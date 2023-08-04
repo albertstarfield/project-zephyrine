@@ -1,0 +1,131 @@
+name: Build and release
+
+on: 
+  workflow_dispatch:
+    inputs:
+      create_release:
+        description: 'Create new release'
+        required: true
+        type: boolean
+      version:
+        description: "Don't include the v"
+        required: true
+
+jobs:
+  windows-x64-release:
+    runs-on: windows-latest
+    steps:
+      - name: Git clone
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.15.0
+      
+      - name: Dependencies
+        run: |
+          npm install
+          npm run rebuild
+          
+      - name: Build and package
+        run: |
+          npm run make-win
+          npm run pack-win
+          
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: windows-x64
+          path: |
+            dist/Alpaca-Electron-win-x64-v${{github.event.inputs.version}}.exe
+
+  macos-x64-release:
+    runs-on: macos-latest
+    steps:
+      - name: Git clone
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.15.0
+      
+      - name: Dependencies
+        run: |
+          npm install
+          npm install electron-installer-dmg -g
+          npx electron-rebuild
+      
+      - name: Build and package
+        run: |
+          npm run make-mac-x64
+          npm run pack-mac-x64
+          mv "release-builds/dmg/x64/Alpaca Electron.dmg" release-builds/dmg/x64/Alpaca-Electron-mac-x64-v${{github.event.inputs.version}}.dmg
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: macos-x64
+          path: |
+            release-builds/dmg/x64/Alpaca-Electron-mac-x64-v${{github.event.inputs.version}}.dmg
+
+  linux-x64-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git clone
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.15.0
+      
+      - name: Dependencies
+        run: |
+          npm install
+          npm run rebuild-linux
+      
+      - name: Build and package
+        run: |
+          npm run make-linux-x64
+          npm run pack-linux-x64
+          mv release-builds/Alpaca-Electron-linux-x64-vx.x.x.tar.gz release-builds/Alpaca-Electron-linux-x64-v${{github.event.inputs.version}}.tar.gz
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-x64
+          path: |
+            release-builds/Alpaca-Electron-linux-x64-v${{github.event.inputs.version}}.tar.gz
+  
+   linux-arm64-release:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Git clone
+        uses: actions/checkout@v3
+        
+      - name: Setup Node.js
+        uses: actions/setup-node@v3
+        with:
+          node-version: 18.15.0
+      
+      - name: Dependencies
+        run: |
+          npm install
+          npm run rebuild-linux
+      
+      - name: Build and package
+        run: |
+          npm run make-linux-arm64
+          npm run pack-linux-arm64
+          mv release-builds/Alpaca-Electron-linux-arm64-vx.x.x.tar.gz release-builds/Alpaca-Electron-linux-arm64-v${{github.event.inputs.version}}.tar.gz
+      
+      - name: Upload artifacts
+        uses: actions/upload-artifact@v3
+        with:
+          name: linux-x64
+          path: |
+            release-builds/Alpaca-Electron-linux-arm64-v${{github.event.inputs.version}}.tar.gz
+  
+  
