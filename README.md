@@ -39,7 +39,7 @@ Project Zephyrine
 
 ## 🎞 Demonstration Screenshot
 
-![Demonstration](https://github.com/ItsPi3141/alpaca-electron/raw/main/demo.gif)
+![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal/picDemo/Demo.png)
 
 ## 🚀 Quick Start Guide
 
