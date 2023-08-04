@@ -48,19 +48,6 @@ Project Zephyrine
 
 2. Run the specific commands from the guide below
 
-3. Once done installing, it'll ask for a valid path to a model. Now, go to where you placed the model, hold shift, right click on the file, and then click on "Copy as Path". Then, paste this into that dialog box and click `Confirm`. 
-
-4. The program will automatically start and now you can begin chatting!
-
-> **Note**  
-> The program will also accept any other 4 bit quantized .bin model files. If you can find other .bin Alpaca model files, you can use them instead of the one recommended in the Quick Start Guide to experiment with different models. As always, be careful about what you download from the internet.
-
-## 🔧 Troubleshooting
-
-### General
-- If you get an error that says "Invalid file path" when pasting the path to the model file, you probably have some sort of misspelling in there. Try copying the path again or using the file picker.
-- If you get an error that says "Couldn't load model", your model is probably corrupted or incompatible. Try downloading the model again.
-- If you face other problems or issues not listed here, create an issue in the "Issues" tab at the top of this page. Describe in detail what happens, and include screenshots. 
 
 ### Windows
 > **Note**  
@@ -97,6 +84,21 @@ Project Zephyrine
 > Run it with your desired model mode for instance 
 >
 > ```./run.sh llama```
+
+
+3. Once done installing, it'll ask for a valid path to a model. Now, go to where you placed the model, hold shift, right click on the file, and then click on "Copy as Path". Then, paste this into that dialog box and click `Confirm`. 
+
+4. The program will automatically start and now you can begin chatting!
+
+> **Note**  
+> The program will also accept any other 4 bit quantized .bin model files. If you can find other .bin Alpaca model files, you can use them instead of the one recommended in the Quick Start Guide to experiment with different models. As always, be careful about what you download from the internet.
+
+## 🔧 Troubleshooting
+
+### General
+- If you get an error that says "Invalid file path" when pasting the path to the model file, you probably have some sort of misspelling in there. Try copying the path again or using the file picker.
+- If you get an error that says "Couldn't load model", your model is probably corrupted or incompatible. Try downloading the model again.
+- If you face other problems or issues not listed here, create an issue in the "Issues" tab at the top of this page. Describe in detail what happens, and include screenshots. 
 
 ## 👨‍💻 Credits
 
