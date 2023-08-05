@@ -5,7 +5,7 @@
 		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
 		<meta name="viewport" content="width=device-width, initial-scale=1" />
 		<meta http-equiv="Cache-Control" content="no-store, max-age=0" />
-		<title>Alpaca Electron</title>
+		<title>Project Zephyrine</title>
 		<link rel="stylesheet" href="style.css" />
 		<link rel="stylesheet" href="titlebar.css" />
 	</head>
@@ -13,7 +13,7 @@
 		<header id="titlebar">
 			<div id="drag-region">
 				<div id="window-title">
-					<span>Alpaca Electron</span>
+					<span>Project Zephyrine</span>
 				</div>
 				<div id="window-controls">
 					<div class="button" id="min-button">
@@ -88,7 +88,7 @@
 				<ul id="messages">
 					<!-- Begin placeholder alpaca -->
 					<div id="feed-placeholder-alpaca">
-						<h1 class="logo">Alpaca Electron</h1>
+						<h1 class="logo">Project Zephyrine</h1>
 						<div class="columns">
 							<!--  -->
 							<div class="column">
@@ -198,7 +198,7 @@
 					</button> -->
 				</div>
 				<div id="path-dialog" class="dialog-content">
-					<p>Enter the filepath for a LLaMA model.</p>
+					<p>Enter the filepath for the current mode model.</p>
 					<p>You can change the model type in settings.</p>
 					<div style="display: flex; gap: 8px">
 						<input type="text" />
@@ -239,25 +239,19 @@
 							<label class="dropdown-arrow">
 								<select id="settings-preset">
 									<option value="custom">Custom</option>
-									<option value="alpaca">Alpaca</option>
-									<option value="vicuna">Vicuna</option>
-									<option value="llama">Llama</option>
 								</select>
 							</label>
 						</div>
 
 						<div style="height: 32px"></div>
 
-						<h3>Llama.cpp settings</h3>
+						<h3>Current Mode Model settings</h3>
 
 						<div class="item">
 							<label>AI model</label>
 							<label class="dropdown-arrow">
 								<select id="model">
-									<option value="alpaca">Alpaca</option>
-									<option value="vicuna">Vicuna</option>
-									<option value="llama">Llama</option>
-									<option value="other">Other</option>
+									<option value="alpaca">Undefined</option>
 								</select>
 							</label>
 						</div>

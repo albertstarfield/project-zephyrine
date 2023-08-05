@@ -1,0 +1,9 @@
+[submodule "llama.cpp"] 
+  path = usr/vendor/llama.cpp
+  url = https://github.com/ggerganov/llama.cpp
+[submodule "ggllm.cpp"] 
+  path = usr/vendor/ggllm.cpp
+  url = https://github.com/cmp-nct/ggllm.cpp
+[submodule "ggml"] 
+  path = usr/vendor/ggml.cpp
+  url = https://github.com/ggerganov/ggml

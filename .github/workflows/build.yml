@@ -98,8 +98,8 @@ jobs:
           name: linux-x64
           path: |
             release-builds/Alpaca-Electron-linux-x64-v${{github.event.inputs.version}}.tar.gz
-  
-   linux-arm64-release:
+
+  linux-arm64-release:
     runs-on: ubuntu-latest
     steps:
       - name: Git clone
@@ -127,5 +127,5 @@ jobs:
           name: linux-x64
           path: |
             release-builds/Alpaca-Electron-linux-arm64-v${{github.event.inputs.version}}.tar.gz
-  
-  
+
+
