@@ -426,7 +426,7 @@ form.running-model .loading {
 	justify-content: flex-start;
 	margin: 0;
 	width: 200px;
-	background-color:var(--background-mid);
+	background-color:var(--background);
 	height: calc(100vh - 182px);
 	overflow: hidden auto;
 	flex-direction: column;
