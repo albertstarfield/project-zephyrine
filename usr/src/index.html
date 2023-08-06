@@ -36,6 +36,12 @@
 							draggable="false"
 						/>
 					</div>
+					<div id="splash-screen-overlay">
+						<div id="splash-screen-content">
+							<h1>Project Zephyrine</h1>
+							<h2>Greetings! We anticipate our forthcoming encounter with enthusiasm. Kindly allow us a brief moment of ten seconds to finalize the necessary preparations before we commence.</h2>
+						</div>
+					</div>
 				</div>
 			</div>
 		</header>
@@ -127,8 +133,8 @@
 								</svg>
 								<h3>Limitations</h3>
 								<div class="card">May segfault occasionally</div>
-								<div class="card">Not trained for writing code</div>
-								<div class="card">Does not always capable providing up to date information</div>
+								<div class="card">Your Computer</div>
+								<div class="card">Not trained to do rickroll</div>
 							</div>
 						</div>
 					</div>
@@ -305,5 +311,16 @@
 		<script>
 			require("./renderer.js");
 		</script>
+		
+		<script>
+			// Hide the splash screen after 10 seconds
+			setTimeout(() => {
+			  const splashScreen = document.getElementById('splash-screen-overlay');
+			  splashScreen.classList.add('fade-out'); // Add the fade-out class
+			  setTimeout(() => {
+				splashScreen.style.display = 'none'; // Hide the splash screen after the animation completes
+			  }, 1000); // Wait for 1 second (same duration as the transition in CSS)
+			}, 10000); // 10000 milliseconds = 10 seconds
+		  </script>
 	</body>
 </html>

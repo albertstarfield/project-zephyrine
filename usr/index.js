@@ -269,13 +269,14 @@ const DDG = require("duck-duck-scrape");
 async function queryToPrompt(text) {
 	console.log("query to Prompt Text Called!");
 	console.log(text);
+	//const keyword_trigger = ['?', 'why', 'who', 'how', 'where', 'when', 'what'];
+	const keyword_trigger = ['?', 'you know', "can you tell me", "explain to me", "elaborate"];
+	if (keyword_trigger.some(keyword_trigger => text.includes(keyword_trigger))){
 	const searchResults = await DDG.search(text, {
 		safeSearch: DDG.SafeSearchType.MODERATE
 	});
 	console.log("External Resources Enabled");
-	//const keyword_trigger = ['?', 'why', 'who', 'how', 'where', 'when', 'what'];
-	const keyword_trigger = ['?'];
-	if (!searchResults.noResults && keyword_trigger.some(keyword_trigger => text.includes(keyword_trigger))) {
+	if (!searchResults.noResults) {
 		var convertedText = "These are additional the context: ";
 		const currentDate = new Date();
 		const year = currentDate.getFullYear();
@@ -320,6 +321,9 @@ async function queryToPrompt(text) {
 		// }
 		// return convertedText;
 	} else {
+		console.log("No result returned!");
+		return text;
+	}} else {
 		console.log("External Resources Bypass Mode");
 		return text;
 	}
@@ -370,6 +374,8 @@ function restart() {
 	initChat();
 }
 
+
+//const splashScreen = document.getElementById('splash-screen-overlay'); //blocking overlay which prevent person and shows peopleexactly that the bot is loading
 function initChat() {
 	if (runningShell) {
 		win.webContents.send("ready");
@@ -386,7 +392,12 @@ function initChat() {
 			win.webContents.send("modelPathValid", { data: false });
 		} else if (res.includes("\n>") && !alpacaReady) {
 			alpacaHalfReady = true;
+			console.log("Chatbot is ready after initialization!")
+		//	splashScreen.style.display = 'flex';
 		} else if (alpacaHalfReady && !alpacaReady) {
+			//when alpaca ready removes the splash screen
+			console.log("Chatbot is ready!")
+			//splashScreen.style.display = 'none';
 			alpacaReady = true;
 			checkAVX = false;
 			win.webContents.send("ready");
@@ -431,7 +442,7 @@ function initChat() {
 		var promptFile = "alpaca.txt";
 	}
 	const chatArgs = `-i --interactive-first -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`;
-	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} --seed ${params.seed} -c 2048`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} --seed ${params.seed} -c 4096`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	if (platform == "win32") {
 		runningShell.write(`[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", supportsAVX2 ? "" : "no_avx2", "chat.exe")}" ${paramArgs} ${chatArgs}\r`);
 	} else if (platform == "darwin") {
