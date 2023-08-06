@@ -41,8 +41,8 @@ Project Zephyrine
 
 ## 🎞 Demonstration Screenshot
 
-![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal/blob/main/picDemo/Demo0.png?raw=true)
-![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal/blob/main/picDemo/Demo1.png?raw=true)
+![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal/blob/main/picDemo/demo0.png?raw=true)
+![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal/blob/main/picDemo/demo1.png?raw=true)
 
 ## 🚀 Quick Start Guide
 
