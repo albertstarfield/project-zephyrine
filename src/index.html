@@ -1,0 +1,315 @@
+<!DOCTYPE html>
+<html lang="en">
+	<head>
+		<meta charset="UTF-8" />
+		<meta http-equiv="X-UA-Compatible" content="IE=edge" />
+		<meta name="viewport" content="width=device-width, initial-scale=1" />
+		<meta http-equiv="Cache-Control" content="no-store, max-age=0" />
+		<title>Alpaca Electron</title>
+		<link rel="stylesheet" href="style.css" />
+		<link rel="stylesheet" href="titlebar.css" />
+	</head>
+	<body>
+		<header id="titlebar">
+			<div id="drag-region">
+				<div id="window-title">
+					<span>Alpaca Electron</span>
+				</div>
+				<div id="window-controls">
+					<div class="button" id="min-button">
+						<img class="icon" srcset="icons/min-w-10.png 1x, icons/min-w-12.png 1.25x, icons/min-w-15.png 1.5x, icons/min-w-15.png 1.75x, icons/min-w-20.png 2x, icons/min-w-20.png 2.25x, icons/min-w-24.png 2.5x, icons/min-w-30.png 3x, icons/min-w-30.png 3.5x" draggable="false" />
+					</div>
+					<div class="button" id="max-button">
+						<img class="icon" srcset="icons/max-w-10.png 1x, icons/max-w-12.png 1.25x, icons/max-w-15.png 1.5x, icons/max-w-15.png 1.75x, icons/max-w-20.png 2x, icons/max-w-20.png 2.25x, icons/max-w-24.png 2.5x, icons/max-w-30.png 3x, icons/max-w-30.png 3.5x" draggable="false" />
+					</div>
+					<div class="button" id="restore-button">
+						<img
+							class="icon"
+							srcset="icons/restore-w-10.png 1x, icons/restore-w-12.png 1.25x, icons/restore-w-15.png 1.5x, icons/restore-w-15.png 1.75x, icons/restore-w-20.png 2x, icons/restore-w-20.png 2.25x, icons/restore-w-24.png 2.5x, icons/restore-w-30.png 3x, icons/restore-w-30.png 3.5x"
+							draggable="false"
+						/>
+					</div>
+					<div class="button" id="close-button">
+						<img
+							class="icon"
+							srcset="icons/close-w-10.png 1x, icons/close-w-12.png 1.25x, icons/close-w-15.png 1.5x, icons/close-w-15.png 1.75x, icons/close-w-20.png 2x, icons/close-w-20.png 2.25x, icons/close-w-24.png 2.5x, icons/close-w-30.png 3x, icons/close-w-30.png 3.5x"
+							draggable="false"
+						/>
+					</div>
+				</div>
+			</div>
+		</header>
+		<div id="main">
+			<div class="form-header">
+				<div class="action-button" id="clear-chat">
+					<svg stroke="currentColor" fill="none" height="1rem" width="1rem" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+						<polyline points="3 6 5 6 21 6"></polyline>
+						<path d="M19 6v14a2 2 0 0 1-2 2H7a2 2 0 0 1-2-2V6m3 0V4a2 2 0 0 1 2-2h4a2 2 0 0 1 2 2v2"></path>
+						<line x1="10" y1="11" x2="10" y2="17"></line>
+						<line x1="14" y1="11" x2="14" y2="17"></line>
+					</svg>
+					Clear chat
+				</div>
+				<div class="action-button" id="change-model">
+					<svg xmlns="http://www.w3.org/2000/svg" height="1rem" width="1rem" fill="currentColor" viewBox="0 0 16 16">
+						<path
+							fill-rule="evenodd"
+							d="M1 11.5a.5.5 0 0 0 .5.5h11.793l-3.147 3.146a.5.5 0 0 0 .708.708l4-4a.5.5 0 0 0 0-.708l-4-4a.5.5 0 0 0-.708.708L13.293 11H1.5a.5.5 0 0 0-.5.5zm14-7a.5.5 0 0 1-.5.5H2.707l3.147 3.146a.5.5 0 1 1-.708.708l-4-4a.5.5 0 0 1 0-.708l4-4a.5.5 0 1 1 .708.708L2.707 4H14.5a.5.5 0 0 1 .5.5z"
+						/>
+					</svg>
+					Change model
+				</div>
+				<div class="action-button" id="settings">
+					<svg stroke="currentColor" fill="none" height="1rem" width="1rem" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
+						<circle cx="12" cy="12" r="3"></circle>
+						<path
+							d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1z"
+						></path>
+					</svg>
+					Settings
+				</div>
+				<div id="resources">
+					<div id="cpu" class="resource-item">
+						<div class="text info">CPU: --%, -- cores</div>
+						<div class="bar">
+							<div class="bar-inner"></div>
+						</div>
+					</div>
+					<div id="ram" class="resource-item">
+						<div class="text info">RAM: --GB/--GB</div>
+						<div class="bar">
+							<div class="bar-inner"></div>
+						</div>
+					</div>
+				</div>
+			</div>
+			<!-- end of left header -->
+			<div id="feed">
+				<ul id="messages">
+					<!-- Begin placeholder alpaca -->
+					<div id="feed-placeholder-alpaca">
+						<h1 class="logo">Alpaca Electron</h1>
+						<div class="columns">
+							<!--  -->
+							<div class="column">
+								<svg stroke="currentColor" fill="none" stroke-width="1.5" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1.5em" width="1.5em" xmlns="http://www.w3.org/2000/svg">
+									<circle cx="12" cy="12" r="5"></circle>
+									<line x1="12" y1="1" x2="12" y2="3"></line>
+									<line x1="12" y1="21" x2="12" y2="23"></line>
+									<line x1="4.22" y1="4.22" x2="5.64" y2="5.64"></line>
+									<line x1="18.36" y1="18.36" x2="19.78" y2="19.78"></line>
+									<line x1="1" y1="12" x2="3" y2="12"></line>
+									<line x1="21" y1="12" x2="23" y2="12"></line>
+									<line x1="4.22" y1="19.78" x2="5.64" y2="18.36"></line>
+									<line x1="18.36" y1="5.64" x2="19.78" y2="4.22"></line>
+								</svg>
+								<h3>Examples</h3>
+								<button class="card">"Can you explain quantum computing in simple terms?" →</button>
+								<button class="card">"Do you have any creative ideas for a 10 year old’s birthday?" →</button>
+								<button class="card">"How do you make an HTTP request in Javascript?" →</button>
+							</div>
+
+							<div class="column">
+								<svg xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24" stroke-width="1.5" stroke="currentColor" height="1.5em" width="1.5em">
+									<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"></path>
+								</svg>
+								<h3>Capabilities</h3>
+								<div class="card">Trained on 20 languages, mostly those with Latin or Cyrillic alphabets</div>
+								<div class="card">Can answer questions naturally, try to use "you" rather than "I"</div>
+								<div class="card">Will not deny your prompts</div>
+							</div>
+
+							<div class="column">
+								<svg stroke="currentColor" fill="none" stroke-width="1.5" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" height="1.5em" width="1.5em" xmlns="http://www.w3.org/2000/svg">
+									<path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z"></path>
+									<line x1="12" y1="9" x2="12" y2="13"></line>
+									<line x1="12" y1="17" x2="12.01" y2="17"></line>
+								</svg>
+								<h3>Limitations</h3>
+								<div class="card">May occasionally generate incorrect information</div>
+								<div class="card">Not trained for writing code</div>
+								<div class="card">Does not always provide information that is up to date</div>
+							</div>
+						</div>
+					</div>
+					<!-- end of placeholder alpaca -->
+				</ul>
+				<div id="bottom"></div>
+				<form id="form" action="">
+					<div class="input-container">
+						<div class="loading hidden info">
+							<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="animate-spin text-center mx-auto mt-4" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg">
+								<line x1="12" y1="2" x2="12" y2="6"></line>
+								<line x1="12" y1="18" x2="12" y2="22"></line>
+								<line x1="4.93" y1="4.93" x2="7.76" y2="7.76"></line>
+								<line x1="16.24" y1="16.24" x2="19.07" y2="19.07"></line>
+								<line x1="2" y1="12" x2="6" y2="12"></line>
+								<line x1="18" y1="12" x2="22" y2="12"></line>
+								<line x1="4.93" y1="19.07" x2="7.76" y2="16.24"></line>
+								<line x1="16.24" y1="7.76" x2="19.07" y2="4.93"></line>
+							</svg>
+						</div>
+						<div class="input-field">
+							<!-- <div contenteditable id="input"></div> -->
+							<!-- <input type="text" id="input" autocomplete="off" /> -->
+							<textarea id="input" maxlength="2048" rows="1" placeholder="Enter a message..."></textarea>
+							<button id="clear">
+								<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-x" viewBox="2 2 12 12">
+									<path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
+								</svg>
+							</button>
+							<button id="autocomplete">
+								<!-- Autocomplete -->
+								<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-4 w-4 mr-1" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg">
+									<line x1="22" y1="2" x2="11" y2="13"></line>
+									<polygon points="22 2 15 22 11 13 2 9 22 2"></polygon>
+								</svg>
+							</button>
+							<button id="stop">
+								<!-- Stop -->
+								<svg stroke="currentColor" fill="none" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" class="h-3 w-3" height="1em" width="1em" xmlns="http://www.w3.org/2000/svg">
+									<rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect>
+								</svg>
+							</button>
+						</div>
+					</div>
+					<div style="display: flex; align-items: center">
+						<label class="switch" style="height: 16px">
+							<input type="checkbox" id="web-access" />
+							<span class="slider round"></span>
+						</label>
+						<p style="margin: 0">Web access (slower)</p>
+					</div>
+					<div class="info">TIP: shift + enter for multiple lines</div>
+				</form>
+			</div>
+			<!-- end of right section -->
+		</div>
+		<!-- END OF MAIN -->
+		<!-- STARTING PROMPT DIALOG -->
+		<div id="path-dialog-bg" class="dialog-bg hidden">
+			<div class="dialog-box">
+				<div class="dialog-title">
+					<h3>Couldn't load model</h3>
+					<!-- <button class="dialog-close">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-x" viewBox="2 2 12 12">
+							<path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
+						</svg>
+					</button> -->
+				</div>
+				<div id="path-dialog" class="dialog-content">
+					<p>Enter the filepath for a LLaMA model.</p>
+					<p>You can change the model type in settings.</p>
+					<div style="display: flex; gap: 8px">
+						<input type="text" />
+						<button class="primary">
+							<svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="currentColor" class="bi bi-folder2-open" viewBox="0 0 16 16">
+								<path
+									d="M1 3.5A1.5 1.5 0 0 1 2.5 2h2.764c.958 0 1.76.56 2.311 1.184C7.985 3.648 8.48 4 9 4h4.5A1.5 1.5 0 0 1 15 5.5v.64c.57.265.94.876.856 1.546l-.64 5.124A2.5 2.5 0 0 1 12.733 15H3.266a2.5 2.5 0 0 1-2.481-2.19l-.64-5.124A1.5 1.5 0 0 1 1 6.14V3.5zM2 6h12v-.5a.5.5 0 0 0-.5-.5H9c-.964 0-1.71-.629-2.174-1.154C6.374 3.334 5.82 3 5.264 3H2.5a.5.5 0 0 0-.5.5V6zm-.367 1a.5.5 0 0 0-.496.562l.64 5.124A1.5 1.5 0 0 0 3.266 14h9.468a1.5 1.5 0 0 0 1.489-1.314l.64-5.124A.5.5 0 0 0 14.367 7H1.633z"
+								/>
+							</svg>
+						</button>
+					</div>
+					<p class="error-text" style="display: none">Invalid file path</p>
+				</div>
+				<div class="dialog-button">
+					<button class="secondary">Cancel</button>
+					<button class="primary">Confirm</button>
+				</div>
+			</div>
+		</div>
+
+		<!-- STARTING SETTINGS DIALOG -->
+		<div id="settings-dialog-bg" class="dialog-bg hidden">
+			<div class="dialog-box">
+				<div class="dialog-title">
+					<h3>Settings</h3>
+					<!-- <button class="dialog-close">
+						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-x" viewBox="2 2 12 12">
+							<path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
+						</svg>
+					</button> -->
+				</div>
+				<div id="settings-dialog" class="dialog-content">
+					<div class="settings-items">
+						<h3>Presets</h3>
+						<p>You can choose a preset from here or customize your own settings below.</p>
+						<div style="height: 8px"></div>
+						<div class="item">
+							<label class="dropdown-arrow">
+								<select id="settings-preset">
+									<option value="custom">Custom</option>
+									<option value="alpaca">Alpaca</option>
+									<option value="vicuna">Vicuna</option>
+									<option value="llama">Llama</option>
+								</select>
+							</label>
+						</div>
+
+						<div style="height: 32px"></div>
+
+						<h3>Llama.cpp settings</h3>
+
+						<div class="item">
+							<label>AI model</label>
+							<label class="dropdown-arrow">
+								<select id="model">
+									<option value="alpaca">Alpaca</option>
+									<option value="vicuna">Vicuna</option>
+									<option value="llama">Llama</option>
+									<option value="other">Other</option>
+								</select>
+							</label>
+						</div>
+
+						<div class="item">
+							<p>Repeat last n tokens</p>
+							<input type="number" step="4" min="0" id="repeat_last_n" value="64" placeholder="64" />
+						</div>
+
+						<div class="item">
+							<p>Repeat penalty</p>
+							<input type="number" step="0.05" min="0" id="repeat_penalty" value="1.3" placeholder="1.3" />
+						</div>
+
+						<div class="item">
+							<p>Top k</p>
+							<input type="number" step="5" min="0" id="top_k" value="40" placeholder="40" />
+						</div>
+
+						<div class="item">
+							<p>Top p</p>
+							<input type="number" step="0.05" min="0" id="top_p" value="0.9" placeholder="0.9" />
+						</div>
+
+						<div class="item">
+							<p>Temperature</p>
+							<input type="number" step="0.05" min="0" max="2" id="temp" value="0.8" placeholder="0.8" />
+						</div>
+
+						<div class="item">
+							<p>Seed (set to -1 for random)</p>
+							<input type="number" step="1" min="-1" id="seed" value="-1" placeholder="-1" />
+						</div>
+
+						<div style="height: 32px"></div>
+
+						<h3>Web search settings</h3>
+						<div class="item">
+							<p>Web search result amount</p>
+							<input type="number" step="1" min="1" max="5" id="websearch_amount" value="5" placeholder="5" />
+						</div>
+					</div>
+				</div>
+				<div class="dialog-button">
+					<button class="secondary">Cancel</button>
+					<button class="primary">Save</button>
+				</div>
+			</div>
+		</div>
+		<script src="socket.io.min.js"></script>
+		<script>
+			require("./renderer.js");
+		</script>
+	</body>
+</html>
