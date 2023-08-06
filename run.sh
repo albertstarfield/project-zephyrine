@@ -574,21 +574,23 @@ fi
 # Install npm dependencies
 npm install --save-dev
 
-# Execute npm run based on the platform and architecture
-if [[ "$platform" == "Linux" ]]; then
-    if [[ "$arch" == "x86_64" ]]; then
-        npm run linux-x64 || { echo "LLaMa npm run linux-x64 failed. See logs for details."; exit 1; }
-    elif [[ "$arch" == "aarch64" ]]; then
-        npm run linux-arm64 || { echo "LLaMa npm run linux-arm64 failed. See logs for details."; exit 1; }
-    fi
-elif [[ "$platform" == "Darwin" ]]; then
-    if [[ "$arch" == "x86_64" ]]; then
-        npm run mac-x64 || { echo "LLaMa npm run mac-x64 failed. See logs for details."; exit 1; }
-    elif [[ "$arch" == "arm64" ]]; then
-        npm run mac-arm64 || { echo "LLaMa npm run mac-arm64 failed. See logs for details."; exit 1; }
+if [ ! -d "${rootdir}/usr/release-builds/" ] || [ $FORCE_REBUILD == 1 ]; then
+
+    # Execute npm run based on the platform and architecture
+    if [[ "$platform" == "Linux" ]]; then
+        if [[ "$arch" == "x86_64" ]]; then
+            npm run linux-x64 || { echo "LLaMa npm run linux-x64 failed. See logs for details."; exit 1; }
+        elif [[ "$arch" == "aarch64" ]]; then
+            npm run linux-arm64 || { echo "LLaMa npm run linux-arm64 failed. See logs for details."; exit 1; }
+        fi
+    elif [[ "$platform" == "Darwin" ]]; then
+        if [[ "$arch" == "x86_64" ]]; then
+            npm run mac-x64 || { echo "LLaMa npm run mac-x64 failed. See logs for details."; exit 1; }
+        elif [[ "$arch" == "arm64" ]]; then
+            npm run mac-arm64 || { echo "LLaMa npm run mac-arm64 failed. See logs for details."; exit 1; }
+        fi
     fi
 fi
-
 echo "LLaMa installation completed successfully."
 
 cd ${rootdir}/usr/release-builds/*Zephyrine*/
