@@ -439,7 +439,7 @@ function initChat() {
 		var revPrompt = "User:";
 	}
 	if (params.model_type == "alpaca") {
-		var promptFile = "alpaca.txt";
+		var promptFile = "universalPrompt.txt";
 	}
 	const chatArgs = `-i --interactive-first -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`;
 	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} --seed ${params.seed} -c 4096`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
