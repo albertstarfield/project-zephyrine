@@ -1,0 +1,31 @@
+#!/bin/bash
+set -e
+target0_Link_src_origin="https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal"
+target1_Link_branched_repo="https://github.com/Willy030125/alpaca-electron-GGML-v2-v3"
+target1_branch="ProjectZephyrineGGMLv2v3-Implementation"
+rootworkdir=$(pwd)/repoworkspace
+rm -rf "${rootworkdir}"
+git config user.name "Automated Reposync Bot"
+git config user.email "albertstarfield2001@gmail.com"
+mkdir "${rootworkdir}"
+cd "${rootworkdir}"
+git clone ${target0_Link_src_origin} target0
+git clone ${target1_Link_branched_repo} target1
+
+cd "${rootworkdir}"
+cd target1
+git checkout -b ${target1_branch}
+rm -rf *
+cp -rv ../target0/* .
+git add -v .
+git commit -m "Automated Project Zephyrine Repo Sync"
+echo "Use your Classic github access token not your password"
+
+echo "https://github.com/settings/tokens"
+git push --set-upstream origin ProjectZephyrineGGMLv2v3-Implementation
+
+cd "${rootworkdir}"
+
+rm -rf "${rootworkdir}"
+echo "Done"
+

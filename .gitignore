@@ -9,3 +9,5 @@ dist
 /release-builds/
 *usr/src/release-builds*
 **release-build*
+**tmp-reposync*
+**repoworkspace*
