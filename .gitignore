@@ -4,6 +4,8 @@ yarn.lock
 models/*
 !models/.gitkeep
 ./build/**
-**release-builds*/**
 dist
 .DS_Store
+/release-builds/
+*usr/src/release-builds*
+**release-build*

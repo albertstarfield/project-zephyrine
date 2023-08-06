@@ -13,6 +13,7 @@ function createWindow() {
 		height: 810,
 		minWidth: 960,
 		minHeight: 600,
+		frame: false,
 		webPreferences: {
 			nodeIntegration: true,
 			contextIsolation: false,
@@ -123,7 +124,7 @@ const schema = {
 	}
 };
 const store = new Store({ schema });
-const fs = require("fs");
+//const fs = require("fs");
 var modelPath = store.get("modelPath");
 
 function checkModelPath() {
@@ -154,34 +155,172 @@ ipcMain.on("checkPath", (_event, { data }) => {
 	}
 });
 
-// DUCKDUCKGO SEARCH FUNCTION
+// DUCKDUCKGO And Function SEARCH FUNCTION
+
+const fs = require('fs');
+//const path = require('path');
+const util = require('util');
+const PDFParser = require('pdf-parse');
+const timeoutPromise = require('timeout-promise');
+const _ = require('lodash');
+const readPdf = require('read-pdf');
+const docxReader = require('docx-reader');
+const textract = require('textract');
+
+const TIMEOUT = 2000; // Timeout for reading each file (2 seconds)
+
+async function readPdfFile(filePath) {
+  return new Promise((resolve, reject) => {
+    readPdf(filePath, (err, text) => {
+      if (err) reject(err);
+      else resolve(text);
+    });
+  });
+}
+
+async function readDocxFile(filePath) {
+  try {
+    const content = await docxReader(filePath);
+    return content;
+  } catch (err) {
+    throw err;
+  }
+}
+
+async function readOtherFile(filePath) {
+  return new Promise((resolve, reject) => {
+    textract.fromFileWithPath(filePath, { timeout: TIMEOUT }, (err, text) => {
+      if (err) reject(err);
+      else resolve(text);
+    });
+  });
+}
+
+async function readAndConcatenateFile(filePath) {
+  const ext = path.extname(filePath).toLowerCase();
+  let text;
+
+  try {
+    if (ext === '.pdf') {
+      text = await readPdfFile(filePath);
+    } else if (ext === '.docx') {
+      text = await readDocxFile(filePath);
+    } else {
+      text = await readOtherFile(filePath);
+    }
+    return text.slice(0, 64); // Limit to 64 characters per file
+  } catch (err) {
+    console.error('Error reading file:', filePath);
+    return '';
+  }
+}
+
+async function searchAndConcatenateText() {
+  const searchDir = os.homedir();
+  const indexFile = path.join(searchDir, 'search_index.txt');
+  const searchResult = [];
+  let currentTextLength = 0;
+
+  try {
+    if (fs.existsSync(indexFile)) {
+      // If an index file exists, load previous search results
+      const indexData = fs.readFileSync(indexFile, 'utf-8');
+      searchResult.push(...indexData.split('\n'));
+      currentTextLength = searchResult.join('').length;
+    }
+
+    async function traverseDir(directory) {
+      const files = fs.readdirSync(directory);
+
+      for (const file of files) {
+        const filePath = path.join(directory, file);
+
+        if (fs.statSync(filePath).isDirectory()) {
+          // Recursive call for directories
+          await traverseDir(filePath);
+        } else {
+          // Check if the file is one of the supported types
+          if (/\.(pdf|txt|docx|doc|odt|xlsx|xls|ppt)$/i.test(filePath)) {
+            const text = await readAndConcatenateFile(filePath);
+            if (currentTextLength + text.length <= 128) {
+              searchResult.push(text);
+              currentTextLength += text.length;
+            }
+          }
+        }
+      }
+    }
+
+    console.log('Starting semantic search...');
+    await traverseDir(searchDir);
+    console.log('Semantic search completed.');
+
+    // Save search results to index file
+    fs.writeFileSync(indexFile, searchResult.join('\n'), 'utf-8');
+
+    return searchResult.join(''); // Final result
+  } catch (err) {
+    console.error('Error during semantic search:', err);
+    return '';
+  }
+}
+const startEndAdditionalContext = "[AdCtx]_________________"; //global variable so every function can see and exclude it from the chat view
 const DDG = require("duck-duck-scrape");
 async function queryToPrompt(text) {
+	console.log("query to Prompt Text Called!");
+	console.log(text);
 	const searchResults = await DDG.search(text, {
 		safeSearch: DDG.SafeSearchType.MODERATE
 	});
-	if (!searchResults.noResults) {
-		var convertedText = `Using the given web search results, answer the following query: `;
-		convertedText += text;
-		convertedText += "\\n### INPUT: \\n";
-		convertedText += "Here are the web search results: ";
+	console.log("External Resources Enabled");
+	//const keyword_trigger = ['?', 'why', 'who', 'how', 'where', 'when', 'what'];
+	const keyword_trigger = ['?'];
+	if (!searchResults.noResults && keyword_trigger.some(keyword_trigger => text.includes(keyword_trigger))) {
+		var convertedText = "These are additional the context: ";
+		const currentDate = new Date();
+		const year = currentDate.getFullYear();
+		const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+		const day = String(currentDate.getDate()).padStart(2, '0');
+		const hours = String(currentDate.getHours()).padStart(2, '0');
+		const minutes = String(currentDate.getMinutes()).padStart(2, '0');
+		const seconds = String(currentDate.getSeconds()).padStart(2, '0');
+
+		const fullDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+		var convertedText = "This is the User Prompt \""+ text + "\"" ;
+		convertedText = convertedText + "." + " The current time and date is" + " " + fullDate + " " + "There are additional context to answer (in conclusion form without saying conclusion) the user prompt in \" ###INPUT:\" but dont forget the previous prompt for the context, However if the previous context with the web context isn't matching ignore the web answers the with the previous prompt context, and you are not allowed to repeat this prompt into your response or answers. ";
+		convertedText = convertedText + "### INPUT: ";
 		var targetResultCount = store.get("params").websearch_amount || 5;
 		if (searchResults.news) {
 			for (let i = 0; i < searchResults.news.length && i < targetResultCount; i++) {
-				convertedText += `${searchResults.news[i].description.replaceAll(/<\/?b>/gi, "")} `;
+				fetchedResults = `${searchResults.news[i].description.replaceAll(/<\/?b>/gi, "")} `;
+				fetchedResults = fetchedResults.substring(0, 256);
+				console.log(fetchedResults);
+				convertedText = convertedText + fetchedResults;
+				var documentReadText = searchAndConcatenateText(text);
+				console.log(documentReadText);
 			}
 		} else {
 			for (let i = 0; i < searchResults.results.length && i < targetResultCount; i++) {
-				convertedText += `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
+				fetchedResults = `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
+				fetchedResults = fetchedResults.substring(0, 256);
+				console.log(fetchedResults);
+				convertedText = convertedText + fetchedResults;
+				var documentReadText = searchAndConcatenateText(text);
+				console.log(documentReadText);
 			}
 		}
-		return convertedText;
+		combinedText = convertedText + documentReadText;
+		
+		combinedText = startEndAdditionalContext + combinedText + startEndAdditionalContext;	
+		console.log("Combined Contexts" + combinedText)
+		return combinedText;
 		// var convertedText = `Summarize the following text: `;
 		// for (let i = 0; i < searchResults.results.length && i < 3; i++) {
 		// 	convertedText += `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
 		// }
 		// return convertedText;
 	} else {
+		console.log("External Resources Bypass Mode");
 		return text;
 	}
 }
@@ -211,6 +350,13 @@ const stripAnsi = (str) => {
 	return str.replace(regex, "");
 };
 
+const stripAdCtx = (str) => {
+	const regex = /\[AdCtx\]_{16,}.*?\[AdCtx\]_{16,}/g; //or you could use the variable and add * since its regex i actually forgot about that
+	//const pattern = [];
+	//const regex = new RegExp(pattern, "g");
+	return str.replace(regex, "")
+}
+
 function restart() {
 	console.log("restarting");
 	win.webContents.send("result", {
@@ -233,6 +379,7 @@ function initChat() {
 	runningShell = ptyProcess;
 	ptyProcess.onData((res) => {
 		res = stripAnsi(res);
+		//res = stripAdCtx(res);
 		console.log(`//> ${res}`);
 		if ((res.includes("llama_model_load: invalid model file") || res.includes("llama_model_load: failed to open") || res.includes("llama_init_from_file: failed to load model")) && res.includes("main: error: failed to load model")) {
 			if (runningShell) runningShell.kill();
@@ -264,7 +411,7 @@ function initChat() {
 			win.webContents.send("result", {
 				data: "\n\n<end>"
 			});
-		} else if (!res.startsWith(currentPrompt) && !res.startsWith("Using the given web search results, answer the following query:") && alpacaReady) {
+		} else if (!res.startsWith(currentPrompt) && !res.startsWith(startEndAdditionalContext) && alpacaReady) {
 			if (platform == "darwin") res = res.replaceAll("^C", "");
 			win.webContents.send("result", {
 				data: res
@@ -282,13 +429,9 @@ function initChat() {
 	}
 	if (params.model_type == "alpaca") {
 		var promptFile = "alpaca.txt";
-	} else if (params.model_type == "vicuna") {
-		var promptFile = "vicuna.txt";
-	} else {
-		var promptFile = "llama.txt";
 	}
 	const chatArgs = `-i --interactive-first -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`;
-	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} --seed ${params.seed}`;
+	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} --seed ${params.seed} -c 2048`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	if (platform == "win32") {
 		runningShell.write(`[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", supportsAVX2 ? "" : "no_avx2", "chat.exe")}" ${paramArgs} ${chatArgs}\r`);
 	} else if (platform == "darwin") {

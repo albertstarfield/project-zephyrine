@@ -5,5 +5,5 @@
   path = usr/vendor/ggllm.cpp
   url = https://github.com/cmp-nct/ggllm.cpp
 [submodule "ggml"] 
-  path = usr/vendor/ggml.cpp
+  path = usr/vendor/ggml
   url = https://github.com/ggerganov/ggml

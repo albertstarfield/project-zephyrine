@@ -174,9 +174,9 @@ build_llama() {
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
-        mv bin/main ${rootdir}/usr/bin/chat
+        cp bin/main ${rootdir}/usr/bin/chat
     elif [[ "$platform" == "Darwin" ]]; then
-        mv bin/main ${rootdir}/usr/bin/chat
+        cp bin/main ${rootdir}/usr/bin/chat
     fi
 
     # Change directory back to rootdir
@@ -249,9 +249,9 @@ build_ggml_base() {
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
-        mv bin/${1} ${rootdir}/usr/bin/chat
+        cp bin/${1} ${rootdir}/usr/bin/chat
     elif [[ "$platform" == "Darwin" ]]; then
-        mv bin/${1} ${rootdir}/usr/bin/chat
+        cp bin/${1} ${rootdir}/usr/bin/chat
     fi
 
     # Change directory back to rootdir
@@ -320,9 +320,9 @@ build_falcon() {
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
-        mv bin/main ${rootdir}/usr/bin/chat
+        cp bin/main ${rootdir}/usr/bin/chat
     elif [[ "$platform" == "Darwin" ]]; then
-        mv bin/main ${rootdir}/usr/bin/chat
+        cp bin/main ${rootdir}/usr/bin/chat
     fi
 
     # Change directory back to rootdir
@@ -334,10 +334,14 @@ build_falcon() {
 #select working mode
 if [ "${1}" == "llama" ]; then
     # Check if LLaMa is already compiled
-    if [[ -f ./vendor/llama.cpp/build/bin/main || -f ./vendor/llama.cpp/build/bin/main.exe ]]; then
-        echo "LLaMa binary already compiled. Moving it to ./usr/bin/..."
-        mv ./vendor/llama.cpp/build/bin/main ./usr/bin/chat
-        mv ./vendor/llama.cpp/build/bin/main.exe ./usr/bin/chat.exe
+    if [[ -f ./usr/vendor/llama.cpp/build/bin/main  || -f ./usr/vendor/llama.cpp/build/bin/main.exe ]]; then
+        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
+        if [ -f ./usr/vendor/llama.cpp/build/bin/${1} ]; then
+        cp ./usr/vendor/llama.cpp/build/bin/main ./usr/bin/chat
+        fi
+         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
+        cp ./usr/vendor/llama.cpp/build/bin/main.exe ./usr/bin/chat.exe
+        fi
     else
         # LLaMa not compiled, build it
         echo "LLaMa binary not found. Building LLaMa..."
@@ -348,10 +352,14 @@ fi
 if [ "${1}" == "mpt" ]; then
     # Check if ggml Binary already compiled
     echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./vendor/ggml/build/bin/${1}  || -f ./vendor/ggml/build/bin/${1}.exe ]]; then
-        echo "LLaMa binary already compiled. Moving it to ./usr/bin/..."
-        mv ./vendor/ggml/build/bin/mpt ./usr/bin/mpt
-        mv ./vendor/ggml/build/bin/mpt.exe ./usr/bin/mpt.exe
+    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
+        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
+        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
+        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
+        fi
+         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
+        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
+        fi
     else
         # LLaMa not compiled, build it
         echo "mpt binary not found. Building mpt..."
@@ -362,10 +370,14 @@ fi
 if [ "${1}" == "dolly-v2" ]; then
     # Check if ggml Binary already compiled
     echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./vendor/ggml/build/bin/${1}  || -f ./vendor/ggml/build/bin/${1}.exe ]]; then
-        echo "LLaMa binary already compiled. Moving it to ./usr/bin/..."
-        mv ./vendor/ggml/build/bin/mpt ./usr/bin/mpt
-        mv ./vendor/ggml/build/bin/mpt.exe ./usr/bin/mpt.exe
+    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
+        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
+        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
+        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
+        fi
+         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
+        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
+        fi
     else
         # LLaMa not compiled, build it
         echo "mpt binary not found. Building mpt..."
@@ -377,10 +389,14 @@ fi
 if [ "${1}" == "gpt-2" ]; then
     # Check if ggml Binary already compiled
     echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./vendor/ggml/build/bin/${1}  || -f ./vendor/ggml/build/bin/${1}.exe ]]; then
+    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
         echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        mv ./vendor/ggml/build/bin/mpt ./usr/bin/mpt
-        mv ./vendor/ggml/build/bin/mpt.exe ./usr/bin/mpt.exe
+        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
+        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
+        fi
+         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
+        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
+        fi
     else
         # LLaMa not compiled, build it
         echo "mpt binary not found. Building mpt..."
@@ -391,10 +407,14 @@ fi
 if [ "${1}" == "gpt-j" ]; then
     # Check if ggml Binary already compiled
     echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./vendor/ggml/build/bin/${1}  || -f ./vendor/ggml/build/bin/${1}.exe ]]; then
+    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
         echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        mv ./vendor/ggml/build/bin/mpt ./usr/bin/mpt
-        mv ./vendor/ggml/build/bin/mpt.exe ./usr/bin/mpt.exe
+        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
+        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
+        fi
+         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
+        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
+        fi
     else
         # LLaMa not compiled, build it
         echo "mpt binary not found. Building mpt..."
@@ -405,10 +425,14 @@ fi
 if [ "${1}" == "gpt-neox" ]; then
     # Check if ggml Binary already compiled
     echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./vendor/ggml/build/bin/${1}  || -f ./vendor/ggml/build/bin/${1}.exe ]]; then
-         echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        mv ./vendor/ggml/build/bin/mpt ./usr/bin/mpt
-        mv ./vendor/ggml/build/bin/mpt.exe ./usr/bin/mpt.exe
+    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
+        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
+        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
+        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
+        fi
+         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
+        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
+        fi
     else
         # LLaMa not compiled, build it
         echo "mpt binary not found. Building mpt..."
@@ -419,10 +443,14 @@ fi
 if [ "${1}" == "mnist" ]; then
     # Check if ggml Binary already compiled
     echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./vendor/ggml/build/bin/${1}  || -f ./vendor/ggml/build/bin/${1}.exe ]]; then
-         echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        mv ./vendor/ggml/build/bin/mpt ./usr/bin/mpt
-        mv ./vendor/ggml/build/bin/mpt.exe ./usr/bin/mpt.exe
+    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
+        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
+        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
+        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
+        fi
+         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
+        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
+        fi
     else
         # LLaMa not compiled, build it
         echo "mpt binary not found. Building mpt..."
@@ -433,10 +461,14 @@ fi
 if [ "${1}" == "replit" ]; then
     # Check if ggml Binary already compiled
     echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./vendor/ggml/build/bin/${1}  || -f ./vendor/ggml/build/bin/${1}.exe ]]; then
-         echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        mv ./vendor/ggml/build/bin/mpt ./usr/bin/mpt
-        mv ./vendor/ggml/build/bin/mpt.exe ./usr/bin/mpt.exe
+    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
+        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
+        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
+        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
+        fi
+         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
+        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
+        fi
     else
         # LLaMa not compiled, build it
         echo "mpt binary not found. Building mpt..."
@@ -447,10 +479,14 @@ fi
 if [ "${1}" == "starcoder" ]; then
     # Check if ggml Binary already compiled
     echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./vendor/ggml/build/bin/${1}  || -f ./vendor/ggml/build/bin/${1}.exe ]]; then
-         echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        mv ./vendor/ggml/build/bin/mpt ./usr/bin/mpt
-        mv ./vendor/ggml/build/bin/mpt.exe ./usr/bin/mpt.exe
+    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
+        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
+        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
+        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
+        fi
+         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
+        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
+        fi
     else
         # LLaMa not compiled, build it
         echo "mpt binary not found. Building mpt..."
@@ -461,10 +497,14 @@ fi
 if [ "${1}" == "whisper" ]; then
     # Check if ggml Binary already compiled
     echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./vendor/ggml/build/bin/${1}  || -f ./vendor/ggml/build/bin/${1}.exe ]]; then
+    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
         echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        mv ./vendor/ggml/build/bin/mpt ./usr/bin/mpt
-        mv ./vendor/ggml/build/bin/mpt.exe ./usr/bin/mpt.exe
+        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
+        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
+        fi
+         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
+        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
+        fi
     else
         # LLaMa not compiled, build it
         echo "mpt binary not found. Building mpt..."
@@ -476,8 +516,8 @@ if [ "${1}" == "falcon" ]; then
     # Check if Falcon ggllm.cpp compiled
     if [[ -f ./vendor/llama.cpp/build/bin/main || -f ./vendor/llama.cpp/build/bin/main.exe ]]; then
         echo "falcon binary already compiled. Moving it to ./usr/bin/..."
-        mv ./vendor/ggllm.cpp/build/bin/main ./usr/bin/chat
-        mv ./vendor/ggllm.cpp/build/bin/main.exe ./usr/bin/chat.exe
+        cp ./vendor/ggllm.cpp/build/bin/main ./usr/bin/chat
+        cp ./vendor/ggllm.cpp/build/bin/main.exe ./usr/bin/chat.exe
     else
         # LLaMa not compiled, build it
         echo "Falcon Not found! Compiling"
@@ -522,11 +562,13 @@ install_dependencies_macos() {
     fi
 }
 
-# Install npm dependencies
-if [[ "$platform" == "Linux" ]]; then
-    install_dependencies_linux
-elif [[ "$platform" == "Darwin" ]]; then
-    install_dependencies_macos
+# Install npm dependencie
+if [ -z "$(command -v npm)" ]; then
+    if [[ "$platform" == "Linux" ]]; then
+        install_dependencies_linux
+    elif [[ "$platform" == "Darwin" ]]; then
+        install_dependencies_macos
+    fi
 fi
 
 # Install npm dependencies
@@ -549,6 +591,6 @@ fi
 
 echo "LLaMa installation completed successfully."
 
-cd ${rootdir}/usr/release-builds/Alpaca*/
-chmod +x Alpaca*Electron*
-"./Alpaca Electron"
+cd ${rootdir}/usr/release-builds/*Zephyrine*/
+chmod +x Project*Zephyrine*
+"./Project Zephyrine"

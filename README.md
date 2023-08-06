@@ -32,9 +32,11 @@ Project Zephyrine
 - [x] Supports Windows(untested), MacOS (untested), and Linux
 - [x] Context memory
 - [x] Partial GPU/FPGA(opencl)/Tensor acceleration (cuBLAS, openBLAS, clBLAST, Metal) [EXPERIMENTAL WARNING!]
+- [x] DuckDuckGo integration for web access
+- [x] Pdf-parse Integration for local literature documents resources access
 - [ ] Chat history
 - [ ] Integration with Stable Diffusion
-- [ ] DuckDuckGo integration for web access
+
 
 
 ## 🎞 Demonstration Screenshot
