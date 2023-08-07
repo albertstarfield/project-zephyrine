@@ -264,8 +264,100 @@ async function searchAndConcatenateText() {
     return '';
   }
 }
-const startEndAdditionalContext = "[AdCtx]_________________"; //global variable so every function can see and exclude it from the chat view
+
+const { exec } = require('child_process');
+function runShellCommand(command) {
+  return new Promise((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(stdout);
+      }
+    });
+  });
+}
+
+async function callLLMChildThoughtProcessor(prompt, lengthGen){
+	//lengthGen is the limit of how much it need to generate
+	//prompt is basically prompt :moai:
+	// flag is basically at what part that callLLMChildThoughtProcessor should return the value started from.
+	const platform = process.platform;
+	console.log(`platform ${platform}`);
+	if (platform === 'win32'){
+		// Windows
+		console.log(`LLMChild Basebinary Detection ${basebin}`);
+		basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", supportsAVX2 ? "" : "no_avx2", "chat.exe")}"`;
+	} else {
+	// *nix (Linux, macOS, etc.)
+	basebin = `"${path.resolve(__dirname, "bin", "chat")}"`;
+	console.log(`LLMChild Basebinary Detection ${basebin}`);
+	}
+	//model = ``;
+
+	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Thoughts: Should I Search this on Local files and Internet for more context on this prompt \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
+	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen}`;
+
+	command = `${basebin} ${LLMChildParam}`;
+	let output;
+	try {
+	console.log(`LLMChild Inference ${command}`);
+	//const output = await runShellCommand(command);
+	 output = await runShellCommand(command);
+	console.log('LLMChild Raw output:', output);
+	} catch (error) {
+	console.error('Error occoured spawning LLMChild!', flag, error.message);
+	}
+
+	
+	// ---------------------------------------
+	const stripThoughtHeader = (str) => {
+	 //or you could use the variable and add * since its regex i actually forgot about that
+	 const regex = /\[ThoughtsProcessor\]_{16,}.*?\[ThoughtsProcessor\]_{16,}/g;
+	//const pattern = [];
+	//const regex = new RegExp(pattern, "g");
+	return str.replace(regex, "");
+	}
+	console.log('LLMChild EE');
+	let filteredOutput;
+	filteredOutput = stripThoughtHeader(output);
+	console.log(`Filtered Output Thought Header Debug LLM Child ${filteredOutput}`);
+	//console.log('LLMChild Filtering Output');
+	//return filteredOutput;
+	
+	return output;
+
+}
+
+
+
+const startEndThoughtProcessor_Flag = "[ThoughtsProcessor]_________________";
+const startEndAdditionalContext_Flag = "[AdCtx]_________________"; //global variable so every function can see and exclude it from the chat view
 const DDG = require("duck-duck-scrape");
+async function decisionOnDataExternalAccess(prompt){
+	console.log("Deciding Whether should i search it or not");
+	
+
+	//decision if yes then do the query optimization
+	// ./chat -p "___[Thoughts Processor] Only answer in Yes or No. Thoughts: Should I Search this on Local files and Internet for more context on this prompt \"What are you doing?\"___[Thoughts Processor] " -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r "[User]" -n 2
+	promptInput = `Only answer in Yes or No. Anything other than that are not accepted without exception. Thoughts: Should I Search this on Local files and Internet for more context on this prompt. ${prompt}`;
+	decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
+	console.log(`decision Search LLMChild ${decisionSearch}`)
+
+	// *nix
+	//runningShell.write(`"${path.resolve(__dirname, "bin", "chat")}" ${paramArgs} ${chatArgs}\r`);
+	// windows
+	// runningShell.write(`[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", supportsAVX2 ? "" : "no_avx2", "chat.exe")}" ${paramArgs} ${chatArgs}\r`);
+
+	// if no then skip and bypass the prompt text to the shell or return question prompt -> directly to shell
+
+	// when said no
+	//pass
+	// when said yes
+	//./chat -p "___[Thoughts Processor] Answer only the search query. Thoughts: What is the Internet and file search query that is optimal for this prompt \"What are you doing?\" and the previous prompt \"I'm building some neutrino\"___[Thoughts Processor] " -m ~/Downloads/hermeslimarp-l2-7b.ggmlvC3.q2_K.bin -r "[User]" -n 69
+	return prompt;
+
+}
 async function queryToPrompt(text) {
 	console.log("query to Prompt Text Called!");
 	console.log(text);
@@ -312,7 +404,7 @@ async function queryToPrompt(text) {
 		}
 		combinedText = convertedText + documentReadText;
 		
-		combinedText = startEndAdditionalContext + combinedText + startEndAdditionalContext;	
+		combinedText = startEndAdditionalContext_Flag + combinedText + startEndAdditionalContext_Flag;	
 		console.log("Combined Contexts" + combinedText)
 		return combinedText;
 		// var convertedText = `Summarize the following text: `;
@@ -387,7 +479,7 @@ function initChat() {
 		res = stripAnsi(res);
 		//res = stripAdCtx(res);
 		console.log(`//> ${res}`);
-		if ((res.includes("llama_model_load: invalid model file") || res.includes("llama_model_load: failed to open") || res.includes("llama_init_from_file: failed to load model")) && res.includes("main: error: failed to load model")) {
+		if ((res.includes("invalid model file") || res.includes("failed to open") || res.includes("failed to load model")) && res.includes("main: error: failed to load model")) {
 			if (runningShell) runningShell.kill();
 			win.webContents.send("modelPathValid", { data: false });
 		} else if (res.includes("\n>") && !alpacaReady) {
@@ -422,7 +514,7 @@ function initChat() {
 			win.webContents.send("result", {
 				data: "\n\n<end>"
 			});
-		} else if (!res.startsWith(currentPrompt) && !res.startsWith(startEndAdditionalContext) && alpacaReady) {
+		} else if (!res.startsWith(currentPrompt) && !res.startsWith(startEndAdditionalContext_Flag) && alpacaReady) {
 			if (platform == "darwin") res = res.replaceAll("^C", "");
 			win.webContents.send("result", {
 				data: res
@@ -460,7 +552,8 @@ ipcMain.on("message", async (_event, { data }) => {
 	currentPrompt = data;
 	if (runningShell) {
 		if (store.get("params").webAccess) {
-			runningShell.write(`${await queryToPrompt(data)}\r`);
+			//runningShell.write(`${await queryToPrompt(data)}\r`);
+			runningShell.write(`${await decisionOnDataExternalAccess(data)}\r`);
 		} else {
 			runningShell.write(`${data}\r`);
 		}
