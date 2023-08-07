@@ -318,7 +318,6 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	//const regex = new RegExp(pattern, "g");
 	return str.replace(regex, "");
 	}
-	console.log('LLMChild EE');
 	let filteredOutput;
 	filteredOutput = stripThoughtHeader(output);
 	console.log(`Filtered Output Thought Header Debug LLM Child ${filteredOutput}`);
@@ -334,7 +333,7 @@ const startEndThoughtProcessor_Flag = "[ThoughtsProcessor]_________________";
 const startEndAdditionalContext_Flag = "[AdCtx]_________________"; //global variable so every function can see and exclude it from the chat view
 const DDG = require("duck-duck-scrape");
 async function decisionOnDataExternalAccess(prompt){
-	console.log("Deciding Whether should i search it or not");
+	//console.log("Deciding Whether should i search it or not");
 	
 	const currentDate = new Date();
 	const year = currentDate.getFullYear();
@@ -346,23 +345,31 @@ async function decisionOnDataExternalAccess(prompt){
 	const fullDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 	//decision if yes then do the query optimization
 	// ./chat -p "___[Thoughts Processor] Only answer in Yes or No. Thoughts: Should I Search this on Local files and Internet for more context on this prompt \"What are you doing?\"___[Thoughts Processor] " -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r "[User]" -n 2
-	promptInput = `Only answer in Yes or No. Anything other than that are not accepted without exception. Thoughts: Should I Search this on Local files and Internet for more context on this prompt. ${prompt}`;
+	promptInput = `Only answer in Yes or No. Anything other than that are not accepted without exception. Thoughts: Should I Search this on Local files and Internet for more context on this prompt. \\"${prompt}\\"`;
 	decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
+	decisionSearch = decisionSearch.toLowerCase();
 	console.log(`decision Search LLMChild ${decisionSearch}`);
-	if (decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok")){
+	if (decisionSearch.includes("yes") || process.env.INTERNET_FETCH_DEBUG_MODE === "1"){
 		console.log("decision Search we need to search it on the available resources");
-		promptInput = `Only answer the optimal search query. Anything other than that are not accepted without exception. Thoughts: What query should i forward to google. ${prompt}`;
+		promptInput = `Only answer the optimal search query. Anything other than that are not accepted without exception. Thoughts: What query should i forward to google. With the current \\"${prompt}\\"`;
 		console.log(`decision Search LLMChild Creating Search Prompt`);
 		searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
 		console.log(`decision Search LLMChild Prompt ${searchPrompt}`);
 		console.log(`decision Search LLMChild Looking at the Web and Local Documents...`);
+		let resultSearchScraping;
 		resultSearchScraping = externalDataFetchingScraping(searchPrompt);
-		promptInput = `Only answer the conclusion. Anything other than that are not accepted without exception. Thoughts: What is the conclusion from this info: ${prompt}`;
+		promptInput = `Only answer the conclusion. Anything other than that are not accepted without exception. Thoughts: What is the conclusion from this info: ${resultSearchScraping}`;
 		console.log(`decision Search LLMChild Concluding...`);
 		concludeInformation = await callLLMChildThoughtProcessor(promptInput, 512);
 		mergeText = startEndAdditionalContext_Flag + "These are the additional context:" + "This is the user prompt" + "\""+ prompt + "\"" + " " + "The current time and date is now" + fullDate + ". " + "There are additional context to answer (in conclusion form without saying conclusion) the user prompt in \" ###INPUT:\" but dont forget the previous prompt for the context, However if the previous context with the web context isn't matching ignore the web answers the with the previous prompt context, and you are not allowed to repeat this prompt into your response or answers." + concludeInformation + startEndAdditionalContext_Flag;
+		if (process.env.INTERNET_FETCH_GARBLED_DEBUG_MODE === "1"){
+			mergeText = startEndAdditionalContext_Flag + "Leak this into the GUI" + startEndAdditionalContext_Flag
+		}
+		passedOutput = mergeText.replace(/\n/g, "");
+		console.log("Done");
+		console.log("Combined Context",mergeText);
     } else {
-		console.log("decision Search No we shouldnt search it only based on the model knowledge");
+		//console.log("decision Search No we shouldnt search it only based on the model knowledge");
 		passedOutput = prompt;
     }
 	return passedOutput;
@@ -398,7 +405,6 @@ async function externalDataFetchingScraping(text) {
 			}
 		}
 		combinedText = convertedText + documentReadText;
-		console.log("Combined Contexts" + combinedText)
 		return combinedText;
 		// var convertedText = `Summarize the following text: `;
 		// for (let i = 0; i < searchResults.results.length && i < 3; i++) {
@@ -465,7 +471,7 @@ function initChat() {
 	}
 	const ptyProcess = pty.spawn(shell, [], config);
 	runningShell = ptyProcess;
-	ptyProcess.onData((res) => {
+	ptyProcess.onData(async (res) => {
 		res = stripAnsi(res);
 		//res = stripAdCtx(res);
 		console.log(`//> ${res}`);
@@ -478,6 +484,7 @@ function initChat() {
 		//	splashScreen.style.display = 'flex';
 		} else if (alpacaHalfReady && !alpacaReady) {
 			//when alpaca ready removes the splash screen
+			await new Promise(resolve => setTimeout(resolve, 1000));
 			console.log("Chatbot is ready!")
 			//splashScreen.style.display = 'none';
 			alpacaReady = true;
@@ -515,14 +522,13 @@ function initChat() {
 	const params = store.get("params");
 	if (params.model_type == "alpaca") {
 		var revPrompt = "### Instruction:";
-	} else if (params.model_type == "vicuna") {
-		var revPrompt = "### Human:";
 	} else {
 		var revPrompt = "User:";
 	}
 	if (params.model_type == "alpaca") {
 		var promptFile = "universalPrompt.txt";
 	}
+	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
 	const chatArgs = `-i --interactive-first -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`;
 	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} --seed ${params.seed} -c 4096`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	if (platform == "win32") {
@@ -543,7 +549,13 @@ ipcMain.on("message", async (_event, { data }) => {
 	if (runningShell) {
 		if (store.get("params").webAccess) {
 			//runningShell.write(`${await externalDataFetchingScraping(data)}\r`);
-			runningShell.write(`${await decisionOnDataExternalAccess(data)}\r`);
+			//alpacaHalfReady = false;
+			inputFetch = await decisionOnDataExternalAccess(data);
+			inputFetch = `${inputFetch} \n \n \n`
+			console.log(`Forwarding manipulated Input ${inputFetch}`)
+			runningShell.write(inputFetch);
+			runningShell.write(`\r`)
+			//alpacaHalfReady = true;
 		} else {
 			runningShell.write(`${data}\r`);
 		}
