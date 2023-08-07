@@ -586,7 +586,7 @@ input:checked + .slider:before {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	justify-content: left;
+	justify-content: center;
 }
 .resource-item {
 	flex: 1 1 100%;

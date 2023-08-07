@@ -551,6 +551,11 @@ install_dependencies_linux() {
         echo "Unsupported package manager or unable to install dependencies. Exiting."
         exit 1
     fi
+
+    echo "Upgrading to the latest Node Version!"
+    sudo npm install -g n
+    sudo n latest
+    sudo node -v
 }
 
 # Function to install dependencies for macOS
@@ -560,6 +565,10 @@ install_dependencies_macos() {
         echo "Homebrew not found. Please install Homebrew and try again."
         exit 1
     fi
+    echo "Upgrading to the latest Node Version!"
+    sudo npm install -g n
+    sudo n latest
+    sudo node -v
 }
 
 # Install npm dependencie
