@@ -296,7 +296,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	//model = ``;
 
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Thoughts: Should I Search this on Local files and Internet for more context on this prompt \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
-	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen}`;
+	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen} -c 2048`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	let output;
@@ -324,8 +324,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	console.log(`Filtered Output Thought Header Debug LLM Child ${filteredOutput}`);
 	//console.log('LLMChild Filtering Output');
 	//return filteredOutput;
-	
-	return output;
+	return filteredOutput;
 
 }
 
@@ -337,51 +336,47 @@ const DDG = require("duck-duck-scrape");
 async function decisionOnDataExternalAccess(prompt){
 	console.log("Deciding Whether should i search it or not");
 	
-
+	const currentDate = new Date();
+	const year = currentDate.getFullYear();
+	const month = String(currentDate.getMonth() + 1).padStart(2, '0');
+	const day = String(currentDate.getDate()).padStart(2, '0');
+	const hours = String(currentDate.getHours()).padStart(2, '0');
+	const minutes = String(currentDate.getMinutes()).padStart(2, '0');
+	const seconds = String(currentDate.getSeconds()).padStart(2, '0');
+	const fullDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 	//decision if yes then do the query optimization
 	// ./chat -p "___[Thoughts Processor] Only answer in Yes or No. Thoughts: Should I Search this on Local files and Internet for more context on this prompt \"What are you doing?\"___[Thoughts Processor] " -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r "[User]" -n 2
 	promptInput = `Only answer in Yes or No. Anything other than that are not accepted without exception. Thoughts: Should I Search this on Local files and Internet for more context on this prompt. ${prompt}`;
 	decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
-	console.log(`decision Search LLMChild ${decisionSearch}`)
-
-	// *nix
-	//runningShell.write(`"${path.resolve(__dirname, "bin", "chat")}" ${paramArgs} ${chatArgs}\r`);
-	// windows
-	// runningShell.write(`[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", supportsAVX2 ? "" : "no_avx2", "chat.exe")}" ${paramArgs} ${chatArgs}\r`);
-
-	// if no then skip and bypass the prompt text to the shell or return question prompt -> directly to shell
-
-	// when said no
-	//pass
-	// when said yes
-	//./chat -p "___[Thoughts Processor] Answer only the search query. Thoughts: What is the Internet and file search query that is optimal for this prompt \"What are you doing?\" and the previous prompt \"I'm building some neutrino\"___[Thoughts Processor] " -m ~/Downloads/hermeslimarp-l2-7b.ggmlvC3.q2_K.bin -r "[User]" -n 69
-	return prompt;
+	console.log(`decision Search LLMChild ${decisionSearch}`);
+	if (decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok")){
+		console.log("decision Search we need to search it on the available resources");
+		promptInput = `Only answer the optimal search query. Anything other than that are not accepted without exception. Thoughts: What query should i forward to google. ${prompt}`;
+		console.log(`decision Search LLMChild Creating Search Prompt`);
+		searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
+		console.log(`decision Search LLMChild Prompt ${searchPrompt}`);
+		console.log(`decision Search LLMChild Looking at the Web and Local Documents...`);
+		resultSearchScraping = externalDataFetchingScraping(searchPrompt);
+		promptInput = `Only answer the conclusion. Anything other than that are not accepted without exception. Thoughts: What is the conclusion from this info: ${prompt}`;
+		console.log(`decision Search LLMChild Concluding...`);
+		concludeInformation = await callLLMChildThoughtProcessor(promptInput, 512);
+		mergeText = startEndAdditionalContext_Flag + "These are the additional context:" + "This is the user prompt" + "\""+ prompt + "\"" + " " + "The current time and date is now" + fullDate + ". " + "There are additional context to answer (in conclusion form without saying conclusion) the user prompt in \" ###INPUT:\" but dont forget the previous prompt for the context, However if the previous context with the web context isn't matching ignore the web answers the with the previous prompt context, and you are not allowed to repeat this prompt into your response or answers." + concludeInformation + startEndAdditionalContext_Flag;
+    } else {
+		console.log("decision Search No we shouldnt search it only based on the model knowledge");
+		passedOutput = prompt;
+    }
+	return passedOutput;
 
 }
-async function queryToPrompt(text) {
+async function externalDataFetchingScraping(text) {
 	console.log("query to Prompt Text Called!");
 	console.log(text);
-	//const keyword_trigger = ['?', 'why', 'who', 'how', 'where', 'when', 'what'];
-	const keyword_trigger = ['?', 'you know', "can you tell me", "explain to me", "elaborate"];
-	if (keyword_trigger.some(keyword_trigger => text.includes(keyword_trigger))){
 	const searchResults = await DDG.search(text, {
 		safeSearch: DDG.SafeSearchType.MODERATE
 	});
 	console.log("External Resources Enabled");
 	if (!searchResults.noResults) {
-		var convertedText = "These are additional the context: ";
-		const currentDate = new Date();
-		const year = currentDate.getFullYear();
-		const month = String(currentDate.getMonth() + 1).padStart(2, '0');
-		const day = String(currentDate.getDate()).padStart(2, '0');
-		const hours = String(currentDate.getHours()).padStart(2, '0');
-		const minutes = String(currentDate.getMinutes()).padStart(2, '0');
-		const seconds = String(currentDate.getSeconds()).padStart(2, '0');
-
-		const fullDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
-		var convertedText = "This is the User Prompt \""+ text + "\"" ;
-		convertedText = convertedText + "." + " The current time and date is" + " " + fullDate + " " + "There are additional context to answer (in conclusion form without saying conclusion) the user prompt in \" ###INPUT:\" but dont forget the previous prompt for the context, However if the previous context with the web context isn't matching ignore the web answers the with the previous prompt context, and you are not allowed to repeat this prompt into your response or answers. ";
-		convertedText = convertedText + "### INPUT: ";
+		let fetchedResults;
 		var targetResultCount = store.get("params").websearch_amount || 5;
 		if (searchResults.news) {
 			for (let i = 0; i < searchResults.news.length && i < targetResultCount; i++) {
@@ -403,8 +398,6 @@ async function queryToPrompt(text) {
 			}
 		}
 		combinedText = convertedText + documentReadText;
-		
-		combinedText = startEndAdditionalContext_Flag + combinedText + startEndAdditionalContext_Flag;	
 		console.log("Combined Contexts" + combinedText)
 		return combinedText;
 		// var convertedText = `Summarize the following text: `;
@@ -414,9 +407,6 @@ async function queryToPrompt(text) {
 		// return convertedText;
 	} else {
 		console.log("No result returned!");
-		return text;
-	}} else {
-		console.log("External Resources Bypass Mode");
 		return text;
 	}
 }
@@ -552,7 +542,7 @@ ipcMain.on("message", async (_event, { data }) => {
 	currentPrompt = data;
 	if (runningShell) {
 		if (store.get("params").webAccess) {
-			//runningShell.write(`${await queryToPrompt(data)}\r`);
+			//runningShell.write(`${await externalDataFetchingScraping(data)}\r`);
 			runningShell.write(`${await decisionOnDataExternalAccess(data)}\r`);
 		} else {
 			runningShell.write(`${data}\r`);
