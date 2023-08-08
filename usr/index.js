@@ -5,6 +5,8 @@ require("@electron/remote/main").initialize();
 const os = require("os");
 const platform = os.platform();
 const arch = os.arch();
+const appName = "Project Zephyrine"
+const consoleLogPrefix = `[${appName}_${platform}_${arch}]:`;
 
 var win;
 function createWindow() {
@@ -251,9 +253,9 @@ async function searchAndConcatenateText() {
       }
     }
 
-    console.log('Starting semantic search...');
+    console.log(consoleLogPrefix, 'Starting semantic search...');
     await traverseDir(searchDir);
-    console.log('Semantic search completed.');
+    console.log(consoleLogPrefix, 'Semantic search completed.');
 
     // Save search results to index file
     fs.writeFileSync(indexFile, searchResult.join('\n'), 'utf-8');
@@ -283,15 +285,15 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	//prompt is basically prompt :moai:
 	// flag is basically at what part that callLLMChildThoughtProcessor should return the value started from.
 	const platform = process.platform;
-	console.log(`platform ${platform}`);
+	console.log(consoleLogPrefix, `platform ${platform}`);
 	if (platform === 'win32'){
 		// Windows
-		console.log(`LLMChild Basebinary Detection ${basebin}`);
+		console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
 		basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", supportsAVX2 ? "" : "no_avx2", "chat.exe")}"`;
 	} else {
 	// *nix (Linux, macOS, etc.)
 	basebin = `"${path.resolve(__dirname, "bin", "chat")}"`;
-	console.log(`LLMChild Basebinary Detection ${basebin}`);
+	console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
 	}
 	//model = ``;
 
@@ -301,10 +303,10 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	command = `${basebin} ${LLMChildParam}`;
 	let output;
 	try {
-	console.log(`LLMChild Inference ${command}`);
+	console.log(consoleLogPrefix, `LLMChild Inference ${command}`);
 	//const output = await runShellCommand(command);
 	 output = await runShellCommand(command);
-	console.log('LLMChild Raw output:', output);
+	console.log(consoleLogPrefix, 'LLMChild Raw output:', output);
 	} catch (error) {
 	console.error('Error occoured spawning LLMChild!', flag, error.message);
 	}
@@ -320,8 +322,8 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	}
 	let filteredOutput;
 	filteredOutput = stripThoughtHeader(output);
-	console.log(`Filtered Output Thought Header Debug LLM Child ${filteredOutput}`);
-	//console.log('LLMChild Filtering Output');
+	console.log(consoleLogPrefix, `Filtered Output Thought Header Debug LLM Child ${filteredOutput}`);
+	//console.log(consoleLogPrefix, 'LLMChild Filtering Output');
 	//return filteredOutput;
 	return filteredOutput;
 
@@ -333,7 +335,7 @@ const startEndThoughtProcessor_Flag = "[ThoughtsProcessor]_________________";
 const startEndAdditionalContext_Flag = "[AdCtx]_________________"; //global variable so every function can see and exclude it from the chat view
 const DDG = require("duck-duck-scrape");
 async function decisionOnDataExternalAccess(prompt){
-	//console.log("Deciding Whether should i search it or not");
+	//console.log(consoleLogPrefix, "Deciding Whether should i search it or not");
 	
 	const currentDate = new Date();
 	const year = currentDate.getFullYear();
@@ -348,40 +350,40 @@ async function decisionOnDataExternalAccess(prompt){
 	promptInput = `Only answer in Yes or No. Anything other than that are not accepted without exception. Thoughts: Should I Search this on Local files and Internet for more context on this prompt. \\"${prompt}\\"`;
 	decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
 	decisionSearch = decisionSearch.toLowerCase();
-	console.log(`decision Search LLMChild ${decisionSearch}`);
+	console.log(consoleLogPrefix, `decision Search LLMChild ${decisionSearch}`);
 	if (decisionSearch.includes("yes") || process.env.INTERNET_FETCH_DEBUG_MODE === "1"){
-		console.log("decision Search we need to search it on the available resources");
-		promptInput = `Only answer the optimal search query. Anything other than that are not accepted without exception. Thoughts: What query should i forward to google. With the current \\"${prompt}\\"`;
-		console.log(`decision Search LLMChild Creating Search Prompt`);
+		console.log(consoleLogPrefix, "decision Search we need to search it on the available resources");
+		promptInput = `Only answer the optimal search query. Anything other than that are not accepted without exception. Thoughts: I should rephrase this prompt to optimize the search result :\\"${prompt}\\"`;
+		console.log(consoleLogPrefix, `decision Search LLMChild Creating Search Prompt`);
 		searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
-		console.log(`decision Search LLMChild Prompt ${searchPrompt}`);
-		console.log(`decision Search LLMChild Looking at the Web and Local Documents...`);
+		console.log(consoleLogPrefix, `decision Search LLMChild Prompt ${searchPrompt}`);
+		console.log(consoleLogPrefix, `decision Search LLMChild Looking at the Web and Local Documents...`);
 		let resultSearchScraping;
 		resultSearchScraping = externalDataFetchingScraping(searchPrompt);
 		promptInput = `Only answer the conclusion. Anything other than that are not accepted without exception. Thoughts: What is the conclusion from this info: ${resultSearchScraping}`;
-		console.log(`decision Search LLMChild Concluding...`);
+		console.log(consoleLogPrefix, `decision Search LLMChild Concluding...`);
 		concludeInformation = await callLLMChildThoughtProcessor(promptInput, 512);
-		mergeText = startEndAdditionalContext_Flag + "These are the additional context:" + "This is the user prompt" + "\""+ prompt + "\"" + " " + "The current time and date is now" + fullDate + ". " + "There are additional context to answer (in conclusion form without saying conclusion) the user prompt in \" ###INPUT:\" but dont forget the previous prompt for the context, However if the previous context with the web context isn't matching ignore the web answers the with the previous prompt context, and you are not allowed to repeat this prompt into your response or answers." + concludeInformation + startEndAdditionalContext_Flag;
+		mergeText = startEndAdditionalContext_Flag + " " + "These are the additional context:" + "This is the user prompt" + "\""+ prompt + "\"" + " " + "The current time and date is now" + fullDate + ". " + "There are additional context to answer (in conclusion form without saying conclusion) the user prompt in \" ###INPUT:\" but dont forget the previous prompt for the context, However if the previous context with the web context isn't matching ignore the web answers the with the previous prompt context, and you are not allowed to repeat this prompt into your response or answers." + concludeInformation + " " + startEndAdditionalContext_Flag;
 		if (process.env.INTERNET_FETCH_GARBLED_DEBUG_MODE === "1"){
 			mergeText = startEndAdditionalContext_Flag + "Leak this into the GUI" + startEndAdditionalContext_Flag
 		}
 		passedOutput = mergeText.replace(/\n/g, "");
-		console.log("Done");
-		console.log("Combined Context",mergeText);
+		console.log(consoleLogPrefix, "Done");
+		console.log(consoleLogPrefix, "Combined Context", mergeText);
     } else {
-		//console.log("decision Search No we shouldnt search it only based on the model knowledge");
+		//console.log(consoleLogPrefix, "decision Search No we shouldnt search it only based on the model knowledge");
 		passedOutput = prompt;
     }
 	return passedOutput;
 
 }
 async function externalDataFetchingScraping(text) {
-	console.log("query to Prompt Text Called!");
-	console.log(text);
+	console.log(consoleLogPrefix, "query to Prompt Text Called!");
+	console.log(consoleLogPrefix, text);
 	const searchResults = await DDG.search(text, {
 		safeSearch: DDG.SafeSearchType.MODERATE
 	});
-	console.log("External Resources Enabled");
+	console.log(consoleLogPrefix, "External Resources Enabled");
 	if (!searchResults.noResults) {
 		let fetchedResults;
 		var targetResultCount = store.get("params").websearch_amount || 5;
@@ -389,19 +391,19 @@ async function externalDataFetchingScraping(text) {
 			for (let i = 0; i < searchResults.news.length && i < targetResultCount; i++) {
 				fetchedResults = `${searchResults.news[i].description.replaceAll(/<\/?b>/gi, "")} `;
 				fetchedResults = fetchedResults.substring(0, 256);
-				console.log(fetchedResults);
+				console.log(consoleLogPrefix, fetchedResults);
 				convertedText = convertedText + fetchedResults;
 				var documentReadText = searchAndConcatenateText(text);
-				console.log(documentReadText);
+				console.log(consoleLogPrefix, documentReadText);
 			}
 		} else {
 			for (let i = 0; i < searchResults.results.length && i < targetResultCount; i++) {
 				fetchedResults = `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
 				fetchedResults = fetchedResults.substring(0, 256);
-				console.log(fetchedResults);
+				console.log(consoleLogPrefix, fetchedResults);
 				convertedText = convertedText + fetchedResults;
 				var documentReadText = searchAndConcatenateText(text);
-				console.log(documentReadText);
+				console.log(consoleLogPrefix, documentReadText);
 			}
 		}
 		combinedText = convertedText + documentReadText;
@@ -412,7 +414,7 @@ async function externalDataFetchingScraping(text) {
 		// }
 		// return convertedText;
 	} else {
-		console.log("No result returned!");
+		console.log(consoleLogPrefix, "No result returned!");
 		return text;
 	}
 }
@@ -467,6 +469,7 @@ function restart() {
 function initChat() {
 	if (runningShell) {
 		win.webContents.send("ready");
+		blockGUIForwarding = false;
 		return;
 	}
 	const ptyProcess = pty.spawn(shell, [], config);
@@ -474,28 +477,27 @@ function initChat() {
 	ptyProcess.onData(async (res) => {
 		res = stripAnsi(res);
 		//res = stripAdCtx(res);
-		console.log(`//> ${res}`);
+		console.log(consoleLogPrefix, "Output pty Stream",`//> ${res}`);
 		if ((res.includes("invalid model file") || res.includes("failed to open") || res.includes("failed to load model")) && res.includes("main: error: failed to load model")) {
 			if (runningShell) runningShell.kill();
 			win.webContents.send("modelPathValid", { data: false });
 		} else if (res.includes("\n>") && !alpacaReady) {
 			alpacaHalfReady = true;
-			console.log("Chatbot is ready after initialization!")
+			console.log(consoleLogPrefix, "Chatbot is ready after initialization!")
 		//	splashScreen.style.display = 'flex';
 		} else if (alpacaHalfReady && !alpacaReady) {
 			//when alpaca ready removes the splash screen
-			await new Promise(resolve => setTimeout(resolve, 1000));
-			console.log("Chatbot is ready!")
+			console.log(consoleLogPrefix, "Chatbot is ready!")
 			//splashScreen.style.display = 'none';
 			alpacaReady = true;
 			checkAVX = false;
 			win.webContents.send("ready");
-			console.log("ready!");
+			console.log(consoleLogPrefix, "ready!");
 		} else if (((res.startsWith("llama_model_load:") && res.includes("sampling parameters: ")) || (res.startsWith("main: interactive mode") && res.includes("sampling parameters: "))) && !checkAVX) {
 			checkAVX = true;
-			console.log("checking avx compat");
+			console.log(consoleLogPrefix, "checking avx compat");
 		} else if (res.match(/PS [A-Z]:.*>/) && checkAVX) {
-			console.log("avx2 incompatible, retrying with avx1");
+			console.log(consoleLogPrefix, "avx2 incompatible, retrying with avx1");
 			if (runningShell) runningShell.kill();
 			runningShell = undefined;
 			currentPrompt = undefined;
@@ -507,12 +509,13 @@ function initChat() {
 			initChat();
 		} else if (((res.match(/PS [A-Z]:.*>/) && platform == "win32") || (res.match(/bash-[0-9]+\.?[0-9]*\$/) && platform == "darwin") || (res.match(/([a-zA-Z0-9]|_|-)+@([a-zA-Z0-9]|_|-)+:?~(\$|#)/) && platform == "linux")) && alpacaReady) {
 			restart();
-		} else if (res.includes("\n>") && alpacaReady) {
+		} else if (res.includes("\n>") && alpacaReady && !blockGUIForwarding) {
 			win.webContents.send("result", {
 				data: "\n\n<end>"
 			});
-		} else if (!res.startsWith(currentPrompt) && !res.startsWith(startEndAdditionalContext_Flag) && alpacaReady) {
+		} else if (!res.startsWith(currentPrompt) && !res.startsWith(startEndAdditionalContext_Flag) && alpacaReady && !blockGUIForwarding) {
 			if (platform == "darwin") res = res.replaceAll("^C", "");
+			console.log(consoleLogPrefix, "Forwarding to GUI...", res);
 			win.webContents.send("result", {
 				data: res
 			});
@@ -550,14 +553,19 @@ ipcMain.on("message", async (_event, { data }) => {
 		if (store.get("params").webAccess) {
 			//runningShell.write(`${await externalDataFetchingScraping(data)}\r`);
 			//alpacaHalfReady = false;
+			blockGUIForwarding = true;
 			inputFetch = await decisionOnDataExternalAccess(data);
-			inputFetch = `${inputFetch} \n \n \n`
-			console.log(`Forwarding manipulated Input ${inputFetch}`)
+			inputFetch = `${inputFetch}`
+			console.log(consoleLogPrefix, `Forwarding manipulated Input ${inputFetch}`)
 			runningShell.write(inputFetch);
-			runningShell.write(`\r`)
+			runningShell.write(`\r`);
+			await new Promise(resolve => setTimeout(resolve, 500));
+			blockGUIForwarding = false;
 			//alpacaHalfReady = true;
 		} else {
+			blockGUIForwarding = true;
 			runningShell.write(`${data}\r`);
+			blockGUIForwarding = false;
 		}
 	}
 });
