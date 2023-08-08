@@ -1,4 +1,11 @@
+Write-Host "Currently Native Windows Support is under development while waiting use the .sh instead (use wsl2)"
+exit(1)
+# ----------------------------------------------------------------
+
 $ErrorActionPreference = "Stop"
+
+
+
 
 # Initialize Variables and check the platform and architecture
 $platform = $env:OS

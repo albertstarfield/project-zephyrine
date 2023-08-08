@@ -426,6 +426,20 @@ var alpacaReady,
 	alpacaHalfReady = false;
 var checkAVX,
 	isAVX2 = false;
+
+
+function restoreChat(){
+	console.log(consoleLogPrefix ,"stubFunction");
+	//read -> spam GUI win send data (User then AI) -> done
+}
+
+async function writeChatHistoryText(prompt, alpacaState0_half, alpacaState1){
+	console.log(consoleLogPrefix ,"stubFunction");
+	//only the filtered GUI text should be written and saved
+	//alpacaState0_half alpacaState1 should determine which of the user that is being sent the data or chat
+}
+
+
 if (store.get("supportsAVX2") == undefined) {
 	store.set("supportsAVX2", true);
 }

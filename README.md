@@ -34,6 +34,7 @@ Project Zephyrine
 - [x] Partial GPU/FPGA(opencl)/Tensor acceleration (cuBLAS, openBLAS, clBLAST, Metal) [EXPERIMENTAL WARNING!]
 - [x] DuckDuckGo integration for web access
 - [x] Pdf-parse Integration for local literature documents resources access
+- [ ] Native Windows Support 
 - [ ] Chat history
 - [ ] Integration with Stable Diffusion
 
@@ -54,7 +55,7 @@ Project Zephyrine
 
 ### Windows
 > **Note**  
-> The process will involve an automated compilation procedure, with all components being installed seamlessly and effortlessly. As a result, there will be no need for specific release binaries.
+> For Windows the launch sequence command are currently broken, You could try running the following command but it is under heavy development, you can see the update on the Issue section about Windows Native Support. In the meantime you could run it using wsl2 and wslg
 
 > Open Powershell and make sure you have git cli installed
 >
