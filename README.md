@@ -34,8 +34,10 @@ Project Zephyrine
 - [x] Partial GPU/FPGA(opencl)/Tensor acceleration (cuBLAS, openBLAS, clBLAST, Metal) [EXPERIMENTAL WARNING!]
 - [x] DuckDuckGo integration for web access
 - [x] Pdf-parse Integration for local literature documents resources access
-- [ ] Native Windows Support 
+- [ ] Fixing Broken Native Windows Support 
+- [ ] Granluar Toggles Mode in the settings section
 - [ ] Chat history
+- [ ] Fixing Local Files Reading Freezes
 - [ ] Integration with Stable Diffusion
 
 

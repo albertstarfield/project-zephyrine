@@ -179,13 +179,7 @@
 							</button>
 						</div>
 					</div>
-					<div style="display: flex; align-items: center">
-						<label class="switch" style="height: 16px">
-							<input type="checkbox" id="web-access" />
-							<span class="slider round"></span>
-						</label>
-						<p style="margin: 0">Additional Context Remote Web Access and Local Resources</p>
-					</div>
+					
 					<div class="info">Note: shift + enter for multiple lines</div>
 				</form>
 			</div>
@@ -294,10 +288,46 @@
 
 						<div style="height: 32px"></div>
 
-						<h3>Web search settings</h3>
+						<h3>Additional Context Settings</h3>
 						<div class="item">
 							<p>Web search result amount</p>
 							<input type="number" step="1" min="1" max="3" id="websearch_amount" value="3" placeholder="3" />
+						</div>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 16px">
+								<input type="checkbox" id="web-access" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Web Access</p>
+						</div>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 16px">
+								<input type="checkbox" id="local-file-access" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Local File Access</p>
+						</div>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 16px">
+								<input type="checkbox" id="LLMChildDecision" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Let LLM Decide to use the data</p>
+						</div>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 16px">
+								<input type="checkbox" id="longchainthought" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Allow Longchain Thought</p>
+						</div>
+						<h3>Chat History</h3>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 16px">
+								<input type="checkbox" id="saverestorechat" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Save and Restore Chat Session</p>
 						</div>
 					</div>
 				</div>

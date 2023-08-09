@@ -334,7 +334,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 const startEndThoughtProcessor_Flag = "[ThoughtsProcessor]_________________";
 const startEndAdditionalContext_Flag = "[AdCtx]_________________"; //global variable so every function can see and exclude it from the chat view
 const DDG = require("duck-duck-scrape");
-async function decisionOnDataExternalAccess(prompt){
+async function callInternalThoughtEngine(prompt){
 	//console.log(consoleLogPrefix, "Deciding Whether should i search it or not");
 	
 	const currentDate = new Date();
@@ -439,6 +439,13 @@ async function writeChatHistoryText(prompt, alpacaState0_half, alpacaState1){
 	//alpacaState0_half alpacaState1 should determine which of the user that is being sent the data or chat
 }
 
+
+let chatStg;
+async function chatArrayStorage(mode, prompt){
+	//mode save
+	//mode retrieve
+	// odd number for AI and even number is for user
+}
 
 if (store.get("supportsAVX2") == undefined) {
 	store.set("supportsAVX2", true);
@@ -564,23 +571,17 @@ ipcMain.on("startChat", () => {
 ipcMain.on("message", async (_event, { data }) => {
 	currentPrompt = data;
 	if (runningShell) {
-		if (store.get("params").webAccess) {
-			//runningShell.write(`${await externalDataFetchingScraping(data)}\r`);
-			//alpacaHalfReady = false;
-			blockGUIForwarding = true;
-			inputFetch = await decisionOnDataExternalAccess(data);
-			inputFetch = `${inputFetch}`
-			console.log(consoleLogPrefix, `Forwarding manipulated Input ${inputFetch}`)
-			runningShell.write(inputFetch);
-			runningShell.write(`\r`);
-			await new Promise(resolve => setTimeout(resolve, 500));
-			blockGUIForwarding = false;
-			//alpacaHalfReady = true;
-		} else {
-			blockGUIForwarding = true;
-			runningShell.write(`${data}\r`);
-			blockGUIForwarding = false;
-		}
+		//runningShell.write(`${await externalDataFetchingScraping(data)}\r`);
+		//alpacaHalfReady = false;
+		blockGUIForwarding = true;
+		inputFetch = await callInternalThoughtEngine(data);
+		inputFetch = `${inputFetch}`
+		console.log(consoleLogPrefix, `Forwarding manipulated Input ${inputFetch}`)
+		runningShell.write(inputFetch);
+		runningShell.write(`\r`);
+		await new Promise(resolve => setTimeout(resolve, 500));
+		blockGUIForwarding = false;
+		//alpacaHalfReady = true;
 	}
 });
 ipcMain.on("stopGeneration", () => {
