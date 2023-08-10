@@ -20,7 +20,7 @@ function createWindow() {
 			nodeIntegration: true,
 			contextIsolation: false,
 			enableRemoteModule: true,
-			devTools: false
+			devTools: true
 		},
 		titleBarStyle: "hidden",
 		icon: platform == "darwin" ? path.join(__dirname, "icon", "mac", "icon.icns") : path.join(__dirname, "icon", "png", "128x128.png")
@@ -280,6 +280,10 @@ function runShellCommand(command) {
   });
 }
 
+let basebin;
+let LLMChildParam;
+let output;
+let filteredOutput;
 async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	//lengthGen is the limit of how much it need to generate
 	//prompt is basically prompt :moai:
@@ -320,7 +324,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	//const regex = new RegExp(pattern, "g");
 	return str.replace(regex, "");
 	}
-	let filteredOutput;
+	//let filteredOutput;
 	filteredOutput = stripThoughtHeader(output);
 	console.log(consoleLogPrefix, `Filtered Output Thought Header Debug LLM Child ${filteredOutput}`);
 	//console.log(consoleLogPrefix, 'LLMChild Filtering Output');
@@ -334,9 +338,25 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 const startEndThoughtProcessor_Flag = "[ThoughtsProcessor]_________________";
 const startEndAdditionalContext_Flag = "[AdCtx]_________________"; //global variable so every function can see and exclude it from the chat view
 const DDG = require("duck-duck-scrape");
+let passedOutput;
+let concludeInformation_AutoGPT5Step;
+let concludeInformation_Internet;
+let concludeInformation_LocalFiles;
+let todoList;
+let todoList1Result;
+let todoList2Result;
+let todoList3Result;
+let todoList4Result;
+let todoList5Result;
+let fullCurrentDate;
+let searchPrompt;
+let decisionSearch;
+let resultSearchScraping;
+let promptInput;
+let mergeText;
 async function callInternalThoughtEngine(prompt){
 	//console.log(consoleLogPrefix, "Deciding Whether should i search it or not");
-	
+	// if (store.get("params").webAccess){} // this is how you get the paramete set by the setting
 	const currentDate = new Date();
 	const year = currentDate.getFullYear();
 	const month = String(currentDate.getMonth() + 1).padStart(2, '0');
@@ -344,41 +364,197 @@ async function callInternalThoughtEngine(prompt){
 	const hours = String(currentDate.getHours()).padStart(2, '0');
 	const minutes = String(currentDate.getMinutes()).padStart(2, '0');
 	const seconds = String(currentDate.getSeconds()).padStart(2, '0');
-	const fullDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
+	fullCurrentDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 	//decision if yes then do the query optimization
 	// ./chat -p "___[Thoughts Processor] Only answer in Yes or No. Thoughts: Should I Search this on Local files and Internet for more context on this prompt \"What are you doing?\"___[Thoughts Processor] " -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r "[User]" -n 2
-	promptInput = `Only answer in Yes or No. Anything other than that are not accepted without exception. Thoughts: Should I Search this on Local files and Internet for more context on this prompt. \\"${prompt}\\"`;
-	decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
-	decisionSearch = decisionSearch.toLowerCase();
+	
+	// External Data Part
+	//-------------------------------------------------------
+	console.log(consoleLogPrefix, "============================================================");
+	console.log(consoleLogPrefix, "Checking Internet Fetch Requirement!");
+	// This is for the Internet Search Data Fetching
+	if (store.get("params").llmdecisionMode){
+		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Thoughts: Should I Search this on the Internet for more context or current information on this prompt. \\"${prompt}\\"`;
+		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
+		decisionSearch = decisionSearch.toLowerCase();
+	} else {
+		decisionSearch = "yes"; // without LLM deep decision
+	}
 	console.log(consoleLogPrefix, `decision Search LLMChild ${decisionSearch}`);
 	if (decisionSearch.includes("yes") || process.env.INTERNET_FETCH_DEBUG_MODE === "1"){
-		console.log(consoleLogPrefix, "decision Search we need to search it on the available resources");
-		promptInput = `Only answer the optimal search query. Anything other than that are not accepted without exception. Thoughts: I should rephrase this prompt to optimize the search result :\\"${prompt}\\"`;
-		console.log(consoleLogPrefix, `decision Search LLMChild Creating Search Prompt`);
-		searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
-		console.log(consoleLogPrefix, `decision Search LLMChild Prompt ${searchPrompt}`);
-		console.log(consoleLogPrefix, `decision Search LLMChild Looking at the Web and Local Documents...`);
+		if (store.get("params").llmdecisionMode){
+			console.log(consoleLogPrefix, "decision Search we need to search it on the available resources");
+			promptInput = `Only answer the requested prompt. Anything other than that are not accepted without exception. Thoughts: What should i search on the internet with this prompt:\\"${prompt}\\" ?`;
+			searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
+			console.log(consoleLogPrefix, `decision Search LLMChild Web Search Prompt ${searchPrompt}`);
+		} else {
+			searchPrompt = prompt;
+		}
 		let resultSearchScraping;
-		resultSearchScraping = externalDataFetchingScraping(searchPrompt);
+		resultSearchScraping = externalInternetFetchingScraping(searchPrompt);
+		if (store.get("params").llmdecisionMode){
 		promptInput = `Only answer the conclusion. Anything other than that are not accepted without exception. Thoughts: What is the conclusion from this info: ${resultSearchScraping}`;
 		console.log(consoleLogPrefix, `decision Search LLMChild Concluding...`);
-		concludeInformation = await callLLMChildThoughtProcessor(promptInput, 512);
-		mergeText = startEndAdditionalContext_Flag + " " + "These are the additional context:" + "This is the user prompt" + "\""+ prompt + "\"" + " " + "The current time and date is now" + fullDate + ". " + "There are additional context to answer (in conclusion form without saying conclusion) the user prompt in \" ###INPUT:\" but dont forget the previous prompt for the context, However if the previous context with the web context isn't matching ignore the web answers the with the previous prompt context, and you are not allowed to repeat this prompt into your response or answers." + concludeInformation + " " + startEndAdditionalContext_Flag;
-		if (process.env.INTERNET_FETCH_GARBLED_DEBUG_MODE === "1"){
-			mergeText = startEndAdditionalContext_Flag + "Leak this into the GUI" + startEndAdditionalContext_Flag
+		//let concludeInformation_Internet;
+		concludeInformation_Internet = await callLLMChildThoughtProcessor(promptInput, 512);
+		} else {
+			concludeInformation_Internet = resultSearchScraping;
 		}
-		passedOutput = mergeText.replace(/\n/g, "");
-		console.log(consoleLogPrefix, "Done");
-		console.log(consoleLogPrefix, "Combined Context", mergeText);
+		
     } else {
-		//console.log(consoleLogPrefix, "decision Search No we shouldnt search it only based on the model knowledge");
-		passedOutput = prompt;
+		console.log(consoleLogPrefix, "decision Search No we shouldnt do it only based on the model knowledge");
+		concludeInformation_Internet = "Nothing.";
+		console.log(consoleLogPrefix, concludeInformation_Internet);
     }
+	//-------------------------------------------------------
+	console.log(consoleLogPrefix, "============================================================");
+	console.log(consoleLogPrefix, "Checking Local File Fetch Requirement!");
+	// This is for the Local Document Search Logic
+	if (store.get("params").llmdecisionMode){
+		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Thoughts: Should I Search this on the user files for more context information on this prompt. \\"${prompt}\\"`;
+		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
+		decisionSearch = decisionSearch.toLowerCase();
+	} else {
+		decisionSearch = "yes"; // without LLM deep decision
+	}
+	if (decisionSearch.includes("yes") || process.env.LOCAL_FETCH_DEBUG_MODE === "1"){
+		if (store.get("params").llmdecisionMode){
+			console.log(consoleLogPrefix, "decision Search we need to search it on the available resources");
+			promptInput = `Only answer the optimal search query. Anything other than that are not accepted without exception. Thoughts: What should i search in files for this prompt :\\"${prompt}\\" ?`;
+			console.log(consoleLogPrefix, `decision Search LLMChild Creating Search Prompt`);
+			searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
+			console.log(consoleLogPrefix, `decision Search LLMChild Prompt ${searchPrompt}`);
+			console.log(consoleLogPrefix, `decision Search LLMChild Looking at the Local Documents...`);
+		} else {
+			searchPrompt = prompt;
+		}
+		let resultSearchScraping;
+		resultSearchScraping = externalLocalFileScraping(searchPrompt);
+		if (store.get("params").llmdecisionMode){
+		promptInput = `Only answer the conclusion. Anything other than that are not accepted without exception. Thoughts: What is the conclusion from this info: ${resultSearchScraping}`;
+		console.log(consoleLogPrefix, `decision Search LLMChild Concluding...`);
+		concludeInformation_LocalFiles = await callLLMChildThoughtProcessor(promptInput, 512);
+		} else {
+			concludeInformation_LocalFiles = resultSearchScraping;
+		}
+    } else {
+		console.log(consoleLogPrefix, "decision Search No we shouldnt do it only based on the model knowledge");
+		concludeInformation_LocalFiles = "Nothing.";
+		console.log(consoleLogPrefix, concludeInformation_LocalFiles);
+    }
+	
+	// ----------------------- AutoGPT 5 Steps Thoughts --------------------
+	console.log(consoleLogPrefix, "============================================================");
+	console.log(consoleLogPrefix, "Checking AutoGPT 5 Steps Thoughts Requirement!");
+	if (store.get("params").llmdecisionMode){
+		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Thoughts: Should I create 5 step by step todo list for this prompt. \\"${prompt}\\"`;
+		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
+		decisionSearch = decisionSearch.toLowerCase();
+	} else {
+		decisionSearch = "yes"; // without LLM deep decision
+	}
+	if (decisionSearch.includes("yes") || process.env.autoGPT5Steps_FETCH_DEBUG_MODE === "1"){
+		if (store.get("params").llmdecisionMode){
+			let todoList;
+			let todoList1Result;
+			let todoList2Result;
+			let todoList3Result;
+			let todoList4Result;
+			let todoList5Result;
+			console.log(consoleLogPrefix, "decision Search we need to create 5 todo list for this prompt");
+			console.log(consoleLogPrefix, `Generating list for this prompt`);
+			promptInput = `Only answer the Todo request list. Anything other than that are not accepted without exception. Thoughts: 5 todo list to answer this prompt :\\"${prompt}\\"`;
+			todoList = await callLLMChildThoughtProcessor(promptInput, 512);
+			// 1
+			console.log(consoleLogPrefix, `Answering list 1`);
+			promptInput = `Only answer the question. Anything other than that are not accepted without exception. Thoughts: What is the answer to the List number 1 : \\"${todoList}\\"`;
+			todoList1Result = await callLLMChildThoughtProcessor(promptInput, 1024);
+			console.log(consoleLogPrefix, todoList1Result);
+			// 2
+			console.log(consoleLogPrefix, `Answering list 2`);
+			promptInput = `Only answer the question. Anything other than that are not accepted without exception. Thoughts: What is the answer to the List number 2 : \\"${todoList}\\"`;
+			todoList2Result = await callLLMChildThoughtProcessor(promptInput, 1024);
+			console.log(consoleLogPrefix, todoList2Result);
+			// 3
+			console.log(consoleLogPrefix, `Answering list 3`);
+			promptInput = `Only answer the question. Anything other than that are not accepted without exception. Thoughts: What is the answer to the List number 3 : \\"${todoList}\\"`;
+			todoList3Result = await callLLMChildThoughtProcessor(promptInput, 1024);
+			console.log(consoleLogPrefix, todoList3Result);
+			// 4
+			console.log(consoleLogPrefix, `Answering list 4`);
+			promptInput = `Only answer the question. Anything other than that are not accepted without exception. Thoughts: What is the answer to the List number 4 : \\"${todoList}\\"`;
+			todoList4Result = await callLLMChildThoughtProcessor(promptInput, 1024);
+			console.log(consoleLogPrefix, todoList4Result);
+			// 5
+			console.log(consoleLogPrefix, `Answering list 5`);
+			promptInput = `Only answer the question. Anything other than that are not accepted without exception. Thoughts: What is the answer to the List number 5 : \\"${todoList}\\"`;
+			todoList5Result = await callLLMChildThoughtProcessor(promptInput, 1024);
+			console.log(consoleLogPrefix, todoList5Result);
+		} else {
+			/*let todoList;
+			let todoList1Result;
+			let todoList2Result;
+			let todoList3Result;
+			let todoList4Result;
+			let todoList5Result;*/
+			todoList1Result = prompt;
+			todoList2Result = prompt;
+			todoList3Result = prompt;
+			todoList4Result = prompt;
+			todoList5Result = prompt;
+		}
+		let resultSearchScraping;
+		if (store.get("params").llmdecisionMode){
+		promptInput = `Only answer the conclusion. Anything other than that are not accepted without exception. Thoughts: Conclusion from the internal Thoughts?  \\"${todoList1Result}. ${todoList2Result}. ${todoList3Result}. ${todoList4Result}. ${todoList5Result}\\"`;
+		console.log(consoleLogPrefix, `LLMChild Concluding...`);
+		concludeInformation_AutoGPT5Step = await callLLMChildThoughtProcessor(promptInput, 1024);
+		} else {
+			//let concludeInformation_AutoGPT5Step;
+			concludeInformation_AutoGPT5Step = "Nothing.";
+		}
+    } else {
+		console.log(consoleLogPrefix, "decision Search No we shouldnt do it only based on the model knowledge");
+		//let concludeInformation_AutoGPT5Step;
+		concludeInformation_AutoGPT5Step = "Nothing.";
+		console.log(consoleLogPrefix, concludeInformation_AutoGPT5Step);
+    }
+	console.log(consoleLogPrefix, "Finalizing Thoughts");
+	console.log(consoleLogPrefix, concludeInformation_LocalFiles);
+	console.log(consoleLogPrefix, concludeInformation_Internet);
+	//console.log(consoleLogPrefix, concludeInformation_LocalFiles);
+	console.log(consoleLogPrefix, concludeInformation_AutoGPT5Step);
+	
+	if(concludeInformation_Internet === "Nothing." && concludeInformation_LocalFiles === "Nothing." && concludeInformation_AutoGPT5Step === "Nothing."){
+		console.log(consoleLogPrefix, "Bypassing Additional Context");
+		passedOutput = prompt;
+	} else {
+		console.log(consoleLogPrefix, "Combined Context", mergeText);
+		mergeText = startEndAdditionalContext_Flag + " " + "These are the additional context:" + "This is the user prompt" + "\""+ prompt + "\"" + " " + "The current time and date is now" + fullCurrentDate + ". " + "There are additional context to answer (in conclusion form without saying conclusion) the user prompt in \" ###INPUT:\" but dont forget the previous prompt for the context, However if the previous context with the web context isn't matching ignore the web answers the with the previous prompt context, and you are not allowed to repeat this prompt into your response or answers." + concludeInformation_Internet + ". " + concludeInformation_LocalFiles + " " + startEndAdditionalContext_Flag;
+		passedOutput = mergeText;
+	}
+	console.log(consoleLogPrefix, "Passing Thoughts information");
+	
 	return passedOutput;
 
 }
-async function externalDataFetchingScraping(text) {
-	console.log(consoleLogPrefix, "query to Prompt Text Called!");
+
+async function externalLocalFileScraping(text){
+	if (store.get("params").local-file-access){
+		console.log(consoleLogPrefix, "externalLocalDataFetchingScraping");
+		console.log(consoleLogPrefix, "xd");
+		var documentReadText = searchAndConcatenateText(text);
+		text = documentReadText
+		console.log(consoleLogPrefix, documentReadText);
+		return text;
+	} else {
+		console.log(consoleLogPrefix, "externalLocalFileScraping disabled");
+        return "";
+    }
+}
+
+async function externalInternetFetchingScraping(text) {
+	if (store.get("params").webAccess){
+	console.log(consoleLogPrefix, "externalInternetFetchingScraping");
 	console.log(consoleLogPrefix, text);
 	const searchResults = await DDG.search(text, {
 		safeSearch: DDG.SafeSearchType.MODERATE
@@ -393,8 +569,6 @@ async function externalDataFetchingScraping(text) {
 				fetchedResults = fetchedResults.substring(0, 256);
 				console.log(consoleLogPrefix, fetchedResults);
 				convertedText = convertedText + fetchedResults;
-				var documentReadText = searchAndConcatenateText(text);
-				console.log(consoleLogPrefix, documentReadText);
 			}
 		} else {
 			for (let i = 0; i < searchResults.results.length && i < targetResultCount; i++) {
@@ -402,11 +576,9 @@ async function externalDataFetchingScraping(text) {
 				fetchedResults = fetchedResults.substring(0, 256);
 				console.log(consoleLogPrefix, fetchedResults);
 				convertedText = convertedText + fetchedResults;
-				var documentReadText = searchAndConcatenateText(text);
-				console.log(consoleLogPrefix, documentReadText);
 			}
 		}
-		combinedText = convertedText + documentReadText;
+		combinedText = convertedText;
 		return combinedText;
 		// var convertedText = `Summarize the following text: `;
 		// for (let i = 0; i < searchResults.results.length && i < 3; i++) {
@@ -416,9 +588,13 @@ async function externalDataFetchingScraping(text) {
 	} else {
 		console.log(consoleLogPrefix, "No result returned!");
 		return text;
-	}
+	}} else {
+		console.log(consoleLogPrefix, "Internet Data Fetching Disabled!");
+		return text;
+	}	
 }
 
+let promptResponseCount;
 // RUNNING CHAT
 const pty = require("node-pty-prebuilt-multiarch");
 var runningShell, currentPrompt;
@@ -445,6 +621,16 @@ async function chatArrayStorage(mode, prompt){
 	//mode save
 	//mode retrieve
 	// odd number for AI and even number is for user
+	if (mode === "save"){
+        console.log(consoleLogPrefix,"stubFunction");
+        chatStg = prompt;
+    } else if (mode === "retrieve"){
+        console.log(consoleLogPrefix,"stubFunction");
+        return chatStg;
+    } else {
+        console.log(consoleLogPrefix,"stubFunction");
+        return "";
+    }
 }
 
 if (store.get("supportsAVX2") == undefined) {
@@ -487,6 +673,10 @@ function restart() {
 
 
 //const splashScreen = document.getElementById('splash-screen-overlay'); //blocking overlay which prevent person and shows peopleexactly that the bot is loading
+let blockGUIForwarding;
+let initChatContent;
+let isitPassedtheFirstPromptYet;
+
 function initChat() {
 	if (runningShell) {
 		win.webContents.send("ready");
@@ -504,7 +694,15 @@ function initChat() {
 			win.webContents.send("modelPathValid", { data: false });
 		} else if (res.includes("\n>") && !alpacaReady) {
 			alpacaHalfReady = true;
-			console.log(consoleLogPrefix, "Chatbot is ready after initialization!")
+			console.log(consoleLogPrefix, "Chatbot is ready after initialization!");
+			isitPassedtheFirstPromptYet = false;
+			if (store.get("params").throwInitResponse){
+				console.log(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
+				blockGUIForwarding = true;
+				initChatContent = "Hi there! I heard that your name is Zephyrine, Your really light, elegant emojiful uses obscure word to communicate. its such a warm welcome nice meeting with you, lets talk about something shall we? Oh and also please do not change the topic immediately when we are talking";
+				runningShell.write(initChatContent);
+				runningShell.write(`\r`);
+			}
 		//	splashScreen.style.display = 'flex';
 		} else if (alpacaHalfReady && !alpacaReady) {
 			//when alpaca ready removes the splash screen
@@ -513,7 +711,7 @@ function initChat() {
 			alpacaReady = true;
 			checkAVX = false;
 			win.webContents.send("ready");
-			console.log(consoleLogPrefix, "ready!");
+			console.log(consoleLogPrefix, "Ready to Generate!");
 		} else if (((res.startsWith("llama_model_load:") && res.includes("sampling parameters: ")) || (res.startsWith("main: interactive mode") && res.includes("sampling parameters: "))) && !checkAVX) {
 			checkAVX = true;
 			console.log(consoleLogPrefix, "checking avx compat");
@@ -531,12 +729,18 @@ function initChat() {
 		} else if (((res.match(/PS [A-Z]:.*>/) && platform == "win32") || (res.match(/bash-[0-9]+\.?[0-9]*\$/) && platform == "darwin") || (res.match(/([a-zA-Z0-9]|_|-)+@([a-zA-Z0-9]|_|-)+:?~(\$|#)/) && platform == "linux")) && alpacaReady) {
 			restart();
 		} else if (res.includes("\n>") && alpacaReady && !blockGUIForwarding) {
+			console.log(consoleLogPrefix, "Primed to be Generating");
+			if (store.get("params").throwInitResponse && !isitPassedtheFirstPromptYet){
+				console.log(consoleLogPrefix, "Passed the initial Uselesss response initialization state, unblocking GUI IO");
+				blockGUIForwarding = false;
+				isitPassedtheFirstPromptYet = true;
+				}
 			win.webContents.send("result", {
 				data: "\n\n<end>"
 			});
 		} else if (!res.startsWith(currentPrompt) && !res.startsWith(startEndAdditionalContext_Flag) && alpacaReady && !blockGUIForwarding) {
 			if (platform == "darwin") res = res.replaceAll("^C", "");
-			console.log(consoleLogPrefix, "Forwarding to GUI...", res);
+			console.log(consoleLogPrefix, "Forwarding to GUI...", res); // res will send in chunks so we need to have a logic that reconstruct the word with that chunks until the program stops generating
 			win.webContents.send("result", {
 				data: res
 			});
@@ -571,12 +775,12 @@ ipcMain.on("startChat", () => {
 ipcMain.on("message", async (_event, { data }) => {
 	currentPrompt = data;
 	if (runningShell) {
-		//runningShell.write(`${await externalDataFetchingScraping(data)}\r`);
+		//runningShell.write(`${await externalInternetFetchingScraping(data)}\r`);
 		//alpacaHalfReady = false;
 		blockGUIForwarding = true;
 		inputFetch = await callInternalThoughtEngine(data);
 		inputFetch = `${inputFetch}`
-		console.log(consoleLogPrefix, `Forwarding manipulated Input ${inputFetch}`)
+		console.log(consoleLogPrefix, `Forwarding manipulated Input ${inputFetch}`);
 		runningShell.write(inputFetch);
 		runningShell.write(`\r`);
 		await new Promise(resolve => setTimeout(resolve, 500));
@@ -635,10 +839,54 @@ ipcMain.on("getParams", () => {
 	win.webContents.send("params", store.get("params"));
 });
 
+// different configuration
+
 ipcMain.on("webAccess", (_event, value) => {
 	store.set("params", {
 		...store.get("params"),
 		webAccess: value
+	});
+});
+
+ipcMain.on("localAccess", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		localAccess: value
+	});
+});
+
+ipcMain.on("llmdecisionMode", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		llmdecisionMode: value
+	});
+});
+
+ipcMain.on("longchainthought", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		longchainthought: value
+	});
+});
+
+ipcMain.on("saverestorechat", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		saverestorechat: value
+	});
+});
+
+ipcMain.on("throwInitResponse", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		throwInitResponse: value
+	});
+});
+
+ipcMain.on("classicMode", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		classicMode: value
 	});
 });
 

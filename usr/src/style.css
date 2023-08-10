@@ -107,7 +107,7 @@ h4,
 h5,
 h6 {
 	font-size: revert;
-	font-weight: bold;
+	font-weight: 300;
 }
 
 code {

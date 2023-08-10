@@ -604,4 +604,4 @@ echo "LLaMa installation completed successfully."
 
 cd ${rootdir}/usr/release-builds/*Zephyrine*/
 chmod +x Project*Zephyrine*
-"./Project Zephyrine" --no-sandbox --disable-dev-shm-usage
+"./Project Zephyrine" --no-sandbox --disable-dev-shm-usage --enable-logging

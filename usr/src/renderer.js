@@ -361,6 +361,12 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("temp").value = data.temp;
 	document.getElementById("seed").value = data.seed;
 	document.getElementById("web-access").checked = data.webAccess;
+	document.getElementById("local-file-access").checked = data.localAccess;
+	document.getElementById("LLMChildDecision").checked = data.llmdecisionMode;
+	document.getElementById("longchainthought").checked = data.extensiveThought;
+	document.getElementById("saverestorechat").checked = data.SaveandRestorechat;
+	document.getElementById("throwInitialGarbageResponse").checked = data.throwInitResponse;
+	document.getElementById("classicmode").checked = data.classicMode;
 });
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
@@ -373,6 +379,12 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			temp: document.getElementById("temp").value || document.getElementById("temp").placeholder,
 			seed: document.getElementById("seed").value || document.getElementById("seed").placeholder,
 			webAccess: document.getElementById("web-access").checked,
+			localAccess: document.getElementById("local-file-access").checked,
+            llmdecisionMode: document.getElementById("LLMChildDecision").checked,
+            extensiveThought: document.getElementById("longchainthought").checked,
+            SaveandRestorechat: document.getElementById("saverestorechat").checked,
+			throwInitResponse: document.getElementById("throwInitialGarbageResponse").checked,
+			classicMode: document.getElementById("classicmode").checked,
 			websearch_amount: document.getElementById("websearch_amount").value || document.getElementById("websearch_amount").placeholder
 		}
 	});
@@ -386,6 +398,22 @@ document.getElementById("web-access").addEventListener("change", () => {
 	ipcRenderer.send("webAccess", document.getElementById("web-access").checked);
 });
 
+document.getElementById("local-file-access").addEventListener("change", () => {
+	ipcRenderer.send("localAccess", document.getElementById("local-file-access").checked);
+});
+
+document.getElementById("LLMChildDecision").addEventListener("change", () => {
+	ipcRenderer.send("llmdecisionMode", document.getElementById("LLMChildDecision").checked);
+});
+
+document.getElementById("longchainthought").addEventListener("change", () => {
+	ipcRenderer.send("extensiveThought", document.getElementById("longchainthought").checked);
+});
+
+document.getElementById("saverestorechat").addEventListener("change", () => {
+	ipcRenderer.send("SaveandRestorechat", document.getElementById("saverestorechat").checked);
+});
+
 document.getElementById("settings-preset").addEventListener("change", () => {
 	console.log("hi");
 	const value = document.getElementById("settings-preset").value;
@@ -396,19 +424,5 @@ document.getElementById("settings-preset").addEventListener("change", () => {
 		document.getElementById("top_k").value = 420;
 		document.getElementById("top_p").value = 90;
 		document.getElementById("temp").value = 0.9;
-	} else if (value == "vicuna") {
-		document.getElementById("model").value = "vicuna";
-		document.getElementById("repeat_last_n").value = 64;
-		document.getElementById("repeat_penalty").value = 1.1;
-		document.getElementById("top_k").value = 420;
-		document.getElementById("top_p").value = 10;
-		document.getElementById("temp").value = 0.7;
-	} else if (value == "llama") {
-		document.getElementById("model").value = "llama";
-		document.getElementById("repeat_last_n").value = 64;
-		document.getElementById("repeat_penalty").value = 1.3;
-		document.getElementById("top_k").value = 420;
-		document.getElementById("top_p").value = 90;
-		document.getElementById("temp").value = 0.8;
 	}
 });
