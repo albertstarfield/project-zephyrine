@@ -61,7 +61,7 @@ Project Zephyrine
 
 > Open Powershell and make sure you have git cli installed
 >
->```git clone https://github.com/ItsPi3141/alpaca-electron.git```
+>```git clone https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal```
 >
 >Change your current directory to alpaca-electron:
 >
@@ -77,7 +77,7 @@ Project Zephyrine
 > The process will involve an automated compilation procedure, with all components being installed seamlessly and effortlessly. As a result, there will be no need for specific release binaries.
 
 >
->```git clone https://github.com/ItsPi3141/alpaca-electron.git```
+>```git clone https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal```
 >
 >Change your current directory to alpaca-electron:
 >

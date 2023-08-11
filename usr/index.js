@@ -357,6 +357,7 @@ let mergeText;
 async function callInternalThoughtEngine(prompt){
 	//console.log(consoleLogPrefix, "Deciding Whether should i search it or not");
 	// if (store.get("params").webAccess){} // this is how you get the paramete set by the setting
+	if (!store.get("params").classicMode){
 	const currentDate = new Date();
 	const year = currentDate.getFullYear();
 	const month = String(currentDate.getMonth() + 1).padStart(2, '0');
@@ -533,6 +534,9 @@ async function callInternalThoughtEngine(prompt){
 		passedOutput = mergeText;
 	}
 	console.log(consoleLogPrefix, "Passing Thoughts information");
+	}else{
+		passedOutput = prompt;
+	}
 	
 	return passedOutput;
 
