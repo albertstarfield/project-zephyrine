@@ -529,7 +529,7 @@ async function callInternalThoughtEngine(prompt){
 		passedOutput = prompt;
 	} else {
 		console.log(consoleLogPrefix, "Combined Context", mergeText);
-		mergeText = startEndAdditionalContext_Flag + " " + "These are the additional context:" + "This is the user prompt" + "\""+ prompt + "\"" + " " + "The current time and date is now" + fullCurrentDate + ". " + "There are additional context to answer (in conclusion form without saying conclusion) the user prompt in \" ###INPUT:\" but dont forget the previous prompt for the context, However if the previous context with the web context isn't matching ignore the web answers the with the previous prompt context, and you are not allowed to repeat this prompt into your response or answers." + concludeInformation_Internet + ". " + concludeInformation_LocalFiles + " " + startEndAdditionalContext_Flag;
+		mergeText = startEndAdditionalContext_Flag + " " + "These are the additional context:" + "This is the user prompt" + "\""+ prompt + "\"" + " " + "The current time and date is now" + fullCurrentDate + ". " + "There are additional context to answer (in conclusion form without saying conclusion) the user prompt in but dont forget the previous prompt for the context, However if the previous context with the web context isn't matching ignore the web answers the with the previous prompt context, and you are not allowed to repeat this prompt into your response or answers. \" ###System:\" " + concludeInformation_Internet + ". " + concludeInformation_LocalFiles + " " + startEndAdditionalContext_Flag;
 		passedOutput = mergeText;
 	}
 	console.log(consoleLogPrefix, "Passing Thoughts information");
