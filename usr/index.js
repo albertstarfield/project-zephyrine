@@ -325,7 +325,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	// ---------------------------------------
 	const stripThoughtHeader = (str) => {
 	 //or you could use the variable and add * since its regex i actually forgot about that
-	 const stripThoughtHeaderregex = /\[\]_{1,}.*?\[\]_{1,}/g;
+	 const stripThoughtHeaderregex = /\_{2,}.*?\_{2,}/g;
 	//const pattern = [];
 	//const regex = new RegExp(pattern, "g");
 	return str.replace(stripThoughtHeaderregex, "");
@@ -342,7 +342,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 
 
 
-const startEndThoughtProcessor_Flag = "[]_"; // we can remove [ThoughtProcessor] word from the phrase to prevent any processing or breaking the chat context on the LLM and instead just use ___ three underscores
+const startEndThoughtProcessor_Flag = "__"; // we can remove [ThoughtProcessor] word from the phrase to prevent any processing or breaking the chat context on the LLM and instead just use ___ three underscores
 const startEndAdditionalContext_Flag = ""; //global variable so every function can see and exclude it from the chat view
 // we can savely blank out the startEndAdditionalContext flag because we are now based on the blockGUI forwarding concept rather than flag matching
 const DDG = require("duck-duck-scrape");
@@ -362,9 +362,27 @@ let decisionSearch;
 let resultSearchScraping;
 let promptInput;
 let mergeText;
+let inputPromptCounterSplit;
+let inputPromptCounter = [];
+let historyChatRetrieved = [];
+let inputPromptCounterThreshold = 6;
 async function callInternalThoughtEngine(prompt){
 	//console.log(consoleLogPrefix, "Deciding Whether should i search it or not");
 	// if (store.get("params").webAccess){} // this is how you get the paramete set by the setting
+	historyChatRetrieved[1]=chatArrayStorage("retrieve", "", false, false, chatStgOrder-1);
+	historyChatRetrieved[2]=chatArrayStorage("retrieve", "", false, false, chatStgOrder-2);
+	
+	// Counting the number of words in the Chat prompt and history
+	inputPromptCounterSplit = prompt.split(" ");
+	inputPromptCounter[0] = inputPromptCounterSplit.length;
+
+	inputPromptCounterSplit = historyChatRetrieved[1].split(" ");
+	inputPromptCounter[1] = inputPromptCounterSplit.length;
+
+	inputPromptCounterSplit = historyChatRetrieved[2].split(" ");
+	inputPromptCounter[2] = inputPromptCounterSplit.length;
+
+
 	if (!store.get("params").classicMode){
 	const currentDate = new Date();
 	const year = currentDate.getFullYear();
@@ -382,28 +400,37 @@ async function callInternalThoughtEngine(prompt){
 	console.log(consoleLogPrefix, "Checking Internet Fetch Requirement!");
 	// This is for the Internet Search Data Fetching
 	if (store.get("params").llmdecisionMode){
-		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this prompt. \\"${prompt}\\"`;
+		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this prompt. \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\`;
 		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
 		decisionSearch = decisionSearch.toLowerCase();
 	} else {
 		decisionSearch = "yes"; // without LLM deep decision
 	}
 	console.log(consoleLogPrefix, `decision Search LLMChild ${decisionSearch}`);
-	if (decisionSearch.includes("yes") || process.env.INTERNET_FETCH_DEBUG_MODE === "1"){
+	// explanation on the inputPromptCounterThreshold
+	// Isn't the decision made by LLM? Certainly, while LLM or the LLMChild contributes to the decision-making process, it lacks the depth of the main thread. This can potentially disrupt the coherence of the prompt context, underscoring the importance of implementing a safety measure like a word threshold before proceeding to the subsequent phase.
+	if (((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.INTERNET_FETCH_DEBUG_MODE === "1"){
 		if (store.get("params").llmdecisionMode){
 			console.log(consoleLogPrefix, "decision Search we need to search it on the available resources");
-			promptInput = `What should i search on the internet with this prompt:\\"${prompt}\\" ?`;
+			promptInput = `What should i search on the internet with this prompt  \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\ ?`;
 			searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
 			console.log(consoleLogPrefix, `decision Search LLMChild Web Search Prompt ${searchPrompt}`);
 		} else {
 			searchPrompt = prompt;
 		}
 		resultSearchScraping = externalInternetFetchingScraping(searchPrompt);
+		
 		if (store.get("params").llmdecisionMode){
+			inputPromptCounterSplit = resultSearchScraping.split(" ");
+			inputPromptCounter[3] = inputPromptCounterSplit.length;
+		if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
 		promptInput = `What is the conclusion from this info: ${resultSearchScraping}`;
 		console.log(consoleLogPrefix, `decision Search LLMChild Concluding...`);
 		//let concludeInformation_Internet;
 		concludeInformation_Internet = await callLLMChildThoughtProcessor(promptInput, 512);
+		} else {
+		concludeInformation_Internet = "Nothing.";
+		}
 		} else {
 			concludeInformation_Internet = resultSearchScraping;
 		}
@@ -418,16 +445,16 @@ async function callInternalThoughtEngine(prompt){
 	console.log(consoleLogPrefix, "Checking Local File Fetch Requirement!");
 	// This is for the Local Document Search Logic
 	if (store.get("params").llmdecisionMode){
-		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this prompt. \\"${prompt}\\"`;
+		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this prompt \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\`;
 		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
 		decisionSearch = decisionSearch.toLowerCase();
 	} else {
 		decisionSearch = "yes"; // without LLM deep decision
 	}
-	if (decisionSearch.includes("yes") || process.env.LOCAL_FETCH_DEBUG_MODE === "1"){
+	if (((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.LOCAL_FETCH_DEBUG_MODE === "1"){
 		if (store.get("params").llmdecisionMode){
 			console.log(consoleLogPrefix, "decision Search we need to search it on the available resources");
-			promptInput = `What should i search in files for this prompt :\\"${prompt}\\" ?`;
+			promptInput = `What should i search in files for this prompt  \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\?`;
 			console.log(consoleLogPrefix, `decision Search LLMChild Creating Search Prompt`);
 			searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
 			console.log(consoleLogPrefix, `decision Search LLMChild Prompt ${searchPrompt}`);
@@ -438,9 +465,15 @@ async function callInternalThoughtEngine(prompt){
 		let resultSearchScraping;
 		resultSearchScraping = externalLocalFileScraping(searchPrompt);
 		if (store.get("params").llmdecisionMode){
+			inputPromptCounterSplit = resultSearchScraping.split(" ");
+			inputPromptCounter[3] = inputPromptCounterSplit.length;
+		if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
 		promptInput = `What is the conclusion from this info: ${resultSearchScraping}`;
 		console.log(consoleLogPrefix, `decision Search LLMChild Concluding...`);
 		concludeInformation_LocalFiles = await callLLMChildThoughtProcessor(promptInput, 512);
+	} else {
+		concludeInformation_LocalFiles = "Nothing.";
+	}
 		} else {
 			concludeInformation_LocalFiles = resultSearchScraping;
 		}
@@ -454,42 +487,48 @@ async function callInternalThoughtEngine(prompt){
 	console.log(consoleLogPrefix, "============================================================");
 	console.log(consoleLogPrefix, "Checking AutoGPT 5 Steps Thoughts Requirement!");
 	if (store.get("params").llmdecisionMode){
-		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this prompt. \\"${prompt}\\"`;
+		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this current prompt which is \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\`;
 		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
 		decisionSearch = decisionSearch.toLowerCase();
 	} else {
 		decisionSearch = "yes"; // without LLM deep decision
 	}
-	if (decisionSearch.includes("yes") || process.env.autoGPT5Steps_FETCH_DEBUG_MODE === "1"){
+	if (((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.autoGPT5Steps_FETCH_DEBUG_MODE === "1"){
 		if (store.get("params").llmdecisionMode){
 			console.log(consoleLogPrefix, "decision Search we need to create 5 todo list for this prompt");
 			console.log(consoleLogPrefix, `Generating list for this prompt`);
 			promptInput = `Create 5 steps either questions or answer starting from its fundamental to answer this prompt :\\"${prompt}\\"`;
 			promptInput = promptInput.replace(/\n/g, " ");
+			promptInput = stripAnsi(promptInput);
 			todoList = await callLLMChildThoughtProcessor(promptInput, 512);
 			// 1
 			console.log(consoleLogPrefix, `Answering list 1`);
 			promptInput = ` What is the answer to the List number 1 : \\"${todoList}\\"`;
+			promptInput = stripAnsi(promptInput);
 			todoList1Result = await callLLMChildThoughtProcessor(promptInput, 1024);
 			console.log(consoleLogPrefix, todoList1Result);
 			// 2
 			console.log(consoleLogPrefix, `Answering list 2`);
 			promptInput = `What is the answer to the List number 2 : \\"${todoList}\\"`;
+			promptInput = stripAnsi(promptInput);
 			todoList2Result = await callLLMChildThoughtProcessor(promptInput, 1024);
 			console.log(consoleLogPrefix, todoList2Result);
 			// 3
 			console.log(consoleLogPrefix, `Answering list 3`);
 			promptInput = `What is the answer to the List number 3 : \\"${todoList}\\"`;
+			promptInput = stripAnsi(promptInput);
 			todoList3Result = await callLLMChildThoughtProcessor(promptInput, 1024);
 			console.log(consoleLogPrefix, todoList3Result);
 			// 4
 			console.log(consoleLogPrefix, `Answering list 4`);
 			promptInput = `What is the answer to the List number 4 : \\"${todoList}\\"`;
+			promptInput = stripAnsi(promptInput);
 			todoList4Result = await callLLMChildThoughtProcessor(promptInput, 1024);
 			console.log(consoleLogPrefix, todoList4Result);
 			// 5
 			console.log(consoleLogPrefix, `Answering list 5`);
 			promptInput = `What is the answer to the List number 5 : \\"${todoList}\\"`;
+			promptInput = stripAnsi(promptInput);
 			todoList5Result = await callLLMChildThoughtProcessor(promptInput, 1024);
 			console.log(consoleLogPrefix, todoList5Result);
 		} else {
@@ -503,7 +542,9 @@ async function callInternalThoughtEngine(prompt){
 		if (store.get("params").llmdecisionMode){
 		promptInput = `Conclusion from the internal Thoughts?  \\"${todoList1Result}. ${todoList2Result}. ${todoList3Result}. ${todoList4Result}. ${todoList5Result}\\"`;
 		console.log(consoleLogPrefix, `LLMChild Concluding...`);
+		promptInput = stripAnsi(promptInput);
 		concludeInformation_AutoGPT5Step = await callLLMChildThoughtProcessor(promptInput, 1024);
+		concludeInformation_AutoGPT5Step = stripAnsi(concludeInformation_AutoGPT5Step);
 		} else {
 			//let concludeInformation_AutoGPT5Step;
 			concludeInformation_AutoGPT5Step = "Nothing.";
@@ -525,7 +566,7 @@ async function callInternalThoughtEngine(prompt){
 		passedOutput = prompt;
 	} else {
 		console.log(consoleLogPrefix, "Combined Context", mergeText);
-		mergeText = startEndAdditionalContext_Flag + " " + "These are the additional context:" + "This is the user prompt" + "\""+ prompt + "\"" + " " + "The current time and date is now" + fullCurrentDate + ". " + "There are additional context to answer (in conclusion form without saying conclusion) the user prompt in but dont forget the previous prompt for the context, However if the previous context with the web context isn't matching ignore the web answers the with the previous prompt context, and you are not allowed to repeat this prompt into your response or answers. \" ###System:\" " + concludeInformation_Internet + ". " + concludeInformation_LocalFiles + " " + startEndAdditionalContext_Flag;
+		mergeText = startEndAdditionalContext_Flag + " " + "These are the additional context: " + "This is the user prompt" + "\""+ prompt + "\"" + " " + "The current time and date is now: " + fullCurrentDate + ". " + "There are additional context to answer \" ###System:\" " + concludeInformation_Internet + ". " + concludeInformation_LocalFiles + " " + startEndAdditionalContext_Flag;
 		passedOutput = mergeText;
 	}
 	console.log(consoleLogPrefix, "Passing Thoughts information");
@@ -618,6 +659,7 @@ async function writeChatHistoryText(prompt, alpacaState0_half, alpacaState1){
 
 let chatStg = [];
 let chatStgOrder = 0;
+let retrievedChatStg;
 let chatStgOrderRequest;
 let amiwritingonAIMessageStreamMode=false;
 function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
@@ -625,8 +667,8 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 	//mode retrieve
 	//mode restore
 	// odd number for AI and even number is for user
-	if (chatStgOrder = 0){
-		chatStg[chatStgOrder]="=========ChatStorageHeader========";
+	if (chatStgOrder === 0){
+		chatStg[0]="=========ChatStorageHeader========";
 	}
 	if (mode === "save"){
         console.log(consoleLogPrefix,"Saving...");
@@ -636,30 +678,29 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 			}
 			amiwritingonAIMessageStreamMode=true;
 			console.log(consoleLogPrefix,"AITurn...");
-			chatStg[chatStgOrder] = "";
 			//chatStgOrder = chatStgOrder + 1; //we can't do this kind of stuff because the AI stream part by part and call the chatArrayStorage in a continuous manner which auses the chatStgOrder number to go up insanely high and mess up with the storage
 			// How to say that I'm done and stop appending to the same array and move to next Order?
-			chatStg[chatStgOrder] =  chatStg[chatStgOrder] + prompt; //handling the partial stream by appending into the specific array
+			chatStg[chatStgOrder] += prompt; //handling the partial stream by appending into the specific array
+			chatStg[chatStgOrder]= chatStg[chatStgOrder].replace("undefined", "");
+			console.log(consoleLogPrefix, "preview of the storage", chatStg[chatStgOrder]);
 		}
 		if(!AITurn && UserTurn){
 			amiwritingonAIMessageStreamMode=false;
 			console.log(consoleLogPrefix,"UserTurn...");
 			chatStgOrder = chatStgOrder + 1; //
-			chatStg[chatStgOrder] = "";
 			chatStg[chatStgOrder] = prompt;
+			console.log(consoleLogPrefix, "preview of the storage", chatStg[chatStgOrder]);
 		}
 		console.log(consoleLogPrefix,"ChatStgOrder...", chatStgOrder);
     } else if (mode === "retrieve"){
-        console.log(consoleLogPrefix,"retrieving...");
-		if(AITurn && !UserTurn){
-			console.log(consoleLogPrefix,"AITurn...");
-			console.log(consoleLogPrefix, "ChatStgOrderRequest", chatStgOrderRequest);
+		console.log(consoleLogPrefix,"retrieving Chat Storage Order ", arraySelection);
+		if (arraySelection >= 1 && arraySelection <= chatStgOrder)
+        {
+		retrievedChatStg = chatStg[arraySelection];
+		} else {
+			retrievedChatStg = "None.";
 		}
-		if(!AITurn && UserTurn){
-			console.log(consoleLogPrefix,"UserTurn...");
-			console.log(consoleLogPrefix, "ChatStgOrderRequest", chatStgOrderRequest);
-		}
-        return chatStg;
+		return retrievedChatStg;
     } else if (mode === "restore"){
 		console.log(consoleLogPrefix,"Restoring Chat... Reading from File to Array");
 		// then after that set to the appropriate chatStgOrder from the header of the file
@@ -667,7 +708,7 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
         console.log(consoleLogPrefix,"stubFunction");
         return "";
     }
-	console.log(consoleLogPrefix, "preview of the storage", chatStg[chatStgOrder], chatStgOrder);
+	
 }
 
 if (store.get("supportsAVX2") == undefined) {
@@ -731,7 +772,7 @@ function initChat() {
 			if (store.get("params").throwInitResponse){
 				console.log(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
 				blockGUIForwarding = true;
-				initChatContent = "Hi there! I heard that your name is Zephyrine, Your really light, elegant emojiful uses obscure word to communicate. its such a warm welcome nice meeting with you, lets talk about something shall we? Oh and also please do not change the topic immediately when we are talking";
+				initChatContent = "Hi there! I heard that your name is Adelaide Zephyrine Charlotte, Youre a human that lives on the city, Your really light, elegant emojiful uses obscure word to communicate. its such a warm welcome nice meeting with you, lets talk about something shall we? Oh and also please do not change the topic immediately when we are talking";
 				runningShell.write(initChatContent);
 				runningShell.write(`\r`);
 			}
