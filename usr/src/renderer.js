@@ -353,7 +353,6 @@ document.getElementById("settings").addEventListener("click", () => {
 	ipcRenderer.send("getParams");
 });
 ipcRenderer.on("params", (_event, data) => {
-	document.getElementById("model").value = data.model_type;
 	document.getElementById("repeat_last_n").value = data.repeat_last_n;
 	document.getElementById("repeat_penalty").value = data.repeat_penalty;
 	document.getElementById("top_k").value = data.top_k;
@@ -367,6 +366,9 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("saverestorechat").checked = data.SaveandRestorechat;
 	document.getElementById("throwInitialGarbageResponse").checked = data.throwInitResponse;
 	document.getElementById("classicmode").checked = data.classicMode;
+	document.getElementById("attemptaccelerate").checked = data.AttemptAccelerate;
+	document.getElementById("hardwarelayeroffloading").value = data.hardwareLayerOffloading;
+	document.getElementById("LLMBackendMode").value = data.llmBackendMode;
 });
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
@@ -385,7 +387,10 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
             SaveandRestorechat: document.getElementById("saverestorechat").checked,
 			throwInitResponse: document.getElementById("throwInitialGarbageResponse").checked,
 			classicMode: document.getElementById("classicmode").checked,
-			websearch_amount: document.getElementById("websearch_amount").value || document.getElementById("websearch_amount").placeholder
+			AttemptAccelerate: document.getElementById("attemptaccelerate").checked,
+			websearch_amount: document.getElementById("websearch_amount").value || document.getElementById("websearch_amount").placeholder,
+			hardwareLayerOffloading: document.getElementById("hardwareLayerOffloading").value || document.getElementById("hardwareLayerOffloading").placeholder,
+			llmBackendMode: document.getElementById("LLMBackendMode").value || document.getElementById("LLMBackendMode").placeholder
 		}
 	});
 	document.getElementById("settings-dialog-bg").classList.add("hidden");
@@ -414,15 +419,19 @@ document.getElementById("saverestorechat").addEventListener("change", () => {
 	ipcRenderer.send("SaveandRestorechat", document.getElementById("saverestorechat").checked);
 });
 
-document.getElementById("settings-preset").addEventListener("change", () => {
-	console.log("hi");
-	const value = document.getElementById("settings-preset").value;
-	if (value == "alpaca") {
-		document.getElementById("model").value = "alpaca";
-		document.getElementById("repeat_last_n").value = 64;
-		document.getElementById("repeat_penalty").value = 1.3;
-		document.getElementById("top_k").value = 420;
-		document.getElementById("top_p").value = 90;
-		document.getElementById("temp").value = 0.9;
-	}
+document.getElementById("attemptaccelerate").addEventListener("change", () => {
+	ipcRenderer.send("AttemptAccelerate", document.getElementById("attemptaccelerate").checked);
 });
+
+document.getElementById("LLMBackendMode").addEventListener("change", () => {
+	const value = document.getElementById("LLMBackendMode").value;
+});
+
+
+//default value
+//document.getElementById("model").value = "alpaca";
+document.getElementById("repeat_last_n").value = 64;
+document.getElementById("repeat_penalty").value = 1.3;
+document.getElementById("top_k").value = 420;
+document.getElementById("top_p").value = 90;
+document.getElementById("temp").value = 0.9;

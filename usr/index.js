@@ -7,6 +7,7 @@ const platform = os.platform();
 const arch = os.arch();
 const appName = "Project Zephyrine"
 const consoleLogPrefix = `[${appName}_${platform}_${arch}]:`;
+const botName = "Adelaide Zephyrine Charlotte"
 
 var win;
 function createWindow() {
@@ -107,7 +108,6 @@ const Store = require("electron-store");
 const schema = {
 	params: {
 		default: {
-			model_type: "alpaca",
 			repeat_last_n: "64",
 			repeat_penalty: "1.3",
 			top_k: "40",
@@ -286,7 +286,7 @@ function stripAnsi(str) {
 	return str.replace(regex, "");
 }
 
-let basebin;
+//let basebin;
 let LLMChildParam;
 let outputLLMChild;
 let filteredOutput;
@@ -296,21 +296,13 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	// flag is basically at what part that callLLMChildThoughtProcessor should return the value started from.
 	const platform = process.platform;
 	console.log(consoleLogPrefix, `platform ${platform}`);
-	if (platform === 'win32'){
-		// Windows
-		console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
-		basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", supportsAVX2 ? "" : "no_avx2", "chat.exe")}"`;
-	} else {
-	// *nix (Linux, macOS, etc.)
-	basebin = `"${path.resolve(__dirname, "bin", "chat")}"`;
-	console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
-	}
+	
 	//model = ``;
 	prompt = prompt.replace("[object Promise]", "");
 	prompt = stripAnsi(prompt);
 
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this prompt \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
-	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen} -c 2048`;
+	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen} -c 2048 -s ${randSeed}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	
@@ -412,7 +404,7 @@ async function callInternalThoughtEngine(prompt){
 	if (((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.INTERNET_FETCH_DEBUG_MODE === "1"){
 		if (store.get("params").llmdecisionMode){
 			console.log(consoleLogPrefix, "decision Search we need to search it on the available resources");
-			promptInput = `What should i search on the internet with this prompt  \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\ ?`;
+			promptInput = `What should i search on the internet with these prompt as context \nUser: \\"${prompt}\\" \n ${botName}:\\${historyChatRetrieved[1]}\\ \nUser:\\${historyChatRetrieved[2]}\\ ?`;
 			searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
 			console.log(consoleLogPrefix, `decision Search LLMChild Web Search Prompt ${searchPrompt}`);
 		} else {
@@ -635,8 +627,157 @@ async function externalInternetFetchingScraping(text) {
 	}	
 }
 
+function fileExists(filePath) {
+    try {
+        fs.accessSync(filePath, fs.constants.F_OK);
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
+
 let promptResponseCount;
-// RUNNING CHAT
+let targetPlatform = '';
+
+//=======================================
+function generateRandomNumber(min, max) {
+	return Math.floor(Math.random() * (max - min + 1)) + min;
+  }
+let randSeed = generateRandomNumber(27000000000, 279999999999)
+// RUNNING Main LLM GUI to User
+let LLMBackendSelection;
+let LLMBackendVariationFileName;
+let LLMBackendVariationSelected;
+let basebin;
+let basebinBinaryMoreSpecificPathResolve;
+function determineLLMBackend(){
+	//--n-gpu-layers Dedicated Hardware Acceleration
+	//var need to be concentrated on llmBackendMode
+
+	/*if (platform === 'darwin') {
+		targetPlatform = 'macOS';
+	} else if (platform === 'win32') {
+		targetPlatform = 'Windows';
+	} else if (platform === 'linux') {
+		targetPlatform = 'Linux';
+	}
+	
+	let targetArch = '';
+	
+	if (arch === 'x64') {
+		targetArch = 'x64';
+	} else if (arch === 'arm64') {
+		targetArch = 'arm64';
+	}*/
+	LLMBackendSelection = store.get("params").llmBackendMode;
+	/*
+	<option value="LLaMa2">LLaMa-2</option>
+									<option value="falcon">Falcon</option>
+									<option value="mpt">MPT</option>
+									<option value="GPTNeoX">GPT-NEO-X</option>
+									<option value="starcoder">Starcoder</option>
+									<option value="gptj">gpt-j</option>
+									<option value="gpt2">gpt-2</option>
+	*/
+	if (!LLMBackendSelection){
+		console.error(consoleLogPrefix, "LLM Backend Selection Failed, falling back to Original LLaMa backend")
+		LLMBackendSelection = "LLaMa2";
+	}
+	if (LLMBackendSelection === "LLaMa2"){
+		LLMBackendVariationFileName = "llama"
+	}else if (LLMBackendSelection === "falcon"){
+		LLMBackendVariationFileName = "falcon"
+	}else if (LLMBackendSelection === "mpt"){
+		LLMBackendVariationFileName = "mpt"
+	}else if (LLMBackendSelection === "GPTNeoX"){
+		LLMBackendVariationFileName = "gptneox"
+	}else if (LLMBackendSelection === "starcoder"){
+		LLMBackendVariationFileName = "starcoder"
+	}else if (LLMBackendSelection === "gptj"){
+		LLMBackendVariationFileName = "gptj"
+	}else if (LLMBackendSelection === "gpt2"){
+		LLMBackendVariationFileName = "gpt2"
+	}else {
+		console.log(consoleLogPrefix, "Unsupported Backend", LLMBackendSelection);
+        process.exit(1);
+	}
+
+	console.log(`Detected Platform: ${platform}`);
+	console.log(`Detected Architecture: ${arch}`);
+	console.log(`Detected LLMBackend: ${LLMBackendSelection}`);
+
+	LLMBackendVariationSelected = `LLMBackend-${LLMBackendVariationFileName}-noaccel`;
+
+	if (platform === 'win32'){
+		// Windows
+		if(arch === 'x64'){
+			console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}.exe`;
+			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
+
+		}else if(arch === 'arm64'){
+			console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}.exe`;
+			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "arm64", supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
+
+		}else{
+			console.log(consoleLogPrefix, "Unsupported Architecture");
+            process.exit(1);
+		}
+	} else if (platform === 'linux'){
+		if(arch === "x64"){
+			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
+			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "x64", basebinBinaryMoreSpecificPathResolve)}"`;
+		console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+		}else if(arch === "arm64"){
+			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
+			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", basebinBinaryMoreSpecificPathResolve)}"`;
+		console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+		}else{
+			console.log(consoleLogPrefix, "Unsupported Architecture");
+            process.exit(1);
+	}
+	// *nix (Linux, macOS, etc.)	
+	} else if (platform === 'darwin'){
+		if(arch === "x64"){
+			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
+			basebin = `"${path.resolve(__dirname, "bin", "0_macOS", "x64", basebinBinaryMoreSpecificPathResolve)}"`;
+		console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+		}else if(arch === "arm64"){
+			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
+			basebin = `"${path.resolve(__dirname, "bin", "0_macOS", "arm64", basebinBinaryMoreSpecificPathResolve)}"`;
+		console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+		}else{
+			console.log(consoleLogPrefix, "Unsupported Architecture");
+            process.exit(1);
+		}
+	}
+
+
+	// Note this need to be able to handle spaces especially when you are aiming for Windows support which almost everything have spaces and everything path is inverted, its an hell for developer natively support 99% except Windows Fuck microsoft
+	console.log(consoleLogPrefix, "DebugBaseBin", basebin);
+	basebin = basebin.replace(" ","\ ");
+	console.log(consoleLogPrefix, "DebugBaseBin", basebin);
+
+	if (!fileExists("/home/albertstarfield/Downloads/alpaca-electron/usr/release-builds")) {
+		console.error("The required file does not exist. It's not supported. Sorry.");
+		process.exit(1);
+	} else {
+		console.log("File exists. Proceed with further actions.");
+	}
+
+	if (fs.existsSync(basebin)){
+		console.log(consoleLogPrefix, "Exists base binary");
+	}else{
+		console.log(consoleLogPrefix, "Doesn't exist");
+	}
+
+	return basebin;
+}
+
+//we're going to define basebin which define which binary to use
+determineLLMBackend();
+
 const pty = require("node-pty-prebuilt-multiarch");
 var runningShell, currentPrompt;
 var alpacaReady,
@@ -823,25 +964,13 @@ function initChat() {
 	});
 
 	const params = store.get("params");
-	if (params.model_type == "alpaca") {
-		var revPrompt = "### Instruction:";
-	} else {
-		var revPrompt = "User:";
-	}
-	if (params.model_type == "alpaca") {
-		var promptFile = "universalPrompt.txt";
-	}
+	revPrompt = "### Instruction:";
+	var promptFile = "universalPrompt.txt";
 	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
 	const chatArgs = `-i --interactive-first -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`;
-	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} --seed ${params.seed} -c 4096`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
-	if (platform == "win32") {
-		runningShell.write(`[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", supportsAVX2 ? "" : "no_avx2", "chat.exe")}" ${paramArgs} ${chatArgs}\r`);
-	} else if (platform == "darwin") {
-		const macArch = arch == "x64" ? "chat" : "chat";
-		runningShell.write(`"${path.resolve(__dirname, "bin", macArch)}" ${paramArgs} ${chatArgs}\r`);
-	} else {
-		runningShell.write(`"${path.resolve(__dirname, "bin", "chat")}" ${paramArgs} ${chatArgs}\r`);
-	}
+	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} --seed ${params.seed} -c 4096 -s ${randSeed}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	//runningShell.write(`set -x \r`);
+	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
 }
 ipcMain.on("startChat", () => {
 	initChat();
@@ -888,7 +1017,7 @@ ipcMain.on("getCurrentModel", () => {
 ipcMain.on("pickFile", () => {
 	dialog
 		.showOpenDialog(win, {
-			title: "Choose Alpaca GGML model",
+			title: "Choose GGML model Based on your Mode",
 			filters: [
 				{
 					name: "GGML model",
@@ -963,6 +1092,13 @@ ipcMain.on("classicMode", (_event, value) => {
 	store.set("params", {
 		...store.get("params"),
 		classicMode: value
+	});
+});
+
+ipcMain.on("llmBackendMode", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		llmBackendMode: value
 	});
 });
 
