@@ -1,6 +1,6 @@
 <h1 align="center">
 <sub>
-<img src="https://raw.githubusercontent.com/ItsPi3141/alpaca-electron/main/icon/alpaca-chat-logo.png?raw=true" height=144>
+<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal/blob/main/picDemo/Project%20Zephyrine%20Logo.jpg?raw=true" height=144>
 </sub>
 <br>
 Project Zephyrine
