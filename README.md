@@ -22,6 +22,7 @@ Project Zephyrine
 <hr>
 
 
+### Current Version is broken and undergoing project restructuring changes! This will be fixed soon
 
 ## 📃 Features & to-do
 

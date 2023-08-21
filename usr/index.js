@@ -301,7 +301,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	prompt = prompt.replace("[object Promise]", "");
 	prompt = stripAnsi(prompt);
 
-	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this prompt \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
+	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
 	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen} -c 2048 -s ${randSeed}`;
 
 	command = `${basebin} ${LLMChildParam}`;
@@ -385,7 +385,7 @@ async function callInternalThoughtEngine(prompt){
 	const seconds = String(currentDate.getSeconds()).padStart(2, '0');
 	fullCurrentDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 	//decision if yes then do the query optimization
-	// ./chat -p "___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this prompt \"What are you doing?\"___[Thoughts Processor] " -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r "[User]" -n 2
+	// ./chat -p "___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"What are you doing?\"___[Thoughts Processor] " -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r "[User]" -n 2
 	// External Data Part
 	//-------------------------------------------------------
 	console.log(consoleLogPrefix, "============================================================");
@@ -398,15 +398,15 @@ async function callInternalThoughtEngine(prompt){
 	} else {
 		decisionSearch = "yes"; // without LLM deep decision
 	}
-	console.log(consoleLogPrefix, `decision Search LLMChild ${decisionSearch}`);
+	//console.log(consoleLogPrefix, `decision Search LLMChild ${decisionSearch}`);
 	// explanation on the inputPromptCounterThreshold
 	// Isn't the decision made by LLM? Certainly, while LLM or the LLMChild contributes to the decision-making process, it lacks the depth of the main thread. This can potentially disrupt the coherence of the prompt context, underscoring the importance of implementing a safety measure like a word threshold before proceeding to the subsequent phase.
 	if (((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.INTERNET_FETCH_DEBUG_MODE === "1"){
 		if (store.get("params").llmdecisionMode){
 			console.log(consoleLogPrefix, "decision Search we need to search it on the available resources");
-			promptInput = `What should i search on the internet with these prompt as context \nUser: \\"${prompt}\\" \n ${botName}:\\${historyChatRetrieved[1]}\\ \nUser:\\${historyChatRetrieved[2]}\\ ?`;
+			promptInput = `What should i search on the internet with these chat  \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\?`;
 			searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
-			console.log(consoleLogPrefix, `decision Search LLMChild Web Search Prompt ${searchPrompt}`);
+			//console.log(consoleLogPrefix, `decision Search LLMChild Web Search Prompt ${searchPrompt}`);
 		} else {
 			searchPrompt = prompt;
 		}
@@ -437,7 +437,7 @@ async function callInternalThoughtEngine(prompt){
 	console.log(consoleLogPrefix, "Checking Local File Fetch Requirement!");
 	// This is for the Local Document Search Logic
 	if (store.get("params").llmdecisionMode){
-		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this prompt \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\`;
+		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\`;
 		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
 		decisionSearch = decisionSearch.toLowerCase();
 	} else {
@@ -446,7 +446,7 @@ async function callInternalThoughtEngine(prompt){
 	if (((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.LOCAL_FETCH_DEBUG_MODE === "1"){
 		if (store.get("params").llmdecisionMode){
 			console.log(consoleLogPrefix, "decision Search we need to search it on the available resources");
-			promptInput = `What should i search in files for this prompt  \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\?`;
+			promptInput = `What should i search in files for this chat  \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\?`;
 			console.log(consoleLogPrefix, `decision Search LLMChild Creating Search Prompt`);
 			searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
 			console.log(consoleLogPrefix, `decision Search LLMChild Prompt ${searchPrompt}`);
@@ -489,7 +489,7 @@ async function callInternalThoughtEngine(prompt){
 		if (store.get("params").llmdecisionMode){
 			console.log(consoleLogPrefix, "decision Search we need to create 5 todo list for this prompt");
 			console.log(consoleLogPrefix, `Generating list for this prompt`);
-			promptInput = `Create 5 steps either questions or answer starting from its fundamental to answer this prompt :\\"${prompt}\\"`;
+			promptInput = `Create 5 steps either questions or answer starting from its fundamental to answer this chat :\\"${prompt}\\"`;
 			promptInput = promptInput.replace(/\n/g, " ");
 			promptInput = stripAnsi(promptInput);
 			todoList = await callLLMChildThoughtProcessor(promptInput, 512);

@@ -369,6 +369,7 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("attemptaccelerate").checked = data.AttemptAccelerate;
 	document.getElementById("hardwarelayeroffloading").value = data.hardwareLayerOffloading;
 	document.getElementById("LLMBackendMode").value = data.llmBackendMode;
+	document.getElementById("emotionalllmchildengine").value = data.emotionalLLMChildengine;
 });
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
@@ -390,7 +391,8 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			AttemptAccelerate: document.getElementById("attemptaccelerate").checked,
 			websearch_amount: document.getElementById("websearch_amount").value || document.getElementById("websearch_amount").placeholder,
 			hardwareLayerOffloading: document.getElementById("hardwareLayerOffloading").value || document.getElementById("hardwareLayerOffloading").placeholder,
-			llmBackendMode: document.getElementById("LLMBackendMode").value || document.getElementById("LLMBackendMode").placeholder
+			llmBackendMode: document.getElementById("LLMBackendMode").value || document.getElementById("LLMBackendMode").placeholder,
+			emotionalLLMChildengine: document.getElementById("emotionalllmchildengine").checked
 		}
 	});
 	document.getElementById("settings-dialog-bg").classList.add("hidden");
@@ -421,6 +423,10 @@ document.getElementById("saverestorechat").addEventListener("change", () => {
 
 document.getElementById("attemptaccelerate").addEventListener("change", () => {
 	ipcRenderer.send("AttemptAccelerate", document.getElementById("attemptaccelerate").checked);
+});
+
+document.getElementById("emotionalllmchildengine").addEventListener("change", () => {
+	ipcRenderer.send("emotionalLLMChildengine", document.getElementById("emotionalllmchildengine").checked);
 });
 
 document.getElementById("LLMBackendMode").addEventListener("change", () => {
