@@ -36,6 +36,7 @@ Project Zephyrine
 - [x] DuckDuckGo integration for web access
 - [x] Pdf-parse Integration for local literature documents resources access
 - [ ] Fixing Broken Native Windows Support 
+- [ ] Project Restructuring for Unautomated nature of Windows support
 - [ ] Granluar Toggles Mode in the settings section
 - [ ] Chat history
 - [ ] Fixing Local Files Reading Freezes
