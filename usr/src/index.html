@@ -285,10 +285,7 @@
 						<div style="height: 32px"></div>
 
 						<h3>Additional Context Settings</h3>
-						<div class="item">
-							<p>Web search result amount</p>
-							<input type="number" step="1" min="1" max="3" id="websearch_amount" value="3" placeholder="3" />
-						</div>
+
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 16px">
 								<input type="checkbox" id="LLMChildDecision" />
@@ -297,6 +294,16 @@
 							<p style="margin: 0">Let LLM Decide and craft the query</p>
 						</div>
 						<h5>Refines the initial prompt into a more refined formulation, optimized for generating accurate responses.</h5>
+						<div class="item">
+							<p>Web search result amount</p>
+							<input type="number" step="1" min="1" max="3" id="websearch_amount" value="3" placeholder="3" />
+						</div>
+						<h5>The upper limit of web-based outcomes considered in formulating the response.</h5>
+						<div class="item">
+							<p>Web Search Maximum Character</p>
+							<input type="number" step="1" min="128" max="1024" id="max_websearch_character" value="512" placeholder="512" />
+						</div>
+						<h5>The parameter governing the upper limit of web result characters for contextual integration.</h5>
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 16px">
 								<input type="checkbox" id="web-access" />
@@ -313,6 +320,21 @@
 							<p style="margin: 0">Local File Access</p>
 						</div>
 						<h5>Activate the capability for the LLM to access and comprehend local documents (please note: your document data will remain within your computer's confines).</h5>
+						<div class="item">
+							<p>Keyword Match Content Percent Threshold</p>
+							<input type="number" step="1" min="1" max="100" id="keywordcontentfilematchpercentthreshold" value="69" placeholder="69" />
+						</div>
+						<h5>Configurable Minimal Threshold Percentage for Keyword-Concordant File Matches</h5>
+						<div class="item">
+							<p>Local Search Maximum Character</p>
+							<input type="number" step="1" min="256" max="512" id="max_localsearch_character" value="512" placeholder="512" />
+						</div>
+						<h5>Configurable Minimal Threshold Percentage for Keyword-Concordant File Matches</h5>
+						<div class="item">
+							<p>Per File Maximum Character</p>
+							<input type="number" step="1" min="256" max="512" id="max_localsearch_perfile_character" value="256" placeholder="256" />
+						</div>
+						<h5>Configurable Minimal Threshold Percentage for Keyword-Concordant File Matches</h5>
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 16px">
 								<input type="checkbox" id="longchainthought" />
@@ -371,7 +393,7 @@
 							</label>
 							<p style="margin: 0">Enable Emotion Profile Picture</p>
 						</div>
-						<h5>Activates the Emotion Engine, empowering the LLMChild thread associated with the chosen model to discern appropriate emotional responses based on the contextual dynamics of interactions. The range of emotions presently available includes (but is not confined to) happiness, sadness, fear, anger, and disgust. Note: The activation of this option is a prerequisite for accessing other emotion-related functionalities.</h5>
+						<h5>Facilitates the dynamic alteration of profile pictures in response to the emotions captured within the context. This functionality relies on the activation of the Emotion Engine; without it, this trigger remains inactive.</h5>
 						<div style="height: 32px"></div>
 						<h3>Classic Mode</h3>
 						<div style="display: flex; align-items: center">
@@ -403,7 +425,7 @@
 			  setTimeout(() => {
 				splashScreen.style.display = 'none'; // Hide the splash screen after the animation completes
 			  }, 1000); // Wait for 1 second (same duration as the transition in CSS)
-			}, 10000); // 10000 milliseconds = 10 seconds
+			}, 100); // 10000 milliseconds = 10 seconds
 		  </script>
 		  <script>
 			// for electron

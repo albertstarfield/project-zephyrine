@@ -1,3 +1,18 @@
+/*
+DEBUGGING TIPS
+For enabling the more verbose output of the console logs you could add this environment variable and set to "1"
+
+INTERNET_FETCH_DEBUG_MODE
+LOCAL_FETCH_DEBUG_MODE
+autoGPT5Steps_FETCH_DEBUG_MODE
+ptyChatStgDEBUG
+ptyStreamDEBUGMode
+
+
+*/
+
+
+
 const { BrowserWindow, app, ipcMain, dialog } = require("electron");
 const path = require("path");
 require("@electron/remote/main").initialize();
@@ -6,7 +21,9 @@ const os = require("os");
 const platform = os.platform();
 const arch = os.arch();
 const appName = "Project Zephyrine"
-const consoleLogPrefix = `[${appName}_${platform}_${arch}]:`;
+const colorReset = "\x1b[0m";
+const colorBrightCyan = "\x1b[96m";
+const consoleLogPrefix = `[${colorBrightCyan}${appName}_${platform}_${arch}${colorReset}]:`;
 const botName = "Adelaide Zephyrine Charlotte"
 
 var win;
@@ -108,15 +125,29 @@ const Store = require("electron-store");
 const schema = {
 	params: {
 		default: {
-			repeat_last_n: "64",
-			repeat_penalty: "1.3",
-			top_k: "40",
-			top_p: "0.9",
-			temp: "0.8",
-			seed: "-1",
-			webAccess: false,
-			websearch_amount: "5"
-		}
+		repeat_last_n: '64',
+		repeat_penalty: '1.3',
+		top_k: '40',
+		top_p: '0.9',
+		temp: '0.8',
+		seed: '-1',
+		webAccess: true,
+		localAccess: true,
+		llmdecisionMode: true,
+		extensiveThought: true,
+		SaveandRestorechat: false,
+		throwInitResponse: true,
+		classicMode: false,
+		AttemptAccelerate: false,
+		emotionalLLMChildengine: true,
+		profilePictureEmotion: true,
+		websearch_amount: '3',
+		maxWebSearchChar: '512',
+		maxLocalSearchChar: '512',
+		maxLocalSearchPerFileChar: '256',
+		keywordContentFileMatchPercentageThreshold: '4',
+		hardwareLayerOffloading: '2'
+		  }		  
 	},
 	modelPath: {
 		default: "undefined"
@@ -157,6 +188,12 @@ ipcMain.on("checkPath", (_event, { data }) => {
 	}
 });
 
+
+
+
+
+
+
 // DUCKDUCKGO And Function SEARCH FUNCTION
 
 const fs = require('fs');
@@ -168,104 +205,59 @@ const _ = require('lodash');
 const readPdf = require('read-pdf');
 const docxReader = require('docx-reader');
 const textract = require('textract');
-
-const TIMEOUT = 2000; // Timeout for reading each file (2 seconds)
-
-async function readPdfFile(filePath) {
-  return new Promise((resolve, reject) => {
-    readPdf(filePath, (err, text) => {
-      if (err) reject(err);
-      else resolve(text);
-    });
-  });
-}
-
-async function readDocxFile(filePath) {
-  try {
-    const content = await docxReader(filePath);
-    return content;
-  } catch (err) {
-    throw err;
+function searchAndConcatenateText(searchText) {
+	const userHomeDir = require('os').homedir();
+	const rootDirectory = path.join(userHomeDir, 'Documents'); // You can change the root directory as needed
+  
+	const result = [];
+	let totalChars = 0;
+  
+	function searchInDirectory(directoryPath) {
+	  const files = fs.readdirSync(directoryPath);
+  
+	  for (const file of files) {
+		const filePath = path.join(directoryPath, file);
+		const fileStats = fs.statSync(filePath);
+  
+		if (fileStats.isDirectory()) {
+		  searchInDirectory(filePath);
+		} else if (fileStats.isFile() && path.extname(file) === '.txt') {
+		  const content = fs.readFileSync(filePath, 'utf-8');
+		  
+		  // filter out files that only 69% and beyond are allowed to pass to the truncatedContent
+		  const contentAnalyzer = content.split(' ');
+		  const searchedTextWordAnalyzer = searchText.split(' ');
+		  let matchedContentSearch = 0;
+		  for (const word of searchedTextWordAnalyzer) {
+			if (contentAnalyzer.includes(word)){
+				matchedContentSearch++;
+			}
+		  }
+		  const matchPercentage = ((matchedContentSearch/content.length)*100);
+		  if (process.env.LOCAL_FETCH_DEBUG_MODE === '1') {
+			console.log(`${consoleLogPrefix} Reading file: ${filePath} Match ${matchPercentage} Percent`);
+		  }
+		  if (matchPercentage > store.get("params").keywordContentFileMatchPercentageThreshold) {
+			const truncatedContent = content.substring(0, store.get("params").maxLocalSearchPerFileChar);
+			result.push(truncatedContent);
+			totalChars += truncatedContent.length;
+  
+			if (totalChars >= store.get("params").maxLocalSearchChar) { //maxLocalSearchChar params
+			  if (process.env.LOCAL_FETCH_DEBUG_MODE === '1') {
+				console.log(`${consoleLogPrefix} Reached character limit. Stopping search.`);
+			  }
+			  return;
+			}
+		  }
+		}
+	  }
+	}
+  
+	searchInDirectory(rootDirectory);
+	
+	return result.join('\n');
   }
-}
 
-async function readOtherFile(filePath) {
-  return new Promise((resolve, reject) => {
-    textract.fromFileWithPath(filePath, { timeout: TIMEOUT }, (err, text) => {
-      if (err) reject(err);
-      else resolve(text);
-    });
-  });
-}
-
-async function readAndConcatenateFile(filePath) {
-  const ext = path.extname(filePath).toLowerCase();
-  let text;
-
-  try {
-    if (ext === '.pdf') {
-      text = await readPdfFile(filePath);
-    } else if (ext === '.docx') {
-      text = await readDocxFile(filePath);
-    } else {
-      text = await readOtherFile(filePath);
-    }
-    return text.slice(0, 64); // Limit to 64 characters per file
-  } catch (err) {
-    console.error('Error reading file:', filePath);
-    return '';
-  }
-}
-
-async function searchAndConcatenateText() {
-  const searchDir = os.homedir();
-  const indexFile = path.join(searchDir, 'search_index.txt');
-  const searchResult = [];
-  let currentTextLength = 0;
-
-  try {
-    if (fs.existsSync(indexFile)) {
-      // If an index file exists, load previous search results
-      const indexData = fs.readFileSync(indexFile, 'utf-8');
-      searchResult.push(...indexData.split('\n'));
-      currentTextLength = searchResult.join('').length;
-    }
-
-    async function traverseDir(directory) {
-      const files = fs.readdirSync(directory);
-
-      for (const file of files) {
-        const filePath = path.join(directory, file);
-
-        if (fs.statSync(filePath).isDirectory()) {
-          // Recursive call for directories
-          await traverseDir(filePath);
-        } else {
-          // Check if the file is one of the supported types
-          if (/\.(pdf|txt|docx|doc|odt|xlsx|xls|ppt)$/i.test(filePath)) {
-            const text = await readAndConcatenateFile(filePath);
-            if (currentTextLength + text.length <= 128) {
-              searchResult.push(text);
-              currentTextLength += text.length;
-            }
-          }
-        }
-      }
-    }
-
-    console.log(consoleLogPrefix, 'Starting semantic search...');
-    await traverseDir(searchDir);
-    console.log(consoleLogPrefix, 'Semantic search completed.');
-
-    // Save search results to index file
-    fs.writeFileSync(indexFile, searchResult.join('\n'), 'utf-8');
-
-    return searchResult.join(''); // Final result
-  } catch (err) {
-    console.error('Error during semantic search:', err);
-    return '';
-  }
-}
 
 const { exec } = require('child_process');
 function runShellCommand(command) {
@@ -294,37 +286,35 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	//lengthGen is the limit of how much it need to generate
 	//prompt is basically prompt :moai:
 	// flag is basically at what part that callLLMChildThoughtProcessor should return the value started from.
-	const platform = process.platform;
-	console.log(consoleLogPrefix, `platform ${platform}`);
+	//const platform = process.platform;
 	
 	//model = ``;
 	prompt = prompt.replace("[object Promise]", "");
 	prompt = stripAnsi(prompt);
 
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
-	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen} -c 2048 -s ${randSeed}`;
+	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen} --threads ${threads} -c 2048 -s ${randSeed}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	
 	try {
-	console.log(consoleLogPrefix, `LLMChild Inference ${command}`);
+	//console.log(consoleLogPrefix, `LLMChild Inference ${command}`);
 	//const output = await runShellCommand(command);
 	outputLLMChild = await runShellCommand(command);
-	console.log(consoleLogPrefix, 'LLMChild Raw output:', outputLLMChild);
+	//console.log(consoleLogPrefix, 'LLMChild Raw output:', outputLLMChild);
 	} catch (error) {
 	console.error('Error occoured spawning LLMChild!', flag, error.message);
 	}	
 	// ---------------------------------------
-	const stripThoughtHeader = (str) => {
-	 //or you could use the variable and add * since its regex i actually forgot about that
-	 const stripThoughtHeaderregex = /\_{2,}.*?\_{2,}/g;
-	//const pattern = [];
-	//const regex = new RegExp(pattern, "g");
-	return str.replace(stripThoughtHeaderregex, "");
+	function stripThoughtHeader(input) {
+		const regex = /__([^_]+)__/g;
+		return input.replace(regex, '');
 	}
+
 	filteredOutput = stripThoughtHeader(outputLLMChild);
 	filteredOutput = filteredOutput.replace(/\n/g, " ");
-	console.log(consoleLogPrefix, `Filtered Output Thought Header Debug LLM Child ${filteredOutput}`);
+	filteredOutput = filteredOutput.replace(/__/g, '');
+	console.log(consoleLogPrefix, `LLMChild Thread Output ${filteredOutput}`); // filtered output
 	//console.log(consoleLogPrefix, 'LLMChild Filtering Output');
 	//return filteredOutput;
 	filteredOutput = stripAnsi(filteredOutput);
@@ -358,6 +348,9 @@ let inputPromptCounterSplit;
 let inputPromptCounter = [];
 let historyChatRetrieved = [];
 let inputPromptCounterThreshold = 6;
+let emotionlist;
+let evaluateEmotionInteraction;
+let emotionalEvaluationResult;
 async function callInternalThoughtEngine(prompt){
 	//console.log(consoleLogPrefix, "Deciding Whether should i search it or not");
 	// if (store.get("params").webAccess){} // this is how you get the paramete set by the setting
@@ -392,32 +385,31 @@ async function callInternalThoughtEngine(prompt){
 	console.log(consoleLogPrefix, "Checking Internet Fetch Requirement!");
 	// This is for the Internet Search Data Fetching
 	if (store.get("params").llmdecisionMode){
-		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this prompt. \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\`;
-		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
+		//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n Your Response:`;
+		promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. From this Interaction Should I Search this on the Internet Yes or No? Answer:`;
+		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 12);
 		decisionSearch = decisionSearch.toLowerCase();
 	} else {
 		decisionSearch = "yes"; // without LLM deep decision
 	}
-	//console.log(consoleLogPrefix, `decision Search LLMChild ${decisionSearch}`);
+	//console.log(consoleLogPrefix, ` LLMChild ${decisionSearch}`);
 	// explanation on the inputPromptCounterThreshold
 	// Isn't the decision made by LLM? Certainly, while LLM or the LLMChild contributes to the decision-making process, it lacks the depth of the main thread. This can potentially disrupt the coherence of the prompt context, underscoring the importance of implementing a safety measure like a word threshold before proceeding to the subsequent phase.
-	if (((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.INTERNET_FETCH_DEBUG_MODE === "1"){
-		if (store.get("params").llmdecisionMode){
-			console.log(consoleLogPrefix, "decision Search we need to search it on the available resources");
-			promptInput = `What should i search on the internet with these chat  \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\?`;
-			searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
-			//console.log(consoleLogPrefix, `decision Search LLMChild Web Search Prompt ${searchPrompt}`);
-		} else {
-			searchPrompt = prompt;
-		}
-		resultSearchScraping = externalInternetFetchingScraping(searchPrompt);
+	if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.INTERNET_FETCH_DEBUG_MODE === "1") && store.get("params").webAccess){
 		
+		searchPrompt = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
+		searchPrompt = searchPrompt.replace(/None\./g, "");
+
+		//promptInput = ` \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. With this interaction What search query for i search in google for the interaction? Search Query:`;
+		//searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
+		console.log(consoleLogPrefix, ` LLMChild Creating Search Prompt`);
+		resultSearchScraping = await externalInternetFetchingScraping(searchPrompt);
 		if (store.get("params").llmdecisionMode){
 			inputPromptCounterSplit = resultSearchScraping.split(" ");
 			inputPromptCounter[3] = inputPromptCounterSplit.length;
 		if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
-		promptInput = `What is the conclusion from this info: ${resultSearchScraping}`;
-		console.log(consoleLogPrefix, `decision Search LLMChild Concluding...`);
+		promptInput = `What is the conclusion from this info: ${resultSearchScraping} Conclusion:`;
+		console.log(consoleLogPrefix, ` LLMChild Concluding...`);
 		//let concludeInformation_Internet;
 		concludeInformation_Internet = await callLLMChildThoughtProcessor(promptInput, 512);
 		} else {
@@ -426,42 +418,44 @@ async function callInternalThoughtEngine(prompt){
 		} else {
 			concludeInformation_Internet = resultSearchScraping;
 		}
-		
     } else {
-		console.log(consoleLogPrefix, "decision Search No we shouldnt do it only based on the model knowledge");
+		console.log(consoleLogPrefix, " No we shouldnt do it only based on the model knowledge");
 		concludeInformation_Internet = "Nothing.";
 		console.log(consoleLogPrefix, concludeInformation_Internet);
     }
+
 	//-------------------------------------------------------
 	console.log(consoleLogPrefix, "============================================================");
 	console.log(consoleLogPrefix, "Checking Local File Fetch Requirement!");
 	// This is for the Local Document Search Logic
 	if (store.get("params").llmdecisionMode){
-		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\`;
-		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
+		//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n Your Response:`;
+	    promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. From this Interaction Should I Search this on the Local Documents Yes or No? Answer:`;
+		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 18);
 		decisionSearch = decisionSearch.toLowerCase();
 	} else {
 		decisionSearch = "yes"; // without LLM deep decision
 	}
-	if (((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.LOCAL_FETCH_DEBUG_MODE === "1"){
+
+	//localAccess variable must be taken into account
+	if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.LOCAL_FETCH_DEBUG_MODE === "1") && store.get("params").localAccess){
 		if (store.get("params").llmdecisionMode){
-			console.log(consoleLogPrefix, "decision Search we need to search it on the available resources");
-			promptInput = `What should i search in files for this chat  \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\?`;
-			console.log(consoleLogPrefix, `decision Search LLMChild Creating Search Prompt`);
-			searchPrompt = await callLLMChildThoughtProcessor(promptInput, 6);
-			console.log(consoleLogPrefix, `decision Search LLMChild Prompt ${searchPrompt}`);
-			console.log(consoleLogPrefix, `decision Search LLMChild Looking at the Local Documents...`);
+			console.log(consoleLogPrefix, "We need to search it on the available resources");
+			promptInput = `What should i search in files for this chat \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n Answer:`;
+			console.log(consoleLogPrefix, ` LLMChild Creating Search Prompt`);
+			searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
+			console.log(consoleLogPrefix, ` LLMChild Prompt ${searchPrompt}`);
+			console.log(consoleLogPrefix, ` LLMChild Looking at the Local Documents...`);
 		} else {
 			searchPrompt = prompt;
 		}
-		let resultSearchScraping;
-		resultSearchScraping = externalLocalFileScraping(searchPrompt);
+		resultSearchScraping = await externalLocalFileScraping(searchPrompt);
 		if (store.get("params").llmdecisionMode){
 			inputPromptCounterSplit = resultSearchScraping.split(" ");
 			inputPromptCounter[3] = inputPromptCounterSplit.length;
 		if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
-		promptInput = `What is the conclusion from this info: ${resultSearchScraping}`;
-		console.log(consoleLogPrefix, `decision Search LLMChild Concluding...`);
+		promptInput = `What is the conclusion from this info: ${resultSearchScraping}. Conclusion:`;
+		console.log(consoleLogPrefix, ` LLMChild Concluding...`);
 		concludeInformation_LocalFiles = await callLLMChildThoughtProcessor(promptInput, 512);
 	} else {
 		concludeInformation_LocalFiles = "Nothing.";
@@ -470,56 +464,57 @@ async function callInternalThoughtEngine(prompt){
 			concludeInformation_LocalFiles = resultSearchScraping;
 		}
     } else {
-		console.log(consoleLogPrefix, "decision Search No we shouldnt do it only based on the model knowledge");
+		console.log(consoleLogPrefix, " No we shouldnt do it only based on the model knowledge");
 		concludeInformation_LocalFiles = "Nothing.";
 		console.log(consoleLogPrefix, concludeInformation_LocalFiles);
     }
 	
+
 	// ----------------------- AutoGPT 5 Steps Thoughts --------------------
 	console.log(consoleLogPrefix, "============================================================");
 	console.log(consoleLogPrefix, "Checking AutoGPT 5 Steps Thoughts Requirement!");
 	if (store.get("params").llmdecisionMode){
-		promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this current prompt which is \\"${prompt}\\" and Previous answer \\${historyChatRetrieved[1]}\\ and this is the previous user prompt before the answer \\${historyChatRetrieved[2]}\\`;
+		//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this interaction \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n Your Response:`;
+		promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. From this Interaction Should I Answer this in 5 steps Yes or No? Answer:`;
 		decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
 		decisionSearch = decisionSearch.toLowerCase();
 	} else {
 		decisionSearch = "yes"; // without LLM deep decision
 	}
-	if (((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.autoGPT5Steps_FETCH_DEBUG_MODE === "1"){
+	if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.autoGPT5Steps_FETCH_DEBUG_MODE === "1") && store.get("params").extensiveThought){
 		if (store.get("params").llmdecisionMode){
-			console.log(consoleLogPrefix, "decision Search we need to create 5 todo list for this prompt");
+			console.log(consoleLogPrefix, " we need to create 5 todo list for this prompt");
 			console.log(consoleLogPrefix, `Generating list for this prompt`);
-			promptInput = `Create 5 steps either questions or answer starting from its fundamental to answer this chat :\\"${prompt}\\"`;
-			promptInput = promptInput.replace(/\n/g, " ");
+			promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n From this chat snippets Create 5 steps of ideas. The 5 Steps:`;
 			promptInput = stripAnsi(promptInput);
 			todoList = await callLLMChildThoughtProcessor(promptInput, 512);
 			// 1
 			console.log(consoleLogPrefix, `Answering list 1`);
-			promptInput = ` What is the answer to the List number 1 : \\"${todoList}\\"`;
+			promptInput = ` What is the answer to the List number 1 : \\"${todoList}\\ Answer/NextStep:"`;
 			promptInput = stripAnsi(promptInput);
 			todoList1Result = await callLLMChildThoughtProcessor(promptInput, 1024);
 			console.log(consoleLogPrefix, todoList1Result);
 			// 2
 			console.log(consoleLogPrefix, `Answering list 2`);
-			promptInput = `What is the answer to the List number 2 : \\"${todoList}\\"`;
+			promptInput = `What is the answer to the List number 2 : \\"${todoList}\\ Answer/NextStep:"`;
 			promptInput = stripAnsi(promptInput);
 			todoList2Result = await callLLMChildThoughtProcessor(promptInput, 1024);
 			console.log(consoleLogPrefix, todoList2Result);
 			// 3
 			console.log(consoleLogPrefix, `Answering list 3`);
-			promptInput = `What is the answer to the List number 3 : \\"${todoList}\\"`;
+			promptInput = `What is the answer to the List number 3 : \\"${todoList}\\ Answer/NextStep:"`;
 			promptInput = stripAnsi(promptInput);
 			todoList3Result = await callLLMChildThoughtProcessor(promptInput, 1024);
 			console.log(consoleLogPrefix, todoList3Result);
 			// 4
 			console.log(consoleLogPrefix, `Answering list 4`);
-			promptInput = `What is the answer to the List number 4 : \\"${todoList}\\"`;
+			promptInput = `What is the answer to the List number 4 : \\"${todoList}\\ Answer/NextStep:"`;
 			promptInput = stripAnsi(promptInput);
 			todoList4Result = await callLLMChildThoughtProcessor(promptInput, 1024);
 			console.log(consoleLogPrefix, todoList4Result);
 			// 5
 			console.log(consoleLogPrefix, `Answering list 5`);
-			promptInput = `What is the answer to the List number 5 : \\"${todoList}\\"`;
+			promptInput = `What is the answer to the List number 5 : \\"${todoList}\\ Answer/NextStep:"`;
 			promptInput = stripAnsi(promptInput);
 			todoList5Result = await callLLMChildThoughtProcessor(promptInput, 1024);
 			console.log(consoleLogPrefix, todoList5Result);
@@ -532,7 +527,7 @@ async function callInternalThoughtEngine(prompt){
 		}
 		let resultSearchScraping;
 		if (store.get("params").llmdecisionMode){
-		promptInput = `Conclusion from the internal Thoughts?  \\"${todoList1Result}. ${todoList2Result}. ${todoList3Result}. ${todoList4Result}. ${todoList5Result}\\"`;
+		promptInput = `Conclusion from the internal Thoughts?  \\"${todoList1Result}. ${todoList2Result}. ${todoList3Result}. ${todoList4Result}. ${todoList5Result}\\ Conclusion:"`;
 		console.log(consoleLogPrefix, `LLMChild Concluding...`);
 		promptInput = stripAnsi(promptInput);
 		concludeInformation_AutoGPT5Step = await callLLMChildThoughtProcessor(promptInput, 1024);
@@ -542,11 +537,43 @@ async function callInternalThoughtEngine(prompt){
 			concludeInformation_AutoGPT5Step = "Nothing.";
 		}
     } else {
-		console.log(consoleLogPrefix, "decision Search No we shouldnt do it only based on the model knowledge");
+		console.log(consoleLogPrefix, " No we shouldnt do it only based on the model knowledge");
 		//let concludeInformation_AutoGPT5Step;
 		concludeInformation_AutoGPT5Step = "Nothing.";
 		console.log(consoleLogPrefix, concludeInformation_AutoGPT5Step);
     }
+	console.log(consoleLogPrefix, "============================================================");
+		console.log(consoleLogPrefix, "Executing LLMChild Emotion Engine!");
+		
+		emotionlist = "Happy, Sad, Fear, Anger, Disgust";
+		if (store.get("params").emotionalLLMChildengine){
+			promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. From this conversation which from the following emotions ${emotionlist} are the correct one? Answer:`;
+			console.log(consoleLogPrefix, `LLMChild Evaluating Interaction With Emotion Engine...`);
+			promptInput = stripAnsi(promptInput);
+			evaluateEmotionInteraction = await callLLMChildThoughtProcessor(promptInput, 64);
+			evaluateEmotionInteraction = evaluateEmotionInteraction.toLowerCase();
+			if (evaluateEmotionInteraction.includes("happy")){
+				emotionalEvaluationResult = "happy";
+			} else if (evaluateEmotionInteraction.includes("sad")){
+				emotionalEvaluationResult = "sad";
+			} else if (evaluateEmotionInteraction.includes("fear")){
+				emotionalEvaluationResult = "fear";
+			} else if (evaluateEmotionInteraction.includes("anger")){
+				emotionalEvaluationResult = "anger";
+			} else if (evaluateEmotionInteraction.includes("disgust")){
+				emotionalEvaluationResult = "disgust";
+			} else {
+				console.log(consoleLogPrefix, `LLMChild Model failed to comply, falling back to default value`);
+				emotionalEvaluationResult = "happy"; // return "happy" if the LLM model refuse to work
+			}
+			console.log(consoleLogPrefix, `LLMChild Emotion Returned ${emotionalEvaluationResult}`);
+			win.webContents.send('emotionalEvaluationResult', emotionalEvaluationResult);
+		}else{
+			emotionalEvaluationResult = "happy"; // return "happy" if the engine is disabled
+			win.webContents.send('emotionalEvaluationResult', emotionalEvaluationResult);
+		}
+
+	
 	console.log(consoleLogPrefix, "Finalizing Thoughts");
 	console.log(consoleLogPrefix, concludeInformation_LocalFiles);
 	console.log(consoleLogPrefix, concludeInformation_Internet);
@@ -557,8 +584,11 @@ async function callInternalThoughtEngine(prompt){
 		console.log(consoleLogPrefix, "Bypassing Additional Context");
 		passedOutput = prompt;
 	} else {
+		concludeInformation_Internet = concludeInformation_Internet === "Nothing." ? "" : concludeInformation_Internet;
+		concludeInformation_LocalFiles = concludeInformation_LocalFiles === "Nothing." ? "" : concludeInformation_LocalFiles;
+		concludeInformation_AutoGPT5Step = concludeInformation_AutoGPT5Step === "Nothing." ? "" : concludeInformation_AutoGPT5Step;
 		console.log(consoleLogPrefix, "Combined Context", mergeText);
-		mergeText = startEndAdditionalContext_Flag + " " + "These are the additional context: " + "This is the user prompt" + "\""+ prompt + "\"" + " " + "The current time and date is now: " + fullCurrentDate + ". " + "There are additional context to answer \" ###System:\" " + concludeInformation_Internet + ". " + concludeInformation_LocalFiles + " " + startEndAdditionalContext_Flag;
+		mergeText = startEndAdditionalContext_Flag + " " + "These are the additional context: " + "This is the user prompt " + "\""+ prompt + "\"" + " " + "The current time and date is now: " + fullCurrentDate + ". " + "There are additional context to answer \" ###System:\" " + concludeInformation_Internet + " " + concludeInformation_LocalFiles + " " + concludeInformation_AutoGPT5Step + startEndAdditionalContext_Flag;
 		passedOutput = mergeText;
 	}
 	console.log(consoleLogPrefix, "Passing Thoughts information");
@@ -571,9 +601,10 @@ async function callInternalThoughtEngine(prompt){
 }
 
 async function externalLocalFileScraping(text){
-	if (store.get("params").local-file-access){
+	console.log(consoleLogPrefix, "called Local File Scraping");
+	if (store.get("params").localAccess){
 		console.log(consoleLogPrefix, "externalLocalDataFetchingScraping");
-		console.log(consoleLogPrefix, "xd");
+		//console.log(consoleLogPrefix, "xd");
 		var documentReadText = searchAndConcatenateText(text);
 		text = documentReadText.replace("[object Promise]", "");
 		console.log(consoleLogPrefix, documentReadText);
@@ -584,10 +615,13 @@ async function externalLocalFileScraping(text){
     }
 }
 
+let convertedText;
+let combinedText;
+//let fetchedResults;
 async function externalInternetFetchingScraping(text) {
 	if (store.get("params").webAccess){
 	console.log(consoleLogPrefix, "externalInternetFetchingScraping");
-	console.log(consoleLogPrefix, text);
+	console.log(consoleLogPrefix, "Search Query", text);
 	const searchResults = await DDG.search(text, {
 		safeSearch: DDG.SafeSearchType.MODERATE
 	});
@@ -598,19 +632,22 @@ async function externalInternetFetchingScraping(text) {
 		if (searchResults.news) {
 			for (let i = 0; i < searchResults.news.length && i < targetResultCount; i++) {
 				fetchedResults = `${searchResults.news[i].description.replaceAll(/<\/?b>/gi, "")} `;
-				fetchedResults = fetchedResults.substring(0, 256);
-				console.log(consoleLogPrefix, fetchedResults);
-				convertedText = convertedText + fetchedResults;
+				fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
+				console.log(consoleLogPrefix, "Fetched Result", fetchedResults);
+				//convertedText = convertedText + fetchedResults;
+				convertedText = fetchedResults;
 			}
 		} else {
 			for (let i = 0; i < searchResults.results.length && i < targetResultCount; i++) {
 				fetchedResults = `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
-				fetchedResults = fetchedResults.substring(0, 256);
-				console.log(consoleLogPrefix, fetchedResults);
-				convertedText = convertedText + fetchedResults;
+				fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
+				console.log(consoleLogPrefix, "Fetched Result" , fetchedResults);
+				//convertedText = convertedText + fetchedResults;
+				convertedText = fetchedResults;
 			}
 		}
 		combinedText = convertedText.replace("[object Promise]", "");
+		console.log(consoleLogPrefix, "externalInternetFetchingScraping Final", combinedText);
 		
 		return combinedText;
 		// var convertedText = `Summarize the following text: `;
@@ -711,12 +748,12 @@ function determineLLMBackend(){
 	if (platform === 'win32'){
 		// Windows
 		if(arch === 'x64'){
-			console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+			console.log(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}.exe`;
 			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
 
 		}else if(arch === 'arm64'){
-			console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+			console.log(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}.exe`;
 			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "arm64", supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
 
@@ -728,11 +765,11 @@ function determineLLMBackend(){
 		if(arch === "x64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
 			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "x64", basebinBinaryMoreSpecificPathResolve)}"`;
-		console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+		console.log(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 		}else if(arch === "arm64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
 			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", basebinBinaryMoreSpecificPathResolve)}"`;
-		console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+		console.log(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 		}else{
 			console.log(consoleLogPrefix, "Unsupported Architecture");
             process.exit(1);
@@ -755,9 +792,9 @@ function determineLLMBackend(){
 
 
 	// Note this need to be able to handle spaces especially when you are aiming for Windows support which almost everything have spaces and everything path is inverted, its an hell for developer natively support 99% except Windows Fuck microsoft
-	console.log(consoleLogPrefix, "DebugBaseBin", basebin);
+	console.log(consoleLogPrefix, "DEBUGBaseBin", basebin);
 	basebin = basebin.replace(" ","\ ");
-	console.log(consoleLogPrefix, "DebugBaseBin", basebin);
+	console.log(consoleLogPrefix, "DEBUGBaseBin", basebin);
 
 	if (!fileExists("/home/albertstarfield/Downloads/alpaca-electron/usr/release-builds")) {
 		console.error("The required file does not exist. It's not supported. Sorry.");
@@ -765,13 +802,6 @@ function determineLLMBackend(){
 	} else {
 		console.log("File exists. Proceed with further actions.");
 	}
-
-	if (fs.existsSync(basebin)){
-		console.log(consoleLogPrefix, "Exists base binary");
-	}else{
-		console.log(consoleLogPrefix, "Doesn't exist");
-	}
-
 	return basebin;
 }
 
@@ -812,27 +842,35 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 		chatStg[0]="=========ChatStorageHeader========";
 	}
 	if (mode === "save"){
-        console.log(consoleLogPrefix,"Saving...");
+        //console.log(consoleLogPrefix,"Saving...");
 		if(AITurn && !UserTurn){
 			if(!amiwritingonAIMessageStreamMode){
 				chatStgOrder = chatStgOrder + 1; // add the order number counter when we detect we did write it on AI mode and need confirmation, when its done we should add the order number
 			}
 			amiwritingonAIMessageStreamMode=true;
-			console.log(consoleLogPrefix,"AITurn...");
+			
 			//chatStgOrder = chatStgOrder + 1; //we can't do this kind of stuff because the AI stream part by part and call the chatArrayStorage in a continuous manner which auses the chatStgOrder number to go up insanely high and mess up with the storage
 			// How to say that I'm done and stop appending to the same array and move to next Order?
 			chatStg[chatStgOrder] += prompt; //handling the partial stream by appending into the specific array
 			chatStg[chatStgOrder]= chatStg[chatStgOrder].replace("undefined", "");
-			console.log(consoleLogPrefix, "preview of the storage", chatStg[chatStgOrder]);
+			if (process.env.ptyChatStgDEBUG === "1"){
+				console.log(consoleLogPrefix,"AITurn...");
+				console.log(consoleLogPrefix, "reconstructing from pty stream: ", chatStg[chatStgOrder]);
+			}
 		}
 		if(!AITurn && UserTurn){
 			amiwritingonAIMessageStreamMode=false;
-			console.log(consoleLogPrefix,"UserTurn...");
+			
 			chatStgOrder = chatStgOrder + 1; //
 			chatStg[chatStgOrder] = prompt;
-			console.log(consoleLogPrefix, "preview of the storage", chatStg[chatStgOrder]);
+			if (process.env.ptyChatStgDEBUG === "1"){
+				console.log(consoleLogPrefix,"UserTurn...");
+				console.log(consoleLogPrefix, "stg pty stream user:", chatStg[chatStgOrder]);
+			}
 		}
+		if (process.env.ptyChatStgDEBUG === "1"){
 		console.log(consoleLogPrefix,"ChatStgOrder...", chatStgOrder);
+		}
     } else if (mode === "retrieve"){
 		console.log(consoleLogPrefix,"retrieving Chat Storage Order ", arraySelection);
 		if (arraySelection >= 1 && arraySelection <= chatStgOrder)
@@ -901,14 +939,16 @@ function initChat() {
 	ptyProcess.onData(async (res) => {
 		res = stripAnsi(res);
 		//res = stripAdditionalContext(res);
+		if (process.env.ptyStreamDEBUGMode === "1"){
 		console.log(consoleLogPrefix, "pty Stream",`//> ${res}`);
+		}
 		//console.log(consoleLogPrefix, "debug", alpacaHalfReady, alpacaReady)
 		if ((res.includes("invalid model file") || res.includes("failed to open") || res.includes("failed to load model")) && res.includes("main: error: failed to load model")) {
 			if (runningShell) runningShell.kill();
 			win.webContents.send("modelPathValid", { data: false });
 		} else if (res.includes("\n>") && !alpacaReady) {
 			alpacaHalfReady = true;
-			console.log(consoleLogPrefix, "Chatbot is ready after initialization!");
+			console.log(consoleLogPrefix, "LLM Main Thread is ready after initialization!");
 			isitPassedtheFirstPromptYet = false;
 			if (store.get("params").throwInitResponse){
 				console.log(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
@@ -920,7 +960,7 @@ function initChat() {
 		//	splashScreen.style.display = 'flex';
 		} else if (alpacaHalfReady && !alpacaReady) {
 			//when alpaca ready removes the splash screen
-			console.log(consoleLogPrefix, "Chatbot is ready!")
+			console.log(consoleLogPrefix, "LLM Main Thread is ready!")
 			//splashScreen.style.display = 'none';
 			alpacaReady = true;
 			checkAVX = false;
@@ -954,7 +994,9 @@ function initChat() {
 			});
 		} else if (alpacaReady && !blockGUIForwarding) { // Forwarding to pty Chat Stream GUI 
 			if (platform == "darwin") res = res.replaceAll("^C", "");
+			if (process.env.ptyStreamDEBUGMode === "1"){
 			console.log(consoleLogPrefix, "Forwarding to GUI...", res); // res will send in chunks so we need to have a logic that reconstruct the word with that chunks until the program stops generating
+			}
 			//chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			chatArrayStorage("save", res, true, false, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 			win.webContents.send("result", {
@@ -1085,6 +1127,20 @@ ipcMain.on("throwInitResponse", (_event, value) => {
 	store.set("params", {
 		...store.get("params"),
 		throwInitResponse: value
+	});
+});
+
+ipcMain.on("emotionalLLMChildengine", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		emotionalLLMChildengine: value
+	});
+});
+
+ipcMain.on("profilePictureEmotion", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		profilePictureEmotion: value
 	});
 });
 

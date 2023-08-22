@@ -176,10 +176,50 @@ const sha256 = async (input) => {
 	const hash = hashArray.map((item) => item.toString(16).padStart(2, "0")).join("");
 	return hash;
 };
+// target Emotional Support Add---------------------------------------------------
+
+let profilePictureEmotions;
+ipcRenderer.on('emotionalEvaluationResult', (event, data) => {
+	// Use the received data in your renderer process
+	console.log('Received emotionalEvaluationResult:', data);
+	profilePictureEmotions = data;
+  });  
+
 const say = (msg, id, isUser) => {
 	let item = document.createElement("li");
 	if (id) item.setAttribute("data-id", id);
-	item.classList.add(isUser ? "user-msg" : document.getElementById("web-access").checked ? "bot-web-msg" : "bot-msg");
+	
+	// step 0 convert it into if structure
+	//item.classList.add(isUser ? "user-msg" : document.getElementById("web-access").checked ? "bot-web-msg" : "bot-msg"); // changes bot response image
+
+	// step 1 Understanding how the profile picture changes based on web-access switch
+	/*
+	if (isUser) {
+		item.classList.add("user-msg");
+	} else if (document.getElementById("web-access").checked) {
+		item.classList.add("bot-web-msg");
+	} else {
+		item.classList.add("bot-msg");
+	}*/
+
+	//step 2 add into 5 emotion mode step
+	
+	if (isUser) {
+		item.classList.add("user-msg");
+	} else if (profilePictureEmotions.toLowerCase() === "happy") {
+		item.classList.add("bot-default");
+	} else if (profilePictureEmotions.toLowerCase() === "fear") {
+		item.classList.add("bot-concernedFear");
+	} else if (profilePictureEmotions.toLowerCase() === "disgust") {
+		item.classList.add("bot-disgust");
+	} else if (profilePictureEmotions.toLowerCase() === "anger") {
+		item.classList.add("bot-anger");
+	} else if (profilePictureEmotions.toLowerCase() === "sad") {
+		item.classList.add("bot-sad");
+	} else {
+		item.classList.add("bot-default");
+	}
+
 	console.log(msg);
 
 	//escape html tag
@@ -368,13 +408,13 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("classicmode").checked = data.classicMode;
 	document.getElementById("attemptaccelerate").checked = data.AttemptAccelerate;
 	document.getElementById("hardwarelayeroffloading").value = data.hardwareLayerOffloading;
-	document.getElementById("LLMBackendMode").value = data.llmBackendMode;
-	document.getElementById("emotionalllmchildengine").value = data.emotionalLLMChildengine;
+	//document.getElementById("LLMBackendMode").value = data.llmBackendMode;
+	document.getElementById("emotionalllmchildengine").checked = data.emotionalLLMChildengine;
+	document.getElementById("profilepictureemotion").checked = data.profilePictureEmotion;
 });
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
 		params: {
-			model_type: document.getElementById("model").value,
 			repeat_last_n: document.getElementById("repeat_last_n").value || document.getElementById("repeat_last_n").placeholder,
 			repeat_penalty: document.getElementById("repeat_penalty").value || document.getElementById("repeat_penalty").placeholder,
 			top_k: document.getElementById("top_k").value || document.getElementById("top_k").placeholder,
@@ -389,10 +429,14 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			throwInitResponse: document.getElementById("throwInitialGarbageResponse").checked,
 			classicMode: document.getElementById("classicmode").checked,
 			AttemptAccelerate: document.getElementById("attemptaccelerate").checked,
+			emotionalLLMChildengine: document.getElementById("emotionalllmchildengine").checked,
+			profilePictureEmotion: document.getElementById("profilepictureemotion").checked,
 			websearch_amount: document.getElementById("websearch_amount").value || document.getElementById("websearch_amount").placeholder,
-			hardwareLayerOffloading: document.getElementById("hardwareLayerOffloading").value || document.getElementById("hardwareLayerOffloading").placeholder,
-			llmBackendMode: document.getElementById("LLMBackendMode").value || document.getElementById("LLMBackendMode").placeholder,
-			emotionalLLMChildengine: document.getElementById("emotionalllmchildengine").checked
+			maxWebSearchChar: document.getElementById("max_websearch_character").value || document.getElementById("max_websearch_character").placeholder,
+			maxLocalSearchChar: document.getElementById("max_localsearch_character").value || document.getElementById("max_localsearch_character").placeholder,
+			maxLocalSearchPerFileChar: document.getElementById("max_localsearch_perfile_character").value || document.getElementById("max_localsearch_perfile_character").placeholder,
+			keywordContentFileMatchPercentageThreshold: document.getElementById("keywordcontentfilematchpercentthreshold").value || document.getElementById("keywordcontentfilematchpercentthreshold").placeholder,
+			hardwareLayerOffloading: document.getElementById("hardwarelayeroffloading").value || document.getElementById("hardwarelayeroffloading").placeholder
 		}
 	});
 	document.getElementById("settings-dialog-bg").classList.add("hidden");
@@ -427,6 +471,10 @@ document.getElementById("attemptaccelerate").addEventListener("change", () => {
 
 document.getElementById("emotionalllmchildengine").addEventListener("change", () => {
 	ipcRenderer.send("emotionalLLMChildengine", document.getElementById("emotionalllmchildengine").checked);
+});
+
+document.getElementById("profilepictureemotion").addEventListener("change", () => {
+	ipcRenderer.send("profilePictureEmotion", document.getElementById("profilepictureemotion").checked);
 });
 
 document.getElementById("LLMBackendMode").addEventListener("change", () => {

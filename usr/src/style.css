@@ -369,6 +369,23 @@ li {
 	background-image: url(img/response-adctx.png);
 }
 
+#messages > li.bot-default::before {
+	background-image: url(img/response_defaultSmile.jpg);
+}
+#messages > li.bot-concernedFear::before {
+	background-image: url(img/response_concernedFear.jpg);
+}
+#messages > li.bot-disgust::before {
+	background-image: url(img/response_disgust.jpg);
+}
+#messages > li.bot-anger::before {
+	background-image: url(img/response_poutAnger.jpg);
+}
+#messages > li.bot-sad::before {
+	background-image: url(img/response_Sad.jpg);
+}
+
+
 @-webkit-keyframes spin {
 	to {
 		-webkit-transform: rotate(1turn);

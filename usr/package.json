@@ -46,7 +46,8 @@
 		"textract":"^2.5.0",
 		"read-pdf":"^0.1.2",
 		"docx-reader": "^0.0.10",
-		"@capacitor/core": "^5.2.2"
+		"@capacitor/core": "^5.2.2",
+		"pdf2json":"^3.0.4"
 	},
 	"devDependencies": {
 		"@electron/rebuild": "^3.2.10",
