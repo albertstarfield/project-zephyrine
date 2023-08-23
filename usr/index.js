@@ -221,8 +221,8 @@ function searchAndConcatenateText(searchText) {
   
 		if (fileStats.isDirectory()) {
 		  searchInDirectory(filePath);
-		} else if (fileStats.isFile() && path.extname(file) === '.txt') {
-		  const content = fs.readFileSync(filePath, 'utf-8');
+		} else if (fileStats.isFile() && (path.extname(file) === '.txt' || path.extname(file) === '.rtf' || path.extname(file) === '.c' || path.extname(file) === '.py' || path.extname(file) === '.html' || path.extname(file) === '.css' || path.extname(file) === '.rb' || path.extname(file) === '.xml')) {
+		  const content = stripAnsi(fs.readFileSync(filePath, 'utf-8'));
 		  
 		  // filter out files that only 69% and beyond are allowed to pass to the truncatedContent
 		  const contentAnalyzer = content.split(' ');
