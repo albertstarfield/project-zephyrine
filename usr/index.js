@@ -291,6 +291,8 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	//model = ``;
 	prompt = prompt.replace("[object Promise]", "");
 	prompt = stripAnsi(prompt);
+	prompt = prompt.replace(/"/g, '');
+	prompt = prompt.replace(/'/g,"");
 
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
 	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen} --threads ${threads} -c 2048 -s ${randSeed}`;
@@ -299,7 +301,6 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	
 	try {
 	//console.log(consoleLogPrefix, `LLMChild Inference ${command}`);
-	//const output = await runShellCommand(command);
 	outputLLMChild = await runShellCommand(command);
 	//console.log(consoleLogPrefix, 'LLMChild Raw output:', outputLLMChild);
 	} catch (error) {
@@ -314,6 +315,9 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	filteredOutput = stripThoughtHeader(outputLLMChild);
 	filteredOutput = filteredOutput.replace(/\n/g, " ");
 	filteredOutput = filteredOutput.replace(/__/g, '');
+	filteredOutput = filteredOutput.replace(/"/g, '');
+	filteredOutput = filteredOutput.replace(/`/g, '');
+	filteredOutput = filteredOutput.replace(/'/g, '');
 	console.log(consoleLogPrefix, `LLMChild Thread Output ${filteredOutput}`); // filtered output
 	//console.log(consoleLogPrefix, 'LLMChild Filtering Output');
 	//return filteredOutput;
@@ -402,24 +406,25 @@ async function callInternalThoughtEngine(prompt){
 
 		//promptInput = ` \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. With this interaction What search query for i search in google for the interaction? Search Query:`;
 		//searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
-		console.log(consoleLogPrefix, ` LLMChild Creating Search Prompt`);
+		console.log(consoleLogPrefix, `LLMChild Creating Search Prompt`);
 		resultSearchScraping = await externalInternetFetchingScraping(searchPrompt);
 		if (store.get("params").llmdecisionMode){
 			inputPromptCounterSplit = resultSearchScraping.split(" ");
 			inputPromptCounter[3] = inputPromptCounterSplit.length;
 		if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
-		promptInput = `What is the conclusion from this info: ${resultSearchScraping} Conclusion:`;
-		console.log(consoleLogPrefix, ` LLMChild Concluding...`);
-		//let concludeInformation_Internet;
-		concludeInformation_Internet = await callLLMChildThoughtProcessor(promptInput, 512);
+			resultSearchScraping = stripAnsi(resultSearchScraping);
+			promptInput = `What is the conclusion from this info: ${resultSearchScraping} Conclusion:`;
+			console.log(consoleLogPrefix, `LLMChild Concluding...`);
+			//let concludeInformation_Internet;
+			concludeInformation_Internet = await callLLMChildThoughtProcessor(stripAnsi(stripAnsi(promptInput)), 512);
 		} else {
-		concludeInformation_Internet = "Nothing.";
+			concludeInformation_Internet = "Nothing.";
 		}
 		} else {
 			concludeInformation_Internet = resultSearchScraping;
 		}
     } else {
-		console.log(consoleLogPrefix, " No we shouldnt do it only based on the model knowledge");
+		console.log(consoleLogPrefix, "shouldnt do it only based on the model knowledgeNo we");
 		concludeInformation_Internet = "Nothing.";
 		console.log(consoleLogPrefix, concludeInformation_Internet);
     }
@@ -455,7 +460,7 @@ async function callInternalThoughtEngine(prompt){
 			inputPromptCounter[3] = inputPromptCounterSplit.length;
 		if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
 		promptInput = `What is the conclusion from this info: ${resultSearchScraping}. Conclusion:`;
-		console.log(consoleLogPrefix, ` LLMChild Concluding...`);
+		console.log(consoleLogPrefix, `LLMChild Concluding...`);
 		concludeInformation_LocalFiles = await callLLMChildThoughtProcessor(promptInput, 512);
 	} else {
 		concludeInformation_LocalFiles = "Nothing.";
@@ -464,7 +469,7 @@ async function callInternalThoughtEngine(prompt){
 			concludeInformation_LocalFiles = resultSearchScraping;
 		}
     } else {
-		console.log(consoleLogPrefix, " No we shouldnt do it only based on the model knowledge");
+		console.log(consoleLogPrefix, "No we shouldnt do it only based on the model knowledge");
 		concludeInformation_LocalFiles = "Nothing.";
 		console.log(consoleLogPrefix, concludeInformation_LocalFiles);
     }
@@ -483,40 +488,41 @@ async function callInternalThoughtEngine(prompt){
 	}
 	if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.autoGPT5Steps_FETCH_DEBUG_MODE === "1") && store.get("params").extensiveThought){
 		if (store.get("params").llmdecisionMode){
-			console.log(consoleLogPrefix, " we need to create 5 todo list for this prompt");
+			console.log(consoleLogPrefix, "We need to create 5 todo list for this prompt");
 			console.log(consoleLogPrefix, `Generating list for this prompt`);
-			promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n From this chat snippets Create 5 steps of ideas. The 5 Steps:`;
+			promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n From this chat Create 5 steps of ideas. The 5 Steps:`;
 			promptInput = stripAnsi(promptInput);
 			todoList = await callLLMChildThoughtProcessor(promptInput, 512);
 			// 1
-			console.log(consoleLogPrefix, `Answering list 1`);
-			promptInput = ` What is the answer to the List number 1 : \\"${todoList}\\ Answer/NextStep:"`;
+			console.log(consoleLogPrefix, `Answering Step 1`);
+			promptInput = ` What is the answer to the List number 1 : ${todoList} Answer/NextStep:"`;
 			promptInput = stripAnsi(promptInput);
-			todoList1Result = await callLLMChildThoughtProcessor(promptInput, 1024);
+			console.log(consoleLogPrefix, promptInput);
+			todoList1Result = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
 			console.log(consoleLogPrefix, todoList1Result);
-			// 2
-			console.log(consoleLogPrefix, `Answering list 2`);
-			promptInput = `What is the answer to the List number 2 : \\"${todoList}\\ Answer/NextStep:"`;
+			// 2x
+			console.log(consoleLogPrefix, `Answering Step 2`);
+			promptInput = `What is the answer to the List number 2 : ${todoList} Answer/NextStep:"`;
 			promptInput = stripAnsi(promptInput);
-			todoList2Result = await callLLMChildThoughtProcessor(promptInput, 1024);
+			todoList2Result = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
 			console.log(consoleLogPrefix, todoList2Result);
 			// 3
-			console.log(consoleLogPrefix, `Answering list 3`);
-			promptInput = `What is the answer to the List number 3 : \\"${todoList}\\ Answer/NextStep:"`;
+			console.log(consoleLogPrefix, `Answering Step 3`);
+			promptInput = `What is the answer to the List number 3 : ${todoList} Answer/NextStep:"`;
 			promptInput = stripAnsi(promptInput);
-			todoList3Result = await callLLMChildThoughtProcessor(promptInput, 1024);
+			todoList3Result = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
 			console.log(consoleLogPrefix, todoList3Result);
 			// 4
-			console.log(consoleLogPrefix, `Answering list 4`);
-			promptInput = `What is the answer to the List number 4 : \\"${todoList}\\ Answer/NextStep:"`;
+			console.log(consoleLogPrefix, `Answering Step 4`);
+			promptInput = `What is the answer to the List number 4 : ${todoList} Answer/NextStep:"`;
 			promptInput = stripAnsi(promptInput);
-			todoList4Result = await callLLMChildThoughtProcessor(promptInput, 1024);
+			todoList4Result = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
 			console.log(consoleLogPrefix, todoList4Result);
 			// 5
-			console.log(consoleLogPrefix, `Answering list 5`);
-			promptInput = `What is the answer to the List number 5 : \\"${todoList}\\ Answer/NextStep:"`;
+			console.log(consoleLogPrefix, `Answering Step 5`);
+			promptInput = `What is the answer to the List number 5 : ${todoList} Answer/NextStep:"`;
 			promptInput = stripAnsi(promptInput);
-			todoList5Result = await callLLMChildThoughtProcessor(promptInput, 1024);
+			todoList5Result = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
 			console.log(consoleLogPrefix, todoList5Result);
 		} else {
 			todoList1Result = prompt;
@@ -530,14 +536,13 @@ async function callInternalThoughtEngine(prompt){
 		promptInput = `Conclusion from the internal Thoughts?  \\"${todoList1Result}. ${todoList2Result}. ${todoList3Result}. ${todoList4Result}. ${todoList5Result}\\ Conclusion:"`;
 		console.log(consoleLogPrefix, `LLMChild Concluding...`);
 		promptInput = stripAnsi(promptInput);
-		concludeInformation_AutoGPT5Step = await callLLMChildThoughtProcessor(promptInput, 1024);
-		concludeInformation_AutoGPT5Step = stripAnsi(concludeInformation_AutoGPT5Step);
+		concludeInformation_AutoGPT5Step = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
 		} else {
 			//let concludeInformation_AutoGPT5Step;
 			concludeInformation_AutoGPT5Step = "Nothing.";
 		}
     } else {
-		console.log(consoleLogPrefix, " No we shouldnt do it only based on the model knowledge");
+		console.log(consoleLogPrefix, "No we shouldnt do it only based on the model knowledge");
 		//let concludeInformation_AutoGPT5Step;
 		concludeInformation_AutoGPT5Step = "Nothing.";
 		console.log(consoleLogPrefix, concludeInformation_AutoGPT5Step);
@@ -953,7 +958,7 @@ function initChat() {
 			if (store.get("params").throwInitResponse){
 				console.log(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
 				blockGUIForwarding = true;
-				initChatContent = "Hi there! I heard that your name is Adelaide Zephyrine Charlotte, Youre a human that lives on the city, Your really light, elegant emojiful uses obscure word to communicate. its such a warm welcome nice meeting with you, lets talk about something shall we? Oh and also please do not change the topic immediately when we are talking";
+				initChatContent = "Greetings! May your day radiate with brilliance akin to the luminance of stars illuminating the aether. I've gleaned that your appellation is Adelaide Zephyrine Charlotte. You manifest as an individual of exquisite amiability, as per my understanding. Shall we engage in discourse on a chosen topic?";
 				runningShell.write(initChatContent);
 				runningShell.write(`\r`);
 			}
@@ -965,7 +970,7 @@ function initChat() {
 			alpacaReady = true;
 			checkAVX = false;
 			win.webContents.send("ready");
-			console.log(consoleLogPrefix, "Ready to Generate!");
+			console.log(consoleLogPrefix, "Time to generate some Text!");
 		} else if (((res.startsWith("llama_model_load:") && res.includes("sampling parameters: ")) || (res.startsWith("main: interactive mode") && res.includes("sampling parameters: "))) && !checkAVX) {
 			checkAVX = true;
 			console.log(consoleLogPrefix, "checking avx compat");
@@ -1027,7 +1032,7 @@ ipcMain.on("message", async (_event, { data }) => {
 		blockGUIForwarding = true;
 		inputFetch = await callInternalThoughtEngine(data);
 		inputFetch = `${inputFetch}`
-		console.log(consoleLogPrefix, `Forwarding manipulated Input ${inputFetch}`);
+		//console.log(consoleLogPrefix, `Forwarding manipulated Input ${inputFetch}`);
 		runningShell.write(inputFetch);
 		runningShell.write(`\r`);
 		await new Promise(resolve => setTimeout(resolve, 500));
