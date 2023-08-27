@@ -1,15 +1,15 @@
 {
 	"name": "project-zephyrine",
 	"productName": "Project Zephyrine",
-	"description": "The friendly way to interact with LLM",
-	"version": "0.0.1",
+	"description": "An amicable, ensorcelled, and refined modality for engaging the Learned Language Model.",
+	"version": "0.0.5",
 	"author": "Albert Starfield",
 	"license": "MIT",
 	"main": "index.js",
 	"icon": "icon/win/icon.ico",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
-		"start": "electron .",
+		"start": "electron . --no-sandbox --disable-dev-shm-usage --enable-logging",
 		"make-win-x64": "npx electron-packager . --overwrite --platform=win32 --arch=x64 --icon=icon/win/icon.ico --prune=true --electron-version=13.6.9 --app-copyright=\"AlbertStarfield\" --out=release-builds  --version-string.CompanyName=AlbertStarfield",
 		"pack-win-x64": "npx electron-builder --win --config --publish=never --prepackaged \"release-builds/Project Zephyrine-win32-x64\"",
 		"win-x64": "rmdir /s /q release-builds dist && npm run make-win-x64",

@@ -526,6 +526,23 @@ if [ "${1}" == "falcon" ]; then
 fi
 
 
+buildLLMBackend(){
+    #Compile all binaries with specific version and support
+    build_falcon
+    build_ggml_base mpt
+    build_ggml_base dolly-v2
+    build_ggml_base gpt-2
+    build_ggml_base gpt-j
+    build_ggml_base gpt-neox
+    build_ggml_base mpt
+    build_llama
+
+
+}
+
+
+#buildLLMBackend
+
 # Change directory to ./usr and install npm dependencies
 cd ./usr || exit 1
 
@@ -565,6 +582,14 @@ install_dependencies_macos() {
         echo "Homebrew not found. Please install Homebrew and try again."
         exit 1
     fi
+
+    if ! command -v port &> /dev/null; then
+        echo "macPorts not found. Please install macPorts and try again."
+        sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+        exit 1
+    fi
+    #/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+
     echo "Upgrading to the latest Node Version!"
     sudo npm install -g n
     sudo n latest
@@ -581,27 +606,9 @@ if [ -z "$(command -v npm)" ]; then
 fi
 
 # Install npm dependencies
-npm install --save-dev
-
-if [ ! -d "${rootdir}/usr/release-builds/" ] || [ $FORCE_REBUILD == 1 ]; then
-
-    # Execute npm run based on the platform and architecture
-    if [[ "$platform" == "Linux" ]]; then
-        if [[ "$arch" == "x86_64" ]]; then
-            npm run linux-x64 || { echo "LLaMa npm run linux-x64 failed. See logs for details."; exit 1; }
-        elif [[ "$arch" == "aarch64" ]]; then
-            npm run linux-arm64 || { echo "LLaMa npm run linux-arm64 failed. See logs for details."; exit 1; }
-        fi
-    elif [[ "$platform" == "Darwin" ]]; then
-        if [[ "$arch" == "x86_64" ]]; then
-            npm run mac-x64 || { echo "LLaMa npm run mac-x64 failed. See logs for details."; exit 1; }
-        elif [[ "$arch" == "arm64" ]]; then
-            npm run mac-arm64 || { echo "LLaMa npm run mac-arm64 failed. See logs for details."; exit 1; }
-        fi
-    fi
+if [[ ! -f ${rootdir}/installed.flag || "${FORCE_REBUILD}" == "1" ]]; then
+    npm install --save-dev
+    touch ${rootdir}/installed.flag
 fi
-echo "LLaMa installation completed successfully."
-
-cd ${rootdir}/usr/release-builds/*Zephyrine*/
-chmod +x Project*Zephyrine*
-"./Project Zephyrine" --no-sandbox --disable-dev-shm-usage --enable-logging
+cd ${rootdir}/usr
+npm start

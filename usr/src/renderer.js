@@ -411,6 +411,7 @@ ipcRenderer.on("params", (_event, data) => {
 	//document.getElementById("LLMBackendMode").value = data.llmBackendMode;
 	document.getElementById("emotionalllmchildengine").checked = data.emotionalLLMChildengine;
 	document.getElementById("profilepictureemotion").checked = data.profilePictureEmotion;
+	document.getElementById("longchainthought-neverfeelenough").checked = data.longChainThoughtNeverFeelenough;
 });
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
@@ -436,7 +437,8 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			maxLocalSearchChar: document.getElementById("max_localsearch_character").value || document.getElementById("max_localsearch_character").placeholder,
 			maxLocalSearchPerFileChar: document.getElementById("max_localsearch_perfile_character").value || document.getElementById("max_localsearch_perfile_character").placeholder,
 			keywordContentFileMatchPercentageThreshold: document.getElementById("keywordcontentfilematchpercentthreshold").value || document.getElementById("keywordcontentfilematchpercentthreshold").placeholder,
-			hardwareLayerOffloading: document.getElementById("hardwarelayeroffloading").value || document.getElementById("hardwarelayeroffloading").placeholder
+			hardwareLayerOffloading: document.getElementById("hardwarelayeroffloading").value || document.getElementById("hardwarelayeroffloading").placeholder,
+			longChainThoughtNeverFeelenough: document.getElementById("longchainthought-neverfeelenough").checked
 		}
 	});
 	document.getElementById("settings-dialog-bg").classList.add("hidden");
@@ -479,6 +481,10 @@ document.getElementById("profilepictureemotion").addEventListener("change", () =
 
 document.getElementById("LLMBackendMode").addEventListener("change", () => {
 	const value = document.getElementById("LLMBackendMode").value;
+});
+
+document.getElementById("longchainthought-neverfeelenough").addEventListener("change", () => {
+	ipcRenderer.send("longChainThoughtNeverFeelenough", document.getElementById("longchainthought-neverfeelenough").checked);
 });
 
 
