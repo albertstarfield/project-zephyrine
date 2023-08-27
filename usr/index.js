@@ -704,7 +704,15 @@ let targetPlatform = '';
 function generateRandomNumber(min, max) {
 	return Math.floor(Math.random() * (max - min + 1)) + min;
   }
-let randSeed = generateRandomNumber(27000000000, 279999999999)
+let randSeed
+let configSeed = store.get("params").seed;
+if (configSeed === "-1"){ 
+	randSeed = generateRandomNumber(27000000000, 279999999999);
+	console.log(consoleLogPrefix, "Random Seed!", randSeed);
+} else {
+	randSeed = configSeed;
+	console.log(consoleLogPrefix, "Predefined Seed!", randSeed);
+}
 // RUNNING Main LLM GUI to User
 let LLMBackendSelection;
 let LLMBackendVariationFileName;
@@ -1034,7 +1042,7 @@ function initChat() {
 	var promptFile = "universalPrompt.txt";
 	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
 	const chatArgs = `-i --interactive-first -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`;
-	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} --seed ${params.seed} -c 4096 -s ${randSeed}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} -c 4096 -s ${randSeed}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
 }
