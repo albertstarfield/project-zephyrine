@@ -18,7 +18,7 @@ Project Zephyrine
   </a>
 </p>
 
-<p align="center"><i>"Project Zephyrine: Empowering Your Chat Experience with LLaMA (GGML v2 GGML v3), LLM, mpt, and GPU Acceleration in an Updated Alpaca Electron Chatbot Local GUI"</i></p>
+<p align="center"><i>"Project Zephyrine: Empowering Your Chat Experience with LLaMA (GGML v2 GGML v3 GGUF), LLM, mpt, and GPU Acceleration in an Updated Alpaca Electron Chatbot Local GUI"</i></p>
 <hr>
 
 
@@ -27,8 +27,8 @@ Project Zephyrine
 ## 📃 Features & to-do
 
 - [x] Runs locally on your computer, internet connection is not needed except when trying to access the web
-- [x] Runs llama-2, llama, mpt, gpt-j, dolly-v2, gpt-2, gpt-neox, starcoder
-- [x] Can run purely on CPU
+- [x] Runs llama-2, llama-2-GGUF, llama, mpt, gpt-j, dolly-v2, gpt-2, gpt-neox, starcoder
+- [x] Can run purely on CPU (x86_64 and arm64/aarch64)
 - [x] Supports Windows(untested), MacOS (untested), and Linux
 - [x] Context memory
 - [x] Partial GPU/FPGA(opencl)/Tensor acceleration (cuBLAS, openBLAS, clBLAST, Metal) [EXPERIMENTAL WARNING!]
