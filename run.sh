@@ -613,6 +613,11 @@ buildLLMBackend(){
         targetFolderArch="arm64"
     fi
 
+     if [ "${arch}" == "x86_64" ]; then
+        targetFolderArch="x64"
+    fi
+
+
     if [ "${platform}" == "Darwin" ]; then
         targetFolderPlatform="0_macOS"
     fi
@@ -654,7 +659,6 @@ buildLLMBackend(){
     
     cd ${rootdir}
     build_ggml_base mpt
-    build_ggml_base dolly-v2
     build_ggml_base gpt-2
     build_ggml_base gpt-j
     build_ggml_base gpt-neox
@@ -663,9 +667,6 @@ buildLLMBackend(){
     #./usr/vendor/ggml/build/bin/${1} location of the compiled binary ggml based
     cp ./usr/vendor/ggml/build/bin/mpt ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-mpt-noaccel
     cp ./usr/vendor/ggml/build/bin/mpt ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-mpt-cuda
-    
-    cp ./usr/vendor/ggml/build/bin/dolly-v2 ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-dolly-v2-noaccel
-    cp ./usr/vendor/ggml/build/bin/dolly-v2 ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-dolly-v2-cuda
 
     cp ./usr/vendor/ggml/build/bin/gpt-2 ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-2-noaccel
     cp ./usr/vendor/ggml/build/bin/gpt-2 ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-2-cuda

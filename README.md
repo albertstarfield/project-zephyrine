@@ -27,7 +27,7 @@ Project Zephyrine
 ## 📃 Features & to-do
 
 - [x] Runs locally on your computer, internet connection is not needed except when trying to access the web
-- [x] Runs llama-2, llama-2-GGUF, llama, mpt, gpt-j, dolly-v2, gpt-2, gpt-neox, starcoder
+- [x] Runs llama-2, llama-2-GGUF, llama, mpt, gpt-j, gpt-2, gpt-neox, starcoder
 - [x] Can run purely on CPU (x86_64 and arm64/aarch64)
 - [x] Supports Windows(untested), MacOS (untested), and Linux
 - [x] Context memory
