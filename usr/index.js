@@ -707,7 +707,7 @@ function generateRandomNumber(min, max) {
 let randSeed
 let configSeed = store.get("params").seed;
 if (configSeed === "-1"){ 
-	randSeed = generateRandomNumber(27000000000, 279999999999);
+	randSeed = generateRandomNumber(270000000000, 279999999999);
 	console.log(consoleLogPrefix, "Random Seed!", randSeed);
 } else {
 	randSeed = configSeed;
@@ -766,6 +766,8 @@ function determineLLMBackend(){
 		LLMBackendVariationFileName = "gptj"
 	}else if (LLMBackendSelection === "gpt2"){
 		LLMBackendVariationFileName = "gpt2"
+	}else if (LLMBackendSelection === "LLaMa2gguf"){
+		LLMBackendVariationFileName = "llama-gguf"
 	}else {
 		console.log(consoleLogPrefix, "Unsupported Backend", LLMBackendSelection);
         process.exit(1);

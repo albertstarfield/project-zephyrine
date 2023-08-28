@@ -29,17 +29,15 @@ Project Zephyrine
 - [x] Runs locally on your computer, internet connection is not needed except when trying to access the web
 - [x] Runs llama-2, llama, mpt, gpt-j, dolly-v2, gpt-2, gpt-neox, starcoder
 - [x] Can run purely on CPU
-- [x] "Borrowed" UI from *that* popular chat AI Xdd
 - [x] Supports Windows(untested), MacOS (untested), and Linux
 - [x] Context memory
 - [x] Partial GPU/FPGA(opencl)/Tensor acceleration (cuBLAS, openBLAS, clBLAST, Metal) [EXPERIMENTAL WARNING!]
 - [x] DuckDuckGo integration for web access
-- [x] Pdf-parse Integration for local literature documents resources access
+- [x] Local files Integration for local literature documents resources access (except for formatted documents)
+- [x] Granluar Toggles Mode in the settings section
 - [ ] Fixing Broken Native Windows Support 
 - [ ] Project Restructuring for Unautomated nature of Windows support
-- [ ] Granluar Toggles Mode in the settings section
 - [ ] Chat history
-- [ ] Fixing Local Files Reading Freezes
 - [ ] Integration with Stable Diffusion
 
 

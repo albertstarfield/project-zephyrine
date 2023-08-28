@@ -1,0 +1,34 @@
+All platform are in their own folder (Platform -> Arch -> then the LLM Backend Binaries)
+example directory ./usr/bin/0_macOS/arm64/LLMBackend-llama-noaccel
+
+
+Naming examples:
+LLMBackend-llama-noaccel
+LLMBackend-llama-cuda
+LLMBackend-llama-opencl
+LLMBackend-llama-openblas
+
+LLMBackend-llama-gguf-noaccel
+LLMBackend-llama-gguf-cuda
+LLMBackend-llama-gguf-opencl
+LLMBackend-llama-gguf-openblas
+
+LLMBackend-falcon-noaccel
+LLMBackend-falcon-cuda
+LLMBackend-falcon-opencl
+LLMBackend-falcon-openblas
+
+LLMBackend-mpt-noaccel
+LLMBackend-mpt-cuda
+
+LLMBackend-gptneox-noaccel
+LLMBackend-gptneox-cuda
+
+LLMBackend-starcoder-noaccel
+LLMBackend-starcoder-cuda
+
+LLMBackend-gptj-noaccel
+LLMBackend-gptj-cuda
+
+LLMBackend-gpt2-noaccel
+LLMBackend-gpt2-cuda
