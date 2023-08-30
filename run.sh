@@ -49,7 +49,17 @@ install_dependencies_macos() {
     # Check if Xcode command line tools are installed
     if ! command -v xcode-select &> /dev/null; then
         echo "Xcode command line tools not found. Please install Xcode and try again."
+        echo "Kindly be aware of the necessity to install the compatible Xcode version corresponding to the specific macOS iteration. For instance, macOS Sonoma mandates the utilization of Xcode 15 Beta, along with its corresponding Xcode Command Line Tools version 15."
         exit 1
+    else
+        xcode-select --install
+        xcodebuild -license
+    fi
+    if ! command -v brew &> /dev/null; then
+        echo "Homebrew command line tools not found. Please install Homebrew and try again."
+        exit 1
+    else 
+    brew doctor
     fi
 }
 
