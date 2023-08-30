@@ -53,13 +53,15 @@ install_dependencies_macos() {
         exit 1
     else
         xcode-select --install
-        xcodebuild -license
+        xcodebuild -license accept
     fi
     if ! command -v brew &> /dev/null; then
         echo "Homebrew command line tools not found. Please install Homebrew and try again."
         exit 1
     else 
     brew doctor
+    brew tap apple/apple http://github.com/apple/homebrew-apple
+    brew install node
     fi
 }
 
