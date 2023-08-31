@@ -830,12 +830,6 @@ function determineLLMBackend(){
 	basebin = basebin.replace(" ","\ ");
 	console.log(consoleLogPrefix, "DEBUGBaseBin", basebin);
 
-	if (!fileExists("/home/albertstarfield/Downloads/alpaca-electron/usr/release-builds")) {
-		console.error("The required file does not exist. It's not supported. Sorry.");
-		process.exit(1);
-	} else {
-		console.log("File exists. Proceed with further actions.");
-	}
 	return basebin;
 }
 

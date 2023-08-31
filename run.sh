@@ -46,12 +46,14 @@ install_dependencies_linux() {
 
 # Function to check and install dependencies for macOS
 install_dependencies_macos() {
+    set +e
     # Check if Xcode command line tools are installed
     if ! command -v xcode-select &> /dev/null; then
         echo "Xcode command line tools not found. Please install Xcode and try again."
         echo "Kindly be aware of the necessity to install the compatible Xcode version corresponding to the specific macOS iteration. For instance, macOS Sonoma mandates the utilization of Xcode 15 Beta, along with its corresponding Xcode Command Line Tools version 15."
         exit 1
     else
+        
         xcode-select --install
         xcodebuild -license accept
     fi
@@ -60,9 +62,17 @@ install_dependencies_macos() {
         exit 1
     else 
     brew doctor
+    #rm -rf "/opt/homebrew/Library/Taps/homebrew/homebrew-core"
+    brew tap homebrew/core
     brew tap apple/apple http://github.com/apple/homebrew-apple
     brew install node
     fi
+    echo "Upgrading to the latest Node Version!"
+    set -e
+    sudo npm install -g n
+    sudo n latest
+    sudo node -v
+    
 }
 
 detect_cuda() {
@@ -728,26 +738,6 @@ install_dependencies_linux() {
     sudo node -v
 }
 
-# Function to install dependencies for macOS
-install_dependencies_macos() {
-    # Check if Homebrew is installed
-    if ! command -v brew &> /dev/null; then
-        echo "Homebrew not found. Please install Homebrew and try again."
-        exit 1
-    fi
-
-    if ! command -v port &> /dev/null; then
-        echo "macPorts not found. Please install macPorts and try again."
-        sudo bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-        exit 1
-    fi
-    #/bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
-
-    echo "Upgrading to the latest Node Version!"
-    sudo npm install -g n
-    sudo n latest
-    sudo node -v
-}
 
 # Install npm dependencie
 if [ -z "$(command -v npm)" ]; then
@@ -765,4 +755,6 @@ if [[ ! -f ${rootdir}/installed.flag || "${FORCE_REBUILD}" == "1" ]]; then
     touch ${rootdir}/installed.flag
 fi
 cd ${rootdir}/usr
+node -v
+npm -v
 npm start

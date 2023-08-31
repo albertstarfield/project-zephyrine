@@ -47,7 +47,8 @@
 		"read-pdf":"^0.1.2",
 		"docx-reader": "^0.0.10",
 		"@capacitor/core": "^5.2.2",
-		"pdf2json":"^3.0.4"
+		"pdf2json":"^3.0.4",
+		"node-pty":"^1.0.0"
 	},
 	"devDependencies": {
 		"@electron/rebuild": "^3.2.10",
