@@ -157,7 +157,7 @@ build_llama() {
     if [[ "$platform" == "Linux" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
             CMAKE_ARGS="-DLLAMA_CUBLAS=on"
-            CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
+            #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
         elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
             CMAKE_ARGS="-DLLAMA_CLBLAST=on"
         elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$opencl" == "opencl" ]]; then
@@ -176,7 +176,7 @@ build_llama() {
     elif [[ "$platform" == "Darwin" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
             CMAKE_ARGS="-DLLAMA_CUBLAS=on"
-            CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
+            #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
         elif [[ "$opencl" == "opencl" ]]; then
             CMAKE_ARGS="-DLLAMA_CLBLAST=on"
         elif [[ "$metal" == "metal" ]]; then
@@ -231,7 +231,7 @@ build_llama_gguf() {
     if [[ "$platform" == "Linux" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
             CMAKE_ARGS="-DLLAMA_CUBLAS=on"
-            CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
+            #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
         elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
             CMAKE_ARGS="-DLLAMA_CLBLAST=on"
         elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$opencl" == "opencl" ]]; then
@@ -250,7 +250,7 @@ build_llama_gguf() {
     elif [[ "$platform" == "Darwin" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
             CMAKE_ARGS="-DLLAMA_CUBLAS=on"
-            CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
+            #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
         elif [[ "$opencl" == "opencl" ]]; then
             CMAKE_ARGS="-DLLAMA_CLBLAST=on"
         elif [[ "$metal" == "metal" ]]; then
@@ -307,7 +307,7 @@ build_ggml_base() {
     if [[ "$platform" == "Linux" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
             CMAKE_ARGS="-DGGML_CUBLAS=on"
-            CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
+            #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
         elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
             CMAKE_ARGS="-DGGML_CLBLAST=on"
         elif [[ "$arch" == "arm64" && "$opencl" == "opencl" ]]; then
@@ -326,7 +326,7 @@ build_ggml_base() {
     elif [[ "$platform" == "Darwin" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
             CMAKE_ARGS="-DGGML_CUBLAS=on"
-            CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
+            #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
         elif [[ "$opencl" == "opencl" ]]; then
             CMAKE_ARGS="-DGGML_CLBLAST=on"
         elif [[ "$metal" == "metal" ]]; then
@@ -379,7 +379,7 @@ build_falcon() {
     if [[ "$platform" == "Linux" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
             CMAKE_ARGS="-DLLAMA_CUBLAS=on"
-            CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
+            #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
         elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
             CMAKE_ARGS="-DLLAMA_CLBLAST=on"
         elif [[ "$arch" == "arm64" && "$opencl" == "opencl" ]]; then
