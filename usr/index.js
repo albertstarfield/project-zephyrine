@@ -203,9 +203,6 @@ const util = require('util');
 const PDFParser = require('pdf-parse');
 const timeoutPromise = require('timeout-promise');
 const _ = require('lodash');
-const readPdf = require('read-pdf');
-const docxReader = require('docx-reader');
-const textract = require('textract');
 function searchAndConcatenateText(searchText) {
 	const userHomeDir = require('os').homedir();
 	const rootDirectory = path.join(userHomeDir, 'Documents'); // You can change the root directory as needed
@@ -836,7 +833,7 @@ function determineLLMBackend(){
 //we're going to define basebin which define which binary to use
 determineLLMBackend();
 
-const pty = require("node-pty-prebuilt-multiarch");
+const pty = require("node-pty");
 var runningShell, currentPrompt;
 var zephyrineReady,
 	zephyrineHalfReady = false;

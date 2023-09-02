@@ -65,7 +65,7 @@ install_dependencies_macos() {
     #rm -rf "/opt/homebrew/Library/Taps/homebrew/homebrew-core"
     brew tap homebrew/core
     brew tap apple/apple http://github.com/apple/homebrew-apple
-    brew install node
+    brew install node cmake
     fi
     echo "Upgrading to the latest Node Version!"
     set -e
@@ -184,15 +184,26 @@ build_llama() {
         else
             CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         fi
+
+        if [ "$(uname -m)" == "arm64" ]; then
+            echo "Enforcing compilation to $(uname -m), Probably cmake wont listen!"
+            export CMAKE_HOST_SYSTEM_PROCESSOR="arm64"
+            ENFORCE_ARCH_COMPILATION="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_HOST_SYSTEM_PROCESSOR=arm64 -DCMAKE_SYSTEM_PROCESSOR=arm64"
+        else
+            ENFORCE_ARCH_COMPILATION=""
+        fi
     else
         echo "Unsupported platform: $platform"
         exit 1
     fi
     # Run CMake
     echo $CMAKE_ARGS $CMAKE_CUDA_FLAGS
-    cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
+    set -x
+    cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS $ENFORCE_ARCH_COMPILATION
+    set +x
 
     # Build with multiple cores
+    echo "This is the architecture $(uname -m) unless the cmake becoming asshole and detect arm64 as x86_64"
     cmake --build . --config Release --parallel $(nproc) || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
@@ -257,6 +268,13 @@ build_llama_gguf() {
             CMAKE_ARGS="-DLLAMA_METAL=on"
         else
             CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+        fi
+        if [ "$(uname -m)" == "arm64" ]; then
+            echo "Enforcing compilation to $(uname -m), Probably cmake wont listen!"
+            export CMAKE_HOST_SYSTEM_PROCESSOR="arm64"
+            ENFORCE_ARCH_COMPILATION="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_HOST_SYSTEM_PROCESSOR=arm64 -DCMAKE_SYSTEM_PROCESSOR=arm64"
+        else
+            ENFORCE_ARCH_COMPILATION=""
         fi
     else
         echo "Unsupported platform: $platform"
@@ -334,6 +352,13 @@ build_ggml_base() {
         else
             CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"
         fi
+        if [ "$(uname -m)" == "arm64" ]; then
+            echo "Enforcing compilation to $(uname -m), Probably cmake wont listen!"
+            export CMAKE_HOST_SYSTEM_PROCESSOR="arm64"
+            ENFORCE_ARCH_COMPILATION="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_HOST_SYSTEM_PROCESSOR=arm64 -DCMAKE_SYSTEM_PROCESSOR=arm64"
+        else
+            ENFORCE_ARCH_COMPILATION=""
+        fi
     else
         echo "Unsupported platform: $platform"
         exit 1
@@ -404,6 +429,13 @@ build_falcon() {
             CMAKE_ARGS="-DLLAMA_METAL=on"
         else
             CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+        fi
+        if [ "$(uname -m)" == "arm64" ]; then
+            echo "Enforcing compilation to $(uname -m), Probably cmake wont listen!"
+            export CMAKE_HOST_SYSTEM_PROCESSOR="arm64"
+            ENFORCE_ARCH_COMPILATION="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_HOST_SYSTEM_PROCESSOR=arm64 -DCMAKE_SYSTEM_PROCESSOR=arm64"
+        else
+            ENFORCE_ARCH_COMPILATION=""
         fi
     else
         echo "Unsupported platform: $platform"
