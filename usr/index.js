@@ -832,7 +832,7 @@ function determineLLMBackend(){
 
 //we're going to define basebin which define which binary to use
 determineLLMBackend();
-
+console.log(consoleLogPrefix, process.versions.modules);
 const pty = require("node-pty");
 var runningShell, currentPrompt;
 var zephyrineReady,

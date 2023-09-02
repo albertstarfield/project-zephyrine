@@ -783,6 +783,7 @@ fi
 # Install npm dependencies
 if [[ ! -f ${rootdir}/installed.flag || "${FORCE_REBUILD}" == "1" ]]; then
     npm install --save-dev
+    npx --openssl_fips='' electron-rebuild #rebuild to prevent node-pty mismatch error of NODE_MODULE_VERSION 115
     buildLLMBackend
     touch ${rootdir}/installed.flag
 fi

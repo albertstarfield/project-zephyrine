@@ -3,6 +3,9 @@
 	"productName": "Project Zephyrine",
 	"description": "An amicable, ensorcelled, and refined modality for engaging the Learned Language Model.",
 	"version": "0.0.6",
+	"engines": {
+		"node": "115"  
+	},
 	"author": "Albert Starfield",
 	"license": "MIT",
 	"main": "index.js",
@@ -29,24 +32,27 @@
 		"linux-arm64": "npm run rebuild-linux && npm run make-linux-arm64"
 	},
 	"dependencies": {
+		"@capacitor/core": "^5.2.2",
 		"@electron/remote": "^2.0.9",
 		"@npmcli/fs": "^3.1.0",
+		"@types/jest": "^29.5.4",
+		"@types/mocha": "^10.0.1",
 		"duck-duck-scrape": "^2.2.3",
 		"electron-store": "^8.1.0",
-		"typescript": "^5.2.2",
-		"node-pty":"^1.0.0",
 		"express": "^4.18.2",
+		"fs": "^0.0.1-security",
+		"node-pty": "^1.0.0",
 		"os-utils": "^0.0.14",
 		"path": "^0.12.7",
 		"pdf-parse": "^1.1.1",
-		"fs": "^0.0.1-security",
 		"timeout-promise": "^1.0.2",
-		"@capacitor/core": "^5.2.2"
+		"typescript": "^5.2.2"
 	},
 	"devDependencies": {
 		"@electron/rebuild": "^3.2.10",
-		"electron": "^13.6.9",
-		"electron-builder": "^23.6.0",
+		"electron": "^24.8.0", 
+		"electron-builder": "^24.6.3",
 		"electron-packager": "^17.1.1"
 	}
 }
+
