@@ -774,7 +774,7 @@ function determineLLMBackend(){
 	console.log(`Detected Architecture: ${arch}`);
 	console.log(`Detected LLMBackend: ${LLMBackendSelection}`);
 
-	LLMBackendVariationSelected = `LLMBackend-${LLMBackendVariationFileName}-noaccel`;// for non accelerated attempt
+	LLMBackendVariationSelected = `LLMBackend-${LLMBackendVariationFileName}`;
 
 	if (platform === 'win32'){
 		// Windows

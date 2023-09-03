@@ -55,7 +55,7 @@ install_dependencies_macos() {
     else
         
         xcode-select --install
-        xcodebuild -license accept
+        sudo xcodebuild -license accept
     fi
     if ! command -v brew &> /dev/null; then
         echo "Homebrew command line tools not found. Please install Homebrew and try again."
@@ -156,33 +156,33 @@ build_llama() {
 
     if [[ "$platform" == "Linux" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
-            CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CUBLAS=on"
             #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
         elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_CLBLAST=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
         elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_CLBLAST=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
         elif [[ "$arch" == "amd64" && "$opencl" == "no_opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$opencl" == "no_opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         elif [[ "$arch" == "amd64" && "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DLLAMA_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
         elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DLLAMA_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
         else
             echo "No special Acceleration, Ignoring"
         fi
     elif [[ "$platform" == "Darwin" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
-            CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CUBLAS=on"
             #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
         elif [[ "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_CLBLAST=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
         elif [[ "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DLLAMA_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
         else
-            CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         fi
 
         if [ "$(uname -m)" == "arm64" ]; then
@@ -241,33 +241,33 @@ build_llama_gguf() {
 
     if [[ "$platform" == "Linux" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
-            CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CUBLAS=on"
             #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
-        elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_CLBLAST=on"
-        elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_CLBLAST=on"
-        elif [[ "$arch" == "amd64" && "$opencl" == "no_opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
-        elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$opencl" == "no_opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         elif [[ "$arch" == "amd64" && "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DLLAMA_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
         elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DLLAMA_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
+        elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
+        elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$opencl" == "opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
+        elif [[ "$arch" == "amd64" && "$opencl" == "no_opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+        elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$opencl" == "no_opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         else
             echo "No special Acceleration, Ignoring"
         fi
     elif [[ "$platform" == "Darwin" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
-            CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CUBLAS=on"
             #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
-        elif [[ "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_CLBLAST=on"
         elif [[ "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DLLAMA_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
+        elif [[ "$opencl" == "opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
         else
-            CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         fi
         if [ "$(uname -m)" == "arm64" ]; then
             echo "Enforcing compilation to $(uname -m), Probably cmake wont listen!"
@@ -324,33 +324,33 @@ build_ggml_base() {
 
     if [[ "$platform" == "Linux" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
-            CMAKE_ARGS="-DGGML_CUBLAS=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DGGML_CUBLAS=on"
             #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
-        elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DGGML_CLBLAST=on"
-        elif [[ "$arch" == "arm64" && "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DGGML_CLBLAST=on"
-        elif [[ "$arch" == "amd64" && "$opencl" == "no_opencl" ]]; then
-            CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"
-        elif [[ "$arch" == "arm64" && "$opencl" == "no_opencl" ]]; then
-            CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"
         elif [[ "$arch" == "amd64" && "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DGGML_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DGGML_METAL=on"
         elif [[ "$arch" == "arm64" && "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DGGML_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DGGML_METAL=on"
+        elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DGGML_CLBLAST=on"
+        elif [[ "$arch" == "arm64" && "$opencl" == "opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DGGML_CLBLAST=on"
+        elif [[ "$arch" == "amd64" && "$opencl" == "no_opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"
+        elif [[ "$arch" == "arm64" && "$opencl" == "no_opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"
         else
             echo "No special Acceleration, Ignoring"
         fi
     elif [[ "$platform" == "Darwin" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
-            CMAKE_ARGS="-DGGML_CUBLAS=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DGGML_CUBLAS=on"
             #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
-        elif [[ "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DGGML_CLBLAST=on"
         elif [[ "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DGGML_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DGGML_METAL=on"
+        elif [[ "$opencl" == "opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DGGML_CLBLAST=on"
         else
-            CMAKE_ARGS="-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"
+            CMAKE_ARGS="${CMAKE_ARGS} -DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS"
         fi
         if [ "$(uname -m)" == "arm64" ]; then
             echo "Enforcing compilation to $(uname -m), Probably cmake wont listen!"
@@ -403,32 +403,32 @@ build_falcon() {
     metal=$(detect_metal)
     if [[ "$platform" == "Linux" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
-            CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CUBLAS=on"
             #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
-        elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_CLBLAST=on"
-        elif [[ "$arch" == "arm64" && "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_CLBLAST=on"
-        elif [[ "$arch" == "amd64" && "$opencl" == "no_opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
-        elif [[ "$arch" == "arm64" && "$opencl" == "no_opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         elif [[ "$arch" == "amd64" && "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DLLAMA_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
         elif [[ "$arch" == "arm64" && "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DLLAMA_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
+        elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
+        elif [[ "$arch" == "arm64" && "$opencl" == "opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
+        elif [[ "$arch" == "amd64" && "$opencl" == "no_opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+        elif [[ "$arch" == "arm64" && "$opencl" == "no_opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         else
             echo "No special Acceleration, Ignoring"
         fi
     elif [[ "$platform" == "Darwin" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
-            CMAKE_ARGS="-DLLAMA_CUBLAS=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CUBLAS=on"
         elif [[ "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="-DLLAMA_CLBLAST=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
         elif [[ "$metal" == "metal" ]]; then
-            CMAKE_ARGS="-DLLAMA_METAL=on"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
         else
-            CMAKE_ARGS="-DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         fi
         if [ "$(uname -m)" == "arm64" ]; then
             echo "Enforcing compilation to $(uname -m), Probably cmake wont listen!"
@@ -685,32 +685,25 @@ buildLLMBackend(){
     # This naming system was introduced due to the Windows different LLMBackend precompiled versions (check llama.cpp and ggllm.cpp release tabs and see the different version of version)
     # example directory ./usr/bin/0_macOS/arm64/LLMBackend-llama-noaccel
 
+    #You know what lets abandon Windows enforced binary structuring and find another way on how to execute other way to have specific acceleration on Windows
+
     
     cd ${rootdir}
     build_llama
     cd ${rootdir}
-    cp ./usr/vendor/llama.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama-noaccel
-    cp ./usr/vendor/llama.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama-cuda
-    cp ./usr/vendor/llama.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama-opencl
-    cp ./usr/vendor/llama.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama-openblas
+    cp ./usr/vendor/llama.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama
 
     cd ${rootdir}
     build_llama_gguf
     cd ${rootdir}
 
-    cp ./usr/vendor/llama-gguf.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama-gguf-noaccel
-    cp ./usr/vendor/llama-gguf.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama-gguf-cuda
-    cp ./usr/vendor/llama-gguf.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama-gguf-opencl
-    cp ./usr/vendor/llama-gguf.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama-gguf-openblas
+    cp ./usr/vendor/llama-gguf.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama-gguf
 
     cd ${rootdir}
     build_falcon
     cd ${rootdir}
 
-    cp ./usr/vendor/ggllm.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-falcon-noaccel
-    cp ./usr/vendor/ggllm.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-falcon-cuda
-    cp ./usr/vendor/ggllm.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-falcon-opencl
-    cp ./usr/vendor/ggllm.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-falcon-openblas
+    cp ./usr/vendor/ggllm.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-falcon
     
     cd ${rootdir}
     build_ggml_base mpt
@@ -720,17 +713,13 @@ buildLLMBackend(){
     cd ${rootdir}
 
     #./usr/vendor/ggml/build/bin/${1} location of the compiled binary ggml based
-    cp ./usr/vendor/ggml/build/bin/mpt ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-mpt-noaccel
-    cp ./usr/vendor/ggml/build/bin/mpt ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-mpt-cuda
+    cp ./usr/vendor/ggml/build/bin/mpt ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-mpt
 
-    cp ./usr/vendor/ggml/build/bin/gpt-2 ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-2-noaccel
-    cp ./usr/vendor/ggml/build/bin/gpt-2 ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-2-cuda
+    cp ./usr/vendor/ggml/build/bin/gpt-2 ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-2
 
-    cp ./usr/vendor/ggml/build/bin/gpt-j ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-j-noaccel
-    cp ./usr/vendor/ggml/build/bin/gpt-j ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-j-cuda
+    cp ./usr/vendor/ggml/build/bin/gpt-j ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-j
 
-    cp ./usr/vendor/ggml/build/bin/gpt-neox ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-neox-noaccel
-    cp ./usr/vendor/ggml/build/bin/gpt-neox ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-neox-cuda
+    cp ./usr/vendor/ggml/build/bin/gpt-neox ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-neox
 
     cd ${rootdir}
 }
