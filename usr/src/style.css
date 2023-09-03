@@ -408,7 +408,7 @@ li {
 	pointer-events: none;
 }
 .loading svg {
-	animation: spin 1s linear infinite;
+	animation: spin 20s steps(2) infinite;
 }
 /* .hidden */
 form.running-model .loading {

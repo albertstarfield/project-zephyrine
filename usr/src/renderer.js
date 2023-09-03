@@ -348,7 +348,9 @@ ipcRenderer.on("totalmem", (_event, { data }) => {
 setInterval(async () => {
 	ipcRenderer.send("cpuUsage");
 	ipcRenderer.send("freemem");
-}, 1500);
+}, 60000);
+// For some reason cpuUsage and freemem everytime its updating its eating huge amount of GPU power ?
+
 ipcRenderer.on("cpuUsage", (_event, { data }) => {
 	cpuPercent = Math.round(data * 100);
 	cpuText.innerText = `CPU: ${cpuPercent}%, ${threadUtilized}/${cpuCount} threads`;
@@ -356,7 +358,7 @@ ipcRenderer.on("cpuUsage", (_event, { data }) => {
 });
 ipcRenderer.on("freemem", (_event, { data }) => {
 	freemem = data;
-	ramText.innerText = `RAM: ${Math.round((totalmem - freemem) * 10) / 10}GB/${totalmem}GB`;
+	ramText.innerText = `Memory: ${Math.round((totalmem - freemem) * 10) / 10}GB/${totalmem}GB`;
 	ramBar.style.transform = `scaleX(${(totalmem - freemem) / totalmem})`;
 });
 
@@ -495,3 +497,4 @@ document.getElementById("repeat_penalty").value = 1.3;
 document.getElementById("top_k").value = 420;
 document.getElementById("top_p").value = 90;
 document.getElementById("temp").value = 0.9;
+

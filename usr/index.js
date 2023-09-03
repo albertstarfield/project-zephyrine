@@ -121,6 +121,7 @@ ipcMain.on("os", () => {
 	});
 });
 
+
 // SET-UP
 const Store = require("electron-store");
 const schema = {
@@ -290,6 +291,8 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	prompt = prompt.replace("[object Promise]", "");
 	prompt = stripAnsi(prompt);
 	prompt = prompt.replace(/"/g, '');
+	prompt = prompt.replace(/_/g, '');
+	prompt = prompt.replace(/:/g, '');
 	prompt = prompt.replace(/'/g,"");
 
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
