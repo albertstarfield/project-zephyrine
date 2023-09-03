@@ -293,7 +293,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	prompt = prompt.replace(/'/g,"");
 
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
-	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen} --threads ${threads} -c 2048 -s ${randSeed}`;
+	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen} --threads ${threads} -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	
@@ -714,10 +714,16 @@ if (configSeed === "-1"){
 let LLMBackendSelection;
 let LLMBackendVariationFileName;
 let LLMBackendVariationSelected;
+let LLMBackendAttemptDedicatedHardwareAccel=false; //false by default but overidden when AttempAccelerate varible detected true!
 let basebin;
+let basebinLLMBackendParamPassedDedicatedHardwareAccel=""; //global variable so it can be used on main LLM thread and LLMChild
 let basebinBinaryMoreSpecificPathResolve;
 function determineLLMBackend(){
-	//--n-gpu-layers Dedicated Hardware Acceleration
+
+	//--n-gpu-layers 256 Dedicated Hardware Acceleration
+	// AttemptAccelerate variable will be determining whether the --n-gpu-layers will be passed through the params
+	// store.get("params").AttemptAccelerate
+
 	//var need to be concentrated on llmBackendMode
 
 	/*if (platform === 'darwin') {
@@ -735,6 +741,13 @@ function determineLLMBackend(){
 	} else if (arch === 'arm64') {
 		targetArch = 'arm64';
 	}*/
+
+	if(store.get("params").AttemptAccelerate){
+		basebinLLMBackendParamPassedDedicatedHardwareAccel=`--n-gpu-layers ${store.get("params").hardwareLayerOffloading}`;
+	} else {
+		basebinLLMBackendParamPassedDedicatedHardwareAccel="";
+	}
+
 	LLMBackendSelection = store.get("params").llmBackendMode;
 	/*
 	<option value="LLaMa2">LLaMa-2</option>
@@ -823,9 +836,9 @@ function determineLLMBackend(){
 
 
 	// Note this need to be able to handle spaces especially when you are aiming for Windows support which almost everything have spaces and everything path is inverted, its an hell for developer natively support 99% except Windows Fuck microsoft
-	console.log(consoleLogPrefix, "DEBUGBaseBin", basebin);
+	console.log(consoleLogPrefix, "Base Binary Path", basebin);
 	basebin = basebin.replace(" ","\ ");
-	console.log(consoleLogPrefix, "DEBUGBaseBin", basebin);
+	console.log(consoleLogPrefix, "Base Binary Path", basebin);
 
 	return basebin;
 }
@@ -1035,7 +1048,7 @@ function initChat() {
 	var promptFile = "universalPrompt.txt";
 	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
 	const chatArgs = `-i --interactive-first -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`;
-	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} -c 4096 -s ${randSeed}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} -c 4096 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
 }
