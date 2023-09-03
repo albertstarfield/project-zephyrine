@@ -36,9 +36,8 @@ Project Zephyrine
 - [x] Local files Integration for local literature documents resources access (except for formatted documents)
 - [x] Granluar Toggles Mode in the settings section
 - [ ] Fixing Broken Native Windows Support 
-- [ ] Project Restructuring for Unautomated nature of Windows support
 - [ ] Chat history
-- [ ] Integration with Stable Diffusion
+- [ ] Markdown Formatted Response 
 
 
 
