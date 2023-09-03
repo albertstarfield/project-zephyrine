@@ -158,6 +158,10 @@ build_llama() {
         if [[ "$cuda" == "cuda" ]]; then
             CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CUBLAS=on"
             #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
+        elif [[ "$arch" == "amd64" && "$metal" == "metal" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
+        elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$metal" == "metal" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
         elif [[ "$arch" == "amd64" && "$opencl" == "opencl" ]]; then
             CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
         elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$opencl" == "opencl" ]]; then
@@ -166,10 +170,6 @@ build_llama() {
             CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$opencl" == "no_opencl" ]]; then
             CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
-        elif [[ "$arch" == "amd64" && "$metal" == "metal" ]]; then
-            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
-        elif [[ ( "$arch" == "arm64" || "$arch" == "aarch64" ) && "$metal" == "metal" ]]; then
-            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
         else
             echo "No special Acceleration, Ignoring"
         fi
@@ -177,10 +177,10 @@ build_llama() {
         if [[ "$cuda" == "cuda" ]]; then
             CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CUBLAS=on"
             #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
-        elif [[ "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
         elif [[ "$metal" == "metal" ]]; then
             CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
+        elif [[ "$opencl" == "opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
         else
             CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         fi
@@ -423,10 +423,10 @@ build_falcon() {
     elif [[ "$platform" == "Darwin" ]]; then
         if [[ "$cuda" == "cuda" ]]; then
             CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CUBLAS=on"
-        elif [[ "$opencl" == "opencl" ]]; then
-            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
         elif [[ "$metal" == "metal" ]]; then
             CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_METAL=on"
+        elif [[ "$opencl" == "opencl" ]]; then
+            CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_CLBLAST=on"
         else
             CMAKE_ARGS="${CMAKE_ARGS} -DLLAMA_BLAS=ON -DLLAMA_BLAS_VENDOR=OpenBLAS"
         fi
@@ -691,19 +691,34 @@ buildLLMBackend(){
     cd ${rootdir}
     build_llama
     cd ${rootdir}
-    cp ./usr/vendor/llama.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama
+    echo "Cleaning binaries Replacing with new ones"
+    rm -rf "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
+    if [ ! -d "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}" ]; then
+        mkdir "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
+        echo "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
+    fi
+    
+    mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/llama
+    cp ./usr/vendor/llama.cpp/build/bin/main ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/llama/LLMBackend-llama
+    echo "Copying any Acceleration and Debugging Dependencies for LLaMa GGML v2 v3 Legacy"
+    cp -r ./usr/vendor/llama.cpp/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/llama
 
     cd ${rootdir}
     build_llama_gguf
     cd ${rootdir}
-
-    cp ./usr/vendor/llama-gguf.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-llama-gguf
+    mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/llama-gguf
+    cp ./usr/vendor/llama-gguf.cpp/build/bin/main ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/llama-gguf/LLMBackend-llama-gguf
+    echo "Copying any Acceleration and Debugging Dependencies for LLaMa GGUF Neo Model"
+    cp -r ./usr/vendor/llama-gguf.cpp/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/llama-gguf
 
     cd ${rootdir}
     build_falcon
     cd ${rootdir}
 
-    cp ./usr/vendor/ggllm.cpp/build/bin/main ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-falcon
+    mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/falcon
+    cp ./usr/vendor/ggllm.cpp/build/bin/main ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/falcon/LLMBackend-falcon
+     echo "Copying any Acceleration and Debugging Dependencies for Falcon"
+    cp -r ./usr/vendor/ggllm.cpp/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/falcon/
     
     cd ${rootdir}
     build_ggml_base mpt
@@ -713,13 +728,22 @@ buildLLMBackend(){
     cd ${rootdir}
 
     #./usr/vendor/ggml/build/bin/${1} location of the compiled binary ggml based
-    cp ./usr/vendor/ggml/build/bin/mpt ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-mpt
-
-    cp ./usr/vendor/ggml/build/bin/gpt-2 ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-2
-
-    cp ./usr/vendor/ggml/build/bin/gpt-j ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-j
-
-    cp ./usr/vendor/ggml/build/bin/gpt-neox ./usr/bin/${targetFolderPlatform}/${targetFolderArch}/LLMBackend-gpt-neox
+    mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-mpt
+    mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gpt2
+    mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptj
+    mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptneox
+    echo "Copying any Acceleration and Debugging Dependencies for mpt"
+    cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-mpt
+    cp ./usr/vendor/ggml/build/bin/mpt ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-mpt/LLMBackend-mpt
+    echo "Copying any Acceleration and Debugging Dependencies for gpt2"
+    cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gpt2
+    cp ./usr/vendor/ggml/build/bin/gpt-2 ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gpt2/LLMBackend-gpt-2
+    echo "Copying any Acceleration and Debugging Dependencies for gpt-j"
+    cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptj
+    cp ./usr/vendor/ggml/build/bin/gpt-j ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptj/LLMBackend-gpt-j
+    echo "Copying any Acceleration and Debugging Dependencies for gpt-neo-x"
+    cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptneox
+    cp ./usr/vendor/ggml/build/bin/gpt-neox ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptneox/LLMBackend-gpt-neox
 
     cd ${rootdir}
 }

@@ -713,6 +713,7 @@ if (configSeed === "-1"){
 // RUNNING Main LLM GUI to User
 let LLMBackendSelection;
 let LLMBackendVariationFileName;
+let LLMBackendVariationFileSubFolder;
 let LLMBackendVariationSelected;
 let LLMBackendAttemptDedicatedHardwareAccel=false; //false by default but overidden when AttempAccelerate varible detected true!
 let basebin;
@@ -763,21 +764,29 @@ function determineLLMBackend(){
 		LLMBackendSelection = "LLaMa2";
 	}
 	if (LLMBackendSelection === "LLaMa2"){
-		LLMBackendVariationFileName = "llama"
+		LLMBackendVariationFileName = "llama";
+		LLMBackendVariationFileSubFolder = "llama";
 	}else if (LLMBackendSelection === "falcon"){
-		LLMBackendVariationFileName = "falcon"
+		LLMBackendVariationFileName = "falcon";
+		LLMBackendVariationFileSubFolder = "falcon";
 	}else if (LLMBackendSelection === "mpt"){
-		LLMBackendVariationFileName = "mpt"
+		LLMBackendVariationFileName = "mpt";
+		LLMBackendVariationFileSubFolder = "ggml-mpt";
 	}else if (LLMBackendSelection === "GPTNeoX"){
-		LLMBackendVariationFileName = "gptneox"
+		LLMBackendVariationFileName = "gptneox";
+		LLMBackendVariationFileSubFolder = "ggml-gptneox";
 	}else if (LLMBackendSelection === "starcoder"){
-		LLMBackendVariationFileName = "starcoder"
+		LLMBackendVariationFileName = "starcoder";
+		LLMBackendVariationFileSubFolder = "ggml-starcoder";
 	}else if (LLMBackendSelection === "gptj"){
-		LLMBackendVariationFileName = "gptj"
+		LLMBackendVariationFileName = "gptj";
+		LLMBackendVariationFileSubFolder = "ggml-gptj";
 	}else if (LLMBackendSelection === "gpt2"){
-		LLMBackendVariationFileName = "gpt2"
+		LLMBackendVariationFileName = "gpt2";
+		LLMBackendVariationFileSubFolder = "ggml-gpt2";
 	}else if (LLMBackendSelection === "LLaMa2gguf"){
-		LLMBackendVariationFileName = "llama-gguf"
+		LLMBackendVariationFileName = "llama-gguf";
+		LLMBackendVariationFileSubFolder = "llama-gguf";
 	}else {
 		console.log(consoleLogPrefix, "Unsupported Backend", LLMBackendSelection);
         process.exit(1);
@@ -794,12 +803,12 @@ function determineLLMBackend(){
 		if(arch === 'x64'){
 			console.log(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}.exe`;
-			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
+			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
 
 		}else if(arch === 'arm64'){
 			console.log(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}.exe`;
-			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "arm64", supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
+			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "arm64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
 
 		}else{
 			console.log(consoleLogPrefix, "Unsupported Architecture");
@@ -808,11 +817,11 @@ function determineLLMBackend(){
 	} else if (platform === 'linux'){
 		if(arch === "x64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
-			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "x64", basebinBinaryMoreSpecificPathResolve)}"`;
+			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "x64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
 		console.log(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 		}else if(arch === "arm64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
-			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", basebinBinaryMoreSpecificPathResolve)}"`;
+			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
 		console.log(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 		}else{
 			console.log(consoleLogPrefix, "Unsupported Architecture");
@@ -822,11 +831,11 @@ function determineLLMBackend(){
 	} else if (platform === 'darwin'){
 		if(arch === "x64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
-			basebin = `"${path.resolve(__dirname, "bin", "0_macOS", "x64", basebinBinaryMoreSpecificPathResolve)}"`;
+			basebin = `"${path.resolve(__dirname, "bin", "0_macOS", "x64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
 		console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
 		}else if(arch === "arm64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
-			basebin = `"${path.resolve(__dirname, "bin", "0_macOS", "arm64", basebinBinaryMoreSpecificPathResolve)}"`;
+			basebin = `"${path.resolve(__dirname, "bin", "0_macOS", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
 		console.log(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
 		}else{
 			console.log(consoleLogPrefix, "Unsupported Architecture");
