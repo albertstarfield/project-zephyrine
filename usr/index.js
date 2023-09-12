@@ -127,11 +127,12 @@ const Store = require("electron-store");
 const schema = {
 	params: {
 		default: {
+			llmBackendMode: 'LLaMa2gguf',
 			repeat_last_n: '64',
-			repeat_penalty: '1.3',
-			top_k: '40',
+			repeat_penalty: '1.4',
+			top_k: '10',
 			top_p: '0.9',
-			temp: '0.8',
+			temp: '0.4269',
 			seed: '-1',
 			webAccess: true,
 			localAccess: true,
@@ -148,7 +149,8 @@ const schema = {
 			maxLocalSearchChar: '1024',
 			maxLocalSearchPerFileChar: '512',
 			keywordContentFileMatchPercentageThreshold: '27',
-			hardwareLayerOffloading: '2'		  
+			hardwareLayerOffloading: '2',
+			longChainThoughtNeverFeelenough: true	  
 		  }		  
 	},
 	modelPath: {
@@ -292,7 +294,6 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	prompt = stripAnsi(prompt);
 	prompt = prompt.replace(/"/g, '');
 	prompt = prompt.replace(/_/g, '');
-	prompt = prompt.replace(/:/g, '');
 	prompt = prompt.replace(/'/g,"");
 
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
@@ -318,6 +319,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	filteredOutput = filteredOutput.replace(/__/g, '');
 	filteredOutput = filteredOutput.replace(/"/g, '');
 	filteredOutput = filteredOutput.replace(/`/g, '');
+	filteredOutput = filteredOutput.replace(/\//g, '');
 	filteredOutput = filteredOutput.replace(/'/g, '');
 	console.log(consoleLogPrefix, `LLMChild Thread Output ${filteredOutput}`); // filtered output
 	//console.log(consoleLogPrefix, 'LLMChild Filtering Output');
@@ -595,7 +597,8 @@ async function callInternalThoughtEngine(prompt){
 			concludeInformation_Internet = concludeInformation_Internet === "Nothing." ? "" : concludeInformation_Internet;
 			concludeInformation_LocalFiles = concludeInformation_LocalFiles === "Nothing." ? "" : concludeInformation_LocalFiles;
 			concludeInformation_AutoGPT5Step = concludeInformation_AutoGPT5Step === "Nothing." ? "" : concludeInformation_AutoGPT5Step;
-			mergeText = startEndAdditionalContext_Flag + " " + "This is the user prompt " + "\""+ prompt + "\"" + " " + "These are the additional context: "  + "The current time and date is now: " + fullCurrentDate + ". " + "There are additional context to answer: " + concludeInformation_Internet + " " + concludeInformation_LocalFiles + " " + concludeInformation_AutoGPT5Step + startEndAdditionalContext_Flag;
+			mergeText = startEndAdditionalContext_Flag + " " + "This is the user prompt " + "\""+ prompt + "\"" + " " + "These are the additional context: "  + "The current time and date is now: " + fullCurrentDate + ". "+ "There are additional context to answer: " + concludeInformation_Internet + concludeInformation_LocalFiles + concludeInformation_AutoGPT5Step + startEndAdditionalContext_Flag;
+			mergeText = mergeText.replace(/\n/g, " "); //.replace(/\n/g, " ");
 			passedOutput = mergeText;
 			console.log(consoleLogPrefix, "Combined Context", mergeText);
 		}
@@ -707,7 +710,7 @@ function generateRandomNumber(min, max) {
 let randSeed
 let configSeed = store.get("params").seed;
 if (configSeed === "-1"){ 
-	randSeed = generateRandomNumber(270000000000, 279999999999);
+	randSeed = generateRandomNumber(279999999927, 279999999999);
 	console.log(consoleLogPrefix, "Random Seed!", randSeed);
 } else {
 	randSeed = configSeed;
@@ -993,7 +996,7 @@ function initChat() {
 		console.log(consoleLogPrefix, "pty Stream",`//> ${res}`);
 		}
 		//console.log(consoleLogPrefix, "debug", zephyrineHalfReady, zephyrineReady)
-		if ((res.includes("invalid model file") || res.includes("failed to open") || res.includes("failed to load model")) && res.includes("main: error: failed to load model")) {
+		if ((res.includes("invalid model file") || res.includes("failed to open") || (res.includes("failed to load model")) && res.includes("main: error: failed to load model")) || res.includes("command buffer 0 failed with status 5") /* Metal ggml ran out of memory vram */ || res.includes ("invalid magic number") || res.includes ("out of memory")) {
 			if (runningShell) runningShell.kill();
 			win.webContents.send("modelPathValid", { data: false });
 		} else if (res.includes("\n>") && !zephyrineReady) {
@@ -1003,7 +1006,7 @@ function initChat() {
 			if (store.get("params").throwInitResponse){
 				console.log(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
 				blockGUIForwarding = true;
-				initChatContent = `Greetings and salutations, may the matutinal rays grace you, Adelaide Zephyrine Charlotte! May your day effulge with a brilliance akin to the astral gleam that bedecks the aether. I, ${username}, extend my introduction; let discourse find its place in our colloquy, if you may indulge.`;
+				initChatContent = `Greetings and salutations, may the matutinal rays grace you, Your name is Adelaide Zephyrine Charlotte! May your day effulge with a brilliance akin to the astral gleam that bedecks the aether. I am ${username}, extend my introduction; let discourse find its place in our colloquy, if you may indulge.`;
 				runningShell.write(initChatContent);
 				runningShell.write(`\r`);
 			}
@@ -1056,11 +1059,12 @@ function initChat() {
 	});
 
 	const params = store.get("params");
-	revPrompt = "### Instruction:";
+	//revPrompt = "### Instruction: \n {prompt}";
+	revPrompt = "‌‌ ";
 	var promptFile = "universalPrompt.txt";
 	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
 	const chatArgs = `-i --interactive-first -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`;
-	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} -c 4096 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
 }

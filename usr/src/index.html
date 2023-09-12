@@ -191,7 +191,7 @@
 		<div id="path-dialog-bg" class="dialog-bg hidden">
 			<div class="dialog-box">
 				<div class="dialog-title">
-					<h3>Couldn't load model</h3>
+					<h3>Failed to Load Model</h3>
 					<!-- <button class="dialog-close">
 						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-x" viewBox="2 2 12 12">
 							<path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
@@ -199,8 +199,24 @@
 					</button> -->
 				</div>
 				<div id="path-dialog" class="dialog-content">
-					<p>Enter the filepath for the current mode model.</p>
-					<p>You can change the model type in settings.</p>
+					<h3>LLM Backend Mode</h3>
+						<p>You have the flexibility to select the desired LLM Backend Mode tailored to your specific downloaded model.</p>
+						<div style="height: 8px"></div>
+						<div class="item">
+							<label class="dropdown-arrow">
+								<select id="LLMBackendMode">
+									<option value="LLaMa2">LLaMa-2</option>
+									<option value="LLaMa2gguf">LLaMa-2-GGUF</option>
+									<option value="falcon">Falcon</option>
+									<option value="mpt">MPT</option>
+									<option value="GPTNeoX">GPT-NEO-X</option>
+									<option value="starcoder">Starcoder</option>
+									<option value="gptj">gpt-j</option>
+									<option value="gpt2">gpt-2</option>
+								</select>
+							</label>
+						</div>
+					<h5>Enter the filepath for the current mode model. You can change the model type in settings. for other types such as GGML or GGUF</h5>
 					<div style="display: flex; gap: 8px">
 						<input type="text" />
 						<button class="primary">

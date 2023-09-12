@@ -395,6 +395,7 @@ document.getElementById("settings").addEventListener("click", () => {
 	ipcRenderer.send("getParams");
 });
 ipcRenderer.on("params", (_event, data) => {
+	document.getElementById("LLMBackendMode").value = data.llmBackendMode;
 	document.getElementById("repeat_last_n").value = data.repeat_last_n;
 	document.getElementById("repeat_penalty").value = data.repeat_penalty;
 	document.getElementById("top_k").value = data.top_k;
@@ -410,7 +411,6 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("classicmode").checked = data.classicMode;
 	document.getElementById("attemptaccelerate").checked = data.AttemptAccelerate;
 	document.getElementById("hardwarelayeroffloading").value = data.hardwareLayerOffloading;
-	//document.getElementById("LLMBackendMode").value = data.llmBackendMode;
 	document.getElementById("emotionalllmchildengine").checked = data.emotionalLLMChildengine;
 	document.getElementById("profilepictureemotion").checked = data.profilePictureEmotion;
 	document.getElementById("longchainthought-neverfeelenough").checked = data.longChainThoughtNeverFeelenough;
@@ -418,6 +418,7 @@ ipcRenderer.on("params", (_event, data) => {
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
 		params: {
+			llmBackendMode: document.getElementById("LLMBackendMode").value || document.getElementById("LLMBackendMode").value.placeholder,
 			repeat_last_n: document.getElementById("repeat_last_n").value || document.getElementById("repeat_last_n").placeholder,
 			repeat_penalty: document.getElementById("repeat_penalty").value || document.getElementById("repeat_penalty").placeholder,
 			top_k: document.getElementById("top_k").value || document.getElementById("top_k").placeholder,
@@ -445,6 +446,7 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 	});
 	document.getElementById("settings-dialog-bg").classList.add("hidden");
 });
+
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.secondary").addEventListener("click", () => {
 	document.getElementById("settings-dialog-bg").classList.add("hidden");
 });
@@ -479,10 +481,6 @@ document.getElementById("emotionalllmchildengine").addEventListener("change", ()
 
 document.getElementById("profilepictureemotion").addEventListener("change", () => {
 	ipcRenderer.send("profilePictureEmotion", document.getElementById("profilepictureemotion").checked);
-});
-
-document.getElementById("LLMBackendMode").addEventListener("change", () => {
-	const value = document.getElementById("LLMBackendMode").value;
 });
 
 document.getElementById("longchainthought-neverfeelenough").addEventListener("change", () => {

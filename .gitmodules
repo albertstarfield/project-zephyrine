@@ -2,7 +2,7 @@
   path = usr/vendor/llama.cpp
   url = https://github.com/ggerganov/llama.cpp
   branch = main
-  commit = 99d29c0094476c4962023036ecd61a3309d0e16b
+  commit = 93356bd
 [submodule "ggllm.cpp"] 
   path = usr/vendor/ggllm.cpp
   url = https://github.com/cmp-nct/ggllm.cpp

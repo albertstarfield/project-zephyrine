@@ -137,7 +137,7 @@ build_llama() {
     
     # Change directory to llama.cpp
     cd usr/vendor/llama.cpp || exit 1
-    git checkout 99d29c0094476c4962023036ecd61a3309d0e16b #return to ggml era not the dependencies breaking gguf model mode 
+    git checkout 93356bd #return to ggml era not the dependencies breaking gguf model mode 
 
     # Create build directory and change directory to it
     mkdir -p build
