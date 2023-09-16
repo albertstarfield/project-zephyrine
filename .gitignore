@@ -12,3 +12,6 @@ dist
 **tmp-reposync*
 **repoworkspace*
 **installed.flag*
+**code_query**
+**code_queue**
+**.DS_Store**

@@ -48,8 +48,8 @@ Project Zephyrine
 
 ## 🚀 Quick Start Guide
 
-1. You can easily download GGMLv2 and GGMLv3 from [The Bloke Huggingface Repo](https://huggingface.co/TheBloke) from there you can see multiple and various of quantization for instance the llama-2 7B GGML
-> https://huggingface.co/TheBloke/Llama-2-7B-GGML
+1. You can easily download GGMLv2, GGMLv3, GGUF, GGUFv2 from [The Bloke Huggingface Repo](https://huggingface.co/TheBloke) from there you can see multiple and various of quantization for instance the llama-2 Nous Hermes 7B GGUF
+> https://huggingface.co/TheBloke/Nous-Hermes-Llama2-GGUF
 
 2. Run the specific commands from the guide below
 
