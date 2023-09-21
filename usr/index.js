@@ -161,7 +161,7 @@ const schema = {
 	}
 };
 const store = new Store({ schema });
-//const fs = require("fs");
+const fs = require("fs");
 var modelPath = store.get("modelPath");
 
 function checkModelPath() {
@@ -200,7 +200,7 @@ ipcMain.on("checkPath", (_event, { data }) => {
 
 // DUCKDUCKGO And Function SEARCH FUNCTION
 
-const fs = require('fs');
+//const fs = require('fs');
 //const path = require('path');
 const util = require('util');
 const PDFParser = require('pdf-parse');
@@ -298,9 +298,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
 	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen} --threads ${threads} -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
-
 	command = `${basebin} ${LLMChildParam}`;
-	
 	try {
 	//console.log(consoleLogPrefix, `LLMChild Inference ${command}`);
 	outputLLMChild = await runShellCommand(command);
@@ -710,7 +708,7 @@ function generateRandomNumber(min, max) {
 let randSeed
 let configSeed = store.get("params").seed;
 if (configSeed === "-1"){ 
-	randSeed = generateRandomNumber(279999999927, 279999999999);
+	randSeed = generateRandomNumber(2700000000027, 2709999999999);
 	console.log(consoleLogPrefix, "Random Seed!", randSeed);
 } else {
 	randSeed = configSeed;
@@ -882,6 +880,8 @@ async function writeChatHistoryText(prompt, alpacaState0_half, alpacaState1){
 
 
 let chatStg = [];
+let chatStgJson;
+let chatStgPersistentPath = `${path.resolve(__dirname, "storage", "presistentInteractionMem.json")}`;
 let chatStgOrder = 0;
 let retrievedChatStg;
 let chatStgOrderRequest;
@@ -894,6 +894,7 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 	if (chatStgOrder === 0){
 		chatStg[0]="=========ChatStorageHeader========";
 	}
+	
 	if (mode === "save"){
         //console.log(consoleLogPrefix,"Saving...");
 		if(AITurn && !UserTurn){
@@ -905,7 +906,7 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 			//chatStgOrder = chatStgOrder + 1; //we can't do this kind of stuff because the AI stream part by part and call the chatArrayStorage in a continuous manner which auses the chatStgOrder number to go up insanely high and mess up with the storage
 			// How to say that I'm done and stop appending to the same array and move to next Order?
 			chatStg[chatStgOrder] += prompt; //handling the partial stream by appending into the specific array
-			chatStg[chatStgOrder]= chatStg[chatStgOrder].replace("undefined", "");
+			chatStg[chatStgOrder] = chatStg[chatStgOrder].replace("undefined", "");
 			if (process.env.ptyChatStgDEBUG === "1"){
 				console.log(consoleLogPrefix,"AITurn...");
 				console.log(consoleLogPrefix, "reconstructing from pty stream: ", chatStg[chatStgOrder]);
@@ -933,13 +934,60 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 			retrievedChatStg = "None.";
 		}
 		return retrievedChatStg;
-    } else if (mode === "restore"){
-		console.log(consoleLogPrefix,"Restoring Chat... Reading from File to Array");
+    } else if (mode === "restoreLoadPersistentMem"){
+		if (store.get("params").SaveandRestorechat) {
+			console.log(consoleLogPrefix,"Restoring Chat... Reading from File to Array");
+			chatStgOrder=0;
+			chatStg = fs.readFile(filename, 'utf8', (err, data) => {
+				if (err) {
+				console.error('Error reading file:', err);
+				callback([]);
+				} else {
+				try {
+					const array = JSON.parse(data);
+					callback(array);
+				} catch (parseError) {
+					console.error('Error parsing JSON:', parseError);
+					callback([]);
+				}
+				}
+			});
+			console.log(consoleLogPrefix, chatStg);
+			console.log(consoleLogPrefix, "Triggering Restoration Mode for the UI and main LLM Thread!");
+			console.log(consoleLogPrefix, "Stub!");
+		} else {
+			console.log(consoleLogPrefix, "Save and Restore Chat Disabled");
+		}
+
 		// then after that set to the appropriate chatStgOrder from the header of the file
+	} else if (mode === "reset"){
+		console.log(consoleLogPrefix, "Resetting Temporary Storage Order and Overwriting to Null!");
+		chatStgOrder=0;
+		chatStg = [];
+		
+	} else if (mode === "flushPersistentMem"){
+		if (store.get("params").SaveandRestorechat) {
+			//example of the directory writing 
+			//basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
+			console.log(consoleLogPrefix, "Stub Function but Trying Flushing into Mem!");
+			console.log(consoleLogPrefix, chatStg);
+			chatStgJson = JSON.stringify(chatStg)
+			console.log(consoleLogPrefix, chatStgJson);
+			console.log(consoleLogPrefix, chatStgPersistentPath)
+			fs.writeFile(chatStgPersistentPath, chatStgJson, (err) => {
+				if (err) {
+				console.error(consoleLogPrefix, 'Error writing file:', err);
+				} else {
+				console.log(consoleLogPrefix, 'Array data saved to file:', chatStgPersistentPath);
+				}
+			});
+		} else {
+			console.log(consoleLogPrefix,"stubFunction");
+			return "";
+		}
 	} else {
-        console.log(consoleLogPrefix,"stubFunction");
-        return "";
-    }
+		console.log(consoleLogPrefix, "Save and Restore Chat disabled!")
+	}
 	
 }
 
@@ -963,7 +1011,7 @@ const stripAdditionalContext = (str) => {
 }
 
 function restart() {
-	console.log("restarting");
+	console.log(consoleLogPrefix, "Resetting Main LLM State and Storage!");
 	win.webContents.send("result", {
 		data: "\n\n<end>"
 	});
@@ -972,6 +1020,8 @@ function restart() {
 	currentPrompt = undefined;
 	zephyrineReady = false;
 	zephyrineHalfReady = false;
+	chatArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
+	chatArrayStorage("reset", 0, 0, 0, 0); // fill it with 0 0 0 0 just to fill in nonsensical data since its only require reset command to execute the command
 	initChat();
 }
 
