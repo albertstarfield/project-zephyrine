@@ -40,6 +40,7 @@ Project Zephyrine
 - [ ] Addresses issues with Native Windows Support.
 - [ ] Introduces Chat history functionality.
 - [ ] Implements Markdown Formatted Response support.
+- [ ] Adding Docker Support
 
 
 

@@ -1,6 +1,6 @@
-appId: com.pi.alpaca.electron
+appId: com.as.zephyrine.electron
 nsis:
-    artifactName: Alpaca-Electron-win-x64-v${version}.${ext}
+    artifactName: Zephyrine-Electron-win-x64-v${version}.${ext}
     shortcutName: ${productName}
     uninstallDisplayName: ${productName}
     createDesktopShortcut: always
