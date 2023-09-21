@@ -2,10 +2,13 @@
 <sub>
 <img src="https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal/blob/main/picDemo/Project%20Zephyrine%20Logo.jpg?raw=true" height=144>
 </sub>
+
 <br>
 Project Zephyrine
 </h1>
-<br>
+
+<h5 align="center"> </h5>
+
 <p align="center">
   <a href="https://nodejs.org">
     <img src="https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white">
@@ -18,11 +21,8 @@ Project Zephyrine
   </a>
 </p>
 
-<p align="center"><i>"Project Zephyrine: Empowering Your Chat Experience with LLaMA (GGML v2 GGML v3 GGUF), LLM, mpt, and GPU Acceleration in an Updated Alpaca Electron Chatbot Local GUI"</i></p>
+<p align="center"><i>Greetings, I am Adelaide Zephyrine Charlotte, delighted to make your acquaintance. Shall we embark on our intellectual voyage through this endeavor? </i></p>
 <hr>
-
-
-### Current Version is broken and undergoing project restructuring changes! This will be fixed soon
 
 ## 📃 Features & to-do
 
