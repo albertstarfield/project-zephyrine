@@ -370,9 +370,10 @@ document.getElementById("clear").addEventListener("click", () => {
 	});
 });
 
-document.getElementById("clear-chat").addEventListener("click", () => {
+document.getElementById("chat-reset").addEventListener("click", () => {
 	stopButton.click();
 	stopButton.removeAttribute("disabled");
+	ipcRenderer.send("restart");
 	document.querySelectorAll("#messages li").forEach((element) => {
 		element.remove();
 	});
