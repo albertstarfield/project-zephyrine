@@ -249,25 +249,6 @@
 				</div>
 				<div id="settings-dialog" class="dialog-content">
 					<div class="settings-items">
-						<h3>LLM Backend Mode</h3>
-						<p>You have the flexibility to select the desired LLM Backend Mode tailored to your specific downloaded model.</p>
-						<div style="height: 8px"></div>
-						<div class="item">
-							<label class="dropdown-arrow">
-								<select id="LLMBackendMode">
-									<option value="LLaMa2">LLaMa-2</option>
-									<option value="LLaMa2gguf">LLaMa-2-GGUF</option>
-									<option value="falcon">Falcon</option>
-									<option value="mpt">MPT</option>
-									<option value="GPTNeoX">GPT-NEO-X</option>
-									<option value="starcoder">Starcoder</option>
-									<option value="gptj">gpt-j</option>
-									<option value="gpt2">gpt-2</option>
-								</select>
-							</label>
-						</div>
-
-						<div style="height: 32px"></div>
 
 						<h3>Current Mode Model settings</h3>
 
@@ -359,9 +340,9 @@
 								<input type="checkbox" id="longchainthought" />
 								<span class="slider round"></span>
 							</label>
-							<p style="margin: 0">Allow Extensive Thoughts Answering</p>
+							<p style="margin: 0">"Enable 'Chain of Thought' for Enhanced Response Depth"</p>
 						</div>
-						<h5>Enable the established AutoGPT 5 steps Thought Backend to enhance the precision of the response outcome.</h5>
+						<h5>Enabling the 'Chain of Thought' feature enhances the depth of response quality, particularly beneficial when your specific model requires extensive contemplation due to perceived insufficiency in its answers. This 'Chain of Thought' functionality proves highly advantageous, particularly in tackling complex mathematical calculus problems, although the accuracy of responses remains contingent on the model's inherent capabilities.</h5>
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
 								<input type="checkbox" id="longchainthought-neverfeelenough" />

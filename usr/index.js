@@ -4,7 +4,7 @@ For enabling the more verbose output of the console logs you could add this envi
 
 INTERNET_FETCH_DEBUG_MODE
 LOCAL_FETCH_DEBUG_MODE
-autoGPT5Steps_FETCH_DEBUG_MODE
+CoTMultiSteps_FETCH_DEBUG_MODE
 ptyChatStgDEBUG
 ptyStreamDEBUGMode
 
@@ -132,7 +132,7 @@ const schema = {
 			repeat_penalty: '1.4',
 			top_k: '10',
 			top_p: '0.9',
-			temp: '0.4269',
+			temp: '0.1',
 			seed: '-1',
 			webAccess: true,
 			localAccess: true,
@@ -223,7 +223,7 @@ function searchAndConcatenateText(searchText) {
 		if (fileStats.isDirectory()) {
 		  searchInDirectory(filePath);
 		} else if (fileStats.isFile() && (path.extname(file) === '.txt' || path.extname(file) === '.rtf' || path.extname(file) === '.c' || path.extname(file) === '.py' || path.extname(file) === '.html' || path.extname(file) === '.css' || path.extname(file) === '.rb' || path.extname(file) === '.xml')) {
-		  const content = stripAnsi(fs.readFileSync(filePath, 'utf-8'));
+		  const content = stripProgramBreakingCharacters(fs.readFileSync(filePath, 'utf-8'));
 		  
 		  // filter out files that only 69% and beyond are allowed to pass to the truncatedContent
 		  const contentAnalyzer = content.split(' ');
@@ -273,12 +273,59 @@ function runShellCommand(command) {
   });
 }
 
-function stripAnsi(str) {
-	const pattern = ["[\\u001B\\u009B][[\\]()#;?]*(?:(?:(?:(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]+)*|[a-zA-Z\\d]+(?:;[-a-zA-Z\\d\\/#&.:=?%@~_]*)*)?\\u0007)", "(?:(?:\\d{1,4}(?:;\\d{0,4})*)?[\\dA-PR-TZcf-nq-uy=><~]))"].join("|");
-	const regex = new RegExp(pattern, "g");
-	return str.replace(regex, "");
+
+// Filtering function section --------------------
+function onlyAllowNumber(inputString){
+	const regex = /\d/g;
+	// Use the match method to find all digits in the input string
+	const numbersArray = inputString.match(regex);
+  
+	// Join the matched digits to form a new string
+	const filteredString = numbersArray ? numbersArray.join('') : '';
+	
+	return filteredString;
 }
 
+function isVariableEmpty(variable) {
+	// Check if the variable is undefined or null
+	if (variable === undefined || variable === null) {
+	  return true;
+	}
+  
+	// Check if the variable is an empty string
+	if (typeof variable === 'string' && variable.trim() === '') {
+	  return true;
+	}
+  
+	// Check if the variable is an empty array
+	if (Array.isArray(variable) && variable.length === 0) {
+	  return true;
+	}
+  
+	// Check if the variable is an empty object
+	if (typeof variable === 'object' && Object.keys(variable).length === 0) {
+	  return true;
+	}
+  
+	// If none of the above conditions are met, the variable is not empty
+	return false;
+  }
+
+function stripProgramBreakingCharacters(str) {
+	let result;
+	//console.log(consoleLogPrefix, "Filtering Ansi while letting go other characters...");
+	// Define the regular expression pattern to exclude ANSI escape codes
+	const pattern = /\u001B\[[0-9;]*m/g;
+	result = str.replace(pattern, "");
+	result = result.replace(/"/g, '');
+	result = result.replace(/_/g, '');
+	result = result.replace(/'/g, '');
+	result = result.replace("[object Promise]", "");
+	// Use the regular expression to replace matched ANSI escape codes
+	return result
+	  
+}
+// -----------------------------------------------
 //let basebin;
 let LLMChildParam;
 let outputLLMChild;
@@ -291,13 +338,10 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	
 	//model = ``;
 	prompt = prompt.replace("[object Promise]", "");
-	prompt = stripAnsi(prompt);
-	prompt = prompt.replace(/"/g, '');
-	prompt = prompt.replace(/_/g, '');
-	prompt = prompt.replace(/'/g,"");
+	prompt = stripProgramBreakingCharacters(prompt);
 
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
-	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} -n ${lengthGen} --threads ${threads} -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 	command = `${basebin} ${LLMChildParam}`;
 	try {
 	//console.log(consoleLogPrefix, `LLMChild Inference ${command}`);
@@ -322,7 +366,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	console.log(consoleLogPrefix, `LLMChild Thread Output ${filteredOutput}`); // filtered output
 	//console.log(consoleLogPrefix, 'LLMChild Filtering Output');
 	//return filteredOutput;
-	filteredOutput = stripAnsi(filteredOutput);
+	filteredOutput = stripProgramBreakingCharacters(filteredOutput);
 	return filteredOutput;
 
 }
@@ -334,15 +378,13 @@ const startEndAdditionalContext_Flag = ""; //global variable so every function c
 // we can savely blank out the startEndAdditionalContext flag because we are now based on the blockGUI forwarding concept rather than flag matching
 const DDG = require("duck-duck-scrape");
 let passedOutput="";
-let concludeInformation_AutoGPT5Step;
+let concludeInformation_CoTMultiSteps;
+let required_CoTSteps;
+let concatenatedCoT="";
 let concludeInformation_Internet;
 let concludeInformation_LocalFiles;
 let todoList;
-let todoList1Result;
-let todoList2Result;
-let todoList3Result;
-let todoList4Result;
-let todoList5Result;
+let todoListResult;
 let fullCurrentDate;
 let searchPrompt="";
 let decisionSearch;
@@ -421,11 +463,11 @@ async function callInternalThoughtEngine(prompt){
 				inputPromptCounterSplit = resultSearchScraping.split(" ");
 				inputPromptCounter[3] = inputPromptCounterSplit.length;
 			if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
-				resultSearchScraping = stripAnsi(resultSearchScraping);
+				resultSearchScraping = stripProgramBreakingCharacters(resultSearchScraping);
 				promptInput = `What is the conclusion from this info: ${resultSearchScraping} Conclusion:`;
 				console.log(consoleLogPrefix, `LLMChild Concluding...`);
 				//let concludeInformation_Internet;
-				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripAnsi(stripAnsi(promptInput)), 1024);
+				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(stripProgramBreakingCharacters(promptInput)), 1024);
 			} else {
 				concludeInformation_Internet = "Nothing.";
 			}
@@ -484,9 +526,9 @@ async function callInternalThoughtEngine(prompt){
 		}
 		
 
-		// ----------------------- AutoGPT 5 Steps Thoughts --------------------
+		// ----------------------- CoT Steps Thoughts --------------------
 		console.log(consoleLogPrefix, "============================================================");
-		console.log(consoleLogPrefix, "Checking AutoGPT 5 Steps Thoughts Requirement!");
+		console.log(consoleLogPrefix, "Checking Chain of Thoughts Depth requirement Requirement!");
 		if (store.get("params").llmdecisionMode){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this interaction \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n Your Response:`;
 			promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. For the additional context this is what i concluded from Internet ${concludeInformation_Internet}. \n This is what i concluded from the Local Files ${concludeInformation_LocalFiles}. \n From this Interaction and additional context Should I Answer this in 5 steps Yes or No? Answer:`;
@@ -495,66 +537,51 @@ async function callInternalThoughtEngine(prompt){
 		} else {
 			decisionSearch = "yes"; // without LLM deep decision
 		}
-		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.autoGPT5Steps_FETCH_DEBUG_MODE === "1") && store.get("params").extensiveThought){
+		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.CoTMultiSteps_FETCH_DEBUG_MODE === "1") && store.get("params").extensiveThought){
 			if (store.get("params").llmdecisionMode){
-				console.log(consoleLogPrefix, "We need to create 5 todo list for this prompt");
+				
+				// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
+				// required_CoTSteps
+				promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n From this context from 1 to 27 how many steps that is required to answer. Answer:`;
+				required_CoTSteps = await callLLMChildThoughtProcessor(promptInput, 16);
+				required_CoTSteps = onlyAllowNumber(required_CoTSteps)
+
+				if (isVariableEmpty(required_CoTSteps)){
+					required_CoTSteps = 5;
+					console.log(consoleLogPrefix, "CoT Steps Retrieval Failure due to model failed to comply, Falling back")
+				}
+				console.log(consoleLogPrefix, "We need to create thougts instruction list for this prompt");
 				console.log(consoleLogPrefix, `Generating list for this prompt`);
-				promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n From this chat List 5 steps on how to Answer it. Answer:`;
-				promptInput = stripAnsi(promptInput);
+				promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n From this chat List ${required_CoTSteps} steps on how to Answer it. Answer:`;
+				promptInput = stripProgramBreakingCharacters(promptInput);
 				todoList = await callLLMChildThoughtProcessor(promptInput, 512);
-				// 1
-				console.log(consoleLogPrefix, `Answering Step 1`);
-				promptInput = ` What is the answer to the List number 1 : ${todoList} Answer/NextStep:"`;
-				promptInput = stripAnsi(promptInput);
-				console.log(consoleLogPrefix, promptInput);
-				todoList1Result = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
-				console.log(consoleLogPrefix, todoList1Result);
-				// 2x
-				console.log(consoleLogPrefix, `Answering Step 2`);
-				promptInput = `What is the answer to the List number 2 : ${todoList} Answer/NextStep:"`;
-				promptInput = stripAnsi(promptInput);
-				todoList2Result = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
-				console.log(consoleLogPrefix, todoList2Result);
-				// 3
-				console.log(consoleLogPrefix, `Answering Step 3`);
-				promptInput = `What is the answer to the List number 3 : ${todoList} Answer/NextStep:"`;
-				promptInput = stripAnsi(promptInput);
-				todoList3Result = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
-				console.log(consoleLogPrefix, todoList3Result);
-				// 4
-				console.log(consoleLogPrefix, `Answering Step 4`);
-				promptInput = `What is the answer to the List number 4 : ${todoList} Answer/NextStep:"`;
-				promptInput = stripAnsi(promptInput);
-				todoList4Result = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
-				console.log(consoleLogPrefix, todoList4Result);
-				// 5
-				console.log(consoleLogPrefix, `Answering Step 5`);
-				promptInput = `What is the answer to the List number 5 : ${todoList} Answer/NextStep:"`;
-				promptInput = stripAnsi(promptInput);
-				todoList5Result = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
-				console.log(consoleLogPrefix, todoList5Result);
+
+				for(let iterate = 1; iterate <= required_CoTSteps; iterate++){
+					console.log(consoleLogPrefix, "Processing Chain of Thoughts Step", iterate);
+					promptInput = ` What is the answer to the List number ${iterate} : ${todoList} Answer/NextStep:"`;
+					promptInput = stripProgramBreakingCharacters(promptInput);
+					todoListResult = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
+					concatenatedCoT = concatenatedCoT + ". " + todoListResult;
+					console.log(consoleLogPrefix, iterate, "Result: ", todoListResult);
+				}
 			} else {
-				todoList1Result = prompt;
-				todoList2Result = prompt;
-				todoList3Result = prompt;
-				todoList4Result = prompt;
-				todoList5Result = prompt;
+				concatenatedCoT = prompt;
 			}
 			let resultSearchScraping;
 			if (store.get("params").llmdecisionMode){
-			promptInput = `Conclusion from the internal Thoughts?  \\"${todoList1Result}. ${todoList2Result}. ${todoList3Result}. ${todoList4Result}. ${todoList5Result}\\ Conclusion:"`;
+			promptInput = `Conclusion from the internal Thoughts?  \\"${concatenatedCoT}\\" Conclusion:"`;
 			console.log(consoleLogPrefix, `LLMChild Concluding...`);
-			promptInput = stripAnsi(promptInput);
-			concludeInformation_AutoGPT5Step = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 1024));
+			promptInput = stripProgramBreakingCharacters(promptInput);
+			concludeInformation_CoTMultiSteps = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
 			} else {
-				//let concludeInformation_AutoGPT5Step;
-				concludeInformation_AutoGPT5Step = "Nothing.";
+				//let concludeInformation_CoTMultiSteps;
+				concludeInformation_CoTMultiSteps = "Nothing.";
 			}
 		} else {
 			console.log(consoleLogPrefix, "No, we shouldnt do it only based on the model knowledge");
-			//let concludeInformation_AutoGPT5Step;
-			concludeInformation_AutoGPT5Step = "Nothing.";
-			console.log(consoleLogPrefix, concludeInformation_AutoGPT5Step);
+			//let concludeInformation_CoTMultiSteps;
+			concludeInformation_f = "Nothing.";
+			console.log(consoleLogPrefix, concludeInformation_CoTMultiSteps);
 		}
 		console.log(consoleLogPrefix, "============================================================");
 			console.log(consoleLogPrefix, "Executing LLMChild Emotion Engine!");
@@ -563,7 +590,7 @@ async function callInternalThoughtEngine(prompt){
 			if (store.get("params").emotionalLLMChildengine){
 				promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. From this conversation which from the following emotions ${emotionlist} are the correct one? Answer:`;
 				console.log(consoleLogPrefix, `LLMChild Evaluating Interaction With Emotion Engine...`);
-				promptInput = stripAnsi(promptInput);
+				promptInput = stripProgramBreakingCharacters(promptInput);
 				evaluateEmotionInteraction = await callLLMChildThoughtProcessor(promptInput, 64);
 				evaluateEmotionInteraction = evaluateEmotionInteraction.toLowerCase();
 				if (evaluateEmotionInteraction.includes("happy")){
@@ -588,14 +615,14 @@ async function callInternalThoughtEngine(prompt){
 			}
 
 		
-		if(concludeInformation_Internet === "Nothing." && concludeInformation_LocalFiles === "Nothing." && concludeInformation_AutoGPT5Step === "Nothing."){
+		if(concludeInformation_Internet === "Nothing." && concludeInformation_LocalFiles === "Nothing." && concludeInformation_CoTMultiSteps === "Nothing."){
 			console.log(consoleLogPrefix, "Bypassing Additional Context");
 			passedOutput = prompt;
 		} else {
 			concludeInformation_Internet = concludeInformation_Internet === "Nothing." ? "" : concludeInformation_Internet;
 			concludeInformation_LocalFiles = concludeInformation_LocalFiles === "Nothing." ? "" : concludeInformation_LocalFiles;
-			concludeInformation_AutoGPT5Step = concludeInformation_AutoGPT5Step === "Nothing." ? "" : concludeInformation_AutoGPT5Step;
-			mergeText = startEndAdditionalContext_Flag + " " + "This is the user prompt " + "\""+ prompt + "\"" + " " + "These are the additional context: "  + "The current time and date is now: " + fullCurrentDate + ". "+ "There are additional context to answer: " + concludeInformation_Internet + concludeInformation_LocalFiles + concludeInformation_AutoGPT5Step + startEndAdditionalContext_Flag;
+			concludeInformation_CoTMultiSteps = concludeInformation_CoTMultiSteps === "Nothing." ? "" : concludeInformation_CoTMultiSteps;
+			mergeText = startEndAdditionalContext_Flag + " " + "This is the user prompt " + "\""+ prompt + "\"" + " " + "These are the additional context: "  + "The current time and date is now: " + fullCurrentDate + ". "+ "There are additional context to answer: " + concludeInformation_Internet + concludeInformation_LocalFiles + concludeInformation_CoTMultiSteps + startEndAdditionalContext_Flag;
 			mergeText = mergeText.replace(/\n/g, " "); //.replace(/\n/g, " ");
 			passedOutput = mergeText;
 			console.log(consoleLogPrefix, "Combined Context", mergeText);
@@ -605,9 +632,9 @@ async function callInternalThoughtEngine(prompt){
 			passedOutput = prompt;
 		}
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
-			promptInput = `This is the conversation \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. While this is the context \n The current time and date is now: ${fullCurrentDate}, Answers from the internet ${concludeInformation_Internet}. and this is Answer from the Local Files ${concludeInformation_LocalFiles}. And finally this is from the AutoGPT 5 Steps ${concludeInformation_AutoGPT5Step}. \n From this Information should I dig deeper and retry to get more clearer information to answer the chat? Yes or No? Answer:`;
+			promptInput = `This is the conversation \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. While this is the context \n The current time and date is now: ${fullCurrentDate}, Answers from the internet ${concludeInformation_Internet}. and this is Answer from the Local Files ${concludeInformation_LocalFiles}. And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n From this Information should I dig deeper and retry to get more clearer information to answer the chat? Yes or No? Answer:`;
 			console.log(consoleLogPrefix, `LLMChild Evaluating Information PostProcess`);
-			reevaluateAdCtxDecisionAgent = stripAnsi(await callLLMChildThoughtProcessor(promptInput, 32));
+			reevaluateAdCtxDecisionAgent = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 32));
 			if (reevaluateAdCtxDecisionAgent.includes("yes") || reevaluateAdCtxDecisionAgent.includes("yep") || reevaluateAdCtxDecisionAgent.includes("ok") || reevaluateAdCtxDecisionAgent.includes("valid") || reevaluateAdCtxDecisionAgent.includes("should") || reevaluateAdCtxDecisionAgent.includes("true")){
 				reevaluateAdCtx = true;
 				console.log(consoleLogPrefix, `Context isnt good enough! Still lower than standard!`);
@@ -620,7 +647,7 @@ async function callInternalThoughtEngine(prompt){
 			reevaluateAdCtx = false;
 		}
 	}
-	
+	console.log(consoleLogPrefix, passedOutput);
 	return passedOutput;
 
 }
@@ -1040,7 +1067,7 @@ function initChat() {
 	const ptyProcess = pty.spawn(shell, [], config);
 	runningShell = ptyProcess;
 	ptyProcess.onData(async (res) => {
-		res = stripAnsi(res);
+		res = stripProgramBreakingCharacters(res);
 		//res = stripAdditionalContext(res);
 		if (process.env.ptyStreamDEBUGMode === "1"){
 		console.log(consoleLogPrefix, "pty Stream",`//> ${res}`);
