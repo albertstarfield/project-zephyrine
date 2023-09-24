@@ -1,6 +1,6 @@
 <h1 align="center">
 <sub>
-<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal/blob/main/picDemo/Project%20Zephyrine%20Logo.jpg?raw=true" height=144>
+<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Project%20Zephyrine%20Logo.jpg?raw=true" height=144>
 </sub>
 
 <br>
@@ -46,8 +46,8 @@ Project Zephyrine
 
 ## 🎞 Demonstration Screenshot
 
-![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal/blob/main/picDemo/demo0.png?raw=true)
-![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine-ggmlv2v3-universal/blob/main/picDemo/demo1.png?raw=true)
+![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/demo0.png?raw=true)
+![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/demo1.png?raw=true)
 
 ## 🚀 Quick Start Guide
 
