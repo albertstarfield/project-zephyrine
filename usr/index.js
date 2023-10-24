@@ -615,7 +615,7 @@ async function callInternalThoughtEngine(prompt){
 			}
 
 		
-		if(concludeInformation_Internet === "Nothing." && concludeInformation_LocalFiles === "Nothing." && concludeInformation_CoTMultiSteps === "Nothing."){
+		if((concludeInformation_Internet === "Nothing." || concludeInformation_Internet === "undefined" ) && (concludeInformation_LocalFiles === "Nothing." || concludeInformation_LocalFiles === "undefined") && (concludeInformation_CoTMultiSteps === "Nothing." || concludeInformation_CoTMultiSteps === "undefined")){
 			console.log(consoleLogPrefix, "Bypassing Additional Context");
 			passedOutput = prompt;
 		} else {
