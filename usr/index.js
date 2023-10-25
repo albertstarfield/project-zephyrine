@@ -11,8 +11,6 @@ ptyStreamDEBUGMode
 
 */
 
-
-
 const { BrowserWindow, app, ipcMain, dialog } = require("electron");
 const path = require("path");
 require("@electron/remote/main").initialize();
@@ -205,56 +203,96 @@ ipcMain.on("checkPath", (_event, { data }) => {
 const util = require('util');
 const PDFParser = require('pdf-parse');
 const timeoutPromise = require('timeout-promise');
+const { promisify } = require('util');
 const _ = require('lodash');
-function searchAndConcatenateText(searchText) {
+const readdir = promisify(fs.readdir);
+const stat = promisify(fs.stat);
+
+
+
+let convertedText;
+let combinedText;
+//let fetchedResults;
+async function externalInternetFetchingScraping(text) {
+	if (store.get("params").webAccess){
+	console.log(consoleLogPrefix, "externalInternetFetchingScraping");
+	console.log(consoleLogPrefix, "Search Query", text);
+	const searchResults = await DDG.search(text, {
+		safeSearch: DDG.SafeSearchType.MODERATE
+	});
+	console.log(consoleLogPrefix, "External Resources Enabled");
+	if (!searchResults.noResults) {
+		let fetchedResults;
+		var targetResultCount = store.get("params").websearch_amount || 5;
+		if (searchResults.news) {
+			for (let i = 0; i < searchResults.news.length && i < targetResultCount; i++) {
+				fetchedResults = `${searchResults.news[i].description.replaceAll(/<\/?b>/gi, "")} `;
+				fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
+				console.log(consoleLogPrefix, "Fetched Result", fetchedResults);
+				//convertedText = convertedText + fetchedResults;
+				convertedText = fetchedResults;
+			}
+		} else {
+			for (let i = 0; i < searchResults.results.length && i < targetResultCount; i++) {
+				fetchedResults = `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
+				fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
+				console.log(consoleLogPrefix, "Fetched Result" , fetchedResults);
+				//convertedText = convertedText + fetchedResults;
+				convertedText = fetchedResults;
+			}
+		}
+		combinedText = convertedText.replace("[object Promise]", "");
+		console.log(consoleLogPrefix, "externalInternetFetchingScraping Final", combinedText);
+		
+		return combinedText;
+		// var convertedText = `Summarize the following text: `;
+		// for (let i = 0; i < searchResults.results.length && i < 3; i++) {
+		// 	convertedText += `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
+		// }
+		// return convertedText;
+	} else {
+		console.log(consoleLogPrefix, "No result returned!");
+		return text;
+	}} else {
+		console.log(consoleLogPrefix, "Internet Data Fetching Disabled!");
+		return text;
+	}	
+}
+
+async function searchAndConcatenateText(searchText) {
 	const userHomeDir = require('os').homedir();
 	const rootDirectory = path.join(userHomeDir, 'Documents'); // You can change the root directory as needed
   
 	const result = [];
 	let totalChars = 0;
   
-	function searchInDirectory(directoryPath) {
-	  const files = fs.readdirSync(directoryPath);
-  
-	  for (const file of files) {
-		const filePath = path.join(directoryPath, file);
-		const fileStats = fs.statSync(filePath);
-  
-		if (fileStats.isDirectory()) {
-		  searchInDirectory(filePath);
-		} else if (fileStats.isFile() && (path.extname(file) === '.txt' || path.extname(file) === '.rtf' || path.extname(file) === '.c' || path.extname(file) === '.py' || path.extname(file) === '.html' || path.extname(file) === '.css' || path.extname(file) === '.rb' || path.extname(file) === '.xml')) {
-		  const content = stripProgramBreakingCharacters(fs.readFileSync(filePath, 'utf-8'));
-		  
-		  // filter out files that only 69% and beyond are allowed to pass to the truncatedContent
-		  const contentAnalyzer = content.split(' ');
-		  const searchedTextWordAnalyzer = searchText.split(' ');
-		  let matchedContentSearch = 0;
-		  for (const word of searchedTextWordAnalyzer) {
-			if (contentAnalyzer.includes(word)){
-				matchedContentSearch++;
-			}
-		  }
-		  const matchPercentage = ((matchedContentSearch/content.length)*100);
-		  if (process.env.LOCAL_FETCH_DEBUG_MODE === '1') {
-			console.log(`${consoleLogPrefix} Reading file: ${filePath} Match ${matchPercentage} Percent`);
-		  }
-		  if (matchPercentage > store.get("params").keywordContentFileMatchPercentageThreshold) {
-			const truncatedContent = content.substring(0, store.get("params").maxLocalSearchPerFileChar);
-			result.push(truncatedContent);
-			totalChars += truncatedContent.length;
-  
-			if (totalChars >= store.get("params").maxLocalSearchChar) { //maxLocalSearchChar params
-			  if (process.env.LOCAL_FETCH_DEBUG_MODE === '1') {
-				console.log(`${consoleLogPrefix} Reached character limit. Stopping search.`);
-			  }
-			  return;
+	async function searchInDirectory(directoryPath) {
+		const files = await readdir(dir);
+		const matches = [];
+	  
+		for (const file of files) {
+		  const filePath = path.join(dir, file);
+		  const fileStat = await stat(filePath);
+	  
+		  if (fileStat.isDirectory()) {
+			matches.push(...await searchFiles(filePath, keyword));
+		  } else if (fileStat.isFile() && /\.(pdf|docx|txt)$/i.test(file)) {
+			const content = await fs.promises.readFile(filePath, 'utf8');
+	  
+			if (content.includes(keyword)) {
+			  console.log(`Found ${keyword} in ${filePath}`);
+			  matches.push({
+				file: filePath,
+				match: content.match(new RegExp(`(.*${keyword}.*)`, 'i'))[0]
+			  });
 			}
 		  }
 		}
-	  }
+	  
+		return matches;
 	}
   
-	searchInDirectory(rootDirectory);
+	result = searchInDirectory(rootDirectory);
 	
 	return result.join('\n');
   }
@@ -580,7 +618,7 @@ async function callInternalThoughtEngine(prompt){
 		} else {
 			console.log(consoleLogPrefix, "No, we shouldnt do it only based on the model knowledge");
 			//let concludeInformation_CoTMultiSteps;
-			concludeInformation_f = "Nothing.";
+			concludeInformation_CoTMultiSteps = "Nothing.";
 			console.log(consoleLogPrefix, concludeInformation_CoTMultiSteps);
 		}
 		console.log(consoleLogPrefix, "============================================================");
@@ -665,55 +703,6 @@ async function externalLocalFileScraping(text){
 		console.log(consoleLogPrefix, "externalLocalFileScraping disabled");
         return "";
     }
-}
-
-let convertedText;
-let combinedText;
-//let fetchedResults;
-async function externalInternetFetchingScraping(text) {
-	if (store.get("params").webAccess){
-	console.log(consoleLogPrefix, "externalInternetFetchingScraping");
-	console.log(consoleLogPrefix, "Search Query", text);
-	const searchResults = await DDG.search(text, {
-		safeSearch: DDG.SafeSearchType.MODERATE
-	});
-	console.log(consoleLogPrefix, "External Resources Enabled");
-	if (!searchResults.noResults) {
-		let fetchedResults;
-		var targetResultCount = store.get("params").websearch_amount || 5;
-		if (searchResults.news) {
-			for (let i = 0; i < searchResults.news.length && i < targetResultCount; i++) {
-				fetchedResults = `${searchResults.news[i].description.replaceAll(/<\/?b>/gi, "")} `;
-				fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
-				console.log(consoleLogPrefix, "Fetched Result", fetchedResults);
-				//convertedText = convertedText + fetchedResults;
-				convertedText = fetchedResults;
-			}
-		} else {
-			for (let i = 0; i < searchResults.results.length && i < targetResultCount; i++) {
-				fetchedResults = `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
-				fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
-				console.log(consoleLogPrefix, "Fetched Result" , fetchedResults);
-				//convertedText = convertedText + fetchedResults;
-				convertedText = fetchedResults;
-			}
-		}
-		combinedText = convertedText.replace("[object Promise]", "");
-		console.log(consoleLogPrefix, "externalInternetFetchingScraping Final", combinedText);
-		
-		return combinedText;
-		// var convertedText = `Summarize the following text: `;
-		// for (let i = 0; i < searchResults.results.length && i < 3; i++) {
-		// 	convertedText += `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
-		// }
-		// return convertedText;
-	} else {
-		console.log(consoleLogPrefix, "No result returned!");
-		return text;
-	}} else {
-		console.log(consoleLogPrefix, "Internet Data Fetching Disabled!");
-		return text;
-	}	
 }
 
 function fileExists(filePath) {

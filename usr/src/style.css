@@ -771,3 +771,14 @@ p.error-text::before {
 .settings-items > .item select {
 	width: 7.5rem;
 }
+
+.info-items > .item {
+	display: flex;
+	justify-content: space-between;
+	align-items: center;
+	margin-top: 0rem;
+}
+.info-items > .item > input,
+.info-items > .item select {
+	width: 7.5rem;
+}

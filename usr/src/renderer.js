@@ -395,6 +395,13 @@ document.getElementById("settings").addEventListener("click", () => {
 	document.getElementById("settings-dialog-bg").classList.remove("hidden");
 	ipcRenderer.send("getParams");
 });
+
+ipcRenderer.send("getParams");
+document.getElementById("aboutSection").addEventListener("click", () => {
+	document.getElementById("info-dialog-bg").classList.remove("hidden");
+	ipcRenderer.send("getParams");
+});
+
 ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("LLMBackendMode").value = data.llmBackendMode;
 	document.getElementById("repeat_last_n").value = data.repeat_last_n;
@@ -450,6 +457,10 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.secondary").addEventListener("click", () => {
 	document.getElementById("settings-dialog-bg").classList.add("hidden");
+});
+
+document.querySelector("#info-dialog-bg > div > div.dialog-button > button.secondary").addEventListener("click", () => {
+	document.getElementById("info-dialog-bg").classList.add("hidden");
 });
 
 document.getElementById("web-access").addEventListener("change", () => {

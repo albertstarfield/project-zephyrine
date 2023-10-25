@@ -22,6 +22,7 @@ Project Zephyrine
 </p>
 
 <p align="center"><i>Greetings, I am Adelaide Zephyrine Charlotte, delighted to make your acquaintance. Shall we embark on our intellectual voyage through this endeavor? </i></p>
+
 <hr>
 
 ## 📃 Features & to-do
@@ -38,10 +39,12 @@ Project Zephyrine
 - [x] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.
 - [x] Includes a Granular Toggles Mode within the settings section.
 - [ ] Addresses issues with Native Windows Support.
+- [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
+- [ ] Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands.
+- [ ] Enabling an autonomous cognitive loop in a mode reminiscent of AutoGPT.
 - [ ] Introduces Chat history functionality.
 - [ ] Implements Markdown Formatted Response support.
 - [ ] Adding Docker Support
-
 
 
 ## 🎞 Demonstration Screenshot
