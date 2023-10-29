@@ -23,17 +23,17 @@ h1.logo {
 	--primary-text: #d1d5db;
 	--primary-text-alt: #ececf1;
 	--secondary-text: #ffffff80;
-	--background: #343541;
+	--background: #34354158;
 	--background-mid: #2c2d30;
 	--background-alt: #202123;
-	--surface: #444654;
-	--surface-alt: #565869;
+	--surface: #4446542d;
+	--surface-alt: #56586992;
 	--surface-alt-bright: #acacbe;
 	--tertiary: #3e3f4b;
 	--accent: #00c1c1; /* Azure Turquoise Sweet Blue accent */
 	--secondary: #1A7F64; /* Azure Turquoise Sweet Blue secondary */
 	--error: #ff5d5d;
-	--overlay: rgba(52, 53, 65, 0.9);
+	--overlay: rgba(62, 61, 61, 0.676);
 	--hover: hsla(240, 9%, 59%, 0.1);
 	--border: rgb(64, 65, 79);
 	--small-shadow: 0 6px 9px -1px rgba(0, 0, 0, 0.4), 0 4px 8px -2px rgba(0, 0, 0, 0.4);
@@ -52,14 +52,14 @@ h1.logo {
 		--background: #ffffff; /* White background */
 		--background-mid: #f4f4f4;
 		--background-alt: #c5c4c4;
-		--surface: #f8f8f8;
-		--surface-alt: #ffffff;
+		--surface: #f8f8f81e;
+		--surface-alt: #7575755e;
 		--surface-alt-bright: #acacbe;
 		--tertiary: #f1f1f1;
 		--accent: #00c1c1; /* Azure Turquoise Sweet Blue accent */
 		--secondary: #1A7F64; /* Azure Turquoise Sweet Blue secondary */
 		--error: #ff5d5d;
-		--overlay: rgba(240, 240, 240, 0.9); /* Light gray overlay */
+		--overlay: rgba(240, 240, 240, 0.34); /* Light gray overlay */
 		--hover: hsla(240, 9%, 59%, 0.1);
 		--border: #ffffff; /* Light gray border */
 		--small-shadow: 0 6px 9px -1px rgba(0, 0, 0, 0.1), 0 4px 8px -2px rgba(0, 0, 0, 0.1);
@@ -68,6 +68,7 @@ h1.logo {
 		--shadow-color: #00000029;
 		--shadow-intensity: 13;
 		--shadow-disperse: 100px;
+		--contrast-black-overlay: #525252;
 	}
 }
 
@@ -170,6 +171,7 @@ body {
 
 .input-field {
 	background: var(--surface);
+	backdrop-filter: blur(8px); /* Add a blur effect to the background */
 	display: flex;
 	padding: 10px;
 	box-sizing: border-box;
@@ -177,6 +179,24 @@ body {
 	border-radius: 1.275rem;
 	border: solid 1px var(--hover);
 	pointer-events: all;
+}
+.bubble-field {
+	background: var(--surface);
+	backdrop-filter: blur(8px); /* Add a blur effect to the background */
+	display: flex;
+	padding: 0px;
+	box-sizing: border-box;
+	height: 1.8rem;
+	margin: 7px 128px;
+	max-width: 35rem;
+	width: calc(100vw - 296px);
+	box-shadow: 0 0 var(--shadow-disperse) var(--shadow-color);
+	border-radius: 1.44rem;
+	border: solid 2px var(--hover);
+	pointer-events: all;
+	text-align: center;
+	justify-content: center;
+	align-items: center;
 }
 #input {
 	white-space: pre-wrap;
@@ -422,7 +442,15 @@ form.running-model .loading {
 }
 .info {
 	font-size: 12px;
-	padding: 5px;
+	padding: 0px;
+	vertical-align: middle;
+	text-align: center;
+}
+
+.info-bottom-changable {
+	font-size: 10px;
+	padding: 0px;
+	vertical-align: middle;
 	text-align: center;
 }
 
@@ -433,7 +461,7 @@ form.running-model .loading {
 	display: flex;
 	flex-direction: column;
 	align-items: center;
-	background-image: linear-gradient(180deg, #0000, var(--background) 58.85%);
+	background: linear-gradient(180deg, #0000, var(--accent), 44%);
 	margin: 0;
 	pointer-events: none;
 }
@@ -630,6 +658,7 @@ input:checked + .slider:before {
 	height: 5px;
 	border-radius: 69px;
 	background-color: var(--background-mid);
+	backdrop-filter: blur(20px);
 	overflow: hidden;
 }
 .bar-inner {
@@ -644,6 +673,7 @@ input:checked + .slider:before {
 
 .dialog-bg {
 	background-color: var(--overlay);
+	backdrop-filter: blur(8px); /* Add a blur effect to the background */
 	width: 100vw;
 	height: 100vh;
 	margin: 0;

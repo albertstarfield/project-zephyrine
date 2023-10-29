@@ -1,3 +1,28 @@
+/**
+ * Render --> Main
+ * ---------------
+ * Render:  window.ipcRender.send('channel', data); // Data is optional.
+ * Main:    electronIpcMain.on('channel', (event, data) => { methodName(data); })
+ *
+ * Main --> Render
+ * ---------------
+ * Main:    windowName.webContents.send('channel', data); // Data is optional.
+ * Render:  window.ipcRender.receive('channel', (data) => { methodName(data); });
+ *
+ * Render --> Main (Value) --> Render
+ * ----------------------------------
+ * Render:  window.ipcRender.invoke('channel', data).then((result) => { methodName(result); });
+ * Main:    electronIpcMain.handle('channel', (event, data) => { return someMethod(data); });
+ *
+ * Render --> Main (Promise) --> Render
+ * ------------------------------------
+ * Render:  window.ipcRender.invoke('channel', data).then((result) => { methodName(result); });
+ * Main:    electronIpcMain.handle('channel', async (event, data) => {
+ *              return await promiseName(data)
+ *                  .then(() => { return result; })
+ *          });
+ */
+//https://stackoverflow.com/questions/72591633/electron-simplest-example-to-pass-variable-from-js-to-html-using-ipc-contextb
 const remote = require("@electron/remote");
 const { ipcRenderer, dialog } = require("electron");
 
@@ -185,7 +210,10 @@ ipcRenderer.on('emotionalEvaluationResult', (event, data) => {
 	profilePictureEmotions = data;
   });  
 
+const marked = require('marked') // call marked marked.js to convert output to Markdown
+
 const say = (msg, id, isUser) => {
+	// Sidenote : Reverse Engineering Conclusion : Only captures one data stream iteration
 	let item = document.createElement("li");
 	if (id) item.setAttribute("data-id", id);
 	
@@ -219,15 +247,16 @@ const say = (msg, id, isUser) => {
 	} else {
 		item.classList.add("bot-default");
 	}
-
+	
 	console.log(msg);
 
 	//escape html tag
 	if (isUser) {
+		//msg = marked.parse(msg);
 		msg = msg.replaceAll(/</g, "&lt;");
 		msg = msg.replaceAll(/>/g, "&gt;");
 	}
-
+	//console.log("reverseEngMessage", msg)
 	item.innerHTML = msg;
 	if (document.getElementById("bottom").getBoundingClientRect().y - 40 < window.innerHeight) {
 		setTimeout(() => {
@@ -236,7 +265,8 @@ const say = (msg, id, isUser) => {
 	}
 	messages.append(item);
 };
-var responses = [];
+//console.log("responsesTraceDebug", responses)
+var responses = []; // This is probably appending the continous stream of llama-2 LLM
 
 Date.prototype.timeNow = function () {
 	return (this.getHours() < 10 ? "0" : "") + this.getHours() + ":" + (this.getMinutes() < 10 ? "0" : "") + this.getMinutes() + ":" + (this.getSeconds() < 10 ? "0" : "") + this.getSeconds();
@@ -245,12 +275,70 @@ Date.prototype.today = function () {
 	return (this.getDate() < 10 ? "0" : "") + this.getDate() + "/" + (this.getMonth() + 1 < 10 ? "0" : "") + (this.getMonth() + 1) + "/" + this.getFullYear();
 };
 
+
+
+/* Renderer that handeled the result data from the binary data into html */
+
+function HTMLInterpreterPreparation(stream){
+	stream = stream.replaceAll(/\r?\n\x1B\[\d+;\d+H./g, "");
+	stream = stream.replaceAll(/\x08\r?\n?/g, "");
+
+	stream = stream.replaceAll("\\t", "&nbsp;&nbsp;&nbsp;&nbsp;"); //tab characters
+	stream = stream.replaceAll("\\b", "&nbsp;"); //no break space
+	stream = stream.replaceAll("\\f", "&nbsp;"); //no break space
+	stream = stream.replaceAll("\\r", "\n"); //sometimes /r is used in codeblocks
+
+	stream = stream.replaceAll("\\n", "\n"); //convert line breaks back
+	stream = stream.replaceAll("\\\n", "\n"); //convert line breaks back
+	stream = stream.replaceAll('\\\\\\""', '"'); //convert quotes back
+
+	stream = stream.replaceAll(/\[name\]/gi, "Alpaca");
+
+	stream = stream.replaceAll(/(<|\[|#+)((current|local)_)?time(>|\]|#+)/gi, new Date().timeNow());
+	stream = stream.replaceAll(/(<|\[|#+)(current_)?date(>|\]|#+)/gi, new Date().today());
+	stream = stream.replaceAll(/(<|\[|#+)day_of_(the_)?week(>|\]|#+)/gi, new Date().toLocaleString("en-us", { weekday: "long" }));
+
+	stream = stream.replaceAll(/(<|\[|#+)(current_)?year(>|\]|#+)/gi, new Date().getFullYear());
+	stream = stream.replaceAll(/(<|\[|#+)(current_)?month(>|\]|#+)/gi, new Date().getMonth() + 1);
+	stream = stream.replaceAll(/(<|\[|#+)(current_)?day(>|\]|#+)/gi, new Date().getDate());
+
+	//escape html tag
+	stream = stream.replaceAll(/</g, "&lt;"); // translates < into the special character input so it can be inputted without being changed on the terminal I/O
+	stream = stream.replaceAll(/>/g, "&gt;"); // translates > into the special character input so it can be inputted without being changed on the terminal I/O
+	return stream;
+}
+
+function firstLineParagraphCleaner(stream){
+	let str = stream;
+	let arr = str.split('\n');
+	arr[0] = arr[0].replace(/<p>|<\/p>/g, '');
+	let result = arr.join('\n');
+	return result;
+}
+
+
+// It seems that this is the one that handles the continous stream result of the binary call then forwrad it to html
+let prefixConsoleLogStreamCapture = "[LLMMainBackendStreamCapture]: ";
 ipcRenderer.on("result", async (_event, { data }) => {
 	var response = data;
+	const id = gen;
+	let existing = document.querySelector(`[data-id='${id}']`);
+	let totalStreamResultData;
 	loading(false);
 	if (data == "\n\n<end>") {
 		setTimeout(() => {
 			isRunningModel = false;
+			console.log(prefixConsoleLogStreamCapture, "Stream Ended!");
+			console.log(prefixConsoleLogStreamCapture, "Assuming LLM Main Backend Done Typing!");
+			console.log(prefixConsoleLogStreamCapture, "Sending Stream to GUI");
+			//totalStreamResultData = responses[id];
+			totalStreamResultData = marked.parse(responses[id]);
+			totalStreamResultData = firstLineParagraphCleaner(totalStreamResultData);
+			console.log("responsesStreamCaptureTrace_markedConverted:", totalStreamResultData);
+			//totalStreamResultData = HTMLInterpreterPreparation(totalStreamResultData); //legacy old alpaca-electron interpretation
+			console.log("responsesStreamCaptureTrace_markedConverted_InterpretedPrep:", totalStreamResultData);
+			existing.innerHTML = totalStreamResultData; // existing innerHTML is a final form which send the stream into the GUI
+			console.log(prefixConsoleLogStreamCapture, "It should be done");
 			form.setAttribute("class", isRunningModel ? "running-model" : "");
 		}, 200);
 	} else {
@@ -258,14 +346,13 @@ ipcRenderer.on("result", async (_event, { data }) => {
 		document.body.classList.remove("alpaca");
 		isRunningModel = true;
 		form.setAttribute("class", isRunningModel ? "running-model" : "");
-		const id = gen;
-		let existing = document.querySelector(`[data-id='${id}']`);
 		if (existing) {
+			//console.log("responsesStreamCaptureTrace_init:", responses[id]);
 			if (!responses[id]) {
 				responses[id] = document.querySelector(`[data-id='${id}']`).innerHTML;
 			}
-
 			responses[id] = responses[id] + response;
+			//console.log("responsesStreamCaptureTrace_first:", responses[id]);
 
 			if (responses[id].startsWith("<br>")) {
 				responses[id] = responses[id].replace("<br>", "");
@@ -273,40 +360,14 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			if (responses[id].startsWith("\n")) {
 				responses[id] = responses[id].replace("\n", "");
 			}
-
-			responses[id] = responses[id].replaceAll(/\r?\n\x1B\[\d+;\d+H./g, "");
-			responses[id] = responses[id].replaceAll(/\x08\r?\n?/g, "");
-
-			responses[id] = responses[id].replaceAll("\\t", "&nbsp;&nbsp;&nbsp;&nbsp;"); //tab characters
-			responses[id] = responses[id].replaceAll("\\b", "&nbsp;"); //no break space
-			responses[id] = responses[id].replaceAll("\\f", "&nbsp;"); //no break space
-			responses[id] = responses[id].replaceAll("\\r", "\n"); //sometimes /r is used in codeblocks
-
-			responses[id] = responses[id].replaceAll("\\n", "\n"); //convert line breaks back
-			responses[id] = responses[id].replaceAll("\\\n", "\n"); //convert line breaks back
-			responses[id] = responses[id].replaceAll('\\\\\\""', '"'); //convert quotes back
-
-			responses[id] = responses[id].replaceAll(/\[name\]/gi, "Alpaca");
-
-			responses[id] = responses[id].replaceAll(/(<|\[|#+)((current|local)_)?time(>|\]|#+)/gi, new Date().timeNow());
-			responses[id] = responses[id].replaceAll(/(<|\[|#+)(current_)?date(>|\]|#+)/gi, new Date().today());
-			responses[id] = responses[id].replaceAll(/(<|\[|#+)day_of_(the_)?week(>|\]|#+)/gi, new Date().toLocaleString("en-us", { weekday: "long" }));
-
-			responses[id] = responses[id].replaceAll(/(<|\[|#+)(current_)?year(>|\]|#+)/gi, new Date().getFullYear());
-			responses[id] = responses[id].replaceAll(/(<|\[|#+)(current_)?month(>|\]|#+)/gi, new Date().getMonth() + 1);
-			responses[id] = responses[id].replaceAll(/(<|\[|#+)(current_)?day(>|\]|#+)/gi, new Date().getDate());
-
-			//escape html tag
-			responses[id] = responses[id].replaceAll(/</g, "&lt;");
-			responses[id] = responses[id].replaceAll(/>/g, "&gt;");
-
 			// if scroll is within 8px of the bottom, scroll to bottom
 			if (document.getElementById("bottom").getBoundingClientRect().y - 40 < window.innerHeight) {
 				setTimeout(() => {
 					bottom.scrollIntoView({ behavior: "smooth", block: "end" });
 				}, 100);
 			}
-			existing.innerHTML = responses[id];
+			
+			//existing.innerHTML = responses[id];
 		} else {
 			say(response, id);
 		}
@@ -324,6 +385,18 @@ document.querySelectorAll("#feed-placeholder-alpaca button.card").forEach((e) =>
 		let text = e.innerText.replace('"', "").replace('" →', "");
 		input.value = text;
 	});
+});
+let username;
+let assistantName;
+ipcRenderer.send("username") //send request of that specific data from all process that is running
+ipcRenderer.send("assistantName") //send request
+ipcRenderer.on("username", (_event, { data }) => {
+	username = data;	
+	console.log("The username is: ", username);
+});
+ipcRenderer.on("assistantName", (_event, { data }) => {
+	assistantName = data;
+	console.log("I am :", assistantName);
 });
 
 const cpuText = document.querySelector("#cpu .text");

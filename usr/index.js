@@ -10,8 +10,34 @@ ptyStreamDEBUGMode
 
 
 */
-
+//https://stackoverflow.com/questions/72591633/electron-simplest-example-to-pass-variable-from-js-to-html-using-ipc-contextb
+/**
+ * Render --> Main
+ * ---------------
+ * Render:  window.ipcRender.send('channel', data); // Data is optional.
+ * Main:    electronIpcMain.on('channel', (event, data) => { methodName(data); })
+ *
+ * Main --> Render
+ * ---------------
+ * Main:    windowName.webContents.send('channel', data); // Data is optional.
+ * Render:  window.ipcRender.receive('channel', (data) => { methodName(data); });
+ *
+ * Render --> Main (Value) --> Render
+ * ----------------------------------
+ * Render:  window.ipcRender.invoke('channel', data).then((result) => { methodName(result); });
+ * Main:    electronIpcMain.handle('channel', (event, data) => { return someMethod(data); });
+ *
+ * Render --> Main (Promise) --> Render
+ * ------------------------------------
+ * Render:  window.ipcRender.invoke('channel', data).then((result) => { methodName(result); });
+ * Main:    electronIpcMain.handle('channel', async (event, data) => {
+ *              return await promiseName(data)
+ *                  .then(() => { return result; })
+ *          });
+ */
 const { BrowserWindow, app, ipcMain, dialog } = require("electron");
+const ipcRenderer = require("electron").ipcRenderer;
+const contextBridge = require('electron').contextBridge;
 const path = require("path");
 require("@electron/remote/main").initialize();
 
@@ -22,8 +48,9 @@ const appName = "Project Zephyrine"
 const colorReset = "\x1b[0m";
 const colorBrightCyan = "\x1b[96m";
 const consoleLogPrefix = `[${colorBrightCyan}${appName}_${platform}_${arch}${colorReset}]:`;
-const botName = "Adelaide Zephyrine Charlotte"
+const assistantName = "Adelaide Zephyrine Charlotte"
 const username = os.userInfo().username;
+
 
 var win;
 function createWindow() {
@@ -45,9 +72,10 @@ function createWindow() {
 	require("@electron/remote/main").enable(win.webContents);
 
 	win.loadFile(path.resolve(__dirname, "src", "index.html"));
-
+	// after main window and main process initialize the electron core send the global.username and global.assistantName to the global bot
 	win.setMenu(null);
 	// win.webContents.openDevTools();
+	
 }
 
 app.on("second-instance", () => {
@@ -82,6 +110,20 @@ for (let i = 1; i < sysThreads; i = i * 2) {
 if (sysThreads == 4) {
 	threads = 4;
 }
+
+// username
+ipcMain.on("username", () => {
+	win.webContents.send("username", {
+		data: username
+	});
+});
+// Assistant name is one of the operating system part
+ipcMain.on("assistantName", () => {
+	win.webContents.send("assistantName", {
+		data: assistantName
+	});
+});
+
 ipcMain.on("cpuUsage", () => {
 	osUtil.cpuUsage(function (v) {
 		win.webContents.send("cpuUsage", { data: v });
@@ -158,6 +200,8 @@ const schema = {
 		default: "undefined"
 	}
 };
+
+
 const store = new Store({ schema });
 const fs = require("fs");
 var modelPath = store.get("modelPath");
@@ -355,9 +399,10 @@ function stripProgramBreakingCharacters(str) {
 	// Define the regular expression pattern to exclude ANSI escape codes
 	const pattern = /\u001B\[[0-9;]*m/g;
 	result = str.replace(pattern, "");
-	result = result.replace(/"/g, '');
-	result = result.replace(/_/g, '');
-	result = result.replace(/'/g, '');
+
+	result = result.replace(/"/g, '&#34;'); // convert it to html code so it doesnt misinterpreted by the backend shell
+	result = result.replace(/_/g, '&#95;'); // convert it to html code so it doesnt misinterpreted by the backend shell
+	result = result.replace(/'/g, "&#39;"); // convert it to html code so it doesnt misinterpreted by the backend shell
 	result = result.replace("[object Promise]", "");
 	// Use the regular expression to replace matched ANSI escape codes
 	return result
@@ -1047,6 +1092,7 @@ let blockGUIForwarding;
 let initChatContent;
 let isitPassedtheFirstPromptYet;
 
+
 function initChat() {
 	if (runningShell) {
 		win.webContents.send("ready");
@@ -1072,7 +1118,7 @@ function initChat() {
 			if (store.get("params").throwInitResponse){
 				console.log(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
 				blockGUIForwarding = true;
-				initChatContent = `Greetings and salutations, may the matutinal rays grace you, Your name is Adelaide Zephyrine Charlotte! May your day effulge with a brilliance akin to the astral gleam that bedecks the aether. I am ${username}, extend my introduction; let discourse find its place in our colloquy, if you may indulge.`;
+				initChatContent = `Greetings and salutations, may the matutinal rays grace you, Your name is ${assistantName}! May your day effulge with a brilliance akin to the astral gleam that bedecks the aether. I am ${username}, extend my introduction; let discourse find its place in our colloquy, if you may indulge.`;
 				runningShell.write(initChatContent);
 				runningShell.write(`\r`);
 			}
@@ -1118,6 +1164,7 @@ function initChat() {
 			}
 			//chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			chatArrayStorage("save", res, true, false, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
+			//res = marked.parse(res);
 			win.webContents.send("result", {
 				data: res
 			});

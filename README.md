@@ -38,19 +38,20 @@ Project Zephyrine
 - [x] Integrates with DuckDuckGo for web access.
 - [x] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.
 - [x] Includes a Granular Toggles Mode within the settings section.
+- [x] Implements Markdown Formatted Response support.
+- [ ] Implement Typing-like experience Response Support.
 - [ ] Addresses issues with Native Windows Support.
 - [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
 - [ ] Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands.
 - [ ] Enabling an autonomous cognitive loop in a mode reminiscent of AutoGPT.
 - [ ] Introduces Chat history functionality.
-- [ ] Implements Markdown Formatted Response support.
 - [ ] Adding Docker Support
 
 
 ## 🎞 Demonstration Screenshot
 
 ![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/demo0.png?raw=true)
-![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/demo1.png?raw=true)
+![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/demo1.gif?raw=true)
 
 ## 🚀 Quick Start Guide
 
