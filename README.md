@@ -51,7 +51,9 @@ Project Zephyrine
 ## 🎞 Demonstration Screenshot
 
 ![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/demo0.png?raw=true)
-![Demonstration](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/demo1.gif?raw=true)
+![Demonstration_video](https://github.com/albertstarfield/alpaca-electron-zephyrine/raw/main/demo-1.gif)
+
+#### Sidenote: This footage was recorded on a macOS device with an “Apple M2 Pro” processor. Some parts of the footage were sped up because of the large size of the model nous-hermes-llama2-13b.Q5_K_S that was used. The footage may appear jittery and lack the typing effect that is present in the original version. This is because of the use of markdown, which will be fixed in a later update.
 
 ## 🚀 Quick Start Guide
 
