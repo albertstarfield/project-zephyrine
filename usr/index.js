@@ -413,32 +413,96 @@ function stripProgramBreakingCharacters(str) {
 let LLMChildParam;
 let outputLLMChild;
 let filteredOutput;
+let definedSeed_LLMchild=0;
+let childLLMResultNotPassed=true;
+let childLLMDebugResultMode=false;
+let llmChildfailureCountSum=0;
+async function hasAlphabet(str) { 
+	//console.log(consoleLogPrefix, "hasAlphabetCheck called", str);
+	// Loop through each character of the string
+	for (let i = 0; i < str.length; i++) {
+	  // Get the ASCII code of the character
+	  let code = str.charCodeAt(i);
+	  // Check if the code is between 65 and 90 (uppercase letters) or between 97 and 122 (lowercase letters)
+	  if ((code >= 33 && code <= 94) || (code >= 96 && code <= 126)) {
+		// Return true if an alphabet is found
+		return true;
+	  }
+	}
+	// Return false if no alphabet is found
+	return false;
+}
+
 async function callLLMChildThoughtProcessor(prompt, lengthGen){
+	childLLMResultNotPassed = true;
+	definedSeed_LLMchild = `${randSeed}`;
+	while(childLLMResultNotPassed){
+		//console.log(consoleLogPrefix, "callLLMChildThoughtProcessor Called");
+		result = await callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild);
+		if (await hasAlphabet(result)){
+			childLLMResultNotPassed = false;
+			//console.log(consoleLogPrefix, "Result detected", result);
+			childLLMDebugResultMode = false;
+		} else {
+			definedSeed_LLMchild = generateRandomNumber(0, 9999999999);
+			llmChildfailureCountSum = llmChildfailureCountSum + 1;
+			lengthGen = llmChildfailureCountSum + lengthGen;
+			childLLMDebugResultMode = true;
+			console.log(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "LengthGen Request", lengthGen);
+			console.log(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
+			childLLMResultNotPassed = true;
+		}
+} 
+	//console.log(consoleLogPrefix, "callLLMChildThoughtProcessor Result Passed");
+	return result
+}
+
+async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild){
 	//lengthGen is the limit of how much it need to generate
 	//prompt is basically prompt :moai:
 	// flag is basically at what part that callLLMChildThoughtProcessor should return the value started from.
 	//const platform = process.platform;
 	
+	// November 2, 2023 Found issues when the LLM Model when being called through the callLLMChildThoughtProcessor and then its only returns empty space its just going to make the whole javascript process froze without error or the error being logged because of its error located on index.js
+	// To combat this we need 2 layered function callLLMChildThoughtProcessor() the frontend which serve the whole program transparently and  callLLMChildThoughtProcessor_backend() which the main core that is being moved into
+
 	//model = ``;
 	prompt = prompt.replace("[object Promise]", "");
 	prompt = stripProgramBreakingCharacters(prompt);
 
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
-	LLMChildParam = `-p \"${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 2048 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 	command = `${basebin} ${LLMChildParam}`;
 	try {
 	//console.log(consoleLogPrefix, `LLMChild Inference ${command}`);
 	outputLLMChild = await runShellCommand(command);
+	if(childLLMDebugResultMode){
+		console.log(consoleLogPrefix, 'LLMChild Raw output:', outputLLMChild);
+	}
 	//console.log(consoleLogPrefix, 'LLMChild Raw output:', outputLLMChild);
 	} catch (error) {
 	console.error('Error occoured spawning LLMChild!', flag, error.message);
 	}	
 	// ---------------------------------------
+	/*
 	function stripThoughtHeader(input) {
 		const regex = /__([^_]+)__/g;
 		return input.replace(regex, '');
 	}
+	*/
 
+	function stripThoughtHeader(str){
+		// Find the index of the last occurrence of "__" in the string
+		let lastIndex = str.lastIndexOf(`${startEndThoughtProcessor_Flag}`);
+		// If "__" is not found, return the original string
+		if (lastIndex === -1) {
+		  return str;
+		}
+		// Otherwise, return the substring after the last "__"
+		else {
+		  return str.substring(lastIndex + 2);
+		}
+	}
 	filteredOutput = stripThoughtHeader(outputLLMChild);
 	filteredOutput = filteredOutput.replace(/\n/g, " ");
 	filteredOutput = filteredOutput.replace(/__/g, '');
@@ -446,7 +510,10 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	filteredOutput = filteredOutput.replace(/`/g, '');
 	filteredOutput = filteredOutput.replace(/\//g, '');
 	filteredOutput = filteredOutput.replace(/'/g, '');
-	console.log(consoleLogPrefix, `LLMChild Thread Output ${filteredOutput}`); // filtered output
+	if(childLLMDebugResultMode){
+		console.log(consoleLogPrefix, `LLMChild Thread Output ${filteredOutput}`); // filtered output
+	}
+	//
 	//console.log(consoleLogPrefix, 'LLMChild Filtering Output');
 	//return filteredOutput;
 	filteredOutput = stripProgramBreakingCharacters(filteredOutput);
@@ -456,7 +523,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 
 
 
-const startEndThoughtProcessor_Flag = "__"; // we can remove [ThoughtProcessor] word from the phrase to prevent any processing or breaking the chat context on the LLM and instead just use ___ three underscores
+const startEndThoughtProcessor_Flag = "OutputResponse:"; // we can remove [ThoughtProcessor] word from the phrase to prevent any processing or breaking the chat context on the LLM and instead just use ___ three underscores
 const startEndAdditionalContext_Flag = ""; //global variable so every function can see and exclude it from the chat view
 // we can savely blank out the startEndAdditionalContext flag because we are now based on the blockGUI forwarding concept rather than flag matching
 const DDG = require("duck-duck-scrape");
@@ -627,7 +694,8 @@ async function callInternalThoughtEngine(prompt){
 				// required_CoTSteps
 				promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n From this context from 1 to 27 how many steps that is required to answer. Answer:`;
 				required_CoTSteps = await callLLMChildThoughtProcessor(promptInput, 16);
-				required_CoTSteps = onlyAllowNumber(required_CoTSteps)
+				required_CoTSteps = onlyAllowNumber(required_CoTSteps);
+				console.log(consoleLogPrefix, "Required CoT steps", required_CoTSteps);
 
 				if (isVariableEmpty(required_CoTSteps)){
 					required_CoTSteps = 5;
