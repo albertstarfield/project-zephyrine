@@ -488,6 +488,7 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("LLMChildDecision").checked = data.llmdecisionMode;
 	document.getElementById("longchainthought").checked = data.extensiveThought;
 	document.getElementById("saverestorechat").checked = data.SaveandRestorechat;
+	document.getElementById("historyChatCtx").checked = data.hisChatCTX;
 	document.getElementById("throwInitialGarbageResponse").checked = data.throwInitResponse;
 	document.getElementById("classicmode").checked = data.classicMode;
 	document.getElementById("attemptaccelerate").checked = data.AttemptAccelerate;
@@ -511,6 +512,7 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
             llmdecisionMode: document.getElementById("LLMChildDecision").checked,
             extensiveThought: document.getElementById("longchainthought").checked,
             SaveandRestorechat: document.getElementById("saverestorechat").checked,
+			hisChatCTX: document.getElementById("historyChatCtx").checked,
 			throwInitResponse: document.getElementById("throwInitialGarbageResponse").checked,
 			classicMode: document.getElementById("classicmode").checked,
 			AttemptAccelerate: document.getElementById("attemptaccelerate").checked,
@@ -554,6 +556,10 @@ document.getElementById("longchainthought").addEventListener("change", () => {
 
 document.getElementById("saverestorechat").addEventListener("change", () => {
 	ipcRenderer.send("SaveandRestorechat", document.getElementById("saverestorechat").checked);
+});
+
+document.getElementById("historyChatCtx").addEventListener("change", () => {
+	ipcRenderer.send("hisChatCTX", document.getElementById("historyChatCtx").checked);
 });
 
 document.getElementById("attemptaccelerate").addEventListener("change", () => {

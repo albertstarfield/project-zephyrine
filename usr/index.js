@@ -7,7 +7,7 @@ LOCAL_FETCH_DEBUG_MODE
 CoTMultiSteps_FETCH_DEBUG_MODE
 ptyChatStgDEBUG
 ptyStreamDEBUGMode
-
+HISTORY_CTX_FETCH_DEBUG_MODE
 
 */
 //https://stackoverflow.com/questions/72591633/electron-simplest-example-to-pass-variable-from-js-to-html-using-ipc-contextb
@@ -172,7 +172,7 @@ const schema = {
 			repeat_penalty: '1.4',
 			top_k: '10',
 			top_p: '0.9',
-			temp: '0.1',
+			temp: '0.6',
 			seed: '-1',
 			webAccess: true,
 			localAccess: true,
@@ -394,19 +394,44 @@ function isVariableEmpty(variable) {
   }
 
 function stripProgramBreakingCharacters(str) {
-	let result;
 	//console.log(consoleLogPrefix, "Filtering Ansi while letting go other characters...");
 	// Define the regular expression pattern to exclude ANSI escape codes
 	const pattern = /\u001B\[[0-9;]*m/g;
-	result = str.replace(pattern, "");
-
-	result = result.replace(/"/g, '&#34;'); // convert it to html code so it doesnt misinterpreted by the backend shell
-	result = result.replace(/_/g, '&#95;'); // convert it to html code so it doesnt misinterpreted by the backend shell
-	result = result.replace(/'/g, "&#39;"); // convert it to html code so it doesnt misinterpreted by the backend shell
-	result = result.replace("[object Promise]", "");
-	// Use the regular expression to replace matched ANSI escape codes
-	return result
-	  
+	//console.log(consoleLogPrefix, "0");
+	let modified = "";
+	let output = [];
+	let result = "";
+	// Split the input string by ```
+	//console.log(consoleLogPrefix, "1");
+	let parts = str.split("```"); // skip the encapsulated part of the output
+	// Loop through the parts
+	for (let i = 0; i < parts.length; i++) {
+		//console.log(consoleLogPrefix, "2");
+		// If the index is even, it means the part is outside of ```
+		if (i % 2 == 0) {
+			//console.log(consoleLogPrefix, "5");
+		// Replace all occurrences of AD with AB using a regular expression
+		modified = parts[i].replace(/"/g, '&#34;'); 
+		modified = parts[i].replace(/_/g, '&#95;');
+		modified = parts[i].replace(/'/g, '&#39;');
+		modified = parts[i].replace(/^[\u200B\u200C\u200D\u200E\u200F\uFEFF]/,"")
+		modified = parts[i].replace(pattern, "");
+		modified = parts[i].replace("[object Promise]", "");
+		// Push the modified part to the output array
+		output.push(modified);
+		} else {
+			//console.log(consoleLogPrefix, "3");
+		// If the index is odd, it means the part is inside of ```
+		// Do not modify the part and push it to the output array
+		output.push(parts[i]);
+		}
+	}
+	//console.log(consoleLogPrefix, "4");
+	// Join the output array by ``` and return it
+	result = output.join("```");
+	//console.log(consoleLogPrefix, result);
+	return result;
+		
 }
 // -----------------------------------------------
 //let basebin;
@@ -437,18 +462,18 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	childLLMResultNotPassed = true;
 	definedSeed_LLMchild = `${randSeed}`;
 	while(childLLMResultNotPassed){
-		//console.log(consoleLogPrefix, "callLLMChildThoughtProcessor Called");
+		//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
 		result = await callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild);
 		if (await hasAlphabet(result)){
 			childLLMResultNotPassed = false;
 			//console.log(consoleLogPrefix, "Result detected", result);
 			childLLMDebugResultMode = false;
 		} else {
-			definedSeed_LLMchild = generateRandomNumber(0, 9999999999);
+			definedSeed_LLMchild = generateRandomNumber(minRandSeedRange, maxRandSeedRange);
 			llmChildfailureCountSum = llmChildfailureCountSum + 1;
 			lengthGen = llmChildfailureCountSum + lengthGen;
 			childLLMDebugResultMode = true;
-			console.log(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "LengthGen Request", lengthGen);
+			console.log(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "Adjusting LengthGen Request to: ", lengthGen);
 			console.log(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
 			childLLMResultNotPassed = true;
 		}
@@ -458,6 +483,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 }
 
 async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild){
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called");
 	//lengthGen is the limit of how much it need to generate
 	//prompt is basically prompt :moai:
 	// flag is basically at what part that callLLMChildThoughtProcessor should return the value started from.
@@ -467,12 +493,18 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	// To combat this we need 2 layered function callLLMChildThoughtProcessor() the frontend which serve the whole program transparently and  callLLMChildThoughtProcessor_backend() which the main core that is being moved into
 
 	//model = ``;
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called stripping Object Promise");
 	prompt = prompt.replace("[object Promise]", "");
-	prompt = stripProgramBreakingCharacters(prompt);
-
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Stripping ProgramBreakingCharacters");
+	function stripProgramBreakingCharacters_childLLM(str) {
+		return str.replace(/[^\p{L}\s]/gu, "");
+	  }
+	prompt = stripProgramBreakingCharacters_childLLM(prompt); // this fixes the strange issue that frozes the whole program after the 3rd interaction
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ParamInput");
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
 	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 2048 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 	command = `${basebin} ${LLMChildParam}`;
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
 	try {
 	//console.log(consoleLogPrefix, `LLMChild Inference ${command}`);
 	outputLLMChild = await runShellCommand(command);
@@ -500,9 +532,11 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		}
 		// Otherwise, return the substring after the last "__"
 		else {
-		  return str.substring(lastIndex + 2);
+		  //return str.substring(lastIndex + 2); //replace +2 with automatic calculation on how much character on the _Flag
+		  return str.substring(lastIndex + startEndThoughtProcessor_Flag.length);
 		}
 	}
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Filtering Output");
 	filteredOutput = stripThoughtHeader(outputLLMChild);
 	filteredOutput = filteredOutput.replace(/\n/g, " ");
 	filteredOutput = filteredOutput.replace(/__/g, '');
@@ -517,6 +551,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	//console.log(consoleLogPrefix, 'LLMChild Filtering Output');
 	//return filteredOutput;
 	filteredOutput = stripProgramBreakingCharacters(filteredOutput);
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Done");
 	return filteredOutput;
 
 }
@@ -530,14 +565,17 @@ const DDG = require("duck-duck-scrape");
 let passedOutput="";
 let concludeInformation_CoTMultiSteps;
 let required_CoTSteps;
+let historyDistanceReq;
 let concatenatedCoT="";
 let concludeInformation_Internet;
 let concludeInformation_LocalFiles;
+let concludeInformation_chatHistory;
 let todoList;
 let todoListResult;
 let fullCurrentDate;
 let searchPrompt="";
 let decisionSearch;
+let decisionChatHistoryCTX;
 let resultSearchScraping;
 let promptInput;
 let mergeText;
@@ -550,21 +588,48 @@ let evaluateEmotionInteraction;
 let emotionalEvaluationResult;
 let reevaluateAdCtx;
 let reevaluateAdCtxDecisionAgent;
+function historyRequirementRetrieval(historyDistance){
+	//chatArrayStorage("retrieve", "", false, false, chatStgOrder-1);
+	console.log(consoleLogPrefix, `Retrieving Chat History with history Depth ${historyDistance}`);
+	let str = "";
+	for (let i = historyDistance; i >= 1; i--){
+		if (i % 2 === 0) {
+			str += `${username}: `; // even number on this version of zephyrine means the User that makes the prompt or user input prompt 
+		  } else {
+			str += `${assistantName}: `; // odd number on this version of zephyrine means the AI or the assistant is the one that answers
+		  }
+		  str += `${chatArrayStorage("retrieve", "", false, false, chatStgOrder-i)} \n`
+		  //console.log(i + ": " + str);
+		  //deduplicate string to reduce the size need to be submitted which optimizes the input size and bandwidth
+		}
+	console.log(consoleLogPrefix, "__historyRequirementRetrievalFlexResult \n", str);
+	return str;
+}
 async function callInternalThoughtEngine(prompt){
-	//console.log(consoleLogPrefix, "Deciding Whether should i search it or not");
-	// if (store.get("params").webAccess){} // this is how you get the paramete set by the setting
-	historyChatRetrieved[1]=chatArrayStorage("retrieve", "", false, false, chatStgOrder-1);
-	historyChatRetrieved[2]=chatArrayStorage("retrieve", "", false, false, chatStgOrder-2);
+	if (store.get("params").llmdecisionMode){
+		// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
+		promptInput = `${username}:${prompt}\n Based on your evaluation of the request submitted by ${username}, could you please ascertain the number of sequential steps, ranging from 1 to 50, necessary to acquire the relevant historical context to understand the present situation? Answer only in numbers:`;
+		historyDistanceReq = await callLLMChildThoughtProcessor(promptInput, 32);
+		historyDistanceReq = onlyAllowNumber(historyDistanceReq);
+		console.log(consoleLogPrefix, "Required History Distance as Context", historyDistanceReq);
+
+		if (isVariableEmpty(historyDistanceReq)){
+			historyDistanceReq = 5;
+			console.log(consoleLogPrefix, "historyDistanceReq Retrieval Failure due to model failed to comply, Falling back to 5 History Depth/Distance");
+		}
+	}else{
+		historyDistanceReq = 5;
+		console.log(consoleLogPrefix, "historyDistanceReq Mode");
+	}
+	console.log(consoleLogPrefix, "Retrieving History!");
+	historyChatRetrieved=historyRequirementRetrieval(historyDistanceReq);
 	
 	// Counting the number of words in the Chat prompt and history
 	inputPromptCounterSplit = prompt.split(" ");
 	inputPromptCounter[0] = inputPromptCounterSplit.length;
 
-	inputPromptCounterSplit = historyChatRetrieved[1].split(" ");
+	inputPromptCounterSplit = historyChatRetrieved;
 	inputPromptCounter[1] = inputPromptCounterSplit.length;
-
-	inputPromptCounterSplit = historyChatRetrieved[2].split(" ");
-	inputPromptCounter[2] = inputPromptCounterSplit.length;
     //store.get("params").longChainThoughtNeverFeelenough
 	reevaluateAdCtx=true; // to allow run the inside the while commands
 	while (reevaluateAdCtx){
@@ -579,14 +644,62 @@ async function callInternalThoughtEngine(prompt){
 		fullCurrentDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 		//decision if yes then do the query optimization
 		// ./chat -p "___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"What are you doing?\"___[Thoughts Processor] " -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r "[User]" -n 2
+		// Chat History Context Call
+		// -----------------------------------------------------
+		console.log(consoleLogPrefix, "============================================================");
+		// This is for the ChatCTX Request
+		//&& store.get("params").hisChatCTX
+		if (store.get("params").llmdecisionMode){
+			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username}:${prompt}\n Your Response:`;
+			promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Previous session out of scope chat history for context Yes or No? Answer:`;
+			console.log(consoleLogPrefix, "Checking Chat History Context Call Requirement!");
+			decisionChatHistoryCTX = await callLLMChildThoughtProcessor(promptInput, 12);
+			decisionChatHistoryCTX = decisionChatHistoryCTX.toLowerCase();
+		} else {
+			decisionChatHistoryCTX = "yes"; // without LLM deep decision
+		}
+		//console.log(consoleLogPrefix, ` LLMChild ${decisionSearch}`);
+		// explanation on the inputPromptCounterThreshold
+		// Isn't the decision made by LLM? Certainly, while LLM or the LLMChild contributes to the decision-making process, it lacks the depth of the main thread. This can potentially disrupt the coherence of the prompt context, underscoring the importance of implementing a safety measure like a word threshold before proceeding to the subsequent phase.
+		if ((((decisionChatHistoryCTX.includes("yes") || decisionChatHistoryCTX.includes("yep") || decisionChatHistoryCTX.includes("ok") || decisionChatHistoryCTX.includes("valid") || decisionChatHistoryCTX.includes("should") || decisionChatHistoryCTX.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.HISTORY_CTX_FETCH_DEBUG_MODE === "1") && store.get("params").hisChatCTX){
+			if (store.get("params").llmdecisionMode){
+				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. What should i search on the Internet on this interaction to help with my answer when i dont know the answer? Answer:`;
+				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
+			}else{
+				searchPrompt = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
+				searchPrompt = searchPrompt.replace(/None\./g, "");
+			}
+			console.log(consoleLogPrefix, `LLMChild Creating Search Prompt`);
+			resultSearchScraping = await externalInternetFetchingScraping(searchPrompt);
+			if (store.get("params").llmdecisionMode){
+				inputPromptCounterSplit = resultSearchScraping.split(" ");
+				inputPromptCounter[3] = inputPromptCounterSplit.length;
+			if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
+				resultSearchScraping = stripProgramBreakingCharacters(resultSearchScraping);
+				promptInput = `What is the conclusion from this info: ${resultSearchScraping} Conclusion:`;
+				console.log(consoleLogPrefix, `LLMChild Concluding...`);
+				//let concludeInformation_Internet;
+				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(stripProgramBreakingCharacters(promptInput)), 1024);
+			} else {
+				concludeInformation_Internet = "Nothing.";
+			}
+			} else {
+				concludeInformation_Internet = resultSearchScraping;
+			}
+		} else {
+			console.log(consoleLogPrefix, "No Dont need to search it on the internet");
+			concludeInformation_Internet = "Nothing.";
+			console.log(consoleLogPrefix, concludeInformation_Internet);
+		}
 		// External Data Part
 		//-------------------------------------------------------
 		console.log(consoleLogPrefix, "============================================================");
-		console.log(consoleLogPrefix, "Checking Internet Fetch Requirement!");
+		
 		// This is for the Internet Search Data Fetching
-		if (store.get("params").llmdecisionMode){
-			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n Your Response:`;
-			promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Internet Yes or No? Answer:`;
+		if (store.get("params").llmdecisionMode && store.get("params").webAccess){
+			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username}:${prompt}\n Your Response:`;
+			promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Internet Yes or No? Answer:`;
+			console.log(consoleLogPrefix, "Checking Internet Fetch Requirement!");
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 12);
 			decisionSearch = decisionSearch.toLowerCase();
 		} else {
@@ -595,9 +708,9 @@ async function callInternalThoughtEngine(prompt){
 		//console.log(consoleLogPrefix, ` LLMChild ${decisionSearch}`);
 		// explanation on the inputPromptCounterThreshold
 		// Isn't the decision made by LLM? Certainly, while LLM or the LLMChild contributes to the decision-making process, it lacks the depth of the main thread. This can potentially disrupt the coherence of the prompt context, underscoring the importance of implementing a safety measure like a word threshold before proceeding to the subsequent phase.
-		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.INTERNET_FETCH_DEBUG_MODE === "1") && store.get("params").webAccess){
+		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.INTERNET_FETCH_DEBUG_MODE === "1") && store.get("params").webAccess){
 			if (store.get("params").llmdecisionMode){
-				promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. What should i search on the Internet on this interaction to help with my answer when i dont know the answer? Answer:`;
+				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. Do i have the knowledge to answer this then if i dont have the knowledge should i search it on the internet? Answer:`;
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
 			}else{
 				searchPrompt = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
@@ -605,7 +718,7 @@ async function callInternalThoughtEngine(prompt){
 			}
 			
 
-			//promptInput = ` \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. With this interaction What search query for i search in google for the interaction? Search Query:`;
+			//promptInput = ` ${historyChatRetrieved}\n${username}:${prompt}\n. With this interaction What search query for i search in google for the interaction? Search Query:`;
 			//searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
 			console.log(consoleLogPrefix, `LLMChild Creating Search Prompt`);
 			resultSearchScraping = await externalInternetFetchingScraping(searchPrompt);
@@ -632,11 +745,12 @@ async function callInternalThoughtEngine(prompt){
 
 		//-------------------------------------------------------
 		console.log(consoleLogPrefix, "============================================================");
-		console.log(consoleLogPrefix, "Checking Local File Fetch Requirement!");
+		
 		// This is for the Local Document Search Logic
-		if (store.get("params").llmdecisionMode){
-			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n Your Response:`;
-			promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Local Documents Yes or No? Answer:`;
+		if (store.get("params").llmdecisionMode && store.get("params").localAccess){
+			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat ${historyChatRetrieved}\n${username}:${prompt}\n Your Response:`;
+			promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this? Should I Search this on the Local Documents Yes or No? Answer:`;
+			console.log(consoleLogPrefix, "Checking Local File Fetch Requirement!");
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 18);
 			decisionSearch = decisionSearch.toLowerCase();
 		} else {
@@ -644,10 +758,10 @@ async function callInternalThoughtEngine(prompt){
 		}
 
 		//localAccess variable must be taken into account
-		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.LOCAL_FETCH_DEBUG_MODE === "1") && store.get("params").localAccess){
+		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold)) || process.env.LOCAL_FETCH_DEBUG_MODE === "1") && store.get("params").localAccess){
 			if (store.get("params").llmdecisionMode){
 				console.log(consoleLogPrefix, "We need to search it on the available resources");
-				promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction what should i search that i dont know Answer:`;
+				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this if not what should i search on the local file then:`;
 				console.log(consoleLogPrefix, `LLMChild Creating Search Prompt`);
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
 				console.log(consoleLogPrefix, `LLMChild Prompt ${searchPrompt}`);
@@ -680,19 +794,19 @@ async function callInternalThoughtEngine(prompt){
 		console.log(consoleLogPrefix, "============================================================");
 		console.log(consoleLogPrefix, "Checking Chain of Thoughts Depth requirement Requirement!");
 		if (store.get("params").llmdecisionMode){
-			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this interaction \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n Your Response:`;
-			promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. For the additional context this is what i concluded from Internet ${concludeInformation_Internet}. \n This is what i concluded from the Local Files ${concludeInformation_LocalFiles}. \n From this Interaction and additional context Should I Answer this in 5 steps Yes or No? Answer:`;
-			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 6);
+			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this interaction ${historyChatRetrieved}\n${username}:${prompt}\n Your Response:`;
+			promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. For the additional context this is what i concluded from Internet ${concludeInformation_Internet}. \n This is what i concluded from the Local Files ${concludeInformation_LocalFiles}. \n From this Interaction and additional context Should I Answer this in 5 steps Yes or No? Answer only in Numbers:`;
+			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 32);
 			decisionSearch = decisionSearch.toLowerCase();
 		} else {
 			decisionSearch = "yes"; // without LLM deep decision
 		}
-		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold || inputPromptCounter[2] > inputPromptCounterThreshold)) || process.env.CoTMultiSteps_FETCH_DEBUG_MODE === "1") && store.get("params").extensiveThought){
+		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.CoTMultiSteps_FETCH_DEBUG_MODE === "1") && store.get("params").extensiveThought){
 			if (store.get("params").llmdecisionMode){
 				
 				// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 				// required_CoTSteps
-				promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n From this context from 1 to 27 how many steps that is required to answer. Answer:`;
+				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n From this context from 1 to 27 how many steps that is required to answer. Answer:`;
 				required_CoTSteps = await callLLMChildThoughtProcessor(promptInput, 16);
 				required_CoTSteps = onlyAllowNumber(required_CoTSteps);
 				console.log(consoleLogPrefix, "Required CoT steps", required_CoTSteps);
@@ -703,7 +817,7 @@ async function callInternalThoughtEngine(prompt){
 				}
 				console.log(consoleLogPrefix, "We need to create thougts instruction list for this prompt");
 				console.log(consoleLogPrefix, `Generating list for this prompt`);
-				promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n From this chat List ${required_CoTSteps} steps on how to Answer it. Answer:`;
+				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n From this chat List ${required_CoTSteps} steps on how to Answer it. Answer:`;
 				promptInput = stripProgramBreakingCharacters(promptInput);
 				todoList = await callLLMChildThoughtProcessor(promptInput, 512);
 
@@ -739,7 +853,7 @@ async function callInternalThoughtEngine(prompt){
 			
 			emotionlist = "Happy, Sad, Fear, Anger, Disgust";
 			if (store.get("params").emotionalLLMChildengine){
-				promptInput = `\nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. From this conversation which from the following emotions ${emotionlist} are the correct one? Answer:`;
+				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. From this conversation which from the following emotions ${emotionlist} are the correct one? Answer:`;
 				console.log(consoleLogPrefix, `LLMChild Evaluating Interaction With Emotion Engine...`);
 				promptInput = stripProgramBreakingCharacters(promptInput);
 				evaluateEmotionInteraction = await callLLMChildThoughtProcessor(promptInput, 64);
@@ -765,15 +879,15 @@ async function callInternalThoughtEngine(prompt){
 				win.webContents.send('emotionalEvaluationResult', emotionalEvaluationResult);
 			}
 
-		
-		if((concludeInformation_Internet === "Nothing." || concludeInformation_Internet === "undefined" ) && (concludeInformation_LocalFiles === "Nothing." || concludeInformation_LocalFiles === "undefined") && (concludeInformation_CoTMultiSteps === "Nothing." || concludeInformation_CoTMultiSteps === "undefined")){
+		//concludeInformation_chatHistory
+		if((concludeInformation_Internet === "Nothing." || concludeInformation_Internet === "undefined" ) && (concludeInformation_LocalFiles === "Nothing." || concludeInformation_LocalFiles === "undefined") && (concludeInformation_CoTMultiSteps === "Nothing." || concludeInformation_CoTMultiSteps === "undefined") && (concludeInformation_chatHistory === "Nothing." || concludeInformation_chatHistory === "undefined")){
 			console.log(consoleLogPrefix, "Bypassing Additional Context");
 			passedOutput = prompt;
 		} else {
 			concludeInformation_Internet = concludeInformation_Internet === "Nothing." ? "" : concludeInformation_Internet;
 			concludeInformation_LocalFiles = concludeInformation_LocalFiles === "Nothing." ? "" : concludeInformation_LocalFiles;
 			concludeInformation_CoTMultiSteps = concludeInformation_CoTMultiSteps === "Nothing." ? "" : concludeInformation_CoTMultiSteps;
-			mergeText = startEndAdditionalContext_Flag + " " + "This is the user prompt " + "\""+ prompt + "\"" + " " + "These are the additional context: "  + "The current time and date is now: " + fullCurrentDate + ". "+ "There are additional context to answer: " + concludeInformation_Internet + concludeInformation_LocalFiles + concludeInformation_CoTMultiSteps + startEndAdditionalContext_Flag;
+			mergeText = startEndAdditionalContext_Flag + " " + `This is the ${username} prompt ` + "\""+ prompt + "\"" + " " + "These are the additonal context, but DO NOT mirror the Additional Context: " + ` Your feeling is now in \"${emotionalEvaluationResult}\", ` + "The current time and date is now: " + fullCurrentDate + ". "+ "There are additional context to answer: " + concludeInformation_Internet + concludeInformation_LocalFiles + concludeInformation_CoTMultiSteps + startEndAdditionalContext_Flag;
 			mergeText = mergeText.replace(/\n/g, " "); //.replace(/\n/g, " ");
 			passedOutput = mergeText;
 			console.log(consoleLogPrefix, "Combined Context", mergeText);
@@ -783,12 +897,14 @@ async function callInternalThoughtEngine(prompt){
 			passedOutput = prompt;
 		}
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
-			promptInput = `This is the conversation \nUser:${historyChatRetrieved[2]} \nResponse:${historyChatRetrieved[1]} \nUser:${prompt}\n. While this is the context \n The current time and date is now: ${fullCurrentDate}, Answers from the internet ${concludeInformation_Internet}. and this is Answer from the Local Files ${concludeInformation_LocalFiles}. And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n From this Information should I dig deeper and retry to get more clearer information to answer the chat? Yes or No? Answer:`;
+			promptInput = `This is the conversation ${historyChatRetrieved}\n${username}:${prompt}\n. While this is the context \n The current time and date is now: ${fullCurrentDate}, Answers from the internet ${concludeInformation_Internet}. and this is Answer from the Local Files ${concludeInformation_LocalFiles}. And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n From the user named ${username} did i or will i make the user said that my respond is bad, horrible, not professional, trash? Answer only with Yes or No? Answer:`;
 			console.log(consoleLogPrefix, `LLMChild Evaluating Information PostProcess`);
-			reevaluateAdCtxDecisionAgent = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 32));
+			reevaluateAdCtxDecisionAgent = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 64));
 			if (reevaluateAdCtxDecisionAgent.includes("yes") || reevaluateAdCtxDecisionAgent.includes("yep") || reevaluateAdCtxDecisionAgent.includes("ok") || reevaluateAdCtxDecisionAgent.includes("valid") || reevaluateAdCtxDecisionAgent.includes("should") || reevaluateAdCtxDecisionAgent.includes("true")){
 				reevaluateAdCtx = true;
-				console.log(consoleLogPrefix, `Context isnt good enough! Still lower than standard!`);
+				randSeed = generateRandomNumber(minRandSeedRange, maxRandSeedRange);
+				console.log(consoleLogPrefix, `Context isnt good enough! Still lower than standard! Shifting global seed! ${randSeed}`);
+				
 				console.log(consoleLogPrefix, reevaluateAdCtxDecisionAgent);
 			} else {
 				console.log(consoleLogPrefix, `Passing Context!`);
@@ -836,8 +952,10 @@ function generateRandomNumber(min, max) {
   }
 let randSeed
 let configSeed = store.get("params").seed;
+let maxRandSeedRange=99999999;
+let minRandSeedRange=0;
 if (configSeed === "-1"){ 
-	randSeed = generateRandomNumber(2700000000027, 2709999999999);
+	randSeed = generateRandomNumber(minRandSeedRange, maxRandSeedRange);
 	console.log(consoleLogPrefix, "Random Seed!", randSeed);
 } else {
 	randSeed = configSeed;
@@ -848,7 +966,7 @@ let LLMBackendSelection;
 let LLMBackendVariationFileName;
 let LLMBackendVariationFileSubFolder;
 let LLMBackendVariationSelected;
-let LLMBackendAttemptDedicatedHardwareAccel=false; //false by default but overidden when AttempAccelerate varible detected true!
+let LLMBackendAttemptDedicatedHardwareAccel=false; //false by default but overidden if AttempAccelerate varible set to true!
 let basebin;
 let basebinLLMBackendParamPassedDedicatedHardwareAccel=""; //global variable so it can be used on main LLM thread and LLMChild
 let basebinBinaryMoreSpecificPathResolve;
@@ -1186,7 +1304,7 @@ function initChat() {
 			if (store.get("params").throwInitResponse){
 				console.log(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
 				blockGUIForwarding = true;
-				initChatContent = `Greetings and salutations, may the matutinal rays grace you, Your name is ${assistantName}! May your day effulge with a brilliance akin to the astral gleam that bedecks the aether. I am ${username}, extend my introduction; let discourse find its place in our colloquy, if you may indulge.`;
+				initChatContent = `Greetings and salutations, may the morning rays grace ${assistantName}! May ${username}'s day shine as brightly as the stars that adorn the sky. I am ${username}, extending my introduction; let our conversation find its footing as we engage in discourse, if you would be so kind.`;
 				runningShell.write(initChatContent);
 				runningShell.write(`\r`);
 			}
