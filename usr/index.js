@@ -460,6 +460,7 @@ async function hasAlphabet(str) {
 
 async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	childLLMResultNotPassed = true;
+	let specializedModelReq="";
 	definedSeed_LLMchild = `${randSeed}`;
 	while(childLLMResultNotPassed){
 		//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
@@ -481,6 +482,12 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	//console.log(consoleLogPrefix, "callLLMChildThoughtProcessor Result Passed");
 	return result
 }
+
+
+// TODO: Implement to "use specialized model" for each request/prompt for optimization, so that the main model can just use a 7B really lightweight 
+// funny thing is that Im actually inspired to make those microkernel-like architecture from my limitation on writing story
+// Have an idea but doesnt have the vocab library space on my head so use an supervised external extension instead
+// That's why Human are still required on AI operation
 
 async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild){
 	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called");
@@ -538,12 +545,13 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	}
 	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Filtering Output");
 	filteredOutput = stripThoughtHeader(outputLLMChild);
-	filteredOutput = filteredOutput.replace(/\n/g, " ");
+	filteredOutput = filteredOutput.replace(/\n/g, "\\n");
+	filteredOutput = filteredOutput.replace(/\r/g, "");
 	filteredOutput = filteredOutput.replace(/__/g, '');
-	filteredOutput = filteredOutput.replace(/"/g, '');
+	filteredOutput = filteredOutput.replace(/"/g, '\\"');
 	filteredOutput = filteredOutput.replace(/`/g, '');
-	filteredOutput = filteredOutput.replace(/\//g, '');
-	filteredOutput = filteredOutput.replace(/'/g, '');
+	filteredOutput = filteredOutput.replace(/\//g, '\\/');
+	filteredOutput = filteredOutput.replace(/'/g, '\\\'');
 	if(childLLMDebugResultMode){
 		console.log(consoleLogPrefix, `LLMChild Thread Output ${filteredOutput}`); // filtered output
 	}
@@ -590,6 +598,10 @@ let reevaluateAdCtx;
 let reevaluateAdCtxDecisionAgent;
 function historyRequirementRetrieval(historyDistance){
 	//chatArrayStorage("retrieve", "", false, false, chatStgOrder-1);
+	if (historyDistance >= chatStgOrder){
+		console.log(consoleLogPrefix, `Requested ${historyDistance} History Depth/Distances doesnt exist, Clamping to ${chatStgOrder}`);
+		historyDistance = chatStgOrder;
+	}
 	console.log(consoleLogPrefix, `Retrieving Chat History with history Depth ${historyDistance}`);
 	let str = "";
 	for (let i = historyDistance; i >= 1; i--){
@@ -605,6 +617,15 @@ function historyRequirementRetrieval(historyDistance){
 	console.log(consoleLogPrefix, "__historyRequirementRetrievalFlexResult \n", str);
 	return str;
 }
+
+async function captureScreenContext(stub){
+	// this is a stub function not yet to be implemented
+}
+
+function isBlankOrWhitespaceTrue_CheckVariable(str){
+	return /^\s*$/.test(str);
+}
+
 async function callInternalThoughtEngine(prompt){
 	if (store.get("params").llmdecisionMode){
 		// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
@@ -679,7 +700,8 @@ async function callInternalThoughtEngine(prompt){
 				promptInput = `What is the conclusion from this info: ${resultSearchScraping} Conclusion:`;
 				console.log(consoleLogPrefix, `LLMChild Concluding...`);
 				//let concludeInformation_Internet;
-				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(stripProgramBreakingCharacters(promptInput)), 1024);
+				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(promptInput), 1024);
+				console.log(consoleLogPrefix, concludeInformation_Internet);
 			} else {
 				concludeInformation_Internet = "Nothing.";
 			}
@@ -832,7 +854,6 @@ async function callInternalThoughtEngine(prompt){
 			} else {
 				concatenatedCoT = prompt;
 			}
-			let resultSearchScraping;
 			if (store.get("params").llmdecisionMode){
 			promptInput = `Conclusion from the internal Thoughts?  \\"${concatenatedCoT}\\" Conclusion:"`;
 			console.log(consoleLogPrefix, `LLMChild Concluding...`);
@@ -880,7 +901,7 @@ async function callInternalThoughtEngine(prompt){
 			}
 
 		//concludeInformation_chatHistory
-		if((concludeInformation_Internet === "Nothing." || concludeInformation_Internet === "undefined" ) && (concludeInformation_LocalFiles === "Nothing." || concludeInformation_LocalFiles === "undefined") && (concludeInformation_CoTMultiSteps === "Nothing." || concludeInformation_CoTMultiSteps === "undefined") && (concludeInformation_chatHistory === "Nothing." || concludeInformation_chatHistory === "undefined")){
+		if((concludeInformation_Internet === "Nothing." || concludeInformation_Internet === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_Internet) ) && (concludeInformation_LocalFiles === "Nothing." || concludeInformation_LocalFiles === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_LocalFiles)) && (concludeInformation_CoTMultiSteps === "Nothing." || concludeInformation_CoTMultiSteps === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_CoTMultiSteps)) && (concludeInformation_chatHistory === "Nothing." || concludeInformation_chatHistory === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_chatHistory))){
 			console.log(consoleLogPrefix, "Bypassing Additional Context");
 			passedOutput = prompt;
 		} else {
