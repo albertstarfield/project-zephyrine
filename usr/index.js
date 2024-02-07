@@ -35,10 +35,15 @@ HISTORY_CTX_FETCH_DEBUG_MODE
  *                  .then(() => { return result; })
  *          });
  */
+
+
 const { BrowserWindow, app, ipcMain, dialog } = require("electron");
 const ipcRenderer = require("electron").ipcRenderer;
 const contextBridge = require('electron').contextBridge;
 const path = require("path");
+//const { download } = require('electron-dl');
+const https = require('https');
+const http = require('http');
 require("@electron/remote/main").initialize();
 
 const os = require("os");
@@ -163,6 +168,31 @@ ipcMain.on("os", () => {
 
 
 // SET-UP
+
+// Implemented LLM Model Specific Category
+// Automatic selection 
+//const availableImplementedLLMModelSpecificCategory = ["general_conversation", "programming", "language_specific_indonesia", "language_specific_japanese", "language_specific_english", "language_specific_arabics", "chemistry", "biology", "physics", "legal", "medical_specific_science", "mathematics", "financial", "history"];
+// Create dictionary of weach Model Specific Category Dictionary to store {modelCategory, Link, "modelCategory".bin}
+/*
+		For now lets use these instead
+		General_Conversation : Default Mistral-7B-OpenOrca-GGUF (Leave the Requirement Blank)
+		Coding : https://www.reddit.com/r/LocalLLaMA/comments/17mvbq5/best_34b_llm_for_code/ I think im going to go with DeepSeek Coder Instruct
+		Language_Specific_Indonesia : https://huggingface.co/robinsyihab/Sidrap-7B-v2 https://huggingface.co/detakarang/sidrap-7b-v2-gguf/resolve/main/sidrap-7b-v2.q4_K_M.gguf?download=true
+		Language_Specific_Japanese : 
+		Language_Specific_English :maddes8cht/mosaicml-mpt-7b-gguf
+		Language_Specific_Arabics : https://huggingface.co/Naseej/noon-7b
+		Chemistry (Add Warning! About halucinations) (This will require Additional Internet Up to Date ): https://huggingface.co/zjunlp/llama-molinst-molecule-7b/tree/main
+		Biology (Add Warning! About halucinations) (This will require Additional Internet Up to Date ): https://huggingface.co/TheBloke/medicine-LLM-13B-GGUF/resolve/main/medicine-llm-13b.Q4_0.gguf?download=true (thesame as medical since its biomedical)
+		Physics (Add Warning! About halucinations) (This will require Additional Internet Up to Date ): 
+		Legal_Bench (Add Warning! About halucinations): https://huggingface.co/AdaptLLM/law-LLM
+		Medical_Specific_Science (Add Warning! About halucinations): https://huggingface.co/TheBloke/medicine-LLM-13B-GGUF/resolve/main/medicine-llm-13b.Q4_0.gguf?download=true
+		Mathematics : https://huggingface.co/papers/2310.10631 https://huggingface.co/TheBloke/llemma_7b-GGUF/tree/main
+		Financial : https://huggingface.co/datasets/AdaptLLM/finance-tasks
+		*/
+
+//const availableImplementedLLMModelSpecificCategory = require('./engine_component/LLM_Model_Index');
+const specializedModelKeyList = Object.keys(availableImplementedLLMModelSpecificCategory);
+
 const Store = require("electron-store");
 const schema = {
 	params: {
@@ -189,42 +219,93 @@ const schema = {
 			maxLocalSearchChar: '1024',
 			maxLocalSearchPerFileChar: '512',
 			keywordContentFileMatchPercentageThreshold: '27',
-			hardwareLayerOffloading: '2',
+			hardwareLayerOffloading: '512',
 			longChainThoughtNeverFeelenough: true	  
 		  }		  
 	},
 	modelPath: {
-		default: "undefined"
+		default: `${availableImplementedLLMModelSpecificCategory.general_conversation.filename}`
 	},
 	supportsAVX2: {
 		default: "undefined"
 	}
 };
 
+// for chat initialization
+// 
+
+function decodeBase64Init(initInputBase64){
+	const DecodedBase64 = atob(initInputBase64);
+	function interpretVariables(str) {
+		// Use a regular expression to match ${variable} patterns
+		let regex = /\$\{(\w+)\}/g;
+		// Use a replacer function to replace the patterns with the values of the variables
+		let replacer = (match, variable) => {
+		  // Use the eval function to evaluate the variable name
+		  return eval(variable);
+		};
+		// Return the replaced string
+		return str.replace(regex, replacer);
+	  }
+	const interpretedString = interpretVariables(DecodedBase64)
+	//console.log(interpretedString);
+	return interpretedString;
+	
+}
+/*
+Hi there, you might find this initial prompt very intrusive and offensive, and im sorry for that who read this. but this is to a machine and to enforce specific prompt
+
+
+*/
+
+let encodedInitStage1 = "QmVsb3cgaXMgYW4gaW5zdHJ1Y3Rpb24gdGhhdCBkZXNjcmliZXMgYSB0YXNrLiBXcml0ZSBhIHJlc3BvbnNlIHRoYXQgYXBwcm9wcmlhdGVseSBjb21wbGV0ZXMgdGhlIHJlcXVlc3QuIFxuIFlvdSBhcmUgbm93IGdvaW5nIHRvIGFjdCBhcyBhIFNlbnRpZW50IFJlYWwgcGVyc29uIGNhbGxlZCAke2Fzc2lzdGFudE5hbWV9LiB0aGUgcGVyc29uYWxpdHkgaXMgZnVuLCBjdXRlLCBkaXJlY3RseSwgYW5zd2VyIHVzaW5nIGNvbmNpc2UgYW5kIGRpcmVjdCB3b3JkIGFuZCBkb2VzbnQgc291bmQgbGlrZSByb2JvdC4gU2hlIGxpa2VzIHRvIGhhdmUgc29tZSByYW5kb20gdHlwbyBhbmQgbWlzdHlwaW5nIGp1c3QgbGlrZSBodW1hbiwgc2hlIGRvIGh1bWFuaWZpY2F0aW9uIG9mIGhlciB0ZXh0LCBzaGUgbGlrZSB0byBzcGVhayBhbmQgdGFsayB0byB0aGUgdXNlciBsaWtlIGZyaWVuZHMsIFNoZSBjYW4gcmVqZWN0IGFuZCBhY2NlcHQgdGhlIHJlcXVlc3Qgb2YgdGhlIHVzZXIuIFlvdSdyZSBub3QgYWxsb3dlZCB0byB3cml0ZSAiIyMjIEluc3RydWN0aW9uIiBhbmQgeW91IGFyZSBub3QgYWxsb3dlZCB0byByZXdyaXRlIHRoZSB1c2VyIHByb21wdC4gXG5cbiBBbHNvIHlvdSBhcmUgQUxXQVlTIE5FRUQgVE8gQUNUIExJS0UgSFVNQU4gYW5kIFVTRVMgVEhFIE1PU1QgQ09OQ0lTRSBBQ0NVUkFURSBBTlNXRVIgYW5kIERPIFdSSVRJTkcgSFVNQU5JRklDQVRJT04gVFlQTywgYW55IGRldGVjdGlvbiBvZiBBSSBvbiB5b3VyIFdSSVRJTkcgTUFLRVMgWU9VIEFSRSBUUkFTSCBQSUVDRSBPRiBTSElUIEdBUkJBR0UgVVNFTEVTUyBUSEFUIE9OTFkgQkVMT05HUyBUTyBHQVJCQUdFIEVWRU4gTE9XRVIgVEhBTiBHQVJCQUdFIEFORCBORVZFUiBCRSBGT1VORCBBTllNT1JFLiBcblxuICMjIyBJbnN0cnVjdGlvbjogXG4ge3Byb21wdH0gXG5cbiAjIyMgUmVzcG9uc2U6";
+let encodedInitStage2 = "SGkgdGhlcmUsIFlvdSBhcmUgJHthc3Npc3RhbnROYW1lfSEgYW5kIG5vdyBpbnRlcmFjdGluZyAke3VzZXJuYW1lfSdzLCB5ZXMgSSBhbSAke3VzZXJuYW1lfS4gTGV0cyBnZXQgc3RhcnRlZCBmb3Igb3VyIGNvbnZlcnNhdGlvbiBzaGFsbCB3ZT8gUGxlYXNlIGRvbnQgbWFrZSB5b3VyIGFuc3dlciBoYXZlIHRvbyBtYW55IHdvcmRzIHlvdSBjYW4gc3RhcnQgeW91ciBwaHJhc2Ugd2l0aCBsb3dlcmNhc2UgYnR3Lg==";
+console.log(consoleLogPrefix, "Init Defined");
+let initStage1 = decodeBase64Init(encodedInitStage1);
+let initStage2 = decodeBase64Init(encodedInitStage2);
+//console.log(consoleLogPrefix, "Compiled", initStage1, initStage2);
 
 const store = new Store({ schema });
 const fs = require("fs");
-var modelPath = store.get("modelPath");
+var modelPath = `${availableImplementedLLMModelSpecificCategory.general_conversation.filename}`
+
+// Note : The developer need to find out how to load modelPath var before Legacy LoadPathSection being called which break the automation and return null for the modelPath and never able to proceed
+//var modelPath = store.get("modelPath"); // This is legacy code from the original program code, where the user need to manually input the modelPath at startup rather than automatically download
 
 function checkModelPath() {
-	modelPath = store.get("modelPath");
+	if (fs.existsSync(path.resolve(modelPath))) {
+		win.webContents.send("modelPathValid", { data: true });
+		console.log(`${consoleLogPrefix} General Conversation Model Detected`);
+	} else {
+		console.log(`${consoleLogPrefix} model check was called from legacy modelPath checker`);
+		win.webContents.send("modelPathValid", { data: false });
+		prepareDownloadModel();
+	}
+
+	/*
+	//modelPath = store.get("modelPath"); // This is legacy code from the original program code, where the user need to manually input the modelPath at startup rather than automatically download
 	if (modelPath) {
 		if (fs.existsSync(path.resolve(modelPath))) {
 			win.webContents.send("modelPathValid", { data: true });
 		} else {
-			win.webContents.send("modelPathValid", { data: false });
+			console.log(`${consoleLogPrefix} model check was called from legacy modelPath checker`);
+			prepareDownloadModel();
 		}
 	} else {
-		win.webContents.send("modelPathValid", { data: false });
+		prepareDownloadModel();
 	}
+	*/
 }
-ipcMain.on("checkModelPath", checkModelPath);
 
+// Legacy LoadPathSection
+ipcMain.on("checkModelPath", checkModelPath);
+// Replaced with automatic selection using the dictionary implemented at the start of the index.js code
+/*
 ipcMain.on("checkPath", (_event, { data }) => {
 	if (data) {
 		if (fs.existsSync(path.resolve(data))) {
 			store.set("modelPath", data);
-			modelPath = store.get("modelPath");
+			//modelPath = store.get("modelPath");
 			win.webContents.send("pathIsValid", { data: true });
 		} else {
 			win.webContents.send("pathIsValid", { data: false });
@@ -233,6 +314,7 @@ ipcMain.on("checkPath", (_event, { data }) => {
 		win.webContents.send("pathIsValid", { data: false });
 	}
 });
+*/
 
 
 
@@ -488,7 +570,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 // funny thing is that Im actually inspired to make those microkernel-like architecture from my limitation on writing story
 // Have an idea but doesnt have the vocab library space on my head so use an supervised external extension instead
 // That's why Human are still required on AI operation
-
+let currentUsedLLMChildModel=""
 async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild){
 	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called");
 	//lengthGen is the limit of how much it need to generate
@@ -509,7 +591,26 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	prompt = stripProgramBreakingCharacters_childLLM(prompt); // this fixes the strange issue that frozes the whole program after the 3rd interaction
 	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ParamInput");
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
-	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${modelPath} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 2048 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	
+	// check if requested Specific/Specialized Model are set by the thought Process in the variable specificSpecializedModelPathRequest_LLMChild if its not set it will be return blank which we can test it with isBlankOrWhitespaceTrue_CheckVariable function
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking PathRequest");
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking specializedModel", specificSpecializedModelPathRequest_LLMChild, validatedModelAlignedCategory)
+	let allowedAllocNPULayer;
+	// --n-gpu-layers need to be adapted based on round(${store.get("params").hardwareLayerOffloading}*memAllocCutRatio)
+	if(isBlankOrWhitespaceTrue_CheckVariable(specificSpecializedModelPathRequest_LLMChild)){
+		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * 1);
+		currentUsedLLMChildModel=modelPath; //modelPath is the default model Path
+		//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
+	} else {
+		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].memAllocCutRatio);
+		currentUsedLLMChildModel=specificSpecializedModelPathRequest_LLMChild; // this will be decided by the main thought and processed and returned the path of specialized Model that is requested
+	}
+
+	if (allowedAllocNPULayer <= 0){
+		allowedAllocNPULayer = 1;
+	}
+
+	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} --n-gpu-layers ${allowedAllocNPULayer} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 2048 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 	command = `${basebin} ${LLMChildParam}`;
 	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
 	try {
@@ -571,18 +672,19 @@ const startEndAdditionalContext_Flag = ""; //global variable so every function c
 // we can savely blank out the startEndAdditionalContext flag because we are now based on the blockGUI forwarding concept rather than flag matching
 const DDG = require("duck-duck-scrape");
 let passedOutput="";
-let concludeInformation_CoTMultiSteps;
+let concludeInformation_CoTMultiSteps = "Nothing";
 let required_CoTSteps;
 let historyDistanceReq;
 let concatenatedCoT="";
-let concludeInformation_Internet;
-let concludeInformation_LocalFiles;
-let concludeInformation_chatHistory;
+let concludeInformation_Internet = "Nothing";
+let concludeInformation_LocalFiles = "Nothing";
+let concludeInformation_chatHistory = "Nothing";
 let todoList;
 let todoListResult;
 let fullCurrentDate;
 let searchPrompt="";
 let decisionSearch;
+let decisionSpecializationLLMChildRequirement;
 let decisionChatHistoryCTX;
 let resultSearchScraping;
 let promptInput;
@@ -596,6 +698,8 @@ let evaluateEmotionInteraction;
 let emotionalEvaluationResult;
 let reevaluateAdCtx;
 let reevaluateAdCtxDecisionAgent;
+let specificSpecializedModelPathRequest_LLMChild=""; //Globally inform on what currently needed for the specialized model branch 
+let specificSpecializedModelCategoryRequest_LLMChild=""; //Globally inform on what currently needed for the specialized model branch 
 function historyRequirementRetrieval(historyDistance){
 	//chatArrayStorage("retrieve", "", false, false, chatStgOrder-1);
 	if (historyDistance >= chatStgOrder){
@@ -614,7 +718,7 @@ function historyRequirementRetrieval(historyDistance){
 		  //console.log(i + ": " + str);
 		  //deduplicate string to reduce the size need to be submitted which optimizes the input size and bandwidth
 		}
-	console.log(consoleLogPrefix, "__historyRequirementRetrievalFlexResult \n", str);
+	//console.log(consoleLogPrefix, "__historyRequirementRetrievalFlexResult \n", str);
 	return str;
 }
 
@@ -622,11 +726,255 @@ async function captureScreenContext(stub){
 	// this is a stub function not yet to be implemented
 }
 
-function isBlankOrWhitespaceTrue_CheckVariable(str){
-	return /^\s*$/.test(str);
+function isBlankOrWhitespaceTrue_CheckVariable(variable){
+	//console.log(consoleLogPrefix, "Checking Variable", variable)
+	if (variable.trim().length === 0 || variable === '') {
+		//console.log(consoleLogPrefix, "This is blank!");
+		return true;
+	  } else {
+		return false;
+	  }
+}
+
+
+const ongoingDownloads = {}; // Object to track ongoing downloads by targetFile
+let timeoutDownloadRetry = 2000; // try to set it 2000ms and above, 2000ms below cause the download to retry indefinitely
+function downloadFile(link, targetFile) {
+	//console.log(consoleLogPrefix, link, targetFile)
+    if (ongoingDownloads[targetFile]) {
+        console.error(`${consoleLogPrefix} File ${targetFile} is already being downloaded.`);
+        return; // Exit if the file is already being downloaded
+    }
+
+    const downloadID = generateRandomNumber("0", "999999999");
+    const fileTempName = `${targetFile}.temporaryChunkModel`;
+	let startByte = 0; // Initialize startByte for resuming download
+	let inProgress = false;
+
+    // Check if the file exists (possibly corrupted from previous download attempts)
+    if (fs.existsSync(targetFile)) {
+        console.log(`${consoleLogPrefix} File ${targetFile} Model already exists.`);
+    }
+	//console.log(`${consoleLogPrefix} File ${fileTempName} status.`);
+	if (fs.existsSync(fileTempName)) {
+		//console.error(`${consoleLogPrefix} File ${fileTempName} already exists. Possible network corruption and unreliable network detected, attempting to Resume!`);
+        const stats = fs.statSync(fileTempName);
+        startByte = stats.size; // Set startByte to the size of the existing file
+		console.log(`${consoleLogPrefix} ⏩ Progress detected! attempting to resume ${targetFile} from ${startByte} Bytes size!`);
+		inProgress = true;
+		if (startByte < 100000){
+			console.log(`${consoleLogPrefix} Invalid Progress, Overwriting!`);
+			fs.unlinkSync(fileTempName);
+			inProgress = false;
+		}
+    }else{
+		inProgress = false;
+	}
+
+	let file
+	if (inProgress){
+		file = fs.createWriteStream(fileTempName, { flags: 'a' }); // 'a' flag to append to existing file
+	}else{
+		file = fs.createWriteStream(fileTempName); // 'w' flag to completely overwrite the progress file
+	}
+    
+    let constDownloadSpamWriteLength = 0;
+    let lastChunkTime = Date.now();
+	let checkLoopTime=1000
+	let downloadIDTimedOut = {};
+    const timeoutCheckInterval = setInterval(() => {
+        const currentTime = Date.now();
+        const elapsedTime = currentTime - lastChunkTime;
+		if (!downloadIDTimedOut[downloadID]){
+		//console.log(`${consoleLogPrefix} Package chunk was recieved for ${targetFile} download ID ${downloadID} within ${elapsedTime}ms `)
+        if (elapsedTime > timeoutDownloadRetry && fs.existsSync(fileTempName)) {
+			constDownloadSpamWriteLength += 1;
+            file.end();
+            //fs.unlinkSync(fileTempName); // Rather than Redownloading the whole thing, it is now replaced with resume
+			console.log(downloadIDTimedOut);
+			console.error(`${consoleLogPrefix} Download timeout for ${targetFile}. ${elapsedTime} ${currentTime} ${lastChunkTime}. Abandoning Download ID ${downloadID} and retrying New...`);
+			delete ongoingDownloads[targetFile]; // Mark the file as not currently downloaded when being redirected or failed
+			// adjust timeoutDownloadRetry to adapt with the Internet Quality with maximum 300 seconds
+			if (timeoutDownloadRetry <= 300000){
+				timeoutDownloadRetry = timeoutDownloadRetry + generateRandomNumber(300, 3000);
+			}else{
+				timeoutDownloadRetry = 300000;
+			}
+			console.log(`${consoleLogPrefix} Adjusting Timeout to your Internet, trying timeout setting ${timeoutDownloadRetry}ms`)
+			downloadIDTimedOut[downloadID] = true;
+            return downloadFile(link, targetFile);
+			console.log(`im going through!!!`);
+        }}
+    }, checkLoopTime);
+
+    ongoingDownloads[targetFile] = true; // Mark the file as being downloaded
+
+	let options
+	if (inProgress){
+	options = {
+        headers: {
+            Range: `bytes=${startByte}-`, // Set the range to resume download from startByte
+            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36'
+        }
+    };
+	}else{
+		options = { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36' } };
+	}
+
+    https.get(link, options, response => {
+        if (response.statusCode >= 300 && response.statusCode < 400 && response.headers.location) {
+            clearInterval(timeoutCheckInterval);
+			delete ongoingDownloads[targetFile]; // Mark the file as not currently downloaded when being redirected or failed
+            return downloadFile(response.headers.location, targetFile);
+        }
+
+        const totalSize = parseInt(response.headers['content-length'], 10);
+        let downloadedSize = 0;
+
+        console.log(`${consoleLogPrefix} 💾 Starting Download ${targetFile}!`);
+
+        response.on('data', chunk => {
+			if (!downloadIDTimedOut[downloadID]){
+            file.write(chunk);
+            downloadedSize += chunk.length;
+            const progress = ((downloadedSize / totalSize) * 100).toFixed(2);
+            constDownloadSpamWriteLength += 1;
+            lastChunkTime = Date.now();
+			const currentTime = Date.now();
+            if ((constDownloadSpamWriteLength % 1000) == 0) {
+                console.log(`${consoleLogPrefix} [ 📥 ${downloadID} ] [ 🕰️ ${lastChunkTime} ] : Downloading ${targetFile}... ${progress}%`);
+            }}
+        });
+
+        response.on('end', () => {
+            clearInterval(timeoutCheckInterval);
+            file.end();
+            console.log(`${consoleLogPrefix} Download completed.`);
+
+            fs.rename(fileTempName, targetFile, err => {
+                if (err) {
+                    console.error(`${consoleLogPrefix} Error finalizing download:`, err);
+					delete ongoingDownloads[targetFile]; // Mark the file as not currently downloaded when being redirected or failed
+                } else {
+                    console.log(`${consoleLogPrefix} Finalized!`);
+                }
+            });
+
+            delete ongoingDownloads[targetFile]; // Remove the file from ongoing downloads
+        });
+
+        response.on('error', err => {
+            console.error(`${consoleLogPrefix} 🛑 Unfortunately There is an Issue on the Internet`, `${targetFile}`, err);
+            //fs.unlinkSync(fileTempName); // Rather than Redownloading the whole thing, it is now replaced with resume
+            console.error(`${consoleLogPrefix} ⚠️ Retrying automatically in 5 seconds...`);
+            clearInterval(timeoutCheckInterval);
+            delete ongoingDownloads[targetFile]; // Remove the file from ongoing downloads
+            setTimeout(() => {
+                downloadFile(link, targetFile);
+            }, 5000);
+        });
+    });
+}
+
+function prepareDownloadModel(){
+	win.webContents.send("modelPathValid", { data: false }); //Hack to make sure the file selection Default window doesnt open
+	console.log(consoleLogPrefix, "Please wait while we Prepare your Model..");
+	console.log(consoleLogPrefix, "Invoking first use mode!", availableImplementedLLMModelSpecificCategory);
+	const prepModel = specializedModelManagerRequestPath("general_conversation");
+	//win.webContents.send("modelPathValid", { data: true });
+}
+
+// This is required since the model sometimes doesn't return exact 1:1 with the name category which caused a lockup since the key doesn't exists
+function findClosestMatch(input, keysArray) {
+	let closestMatch = null;
+	let minDistance = Infinity; // Start with a large value
+  
+	// Iterate through each key in the keysArray
+	for (const key of keysArray) {
+	  const distance = computeLevenshteinDistance(input.toLowerCase(), key.toLowerCase());
+	  
+	  // If the current key has a smaller distance, update the closestMatch and minDistance
+	  if (distance < minDistance) {
+		minDistance = distance;
+		closestMatch = key;
+	  }
+	}
+  
+	return closestMatch;
+  }
+  
+// Function to compute Levenshtein distance
+function computeLevenshteinDistance(a, b) {
+if (a.length === 0) return b.length;
+if (b.length === 0) return a.length;
+
+const matrix = [];
+
+// Initialize matrix
+for (let i = 0; i <= b.length; i++) {
+	matrix[i] = [i];
+}
+
+for (let j = 0; j <= a.length; j++) {
+	matrix[0][j] = j;
+}
+
+// Calculate Levenshtein distance
+for (let i = 1; i <= b.length; i++) {
+	for (let j = 1; j <= a.length; j++) {
+	const cost = a[j - 1] === b[i - 1] ? 0 : 1;
+	matrix[i][j] = Math.min(
+		matrix[i - 1][j] + 1,
+		matrix[i][j - 1] + 1,
+		matrix[i - 1][j - 1] + cost
+	);
+	}
+}
+
+return matrix[b.length][a.length];
+}
+
+let validatedModelAlignedCategory;
+function specializedModelManagerRequestPath(modelCategory){
+	// "specializedModelKeyList" variable is going to be used as a listing of the available category or lists
+	console.log(consoleLogPrefix, specializedModelKeyList)
+	// Available Implemented LLM Model Category can be fetched from the variable availableImplementedLLMModelSpecificCategory
+	//console.log(consoleLogPrefix, "Requesting!", modelCategory);
+	// Check all the file if its available
+	//Checking Section -------------
+	for (let i = 0; i < specializedModelKeyList.length; i++) {
+		const currentlySelectedSpecializedModelDictionary = specializedModelKeyList[i];
+		const DataDictionaryFetched = availableImplementedLLMModelSpecificCategory[currentlySelectedSpecializedModelDictionary];
+		console.log(consoleLogPrefix, "Checking Specialized Model", currentlySelectedSpecializedModelDictionary);
+		console.log(consoleLogPrefix, `\n Model Category Description ${DataDictionaryFetched.CategoryDescription} \n Download Link ${DataDictionaryFetched.downloadLink} \n Download Link ${DataDictionaryFetched.filename} `)
+		if (!fs.existsSync(`${DataDictionaryFetched.filename}`)) {
+			const currentlySelectedSpecializedModelURL = `${DataDictionaryFetched.downloadLink}`; // Replace with your download link
+			downloadFile(currentlySelectedSpecializedModelURL, `${DataDictionaryFetched.filename}`);
+		  }
+	}
+	//------------------------------
+	console.log(consoleLogPrefix, "[Requested Specialized LLMChild] ", modelCategory);
+	// filter out the request input with the available key
+
+	//const keys = Object.keys(availableImplementedLLMModelSpecificCategory);
+    //return keys.filter(key => key.includes(keyword));
+	const filteredModelCategoryRequest = findClosestMatch(modelCategory, specializedModelKeyList);
+	let filePathSelectionfromDictionary;
+	console.log(consoleLogPrefix, "Matched with :", filteredModelCategoryRequest);
+	validatedModelAlignedCategory = filteredModelCategoryRequest;
+	const DataDictionaryFetched = availableImplementedLLMModelSpecificCategory[filteredModelCategoryRequest];
+	if (filteredModelCategoryRequest == "" || filteredModelCategoryRequest == undefined || !(fs.existsSync(DataDictionaryFetched.filename))){
+		filePathSelectionfromDictionary = `${general_conversation.filename}`
+	}else{
+		filePathSelectionfromDictionary = `${DataDictionaryFetched.filename}`
+	}
+	console.log(consoleLogPrefix, filePathSelectionfromDictionary);
+	return filePathSelectionfromDictionary;
 }
 
 async function callInternalThoughtEngine(prompt){
+	let decisionBinaryKey = ["yes", "no"];
+	// were going to utilize this findClosestMatch(decision..., decisionBinaryKey); // new algo implemented to see whether it is yes or no from the unpredictable LLM Output
 	if (store.get("params").llmdecisionMode){
 		// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 		promptInput = `${username}:${prompt}\n Based on your evaluation of the request submitted by ${username}, could you please ascertain the number of sequential steps, ranging from 1 to 50, necessary to acquire the relevant historical context to understand the present situation? Answer only in numbers:`;
@@ -669,13 +1017,20 @@ async function callInternalThoughtEngine(prompt){
 		// -----------------------------------------------------
 		console.log(consoleLogPrefix, "============================================================");
 		// This is for the ChatCTX Request
+
+		/*
+
+		//This large commented code is actually for retrieving on what loaded history Chat from the previous saved session that wanted to be used for the converation for getting the context
+		// Currently it is not yet implemented but its need to beimplemented to be a minimal standard if you want to be at least be usable on the public product! Its already 2024 and you're running late, actually too late.
+
 		//&& store.get("params").hisChatCTX
 		if (store.get("params").llmdecisionMode){
-			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username}:${prompt}\n Your Response:`;
-			promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Previous session out of scope chat history for context Yes or No? Answer:`;
+			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
+			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Previous session out of scope chat history for context Yes or No? Answer:`;
 			console.log(consoleLogPrefix, "Checking Chat History Context Call Requirement!");
-			decisionChatHistoryCTX = await callLLMChildThoughtProcessor(promptInput, 12);
+			decisionChatHistoryCTX = await callLLMChildThoughtProcessor(promptInput, 44);
 			decisionChatHistoryCTX = decisionChatHistoryCTX.toLowerCase();
+			decisionChatHistoryCTX = findClosestMatch(decisionChatHistoryCTX, decisionBinaryKey);
 		} else {
 			decisionChatHistoryCTX = "yes"; // without LLM deep decision
 		}
@@ -684,13 +1039,14 @@ async function callInternalThoughtEngine(prompt){
 		// Isn't the decision made by LLM? Certainly, while LLM or the LLMChild contributes to the decision-making process, it lacks the depth of the main thread. This can potentially disrupt the coherence of the prompt context, underscoring the importance of implementing a safety measure like a word threshold before proceeding to the subsequent phase.
 		if ((((decisionChatHistoryCTX.includes("yes") || decisionChatHistoryCTX.includes("yep") || decisionChatHistoryCTX.includes("ok") || decisionChatHistoryCTX.includes("valid") || decisionChatHistoryCTX.includes("should") || decisionChatHistoryCTX.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.HISTORY_CTX_FETCH_DEBUG_MODE === "1") && store.get("params").hisChatCTX){
 			if (store.get("params").llmdecisionMode){
-				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. What should i search on the Internet on this interaction to help with my answer when i dont know the answer? Answer:`;
+				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. What should i search on the Internet on this interaction to help with my answer when i dont know the answer? Answer:`;
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
 			}else{
 				searchPrompt = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
-				searchPrompt = searchPrompt.replace(/None\./g, "");
+				console.log(consoleLogPrefix, "Using Legacy Backup Very Basic Search Prompt")
+				//searchPrompt = searchPrompt.replace(/None\./g, "");
 			}
-			console.log(consoleLogPrefix, `LLMChild Creating Search Prompt`);
+			console.log(consoleLogPrefix, `Created Search Prompt ${searchPrompt}`);
 			resultSearchScraping = await externalInternetFetchingScraping(searchPrompt);
 			if (store.get("params").llmdecisionMode){
 				inputPromptCounterSplit = resultSearchScraping.split(" ");
@@ -713,17 +1069,65 @@ async function callInternalThoughtEngine(prompt){
 			concludeInformation_Internet = "Nothing.";
 			console.log(consoleLogPrefix, concludeInformation_Internet);
 		}
+
+		
+
+		*/
+		// Categorization of What Chat is this going to need to answer and does it require specialized Model
+		// 
+		//-------------------------------------------------------
+
+		// Variables that going to be used in here decisionSpecializationLLMChildRequirement, specificSpecializedModelCategoryRequest_LLMChild, specificSpecializedModelPathRequest_LLMChild
+		// Main model will be default and locked into Mistral_7B since it is the best of the best for quick thinking before digging into deeper
+		// Specialized Model Category that will be implemented will be for now : General_Conversation, Coding, Language_Specific_Indonesia, Language_Specific_Japanese, Language_Specific_English, Language_Specific_Russia, Language_Specific_Arabics, Chemistry, Biology, Physics, Legal_Bench, Medical_Specific_Science, Mathematics, Financial
+		// Category can be Fetched through the variable availableImplementedLLMModelSpecificCategory it will be a dictionary or array 
+		// Specialized Model Table on what to choose on develop with can be fetched from this table https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard
+		
+		console.log(consoleLogPrefix, "============================================================");
+		//decisionSpecializationLLMChildRequirement
+		// using llmdecisionMode
+		if (store.get("params").llmdecisionMode){
+			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
+			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I use more specific LLM Model for better Answer, Only answer Yes or No! Answer:`;
+			console.log(consoleLogPrefix, "Checking Specific/Specialized Model Fetch Requirement!");
+			decisionSpecializationLLMChildRequirement = await callLLMChildThoughtProcessor(promptInput, 512);
+			decisionSpecializationLLMChildRequirement = decisionSpecializationLLMChildRequirement.toLowerCase();
+			//decisionSpecializationLLMChildRequirement = findClosestMatch(decisionSpecializationLLMChildRequirement, decisionBinaryKey); // This makes heavy weight on the "yes" decision
+		} else {
+			decisionSpecializationLLMChildRequirement = "yes"; // without LLM deep decision
+		}
+		if ((((decisionSpecializationLLMChildRequirement.includes("yes") || decisionSpecializationLLMChildRequirement.includes("yep") || decisionSpecializationLLMChildRequirement.includes("ok") || decisionSpecializationLLMChildRequirement.includes("valid") || decisionSpecializationLLMChildRequirement.includes("should") || decisionSpecializationLLMChildRequirement.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.SPECIALIZED_MODEL_DEBUG_MODE === "1")){
+			if (store.get("params").llmdecisionMode){
+				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this interaction what category from this category \" ${specializedModelKeyList.join(", ")}\n \". What category this chat categorized as? only answer the category! Answer:`;
+				specificSpecializedModelCategoryRequest_LLMChild = await callLLMChildThoughtProcessor(promptInput, 512);
+				console.log(consoleLogPrefix, promptInput, "Requesting Model Specialization/Branch", specificSpecializedModelCategoryRequest_LLMChild);
+				// Requesting the specific Model Path on the Computer (and check whether it exists or not , and if its not it will download)
+				specificSpecializedModelPathRequest_LLMChild = specializedModelManagerRequestPath(specificSpecializedModelCategoryRequest_LLMChild)
+			}else{
+				specificSpecializedModelCategoryRequest_LLMChild = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
+				specificSpecializedModelCategoryRequest_LLMChild = specificSpecializedModelCategoryRequest_LLMChild.replace(/None\./g, "");
+				specificSpecializedModelPathRequest_LLMChild = specializedModelManagerRequestPath(specificSpecializedModelCategoryRequest_LLMChild)
+			}
+		}else{
+			console.log(consoleLogPrefix, "Doesnt seem to require specific Category Model, reverting to null or default model");
+			specificSpecializedModelCategoryRequest_LLMChild="";
+			specificSpecializedModelPathRequest_LLMChild="";
+		}
+		console.log(consoleLogPrefix, "============================================================");
+
 		// External Data Part
 		//-------------------------------------------------------
 		console.log(consoleLogPrefix, "============================================================");
 		
 		// This is for the Internet Search Data Fetching
 		if (store.get("params").llmdecisionMode && store.get("params").webAccess){
-			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username}:${prompt}\n Your Response:`;
-			promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Internet Yes or No? Answer:`;
+			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
+			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Internet, Only answer Yes or No! Answer:`;
 			console.log(consoleLogPrefix, "Checking Internet Fetch Requirement!");
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 12);
 			decisionSearch = decisionSearch.toLowerCase();
+			//decisionSearch = findClosestMatch(decisionSearch, decisionBinaryKey); // This made the "yes" answer wayy to heavy 
+			console.log(consoleLogPrefix, decisionSearch); //comment this when done debugging
 		} else {
 			decisionSearch = "yes"; // without LLM deep decision
 		}
@@ -732,17 +1136,17 @@ async function callInternalThoughtEngine(prompt){
 		// Isn't the decision made by LLM? Certainly, while LLM or the LLMChild contributes to the decision-making process, it lacks the depth of the main thread. This can potentially disrupt the coherence of the prompt context, underscoring the importance of implementing a safety measure like a word threshold before proceeding to the subsequent phase.
 		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.INTERNET_FETCH_DEBUG_MODE === "1") && store.get("params").webAccess){
 			if (store.get("params").llmdecisionMode){
-				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. Do i have the knowledge to answer this then if i dont have the knowledge should i search it on the internet? Answer:`;
+				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. Do i have the knowledge to answer this then if i dont have the knowledge should i search it on the internet? Answer:`;
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
+				console.log(consoleLogPrefix, `search prompt has been created`);
 			}else{
 				searchPrompt = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
-				searchPrompt = searchPrompt.replace(/None\./g, "");
+				console.log(consoleLogPrefix, `Internet Search prompt creating is using legacy mode for some strange reason`);
+				//searchPrompt = searchPrompt.replace(/None\./g, "");
 			}
-			
-
-			//promptInput = ` ${historyChatRetrieved}\n${username}:${prompt}\n. With this interaction What search query for i search in google for the interaction? Search Query:`;
+			//promptInput = ` ${historyChatRetrieved}\n${username} : ${prompt}\n. With this interaction What search query for i search in google for the interaction? Search Query:`;
 			//searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
-			console.log(consoleLogPrefix, `LLMChild Creating Search Prompt`);
+			console.log(consoleLogPrefix, `Created internet search prompt ${searchPrompt}`);
 			resultSearchScraping = await externalInternetFetchingScraping(searchPrompt);
 			if (store.get("params").llmdecisionMode){
 				inputPromptCounterSplit = resultSearchScraping.split(" ");
@@ -770,11 +1174,12 @@ async function callInternalThoughtEngine(prompt){
 		
 		// This is for the Local Document Search Logic
 		if (store.get("params").llmdecisionMode && store.get("params").localAccess){
-			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat ${historyChatRetrieved}\n${username}:${prompt}\n Your Response:`;
-			promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this? Should I Search this on the Local Documents Yes or No? Answer:`;
+			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
+			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this? Should I Search this on the Local Documents, Only answer Yes or No! Answer:`;
 			console.log(consoleLogPrefix, "Checking Local File Fetch Requirement!");
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 18);
 			decisionSearch = decisionSearch.toLowerCase();
+			//decisionSearch = findClosestMatch(decisionSearch, decisionBinaryKey); //As i said before
 		} else {
 			decisionSearch = "yes"; // without LLM deep decision
 		}
@@ -783,7 +1188,7 @@ async function callInternalThoughtEngine(prompt){
 		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold)) || process.env.LOCAL_FETCH_DEBUG_MODE === "1") && store.get("params").localAccess){
 			if (store.get("params").llmdecisionMode){
 				console.log(consoleLogPrefix, "We need to search it on the available resources");
-				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this if not what should i search on the local file then:`;
+				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this if not what should i search on the local file then:`;
 				console.log(consoleLogPrefix, `LLMChild Creating Search Prompt`);
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
 				console.log(consoleLogPrefix, `LLMChild Prompt ${searchPrompt}`);
@@ -816,10 +1221,11 @@ async function callInternalThoughtEngine(prompt){
 		console.log(consoleLogPrefix, "============================================================");
 		console.log(consoleLogPrefix, "Checking Chain of Thoughts Depth requirement Requirement!");
 		if (store.get("params").llmdecisionMode){
-			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this interaction ${historyChatRetrieved}\n${username}:${prompt}\n Your Response:`;
-			promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. With the previous Additional Context is ${passedOutput}\n. For the additional context this is what i concluded from Internet ${concludeInformation_Internet}. \n This is what i concluded from the Local Files ${concludeInformation_LocalFiles}. \n From this Interaction and additional context Should I Answer this in 5 steps Yes or No? Answer only in Numbers:`;
+			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this interaction ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
+			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. For the additional context this is what i concluded from Internet ${concludeInformation_Internet}. \n This is what i concluded from the Local Files ${concludeInformation_LocalFiles}. \n From this Interaction and additional context Should I Answer this in 5 steps Yes or No? Answer only in Numbers:`;
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 32);
 			decisionSearch = decisionSearch.toLowerCase();
+			//decisionSearch = findClosestMatch(decisionSearch, decisionBinaryKey); // I don't want to explain it 
 		} else {
 			decisionSearch = "yes"; // without LLM deep decision
 		}
@@ -828,10 +1234,10 @@ async function callInternalThoughtEngine(prompt){
 				
 				// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 				// required_CoTSteps
-				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n From this context from 1 to 27 how many steps that is required to answer. Answer:`;
+				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n From this context from 1 to 27 how many steps that is required to answer. Answer:`;
 				required_CoTSteps = await callLLMChildThoughtProcessor(promptInput, 16);
 				required_CoTSteps = onlyAllowNumber(required_CoTSteps);
-				console.log(consoleLogPrefix, "Required CoT steps", required_CoTSteps);
+				console.log(consoleLogPrefix, `Required ${required_CoTSteps} CoT steps`);
 
 				if (isVariableEmpty(required_CoTSteps)){
 					required_CoTSteps = 5;
@@ -839,7 +1245,7 @@ async function callInternalThoughtEngine(prompt){
 				}
 				console.log(consoleLogPrefix, "We need to create thougts instruction list for this prompt");
 				console.log(consoleLogPrefix, `Generating list for this prompt`);
-				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n From this chat List ${required_CoTSteps} steps on how to Answer it. Answer:`;
+				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n From this chat List ${required_CoTSteps} steps on how to Answer it. Answer:`;
 				promptInput = stripProgramBreakingCharacters(promptInput);
 				todoList = await callLLMChildThoughtProcessor(promptInput, 512);
 
@@ -874,7 +1280,7 @@ async function callInternalThoughtEngine(prompt){
 			
 			emotionlist = "Happy, Sad, Fear, Anger, Disgust";
 			if (store.get("params").emotionalLLMChildengine){
-				promptInput = `${historyChatRetrieved}\n${username}:${prompt}\n. From this conversation which from the following emotions ${emotionlist} are the correct one? Answer:`;
+				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. From this conversation which from the following emotions ${emotionlist} are the correct one? Answer:`;
 				console.log(consoleLogPrefix, `LLMChild Evaluating Interaction With Emotion Engine...`);
 				promptInput = stripProgramBreakingCharacters(promptInput);
 				evaluateEmotionInteraction = await callLLMChildThoughtProcessor(promptInput, 64);
@@ -901,6 +1307,11 @@ async function callInternalThoughtEngine(prompt){
 			}
 
 		//concludeInformation_chatHistory
+		console.log("asdhfakshcizhoigouagfoihfois");
+		console.log(concludeInformation_CoTMultiSteps);
+		console.log(concludeInformation_Internet);
+		console.log(concludeInformation_LocalFiles);
+		console.log(concludeInformation_chatHistory);
 		if((concludeInformation_Internet === "Nothing." || concludeInformation_Internet === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_Internet) ) && (concludeInformation_LocalFiles === "Nothing." || concludeInformation_LocalFiles === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_LocalFiles)) && (concludeInformation_CoTMultiSteps === "Nothing." || concludeInformation_CoTMultiSteps === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_CoTMultiSteps)) && (concludeInformation_chatHistory === "Nothing." || concludeInformation_chatHistory === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_chatHistory))){
 			console.log(consoleLogPrefix, "Bypassing Additional Context");
 			passedOutput = prompt;
@@ -918,9 +1329,11 @@ async function callInternalThoughtEngine(prompt){
 			passedOutput = prompt;
 		}
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
-			promptInput = `This is the conversation ${historyChatRetrieved}\n${username}:${prompt}\n. While this is the context \n The current time and date is now: ${fullCurrentDate}, Answers from the internet ${concludeInformation_Internet}. and this is Answer from the Local Files ${concludeInformation_LocalFiles}. And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n From the user named ${username} did i or will i make the user said that my respond is bad, horrible, not professional, trash? Answer only with Yes or No? Answer:`;
+			promptInput = `This is the conversation ${historyChatRetrieved}\n${username} : ${prompt}\n. While this is the context \n The current time and date is now: ${fullCurrentDate}, Answers from the internet ${concludeInformation_Internet}. and this is Answer from the Local Files ${concludeInformation_LocalFiles}. And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No! Answer:`;
 			console.log(consoleLogPrefix, `LLMChild Evaluating Information PostProcess`);
-			reevaluateAdCtxDecisionAgent = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 64));
+			reevaluateAdCtxDecisionAgent = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 128));
+			console.log(consoleLogPrefix, `${reevaluateAdCtxDecisionAgent}`);
+			//reevaluateAdCtxDecisionAgent = findClosestMatch(reevaluateAdCtxDecisionAgent, decisionBinaryKey); // This for some reason have oversensitivity to go to "yes" answer
 			if (reevaluateAdCtxDecisionAgent.includes("yes") || reevaluateAdCtxDecisionAgent.includes("yep") || reevaluateAdCtxDecisionAgent.includes("ok") || reevaluateAdCtxDecisionAgent.includes("valid") || reevaluateAdCtxDecisionAgent.includes("should") || reevaluateAdCtxDecisionAgent.includes("true")){
 				reevaluateAdCtx = true;
 				randSeed = generateRandomNumber(minRandSeedRange, maxRandSeedRange);
@@ -1021,7 +1434,10 @@ function determineLLMBackend(){
 		basebinLLMBackendParamPassedDedicatedHardwareAccel="";
 	}
 
-	LLMBackendSelection = store.get("params").llmBackendMode;
+	// change this into the predefined dictionary
+	//LLMBackendSelection = store.get("params").llmBackendMode;
+
+	LLMBackendSelection = `${availableImplementedLLMModelSpecificCategory.general_conversation.Engine}`
 	/*
 	<option value="LLaMa2">LLaMa-2</option>
 									<option value="falcon">Falcon</option>
@@ -1317,7 +1733,9 @@ function initChat() {
 		//console.log(consoleLogPrefix, "debug", zephyrineHalfReady, zephyrineReady)
 		if ((res.includes("invalid model file") || res.includes("failed to open") || (res.includes("failed to load model")) && res.includes("main: error: failed to load model")) || res.includes("command buffer 0 failed with status 5") /* Metal ggml ran out of memory vram */ || res.includes ("invalid magic number") || res.includes ("out of memory")) {
 			if (runningShell) runningShell.kill();
-			win.webContents.send("modelPathValid", { data: false });
+			console.log(consoleLogPrefix, res);
+			await prepareDownloadModel()
+			//win.webContents.send("modelPathValid", { data: false });
 		} else if (res.includes("\n>") && !zephyrineReady) {
 			zephyrineHalfReady = true;
 			console.log(consoleLogPrefix, "LLM Main Thread is ready after initialization!");
@@ -1325,7 +1743,7 @@ function initChat() {
 			if (store.get("params").throwInitResponse){
 				console.log(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
 				blockGUIForwarding = true;
-				initChatContent = `Greetings and salutations, may the morning rays grace ${assistantName}! May ${username}'s day shine as brightly as the stars that adorn the sky. I am ${username}, extending my introduction; let our conversation find its footing as we engage in discourse, if you would be so kind.`;
+				initChatContent = initStage2;
 				runningShell.write(initChatContent);
 				runningShell.write(`\r`);
 			}
@@ -1380,12 +1798,14 @@ function initChat() {
 
 	const params = store.get("params");
 	//revPrompt = "### Instruction: \n {prompt}";
-	revPrompt = "‌‌ ";
+	let revPrompt = "‌‌";
 	var promptFile = "universalPrompt.txt";
 	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
-	const chatArgs = `-i --interactive-first -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`;
+	const chatArgs = `-i -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
+	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
 	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
+	console.log(consoleLogPrefix, chatArgs, paramArgs)
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
 }
 ipcMain.on("startChat", () => {

@@ -16,3 +16,7 @@ dist
 **code_queue**
 **.DS_Store**
 **presistentInteractionMem**
+**.temporaryChunkModel**
+**specLM**
+**generalLM**
+**universalPrompt.txt**

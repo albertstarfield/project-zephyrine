@@ -60,7 +60,8 @@
 					</svg>
 					Flush Session
 				</div>
-				<div class="action-button" id="change-model">
+				<!-- Change-model button is now removed since the changing of this program paradigm, since this program are unable to compete with any LLM model runner im going to orientate this into plug and play model are already available and chosen automatically by the AI and the developer just like chatGPT and BingAI -->
+				<!-- <div class="action-button" id="change-model">
 					<svg xmlns="http://www.w3.org/2000/svg" height="1rem" width="1rem" fill="currentColor" viewBox="0 0 16 16">
 						<path
 							fill-rule="evenodd"
@@ -68,7 +69,7 @@
 						/>
 					</svg>
 					Change model
-				</div>
+				</div> -->
 				<div class="action-button" id="settings">
 					<svg stroke="currentColor" fill="none" height="1rem" width="1rem" stroke-width="2" viewBox="0 0 24 24" stroke-linecap="round" stroke-linejoin="round" xmlns="http://www.w3.org/2000/svg">
 						<circle cx="12" cy="12" r="3"></circle>
@@ -210,6 +211,7 @@
 			<div class="dialog-box">
 				<div class="dialog-title">
 					<h3>Failed to Load Model</h3>
+					
 					<!-- <button class="dialog-close">
 						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-x" viewBox="2 2 12 12">
 							<path d="M4.646 4.646a.5.5 0 0 1 .708 0L8 7.293l2.646-2.647a.5.5 0 0 1 .708.708L8.707 8l2.647 2.646a.5.5 0 0 1-.708.708L8 8.707l-2.646 2.647a.5.5 0 0 1-.708-.708L7.293 8 4.646 5.354a.5.5 0 0 1 0-.708z" />
@@ -217,7 +219,8 @@
 					</button> -->
 				</div>
 				<div id="path-dialog" class="dialog-content">
-					<h3>LLM Backend Mode</h3>
+					<p>During this process, the program will autonomously initiate the download of the necessary model, which approximately ranges from 40 to 50GB. Users can monitor the progress within the console terminal. Once the download is complete, you may proceed by clicking on the 'Load' option again.</p>
+					<!--<h3>LLM Backend Mode</h3>
 						<p>You have the flexibility to select the desired LLM Backend Mode tailored to your specific downloaded model.</p>
 						<div style="height: 8px"></div>
 						<div class="item">
@@ -244,9 +247,9 @@
 								/>
 							</svg>
 						</button>
-					</div>
-					<p class="error-text" style="display: none">Invalid file path</p>
-				</div>
+					</div> 
+					<p class="error-text" style="display: none">Invalid file path</p>-->
+				</div> 
 				<div class="dialog-button">
 					<button class="secondary">Cancel</button>
 					<button class="primary">Load</button>
@@ -399,6 +402,24 @@
 							<p style="margin: 0">Let the Main LLM Model be The Decision Agent</p>
 						</div>
 						<h5>Refines the initial prompt into a more refined formulation, optimized for generating accurate responses.</h5>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="ExecuteActionCommand" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Automatic Command Exec (Not Yet Implemented)</p>
+						</div>
+						<h5>Proceed with caution when executing the generated code. Any risks or potential issues arising from the program's output, including system disruptions or data loss, are solely your responsibility.</h5>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="AutomateLoopback" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Automata Agent Loop (Not Yet Implemented)</p>
+						</div>
+						<h5>Enables the program to autonomously process input and output in a continuous loop. This functionality may result in sustained high CPU/GPU utilization.</h5>
+
+
 						<div class="item">
 							<p>Web search result amount</p>
 							<input type="number" step="1" min="1" max="10" id="websearch_amount" value="7" placeholder="7" />

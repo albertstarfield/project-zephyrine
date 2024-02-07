@@ -50,11 +50,13 @@ ipcRenderer.on("modelPathValid", (_event, { data }) => {
 		document.getElementById("path-dialog-bg").classList.remove("hidden");
 	}
 });
-
+/*
 document.querySelector("#path-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	var path = document.querySelector("#path-dialog input[type=text]").value.replaceAll('"', "");
 	ipcRenderer.send("checkPath", { data: path });
 });
+*/
+// Replaced with automatic selection
 
 document.querySelector("#path-dialog-bg > div > div.dialog-button > button.secondary").addEventListener("click", () => {
 	document.getElementById("path-dialog-bg").classList.add("hidden");
@@ -70,15 +72,13 @@ ipcRenderer.on("pathIsValid", (_event, { data }) => {
 		document.querySelector("#path-dialog > p.error-text").style.display = "block";
 	}
 });
+/*
+// Legacy alpaca-electron manual selection file code
 
 document.querySelector("#path-dialog > div > button").addEventListener("click", () => {
 	ipcRenderer.send("pickFile");
 });
 ipcRenderer.on("pickedFile", (_error, { data }) => {
-	document.querySelector("#path-dialog input[type=text]").value = data;
-});
-
-ipcRenderer.on("currentModel", (_event, { data }) => {
 	document.querySelector("#path-dialog input[type=text]").value = data;
 });
 
@@ -88,6 +88,14 @@ document.querySelector("#path-dialog input[type=text]").addEventListener("keypre
 		document.querySelector("#path-dialog-bg .dialog-button button.primary").click();
 	}
 });
+
+
+*/
+
+ipcRenderer.on("currentModel", (_event, { data }) => {
+	document.querySelector("#path-dialog input[type=text]").value = data;
+});
+
 
 window.onbeforeunload = (event) => {
 	win.removeAllListeners();
@@ -456,12 +464,16 @@ document.getElementById("chat-reset").addEventListener("click", () => {
 		});
 	}, 100);
 });
+
+// since the program now come with predefined tuned model this won't be required and if its implemented it will make the program runs in buggy state or chaos like the button won't be able clicked without error and etc
+/*
 document.getElementById("change-model").addEventListener("click", () => {
 	ipcRenderer.send("getCurrentModel");
 	document.querySelector("#path-dialog-bg > div > div.dialog-button > button.secondary").style.display = "";
 	document.querySelector("#path-dialog-bg > div > div.dialog-title > h3").innerText = "Change model path";
 	document.getElementById("path-dialog-bg").classList.remove("hidden");
 });
+*/
 
 ipcRenderer.send("getParams");
 document.getElementById("settings").addEventListener("click", () => {
@@ -476,7 +488,7 @@ document.getElementById("aboutSection").addEventListener("click", () => {
 });
 
 ipcRenderer.on("params", (_event, data) => {
-	document.getElementById("LLMBackendMode").value = data.llmBackendMode;
+	//document.getElementById("LLMBackendMode").value = data.llmBackendMode; // since the program now come with predefined tuned model this won't be required and if its implemented it will make the program runs in buggy state or chaos like the button won't be able clicked without error and etc, and selection are implemented on dictionary on index.js in Engine section of the Data
 	document.getElementById("repeat_last_n").value = data.repeat_last_n;
 	document.getElementById("repeat_penalty").value = data.repeat_penalty;
 	document.getElementById("top_k").value = data.top_k;
@@ -500,7 +512,7 @@ ipcRenderer.on("params", (_event, data) => {
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
 		params: {
-			llmBackendMode: document.getElementById("LLMBackendMode").value || document.getElementById("LLMBackendMode").value.placeholder,
+			//llmBackendMode: document.getElementById("LLMBackendMode").value || document.getElementById("LLMBackendMode").value.placeholder, // since the program now come with predefined tuned model this won't be required and if its implemented it will make the program runs in buggy state or chaos like the button won't be able clicked without error and etc, and selection are implemented on dictionary on index.js in Engine section of the Data
 			repeat_last_n: document.getElementById("repeat_last_n").value || document.getElementById("repeat_last_n").placeholder,
 			repeat_penalty: document.getElementById("repeat_penalty").value || document.getElementById("repeat_penalty").placeholder,
 			top_k: document.getElementById("top_k").value || document.getElementById("top_k").placeholder,
