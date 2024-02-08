@@ -131,9 +131,18 @@ detect_metal() {
 #-------------------------------------------------------
 #chat binary building
 # Function to build and install LLaMa
+
+cleanInstalledFolder(){
+    set +e
+    rm -rf usr/vendor/ggllm.cpp usr/vendor/ggml usr/vendor/llama-gguf.cpp usr/vendor/llama.cpp usr/node_modules
+    mkdir usr/vendor/ggllm.cpp usr/vendor/ggml usr/vendor/llama-gguf.cpp usr/vendor/llama.cpp
+    set -e
+}
 build_llama() {
     # Clone submodule and update
-    git submodule update --init --recursive
+    # Clean the submodule folders fist
+    
+    git submodule update --init --recursive --remote --merge
     
     # Change directory to llama.cpp
     cd usr/vendor/llama.cpp || exit 1
@@ -219,7 +228,7 @@ build_llama() {
 
 build_llama_gguf() {
     # Clone submodule and update
-    git submodule update --init --recursive
+    git submodule update --init --recursive --remote --merge
     
     # Change directory to llama.cpp
     cd usr/vendor/llama-gguf.cpp || exit 1
@@ -302,7 +311,7 @@ build_llama_gguf() {
 build_ggml_base() {
     echo "Requesting GGML Binary"
     # Clone submodule and update
-    git submodule update --init --recursive
+    git submodule update --init --recursive --remote --merge
     
     # Change directory to llama.cpp
     cd usr/vendor/ggml || exit 1
@@ -383,7 +392,7 @@ build_ggml_base() {
 
 build_falcon() {
     # Clone submodule and update
-    git submodule update --init --recursive
+    git submodule update --init --recursive --remote --merge
     
     # Change directory to llama.cpp
     cd usr/vendor/ggllm.cpp || exit 1
@@ -518,19 +527,7 @@ fi
 if [ "${1}" == "gpt-2" ]; then
     # Check if ggml Binary already compiled
     echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
-        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
-        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
-        fi
-         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
-        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
-        fi
-    else
-        # LLaMa not compiled, build it
-        echo "mpt binary not found. Building mpt..."
-        build_ggml_base "${1}"
-    fi
+    echo "gpt-2 is no longer available!"
 fi
 
 if [ "${1}" == "gpt-j" ]; then
@@ -688,7 +685,12 @@ buildLLMBackend(){
     #You know what lets abandon Windows enforced binary structuring and find another way on how to execute other way to have specific acceleration on Windows
 
     
+
+
     cd ${rootdir}
+
+    
+
     build_llama
     cd ${rootdir}
     echo "Cleaning binaries Replacing with new ones"
@@ -795,6 +797,7 @@ fi
 
 # Install npm dependencies
 if [[ ! -f ${rootdir}/installed.flag || "${FORCE_REBUILD}" == "1" ]]; then
+    cleanInstalledFolder
     npm install --save-dev
     npx --openssl_fips='' electron-rebuild #rebuild to prevent node-pty mismatch error of NODE_MODULE_VERSION 115
     buildLLMBackend

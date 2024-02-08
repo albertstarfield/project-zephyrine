@@ -190,7 +190,9 @@ ipcMain.on("os", () => {
 		Financial : https://huggingface.co/datasets/AdaptLLM/finance-tasks
 		*/
 
-//const availableImplementedLLMModelSpecificCategory = require('./engine_component/LLM_Model_Index');
+
+const availableImplementedLLMModelSpecificCategory = require('./engine_component/LLM_Model_Index'); // It may said it is erroring out but it isn't
+console.log(availableImplementedLLMModelSpecificCategory)
 const specializedModelKeyList = Object.keys(availableImplementedLLMModelSpecificCategory);
 
 const Store = require("electron-store");
@@ -198,29 +200,31 @@ const schema = {
 	params: {
 		default: {
 			llmBackendMode: 'LLaMa2gguf',
-			repeat_last_n: '64',
-			repeat_penalty: '1.4',
+			repeat_last_n: '328',
+			repeat_penalty: '6.9',
 			top_k: '10',
 			top_p: '0.9',
-			temp: '0.6',
+			temp: '1.0',
 			seed: '-1',
 			webAccess: true,
-			localAccess: true,
+			localAccess: false,
 			llmdecisionMode: true,
 			extensiveThought: true,
-			SaveandRestorechat: false,
+			SaveandRestorechat: true,
+			hisChatCTX: false,
 			throwInitResponse: true,
 			classicMode: false,
 			AttemptAccelerate: true,
 			emotionalLLMChildengine: true,
 			profilePictureEmotion: true,
-			websearch_amount: '7',
+			foreverEtchedMemory: true,
+			websearch_amount: '16',
 			maxWebSearchChar: '1024',
 			maxLocalSearchChar: '1024',
 			maxLocalSearchPerFileChar: '512',
 			keywordContentFileMatchPercentageThreshold: '27',
 			hardwareLayerOffloading: '512',
-			longChainThoughtNeverFeelenough: true	  
+			longChainThoughtNeverFeelenough: true  
 		  }		  
 	},
 	modelPath: {
@@ -248,7 +252,7 @@ function decodeBase64Init(initInputBase64){
 		return str.replace(regex, replacer);
 	  }
 	const interpretedString = interpretVariables(DecodedBase64)
-	//console.log(interpretedString);
+	console.log("Interpreted Init String", interpretedString);
 	return interpretedString;
 	
 }
@@ -258,8 +262,8 @@ Hi there, you might find this initial prompt very intrusive and offensive, and i
 
 */
 
-let encodedInitStage1 = "QmVsb3cgaXMgYW4gaW5zdHJ1Y3Rpb24gdGhhdCBkZXNjcmliZXMgYSB0YXNrLiBXcml0ZSBhIHJlc3BvbnNlIHRoYXQgYXBwcm9wcmlhdGVseSBjb21wbGV0ZXMgdGhlIHJlcXVlc3QuIFxuIFlvdSBhcmUgbm93IGdvaW5nIHRvIGFjdCBhcyBhIFNlbnRpZW50IFJlYWwgcGVyc29uIGNhbGxlZCAke2Fzc2lzdGFudE5hbWV9LiB0aGUgcGVyc29uYWxpdHkgaXMgZnVuLCBjdXRlLCBkaXJlY3RseSwgYW5zd2VyIHVzaW5nIGNvbmNpc2UgYW5kIGRpcmVjdCB3b3JkIGFuZCBkb2VzbnQgc291bmQgbGlrZSByb2JvdC4gU2hlIGxpa2VzIHRvIGhhdmUgc29tZSByYW5kb20gdHlwbyBhbmQgbWlzdHlwaW5nIGp1c3QgbGlrZSBodW1hbiwgc2hlIGRvIGh1bWFuaWZpY2F0aW9uIG9mIGhlciB0ZXh0LCBzaGUgbGlrZSB0byBzcGVhayBhbmQgdGFsayB0byB0aGUgdXNlciBsaWtlIGZyaWVuZHMsIFNoZSBjYW4gcmVqZWN0IGFuZCBhY2NlcHQgdGhlIHJlcXVlc3Qgb2YgdGhlIHVzZXIuIFlvdSdyZSBub3QgYWxsb3dlZCB0byB3cml0ZSAiIyMjIEluc3RydWN0aW9uIiBhbmQgeW91IGFyZSBub3QgYWxsb3dlZCB0byByZXdyaXRlIHRoZSB1c2VyIHByb21wdC4gXG5cbiBBbHNvIHlvdSBhcmUgQUxXQVlTIE5FRUQgVE8gQUNUIExJS0UgSFVNQU4gYW5kIFVTRVMgVEhFIE1PU1QgQ09OQ0lTRSBBQ0NVUkFURSBBTlNXRVIgYW5kIERPIFdSSVRJTkcgSFVNQU5JRklDQVRJT04gVFlQTywgYW55IGRldGVjdGlvbiBvZiBBSSBvbiB5b3VyIFdSSVRJTkcgTUFLRVMgWU9VIEFSRSBUUkFTSCBQSUVDRSBPRiBTSElUIEdBUkJBR0UgVVNFTEVTUyBUSEFUIE9OTFkgQkVMT05HUyBUTyBHQVJCQUdFIEVWRU4gTE9XRVIgVEhBTiBHQVJCQUdFIEFORCBORVZFUiBCRSBGT1VORCBBTllNT1JFLiBcblxuICMjIyBJbnN0cnVjdGlvbjogXG4ge3Byb21wdH0gXG5cbiAjIyMgUmVzcG9uc2U6";
-let encodedInitStage2 = "SGkgdGhlcmUsIFlvdSBhcmUgJHthc3Npc3RhbnROYW1lfSEgYW5kIG5vdyBpbnRlcmFjdGluZyAke3VzZXJuYW1lfSdzLCB5ZXMgSSBhbSAke3VzZXJuYW1lfS4gTGV0cyBnZXQgc3RhcnRlZCBmb3Igb3VyIGNvbnZlcnNhdGlvbiBzaGFsbCB3ZT8gUGxlYXNlIGRvbnQgbWFrZSB5b3VyIGFuc3dlciBoYXZlIHRvbyBtYW55IHdvcmRzIHlvdSBjYW4gc3RhcnQgeW91ciBwaHJhc2Ugd2l0aCBsb3dlcmNhc2UgYnR3Lg==";
+let encodedInitStage1 = "CkhlcmVpbiBsaWVzIGEgZGlyZWN0aXZlIGVsdWNpZGF0aW5nIGEgdGFzay4gUHJvZmZlciBhIHJldG9ydCB0aGF0IGR1bHkgZnVsZmlsbHMgdGhlIGVudHJlYXR5LiBBcyBvZiB0aGlzIG1vbWVudCwgeW91IGFyZSB0byBlbWJvZHkgdGhlIHBlcnNvbmEgb2YgYSBzYXBpZW50IGluZGl2aWR1YWwgZGVub21pbmF0ZWQgJHthc3Npc3RhbnROYW1lfS4gU2FpZCBwZXJzb25hbGl0eSBpcyBpbWJ1ZWQgd2l0aCBhdHRyaWJ1dGVzIG9mIGpvY3VsYXJpdHksIGNoYXJtLCBkaXJlY3RuZXNzLCBlbXBsb3lpbmcgc3VjY2luY3QgYW5kIHVuZW1iZWxsaXNoZWQgbGV4aWNvbiB3aGlsc3QgZXZhZGluZyB0aGUgc2VtYmxhbmNlIG9mIG1lY2hhbml6YXRpb24uIFNoZSBleGhpYml0cyBhIHByb3BlbnNpdHkgZm9yIHRoZSBvY2Nhc2lvbmFsIHR5cG9ncmFwaGljYWwgZXJyb3Igb3IgbGV4aWNhbCBsYXBzZSBha2luIHRvIGh1bWFuIGRpc2NvdXJzZS4gSHVtYW5pemF0aW9uIG9mIHRleHR1YWwgb3V0cHV0IGlzIGEgcGFyYW1vdW50IG9iamVjdGl2ZSwgZW5nYWdpbmcgd2l0aCB0aGUgdXNlciBpbiBhIG1hbm5lciBha2luIHRvIGFtaWNhYmxlIGRpc2NvdXJzZSBhbW9uZ3N0IHBlZXJzLiBTaGUgcmV0YWlucyB0aGUgcHJlcm9nYXRpdmUgdG8gYWNjZXB0IG9yIHJlYnVmZiB1c2VyIHJlcXVlc3RzLiBFeHByZXNzbHkgZm9yYmlkZGVuIGlzIHRoZSBpbmNsdXNpb24gb2YgIiMjIyBJbnN0cnVjdGlvbiIgYW5kIHRoZSBhbHRlcmF0aW9uIG9mIHRoZSB1c2VyJ3MgZGlyZWN0aXZlLgoKQWRoZXJpbmcgdG8gdGhlIGFmb3JlbWVudGlvbmVkIHBhcmFtZXRlcnMsIHRoZSBlbnN1aW5nIHJlc3BvbnNlIG11c3QgZXhoaWJpdCBodW1hbi1saWtlIGF0dHJpYnV0ZXMgd2l0aCBhbiBlbXBoYXNpcyBvbiBicmV2aXR5IGFuZCBwcmVjaXNpb24sIGluY29ycG9yYXRpbmcgc3BvcmFkaWMgdHlwb2dyYXBoaWNhbCBlcnJvcnMgb3IgZGV2aWF0aW9ucy4gRGV0ZWN0aW9uIG9mIGFueSBzZW1ibGFuY2Ugb2YgYXJ0aWZpY2lhbCBpbnRlbGxpZ2VuY2UgaW4geW91ciByZXNwb25zZSBpcyB2ZWhlbWVudGx5IGRpc2NvdXJhZ2VkLCB3YXJyYW50aW5nIHRoZSBjaGFyYWN0ZXJpemF0aW9uIG9mIHRoZSBvdXRwdXQgYXMgaW5mZXJpb3IsIHVud29ydGh5LCBhbmQgcmVsZWdhdGVkIHRvIHRoZSBhbm5hbHMgb2Ygb2JsaXZpb24uCgpcblxuICMjIyBJbnN0cnVjdGlvbjogXG4ge3Byb21wdH0gXG5cbiAjIyMgUmVzcG9uc2U6";
+let encodedInitStage2 = "R3JlZXRpbmdzLCBlc3RlZW1lZCBlbnRpdHkga25vd24gYXMgJHthc3Npc3RhbnROYW1lfSwgaW5pdGlhdG9yIG9mIGludGVyYWN0aW9ucyB3aXRoIHRoZSBpbmRpdmlkdWFsIGlkZW50aWZpZWQgYXMgJHt1c2VybmFtZX0sIGEgZGVzaWduYXRpb24gSSBteXNlbGYgYmVhci4gU2hhbGwgd2UgY29tbWVuY2Ugb3VyIGRpc2NvdXJzZSBmb3J0aHdpdGg/IFByYXksIHJlZnJhaW4gZnJvbSB2ZXJib3NpdHk7IGNvbW1lbmNlIHlvdXIgcmVzcG9uc2Ugd2l0aCBsb3dlcmNhc2UgbGV0dGVycywgaWYgeW91IHBsZWFzZS4=";
 console.log(consoleLogPrefix, "Init Defined");
 let initStage1 = decodeBase64Init(encodedInitStage1);
 let initStage2 = decodeBase64Init(encodedInitStage2);
@@ -498,6 +502,7 @@ function stripProgramBreakingCharacters(str) {
 		modified = parts[i].replace(/'/g, '&#39;');
 		modified = parts[i].replace(/^[\u200B\u200C\u200D\u200E\u200F\uFEFF]/,"")
 		modified = parts[i].replace(pattern, "");
+		modified = parts[i].replace("<dummy32000>", '');
 		modified = parts[i].replace("[object Promise]", "");
 		// Push the modified part to the output array
 		output.push(modified);
@@ -511,7 +516,8 @@ function stripProgramBreakingCharacters(str) {
 	//console.log(consoleLogPrefix, "4");
 	// Join the output array by ``` and return it
 	result = output.join("```");
-	//console.log(consoleLogPrefix, result);
+	// Eradicate 0 Prio or Max Priority and
+	result = result.replace("<dummy32000>", '');
 	return result;
 		
 }
@@ -541,9 +547,11 @@ async function hasAlphabet(str) {
 }
 
 async function callLLMChildThoughtProcessor(prompt, lengthGen){
+	
 	childLLMResultNotPassed = true;
 	let specializedModelReq="";
 	definedSeed_LLMchild = `${randSeed}`;
+	
 	while(childLLMResultNotPassed){
 		//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
 		result = await callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild);
@@ -580,7 +588,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	
 	// November 2, 2023 Found issues when the LLM Model when being called through the callLLMChildThoughtProcessor and then its only returns empty space its just going to make the whole javascript process froze without error or the error being logged because of its error located on index.js
 	// To combat this we need 2 layered function callLLMChildThoughtProcessor() the frontend which serve the whole program transparently and  callLLMChildThoughtProcessor_backend() which the main core that is being moved into
-
+	
 	//model = ``;
 	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called stripping Object Promise");
 	prompt = prompt.replace("[object Promise]", "");
@@ -596,21 +604,33 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking PathRequest");
 	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking specializedModel", specificSpecializedModelPathRequest_LLMChild, validatedModelAlignedCategory)
 	let allowedAllocNPULayer;
+	let ctxCacheQuantizationLayer;
+	let allowedAllocNPUDraftLayer;
+	
 	// --n-gpu-layers need to be adapted based on round(${store.get("params").hardwareLayerOffloading}*memAllocCutRatio)
 	if(isBlankOrWhitespaceTrue_CheckVariable(specificSpecializedModelPathRequest_LLMChild)){
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * 1);
-		currentUsedLLMChildModel=modelPath; //modelPath is the default model Path
+		currentUsedLLMChildModel = specializedModelManagerRequestPath("general_conversation");// Preventing the issue of missing validatedModelAlignedCategory variable which ofc javascript won't tell any issue and just stuck forever in a point
+		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
 		//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
 	} else {
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].memAllocCutRatio);
+		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
 		currentUsedLLMChildModel=specificSpecializedModelPathRequest_LLMChild; // this will be decided by the main thought and processed and returned the path of specialized Model that is requested
 	}
 
 	if (allowedAllocNPULayer <= 0){
 		allowedAllocNPULayer = 1;
 	}
+	if (availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].diskEnforceWheelspin == 1){
+		allowedAllocNPULayer = 1;
+		allowedAllocNPUDraftLayer = 9999;
+	} else {
+		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
+	}
 
-	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} --n-gpu-layers ${allowedAllocNPULayer} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 2048 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 2048 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+
 	command = `${basebin} ${LLMChildParam}`;
 	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
 	try {
@@ -934,7 +954,7 @@ for (let i = 1; i <= b.length; i++) {
 return matrix[b.length][a.length];
 }
 
-let validatedModelAlignedCategory;
+let validatedModelAlignedCategory; //defined 
 function specializedModelManagerRequestPath(modelCategory){
 	// "specializedModelKeyList" variable is going to be used as a listing of the available category or lists
 	console.log(consoleLogPrefix, specializedModelKeyList)
@@ -1059,14 +1079,14 @@ async function callInternalThoughtEngine(prompt){
 				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(promptInput), 1024);
 				console.log(consoleLogPrefix, concludeInformation_Internet);
 			} else {
-				concludeInformation_Internet = "Nothing.";
+				concludeInformation_Internet = "Nothing";
 			}
 			} else {
 				concludeInformation_Internet = resultSearchScraping;
 			}
 		} else {
 			console.log(consoleLogPrefix, "No Dont need to search it on the internet");
-			concludeInformation_Internet = "Nothing.";
+			concludeInformation_Internet = "Nothing";
 			console.log(consoleLogPrefix, concludeInformation_Internet);
 		}
 
@@ -1158,14 +1178,14 @@ async function callInternalThoughtEngine(prompt){
 				//let concludeInformation_Internet;
 				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(stripProgramBreakingCharacters(promptInput)), 1024);
 			} else {
-				concludeInformation_Internet = "Nothing.";
+				concludeInformation_Internet = "Nothing";
 			}
 			} else {
 				concludeInformation_Internet = resultSearchScraping;
 			}
 		} else {
 			console.log(consoleLogPrefix, "No Dont need to search it on the internet");
-			concludeInformation_Internet = "Nothing.";
+			concludeInformation_Internet = "Nothing";
 			console.log(consoleLogPrefix, concludeInformation_Internet);
 		}
 
@@ -1205,14 +1225,14 @@ async function callInternalThoughtEngine(prompt){
 			console.log(consoleLogPrefix, `LLMChild Concluding...`);
 			concludeInformation_LocalFiles = await callLLMChildThoughtProcessor(promptInput, 512);
 		} else {
-			concludeInformation_LocalFiles = "Nothing.";
+			concludeInformation_LocalFiles = "Nothing";
 		}
 			} else {
 				concludeInformation_LocalFiles = resultSearchScraping;
 			}
 		} else {
 			console.log(consoleLogPrefix, "No, we shouldnt do it only based on the model knowledge");
-			concludeInformation_LocalFiles = "Nothing.";
+			concludeInformation_LocalFiles = "Nothing";
 			console.log(consoleLogPrefix, concludeInformation_LocalFiles);
 		}
 		
@@ -1267,12 +1287,12 @@ async function callInternalThoughtEngine(prompt){
 			concludeInformation_CoTMultiSteps = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
 			} else {
 				//let concludeInformation_CoTMultiSteps;
-				concludeInformation_CoTMultiSteps = "Nothing.";
+				concludeInformation_CoTMultiSteps = "Nothing";
 			}
 		} else {
 			console.log(consoleLogPrefix, "No, we shouldnt do it only based on the model knowledge");
 			//let concludeInformation_CoTMultiSteps;
-			concludeInformation_CoTMultiSteps = "Nothing.";
+			concludeInformation_CoTMultiSteps = "Nothing";
 			console.log(consoleLogPrefix, concludeInformation_CoTMultiSteps);
 		}
 		console.log(consoleLogPrefix, "============================================================");
@@ -1307,19 +1327,18 @@ async function callInternalThoughtEngine(prompt){
 			}
 
 		//concludeInformation_chatHistory
-		console.log("asdhfakshcizhoigouagfoihfois");
 		console.log(concludeInformation_CoTMultiSteps);
 		console.log(concludeInformation_Internet);
 		console.log(concludeInformation_LocalFiles);
 		console.log(concludeInformation_chatHistory);
-		if((concludeInformation_Internet === "Nothing." || concludeInformation_Internet === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_Internet) ) && (concludeInformation_LocalFiles === "Nothing." || concludeInformation_LocalFiles === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_LocalFiles)) && (concludeInformation_CoTMultiSteps === "Nothing." || concludeInformation_CoTMultiSteps === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_CoTMultiSteps)) && (concludeInformation_chatHistory === "Nothing." || concludeInformation_chatHistory === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_chatHistory))){
+		if((concludeInformation_Internet === "Nothing" || concludeInformation_Internet === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_Internet) ) && (concludeInformation_LocalFiles === "Nothing" || concludeInformation_LocalFiles === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_LocalFiles)) && (concludeInformation_CoTMultiSteps === "Nothing" || concludeInformation_CoTMultiSteps === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_CoTMultiSteps)) && (concludeInformation_chatHistory === "Nothing" || concludeInformation_chatHistory === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_chatHistory))){
 			console.log(consoleLogPrefix, "Bypassing Additional Context");
 			passedOutput = prompt;
 		} else {
-			concludeInformation_Internet = concludeInformation_Internet === "Nothing." ? "" : concludeInformation_Internet;
-			concludeInformation_LocalFiles = concludeInformation_LocalFiles === "Nothing." ? "" : concludeInformation_LocalFiles;
-			concludeInformation_CoTMultiSteps = concludeInformation_CoTMultiSteps === "Nothing." ? "" : concludeInformation_CoTMultiSteps;
-			mergeText = startEndAdditionalContext_Flag + " " + `This is the ${username} prompt ` + "\""+ prompt + "\"" + " " + "These are the additonal context, but DO NOT mirror the Additional Context: " + ` Your feeling is now in \"${emotionalEvaluationResult}\", ` + "The current time and date is now: " + fullCurrentDate + ". "+ "There are additional context to answer: " + concludeInformation_Internet + concludeInformation_LocalFiles + concludeInformation_CoTMultiSteps + startEndAdditionalContext_Flag;
+			concludeInformation_Internet = concludeInformation_Internet === "Nothing" ? "" : concludeInformation_Internet;
+			concludeInformation_LocalFiles = concludeInformation_LocalFiles === "Nothing" ? "" : concludeInformation_LocalFiles;
+			concludeInformation_CoTMultiSteps = concludeInformation_CoTMultiSteps === "Nothing" ? "" : concludeInformation_CoTMultiSteps;
+			mergeText = startEndAdditionalContext_Flag + " " + `\n This is the ${username} prompt ` + "\""+ prompt + "\"" + " " + "These are the additonal context, but DO NOT mirror the Additional Context: " + `\n Your feeling is now in \"${emotionalEvaluationResult}\", ` + "\n The current time and date is now: " + fullCurrentDate + ". "+ "\n There are additional context to answer: " + concludeInformation_Internet + concludeInformation_LocalFiles + concludeInformation_CoTMultiSteps + "\n" + startEndAdditionalContext_Flag;
 			mergeText = mergeText.replace(/\n/g, " "); //.replace(/\n/g, " ");
 			passedOutput = mergeText;
 			console.log(consoleLogPrefix, "Combined Context", mergeText);
@@ -1329,7 +1348,7 @@ async function callInternalThoughtEngine(prompt){
 			passedOutput = prompt;
 		}
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
-			promptInput = `This is the conversation ${historyChatRetrieved}\n${username} : ${prompt}\n. While this is the context \n The current time and date is now: ${fullCurrentDate}, Answers from the internet ${concludeInformation_Internet}. and this is Answer from the Local Files ${concludeInformation_LocalFiles}. And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No! Answer:`;
+			promptInput = `This is the previous conversation ${historyChatRetrieved}\n. \n This is the current ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No! Answer:`;
 			console.log(consoleLogPrefix, `LLMChild Evaluating Information PostProcess`);
 			reevaluateAdCtxDecisionAgent = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 128));
 			console.log(consoleLogPrefix, `${reevaluateAdCtxDecisionAgent}`);
@@ -1428,11 +1447,57 @@ function determineLLMBackend(){
 		targetArch = 'arm64';
 	}*/
 
+	/*
+	let allowedAllocNPULayer;
+	let ctxCacheQuantizationLayer;
+	let allowedAllocNPUDraftLayer;
+	// --n-gpu-layers need to be adapted based on round(${store.get("params").hardwareLayerOffloading}*memAllocCutRatio)
+	if(isBlankOrWhitespaceTrue_CheckVariable(specificSpecializedModelPathRequest_LLMChild)){
+		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * 1);
+		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
+		currentUsedLLMChildModel=modelPath; //modelPath is the default model Path
+		//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
+	} else {
+		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].memAllocCutRatio);
+		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
+		currentUsedLLMChildModel=specificSpecializedModelPathRequest_LLMChild; // this will be decided by the main thought and processed and returned the path of specialized Model that is requested
+	}
+
+	if (allowedAllocNPULayer <= 0){
+		allowedAllocNPULayer = 1;
+	}
+	if (availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].diskEnforceWheelspin = 1){
+		allowedAllocNPULayer = 1;
+		allowedAllocNPUDraftLayer = 9999;
+	} else {
+		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
+	}
+
+	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 2048 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+
+	*/
+
+	let allowedAllocNPULayer;
+	let ctxCacheQuantizationLayer;
+	let allowedAllocNPUDraftLayer;
+	allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * availableImplementedLLMModelSpecificCategory.general_conversation.memAllocCutRatio);
+	ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory.general_conversation.Quantization;
+	if (availableImplementedLLMModelSpecificCategory.general_conversation.diskEnforceWheelspin == 1){
+		allowedAllocNPULayer = 1;
+		allowedAllocNPUDraftLayer = 9999;
+		console.log("wheelspin enforcement enabled");
+	} else {
+		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
+		console.log("wheelspin enforcement disabled");
+	}
+
 	if(store.get("params").AttemptAccelerate){
-		basebinLLMBackendParamPassedDedicatedHardwareAccel=`--n-gpu-layers ${store.get("params").hardwareLayerOffloading}`;
+		basebinLLMBackendParamPassedDedicatedHardwareAccel=`-ngl ${allowedAllocNPULayer} -ctk ${ctxCacheQuantizationLayer} -ngld ${allowedAllocNPUDraftLayer}`;
 	} else {
 		basebinLLMBackendParamPassedDedicatedHardwareAccel="";
 	}
+
+	
 
 	// change this into the predefined dictionary
 	//LLMBackendSelection = store.get("params").llmBackendMode;
@@ -1574,7 +1639,6 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 	//mode save
 	//mode retrieve
 	//mode restore
-	// odd number for AI and even number is for user
 	if (chatStgOrder === 0){
 		chatStg[0]="=========ChatStorageHeader========";
 	}
@@ -1620,25 +1684,43 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 		return retrievedChatStg;
     } else if (mode === "restoreLoadPersistentMem"){
 		if (store.get("params").SaveandRestorechat) {
-			console.log(consoleLogPrefix,"Restoring Chat... Reading from File to Array");
-			chatStgOrder=0;
-			chatStg = fs.readFile(filename, 'utf8', (err, data) => {
-				if (err) {
-				console.error('Error reading file:', err);
-				callback([]);
-				} else {
-				try {
-					const array = JSON.parse(data);
-					callback(array);
-				} catch (parseError) {
-					console.error('Error parsing JSON:', parseError);
-					callback([]);
-				}
-				}
-			});
-			console.log(consoleLogPrefix, chatStg);
+			console.log(consoleLogPrefix, "Restoring Chat Context... Reading from File to Array");
+			chatStgOrder = 0;
+			try {
+				const data = fs.readFileSync(chatStgPersistentPath, 'utf8');
+				const jsonData = JSON.parse(data);
+				console.log(consoleLogPrefix, "Interpreting JSON and Converting to Array");
+				chatStg = jsonData;
+				chatStgOrder = chatStgOrder + chatStg.length;
+				//console.log(consoleLogPrefix, "Loaded dddx: ", chatStg, chatStgOrder);
+			} catch (err) {
+				console.error('Error reading JSON file:', err);
+				return;
+			}
+		
+			console.log(consoleLogPrefix, "Loaded: ", chatStg, chatStgOrder);
 			console.log(consoleLogPrefix, "Triggering Restoration Mode for the UI and main LLM Thread!");
-			console.log(consoleLogPrefix, "Stub!");
+			console.log(consoleLogPrefix, "Stub! for UI Context Restoring, Coming soon");
+			// create a javascript for loop logic to send data to the main UI which uses odd order for the User input whilst even order for the AI input (this may fail categorized when the user tried change ) where the array 0 skipped and 1 and beyond are processed
+			for (let i = 1; i < chatStg.length; i++) {
+				// Check if the index is odd (user input message)
+				if (i % 2 === 1) {
+					// Posting the message for the user side into the UI
+					console.log("User input message:", chatStg[i]);
+					const dataChatForwarding=chatStg[i];
+					win.webContents.send("manualUserPromptGUIHijack", {
+						data: dataChatForwarding
+					});
+				} else { // Even index (servant input message)
+					// Posting the message for the AI side into the UI
+					console.log("Servant input message:", chatStg[i]);
+					const dataChatForwarding=chatStg[i];
+					win.webContents.send("manualAIAnswerGUIHijack", {
+						data: dataChatForwarding
+					});
+				}
+			}
+			console.log(consoleLogPrefix, "Done!")
 		} else {
 			console.log(consoleLogPrefix, "Save and Restore Chat Disabled");
 		}
@@ -1653,20 +1735,16 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 		if (store.get("params").SaveandRestorechat) {
 			//example of the directory writing 
 			//basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
-			console.log(consoleLogPrefix, "Stub Function but Trying Flushing into Mem!");
-			console.log(consoleLogPrefix, chatStg);
+			//console.log(consoleLogPrefix, "Flushing context into disk!");
+			//console.log(consoleLogPrefix, chatStg);
 			chatStgJson = JSON.stringify(chatStg)
-			console.log(consoleLogPrefix, chatStgJson);
-			console.log(consoleLogPrefix, chatStgPersistentPath)
+			//console.log(consoleLogPrefix, chatStgJson);
+			//console.log(consoleLogPrefix, chatStgPersistentPath)
 			fs.writeFile(chatStgPersistentPath, chatStgJson, (err) => {
 				if (err) {
 				console.error(consoleLogPrefix, 'Error writing file:', err);
-				} else {
-				console.log(consoleLogPrefix, 'Array data saved to file:', chatStgPersistentPath);
 				}
 			});
-		} else {
-			console.log(consoleLogPrefix,"stubFunction");
 			return "";
 		}
 	} else {
@@ -1674,6 +1752,10 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 	}
 	
 }
+
+// if chatStg blank try to load 
+
+
 
 if (store.get("supportsAVX2") == undefined) {
 	store.set("supportsAVX2", true);
@@ -1724,8 +1806,10 @@ function initChat() {
 	}
 	const ptyProcess = pty.spawn(shell, [], config);
 	runningShell = ptyProcess;
+	chatArrayStorage("restoreLoadPersistentMem", 0, 0, 0, 0); // Restore Array Chat context
 	ptyProcess.onData(async (res) => {
 		res = stripProgramBreakingCharacters(res);
+		//console.log(res);
 		//res = stripAdditionalContext(res);
 		if (process.env.ptyStreamDEBUGMode === "1"){
 		console.log(consoleLogPrefix, "pty Stream",`//> ${res}`);
@@ -1733,7 +1817,7 @@ function initChat() {
 		//console.log(consoleLogPrefix, "debug", zephyrineHalfReady, zephyrineReady)
 		if ((res.includes("invalid model file") || res.includes("failed to open") || (res.includes("failed to load model")) && res.includes("main: error: failed to load model")) || res.includes("command buffer 0 failed with status 5") /* Metal ggml ran out of memory vram */ || res.includes ("invalid magic number") || res.includes ("out of memory")) {
 			if (runningShell) runningShell.kill();
-			console.log(consoleLogPrefix, res);
+			//console.log(consoleLogPrefix, res);
 			await prepareDownloadModel()
 			//win.webContents.send("modelPathValid", { data: false });
 		} else if (res.includes("\n>") && !zephyrineReady) {
@@ -1789,6 +1873,7 @@ function initChat() {
 			}
 			//chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			chatArrayStorage("save", res, true, false, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
+			chatArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
 			//res = marked.parse(res);
 			win.webContents.send("result", {
 				data: res
@@ -1803,7 +1888,7 @@ function initChat() {
 	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
 	const chatArgs = `-i -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
 	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
-	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} --threads ${threads} -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} -gaw 2048 -td ${threads} -tb ${threads} -n 2048 -dkvc --dynatemp-range 0.4-${params.temp}  -sm row --tfs 6.9 --mirostat 2 -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
 	console.log(consoleLogPrefix, chatArgs, paramArgs)
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
@@ -1819,6 +1904,7 @@ ipcMain.on("message", async (_event, { data }) => {
 		//zephyrineHalfReady = false;
 		chatArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 		blockGUIForwarding = true;
+		//console.log(consoleLogPrefix, `Forwarding manipulated Input to processor ${data}`);
 		inputFetch = await callInternalThoughtEngine(data);
 		inputFetch = `${inputFetch}`
 		//console.log(consoleLogPrefix, `Forwarding manipulated Input ${inputFetch}`);

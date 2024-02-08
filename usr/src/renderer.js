@@ -73,7 +73,7 @@ ipcRenderer.on("pathIsValid", (_event, { data }) => {
 	}
 });
 /*
-// Legacy alpaca-electron manual selection file code
+// Legacy alpaca-electron manual selection model file code
 
 document.querySelector("#path-dialog > div > button").addEventListener("click", () => {
 	ipcRenderer.send("pickFile");
@@ -165,8 +165,20 @@ form.addEventListener("submit", (e) => {
 	if (form.classList.contains("running-model")) return;
 	if (input.value) {
 		var prompt = input.value.replaceAll("\n", "\\n");
-		ipcRenderer.send("message", { data: prompt });
-		say(input.value, `user${gen}`, true);
+		//Reverse engineering conclusion note : This is for sending the prompt or the User input to the GUI
+		// NO its not, this ipcRenderer is for sending the prompt to index.js then to whatever engine_component or can be said as interprocesscommunication for processing, not for rendering into the GUI
+		ipcRenderer.send("message", { data: prompt }); 
+		// Reverse Engineering note : this might be the one that sends to the GUI! 
+		// but what is input.value? where does it come from? From the look of the var prompt = input.value.replaceAll("\n", "\\n"); it seems it stores the user message but what is the .value? 
+		// Ah, so the input variable is already or asyncrhonously determined by the renderer.js for the value subvariable
+		// so to forward thing basically we just do
+		/*
+		say(message, `user${gen}`, true);
+		gen++;
+
+		//Haha reverse engineering done!
+		*/
+		say(input.value, `user${gen}`, true); // so ${gen} is for determining what part of the chat history that its belongs to, Nice!
 		loading(prompt);
 		input.value = "";
 		isRunningModel = true;
@@ -239,7 +251,13 @@ const say = (msg, id, isUser) => {
 	}*/
 
 	//step 2 add into 5 emotion mode step
-	
+
+	// Because of the save and load doesn't contain profilePictureEmotions currently, when its being loaded the program will error out thus if its uninitialized or undefined we can set it to default "happy"
+	if (typeof profilePictureEmotions === 'undefined') {
+		profilePictureEmotions = 'happy'; // Set the variable to a default value or any other desired value
+	}
+
+
 	if (isUser) {
 		item.classList.add("user-msg");
 	} else if (profilePictureEmotions.toLowerCase() === "happy") {
@@ -255,8 +273,7 @@ const say = (msg, id, isUser) => {
 	} else {
 		item.classList.add("bot-default");
 	}
-	
-	console.log(msg);
+	console.log(msg); //debug message
 
 	//escape html tag
 	if (isUser) {
@@ -327,6 +344,56 @@ function firstLineParagraphCleaner(stream){
 
 // It seems that this is the one that handles the continous stream result of the binary call then forwrad it to html
 let prefixConsoleLogStreamCapture = "[LLMMainBackendStreamCapture]: ";
+// add some custom remote ipc async routines (in this case the experiment is going to be conducted on the index.js where we manually inject the user input data to the GUI, this is important for the save and restore function of the program)
+
+// this is for recieving (load User input) message from the saved message routines
+ipcRenderer.on("manualUserPromptGUIHijack", async (_event, { data }) => { 
+	var userPretendInput = data;
+	say(userPretendInput, `user${gen}`, true);
+	gen++;
+});
+// this is for recieving (load AI Output) message from the saved message routines
+ipcRenderer.on("manualAIAnswerGUIHijack", async (_event, { data }) => { 
+	const id = gen;
+	var response = data;
+	let existing = document.querySelector(`[data-id='${id}']`);
+
+	if (existing) {
+		//console.log("responsesStreamCaptureTrace_init:", responses[id]);
+		if (!responses[id]) {
+			responses[id] = document.querySelector(`[data-id='${id}']`).innerHTML;
+		}
+		responses[id] = responses[id] + response;
+		//console.log("responsesStreamCaptureTrace_first:", responses[id]);
+
+		if (responses[id].startsWith("<br>")) {
+			responses[id] = responses[id].replace("<br>", "");
+		}
+		if (responses[id].startsWith("\n")) {
+			responses[id] = responses[id].replace("\n", "");
+		}
+		// if scroll is within 8px of the bottom, scroll to bottom
+		if (document.getElementById("bottom").getBoundingClientRect().y - 40 < window.innerHeight) {
+			setTimeout(() => {
+				bottom.scrollIntoView({ behavior: "smooth", block: "end" });
+			}, 100);
+		}
+		
+		//existing.innerHTML = responses[id];
+	} else {
+		say(response, id);
+	}
+	// okay it seems that it works but its saying about "Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'toLowerCase()')
+
+	// Oh its about the profile picture emotion issue we can just stub it out using the normal profile picture, nobody will notice for now (define using default)
+	profilePictureEmotions = "happy"; 
+	existing.innerHTML = response; // no submitting this thing will result in error "Uncaught (in promise) TypeError: Cannot set properties of null (setting 'innerHTML')"
+	// Something is missing. Ah th emissing part is that on the let existing need to end with .innerHTML, Nope. Still erroring out.
+
+	
+
+});
+
 ipcRenderer.on("result", async (_event, { data }) => {
 	var response = data;
 	const id = gen;
@@ -501,6 +568,7 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("longchainthought").checked = data.extensiveThought;
 	document.getElementById("saverestorechat").checked = data.SaveandRestorechat;
 	document.getElementById("historyChatCtx").checked = data.hisChatCTX;
+	document.getElementById("foreveretchedmemory").checked = data.foreverEtchedMemory;
 	document.getElementById("throwInitialGarbageResponse").checked = data.throwInitResponse;
 	document.getElementById("classicmode").checked = data.classicMode;
 	document.getElementById("attemptaccelerate").checked = data.AttemptAccelerate;
@@ -525,6 +593,7 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
             extensiveThought: document.getElementById("longchainthought").checked,
             SaveandRestorechat: document.getElementById("saverestorechat").checked,
 			hisChatCTX: document.getElementById("historyChatCtx").checked,
+			foreverEtchedMemory: document.getElementById("foreveretchedmemory").checked,
 			throwInitResponse: document.getElementById("throwInitialGarbageResponse").checked,
 			classicMode: document.getElementById("classicmode").checked,
 			AttemptAccelerate: document.getElementById("attemptaccelerate").checked,
