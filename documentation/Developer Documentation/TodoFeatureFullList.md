@@ -14,6 +14,9 @@
 - [ ] Autoexec for generated command
 - [ ] Automata Mode
 - [ ] Interaction Experience Sideloading.
+- [ ] Mobile HTML5 UI
+- [ ] Mobile static-version precompiled.
+- [ ] Very strict jailed version of Mobile version for iOS support.
 - [ ] Implement Typing-like experience Response Support.
 - [ ] Addresses issues with Native Windows Support.
 - [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
