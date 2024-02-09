@@ -1,0 +1,23 @@
+## 📃 Full laundry list of Features & to-do
+- [x] Operates locally on your computer, requiring an internet connection solely for web access.
+- [x] Can function exclusively on CPU architectures, such as x86_64 and arm64/aarch64.
+- [x] Provides compatibility with Windows* (untested), MacOS (untested on x86_64), and Linux operating systems.
+- [x] Features partial GPU/MPS/FPGA (opencl)/Tensor acceleration using cuBLAS, openBLAS, clBLAST, Vulkan, and Metal.
+- [x] Web access.
+- [x] Chat history functionality.
+- [X] Features an disk access model mode : Apple's research into Low Memory Localized Running Models.
+- [x] Accommodates multiple model modes, including llama-2, llama-2-GGUF, llama, and falcon Backend model Mode.
+- [x] Offers context memory capabilities.
+- [x] Includes a Granular Toggles Mode within the settings section.
+- [x] Implements Markdown Formatted Response support.
+- [ ] Self-updating, Self-maintaning, and Self-Adapting Code.
+- [ ] Autoexec for generated command
+- [ ] Automata Mode
+- [ ] Interaction Experience Sideloading.
+- [ ] Implement Typing-like experience Response Support.
+- [ ] Addresses issues with Native Windows Support.
+- [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
+- [ ] Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands.
+- [ ] Enabling an autonomous cognitive loop in a mode reminiscent of AutoGPT.
+- [ ] Adding Docker Support
+- [ ] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.

@@ -16,6 +16,7 @@ dist
 **code_queue**
 **.DS_Store**
 **presistentInteractionMem**
+presistentInteractionMem.json
 **.temporaryChunkModel**
 **specLM**
 **generalLM**

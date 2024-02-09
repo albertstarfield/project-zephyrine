@@ -26,28 +26,20 @@ Project Zephyrine
 <hr>
 
 > **Important Note:**
-> Caution: A fundamental paradigmatic transition is underway in the evolution of this software. Acknowledging the eminent positions of LMStudio and OLlama GUI, which have garnered substantial attention and support at opportune junctures, contrasts starkly with my current solitary endeavor. Engaging in direct competition with them would inevitably lead to failure and obsolescence. Therefore, rather than embarking on a futile endeavor, this program is undergoing a metamorphosis towards a plug-and-play, readily deployable framework akin to Copilot, albeit mostly offline, with a concentrated focus on delineated entity that have MoE (Mix of Experts), thus eschewing the conventional model-based interface.
+> A fundamental paradigmatic transition is underway in the evolution of this software. Acknowledging the eminent positions of LMStudio and OLlama GUI, which have garnered substantial attention and support at opportune junctures, contrasts starkly with my current solitary endeavor. Engaging in direct competition with them would inevitably lead to failure and obsolescence. Therefore, rather than embarking on a futile endeavor, this program is undergoing a metamorphosis towards a plug-and-play, readily deployable framework akin to Copilot, albeit mostly offline, with a concentrated focus on delineated entity that have MoE (Mix of Experts), thus eschewing the conventional model-based interface.
 
 ## 📃 Features & to-do
 
 - [x] Operates locally on your computer, requiring an internet connection solely for web access.
-- [x] Accommodates multiple model modes, including llama-2, llama-2-GGUF, llama, and falcon Backend model Mode.
 - [x] Can function exclusively on CPU architectures, such as x86_64 and arm64/aarch64.
-- [x] Provides compatibility with Windows (untested), MacOS (untested on x86_64), and Linux operating systems.
-- [x] Offers context memory capabilities.
+- [x] Provides compatibility with Windows* (untested), MacOS (untested on x86_64), and Linux operating systems.
 - [x] Features partial GPU/MPS/FPGA (opencl)/Tensor acceleration using cuBLAS, openBLAS, clBLAST, Vulkan, and Metal.
-- [x] Integrates with DuckDuckGo for web access.
-- [x] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.
-- [x] Includes a Granular Toggles Mode within the settings section.
-- [x] Implements Markdown Formatted Response support.
-- [x] Introduces Chat history functionality.
-- [X] Features an disk access model mode : Apple's research into Low Memory Localized Running Models
-- [ ] Implement Typing-like experience Response Support.
-- [ ] Addresses issues with Native Windows Support.
-- [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
-- [ ] Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands.
-- [ ] Enabling an autonomous cognitive loop in a mode reminiscent of AutoGPT.
-- [ ] Adding Docker Support
+- [x] Web access.
+- [x] Chat history functionality.
+
+Just a heads up, some details aren't listed here or in the `readme.md` file. Instead, they've been moved to the `TodoFeatureFullList.md` document or you can check them out [here](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/ToDoFeatureFullList.md).
+
+
 
 
 ## 🎞 Demonstration Screenshot
@@ -60,10 +52,11 @@ Project Zephyrine
 
 ## 🚀 Quick Start Guide
 
-1. You may conveniently acquire GGMLv2, GGMLv3, GGUF, and GGUFv2 from [The Bloke Huggingface Repository](https://huggingface.co/TheBloke). Within this repository, you will find a diverse array of quantization options, exemplified by the Llama-2 Nous Hermes 7B GGUF model, accessible at the following link: [Nous Hermes Llama2 GGUF](https://huggingface.co/TheBloke/Nous-Hermes-Llama2-GGUF).
+1. **Follow the Guide**: Look at the guide provided and do what it says.
+2. **Wait for the Model**: After following the guide, be patient. Keep an eye on your terminal or console for messages about the model downloading itself automatically.
+3. **Relaunch the Program**: Once the model has finished downloading, restart the program.
 
-2. Execute the prescribed commands as delineated in the provided guide, taking into consideration the platform upon which you are operating.
-
+That's it! You're ready to go.
 
 ### Windows
 > **Note**  
@@ -93,15 +86,9 @@ Project Zephyrine
 
 4. The program will commence automatically, affording you the opportunity to initiate a conversation at your convenience.
 
-> **Note**  
-> The software shall accommodate 2_K bit quantized .bin model files, contingent upon the selected mode. Nonetheless, the utilization of a Q2_K quantized model is discouraged, as it may compromise the operational integrity of the LLMChild, resulting in subpar output quality. If alternative .bin Alpaca model files are available, they may be employed in lieu of the recommended model outlined in the Quick Start Guide for the purpose of exploring diverse model options. Caution is advised when obtaining content from online sources.
-
 ## 🔧 Troubleshooting
 
-### General
-- In the event that you encounter an error message stating "Invalid file path" when attempting to input the model file path, it is likely attributable to a typographical error. We recommend revisiting the path entry process or employing the file picker function for a more accurate input.
-- Should you encounter an error message reading "Couldn't load model," it is plausible that your model file is either corrupted, incompatible, or configured incorrectly for the chosen model mode. We suggest exploring alternative modes that are compatible with the downloaded model, or, if the issue persists, consulting the model repository's readme section for guidance on reacquiring the model.
-- For any other unforeseen challenges or issues not covered in the aforementioned scenarios, we kindly request that you create an issue within the "Issues" tab located at the top of this page. Please provide a comprehensive description of the issue, including accompanying screenshots for further assistance.
+[Click here to see the general troubleshooting](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/Troubleshooting%20Quick%20Guide.md)
 
 ## 👨‍💻 Credits
 The development of this project owes credit to several contributors whose valuable efforts have shaped its foundation and brought it to fruition.
