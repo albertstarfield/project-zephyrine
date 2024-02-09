@@ -1747,6 +1747,17 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 			});
 			return "";
 		}
+	} else if (mode === "resetPersistentStorage") {
+		if (store.get("params").SaveandRestorechat) {
+			chatStgJson = ""
+			console.log(consoleLogPrefix, "Chat History Backend has been Reset!")
+			fs.writeFile(chatStgPersistentPath, chatStgJson, (err) => {
+				if (err) {
+				console.error(consoleLogPrefix, 'Error writing file:', err);
+				}
+			});
+			return "";
+		}
 	} else {
 		console.log(consoleLogPrefix, "Save and Restore Chat disabled!")
 	}
@@ -1968,6 +1979,9 @@ ipcMain.on("getParams", () => {
 
 // different configuration
 
+
+//each settings or new settings need to be defined her too not only on renderer.js
+
 ipcMain.on("webAccess", (_event, value) => {
 	store.set("params", {
 		...store.get("params"),
@@ -2045,7 +2059,15 @@ ipcMain.on("longChainThoughtNeverFeelenough", (_event, value) => {
 	});
 });
 
+//Alias for chatArrayStorage so that the ipcMain can run
+
+function erasePersistentMemoryiPCMain(){
+	chatArrayStorage("resetPersistentStorage", 0, 0, 0, 0);
+	return true;
+}
+
 ipcMain.on("restart", restart);
+ipcMain.on("resetChatHistoryCTX", erasePersistentMemoryiPCMain);
 
 process.on("unhandledRejection", () => {});
 process.on("uncaughtException", () => {});

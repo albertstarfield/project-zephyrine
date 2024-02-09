@@ -522,6 +522,7 @@ document.getElementById("chat-reset").addEventListener("click", () => {
 	stopButton.click();
 	stopButton.removeAttribute("disabled");
 	ipcRenderer.send("restart");
+	ipcRenderer.send("resetChatHistoryCTX");
 	document.querySelectorAll("#messages li").forEach((element) => {
 		element.remove();
 	});

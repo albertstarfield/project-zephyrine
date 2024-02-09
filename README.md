@@ -25,26 +25,28 @@ Project Zephyrine
 
 <hr>
 
+> **Important Note:**
+> Caution: A fundamental paradigmatic transition is underway in the evolution of this software. Acknowledging the eminent positions of LMStudio and OLlama GUI, which have garnered substantial attention and support at opportune junctures, contrasts starkly with my current solitary endeavor. Engaging in direct competition with them would inevitably lead to failure and obsolescence. Therefore, rather than embarking on a futile endeavor, this program is undergoing a metamorphosis towards a plug-and-play, readily deployable framework akin to Copilot, albeit mostly offline, with a concentrated focus on delineated entity that have MoE (Mix of Experts), thus eschewing the conventional model-based interface.
+
 ## 📃 Features & to-do
 
 - [x] Operates locally on your computer, requiring an internet connection solely for web access.
-- [x] Accommodates multiple model modes, including llama-2, llama-2-GGUF, llama, and falcon Model Mode.
-> **Important Note:**
-> It is imperative to acknowledge that the model modes (MPT, GPT-J, GPT-2, GPT-Neox, StarCoder) are currently in an experimental phase, and users may potentially encounter initialization issues. These issues may arise due to the absence of interactive functionality within the compiled binary. We strongly recommend exercising caution and being mindful of this potential limitation.
+- [x] Accommodates multiple model modes, including llama-2, llama-2-GGUF, llama, and falcon Backend model Mode.
 - [x] Can function exclusively on CPU architectures, such as x86_64 and arm64/aarch64.
 - [x] Provides compatibility with Windows (untested), MacOS (untested on x86_64), and Linux operating systems.
 - [x] Offers context memory capabilities.
-- [x] Features partial GPU/MPS/FPGA (opencl)/Tensor acceleration using cuBLAS, openBLAS, clBLAST, and Metal.
+- [x] Features partial GPU/MPS/FPGA (opencl)/Tensor acceleration using cuBLAS, openBLAS, clBLAST, Vulkan, and Metal.
 - [x] Integrates with DuckDuckGo for web access.
 - [x] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.
 - [x] Includes a Granular Toggles Mode within the settings section.
 - [x] Implements Markdown Formatted Response support.
+- [x] Introduces Chat history functionality.
+- [X] Features an disk access model mode : Apple's research into Low Memory Localized Running Models
 - [ ] Implement Typing-like experience Response Support.
 - [ ] Addresses issues with Native Windows Support.
 - [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
 - [ ] Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands.
 - [ ] Enabling an autonomous cognitive loop in a mode reminiscent of AutoGPT.
-- [ ] Introduces Chat history functionality.
 - [ ] Adding Docker Support
 
 

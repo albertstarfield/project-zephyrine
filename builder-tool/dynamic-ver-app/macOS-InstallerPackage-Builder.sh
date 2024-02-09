@@ -1,0 +1,1 @@
+#Quest : Make a one click .app package that stored on .dmg that can be dragged into the /Applications and launched in one click while automagically install it into $HOME/adelaide-zephy-runtime and automatically run and skip installation if installation were detected(run the ./run.sh inside $HOME/adelaide-zephy-runtime) 
