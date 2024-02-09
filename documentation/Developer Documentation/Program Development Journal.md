@@ -25,3 +25,14 @@ I also did a survey and found out that LM Studio and Ollama have much bigger com
 
 Unfortunately, without any financial or core support from anyone (unlike Willy, who left the project because he found a job got supported by his circle while I'm still unemployed) and turbofast development of AI by the big or even small but supported tech companies, I know I can't keep this up forever. Am I crazy for trying? Maybe, but in a balanced sort of way.
  
+---
+### Entry II : February 9, 2024
+---
+
+Hey, it's Albert checking in! I'm writing my second journal entry today. You might be wondering why I removed the option to change models and other features. Well, it all boils down to a big change in how the program is evolving.
+
+At first, I thought it'd be cool to let users customize their models. But after working on it for months and using it myself, I realized there were a bunch of problems. Things like repeating instructions, weird text outputs, and just a general drop in quality were getting in the way. It was making things more complicated for users, and that's the last thing I wanted.
+
+So, I made the decision to stick with one main model called Mistral-Openorca-7B-Q4_0. It's a good balance of performance and quality. And don't worry, I'm working on adding a feature called Mixture of Experts, where the program can switch to different models based on what's needed. This way, users don't have to spend ages searching online or tweaking settings. It'll all just work smoothly.
+
+I think maybe my preference for simplicity in the program's interface comes from using Apple products too much. Plus, there's this memory from years ago when someone I had a crush on chose someone else because my solution to a problem was too complicated. I'm not even sure if I still have feelings for that person. But hey, that experience taught me to simplify things while still keeping the details in check.
