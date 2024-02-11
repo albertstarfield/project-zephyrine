@@ -10,6 +10,7 @@
 - [x] Offers context memory capabilities.
 - [x] Includes a Granular Toggles Mode within the settings section.
 - [x] Implements Markdown Formatted Response support.
+- [x] Implement Typing-like experience Response Support.
 - [ ] Self-updating, Self-maintaning, and Self-Adapting Code.
 - [ ] Autoexec for generated command
 - [ ] Automata Mode
@@ -17,7 +18,6 @@
 - [ ] Mobile HTML5 UI
 - [ ] Mobile static-version precompiled.
 - [ ] Very strict jailed version of Mobile version for iOS support.
-- [ ] Implement Typing-like experience Response Support.
 - [ ] Addresses issues with Native Windows Support.
 - [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
 - [ ] Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands.

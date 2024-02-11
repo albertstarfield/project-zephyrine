@@ -412,7 +412,7 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			console.log("responsesStreamCaptureTrace_markedConverted:", totalStreamResultData);
 			//totalStreamResultData = HTMLInterpreterPreparation(totalStreamResultData); //legacy old alpaca-electron interpretation
 			console.log("responsesStreamCaptureTrace_markedConverted_InterpretedPrep:", totalStreamResultData);
-			existing.innerHTML = totalStreamResultData; // existing innerHTML is a final form which send the stream into the GUI
+			existing.innerHTML = totalStreamResultData; // existing innerHTML is a final form which send the stream into the GUI (so basically it replaces all the chunks of message from the responses[id] on the existing.innerHTML)
 			console.log(prefixConsoleLogStreamCapture, "It should be done");
 			console.log(prefixConsoleLogStreamCapture, "current ID of Output", id);
 			form.setAttribute("class", isRunningModel ? "running-model" : "");
@@ -443,7 +443,7 @@ ipcRenderer.on("result", async (_event, { data }) => {
 				}, 100);
 			}
 			
-			//existing.innerHTML = responses[id];
+			existing.innerHTML = responses[id]; // This sends each stream
 		} else {
 			say(response, id);
 		}
