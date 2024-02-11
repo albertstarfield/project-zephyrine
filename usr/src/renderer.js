@@ -401,7 +401,7 @@ ipcRenderer.on("result", async (_event, { data }) => {
 	let totalStreamResultData;
 	loading(false);
 	if (data == "\n\n<end>") {
-		setTimeout(() => {
+		setTimeout(() => { // this timeout is for the final render, if somehow after the 
 			isRunningModel = false;
 			console.log(prefixConsoleLogStreamCapture, "Stream Ended!");
 			console.log(prefixConsoleLogStreamCapture, "Assuming LLM Main Backend Done Typing!");
@@ -414,6 +414,7 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			console.log("responsesStreamCaptureTrace_markedConverted_InterpretedPrep:", totalStreamResultData);
 			existing.innerHTML = totalStreamResultData; // existing innerHTML is a final form which send the stream into the GUI
 			console.log(prefixConsoleLogStreamCapture, "It should be done");
+			console.log(prefixConsoleLogStreamCapture, "current ID of Output", id);
 			form.setAttribute("class", isRunningModel ? "running-model" : "");
 		}, 200);
 	} else {
