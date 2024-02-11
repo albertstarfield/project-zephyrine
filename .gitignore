@@ -8,6 +8,8 @@ dist
 .DS_Store
 /release-builds/
 *usr/src/release-builds*
+**usr/storage/**
+**usr/storage/presistentInteractionMem**
 **release-build*
 **tmp-reposync*
 **repoworkspace*

@@ -629,7 +629,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
 	}
 
-	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 2048 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 4096 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
@@ -985,10 +985,11 @@ function specializedModelManagerRequestPath(modelCategory){
 	const DataDictionaryFetched = availableImplementedLLMModelSpecificCategory[filteredModelCategoryRequest];
 	if (filteredModelCategoryRequest == "" || filteredModelCategoryRequest == undefined || !(fs.existsSync(DataDictionaryFetched.filename))){
 		filePathSelectionfromDictionary = `${general_conversation.filename}`
+		console.log(consoleLogPrefix, "modelManager: Fallback");
 	}else{
 		filePathSelectionfromDictionary = `${DataDictionaryFetched.filename}`
+		console.log(consoleLogPrefix, "modelManager : Model Detected!", filePathSelectionfromDictionary);
 	}
-	console.log(consoleLogPrefix, filePathSelectionfromDictionary);
 	return filePathSelectionfromDictionary;
 }
 
@@ -1891,7 +1892,7 @@ function initChat() {
 	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
 	const chatArgs = `-i -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
 	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
-	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} -gaw 2048 -td ${threads} -tb ${threads} -n 2048 -dkvc --dynatemp-range 0.27-${params.temp}  -sm row --tfs 6.9 --mirostat 2 -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} -gaw 2048 -td ${threads} -tb ${threads} -n 4096 -dkvc --dynatemp-range 0.27-${params.temp}  -sm row --tfs 6.9 --mirostat 2 -c 4096 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
 	console.log(consoleLogPrefix, chatArgs, paramArgs)
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
