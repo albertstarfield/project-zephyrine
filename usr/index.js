@@ -997,7 +997,7 @@ function specializedModelManagerRequestPath(modelCategory){
 	console.log("Not freezing2");
 	if (filteredModelCategoryRequest == "" || filteredModelCategoryRequest == undefined || !(checkFileExists(DataDictionaryFetched.filename))){
 		console.log("Not freezing3");
-		filePathSelectionfromDictionary = `${availableImplementedLLMModelSpecificCategory[general_conversation].filename}`
+		filePathSelectionfromDictionary = `${availableImplementedLLMModelSpecificCategory["general_conversation"].filename}`
 		console.log(consoleLogPrefix, "modelManager: Fallback");
 	}else{
 		filePathSelectionfromDictionary = `${DataDictionaryFetched.filename}`
