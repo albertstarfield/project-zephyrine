@@ -1648,7 +1648,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	//mode retrieve
 	//mode restore
 	if (chatStgOrder === 0){
-		chatStg[0]="=========ChatStorageHeader========";
+		chatStg[0]=`=========InteractionStorageHeader_${randSeed}========`;
 	}
 	
 	if (mode === "save"){
