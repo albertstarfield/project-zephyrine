@@ -11,18 +11,17 @@
 - [x] Includes a Granular Toggles Mode within the settings section.
 - [x] Implements Markdown Formatted Response support.
 - [x] Implement Typing-like experience Response Support.
-- [ ] Implementing a Proactive Lockup Timeout Verification Mechanism in the Quest for External Context Acquisition .
+- [ ] Implementing a Proactive Lockup Timeout Verification Mechanism in the Quest for External Context Acquisition.
 - [ ] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.
 - [ ] Interaction Experience Sideloading Subsystem.
 - [ ] Implementing Native Windows Support.
 - [ ] Autoexec for generated command.
-- [ ] Automata Mode.
+- [ ] Automata Mode (autoGPT agent like functionality).
 - [ ] Mobile HTML5 UI.
 - [ ] Self-updating, Self-maintaning, and Self-Adapting Code.
 - [ ] Mobile static-version precompiled.
 - [ ] Very strict jailed version of Mobile version for iOS support.
 - [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
 - [ ] Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands.
-- [ ] Enabling an autonomous cognitive loop in a mode reminiscent of AutoGPT.
 - [ ] Adding Docker Support
 

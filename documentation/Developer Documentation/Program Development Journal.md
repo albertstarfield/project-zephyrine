@@ -36,3 +36,19 @@ At first, I thought it'd be cool to let users customize their models. But after 
 So, I made the decision to stick with one main model called Mistral-Openorca-7B-Q4_0. It's a good balance of performance and quality. And don't worry, I'm working on adding a feature called Mixture of Experts (No we're not using Mixtral for performance and memory reasons), where the program can switch to different models based on what's needed. This way, users don't have to spend ages searching online or tweaking settings. It'll all just work smoothly.
 
 I think maybe my preference for simplicity in the program's interface comes from using Apple products too much. Plus, there's this memory from years ago when someone I had a crush on chose someone else because my solution to a problem was too complicated. I'm not even sure if I still have feelings for that person. But hey, that experience taught me to simplify things while still keeping the details in check.
+
+---
+### Entry I : February 11, 2024
+---
+
+Hello there, it's Albert again! After a day's work drawing the Adelaide Paradigm Architecture, it was designed based on what I have learned throughout my life and how to think and retrieve memories. However, it more closely resembles an INFJ overthinking architecture. Also, I fixed some major lockup issues in the model manager. Although it may seem trivial to you and others, my work presents quite a significant challenge, and I might be overwhelmed because it's so demanding. In fact, I think I may have overworked on this project, as I believe I'm starting to need glasses due to the strain.
+
+You might have looked at my LinkedIn profile. For starters, I'm not an AI expert like my friends, who have support from all corners and numerous certificates. Unlike them, I'm just a grunt and a failure with a dream and overambition over the years, all while lacking the IQ performance (or, one could say, Exynos performance vs. Apple Silicon performance typically required for this industry), support, time, and position to achieve such feats.
+
+Furthermore, I've never coded in JavaScript, HTML5, or even CSS. This is essentially my first foray into a "Real Project," which requires me to somewhat reverse-engineer everything it entails, including the taste of debugging JavaScript hellscape. Although I'm not familiar with JavaScript, I can at least write pseudocode, which can later be processed by a GPT engine. Slowly but surely, due to the errors produced by the GPT engine's code, I began to understand how JavaScript works, even if the implementation is somewhat strange, quirky, and hacky. Well, I suppose all I can do is continue seeking help from my friends or elsewhere, and perhaps one day I'll receive the assistance or support I need, along with the positive ripple effects of my efforts over the months of this Weight of the World (Get it? Haaa).
+
+At one point, I did try asking Adelaide for a gift recommendation for an old friend. Unexpectedly, she suggested something I hadn't thought of and even recommended a song from a game that my friend likes, even though I didn't specify which game. Did she really manage to grasp the chain of thoughts so deeply? Her thoughts and language remain complex for me to understand, but I was still amazed. It gives me hope that this might indeed be a good project, but it's just a glimpse; I shouldn't celebrate too early.
+
+I believe I have glimpsed myself from the future before. How many times have I been here and felt the pain repeatedly? Well, I hope that Adelaide is able to unlock the discovery of 4D or even (n-2)D film reels, and perhaps catch a glimpse of (n-1)D, gaining a better understanding of why I keep seeing these things.
+
+I suppose that's all for this entry for now.

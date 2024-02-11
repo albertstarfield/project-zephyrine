@@ -440,7 +440,7 @@ ipcRenderer.on("result", async (_event, { data }) => {
 				}, 100);
 			}
 			
-			existing.innerHTML = responses[id]; // This sends each stream
+			existing.innerHTML = responses[id]; // This sends each stream chunk
 		} else {
 			say(response, id);
 		}
