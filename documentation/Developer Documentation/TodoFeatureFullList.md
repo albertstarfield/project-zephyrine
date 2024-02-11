@@ -1,7 +1,7 @@
 ## 📃 Full laundry list of Features & to-do
 - [x] Operates locally on your computer, requiring an internet connection solely for web access.
 - [x] Can function exclusively on CPU architectures, such as x86_64 and arm64/aarch64.
-- [x] Provides compatibility with Windows* (untested), MacOS (untested on x86_64), and Linux operating systems.
+- [x] Provides compatibility with MacOS (untested on x86_64), and Linux operating systems.
 - [x] Features partial GPU/MPS/FPGA (opencl)/Tensor acceleration using cuBLAS, openBLAS, clBLAST, Vulkan, and Metal.
 - [x] Web access.
 - [x] Chat history functionality.
@@ -11,16 +11,18 @@
 - [x] Includes a Granular Toggles Mode within the settings section.
 - [x] Implements Markdown Formatted Response support.
 - [x] Implement Typing-like experience Response Support.
+- [ ] Implementing a Proactive Lockup Timeout Verification Mechanism in the Quest for External Context Acquisition .
+- [ ] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.
+- [ ] Interaction Experience Sideloading Subsystem.
+- [ ] Implementing Native Windows Support.
+- [ ] Autoexec for generated command.
+- [ ] Automata Mode.
+- [ ] Mobile HTML5 UI.
 - [ ] Self-updating, Self-maintaning, and Self-Adapting Code.
-- [ ] Autoexec for generated command
-- [ ] Automata Mode
-- [ ] Interaction Experience Sideloading.
-- [ ] Mobile HTML5 UI
 - [ ] Mobile static-version precompiled.
 - [ ] Very strict jailed version of Mobile version for iOS support.
-- [ ] Addresses issues with Native Windows Support.
 - [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
 - [ ] Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands.
 - [ ] Enabling an autonomous cognitive loop in a mode reminiscent of AutoGPT.
 - [ ] Adding Docker Support
-- [ ] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.
+
