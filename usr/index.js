@@ -210,7 +210,7 @@ const schema = {
 			localAccess: false,
 			llmdecisionMode: true,
 			extensiveThought: true,
-			SaveandRestorechat: true,
+			SaveandRestoreInteraction: true,
 			hisChatCTX: false,
 			throwInitResponse: true,
 			classicMode: false,
@@ -721,7 +721,7 @@ let reevaluateAdCtxDecisionAgent;
 let specificSpecializedModelPathRequest_LLMChild=""; //Globally inform on what currently needed for the specialized model branch 
 let specificSpecializedModelCategoryRequest_LLMChild=""; //Globally inform on what currently needed for the specialized model branch 
 function historyRequirementRetrieval(historyDistance){
-	//chatArrayStorage("retrieve", "", false, false, chatStgOrder-1);
+	//interactionArrayStorage("retrieve", "", false, false, chatStgOrder-1);
 	if (historyDistance >= chatStgOrder){
 		console.log(consoleLogPrefix, `Requested ${historyDistance} History Depth/Distances doesnt exist, Clamping to ${chatStgOrder}`);
 		historyDistance = chatStgOrder;
@@ -734,7 +734,7 @@ function historyRequirementRetrieval(historyDistance){
 		  } else {
 			str += `${assistantName}: `; // odd number on this version of zephyrine means the AI or the assistant is the one that answers
 		  }
-		  str += `${chatArrayStorage("retrieve", "", false, false, chatStgOrder-i)} \n`
+		  str += `${interactionArrayStorage("retrieve", "", false, false, chatStgOrder-i)} \n`
 		  //console.log(i + ": " + str);
 		  //deduplicate string to reduce the size need to be submitted which optimizes the input size and bandwidth
 		}
@@ -1012,6 +1012,7 @@ async function callInternalThoughtEngine(prompt){
 	}
 	console.log(consoleLogPrefix, "Retrieving History!");
 	historyChatRetrieved=historyRequirementRetrieval(historyDistanceReq);
+	concludeInformation_chatHistory=historyChatRetrieved;
 	
 	// Counting the number of words in the Chat prompt and history
 	inputPromptCounterSplit = prompt.split(" ");
@@ -1540,6 +1541,10 @@ function determineLLMBackend(){
 	}else if (LLMBackendSelection === "LLaMa2gguf"){
 		LLMBackendVariationFileName = "llama-gguf";
 		LLMBackendVariationFileSubFolder = "llama-gguf";
+		
+	}else if (LLMBackendSelection === "whisper"){
+			LLMBackendVariationFileName = "whisper";
+			LLMBackendVariationFileSubFolder = "whisper";
 	}else {
 		console.log(consoleLogPrefix, "Unsupported Backend", LLMBackendSelection);
         process.exit(1);
@@ -1615,19 +1620,6 @@ var zephyrineReady,
 var checkAVX,
 	isAVX2 = false;
 
-
-function restoreChat(){
-	console.log(consoleLogPrefix ,"stubFunction");
-	//read -> spam GUI win send data (User then AI) -> done
-}
-
-async function writeChatHistoryText(prompt, alpacaState0_half, alpacaState1){
-	console.log(consoleLogPrefix ,"stubFunction");
-	//only the filtered GUI text should be written and saved
-	//alpacaState0_half alpacaState1 should determine which of the user that is being sent the data or chat
-}
-
-
 let chatStg = [];
 let chatStgJson;
 let chatStgPersistentPath = `${path.resolve(__dirname, "storage", "presistentInteractionMem.json")}`;
@@ -1635,7 +1627,7 @@ let chatStgOrder = 0;
 let retrievedChatStg;
 let chatStgOrderRequest;
 let amiwritingonAIMessageStreamMode=false;
-function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
+function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 	//mode save
 	//mode retrieve
 	//mode restore
@@ -1651,7 +1643,7 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 			}
 			amiwritingonAIMessageStreamMode=true;
 			
-			//chatStgOrder = chatStgOrder + 1; //we can't do this kind of stuff because the AI stream part by part and call the chatArrayStorage in a continuous manner which auses the chatStgOrder number to go up insanely high and mess up with the storage
+			//chatStgOrder = chatStgOrder + 1; //we can't do this kind of stuff because the AI stream part by part and call the  in a continuous manner which auses the chatStgOrder number to go up insanely high and mess up with the storage
 			// How to say that I'm done and stop appending to the same array and move to next Order?
 			chatStg[chatStgOrder] += prompt; //handling the partial stream by appending into the specific array
 			chatStg[chatStgOrder] = chatStg[chatStgOrder].replace("undefined", "");
@@ -1683,7 +1675,7 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 		}
 		return retrievedChatStg;
     } else if (mode === "restoreLoadPersistentMem"){
-		if (store.get("params").SaveandRestorechat) {
+		if (store.get("params").SaveandRestoreInteraction) {
 			console.log(consoleLogPrefix, "Restoring Chat Context... Reading from File to Array");
 			chatStgOrder = 0;
 			try {
@@ -1732,7 +1724,7 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 		chatStg = [];
 		
 	} else if (mode === "flushPersistentMem"){
-		if (store.get("params").SaveandRestorechat) {
+		if (store.get("params").SaveandRestoreInteraction) {
 			//example of the directory writing 
 			//basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
 			//console.log(consoleLogPrefix, "Flushing context into disk!");
@@ -1748,7 +1740,7 @@ function chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 			return "";
 		}
 	} else if (mode === "resetPersistentStorage") {
-		if (store.get("params").SaveandRestorechat) {
+		if (store.get("params").SaveandRestoreInteraction) {
 			chatStgJson = ""
 			console.log(consoleLogPrefix, "Chat History Backend has been Reset!")
 			fs.writeFile(chatStgPersistentPath, chatStgJson, (err) => {
@@ -1797,8 +1789,8 @@ function restart() {
 	currentPrompt = undefined;
 	zephyrineReady = false;
 	zephyrineHalfReady = false;
-	chatArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
-	chatArrayStorage("reset", 0, 0, 0, 0); // fill it with 0 0 0 0 just to fill in nonsensical data since its only require reset command to execute the command
+	("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
+	interactionArrayStorage("reset", 0, 0, 0, 0); // fill it with 0 0 0 0 just to fill in nonsensical data since its only require reset command to execute the command
 	initChat();
 }
 
@@ -1817,7 +1809,7 @@ function initChat() {
 	}
 	const ptyProcess = pty.spawn(shell, [], config);
 	runningShell = ptyProcess;
-	chatArrayStorage("restoreLoadPersistentMem", 0, 0, 0, 0); // Restore Array Chat context
+	interactionArrayStorage("restoreLoadPersistentMem", 0, 0, 0, 0); // Restore Array Chat context
 	ptyProcess.onData(async (res) => {
 		res = stripProgramBreakingCharacters(res);
 		//console.log(res);
@@ -1882,9 +1874,9 @@ function initChat() {
 			if (process.env.ptyStreamDEBUGMode === "1"){
 			console.log(consoleLogPrefix, "Forwarding to GUI...", res); // res will send in chunks so we need to have a logic that reconstruct the word with that chunks until the program stops generating
 			}
-			//chatArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
-			chatArrayStorage("save", res, true, false, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
-			chatArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
+			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
+			interactionArrayStorage("save", res, true, false, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
+			interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
 			//res = marked.parse(res);
 			win.webContents.send("result", {
 				data: res
@@ -1913,7 +1905,7 @@ ipcMain.on("message", async (_event, { data }) => {
 	if (runningShell) {
 		//runningShell.write(`${await externalInternetFetchingScraping(data)}\r`);
 		//zephyrineHalfReady = false;
-		chatArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
+		interactionArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 		blockGUIForwarding = true;
 		//console.log(consoleLogPrefix, `Forwarding manipulated Input to processor ${data}`);
 		inputFetch = await callInternalThoughtEngine(data);
@@ -2003,17 +1995,17 @@ ipcMain.on("llmdecisionMode", (_event, value) => {
 	});
 });
 
-ipcMain.on("longchainthought", (_event, value) => {
+ipcMain.on("extensiveThought", (_event, value) => {
 	store.set("params", {
 		...store.get("params"),
-		longchainthought: value
+		extensiveThought: value
 	});
 });
 
-ipcMain.on("saverestorechat", (_event, value) => {
+ipcMain.on("saverestoreinteraction", (_event, value) => {
 	store.set("params", {
 		...store.get("params"),
-		saverestorechat: value
+		saverestoreinteraction: value
 	});
 });
 
@@ -2055,14 +2047,28 @@ ipcMain.on("llmBackendMode", (_event, value) => {
 ipcMain.on("longChainThoughtNeverFeelenough", (_event, value) => {
 	store.set("params", {
 		...store.get("params"),
-		llmBackendMode: value
+		longChainThoughtNeverFeelenough: value
 	});
 });
 
-//Alias for chatArrayStorage so that the ipcMain can run
+ipcMain.on("SaveandRestoreInteraction", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		SaveandRestoreInteraction: value
+	});
+});
+
+ipcMain.on("foreverEtchedMemory", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		foreverEtchedMemory: value
+	});
+});
+
+//Alias for interactionArrayStorage so that the ipcMain can run
 
 function erasePersistentMemoryiPCMain(){
-	chatArrayStorage("resetPersistentStorage", 0, 0, 0, 0);
+	interactionArrayStorage("resetPersistentStorage", 0, 0, 0, 0);
 	return true;
 }
 

@@ -10,7 +10,6 @@ const availableImplementedLLMModelSpecificCategory = {
 		memAllocCutRatio: 1, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
 		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
-    /*
 	// Since mixtral exists we don't need the other model, for now. However later on we'll going to accept willy model later on
 	// mixtral can't run properly on 16GB of vram
 	// going back to the old version of Zephy
@@ -22,7 +21,7 @@ const availableImplementedLLMModelSpecificCategory = {
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
 		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
-		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
+		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	language_specific_indonesia : {
 		downloadLink: "https://huggingface.co/detakarang/sidrap-7b-v2-gguf/resolve/main/sidrap-7b-v2.q4_K_M.gguf?download=true", //change this later on
@@ -32,7 +31,7 @@ const availableImplementedLLMModelSpecificCategory = {
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
 		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
-		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
+		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	language_specific_japanese : {
 		downloadLink: "https://huggingface.co/TheBloke/japanese-stablelm-instruct-gamma-7B-GGUF/resolve/main/japanese-stablelm-instruct-gamma-7b.Q4_0.gguf?download=true", //change this later on
@@ -42,7 +41,7 @@ const availableImplementedLLMModelSpecificCategory = {
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
 		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
-		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
+		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	language_specific_english : {
 		downloadLink: "https://huggingface.co/maddes8cht/mosaicml-mpt-7b-gguf/resolve/main/mosaicml-mpt-7b-Q4_0.gguf?download=true", //change this later on
@@ -52,7 +51,7 @@ const availableImplementedLLMModelSpecificCategory = {
 		Quantization: "q4_0",
 		Engine: "mpt",
 		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
-		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
+		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	language_specific_arabics :{
 		downloadLink: "https://www.youtube.com/watch?v=dQw4w9WgXcQ", //change this later on
@@ -71,7 +70,7 @@ const availableImplementedLLMModelSpecificCategory = {
 		ParamSize: "34B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
-		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
+		memAllocCutRatio: 0.1, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
 		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	biology : {
@@ -82,7 +81,7 @@ const availableImplementedLLMModelSpecificCategory = {
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
 		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
-		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
+		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	physics : {
 		downloadLink: "https://huggingface.co/TheBloke/Yi-34B-GiftedConvo-merged-GGUF/resolve/main/yi-34b-giftedconvo-merged.Q2_K.gguf?download=true", //change this later on
@@ -91,7 +90,7 @@ const availableImplementedLLMModelSpecificCategory = {
 		ParamSize: "34B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
-		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
+		memAllocCutRatio: 0.1, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
 		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	legal : {
@@ -102,7 +101,7 @@ const availableImplementedLLMModelSpecificCategory = {
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
 		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
-		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
+		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	medical_specific_science : {
 		downloadLink: "https://huggingface.co/TheBloke/medicine-LLM-13B-GGUF/resolve/main/medicine-llm-13b.Q4_0.gguf?download=true", //change this later on
@@ -111,8 +110,8 @@ const availableImplementedLLMModelSpecificCategory = {
 		ParamSize: "13B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
-		memAllocCutRatio: 0.1, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
-		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
+		memAllocCutRatio: 0.4, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
+		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	//
 	mathematics : {
@@ -123,7 +122,7 @@ const availableImplementedLLMModelSpecificCategory = {
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
 		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
-		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
+		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	
 	financial : {
@@ -134,7 +133,7 @@ const availableImplementedLLMModelSpecificCategory = {
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
 		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
-		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
+		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	
 	history : {
@@ -147,7 +146,18 @@ const availableImplementedLLMModelSpecificCategory = {
 		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
 		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
-    */
+    // Vision LLM Model Processed
+	VisionLLM : {
+		downloadLink: "https://huggingface.co/jartine/llava-v1.5-7B-GGUF/resolve/main/llava-v1.5-7b-Q4_K.gguf?download=true", //change this later on
+		filename: "specLM_Vision_LLaVa.bin",
+		CategoryDescription: "LLM That can describe with image",
+		ParamSize: "7B",
+		Quantization: "q4_0",
+		Engine: "LLaMa2gguf",
+		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
+		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
+	},
+	// Speech 
 };
 
 module.exports = availableImplementedLLMModelSpecificCategory;

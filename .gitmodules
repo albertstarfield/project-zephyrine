@@ -12,3 +12,6 @@
 [submodule "llama-gguf.cpp"] 
   path = usr/vendor/llama-gguf.cpp
   url = https://github.com/ggerganov/llama.cpp
+[submodule "whisper.cpp"] 
+  path = usr/vendor/whisper.cpp
+  url = https://github.com/ggerganov/whisper.cpp

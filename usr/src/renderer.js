@@ -556,6 +556,7 @@ document.getElementById("aboutSection").addEventListener("click", () => {
 });
 
 ipcRenderer.on("params", (_event, data) => {
+	// don't forget to scroll down to the bottom of index.js to update the value too
 	//document.getElementById("LLMBackendMode").value = data.llmBackendMode; // since the program now come with predefined tuned model this won't be required and if its implemented it will make the program runs in buggy state or chaos like the button won't be able clicked without error and etc, and selection are implemented on dictionary on index.js in Engine section of the Data
 	document.getElementById("repeat_last_n").value = data.repeat_last_n;
 	document.getElementById("repeat_penalty").value = data.repeat_penalty;
@@ -567,7 +568,7 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("local-file-access").checked = data.localAccess;
 	document.getElementById("LLMChildDecision").checked = data.llmdecisionMode;
 	document.getElementById("longchainthought").checked = data.extensiveThought;
-	document.getElementById("saverestorechat").checked = data.SaveandRestorechat;
+	document.getElementById("saverestoreinteraction").checked = data.SaveandRestoreInteraction;
 	document.getElementById("historyChatCtx").checked = data.hisChatCTX;
 	document.getElementById("foreveretchedmemory").checked = data.foreverEtchedMemory;
 	document.getElementById("throwInitialGarbageResponse").checked = data.throwInitResponse;
@@ -592,7 +593,7 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			localAccess: document.getElementById("local-file-access").checked,
             llmdecisionMode: document.getElementById("LLMChildDecision").checked,
             extensiveThought: document.getElementById("longchainthought").checked,
-            SaveandRestorechat: document.getElementById("saverestorechat").checked,
+            SaveandRestoreInteraction: document.getElementById("saverestoreinteraction").checked,
 			hisChatCTX: document.getElementById("historyChatCtx").checked,
 			foreverEtchedMemory: document.getElementById("foreveretchedmemory").checked,
 			throwInitResponse: document.getElementById("throwInitialGarbageResponse").checked,
@@ -636,8 +637,8 @@ document.getElementById("longchainthought").addEventListener("change", () => {
 	ipcRenderer.send("extensiveThought", document.getElementById("longchainthought").checked);
 });
 
-document.getElementById("saverestorechat").addEventListener("change", () => {
-	ipcRenderer.send("SaveandRestorechat", document.getElementById("saverestorechat").checked);
+document.getElementById("saverestoreinteraction").addEventListener("change", () => {
+	ipcRenderer.send("SaveandRestoreInteraction", document.getElementById("saverestoreinteraction").checked);
 });
 
 document.getElementById("historyChatCtx").addEventListener("change", () => {
