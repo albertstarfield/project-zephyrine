@@ -990,10 +990,14 @@ function specializedModelManagerRequestPath(modelCategory){
 	const filteredModelCategoryRequest = findClosestMatch(modelCategory, specializedModelKeyList);
 	let filePathSelectionfromDictionary;
 	console.log(consoleLogPrefix, "Matched with :", filteredModelCategoryRequest);
+	console.log("Not freezing0");
 	validatedModelAlignedCategory = filteredModelCategoryRequest;
+	console.log("Not freezing1");
 	const DataDictionaryFetched = availableImplementedLLMModelSpecificCategory[filteredModelCategoryRequest];
+	console.log("Not freezing2");
 	if (filteredModelCategoryRequest == "" || filteredModelCategoryRequest == undefined || !(checkFileExists(DataDictionaryFetched.filename))){
-		filePathSelectionfromDictionary = `${general_conversation.filename}`
+		console.log("Not freezing3");
+		filePathSelectionfromDictionary = `${availableImplementedLLMModelSpecificCategory[general_conversation].filename}`
 		console.log(consoleLogPrefix, "modelManager: Fallback");
 	}else{
 		filePathSelectionfromDictionary = `${DataDictionaryFetched.filename}`
