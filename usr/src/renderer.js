@@ -348,7 +348,7 @@ let prefixConsoleLogStreamCapture = "[LLMMainBackendStreamCapture]: ";
 
 // this is for recieving (load User input) message from the saved message routines
 ipcRenderer.on("manualUserPromptGUIHijack", async (_event, { data }) => { 
-	var userPretendInput = data;
+	var userPretendInput = data; //marked.parse(responses[id]);
 	say(userPretendInput, `user${gen}`, true);
 	gen++;
 });
@@ -389,9 +389,6 @@ ipcRenderer.on("manualAIAnswerGUIHijack", async (_event, { data }) => {
 	profilePictureEmotions = "happy"; 
 	existing.innerHTML = response; // no submitting this thing will result in error "Uncaught (in promise) TypeError: Cannot set properties of null (setting 'innerHTML')"
 	// Something is missing. Ah th emissing part is that on the let existing need to end with .innerHTML, Nope. Still erroring out.
-
-	
-
 });
 
 ipcRenderer.on("result", async (_event, { data }) => {
