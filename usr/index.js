@@ -954,6 +954,15 @@ for (let i = 1; i <= b.length; i++) {
 return matrix[b.length][a.length];
 }
 
+// Function to check if a file exists
+function checkFileExists(filePath) {
+    try {
+        fs.accessSync(filePath, fs.constants.F_OK);
+        return true;
+    } catch (err) {
+        return false;
+    }
+}
 let validatedModelAlignedCategory; //defined 
 function specializedModelManagerRequestPath(modelCategory){
 	// "specializedModelKeyList" variable is going to be used as a listing of the available category or lists
@@ -983,7 +992,7 @@ function specializedModelManagerRequestPath(modelCategory){
 	console.log(consoleLogPrefix, "Matched with :", filteredModelCategoryRequest);
 	validatedModelAlignedCategory = filteredModelCategoryRequest;
 	const DataDictionaryFetched = availableImplementedLLMModelSpecificCategory[filteredModelCategoryRequest];
-	if (filteredModelCategoryRequest == "" || filteredModelCategoryRequest == undefined || !(fs.existsSync(DataDictionaryFetched.filename))){
+	if (filteredModelCategoryRequest == "" || filteredModelCategoryRequest == undefined || !(checkFileExists(DataDictionaryFetched.filename))){
 		filePathSelectionfromDictionary = `${general_conversation.filename}`
 		console.log(consoleLogPrefix, "modelManager: Fallback");
 	}else{
@@ -992,6 +1001,8 @@ function specializedModelManagerRequestPath(modelCategory){
 	}
 	return filePathSelectionfromDictionary;
 }
+
+
 
 async function callInternalThoughtEngine(prompt){
 	let decisionBinaryKey = ["yes", "no"];
