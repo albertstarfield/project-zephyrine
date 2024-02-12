@@ -440,7 +440,7 @@ ipcRenderer.on("result", async (_event, { data }) => {
 				}, 100);
 			}
 			
-			existing.innerHTML = responses[id]; // This sends each stream chunk
+			existing.innerHTML = responses[id]; // This sends each stream chunk creating a typing effect like on AI Website
 		} else {
 			say(response, id);
 		}

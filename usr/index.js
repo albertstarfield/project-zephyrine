@@ -756,6 +756,14 @@ function isBlankOrWhitespaceTrue_CheckVariable(variable){
 	  }
 }
 
+async function deleteFile(filePath) {
+    try {
+        await fs.promises.unlink(filePath);
+        console.log(`File ${filePath} deleted successfully.`);
+    } catch (error) {
+        console.error(`Error deleting file ${filePath}:`, error);
+    }
+}
 
 const ongoingDownloads = {}; // Object to track ongoing downloads by targetFile
 let timeoutDownloadRetry = 2000; // try to set it 2000ms and above, 2000ms below cause the download to retry indefinitely
@@ -774,6 +782,10 @@ function downloadFile(link, targetFile) {
     // Check if the file exists (possibly corrupted from previous download attempts)
     if (fs.existsSync(targetFile)) {
         console.log(`${consoleLogPrefix} File ${targetFile} Model already exists.`);
+		// delete any possibility of temporaryChunkModel still exists
+		if (fs.existsSync(fileTempName)){
+			deleteFile(fileTempName); //delete the fileTemp
+		}
     }
 	//console.log(`${consoleLogPrefix} File ${fileTempName} status.`);
 	if (fs.existsSync(fileTempName)) {
@@ -979,7 +991,15 @@ function specializedModelManagerRequestPath(modelCategory){
 		if (!fs.existsSync(`${DataDictionaryFetched.filename}`)) {
 			const currentlySelectedSpecializedModelURL = `${DataDictionaryFetched.downloadLink}`; // Replace with your download link
 			downloadFile(currentlySelectedSpecializedModelURL, `${DataDictionaryFetched.filename}`);
+		  } else {
+			// clean any temporaryChunkModel if model already exists 
+			// delete any possibility of temporaryChunkModel still exists
+			const fileTempName = `${DataDictionaryFetched.filename}.temporaryChunkModel`
+			if (fs.existsSync(fileTempName)){
+				deleteFile(fileTempName); //delete the fileTemp
+			}
 		  }
+		
 	}
 	//------------------------------
 	console.log(consoleLogPrefix, "[Requested Specialized LLMChild] ", modelCategory);
