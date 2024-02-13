@@ -20,3 +20,5 @@ dist
 **specLM**
 **generalLM**
 **universalPrompt.txt**
+**.log**
+*.log
