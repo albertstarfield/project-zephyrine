@@ -654,13 +654,14 @@ input:checked + .slider:before {
 	position: fixed;
 	width: 200px;
 	height: 169.420px;
-	background-color: var(--background);
+	background-color: rgba(0, 0, 0, 0);
 	bottom: 0;
 	left: 0;
 	display: flex;
 	flex-direction: column;
 	align-items: center;
 	justify-content: center;
+	backdrop-filter: blur(20px);
 }
 .resource-item {
 	flex: 1 1 100%;
@@ -669,6 +670,8 @@ input:checked + .slider:before {
 	flex-direction: column;
 	align-items: flex-start;
 	justify-content: center;
+	margin: 0; /* Remove margin */
+    padding: 0; /* Remove padding */
 }
 .resource-item:not(:first-child) {
 	border-top: 1px var(--primary-text) solid;
@@ -851,7 +854,7 @@ p.error-text::before {
     }
 }
 * {
-    transition: all 0.5s ease-in-out;
+    transition: all 1.0s ease-in-out;
 }
 
 /* Sky Background stuff for 0.1.2 */

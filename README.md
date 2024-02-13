@@ -77,14 +77,12 @@ That's it! You're ready to go.
 >
 > ```chmod +x ./run.sh ```
 >
-> Run it with your desired model mode for instance 
+> Run it
 >
 > ```./run.sh```
 
 
-3. Once done installing, it'll ask for a valid path to a model. Now, go to where you placed the model, hold shift, right click on the file, and then click on "Copy as Path". Then, paste this into that dialog box and click `Confirm`. 
-
-4. The program will commence automatically, affording you the opportunity to initiate a conversation at your convenience.
+3. The program will commence automatically, affording you the opportunity to initiate a conversation at your convenience.
 
 ## 🔧 Troubleshooting
 

@@ -51,6 +51,28 @@ document.addEventListener("DOMContentLoaded", function() {
 */
 
 document.addEventListener("DOMContentLoaded", function() {
+    const content = document.getElementById("content");
+
+    // Function to fade in content gradually
+    function fadeInContent() {
+        content.classList.remove("hidden");
+        content.style.opacity = 0;
+        let opacity = 0;
+        const fadeInInterval = setInterval(() => {
+            opacity += 0.05; // Increase opacity gradually
+            content.style.opacity = opacity;
+            if (opacity >= 1) {
+                clearInterval(fadeInInterval);
+            }
+        }, 50); // Adjust the interval for smoother or faster fade-in effect
+    }
+
+    // Call the fadeInContent function after a short delay to ensure smoother transition
+    setTimeout(fadeInContent, 500); // Adjust the delay as needed
+});
+
+
+document.addEventListener("DOMContentLoaded", function() {
     const sky = document.getElementById("sky");
     const stars = [];
 
@@ -518,6 +540,8 @@ ipcRenderer.on("result", async (_event, { data }) => {
 	if (data == "\n\n<end>") {
 		setTimeout(() => { // this timeout is for the final render, if somehow after the 
 			isRunningModel = false;
+			existing.style.opacity = 0;
+			existing.style.transition = 'opacity 1s ease-in-out';
 			console.log(prefixConsoleLogStreamCapture, "Stream Ended!");
 			console.log(prefixConsoleLogStreamCapture, "Assuming LLM Main Backend Done Typing!");
 			console.log(prefixConsoleLogStreamCapture, "Sending Stream to GUI");
@@ -531,6 +555,7 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			console.log(prefixConsoleLogStreamCapture, "It should be done");
 			console.log(prefixConsoleLogStreamCapture, "current ID of Output", id);
 			form.setAttribute("class", isRunningModel ? "running-model" : "");
+			existing.style.opacity = 1;
 		}, 200);
 	} else {
 		document.body.classList.remove("llama");
@@ -650,17 +675,31 @@ ipcRenderer.on("internalTEProgress", (_event, { data }) => {
 
 ipcRenderer.on("cpuUsage", (_event, { data }) => {
 	cpuPercent = Math.round(data * 100);
-	cpuText.innerText = `CPU: ${cpuPercent}%, ${threadUtilized}/${cpuCount} threads`;
+	cpuText.style.opacity = 0;
+	//cpuText.innerText = `🧠 ${cpuPercent}%, ${threadUtilized}/${cpuCount} threads`;
 	cpuText.style.transition = 'opacity 1.5s ease-in-out';
-	cpuBar.style.transition = 'transform 0.5s ease-in-out';
+	cpuBar.style.transition = 'transform 2s ease-in-out';
 	cpuBar.style.transform = `scaleX(${cpuPercent / 100})`;
+	setTimeout(() => {
+		cpuText.innerText = `🧠 ${cpuPercent}%`;
+		// Add fade-in effect to the new text
+		cpuText.style.transition = 'opacity 0.5s ease-in-out';
+		cpuText.style.opacity = 1;
+	}, 1000); // Adjust the delay as needed to match the transition duration
 });
 ipcRenderer.on("freemem", (_event, { data }) => {
 	freemem = data;
-	ramText.innerText = `Memory: ${Math.round((totalmem - freemem) * 10) / 10}GB/${totalmem}GB`;
+	ramText.style.opacity = 0;
 	ramText.style.transition = 'opacity 1.5s ease-in-out';
-	ramBar.style.transition = 'transform 0.5s ease-in-out';
+	ramBar.style.transition = 'transform 2s ease-in-out';
 	ramBar.style.transform = `scaleX(${(totalmem - freemem) / totalmem})`;
+	setTimeout(() => {
+		//ramText.innerText = `💾 ${Math.round((totalmem - freemem) * 10) / 10}GB/${totalmem}GB`;
+		ramText.innerText = `💾 ${Math.round((totalmem - freemem) * 10) / 10}GB`;
+		// Add fade-in effect to the new text
+		ramText.style.transition = 'opacity 0.5s ease-in-out';
+		ramText.style.opacity = 1;
+	}, 1000); // Adjust the delay as needed to match the transition duration
 });
 
 document.getElementById("clear").addEventListener("click", () => {

@@ -1495,7 +1495,7 @@ function generateRandomNumber(min, max) {
   }
 let randSeed
 let configSeed = store.get("params").seed;
-let maxRandSeedRange=99999999;
+let maxRandSeedRange=9999999999999999;
 let minRandSeedRange=0;
 if (configSeed === "-1"){ 
 	randSeed = generateRandomNumber(minRandSeedRange, maxRandSeedRange);
