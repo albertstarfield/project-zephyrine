@@ -8,8 +8,6 @@ dist
 .DS_Store
 /release-builds/
 *usr/src/release-builds*
-**usr/storage/**
-**usr/storage/presistentInteractionMem**
 **release-build*
 **tmp-reposync*
 **repoworkspace*
@@ -18,9 +16,7 @@ dist
 **code_queue**
 **.DS_Store**
 **presistentInteractionMem**
-presistentInteractionMem.json
 **.temporaryChunkModel**
 **specLM**
 **generalLM**
 **universalPrompt.txt**
-usr/main.log

@@ -559,6 +559,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 			childLLMResultNotPassed = false;
 			//console.log(consoleLogPrefix, "Result detected", result);
 			childLLMDebugResultMode = false;
+			llmChildfailureCountSum = 0; //reset failure count if exists, because different seed different result
 		} else {
 			definedSeed_LLMchild = generateRandomNumber(minRandSeedRange, maxRandSeedRange);
 			llmChildfailureCountSum = llmChildfailureCountSum + 1;
@@ -567,6 +568,10 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 			console.log(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "Adjusting LengthGen Request to: ", lengthGen);
 			console.log(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
 			childLLMResultNotPassed = true;
+			if ( llmChildfailureCountSum >= 5 ){
+				defectiveLLMChildSpecificModel=true;
+				console.log(consoleLogPrefix, "I yield! I gave up on using this specific Model! Reporting to LLMChild Engine!");
+			}
 		}
 } 
 	//console.log(consoleLogPrefix, "callLLMChildThoughtProcessor Result Passed");
@@ -608,7 +613,16 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	let allowedAllocNPUDraftLayer;
 	
 	// --n-gpu-layers need to be adapted based on round(${store.get("params").hardwareLayerOffloading}*memAllocCutRatio)
-	if(isBlankOrWhitespaceTrue_CheckVariable(specificSpecializedModelPathRequest_LLMChild)){
+	if(isBlankOrWhitespaceTrue_CheckVariable(specificSpecializedModelPathRequest_LLMChild) || LLMChildDecisionModelMode || defectiveLLMChildSpecificModel){
+		if(LLMChildDecisionModelMode){
+			console.log(consoleLogPrefix, "LLMChild Model Decision Mode! Ignoring Specific Model Request!");
+			//Using custom model for decision isn't a wise decision and may cause infinite loop and Adelaide have the tendencies to choose Indonesian LLM and no got output
+			LLMChildDecisionModelMode = false; //reset global flag
+		}
+		if (defectiveLLMChildSpecificModel){
+			console.log(consoleLogPrefix, "I'm not sure if this an issue of the model information augmentation performance, data corruption, language incompatibility! Fallback to the general_conversation");
+			defectiveLLMChildSpecificModel = false; //reset global flag
+		}
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * 1);
 		currentUsedLLMChildModel = specializedModelManagerRequestPath("general_conversation");// Preventing the issue of missing validatedModelAlignedCategory variable which ofc javascript won't tell any issue and just stuck forever in a point
 		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
@@ -720,6 +734,8 @@ let reevaluateAdCtx;
 let reevaluateAdCtxDecisionAgent;
 let specificSpecializedModelPathRequest_LLMChild=""; //Globally inform on what currently needed for the specialized model branch 
 let specificSpecializedModelCategoryRequest_LLMChild=""; //Globally inform on what currently needed for the specialized model branch 
+let LLMChildDecisionModelMode=false;
+let defectiveLLMChildSpecificModel=false; //Some LLM Model cause a havoc on the zero output text detection and stuck on infinite loop like for instance the LLMChild requesting Indonesian LLM which usually biased upon (I'm not sure why just yet), it will produces no output at all and stuck on loop forever (It maybe caused by corrupted model from the download Manager, further investigation required) 
 function historyRequirementRetrieval(historyDistance){
 	//interactionArrayStorage("retrieve", "", false, false, chatStgOrder-1);
 	if (historyDistance >= chatStgOrder){
@@ -1010,15 +1026,11 @@ function specializedModelManagerRequestPath(modelCategory){
 	const filteredModelCategoryRequest = findClosestMatch(modelCategory, specializedModelKeyList);
 	let filePathSelectionfromDictionary;
 	console.log(consoleLogPrefix, "Matched with :", filteredModelCategoryRequest);
-	console.log("Not freezing0");
 	validatedModelAlignedCategory = filteredModelCategoryRequest;
-	console.log("Not freezing1");
 	const DataDictionaryFetched = availableImplementedLLMModelSpecificCategory[filteredModelCategoryRequest];
-	console.log("Not freezing2");
 	if (filteredModelCategoryRequest == "" || filteredModelCategoryRequest == undefined || !(checkFileExists(DataDictionaryFetched.filename))){
-		console.log("Not freezing3");
 		filePathSelectionfromDictionary = `${availableImplementedLLMModelSpecificCategory["general_conversation"].filename}`
-		console.log(consoleLogPrefix, "modelManager: Fallback");
+		console.log(consoleLogPrefix, "modelManager: Fallback to general conversation");
 	}else{
 		filePathSelectionfromDictionary = `${DataDictionaryFetched.filename}`
 		console.log(consoleLogPrefix, "modelManager : Model Detected!", filePathSelectionfromDictionary);
@@ -1147,6 +1159,7 @@ async function callInternalThoughtEngine(prompt){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I use more specific LLM Model for better Answer, Only answer Yes or No! Answer:`;
 			console.log(consoleLogPrefix, "Checking Specific/Specialized Model Fetch Requirement!");
+			LLMChildDecisionModelMode = true;
 			decisionSpecializationLLMChildRequirement = await callLLMChildThoughtProcessor(promptInput, 512);
 			decisionSpecializationLLMChildRequirement = decisionSpecializationLLMChildRequirement.toLowerCase();
 			//decisionSpecializationLLMChildRequirement = findClosestMatch(decisionSpecializationLLMChildRequirement, decisionBinaryKey); // This makes heavy weight on the "yes" decision
@@ -1159,11 +1172,11 @@ async function callInternalThoughtEngine(prompt){
 				specificSpecializedModelCategoryRequest_LLMChild = await callLLMChildThoughtProcessor(promptInput, 512);
 				console.log(consoleLogPrefix, promptInput, "Requesting Model Specialization/Branch", specificSpecializedModelCategoryRequest_LLMChild);
 				// Requesting the specific Model Path on the Computer (and check whether it exists or not , and if its not it will download)
-				specificSpecializedModelPathRequest_LLMChild = specializedModelManagerRequestPath(specificSpecializedModelCategoryRequest_LLMChild)
+				specificSpecializedModelPathRequest_LLMChild = specializedModelManagerRequestPath(specificSpecializedModelCategoryRequest_LLMChild);
 			}else{
 				specificSpecializedModelCategoryRequest_LLMChild = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
 				specificSpecializedModelCategoryRequest_LLMChild = specificSpecializedModelCategoryRequest_LLMChild.replace(/None\./g, "");
-				specificSpecializedModelPathRequest_LLMChild = specializedModelManagerRequestPath(specificSpecializedModelCategoryRequest_LLMChild)
+				specificSpecializedModelPathRequest_LLMChild = specializedModelManagerRequestPath(specificSpecializedModelCategoryRequest_LLMChild);
 			}
 		}else{
 			console.log(consoleLogPrefix, "Doesnt seem to require specific Category Model, reverting to null or default model");
@@ -1181,6 +1194,7 @@ async function callInternalThoughtEngine(prompt){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Internet, Only answer Yes or No! Answer:`;
 			console.log(consoleLogPrefix, "Checking Internet Fetch Requirement!");
+			LLMChildDecisionModelMode = true;
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 12);
 			decisionSearch = decisionSearch.toLowerCase();
 			//decisionSearch = findClosestMatch(decisionSearch, decisionBinaryKey); // This made the "yes" answer wayy to heavy 
@@ -1234,6 +1248,7 @@ async function callInternalThoughtEngine(prompt){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this? Should I Search this on the Local Documents, Only answer Yes or No! Answer:`;
 			console.log(consoleLogPrefix, "Checking Local File Fetch Requirement!");
+			LLMChildDecisionModelMode = true;
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 18);
 			decisionSearch = decisionSearch.toLowerCase();
 			//decisionSearch = findClosestMatch(decisionSearch, decisionBinaryKey); //As i said before
@@ -1280,6 +1295,7 @@ async function callInternalThoughtEngine(prompt){
 		if (store.get("params").llmdecisionMode){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this interaction ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. For the additional context this is what i concluded from Internet ${concludeInformation_Internet}. \n This is what i concluded from the Local Files ${concludeInformation_LocalFiles}. \n From this Interaction and additional context Should I Answer this in 5 steps Yes or No? Answer only in Numbers:`;
+			LLMChildDecisionModelMode = true;
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 32);
 			decisionSearch = decisionSearch.toLowerCase();
 			//decisionSearch = findClosestMatch(decisionSearch, decisionBinaryKey); // I don't want to explain it 
@@ -1387,6 +1403,7 @@ async function callInternalThoughtEngine(prompt){
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
 			promptInput = `This is the previous conversation ${historyChatRetrieved}\n. \n This is the current ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No! Answer:`;
 			console.log(consoleLogPrefix, `LLMChild Evaluating Information PostProcess`);
+			LLMChildDecisionModelMode = true;
 			reevaluateAdCtxDecisionAgent = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 128));
 			console.log(consoleLogPrefix, `${reevaluateAdCtxDecisionAgent}`);
 			//reevaluateAdCtxDecisionAgent = findClosestMatch(reevaluateAdCtxDecisionAgent, decisionBinaryKey); // This for some reason have oversensitivity to go to "yes" answer
@@ -1650,6 +1667,7 @@ function determineLLMBackend(){
 determineLLMBackend();
 console.log(consoleLogPrefix, process.versions.modules);
 const pty = require("node-pty");
+const { Console } = require("console");
 var runningShell, currentPrompt;
 var zephyrineReady,
 	zephyrineHalfReady = false;
