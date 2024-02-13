@@ -472,7 +472,7 @@ ipcRenderer.on("assistantName", (_event, { data }) => {
 	console.log("I am :", assistantName);
 });
 
-const cpuText = document.querySelector("#cpu .text");
+const cpuText = document.querySelector("#cpu .text"); //("id .text")
 const ramText = document.querySelector("#ram .text");
 const cpuBar = document.querySelector("#cpu .bar-inner");
 const ramBar = document.querySelector("#ram .bar-inner");
@@ -491,11 +491,35 @@ ipcRenderer.on("totalmem", (_event, { data }) => {
 	totalmem = Math.round(data / 102.4) / 10;
 });
 
+// This basically set and send the data into ipcRenderer cpuUsage which manipulate the "green bar", maybe we can learn from this to create a progress bar 
 setInterval(async () => {
 	ipcRenderer.send("cpuUsage");
 	ipcRenderer.send("freemem");
-}, 60000);
+}, 5000);
 // For some reason cpuUsage and freemem everytime its updating its eating huge amount of GPU power ?
+// internalTEProgress for recieving internalThoughtEngineProgress;
+// const cpuText = document.querySelector("#cpu .text"); //("#id .text") make an example from how to choose the specific part of the html that wanted to be changed
+let dynamicTips = document.querySelector("#dynamicTipsUIPart .info-bottom-changable");
+let dynamicTipsBar = document.querySelector("#dynamicTipsUIPart .loading-bar");
+
+setInterval(async () => {
+	ipcRenderer.send("internalThoughtProgressGUI");
+	//console.log("fetching progress!"); // this is my first time programming polling ipc so yeah i know its cringy to have a verbose message in here too though, but i guess everyone has its own starting point :/
+}, 3000);
+
+ipcRenderer.on("internalTEProgress", (_event, { data }) => {
+	
+	if (data == 0){
+		dynamicTips.innerText = "Random Tips: Shift + Enter for multiple lines"
+		dynamicTipsBar.style.width = `${data}%`;
+	}else{
+		dynamicTips.innerText = "Currently Thinking and Murmuring!"
+		console.log(`Internal Engine Debug Progress IPC ${data}`); // data recieved is in % or percent
+		dynamicTipsBar.style.width = `${data}%`;
+	}
+
+});
+
 
 ipcRenderer.on("cpuUsage", (_event, { data }) => {
 	cpuPercent = Math.round(data * 100);

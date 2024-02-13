@@ -134,6 +134,13 @@ ipcMain.on("cpuUsage", () => {
 		win.webContents.send("cpuUsage", { data: v });
 	});
 });
+
+ipcMain.on("internalThoughtProgressGUI", () => {
+		const v = internalThoughtEngineProgress;
+		win.webContents.send("internalTEProgress", {data: v});
+		//win.webContents.send("internalTEProgress", data); // You can't send IPC just using data you have to wrap it using {data : v}
+});
+
 ipcMain.on("cpuFree", () => {
 	osUtil.cpuFree(function (v) {
 		win.webContents.send("cpuFree", { data: v });
@@ -704,7 +711,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 const startEndThoughtProcessor_Flag = "OutputResponse:"; // we can remove [ThoughtProcessor] word from the phrase to prevent any processing or breaking the chat context on the LLM and instead just use ___ three underscores
 const startEndAdditionalContext_Flag = ""; //global variable so every function can see and exclude it from the chat view
 // we can savely blank out the startEndAdditionalContext flag because we are now based on the blockGUI forwarding concept rather than flag matching
-const DDG = require("duck-duck-scrape");
+const DDG = require("duck-duck-scrape"); // might migrate later near the scraping subsystem
 let passedOutput="";
 let concludeInformation_CoTMultiSteps = "Nothing";
 let required_CoTSteps;
@@ -736,7 +743,9 @@ let specificSpecializedModelPathRequest_LLMChild=""; //Globally inform on what c
 let specificSpecializedModelCategoryRequest_LLMChild=""; //Globally inform on what currently needed for the specialized model branch 
 let LLMChildDecisionModelMode=false;
 let defectiveLLMChildSpecificModel=false; //Some LLM Model cause a havoc on the zero output text detection and stuck on infinite loop like for instance the LLMChild requesting Indonesian LLM which usually biased upon (I'm not sure why just yet), it will produces no output at all and stuck on loop forever (It maybe caused by corrupted model from the download Manager, further investigation required) 
-function historyRequirementRetrieval(historyDistance){
+let internalThoughtEngineProgress=0; // 0-100% just like progress
+
+function interactionContextFetching(historyDistance){
 	//interactionArrayStorage("retrieve", "", false, false, chatStgOrder-1);
 	if (historyDistance >= chatStgOrder){
 		console.log(consoleLogPrefix, `Requested ${historyDistance} History Depth/Distances doesnt exist, Clamping to ${chatStgOrder}`);
@@ -754,13 +763,25 @@ function historyRequirementRetrieval(historyDistance){
 		  //console.log(i + ": " + str);
 		  //deduplicate string to reduce the size need to be submitted which optimizes the input size and bandwidth
 		}
-	//console.log(consoleLogPrefix, "__historyRequirementRetrievalFlexResult \n", str);
+	//console.log(consoleLogPrefix, "__interactionContextFetchingFlexResult \n", str);
 	return str;
 }
 
-async function captureScreenContext(stub){
-	// this is a stub function not yet to be implemented
+// External Sensory Subsystem
+// stub function and a reference for later rewrite on using OOP object oriented but less insane than the Java
+class sensorySubsystem{
+		// Graphic or Vision Neural Network
+	async graphicalSensorySubsystem(stub){ // requires a compatibility with LLMChild LLaVa Mode
+		// this is a stub function not yet to be implemented
+	}
+	//Audio Neural Network subsystem
+	async audioSensorySubsystem(stub){
+	}
+	// miscExtIOPlainText Neural Network Subsystem
+	async miscSensoryIOPlainTextsubsystem(stub){
+	}
 }
+
 
 function isBlankOrWhitespaceTrue_CheckVariable(variable){
 	//console.log(consoleLogPrefix, "Checking Variable", variable)
@@ -772,6 +793,9 @@ function isBlankOrWhitespaceTrue_CheckVariable(variable){
 	  }
 }
 
+
+// File Management
+// Delete file function
 async function deleteFile(filePath) {
     try {
         await fs.promises.unlink(filePath);
@@ -781,6 +805,7 @@ async function deleteFile(filePath) {
     }
 }
 
+// downloadManager subsystem
 const ongoingDownloads = {}; // Object to track ongoing downloads by targetFile
 let timeoutDownloadRetry = 2000; // try to set it 2000ms and above, 2000ms below cause the download to retry indefinitely
 function downloadFile(link, targetFile) {
@@ -1042,6 +1067,7 @@ function specializedModelManagerRequestPath(modelCategory){
 
 async function callInternalThoughtEngine(prompt){
 	let decisionBinaryKey = ["yes", "no"];
+	internalThoughtEngineProgress=2;
 	// were going to utilize this findClosestMatch(decision..., decisionBinaryKey); // new algo implemented to see whether it is yes or no from the unpredictable LLM Output
 	if (store.get("params").llmdecisionMode){
 		// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
@@ -1059,7 +1085,7 @@ async function callInternalThoughtEngine(prompt){
 		console.log(consoleLogPrefix, "historyDistanceReq Mode");
 	}
 	console.log(consoleLogPrefix, "Retrieving History!");
-	historyChatRetrieved=historyRequirementRetrieval(historyDistanceReq);
+	historyChatRetrieved=interactionContextFetching(historyDistanceReq);
 	concludeInformation_chatHistory=historyChatRetrieved;
 	
 	// Counting the number of words in the Chat prompt and history
@@ -1151,7 +1177,7 @@ async function callInternalThoughtEngine(prompt){
 		// Specialized Model Category that will be implemented will be for now : General_Conversation, Coding, Language_Specific_Indonesia, Language_Specific_Japanese, Language_Specific_English, Language_Specific_Russia, Language_Specific_Arabics, Chemistry, Biology, Physics, Legal_Bench, Medical_Specific_Science, Mathematics, Financial
 		// Category can be Fetched through the variable availableImplementedLLMModelSpecificCategory it will be a dictionary or array 
 		// Specialized Model Table on what to choose on develop with can be fetched from this table https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard
-		
+		internalThoughtEngineProgress=28; // Randomly represent progress (its not representing the real division so precision may be not present)
 		console.log(consoleLogPrefix, "============================================================");
 		//decisionSpecializationLLMChildRequirement
 		// using llmdecisionMode
@@ -1184,6 +1210,7 @@ async function callInternalThoughtEngine(prompt){
 			specificSpecializedModelPathRequest_LLMChild="";
 		}
 		console.log(consoleLogPrefix, "============================================================");
+		internalThoughtEngineProgress=39; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		// External Data Part
 		//-------------------------------------------------------
@@ -1242,7 +1269,8 @@ async function callInternalThoughtEngine(prompt){
 
 		//-------------------------------------------------------
 		console.log(consoleLogPrefix, "============================================================");
-		
+		internalThoughtEngineProgress=48; // Randomly represent progress (its not representing the real division so precision may be not present)
+
 		// This is for the Local Document Search Logic
 		if (store.get("params").llmdecisionMode && store.get("params").localAccess){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
@@ -1288,6 +1316,7 @@ async function callInternalThoughtEngine(prompt){
 			console.log(consoleLogPrefix, concludeInformation_LocalFiles);
 		}
 		
+		internalThoughtEngineProgress=64; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		// ----------------------- CoT Steps Thoughts --------------------
 		console.log(consoleLogPrefix, "============================================================");
@@ -1348,6 +1377,8 @@ async function callInternalThoughtEngine(prompt){
 			concludeInformation_CoTMultiSteps = "Nothing";
 			console.log(consoleLogPrefix, concludeInformation_CoTMultiSteps);
 		}
+		internalThoughtEngineProgress=78; // Randomly represent progress (its not representing the real division so precision may be not present)
+
 		console.log(consoleLogPrefix, "============================================================");
 			console.log(consoleLogPrefix, "Executing LLMChild Emotion Engine!");
 			
@@ -1384,6 +1415,8 @@ async function callInternalThoughtEngine(prompt){
 		console.log(concludeInformation_Internet);
 		console.log(concludeInformation_LocalFiles);
 		console.log(concludeInformation_chatHistory);
+		internalThoughtEngineProgress=89; // Randomly represent progress (its not representing the real division so precision may be not present)
+
 		if((concludeInformation_Internet === "Nothing" || concludeInformation_Internet === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_Internet) ) && (concludeInformation_LocalFiles === "Nothing" || concludeInformation_LocalFiles === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_LocalFiles)) && (concludeInformation_CoTMultiSteps === "Nothing" || concludeInformation_CoTMultiSteps === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_CoTMultiSteps)) && (concludeInformation_chatHistory === "Nothing" || concludeInformation_chatHistory === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_chatHistory))){
 			console.log(consoleLogPrefix, "Bypassing Additional Context");
 			passedOutput = prompt;
@@ -1400,6 +1433,7 @@ async function callInternalThoughtEngine(prompt){
 		}else{
 			passedOutput = prompt;
 		}
+		internalThoughtEngineProgress=93; // Randomly represent progress (its not representing the real division so precision may be not present)
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
 			promptInput = `This is the previous conversation ${historyChatRetrieved}\n. \n This is the current ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No! Answer:`;
 			console.log(consoleLogPrefix, `LLMChild Evaluating Information PostProcess`);
@@ -1421,6 +1455,8 @@ async function callInternalThoughtEngine(prompt){
 			reevaluateAdCtx = false;
 		}
 	}
+	//reset to 0 to when it finished
+	internalThoughtEngineProgress=0; // Randomly represent progress (its not representing the real division so precision may be not present)
 	console.log(consoleLogPrefix, passedOutput);
 	return passedOutput;
 

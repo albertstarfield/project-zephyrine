@@ -87,13 +87,13 @@
 				</div>
 				<div id="resources">
 					<div id="cpu" class="resource-item">
-						<div class="text info">Hello There!</div>
+						<div class="text info">N/A</div>
 						<div class="bar">
 							<div class="bar-inner"></div>
 						</div>
 					</div>
 					<div id="ram" class="resource-item">
-						<div class="text info">Info will be available in 60 Seconds</div>
+						<div class="text info">N/A</div>
 						<div class="bar">
 							<div class="bar-inner"></div>
 						</div>
@@ -194,10 +194,19 @@
 							</button>
 						</div>
 					</div>
-					<div class="bubble-field">
-						<div class="info-bottom-changable">
-							Note: Shift + Enter for multiple lines
+					<!-- Replicate this Functionality with dynamic Loading bar for the dynamicTipsUIPart
+					<div id="cpu" class="resource-item">
+						<div class="text info">Hello There!</div>
+						<div class="bar">
+							<div class="bar-inner"></div>
 						</div>
+					</div>
+					-->
+					<div id="dynamicTipsUIPart" class="bubble-field">
+						<div class="info-bottom-changable">
+							Initializing
+						</div>
+						<div class="loading-bar"></div>
 					</div>
 					<div style="height: 0.99rem"></div>
 				</form>

@@ -182,6 +182,7 @@ body {
 }
 .bubble-field {
 	background: var(--surface);
+	position: relative;
 	backdrop-filter: blur(8px); /* Add a blur effect to the background */
 	display: flex;
 	padding: 0px;
@@ -427,6 +428,16 @@ li {
 	opacity: 0;
 	pointer-events: none;
 }
+.loading-bar {
+    height: 0.04rem; /* Adjust the height of the loading bar as needed */
+	top: 0;
+	bottom: 0;
+	position: absolute;
+    background-color: var(--accent); /* Set the default color of the loading bar */
+	backdrop-filter: blur(20px);
+    width: 0%; /* Initially set the width to 0 */
+}
+
 .loading svg {
 	animation: spin 20s steps(2) infinite;
 }

@@ -11,7 +11,10 @@
 - [x] Includes a Granular Toggles Mode within the settings section.
 - [x] Implements Markdown Formatted Response support.
 - [x] Implement Typing-like experience Response Support.
-- [ ] Implementing multi language support with Frontend Automatic Translation and Backend EN Processing
+- [x] Progress bar for internal thoughts rather than leaving the user without any information on the GUI why is it Stuck.
+- [ ] Auto Idle Sleep Detection auto fine-tune (Mimicking real-life brain retraining while sleep) maybe augment it to LoRA later on.
+- [ ] Categorize into Classes based on the subsystem drawio for cleaner Code and easier debugging
+- [ ] Implementing multi language support with Frontend Automatic Translation and Backend EN Processing.
 - [ ] Implement and Replace Context Depth fetching to (Multi Level Condensed Memory Contextual Fetching)
 - [ ] Implementing a Proactive Lockup Timeout Verification Mechanism in the Quest for External Context Acquisition.
 - [ ] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.
