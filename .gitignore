@@ -22,3 +22,8 @@ dist
 **universalPrompt.txt**
 **.log**
 *.log
+usr/main.log
+usr/error.log
+usr/storage/presistentInteractionMem.json
+**/*Mem.json
+**/*.log
