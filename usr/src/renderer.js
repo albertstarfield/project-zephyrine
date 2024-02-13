@@ -28,6 +28,123 @@ const { ipcRenderer, dialog } = require("electron");
 
 const win = remote.getCurrentWindow();
 
+
+
+
+// Splash Screen
+
+/*
+document.addEventListener("DOMContentLoaded", function() {
+    const splashScreenOverlay = document.getElementById("splash-screen-overlay");
+
+    // Blur out the splash screen initially
+    setTimeout(() => {
+        splashScreenOverlay.classList.add("blur-out");
+    }, 0);
+
+    // Unblur the splash screen gradually
+    setTimeout(() => {
+        splashScreenOverlay.style.transition = "backdrop-filter 2s ease-in-out";
+        splashScreenOverlay.style.backdropFilter = "blur(0px)";
+    }, 2000);
+});
+*/
+
+document.addEventListener("DOMContentLoaded", function() {
+    const sky = document.getElementById("sky");
+    const stars = [];
+
+    // Function to generate a random number within a range
+    function getRandom(min, max) {
+        return Math.random() * (max - min) + min;
+    }
+
+    // Function to calculate the distance between two points
+    function calculateDistance(x1, y1, x2, y2) {
+        const dx = x2 - x1;
+        const dy = y2 - y1;
+        return Math.sqrt(dx * dx + dy * dy);
+    }
+
+    // Function to create a star
+    function createStar() {
+        const star = document.createElement("div");
+        star.className = "star";
+        star.style.width = getRandom(3, 5) + "px";
+        star.style.height = star.style.width;
+        star.style.top = getRandom(0, sky.offsetHeight) + "px";
+        star.style.left = getRandom(0, sky.offsetWidth) + "px";
+        star.style.backgroundColor = getRandomColor();
+        sky.appendChild(star);
+
+        // Add twinkling effect
+        star.style.animation = "twinkling " + getRandom(2, 5) + "s infinite";
+
+        // Add bloom effect
+        star.addEventListener("mouseover", function() {
+            this.style.boxShadow = "0 0 20px 10px rgba(255, 255, 255, 0.7)";
+        });
+        star.addEventListener("mouseout", function() {
+            this.style.boxShadow = "0 0 20px 10px rgba(255, 255, 255, 0)";
+        });
+
+        // Store star object
+        stars.push({
+            element: star,
+            x: parseFloat(star.style.left),
+            y: parseFloat(star.style.top),
+            xSpeed: getRandom(-1, 1),
+            ySpeed: getRandom(-1, 1)
+        });
+    }
+
+    // Function to move stars and handle collisions
+    function moveStars() {
+        stars.forEach(star => {
+            star.x += star.xSpeed;
+            star.y += star.ySpeed;
+
+            if (star.x < 0 || star.x > sky.offsetWidth - parseFloat(star.element.style.width)) {
+                star.xSpeed *= -1; // Reverse direction on collision with left or right boundary
+            }
+
+            if (star.y < 0 || star.y > sky.offsetHeight - parseFloat(star.element.style.height)) {
+                star.ySpeed *= -1; // Reverse direction on collision with top or bottom boundary
+            }
+
+            star.element.style.left = star.x + "px";
+            star.element.style.top = star.y + "px";
+        });
+
+        requestAnimationFrame(moveStars);
+    }
+
+    // Function to generate a random color
+    function getRandomColor() {
+        const r = Math.floor(Math.random() * 50) + 200; // Red component
+        const g = Math.floor(Math.random() * 50) + 200; // Green component
+        const b = Math.floor(Math.random() * 50); // Blue component
+        return `rgb(${r},${g},${b})`;
+    }
+
+    // Function to generate stars
+    function generateStars() {
+        for (let i = 0; i < 50; i++) {
+            createStar();
+        }
+        moveStars(); // Start moving stars after generating them
+    }
+
+    // Generate stars
+    generateStars();
+});
+
+
+
+
+
+
+
 document.onreadystatechange = (event) => {
 	ipcRenderer.send("os");
 	if (document.readyState == "complete") {
@@ -151,6 +268,7 @@ input.addEventListener("keyup", () => {
 });
 
 let isRunningModel = false;
+
 const loading = (on) => {
 	if (on) {
 		document.querySelector(".loading").classList.remove("hidden");
@@ -511,11 +629,20 @@ ipcRenderer.on("internalTEProgress", (_event, { data }) => {
 	
 	if (data == 0){
 		dynamicTips.innerText = "Random Tips: Shift + Enter for multiple lines"
+		dynamicTips.style.transition = 'opacity 0.5s ease-in-out';
+		dynamicTips.style.opacity = 1;
 		dynamicTipsBar.style.width = `${data}%`;
+		dynamicTipsBar.style.transition = 'width 0.5s ease-in-out';
 	}else{
-		dynamicTips.innerText = "Currently Thinking and Murmuring!"
-		console.log(`Internal Engine Debug Progress IPC ${data}`); // data recieved is in % or percent
+		dynamicTips.style.transition = 'opacity 0.5s ease-in-out';
+		dynamicTips.style.opacity = 0;
 		dynamicTipsBar.style.width = `${data}%`;
+		setTimeout(() => {
+			dynamicTips.innerText = "Currently Thinking and Murmuring!"
+			// Add fade-in effect to the new text
+			dynamicTips.style.transition = 'opacity 0.5s ease-in-out';
+			dynamicTips.style.opacity = 1;
+		}, 1000); // Adjust the delay as needed to match the transition duration
 	}
 
 });
@@ -524,11 +651,15 @@ ipcRenderer.on("internalTEProgress", (_event, { data }) => {
 ipcRenderer.on("cpuUsage", (_event, { data }) => {
 	cpuPercent = Math.round(data * 100);
 	cpuText.innerText = `CPU: ${cpuPercent}%, ${threadUtilized}/${cpuCount} threads`;
+	cpuText.style.transition = 'opacity 1.5s ease-in-out';
+	cpuBar.style.transition = 'transform 0.5s ease-in-out';
 	cpuBar.style.transform = `scaleX(${cpuPercent / 100})`;
 });
 ipcRenderer.on("freemem", (_event, { data }) => {
 	freemem = data;
 	ramText.innerText = `Memory: ${Math.round((totalmem - freemem) * 10) / 10}GB/${totalmem}GB`;
+	ramText.style.transition = 'opacity 1.5s ease-in-out';
+	ramBar.style.transition = 'transform 0.5s ease-in-out';
 	ramBar.style.transform = `scaleX(${(totalmem - freemem) / totalmem})`;
 });
 
