@@ -579,7 +579,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 }
 
 
-// TODO: Implement to "use specialized model" for each request/prompt for optimization, so that the main model can just use a 7B really lightweight 
+// TODO: Implement to "Use specialized model" for each request/prompt for optimization, so that the main model can just use a 7B really lightweight 
 // funny thing is that Im actually inspired to make those microkernel-like architecture from my limitation on writing story
 // Have an idea but doesnt have the vocab library space on my head so use an supervised external extension instead
 // That's why Human are still required on AI operation
