@@ -649,6 +649,15 @@ setInterval(async () => {
 	//console.log("fetching progress!"); // this is my first time programming polling ipc so yeah i know its cringy to have a verbose message in here too though, but i guess everyone has its own starting point :/
 }, 3000);
 
+setInterval(async () => {
+	ipcRenderer.send("internalThoughtProgressTextGUI");
+}, 3000);
+
+let dynamicTipsProgressLLMChild="";
+ipcRenderer.on("internalTEProgressText", (_event, { data }) => {
+	dynamicTipsProgressLLMChild=data;
+});
+
 ipcRenderer.on("internalTEProgress", (_event, { data }) => {
 	
 	if (data == 0){
@@ -662,7 +671,12 @@ ipcRenderer.on("internalTEProgress", (_event, { data }) => {
 		dynamicTips.style.opacity = 0;
 		dynamicTipsBar.style.width = `${data}%`;
 		setTimeout(() => {
-			dynamicTips.innerText = "Currently Thinking and Murmuring!"
+			if(dynamicTipsProgressLLMChild == ""){
+				dynamicTips.innerText = "Waiting LLMChild to Give Progress Report!"
+			} else {
+				dynamicTips.innerText = dynamicTipsProgressLLMChild;
+			}
+			 // no We can't do this, we need to replace it with something more dynamic and more saying verbose what its doing
 			// Add fade-in effect to the new text
 			dynamicTips.style.transition = 'opacity 0.5s ease-in-out';
 			dynamicTips.style.opacity = 1;

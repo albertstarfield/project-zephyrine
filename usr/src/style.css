@@ -28,7 +28,7 @@ h1.logo {
 	--background: #34354158;
 	--background-mid: #2c2d30;
 	--background-alt: #202123;
-	--surface: #4446542d;
+	--surface: #27272727;
 	--surface-alt: #56586992;
 	--surface-alt-bright: #acacbe;
 	--tertiary: #3e3f4b;
@@ -196,7 +196,7 @@ body {
 	background: var(--surface);
 	backdrop-filter: blur(8px); /* Add a blur effect to the background */
 	display: flex;
-	padding: 10px;
+	padding: 0.5rem;
 	box-sizing: border-box;
 	box-shadow: 0 0 var(--shadow-disperse) var(--shadow-color);
 	border-radius: 1.275rem;
@@ -365,7 +365,7 @@ html.darwin #main { /* b r u h */
 	margin: 1.38rem;
 	box-sizing: border-box;
 	padding: 5;
-	margin-bottom: 480px;
+	margin-bottom: 13rem;
 	background-color: rgba(255, 255, 255, 0.058);
 	border-radius: 0.375rem;
 	overflow-y: auto;
@@ -549,7 +549,7 @@ form.running-model .loading {
 	margin: 0;
 	width: 4rem;
 	background-color:var(--background);
-	height: calc(100vh - 182px);
+	height: calc(100vh - 1rem);
 	overflow: hidden auto;
 	flex-direction: column;
 }

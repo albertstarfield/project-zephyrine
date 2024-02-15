@@ -141,6 +141,13 @@ ipcMain.on("internalThoughtProgressGUI", () => {
 		//win.webContents.send("internalTEProgress", data); // You can't send IPC just using data you have to wrap it using {data : v}
 });
 
+ipcMain.on("internalThoughtProgressTextGUI", () => {
+	const v = internalThoughtEngineTextProgress;
+	win.webContents.send("internalTEProgressText", {data: v});
+	internalThoughtEngineTextProgress = ""; // Reset and empty out after read
+	//win.webContents.send("internalTEProgress", data); // You can't send IPC just using data you have to wrap it using {data : v}
+});
+
 ipcMain.on("cpuFree", () => {
 	osUtil.cpuFree(function (v) {
 		win.webContents.send("cpuFree", { data: v });
@@ -572,12 +579,15 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 			llmChildfailureCountSum = llmChildfailureCountSum + 1;
 			lengthGen = llmChildfailureCountSum + lengthGen;
 			childLLMDebugResultMode = true;
+			internalThoughtEngineTextProgress=`LLMChild Failed to execute no Output! Might be a bad model?`;
+			console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
 			console.log(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "Adjusting LengthGen Request to: ", lengthGen);
 			console.log(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
 			childLLMResultNotPassed = true;
 			if ( llmChildfailureCountSum >= 5 ){
 				defectiveLLMChildSpecificModel=true;
-				console.log(consoleLogPrefix, "I yield! I gave up on using this specific Model! Reporting to LLMChild Engine!");
+				internalThoughtEngineTextProgress=`I yield! I gave up on using this specific Model! Reporting to LLMChild Engine!`;
+				console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
 			}
 		}
 } 
@@ -744,6 +754,7 @@ let specificSpecializedModelCategoryRequest_LLMChild=""; //Globally inform on wh
 let LLMChildDecisionModelMode=false;
 let defectiveLLMChildSpecificModel=false; //Some LLM Model cause a havoc on the zero output text detection and stuck on infinite loop like for instance the LLMChild requesting Indonesian LLM which usually biased upon (I'm not sure why just yet), it will produces no output at all and stuck on loop forever (It maybe caused by corrupted model from the download Manager, further investigation required) 
 let internalThoughtEngineProgress=0; // 0-100% just like progress
+let internalThoughtEngineTextProgress="";
 
 function interactionContextFetching(historyDistance){
 	//interactionArrayStorage("retrieve", "", false, false, chatStgOrder-1);
@@ -1072,6 +1083,7 @@ async function callInternalThoughtEngine(prompt){
 	if (store.get("params").llmdecisionMode){
 		// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 		promptInput = `${username}:${prompt}\n Based on your evaluation of the request submitted by ${username}, could you please ascertain the number of sequential steps, ranging from 1 to 50, necessary to acquire the relevant historical context to understand the present situation? Answer only in numbers:`;
+		internalThoughtEngineTextProgress="Acquiring Interaction Context";
 		historyDistanceReq = await callLLMChildThoughtProcessor(promptInput, 32);
 		historyDistanceReq = onlyAllowNumber(historyDistanceReq);
 		console.log(consoleLogPrefix, "Required History Distance as Context", historyDistanceReq);
@@ -1085,6 +1097,7 @@ async function callInternalThoughtEngine(prompt){
 		console.log(consoleLogPrefix, "historyDistanceReq Mode");
 	}
 	console.log(consoleLogPrefix, "Retrieving History!");
+	internalThoughtEngineTextProgress="Retrieving History!";
 	historyChatRetrieved=interactionContextFetching(historyDistanceReq);
 	concludeInformation_chatHistory=historyChatRetrieved;
 	
@@ -1184,7 +1197,8 @@ async function callInternalThoughtEngine(prompt){
 		if (store.get("params").llmdecisionMode){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I use more specific LLM Model for better Answer, Only answer Yes or No! Answer:`;
-			console.log(consoleLogPrefix, "Checking Specific/Specialized Model Fetch Requirement!");
+			internalThoughtEngineTextProgress="Checking Specific/Specialized/Experts Model Fetch Requirement!";
+			console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
 			LLMChildDecisionModelMode = true;
 			decisionSpecializationLLMChildRequirement = await callLLMChildThoughtProcessor(promptInput, 512);
 			decisionSpecializationLLMChildRequirement = decisionSpecializationLLMChildRequirement.toLowerCase();
@@ -1205,7 +1219,8 @@ async function callInternalThoughtEngine(prompt){
 				specificSpecializedModelPathRequest_LLMChild = specializedModelManagerRequestPath(specificSpecializedModelCategoryRequest_LLMChild);
 			}
 		}else{
-			console.log(consoleLogPrefix, "Doesnt seem to require specific Category Model, reverting to null or default model");
+			internalThoughtEngineTextProgress="Doesnt seem to require specific Category Model, reverting to null or default model";
+			console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
 			specificSpecializedModelCategoryRequest_LLMChild="";
 			specificSpecializedModelPathRequest_LLMChild="";
 		}
@@ -1220,7 +1235,8 @@ async function callInternalThoughtEngine(prompt){
 		if (store.get("params").llmdecisionMode && store.get("params").webAccess){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Internet, Only answer Yes or No! Answer:`;
-			console.log(consoleLogPrefix, "Checking Internet Fetch Requirement!");
+			internalThoughtEngineTextProgress="Checking Internet Fetch Requirement!";
+			console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
 			LLMChildDecisionModelMode = true;
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 12);
 			decisionSearch = decisionSearch.toLowerCase();
@@ -1236,6 +1252,8 @@ async function callInternalThoughtEngine(prompt){
 			if (store.get("params").llmdecisionMode){
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. Do i have the knowledge to answer this then if i dont have the knowledge should i search it on the internet? Answer:`;
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
+				internalThoughtEngineTextProgress="Creating Search Prompt for Internet Search!";
+				console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
 				console.log(consoleLogPrefix, `search prompt has been created`);
 			}else{
 				searchPrompt = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
@@ -1252,7 +1270,8 @@ async function callInternalThoughtEngine(prompt){
 			if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
 				resultSearchScraping = stripProgramBreakingCharacters(resultSearchScraping);
 				promptInput = `What is the conclusion from this info: ${resultSearchScraping} Conclusion:`;
-				console.log(consoleLogPrefix, `LLMChild Concluding...`);
+				internalThoughtEngineTextProgress="Concluding LLMChild";
+				console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
 				//let concludeInformation_Internet;
 				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(stripProgramBreakingCharacters(promptInput)), 1024);
 			} else {
@@ -1336,10 +1355,12 @@ async function callInternalThoughtEngine(prompt){
 				
 				// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 				// required_CoTSteps
+				
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n From this context from 1 to 27 how many steps that is required to answer. Answer:`;
 				required_CoTSteps = await callLLMChildThoughtProcessor(promptInput, 16);
 				required_CoTSteps = onlyAllowNumber(required_CoTSteps);
-				console.log(consoleLogPrefix, `Required ${required_CoTSteps} CoT steps`);
+				internalThoughtEngineTextProgress=`Required ${required_CoTSteps} CoT steps`;
+				console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
 
 				if (isVariableEmpty(required_CoTSteps)){
 					required_CoTSteps = 5;
@@ -1352,7 +1373,9 @@ async function callInternalThoughtEngine(prompt){
 				todoList = await callLLMChildThoughtProcessor(promptInput, 512);
 
 				for(let iterate = 1; iterate <= required_CoTSteps; iterate++){
-					console.log(consoleLogPrefix, "Processing Chain of Thoughts Step", iterate);
+					console.log(consoleLogPrefix, );
+					internalThoughtEngineTextProgress=`Processing Chain of Thoughts Step, ${iterate}`;
+					console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
 					promptInput = ` What is the answer to the List number ${iterate} : ${todoList} Answer/NextStep:"`;
 					promptInput = stripProgramBreakingCharacters(promptInput);
 					todoListResult = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
@@ -1364,7 +1387,8 @@ async function callInternalThoughtEngine(prompt){
 			}
 			if (store.get("params").llmdecisionMode){
 			promptInput = `Conclusion from the internal Thoughts?  \\"${concatenatedCoT}\\" Conclusion:"`;
-			console.log(consoleLogPrefix, `LLMChild Concluding...`);
+			internalThoughtEngineTextProgress=`LLMChild Concluding Chain of Thoughts...`;
+			console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
 			promptInput = stripProgramBreakingCharacters(promptInput);
 			concludeInformation_CoTMultiSteps = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
 			} else {
@@ -1385,7 +1409,8 @@ async function callInternalThoughtEngine(prompt){
 			emotionlist = "Happy, Sad, Fear, Anger, Disgust";
 			if (store.get("params").emotionalLLMChildengine){
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. From this conversation which from the following emotions ${emotionlist} are the correct one? Answer:`;
-				console.log(consoleLogPrefix, `LLMChild Evaluating Interaction With Emotion Engine...`);
+				internalThoughtEngineTextProgress=`LLMChild Evaluating Interaction With Emotion Engine...`;
+				console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
 				promptInput = stripProgramBreakingCharacters(promptInput);
 				evaluateEmotionInteraction = await callLLMChildThoughtProcessor(promptInput, 64);
 				evaluateEmotionInteraction = evaluateEmotionInteraction.toLowerCase();
