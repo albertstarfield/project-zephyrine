@@ -29,26 +29,25 @@ const { ipcRenderer, dialog } = require("electron");
 const win = remote.getCurrentWindow();
 
 
-
-
-// Splash Screen
-
-/*
 document.addEventListener("DOMContentLoaded", function() {
-    const splashScreenOverlay = document.getElementById("splash-screen-overlay");
+    const feedPlaceholder = document.getElementById("messages");
 
-    // Blur out the splash screen initially
-    setTimeout(() => {
-        splashScreenOverlay.classList.add("blur-out");
-    }, 0);
+    // Function to show the element with fade-in effect
+    function fadeInElement() {
+        feedPlaceholder.classList.remove("hidden");
+        feedPlaceholder.classList.add("fade-in");
+    }
 
-    // Unblur the splash screen gradually
-    setTimeout(() => {
-        splashScreenOverlay.style.transition = "backdrop-filter 2s ease-in-out";
-        splashScreenOverlay.style.backdropFilter = "blur(0px)";
-    }, 2000);
+    // Function to hide the element with fade-out effect
+    function fadeOutElement() {
+        feedPlaceholder.classList.remove("fade-in");
+        feedPlaceholder.classList.add("hidden");
+    }
+
+    // Call the fadeInElement function after a short delay to ensure smoother transition
+    setTimeout(fadeInElement, 500); // Adjust the delay as needed
 });
-*/
+
 
 document.addEventListener("DOMContentLoaded", function() {
     const content = document.getElementById("content");
@@ -716,13 +715,19 @@ document.getElementById("chat-reset").addEventListener("click", () => {
 	ipcRenderer.send("restart");
 	ipcRenderer.send("resetChatHistoryCTX");
 	document.querySelectorAll("#messages li").forEach((element) => {
+		element.style.opacity = 1;
+		element.style.transition = 'opacity 1s ease-in-out';
+		element.style.opacity = 0;
 		element.remove();
 	});
 	setTimeout(() => {
 		document.querySelectorAll("#messages li").forEach((element) => {
+			element.style.opacity = 1;
+			element.style.transition = 'opacity 1s ease-in-out';
+			element.style.opacity = 0;
 			element.remove();
 		});
-	}, 100);
+	}, 1000);
 });
 
 // since the program now come with predefined tuned model this won't be required and if its implemented it will make the program runs in buggy state or chaos like the button won't be able clicked without error and etc
