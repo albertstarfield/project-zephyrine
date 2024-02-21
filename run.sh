@@ -227,7 +227,7 @@ build_llama() {
 
     # Build with multiple cores
     echo "This is the architecture $(uname -m) unless the cmake becoming asshole and detect arm64 as x86_64"
-    cmake --build . --config Release  || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
+    cmake --build . --config Release --parallel 128 || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -308,7 +308,7 @@ build_llama_gguf() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    cmake --build . --config Release  || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
+    cmake --build . --config Release --parallel 128 || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -321,7 +321,7 @@ build_llama_gguf() {
     cd "$rootdir" || exit 1
 }
 
-# Function to build and install LLaMa
+# Function to build and install ggml
 build_ggml_base() {
     echo "Requesting GGML Binary"
     # Clone submodule and update
@@ -390,7 +390,84 @@ build_ggml_base() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    make -j $(nproc) ${1} || { echo "GGML based compilation failed. See logs for details."; exit 1; }
+    make -j 128 ${1} || { echo "GGML based compilation failed. See logs for details."; exit 1; }
+    pwd
+    # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
+    if [[ "$platform" == "Linux" ]]; then
+        cp bin/${1} ${rootdir}/usr/bin/chat
+    elif [[ "$platform" == "Darwin" ]]; then
+        cp bin/${1} ${rootdir}/usr/bin/chat
+    fi
+
+    # Change directory back to rootdir
+    cd "$rootdir" || exit 1
+}
+
+
+# Function to build and install ggml
+build_gemma_base() {
+    echo "Requesting Google Gemma Binary"
+    # Clone submodule and update
+    git submodule update --init --recursive --remote --merge
+    
+    # Change directory to llama.cpp
+    cd usr/vendor/gemma.cpp || exit 1
+
+    # Create build directory and change directory to it
+    if [ ! -d build ]; then
+    mkdir -p build
+    fi
+
+    cd build || exit 1
+
+    # Install dependencies based on the platform
+    if [[ "$platform" == "Linux" ]]; then
+        install_dependencies_linux
+    elif [[ "$platform" == "Darwin" ]]; then
+        install_dependencies_macos
+    fi
+
+    cuda=$(detect_cuda)
+    opencl=$(detect_opencl)
+    metal=$(detect_metal)
+
+    if [[ "$platform" == "Linux" ]]; then
+        if [[ "$cuda" == "cuda" ]]; then
+            CMAKE_ARGS=""
+            echo "Gemma is CPU SIMD only!"
+        fi
+    elif [[ "$platform" == "Darwin" ]]; then
+        if [[ "$cuda" == "cuda" ]]; then
+            CMAKE_ARGS=""
+            echo "Gemma is CPU SIMD only!"
+            #CMAKE_CUDA_FLAGS="-allow-unsupported-compiler"
+        elif [[ "$metal" == "metal" ]]; then
+            CMAKE_ARGS=""
+            echo "Gemma is CPU SIMD only!"
+        elif [[ "$opencl" == "opencl" ]]; then
+            CMAKE_ARGS=""
+            echo "Gemma is CPU SIMD only!"
+        else
+            CMAKE_ARGS=""
+            echo "Gemma is CPU SIMD only!"
+        fi
+        if [ "$(uname -m)" == "arm64" ]; then
+            echo "Enforcing compilation to $(uname -m), Probably cmake wont listen!"
+            export CMAKE_HOST_SYSTEM_PROCESSOR="arm64"
+            ENFORCE_ARCH_COMPILATION="-DCMAKE_OSX_ARCHITECTURES=arm64 -DCMAKE_APPLE_SILICON_PROCESSOR=arm64 -DCMAKE_HOST_SYSTEM_PROCESSOR=arm64 -DCMAKE_SYSTEM_PROCESSOR=arm64"
+        else
+            ENFORCE_ARCH_COMPILATION=""
+        fi
+    else
+        echo "Unsupported platform: $platform"
+        exit 1
+    fi
+    # Run CMake
+    cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
+
+    # Build with multiple cores
+    make -j 128 ${1} || { echo "Gemma compilation failed. See logs for details."; exit 1; }
+
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -468,7 +545,7 @@ build_falcon() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    cmake --build . --config Release  || { echo "ggllm compilation failed. See logs for details."; exit 1; }
+    cmake --build . --config Release --parallel 128 || { echo "ggllm compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -726,9 +803,17 @@ buildLLMBackend(){
     echo "Copying any Acceleration and Debugging Dependencies for gpt-j"
     cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptj
     cp ./usr/vendor/ggml/build/bin/gpt-j ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptj/LLMBackend-gpt-j
-    echo "Copying any Acceleration and Debugging Dependencies for gpt-neo-x"
-    cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptneox
-    cp ./usr/vendor/ggml/build/bin/gpt-neox ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptneox/LLMBackend-gpt-neox
+
+    cd ${rootdir}
+    #gemma
+    build_gemma_base
+    cd ${rootdir}
+
+    #./usr/vendor/ggml/build/bin/${1} location of the compiled binary ggml based
+    mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/googleGemma
+    echo "Copying any Acceleration and Debugging Dependencies for googleGemma"
+    cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/googleGemma
+    cp ./usr/vendor/ggml/build/bin/gemma ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/googleGemma/LLMBackend-gemma
 
     cd ${rootdir}
 }
@@ -770,11 +855,12 @@ install_dependencies_linux() {
 
 
 # Install npm dependencie
-
-if [[ "$platform" == "Linux" ]]; then
-    install_dependencies_linux
-elif [[ "$platform" == "Darwin" ]]; then
-    install_dependencies_macos
+if [ -z "$(command -v npm)" ]; then
+    if [[ "$platform" == "Linux" ]]; then
+        install_dependencies_linux
+    elif [[ "$platform" == "Darwin" ]]; then
+        install_dependencies_macos
+    fi
 fi
 
 # Install npm dependencies

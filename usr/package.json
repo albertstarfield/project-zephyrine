@@ -43,6 +43,7 @@
 		"electron-store": "^8.1.0",
 		"express": "^4.18.2",
 		"fs": "^0.0.1-security",
+		"gpu-info": "^0.0.1",
 		"jsdom": "^22.1.0",
 		"marked": "^9.1.2",
 		"n": "^9.2.0",

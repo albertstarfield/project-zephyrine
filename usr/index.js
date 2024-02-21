@@ -52,10 +52,10 @@ const platform = os.platform();
 const arch = os.arch();
 const colorReset = "\x1b[0m";
 const colorBrightCyan = "\x1b[96m";
-const consoleLogPrefix = `[${colorBrightCyan}${appName}_${platform}_${arch}${colorReset}]:`;
 const assistantName = "Adelaide Zephyrine Charlotte"
 const appName = `Project ${assistantName}`
 const username = os.userInfo().username;
+const consoleLogPrefix = `[${colorBrightCyan}${appName}_${platform}_${arch}${colorReset}]:`;
 
 
 var win;
@@ -153,6 +153,7 @@ function getSystemInfo() {
         cpuCores: os.cpus().length
     };
 
+	console.log("ashasgakdas")
     // Concatenate basic OS information
     systemInfoStr += `
         System Backplate Information:
@@ -163,18 +164,22 @@ function getSystemInfo() {
         Hostname: ${osInfo.hostname}
         Total Memory: ${Math.round(osInfo.totalMemory / (1024 * 1024 * 1024))} GB
         Free Memory: ${Math.round(osInfo.freeMemory / (1024 * 1024 * 1024))} GB
-        CPU Model: ${osInfo.cpuModel}
-        CPU Speed: ${osInfo.cpuSpeed} MHz
+        SoC Model: ${osInfo.cpuModel}
+        CPU Speed: ${osInfo.cpuSpeed / 10} GHz
         CPU Cores: ${osInfo.cpuCores}
     `;
 
+	console.log("ashasgakdas18535019581")
+	console.log(osInfo.platform)
     // If not Windows, gather CPU usage information
     if (osInfo.platform !== 'win32') {
         const cpuUsage = osUtils.cpuUsage();
+		console.log(osInfo.platform)
         systemInfoStr += `\nCPU Usage: ${Math.round(cpuUsage * 100)}%\n`;
     }
 
     // If not Windows, gather GPU information
+	/*
     if (osInfo.platform !== 'win32') {
         const gpuInfoStr = gpuInfo.get().map(gpu => {
             return `GPU ${gpu.index + 1}: ${gpu.name}`;
@@ -183,12 +188,15 @@ function getSystemInfo() {
         // Concatenate GPU information
         systemInfoStr += `\n${gpuInfoStr}\n`;
     }
-
+	*/
+	console.log("1204810928412")
     return systemInfoStr;
 }
 
 ipcMain.on("SystemBackplateHotplugCheck", () => {
+	console.log("Fetching Hotplug Check");
 	const recievedDataIndexJSGetSystemInfo = getSystemInfo();
+	console.log("Fetching Hotplug Check Done", recievedDataIndexJSGetSystemInfo);
 	win.webContents.send("systemBackPlateInfoView", { data: recievedDataIndexJSGetSystemInfo });
 });
 
@@ -1631,7 +1639,7 @@ if (configSeed === "-1"){
 }
 // RUNNING Main LLM GUI to User
 let LLMBackendSelection;
-let LLMBackendVariationFileName;
+let LLMBackendVariationBinaryFileName;
 let LLMBackendVariationFileSubFolder;
 let LLMBackendVariationSelected;
 let LLMBackendAttemptDedicatedHardwareAccel=false; //false by default but overidden if AttempAccelerate varible set to true!
@@ -1729,32 +1737,34 @@ function determineLLMBackend(){
 		LLMBackendSelection = "LLaMa2";
 	}
 	if (LLMBackendSelection === "LLaMa2"){
-		LLMBackendVariationFileName = "llama";
+		LLMBackendVariationBinaryFileName = "llama";
 		LLMBackendVariationFileSubFolder = "llama";
 	}else if (LLMBackendSelection === "falcon"){
-		LLMBackendVariationFileName = "falcon";
+		LLMBackendVariationBinaryFileName = "falcon";
 		LLMBackendVariationFileSubFolder = "falcon";
 	}else if (LLMBackendSelection === "mpt"){
-		LLMBackendVariationFileName = "mpt";
+		LLMBackendVariationBinaryFileName = "mpt";
 		LLMBackendVariationFileSubFolder = "ggml-mpt";
 	}else if (LLMBackendSelection === "GPTNeoX"){
-		LLMBackendVariationFileName = "gptneox";
+		LLMBackendVariationBinaryFileName = "gptneox";
 		LLMBackendVariationFileSubFolder = "ggml-gptneox";
 	}else if (LLMBackendSelection === "starcoder"){
-		LLMBackendVariationFileName = "starcoder";
+		LLMBackendVariationBinaryFileName = "starcoder";
 		LLMBackendVariationFileSubFolder = "ggml-starcoder";
 	}else if (LLMBackendSelection === "gptj"){
-		LLMBackendVariationFileName = "gptj";
+		LLMBackendVariationBinaryFileName = "gptj";
 		LLMBackendVariationFileSubFolder = "ggml-gptj";
 	}else if (LLMBackendSelection === "gpt2"){
-		LLMBackendVariationFileName = "gpt2";
+		LLMBackendVariationBinaryFileName = "gpt2";
 		LLMBackendVariationFileSubFolder = "ggml-gpt2";
 	}else if (LLMBackendSelection === "LLaMa2gguf"){
-		LLMBackendVariationFileName = "llama-gguf";
+		LLMBackendVariationBinaryFileName = "llama-gguf";
 		LLMBackendVariationFileSubFolder = "llama-gguf";
-		
+	}else if (LLMBackendSelection === "gemma"){
+			LLMBackendVariationBinaryFileName = "gemma";
+			LLMBackendVariationFileSubFolder = "googleGemma";
 	}else if (LLMBackendSelection === "whisper"){
-			LLMBackendVariationFileName = "whisper";
+			LLMBackendVariationBinaryFileName = "whisper";
 			LLMBackendVariationFileSubFolder = "whisper";
 	}else {
 		console.log(consoleLogPrefix, "Unsupported Backend", LLMBackendSelection);
@@ -1765,7 +1775,7 @@ function determineLLMBackend(){
 	console.log(`Detected Architecture: ${arch}`);
 	console.log(`Detected LLMBackend: ${LLMBackendSelection}`);
 
-	LLMBackendVariationSelected = `LLMBackend-${LLMBackendVariationFileName}`;
+	LLMBackendVariationSelected = `LLMBackend-${LLMBackendVariationBinaryFileName}`;
 
 	if (platform === 'win32'){
 		// Windows

@@ -14,3 +14,6 @@
 [submodule "whisper.cpp"] 
   path = usr/vendor/whisper.cpp
   url = https://github.com/ggerganov/whisper.cpp
+[submodule "gemma.cpp"]
+  path = usr/vendor/whisper.cpp
+  url = https://github.com/google/gemma.cpp
