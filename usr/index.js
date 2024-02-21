@@ -47,6 +47,8 @@ const http = require('http');
 require("@electron/remote/main").initialize();
 
 const os = require("os");
+const osUtils = require('os-utils');
+const gpuInfo = require('gpu-info');
 const platform = os.platform();
 const arch = os.arch();
 const appName = "Project Zephyrine"
@@ -135,6 +137,104 @@ ipcMain.on("cpuUsage", () => {
 	});
 });
 
+// Function to gather system information
+function getSystemInfo() {
+    let systemInfoStr = '';
+
+    // Gather basic OS information
+    const osInfo = {
+        platform: os.platform(),
+        release: os.release(),
+        architecture: os.arch(),
+        hostname: os.hostname(),
+        totalMemory: os.totalmem(),
+        freeMemory: os.freemem(),
+        cpuModel: os.cpus()[0].model,
+        cpuSpeed: os.cpus()[0].speed,
+        cpuCores: os.cpus().length
+    };
+
+    // Concatenate basic OS information
+    systemInfoStr += `
+        System Backplate Information:
+        --------------------
+        Platform: ${osInfo.platform}
+        Release: ${osInfo.release}
+        Architecture: ${osInfo.architecture}
+        Hostname: ${osInfo.hostname}
+        Total Memory: ${Math.round(osInfo.totalMemory / (1024 * 1024 * 1024))} GB
+        Free Memory: ${Math.round(osInfo.freeMemory / (1024 * 1024 * 1024))} GB
+        CPU Model: ${osInfo.cpuModel}
+        CPU Speed: ${osInfo.cpuSpeed} MHz
+        CPU Cores: ${osInfo.cpuCores}
+    `;
+
+    // If not Windows, gather CPU usage information
+    if (osInfo.platform !== 'win32') {
+        const cpuUsage = osUtils.cpuUsage();
+        systemInfoStr += `\nCPU Usage: ${Math.round(cpuUsage * 100)}%\n`;
+    }
+
+    // If not Windows, gather GPU information
+    if (osInfo.platform !== 'win32') {
+        const gpuInfoStr = gpuInfo.get().map(gpu => {
+            return `GPU ${gpu.index + 1}: ${gpu.name}`;
+        }).join('\n');
+
+        // Concatenate GPU information
+        systemInfoStr += `\n${gpuInfoStr}\n`;
+    }
+
+    return systemInfoStr;
+}
+
+ipcMain.on("SystemBackplateHotplugCheck", () => {
+	const recievedDataIndexJSGetSystemInfo = getSystemInfo();
+	win.webContents.send("systemBackPlateInfoView", { data: recievedDataIndexJSGetSystemInfo });
+});
+
+ipcMain.on("emotioncurrentDebugInterfaceFetch", () => {
+	let DebugInterfaceCaughtInfo;
+	if (isBlankOrWhitespaceTrue_CheckVariable(emotionalEvaluationResult)){
+		DebugInterfaceCaughtInfo = "Not Yet Defined";
+	} else {
+		DebugInterfaceCaughtInfo = emotionalEvaluationResult;
+	}
+	win.webContents.send("emotionDebugInterfaceStatistics", { data: DebugInterfaceCaughtInfo }); //invoke emotionDebugInterfaceStatistics ipcRenderer on renderer.js
+});
+
+let loadAvg; // for the ipcMain call hardwarestressload will return the percentage from (loadAvg/totalthread)*100
+let totalAvailableThreads=8; //default fallback
+ipcMain.on("hardwarestressload", () => {
+// Function to fetch the current system load average
+function getCurrentSystemLoad() {
+    if (os.platform() === 'win32') {
+        // For Windows, use windows-cpu package
+        try {
+            const winCpu = require('windows-cpu');
+            const cpuLoad = winCpu.totalLoad();
+            loadAvg = [cpuLoad, 0, 0]; // We only have one value, so the other two are set to 0
+        } catch (error) {
+            console.error('Error fetching system load on Windows:', error.message);
+            loadAvg = [0, 0, 0]; // Fallback to 0 if there's an error
+        }
+    } else {
+        // For non-Windows platforms, use os.loadavg()
+        loadAvg = os.loadavg();
+    }
+    // Return an object with the load average values
+    return {
+        loadAvg1min: loadAvg[0],
+        loadAvg5min: loadAvg[1],
+        loadAvg15min: loadAvg[2]
+    };
+}
+
+const requestLoadAvg = getCurrentSystemLoad();
+const currentSystemStressCalc = Math.round((loadAvg[0] / totalAvailableThreads) * 100);
+win.webContents.send("hardwareStressLoad", { data : currentSystemStressCalc });
+});
+
 ipcMain.on("internalThoughtProgressGUI", () => {
 		const v = internalThoughtEngineProgress;
 		win.webContents.send("internalTEProgress", {data: v});
@@ -155,8 +255,9 @@ ipcMain.on("cpuFree", () => {
 });
 
 ipcMain.on("cpuCount", () => {
+	totalAvailableThreads = osUtil.cpuCount()
 	win.webContents.send("cpuCount", {
-		data: osUtil.cpuCount()
+		data: totalAvailableThreads
 	});
 });
 ipcMain.on("threadUtilized", () => {
@@ -746,7 +847,7 @@ let historyChatRetrieved = [];
 let inputPromptCounterThreshold = 6;
 let emotionlist;
 let evaluateEmotionInteraction;
-let emotionalEvaluationResult;
+let emotionalEvaluationResult = "happy"; //default is the "happy" value 
 let reevaluateAdCtx;
 let reevaluateAdCtxDecisionAgent;
 let specificSpecializedModelPathRequest_LLMChild=""; //Globally inform on what currently needed for the specialized model branch 
@@ -1729,6 +1830,7 @@ determineLLMBackend();
 console.log(consoleLogPrefix, process.versions.modules);
 const pty = require("node-pty");
 const { Console } = require("console");
+const { isWhiteSpaceLike } = require("typescript");
 var runningShell, currentPrompt;
 var zephyrineReady,
 	zephyrineHalfReady = false;

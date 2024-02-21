@@ -730,7 +730,7 @@ input:checked + .slider:before {
 
 #resources {
 	position: relative;
-	width: 200px;
+	width: 20rem;
 	height: 169.420px;
 	background-color: rgba(0, 0, 0, 0);
 	bottom: 0;

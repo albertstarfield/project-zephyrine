@@ -618,6 +618,12 @@ const cpuText = document.querySelector("#cpu .text"); //("id .text")
 const ramText = document.querySelector("#ram .text");
 const cpuBar = document.querySelector("#cpu .bar-inner");
 const ramBar = document.querySelector("#ram .bar-inner");
+const emotionindicatorText = document.querySelector("#emotionindicator .text");
+const LLMChildEngineIndicatorText = document.querySelector("#LLMChildEngineIndicator .text");
+const LLMChildEngineIndicatorTextBar = document.querySelector("#LLMChildEngineIndicator .bar-inner");
+
+const HardwareStressLoadText = document.querySelector("#stressload .text");
+const HardwareStressLoadBar = document.querySelector("#stressload .bar-inner");
 
 var cpuCount, threadUtilized, totalmem, cpuPercent, freemem;
 ipcRenderer.send("cpuCount");
@@ -633,10 +639,14 @@ ipcRenderer.on("totalmem", (_event, { data }) => {
 	totalmem = Math.round(data / 102.4) / 10;
 });
 
+
+
 // This basically set and send the data into ipcRenderer cpuUsage which manipulate the "green bar", maybe we can learn from this to create a progress bar 
 setInterval(async () => {
 	ipcRenderer.send("cpuUsage");
 	ipcRenderer.send("freemem");
+	ipcRenderer.send("hardwarestressload");
+	ipcRenderer.send("emotioncurrentDebugInterfaceFetch");
 }, 5000);
 // For some reason cpuUsage and freemem everytime its updating its eating huge amount of GPU power ?
 // internalTEProgress for recieving internalThoughtEngineProgress;
@@ -653,32 +663,56 @@ setInterval(async () => {
 	ipcRenderer.send("internalThoughtProgressTextGUI");
 }, 3000);
 
+setInterval(async () => {
+	ipcRenderer.send("SystemBackplateHotplugCheck");
+}, 10000);
+
+
 let dynamicTipsProgressLLMChild="";
 ipcRenderer.on("internalTEProgressText", (_event, { data }) => {
 	dynamicTipsProgressLLMChild=data;
 });
 
+ipcRenderer.on("emotionDebugInterfaceStatistics", (_event, {data}) => {
+	emotionindicatorText.style.opacity = 0;
+	emotionindicatorText.style.transition = 'opacity 0.5s ease-in-out';
+	// later on the bar is going to be color spectrum representing the emotion
+	setTimeout(() => {
+		emotionindicatorText.innerText = `❤️‍🩹 Current Emotion : ${data}`;
+		emotionindicatorText.style.opacity = 1;
+	}, 1000);
+});
+
+
 ipcRenderer.on("internalTEProgress", (_event, { data }) => {
-	
 	if (data == 0){
-		dynamicTips.innerText = "Random Tips: Shift + Enter for multiple lines"
+		dynamicTips.innerText = "Random Tips: Shift + Enter for multiple lines";
+		LLMChildEngineIndicatorText.innerText = "💤 LLMChild not invoked";
 		dynamicTips.style.transition = 'opacity 0.5s ease-in-out';
 		dynamicTips.style.opacity = 1;
 		dynamicTipsBar.style.width = `${data}%`;
+		LLMChildEngineIndicatorTextBar.style.transition = 'width 0.5s ease-in-out'
+		LLMChildEngineIndicatorTextBar.style.width = `${data}%`;
 		dynamicTipsBar.style.transition = 'width 0.5s ease-in-out';
 	}else{
-		dynamicTips.style.transition = 'opacity 0.5s ease-in-out';
+		dynamicTips.style.transition = 'opacity 1.5s ease-in-out';
 		dynamicTips.style.opacity = 0;
+		LLMChildEngineIndicatorText.style.opacity=0;
 		dynamicTipsBar.style.width = `${data}%`;
+		LLMChildEngineIndicatorTextBar.style.width = `${data}%`;
 		setTimeout(() => {
 			if(dynamicTipsProgressLLMChild == ""){
 				dynamicTips.innerText = "Waiting LLMChild to Give Progress Report!"
+				LLMChildEngineIndicatorText.innerText = `🤔 LLMChild Invoked`
 			} else {
 				dynamicTips.innerText = dynamicTipsProgressLLMChild;
+				LLMChildEngineIndicatorText.innerText = `🤔 LLMChild Processing : ${dynamicTips.innerText}`
 			}
 			 // no We can't do this, we need to replace it with something more dynamic and more saying verbose what its doing
 			// Add fade-in effect to the new text
+			// change the engine control panel or activity monitor on the info
 			dynamicTips.style.transition = 'opacity 0.5s ease-in-out';
+			LLMChildEngineIndicatorText.style.transition = 'opacity 0.5s ease-in-out';
 			dynamicTips.style.opacity = 1;
 		}, 1000); // Adjust the delay as needed to match the transition duration
 	}
@@ -694,7 +728,7 @@ ipcRenderer.on("cpuUsage", (_event, { data }) => {
 	cpuBar.style.transition = 'transform 2s ease-in-out';
 	cpuBar.style.transform = `scaleX(${cpuPercent / 100})`;
 	setTimeout(() => {
-		cpuText.innerText = `🧠 ${cpuPercent}%`;
+		cpuText.innerText = `🧠 CPU Usage ${cpuPercent}%`;
 		// Add fade-in effect to the new text
 		cpuText.style.transition = 'opacity 0.5s ease-in-out';
 		cpuText.style.opacity = 1;
@@ -708,12 +742,28 @@ ipcRenderer.on("freemem", (_event, { data }) => {
 	ramBar.style.transform = `scaleX(${(totalmem - freemem) / totalmem})`;
 	setTimeout(() => {
 		//ramText.innerText = `💾 ${Math.round((totalmem - freemem) * 10) / 10}GB/${totalmem}GB`;
-		ramText.innerText = `💾 ${Math.round((totalmem - freemem) * 10) / 10}GB`;
+		ramText.innerText = `💾 Allocated RAM ${Math.round((totalmem - freemem) * 10) / 10}GB`;
 		// Add fade-in effect to the new text
 		ramText.style.transition = 'opacity 0.5s ease-in-out';
 		ramText.style.opacity = 1;
 	}, 1000); // Adjust the delay as needed to match the transition duration
 });
+
+ipcRenderer.on("hardwareStressLoad", (_event, { data }) => {
+	stressPercent = data;
+	HardwareStressLoadText.style.opacity = 0;
+	HardwareStressLoadText.style.transition = 'opacity 1.5s ease-in-out';
+	HardwareStressLoadBar.style.transition = 'transform 2s ease-in-out';
+	HardwareStressLoadBar.style.transform = `scaleX(${stressPercent/100})`; //since it uses 0.0 to 1.0
+	setTimeout(() => {
+		//ramText.innerText = `💾 ${Math.round((totalmem - freemem) * 10) / 10}GB/${totalmem}GB`;
+		HardwareStressLoadText.innerText = `🔥 Hardware Stress ${stressPercent} %`;
+		// Add fade-in effect to the new text
+		HardwareStressLoadText.style.transition = 'opacity 0.5s ease-in-out';
+		HardwareStressLoadText.style.opacity = 1;
+	}, 1000); // Adjust the delay as needed to match the transition duration
+});
+
 
 document.getElementById("clear").addEventListener("click", () => {
 	input.value = "";
