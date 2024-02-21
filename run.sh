@@ -804,8 +804,8 @@ buildLLMBackend(){
     #./usr/vendor/ggml/build/bin/${1} location of the compiled binary ggml based
     mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/googleGemma
     echo "Copying any Acceleration and Debugging Dependencies for googleGemma"
-    cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/googleGemma
-    cp ./usr/vendor/ggml/build/bin/gemma ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/googleGemma/LLMBackend-gemma
+    cp -r ./usr/vendor/ggml/build/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/googleGemma
+    cp ./usr/vendor/ggml/build/gemma ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/googleGemma/LLMBackend-gemma
 
     cd ${rootdir}
 }
