@@ -621,6 +621,7 @@ const ramBar = document.querySelector("#ram .bar-inner");
 const emotionindicatorText = document.querySelector("#emotionindicator .text");
 const LLMChildEngineIndicatorText = document.querySelector("#LLMChildEngineIndicator .text");
 const LLMChildEngineIndicatorTextBar = document.querySelector("#LLMChildEngineIndicator .bar-inner");
+const SystemBackplateInfoText = document.querySelector("#SystemBackendPlateInfo .text");
 
 const HardwareStressLoadText = document.querySelector("#stressload .text");
 const HardwareStressLoadBar = document.querySelector("#stressload .bar-inner");
@@ -671,6 +672,15 @@ setInterval(async () => {
 let dynamicTipsProgressLLMChild="";
 ipcRenderer.on("internalTEProgressText", (_event, { data }) => {
 	dynamicTipsProgressLLMChild=data;
+});
+
+ipcRenderer.on("systemBackPlateInfoView", (_event, { data }) => {
+	SystemBackplateInfoText.style.opacity = 0;
+	SystemBackplateInfoText.style.transition = 'opacity 0.5s ease-in-out';
+	setTimeout(() => {
+		SystemBackplateInfoText.innerText = `${data}`;
+		SystemBackplateInfoText.style.opacity = 1;
+	}, 1000);
 });
 
 ipcRenderer.on("emotionDebugInterfaceStatistics", (_event, {data}) => {

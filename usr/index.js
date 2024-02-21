@@ -44,18 +44,17 @@ const path = require("path");
 //const { download } = require('electron-dl');
 const https = require('https');
 const http = require('http');
-require("@electron/remote/main").initialize();
-
+require("@electron/remote/main").initialize();4
 const os = require("os");
 const osUtils = require('os-utils');
 const gpuInfo = require('gpu-info');
 const platform = os.platform();
 const arch = os.arch();
-const appName = "Project Zephyrine"
 const colorReset = "\x1b[0m";
 const colorBrightCyan = "\x1b[96m";
 const consoleLogPrefix = `[${colorBrightCyan}${appName}_${platform}_${arch}${colorReset}]:`;
 const assistantName = "Adelaide Zephyrine Charlotte"
+const appName = `Project ${assistantName}`
 const username = os.userInfo().username;
 
 
