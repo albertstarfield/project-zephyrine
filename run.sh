@@ -470,10 +470,11 @@ build_gemma_base() {
 
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
+    #legacy code
     if [[ "$platform" == "Linux" ]]; then
-        cp bin/${1} ${rootdir}/usr/bin/chat
+        cp bin/gemma ${rootdir}/usr/bin/chat
     elif [[ "$platform" == "Darwin" ]]; then
-        cp bin/${1} ${rootdir}/usr/bin/chat
+        cp bin/gemma ${rootdir}/usr/bin/chat
     fi
 
     # Change directory back to rootdir

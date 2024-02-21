@@ -12,6 +12,7 @@
 - [x] Implements Markdown Formatted Response support.
 - [x] Implement Typing-like experience Response Support.
 - [x] Progress bar for internal thoughts rather than leaving the user without any information on the GUI why is it Stuck.
+- [x] First gemma.cpp engine model modes integration initial implementation (experimental) 
 - [ ] Auto Idle Sleep Detection auto fine-tune (Mimicking real-life brain retraining while sleep) maybe augment it to LoRA later on.
 - [ ] Categorize into Classes based on the subsystem drawio for cleaner Code and easier debugging
 - [ ] Implementing multi language support with Frontend Automatic Translation and Backend EN Processing.
