@@ -563,7 +563,7 @@ if [ "${1}" == "gpt-neox" ]; then
         fi
     else
         # LLaMa not compiled, build it
-        echo "mpt binary not found. Building mpt..."
+        echo "gpt-neox binary not found. Building gpt-neox..."
         build_ggml_base "${1}"
     fi
 fi
@@ -581,7 +581,7 @@ if [ "${1}" == "mnist" ]; then
         fi
     else
         # LLaMa not compiled, build it
-        echo "mpt binary not found. Building mpt..."
+        echo "mnist binary not found. Building mnist..."
         build_ggml_base "${1}"
     fi
 fi
@@ -599,7 +599,7 @@ if [ "${1}" == "replit" ]; then
         fi
     else
         # LLaMa not compiled, build it
-        echo "mpt binary not found. Building mpt..."
+        echo "replit binary not found. Building replit..."
         build_ggml_base "${1}"
     fi
 fi
@@ -617,7 +617,7 @@ if [ "${1}" == "starcoder" ]; then
         fi
     else
         # LLaMa not compiled, build it
-        echo "mpt binary not found. Building mpt..."
+        echo "starcoder binary not found. Building starcoder..."
         build_ggml_base "${1}"
     fi
 fi
@@ -635,7 +635,7 @@ if [ "${1}" == "whisper" ]; then
         fi
     else
         # LLaMa not compiled, build it
-        echo "mpt binary not found. Building mpt..."
+        echo "whisper binary not found. Building whisper..."
         build_ggml_base "${1}"
     fi
 fi
@@ -685,14 +685,7 @@ buildLLMBackend(){
     # example directory ./usr/bin/0_macOS/arm64/LLMBackend-llama-noaccel
 
     #You know what lets abandon Windows enforced binary structuring and find another way on how to execute other way to have specific acceleration on Windows
-
-    
-
-
     cd ${rootdir}
-
-    
-
     build_llama
     cd ${rootdir}
     echo "Cleaning binaries Replacing with new ones"
@@ -725,23 +718,13 @@ buildLLMBackend(){
     cp -r ./usr/vendor/ggllm.cpp/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/falcon/
     
     cd ${rootdir}
-    build_ggml_base mpt
-    build_ggml_base gpt-2
     build_ggml_base gpt-j
     build_ggml_base gpt-neox
     cd ${rootdir}
 
     #./usr/vendor/ggml/build/bin/${1} location of the compiled binary ggml based
-    mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-mpt
-    mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gpt2
     mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptj
     mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptneox
-    echo "Copying any Acceleration and Debugging Dependencies for mpt"
-    cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-mpt
-    cp ./usr/vendor/ggml/build/bin/mpt ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-mpt/LLMBackend-mpt
-    echo "Copying any Acceleration and Debugging Dependencies for gpt2"
-    cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gpt2
-    cp ./usr/vendor/ggml/build/bin/gpt-2 ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gpt2/LLMBackend-gpt-2
     echo "Copying any Acceleration and Debugging Dependencies for gpt-j"
     cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptj
     cp ./usr/vendor/ggml/build/bin/gpt-j ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptj/LLMBackend-gpt-j

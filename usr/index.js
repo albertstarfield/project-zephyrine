@@ -1721,11 +1721,9 @@ function determineLLMBackend(){
 	/*
 	<option value="LLaMa2">LLaMa-2</option>
 									<option value="falcon">Falcon</option>
-									<option value="mpt">MPT</option>
 									<option value="GPTNeoX">GPT-NEO-X</option>
 									<option value="starcoder">Starcoder</option>
 									<option value="gptj">gpt-j</option>
-									<option value="gpt2">gpt-2</option>
 	*/
 	if (!LLMBackendSelection){
 		console.error(consoleLogPrefix, "LLM Backend Selection Failed, falling back to Original LLaMa backend")
