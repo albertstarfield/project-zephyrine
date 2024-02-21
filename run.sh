@@ -719,12 +719,10 @@ buildLLMBackend(){
     
     cd ${rootdir}
     build_ggml_base gpt-j
-    build_ggml_base gpt-neox
     cd ${rootdir}
 
     #./usr/vendor/ggml/build/bin/${1} location of the compiled binary ggml based
     mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptj
-    mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptneox
     echo "Copying any Acceleration and Debugging Dependencies for gpt-j"
     cp -r ./usr/vendor/ggml/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptj
     cp ./usr/vendor/ggml/build/bin/gpt-j ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/ggml-gptj/LLMBackend-gpt-j

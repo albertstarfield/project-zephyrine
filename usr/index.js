@@ -1721,7 +1721,6 @@ function determineLLMBackend(){
 	/*
 	<option value="LLaMa2">LLaMa-2</option>
 									<option value="falcon">Falcon</option>
-									<option value="GPTNeoX">GPT-NEO-X</option>
 									<option value="starcoder">Starcoder</option>
 									<option value="gptj">gpt-j</option>
 	*/
