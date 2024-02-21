@@ -467,16 +467,7 @@ build_gemma_base() {
 
     # Build with multiple cores
     make -j 128 ${1} || { echo "Gemma compilation failed. See logs for details."; exit 1; }
-
     pwd
-    # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
-    #legacy code
-    if [[ "$platform" == "Linux" ]]; then
-        cp bin/gemma ${rootdir}/usr/bin/chat
-    elif [[ "$platform" == "Darwin" ]]; then
-        cp bin/gemma ${rootdir}/usr/bin/chat
-    fi
-
     # Change directory back to rootdir
     cd "$rootdir" || exit 1
 }
