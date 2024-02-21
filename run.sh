@@ -9,6 +9,11 @@ arch=$(uname -m)
 rootdir="$(pwd)"
 export CONDA_PREFIX="${rootdir}/conda_python_modules"
 export LC_CTYPE=UTF-8
+export N_PREFIX="${rootdir}/nodeLocalRuntime" #custom PREFIX location for this specific adelaide installation
+# allow to prioritize N_PREFIX and CONDA_PREFIX binary over global
+export PATH="${N_PREFIX}/bin:${CONDA_PREFIX}/bin:${PATH}"
+echo $PATH
+
 
 if [ -z "${ENFORCE_NOACCEL}" ]; then
     ENFORCE_NOACCEL=0
@@ -71,11 +76,12 @@ install_dependencies_macos() {
     brew upgrade
     brew install python node cmake
     fi
-    echo "Upgrading to the latest Node Version!"
+    echo "Upgrading to the recommended node Version!"
     set -e
-    sudo npm install -g n
-    sudo n latest
-    sudo node -v
+    npm install n
+    n 20.11.1
+    echo "did it work?"
+    node -v
     
 }
 
@@ -498,19 +504,7 @@ fi
 if [ "${1}" == "mpt" ]; then
     # Check if ggml Binary already compiled
     echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
-        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
-        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
-        fi
-         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
-        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
-        fi
-    else
-        # LLaMa not compiled, build it
-        echo "mpt binary not found. Building mpt..."
-        build_ggml_base "${1}"
-    fi
+    echo "MPT ggml no longer exists and integrated with the LLaMa-2 engine!"
 fi
 
 if [ "${1}" == "dolly-v2" ]; then
@@ -788,24 +782,26 @@ install_dependencies_linux() {
     fi
 
     echo "Upgrading to the latest Node Version!"
-    sudo npm install -g n
-    sudo n latest
-    sudo node -v
+    npm install n
+    n 20.11.1
+    node -v
 }
 
 
 # Install npm dependencie
-if [ -z "$(command -v npm)" ]; then
-    if [[ "$platform" == "Linux" ]]; then
-        install_dependencies_linux
-    elif [[ "$platform" == "Darwin" ]]; then
-        install_dependencies_macos
-    fi
+
+if [[ "$platform" == "Linux" ]]; then
+    install_dependencies_linux
+elif [[ "$platform" == "Darwin" ]]; then
+    install_dependencies_macos
 fi
 
 # Install npm dependencies
 if [[ ! -f ${rootdir}/installed.flag || "${FORCE_REBUILD}" == "1" ]]; then
     cleanInstalledFolder
+    echo "Enforcing latest npm"
+    npm install npm@latest
+    echo "Installing Modules"
     npm install --save-dev
     npx --openssl_fips='' electron-rebuild
     buildLLMBackend
