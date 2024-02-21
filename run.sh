@@ -7,6 +7,8 @@ platform=$(uname -s)
 arch=$(uname -m)
 # Save the current working directory to "rootdir" variable (compensate spaces)
 rootdir="$(pwd)"
+export CONDA_PREFIX="${rootdir}/conda_python_modules"
+export LC_CTYPE=UTF-8
 
 if [ -z "${ENFORCE_NOACCEL}" ]; then
     ENFORCE_NOACCEL=0
@@ -26,16 +28,16 @@ install_dependencies_linux() {
     if command -v apt-get &> /dev/null; then
         # Install required packages using apt-get
         sudo apt-get update
-        sudo apt-get install -y build-essential cmake libopenblas-dev liblapack-dev
+        sudo apt-get install -y build-essential python3 cmake libopenblas-dev liblapack-dev
     elif command -v dnf &> /dev/null; then
         # Install required packages using dnf (Fedora)
-        sudo dnf install -y gcc-c++ cmake openblas-devel lapack-devel
+        sudo dnf install -y gcc-c++ cmake openblas-devel python lapack-devel
     elif command -v yum &> /dev/null; then
         # Install required packages using yum (CentOS)
-        sudo yum install -y gcc-c++ cmake openblas-devel lapack-devel
+        sudo yum install -y gcc-c++ cmake openblas-devel python lapack-devel
     elif command -v zypper &> /dev/null; then
         # Install required packages using zypper (openSUSE)
-        sudo zypper install -y gcc-c++ cmake openblas-devel lapack-devel
+        sudo zypper install -y gcc-c++ cmake openblas-devel python lapack-devel
     elif command -v swupd &> /dev/null; then
         sudo swupd bundle-add c-basic
     else
@@ -47,6 +49,7 @@ install_dependencies_linux() {
 # Function to check and install dependencies for macOS
 install_dependencies_macos() {
     set +e
+    echo "macOS/darwin based system detected!"
     # Check if Xcode command line tools are installed
     if ! command -v xcode-select &> /dev/null; then
         echo "Xcode command line tools not found. Please install Xcode and try again."
@@ -65,7 +68,8 @@ install_dependencies_macos() {
     #rm -rf "/opt/homebrew/Library/Taps/homebrew/homebrew-core"
     brew tap homebrew/core
     brew tap apple/apple http://github.com/apple/homebrew-apple
-    brew install node cmake
+    brew upgrade
+    brew install python node cmake
     fi
     echo "Upgrading to the latest Node Version!"
     set -e
@@ -134,8 +138,12 @@ detect_metal() {
 
 cleanInstalledFolder(){
     set +e
-    rm -rf usr/vendor/ggllm.cpp usr/vendor/ggml usr/vendor/llama-gguf.cpp usr/vendor/llama.cpp usr/node_modules
-    mkdir usr/vendor/ggllm.cpp usr/vendor/ggml usr/vendor/llama-gguf.cpp usr/vendor/llama.cpp
+    echo "Cleaning Installed Folder to lower the chance of interfering with the installation process"
+    npm cache clean --force
+    
+    rm -rf ${rootdir}/usr/vendor/ggllm.cpp ${rootdir}/usr/vendor/ggml ${rootdir}/usr/vendor/llama-gguf.cpp ${rootdir}/usr/vendor/llama.cpp ${rootdir}/usr/vendor/whisper.cpp ${rootdir}/usr/node_modules ${CONDA_PREFIX}
+    mkdir ${rootdir}/usr/vendor/ggllm.cpp ${rootdir}/usr/vendor/ggml ${rootdir}/usr/vendor/llama-gguf.cpp ${rootdir}/usr/vendor/llama.cpp ${rootdir}/usr/vendor/whisper.cpp ${rootdir}/usr/node_modules ${CONDA_PREFIX}
+    echo "Should be done"
     set -e
 }
 build_llama() {
@@ -213,7 +221,7 @@ build_llama() {
 
     # Build with multiple cores
     echo "This is the architecture $(uname -m) unless the cmake becoming asshole and detect arm64 as x86_64"
-    cmake --build . --config Release --parallel $(nproc) || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
+    cmake --build . --config Release  || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -294,7 +302,7 @@ build_llama_gguf() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    cmake --build . --config Release --parallel $(nproc) || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
+    cmake --build . --config Release  || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -454,7 +462,7 @@ build_falcon() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    cmake --build . --config Release --parallel $(nproc) || { echo "ggllm compilation failed. See logs for details."; exit 1; }
+    cmake --build . --config Release  || { echo "ggllm compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -799,7 +807,7 @@ fi
 if [[ ! -f ${rootdir}/installed.flag || "${FORCE_REBUILD}" == "1" ]]; then
     cleanInstalledFolder
     npm install --save-dev
-    npx --openssl_fips='' electron-rebuild #rebuild to prevent node-pty mismatch error of NODE_MODULE_VERSION 115
+    npx --openssl_fips='' electron-rebuild
     buildLLMBackend
     touch ${rootdir}/installed.flag
 fi

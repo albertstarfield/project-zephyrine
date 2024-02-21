@@ -13,6 +13,7 @@
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
 		"start": "electron . --no-sandbox --disable-dev-shm-usage --enable-logging",
+		"startNoDebug": "electron . --no-sandbox --disable-dev-shm-usage",
 		"make-win-x64": "npx electron-packager . --overwrite --platform=win32 --arch=x64 --icon=icon/win/icon.ico --prune=true --electron-version=13.6.9 --app-copyright=\"AlbertStarfield\" --out=release-builds  --version-string.CompanyName=AlbertStarfield",
 		"pack-win-x64": "npx electron-builder --win --config --publish=never --prepackaged \"release-builds/Project Zephyrine-win32-x64\"",
 		"win-x64": "rmdir /s /q release-builds dist && npm run make-win-x64",
@@ -50,7 +51,7 @@
 		"marked": "^9.1.2",
 		"dompurify": "^3.0.6",
 		"jsdom": "^22.1.0",
-		"gpu-info": "^0.0.1"
+		"@electron/rebuild": "^3.2.9"
 	},
 	"devDependencies": {
 		"@electron/rebuild": "^3.2.10",
