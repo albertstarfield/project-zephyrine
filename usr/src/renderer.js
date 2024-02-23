@@ -606,7 +606,7 @@ let assistantName;
 ipcRenderer.send("username") //send request of that specific data from all process that is running
 ipcRenderer.send("assistantName") //send request
 ipcRenderer.on("username", (_event, { data }) => {
-	username = data;	
+	username = data;
 	console.log("The username is: ", username);
 });
 ipcRenderer.on("assistantName", (_event, { data }) => {

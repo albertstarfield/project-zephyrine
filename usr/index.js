@@ -63,7 +63,7 @@ function createWindow() {
 	win = new BrowserWindow({
 		width: 1200,
 		height: 810,
-		minWidth: 960,
+		minWidth: 780,
 		minHeight: 600,
 		frame: false,
 		webPreferences: {
@@ -153,7 +153,6 @@ function getSystemInfo() {
         cpuCores: os.cpus().length
     };
 
-	console.log("ashasgakdas")
     // Concatenate basic OS information
     systemInfoStr += `
         System Backplate Information:
@@ -168,14 +167,10 @@ function getSystemInfo() {
         CPU Speed: ${osInfo.cpuSpeed / 10} GHz
         CPU Cores: ${osInfo.cpuCores}
     `;
-
-	console.log("ashasgakdas18535019581")
-	console.log(osInfo.platform)
     // If not Windows, gather CPU usage information
     if (osInfo.platform !== 'win32') {
         const cpuUsage = osUtils.cpuUsage();
-		console.log(osInfo.platform)
-        systemInfoStr += `\nCPU Usage: ${Math.round(cpuUsage * 100)}%\n`;
+        systemInfoStr += `CPU Usage: ${Math.round(cpuUsage * 100)}%`;
     }
 
     // If not Windows, gather GPU information
@@ -189,14 +184,11 @@ function getSystemInfo() {
         systemInfoStr += `\n${gpuInfoStr}\n`;
     }
 	*/
-	console.log("1204810928412")
     return systemInfoStr;
 }
 
 ipcMain.on("SystemBackplateHotplugCheck", () => {
-	console.log("Fetching Hotplug Check");
 	const recievedDataIndexJSGetSystemInfo = getSystemInfo();
-	console.log("Fetching Hotplug Check Done", recievedDataIndexJSGetSystemInfo);
 	win.webContents.send("systemBackPlateInfoView", { data: recievedDataIndexJSGetSystemInfo });
 });
 
@@ -1148,7 +1140,8 @@ function specializedModelManagerRequestPath(modelCategory){
 		const DataDictionaryFetched = availableImplementedLLMModelSpecificCategory[currentlySelectedSpecializedModelDictionary];
 		console.log(consoleLogPrefix, "Checking Specialized Model", currentlySelectedSpecializedModelDictionary);
 		console.log(consoleLogPrefix, `\n Model Category Description ${DataDictionaryFetched.CategoryDescription} \n Download Link ${DataDictionaryFetched.downloadLink} \n Download Link ${DataDictionaryFetched.filename} `)
-		if (!fs.existsSync(`${DataDictionaryFetched.filename}`)) {
+		if (!fs.existsSync(`${DataDictionaryFetched.filename}`) && (!isBlankOrWhitespaceTrue_CheckVariable(DataDictionaryFetched.downloadLink))) {
+			console.log("Attempting to Download", DataDictionaryFetched.downloadLink);
 			const currentlySelectedSpecializedModelURL = `${DataDictionaryFetched.downloadLink}`; // Replace with your download link
 			downloadFile(currentlySelectedSpecializedModelURL, `${DataDictionaryFetched.filename}`);
 		  } else {
@@ -1172,7 +1165,7 @@ function specializedModelManagerRequestPath(modelCategory){
 	console.log(consoleLogPrefix, "Matched with :", filteredModelCategoryRequest);
 	validatedModelAlignedCategory = filteredModelCategoryRequest;
 	const DataDictionaryFetched = availableImplementedLLMModelSpecificCategory[filteredModelCategoryRequest];
-	if (filteredModelCategoryRequest == "" || filteredModelCategoryRequest == undefined || !(checkFileExists(DataDictionaryFetched.filename))){
+	if (filteredModelCategoryRequest == "" || filteredModelCategoryRequest == undefined || !(checkFileExists(DataDictionaryFetched.filename)) || (`${DataDictionaryFetched.downloadLink}` == '')){
 		filePathSelectionfromDictionary = `${availableImplementedLLMModelSpecificCategory["general_conversation"].filename}`
 		console.log(consoleLogPrefix, "modelManager: Fallback to general conversation");
 	}else{
@@ -1824,7 +1817,6 @@ function determineLLMBackend(){
 
 
 	// Note this need to be able to handle spaces especially when you are aiming for Windows support which almost everything have spaces and everything path is inverted, its an hell for developer natively support 99% except Windows Fuck microsoft
-	console.log(consoleLogPrefix, "Base Binary Path", basebin);
 	basebin = basebin.replace(" ","\ ");
 	console.log(consoleLogPrefix, "Base Binary Path", basebin);
 

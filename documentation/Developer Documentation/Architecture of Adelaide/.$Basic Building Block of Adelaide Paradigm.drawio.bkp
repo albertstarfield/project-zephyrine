@@ -1,6 +1,6 @@
-<mxfile host="Electron" modified="2024-02-13T02:26:10.404Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/22.1.21 Chrome/120.0.6099.109 Electron/28.1.0 Safari/537.36" etag="O5ES8toTBVydjFWbqLBw" version="22.1.21" type="device" pages="2">
+<mxfile host="Electron" modified="2024-02-13T02:27:15.081Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/22.1.21 Chrome/120.0.6099.109 Electron/28.1.0 Safari/537.36" etag="u1XWHDyzW0KdATq2Ix0f" version="22.1.21" type="device" pages="2">
   <diagram id="C5RBs43oDa-KdzZeNtuy" name="Basic Building Block">
-    <mxGraphModel dx="5930" dy="4545" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="2378" dy="1952" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="WIyWlLk6GJQsqaUBKTNV-0" />
         <mxCell id="WIyWlLk6GJQsqaUBKTNV-1" parent="WIyWlLk6GJQsqaUBKTNV-0" />
@@ -1752,6 +1752,12 @@
         </mxCell>
         <mxCell id="DZOPxF1G8VKMVgEPpo5t-394" value="Oh Cock, There&#39;s so much thing to do and so little budget that i&#39;m able to manoeuvre just like boeing&amp;nbsp;&lt;br&gt;-One of the developer" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
           <mxGeometry x="-240" y="3377" width="205" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="5b-9QbcfHPapWRkDbBxX-0" value="System Command Execute Subsystem" style="swimlane;whiteSpace=wrap;html=1;fillColor=#1ba1e2;fontColor=#ffffff;strokeColor=#006EAF;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+          <mxGeometry x="5234" y="535" width="765" height="431" as="geometry" />
+        </mxCell>
+        <mxCell id="5b-9QbcfHPapWRkDbBxX-1" value="Recieve Incoming Input" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" vertex="1" parent="5b-9QbcfHPapWRkDbBxX-0">
+          <mxGeometry x="594" y="347" width="120" height="60" as="geometry" />
         </mxCell>
       </root>
     </mxGraphModel>

@@ -135,7 +135,6 @@ const availableImplementedLLMModelSpecificCategory = {
 		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
 		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
-	
 	history : {
 		downloadLink: "https://huggingface.co/TheBloke/WizardLM-Uncensored-SuperCOT-StoryTelling-30B-GGUF/resolve/main/WizardLM-Uncensored-SuperCOT-Storytelling.Q2_K.gguf?download=true", //change this later on
 		filename: "specLM_WizardLM_History_StoryTelling.bin",
@@ -146,12 +145,13 @@ const availableImplementedLLMModelSpecificCategory = {
 		memAllocCutRatio: 0.6, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
 		diskEnforceWheelspin: 1 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
+	//Gemma
 	googleGemma : {
 		downloadLink: "", //change this later on, Gemma direct download link doesn't exist yet or blocked that you have to accept gemma license to be able to download it
 		filename: "generalLM_gemma_noncontinous.bin",
 		CategoryDescription: "Google General Conversation support",
 		ParamSize: "7B",
-		Quantization: "b16_0",
+		Quantization: "q8_0", // 8-bit quantization
 		Engine: "gemma",
 		memAllocCutRatio: 1, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
 		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1

@@ -1,6 +1,6 @@
-<mxfile host="Electron" modified="2024-02-13T02:27:15.081Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/22.1.21 Chrome/120.0.6099.109 Electron/28.1.0 Safari/537.36" etag="u1XWHDyzW0KdATq2Ix0f" version="22.1.21" type="device" pages="2">
+<mxfile host="Electron" modified="2024-02-22T02:51:02.509Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/22.1.21 Chrome/120.0.6099.109 Electron/28.1.0 Safari/537.36" etag="F2Tfm6mjE-26wDlrgLdz" version="22.1.21" type="device" pages="2">
   <diagram id="C5RBs43oDa-KdzZeNtuy" name="Basic Building Block">
-    <mxGraphModel dx="2378" dy="1952" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="5930" dy="4545" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="WIyWlLk6GJQsqaUBKTNV-0" />
         <mxCell id="WIyWlLk6GJQsqaUBKTNV-1" parent="WIyWlLk6GJQsqaUBKTNV-0" />
@@ -1222,7 +1222,7 @@
           </mxGeometry>
         </mxCell>
         <mxCell id="jlTXrEissdUTSTELuyVP-9" value="Externally Maintained Component LLM Model Engine" style="swimlane;whiteSpace=wrap;html=1;fillColor=#ffe6cc;strokeColor=#d79b00;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
-          <mxGeometry x="2198" y="-437" width="330" height="390" as="geometry" />
+          <mxGeometry x="2221" y="-493" width="330" height="502" as="geometry" />
         </mxCell>
         <mxCell id="jlTXrEissdUTSTELuyVP-4" value="LLaMa-GGUF" style="rounded=0;whiteSpace=wrap;html=1;" parent="jlTXrEissdUTSTELuyVP-9" vertex="1">
           <mxGeometry x="105" y="40" width="120" height="70" as="geometry" />
@@ -1233,7 +1233,7 @@
         <mxCell id="jlTXrEissdUTSTELuyVP-6" value="Falcon" style="rounded=0;whiteSpace=wrap;html=1;" parent="jlTXrEissdUTSTELuyVP-9" vertex="1">
           <mxGeometry x="105" y="210" width="120" height="70" as="geometry" />
         </mxCell>
-        <mxCell id="jlTXrEissdUTSTELuyVP-7" value="MPT" style="rounded=0;whiteSpace=wrap;html=1;" parent="jlTXrEissdUTSTELuyVP-9" vertex="1">
+        <mxCell id="jlTXrEissdUTSTELuyVP-7" value="MPT (Deprecated)" style="rounded=0;whiteSpace=wrap;html=1;" parent="jlTXrEissdUTSTELuyVP-9" vertex="1">
           <mxGeometry x="105" y="300" width="120" height="70" as="geometry" />
         </mxCell>
         <mxCell id="jlTXrEissdUTSTELuyVP-213" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;" parent="jlTXrEissdUTSTELuyVP-9" source="jlTXrEissdUTSTELuyVP-9" target="jlTXrEissdUTSTELuyVP-4" edge="1">
@@ -1258,6 +1258,15 @@
           <mxGeometry width="50" height="50" relative="1" as="geometry">
             <mxPoint x="-140" y="440" as="sourcePoint" />
             <mxPoint x="-680" y="330" as="targetPoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="QxhRrqZxvhLsfJFxlQDN-0" value="Google Gemma" style="rounded=0;whiteSpace=wrap;html=1;" vertex="1" parent="jlTXrEissdUTSTELuyVP-9">
+          <mxGeometry x="105" y="397" width="120" height="70" as="geometry" />
+        </mxCell>
+        <mxCell id="QxhRrqZxvhLsfJFxlQDN-1" value="" style="endArrow=classic;startArrow=classic;html=1;rounded=0;exitX=0;exitY=0.5;exitDx=0;exitDy=0;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" edge="1" parent="jlTXrEissdUTSTELuyVP-9" source="jlTXrEissdUTSTELuyVP-9" target="QxhRrqZxvhLsfJFxlQDN-0">
+          <mxGeometry width="50" height="50" relative="1" as="geometry">
+            <mxPoint x="-18" y="309" as="sourcePoint" />
+            <mxPoint x="32" y="259" as="targetPoint" />
           </mxGeometry>
         </mxCell>
         <mxCell id="jlTXrEissdUTSTELuyVP-10" value="Front end GUI (Main I/O Input and Output)&lt;br style=&quot;border-color: var(--border-color);&quot;&gt;(index.html)" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
@@ -1753,10 +1762,10 @@
         <mxCell id="DZOPxF1G8VKMVgEPpo5t-394" value="Oh Cock, There&#39;s so much thing to do and so little budget that i&#39;m able to manoeuvre just like boeing&amp;nbsp;&lt;br&gt;-One of the developer" style="text;html=1;strokeColor=none;fillColor=none;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
           <mxGeometry x="-240" y="3377" width="205" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="5b-9QbcfHPapWRkDbBxX-0" value="System Command Execute Subsystem" style="swimlane;whiteSpace=wrap;html=1;fillColor=#1ba1e2;fontColor=#ffffff;strokeColor=#006EAF;" vertex="1" parent="WIyWlLk6GJQsqaUBKTNV-1">
+        <mxCell id="5b-9QbcfHPapWRkDbBxX-0" value="System Command Execute Subsystem" style="swimlane;whiteSpace=wrap;html=1;fillColor=#1ba1e2;fontColor=#ffffff;strokeColor=#006EAF;" parent="WIyWlLk6GJQsqaUBKTNV-1" vertex="1">
           <mxGeometry x="5234" y="535" width="765" height="431" as="geometry" />
         </mxCell>
-        <mxCell id="5b-9QbcfHPapWRkDbBxX-1" value="Recieve Incoming Input" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" vertex="1" parent="5b-9QbcfHPapWRkDbBxX-0">
+        <mxCell id="5b-9QbcfHPapWRkDbBxX-1" value="Recieve Incoming Input" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" parent="5b-9QbcfHPapWRkDbBxX-0" vertex="1">
           <mxGeometry x="594" y="347" width="120" height="60" as="geometry" />
         </mxCell>
       </root>
