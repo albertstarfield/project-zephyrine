@@ -677,6 +677,7 @@ ipcRenderer.on("internalTEProgressText", (_event, { data }) => {
 ipcRenderer.on("systemBackPlateInfoView", (_event, { data }) => {
 	SystemBackplateInfoText.style.opacity = 0;
 	SystemBackplateInfoText.style.transition = 'opacity 0.5s ease-in-out';
+	SystemBackplateInfoText.style.textAlign = 'left';
 	setTimeout(() => {
 		SystemBackplateInfoText.innerText = `${data}`;
 		SystemBackplateInfoText.style.opacity = 1;

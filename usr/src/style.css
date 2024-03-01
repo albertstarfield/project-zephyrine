@@ -2,7 +2,7 @@
 @font-face {
 	font-family: "TitleFont";
 	/* src: url("fonts/IBM Plex/IBMPlexSans-Light.ttf");*/
-	src: url("fonts/SpaceGrotesk-Regular.ttf");
+	src: url("fonts/The-Suavity.ttf");
 	font-weight: normal;
 }
 
@@ -16,8 +16,10 @@
 
 h1.logo {
 	font-family: "TitleFont";
+	font-size: 4rem;
+	height:4rem ;
 	/* Additional title styling goes here */
-	margin: 0.8rem;
+	margin: 1.1rem;
 	padding: 5;
   }
 
@@ -190,6 +192,14 @@ body {
     font-size: 3rem;
     opacity: 0; /* Initially hide the text */
     transition: opacity 1s ease-in-out; /* Add transition for opacity change */
+}
+
+#borderMarginContent {
+    padding: 1.2769420rem; /* Set padding to 1rem */
+}
+
+#borderMarginContentTitle {
+    padding: 0.2769420rem; /* Set padding to 1rem */
 }
 
 .input-field {
@@ -366,10 +376,10 @@ html.darwin #main { /* b r u h */
 	box-sizing: border-box;
 	padding: 5;
 	margin-bottom: 13rem;
-	background-color: rgba(255, 255, 255, 0.058);
+	background-color: rgba(255, 255, 255, 0.003);
 	border-radius: 0.375rem;
 	overflow-y: auto;
-	backdrop-filter: blur(9px);
+	backdrop-filter: blur(3.9px);
 	box-shadow: 0 0 1.2794rem var(--shadow-color-less-intense); /* Need to be specifically disperesed since it doesn't look good if it using the global variable */
 	border-radius: 1.44rem;
 	padding: 1rem;
@@ -731,13 +741,37 @@ input:checked + .slider:before {
 #resources {
 	position: relative;
 	width: 20rem;
-	height: 169.420px;
 	background-color: rgba(0, 0, 0, 0);
 	bottom: 0;
 	left: 0;
 	flex-direction: row;
 	backdrop-filter: blur(20px);
 }
+
+#itemDialogueCards_default {
+	position: relative;
+	width: 27rem;
+	background-color: rgba(0, 0, 0, 0.13);
+	bottom: 0;
+	left: 0;
+	margin: 1rem;
+	flex-direction: row;
+	backdrop-filter: blur(20px);
+	box-shadow: 0 0 var(--shadow-disperse) var(--shadow-color);
+}
+
+#itemDialogueCards_EngineStatistics {
+	position: relative;
+	width: 15rem;
+	background-color: rgba(0, 0, 0, 0.13);
+	bottom: 0;
+	left: 0;
+	margin: 1rem;
+	flex-direction: row;
+	backdrop-filter: blur(20px);
+	box-shadow: 0 0 var(--shadow-disperse) var(--shadow-color);
+}
+
 .resource-item {
 	flex: 1 1 100%;
 	width: 100%;
@@ -759,7 +793,7 @@ input:checked + .slider:before {
 	padding: 5px 0;
 }
 .bar {
-	width: 142px;
+	width: 12.14rem;
 	height: 5px;
 	border-radius: 69px;
 	background-color: var(--background-mid);
@@ -777,8 +811,8 @@ input:checked + .slider:before {
 }
 
 .dialog-bg {
-	background-color: var(--overlay);
-	backdrop-filter: blur(8px); /* Add a blur effect to the background */
+	background-color: var(--background);
+	backdrop-filter: blur(8rem); /* Add a blur effect to the background */
 	width: 100vw;
 	height: 100vh;
 	margin: 0;
@@ -968,4 +1002,16 @@ p.error-text::before {
 .fade-in {
     opacity: 1;
     transition: opacity 1s ease-in-out; /* Smooth transition */
+}
+
+/*small window auto adjustment (preparing for mobile UI)*/
+/* Media query for screens less than 790px wide */
+@media (max-width: 790px) {
+    .form-header {
+        width: 0rem; /* Set width to 0rem */
+    }
+	#titlebar{
+		width: calc(50% - 2px);
+	}
+
 }

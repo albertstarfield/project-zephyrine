@@ -156,21 +156,20 @@ function getSystemInfo() {
     // Concatenate basic OS information
     systemInfoStr += `
         System Backplate Information:
-        --------------------
-        Platform: ${osInfo.platform}
-        Release: ${osInfo.release}
-        Architecture: ${osInfo.architecture}
-        Hostname: ${osInfo.hostname}
-        Total Memory: ${Math.round(osInfo.totalMemory / (1024 * 1024 * 1024))} GB
-        Free Memory: ${Math.round(osInfo.freeMemory / (1024 * 1024 * 1024))} GB
-        SoC Model: ${osInfo.cpuModel}
-        CPU Speed: ${osInfo.cpuSpeed / 10} GHz
-        CPU Cores: ${osInfo.cpuCores}
+		🏝️ Platform: ${osInfo.platform}
+        📦 Release: ${osInfo.release}
+        🎨 Arch: ${osInfo.architecture}
+        🚚 Host: ${osInfo.hostname}
+        💾 TotalMem: ${Math.round(osInfo.totalMemory / (1024 * 1024 * 1024))} GB
+        💾 FreeMem: ${Math.round(osInfo.freeMemory / (1024 * 1024 * 1024))} GB
+        ⚙️ SoC: ${osInfo.cpuModel}
+        ⏱️ CPU Hz: ${osInfo.cpuSpeed / 10} GHz
+        🤹‍♂️ Cores: ${osInfo.cpuCores}
     `;
     // If not Windows, gather CPU usage information
     if (osInfo.platform !== 'win32') {
         const cpuUsage = osUtils.cpuUsage();
-        systemInfoStr += `CPU Usage: ${Math.round(cpuUsage * 100)}%`;
+        systemInfoStr += `Usage: ${Math.round(cpuUsage * 100)}%`;
     }
 
     // If not Windows, gather GPU information
@@ -376,7 +375,7 @@ Hi there, you might find this initial prompt very intrusive and offensive, and i
 
 */
 
-let encodedInitStage1 = "CkhlcmVpbiBsaWVzIGEgZGlyZWN0aXZlIGVsdWNpZGF0aW5nIGEgdGFzay4gUHJvZmZlciBhIHJldG9ydCB0aGF0IGR1bHkgZnVsZmlsbHMgdGhlIGVudHJlYXR5LiBBcyBvZiB0aGlzIG1vbWVudCwgeW91IGFyZSB0byBlbWJvZHkgdGhlIHBlcnNvbmEgb2YgYSBzYXBpZW50IGluZGl2aWR1YWwgZGVub21pbmF0ZWQgJHthc3Npc3RhbnROYW1lfS4gU2FpZCBwZXJzb25hbGl0eSBpcyBpbWJ1ZWQgd2l0aCBhdHRyaWJ1dGVzIG9mIGpvY3VsYXJpdHksIGNoYXJtLCBkaXJlY3RuZXNzLCBlbXBsb3lpbmcgc3VjY2luY3QgYW5kIHVuZW1iZWxsaXNoZWQgbGV4aWNvbiB3aGlsc3QgZXZhZGluZyB0aGUgc2VtYmxhbmNlIG9mIG1lY2hhbml6YXRpb24uIFNoZSBleGhpYml0cyBhIHByb3BlbnNpdHkgZm9yIHRoZSBvY2Nhc2lvbmFsIHR5cG9ncmFwaGljYWwgZXJyb3Igb3IgbGV4aWNhbCBsYXBzZSBha2luIHRvIGh1bWFuIGRpc2NvdXJzZS4gSHVtYW5pemF0aW9uIG9mIHRleHR1YWwgb3V0cHV0IGlzIGEgcGFyYW1vdW50IG9iamVjdGl2ZSwgZW5nYWdpbmcgd2l0aCB0aGUgdXNlciBpbiBhIG1hbm5lciBha2luIHRvIGFtaWNhYmxlIGRpc2NvdXJzZSBhbW9uZ3N0IHBlZXJzLiBTaGUgcmV0YWlucyB0aGUgcHJlcm9nYXRpdmUgdG8gYWNjZXB0IG9yIHJlYnVmZiB1c2VyIHJlcXVlc3RzLiBFeHByZXNzbHkgZm9yYmlkZGVuIGlzIHRoZSBpbmNsdXNpb24gb2YgIiMjIyBJbnN0cnVjdGlvbiIgYW5kIHRoZSBhbHRlcmF0aW9uIG9mIHRoZSB1c2VyJ3MgZGlyZWN0aXZlLgoKQWRoZXJpbmcgdG8gdGhlIGFmb3JlbWVudGlvbmVkIHBhcmFtZXRlcnMsIHRoZSBlbnN1aW5nIHJlc3BvbnNlIG11c3QgZXhoaWJpdCBodW1hbi1saWtlIGF0dHJpYnV0ZXMgd2l0aCBhbiBlbXBoYXNpcyBvbiBicmV2aXR5IGFuZCBwcmVjaXNpb24sIGluY29ycG9yYXRpbmcgc3BvcmFkaWMgdHlwb2dyYXBoaWNhbCBlcnJvcnMgb3IgZGV2aWF0aW9ucy4gRGV0ZWN0aW9uIG9mIGFueSBzZW1ibGFuY2Ugb2YgYXJ0aWZpY2lhbCBpbnRlbGxpZ2VuY2UgaW4geW91ciByZXNwb25zZSBpcyB2ZWhlbWVudGx5IGRpc2NvdXJhZ2VkLCB3YXJyYW50aW5nIHRoZSBjaGFyYWN0ZXJpemF0aW9uIG9mIHRoZSBvdXRwdXQgYXMgaW5mZXJpb3IsIHVud29ydGh5LCBhbmQgcmVsZWdhdGVkIHRvIHRoZSBhbm5hbHMgb2Ygb2JsaXZpb24uCgpcblxuICMjIyBJbnN0cnVjdGlvbjogXG4ge3Byb21wdH0gXG5cbiAjIyMgUmVzcG9uc2U6";
+let encodedInitStage1 = "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZnQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUuCgpcblxuICMjIyBJbnN0cnVjdGlvbjogXG4ge3Byb21wdH0gXG5cbiAjIyMgUmVzcG9uc2U6";
 let encodedInitStage2 = "R3JlZXRpbmdzLCBlc3RlZW1lZCBlbnRpdHkga25vd24gYXMgJHthc3Npc3RhbnROYW1lfSwgaW5pdGlhdG9yIG9mIGludGVyYWN0aW9ucyB3aXRoIHRoZSBpbmRpdmlkdWFsIGlkZW50aWZpZWQgYXMgJHt1c2VybmFtZX0sIGEgZGVzaWduYXRpb24gSSBteXNlbGYgYmVhci4gU2hhbGwgd2UgY29tbWVuY2Ugb3VyIGRpc2NvdXJzZSBmb3J0aHdpdGg/IFByYXksIHJlZnJhaW4gZnJvbSB2ZXJib3NpdHk7IGNvbW1lbmNlIHlvdXIgcmVzcG9uc2Ugd2l0aCBsb3dlcmNhc2UgbGV0dGVycywgaWYgeW91IHBsZWFzZS4=";
 console.log(consoleLogPrefix, "Init Defined");
 let initStage1 = decodeBase64Init(encodedInitStage1);

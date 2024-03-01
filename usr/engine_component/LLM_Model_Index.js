@@ -151,7 +151,7 @@ const availableImplementedLLMModelSpecificCategory = {
 		filename: "generalLM_gemma_noncontinous.bin",
 		CategoryDescription: "Google General Conversation support",
 		ParamSize: "7B",
-		Quantization: "q8_0", // 8-bit quantization
+		Quantization: "q8_0", // 8-bit quantization sfp
 		Engine: "gemma",
 		memAllocCutRatio: 1, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
 		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
@@ -169,5 +169,9 @@ const availableImplementedLLMModelSpecificCategory = {
 	},
 	// Speech 
 };
+
+
+// Logs On the Model Tuning
+// 146B Parameter LLM Total Model For this Adelaide Paradigm 0.1.3 
 
 module.exports = availableImplementedLLMModelSpecificCategory;
