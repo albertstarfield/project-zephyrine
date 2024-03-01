@@ -337,7 +337,10 @@ const schema = {
 			maxLocalSearchPerFileChar: '512',
 			keywordContentFileMatchPercentageThreshold: '27',
 			hardwareLayerOffloading: '512',
-			longChainThoughtNeverFeelenough: true  
+			longChainThoughtNeverFeelenough: true,
+			qostimeoutllmchildglobal: '60000',
+			qostimeoutllmchildsubcategory: '30000',
+			qostimeoutllmchildbackbrainglobalqueuemax: '3600000'
 		  }		  
 	},
 	modelPath: {

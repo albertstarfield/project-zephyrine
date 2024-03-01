@@ -836,6 +836,9 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("top_p").value = data.top_p;
 	document.getElementById("temp").value = data.temp;
 	document.getElementById("seed").value = data.seed;
+	document.getElementById("QoSTimeoutLLMChildGlobal").value = data.qostimeoutllmchildglobal;
+	document.getElementById("QoSTimeoutLLMChildSubCategory").value = data.qostimeoutllmchildsubcategory;
+	document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").value = data.qostimeoutllmchildbackbrainglobalqueuemax;
 	document.getElementById("web-access").checked = data.webAccess;
 	document.getElementById("local-file-access").checked = data.localAccess;
 	document.getElementById("LLMChildDecision").checked = data.llmdecisionMode;
@@ -861,6 +864,9 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			top_p: document.getElementById("top_p").value || document.getElementById("top_p").placeholder,
 			temp: document.getElementById("temp").value || document.getElementById("temp").placeholder,
 			seed: document.getElementById("seed").value || document.getElementById("seed").placeholder,
+			qostimeoutllmchildglobal: document.getElementById("QoSTimeoutLLMChildGlobal").value || document.getElementById("QoSTimeoutLLMChildGlobal").placeholder,
+			qostimeoutllmchildsubcategory: document.getElementById("QoSTimeoutLLMChildSubCategory").value || document.getElementById("QoSTimeoutLLMChildSubCategory").placeholder,
+			qostimeoutllmchildbackbrainglobalqueuemax: document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").value || document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").placeholder,
 			webAccess: document.getElementById("web-access").checked,
 			localAccess: document.getElementById("local-file-access").checked,
             llmdecisionMode: document.getElementById("LLMChildDecision").checked,
