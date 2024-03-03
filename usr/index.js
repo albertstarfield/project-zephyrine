@@ -60,6 +60,7 @@ const username = os.userInfo().username;
 const consoleLogPrefix = `[${colorBrightCyan}${appName}_${platform}_${arch}${colorReset}]:`;
 
 
+
 var win;
 function createWindow() {
 	win = new BrowserWindow({
@@ -84,6 +85,21 @@ function createWindow() {
 	win.setMenu(null);
 	// win.webContents.openDevTools();
 	
+}
+//custom icon for the dock on darwin based os using QE/CI engine
+if (os.platform() == "darwin"){
+const electron = require('electron'); // Import the electron module
+const app = electron.app;
+const image = electron.nativeImage.createFromPath(
+  app.getAppPath() + "/" + path.join("icon", "mac", "icon.icns")
+);
+app.dock.setIcon(image);
+app.name = assistantName;
+}
+
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
 }
 
 app.on("second-instance", () => {
@@ -203,7 +219,8 @@ ipcMain.on("emotioncurrentDebugInterfaceFetch", () => {
 	win.webContents.send("emotionDebugInterfaceStatistics", { data: DebugInterfaceCaughtInfo }); //invoke emotionDebugInterfaceStatistics ipcRenderer on renderer.js
 });
 
-let loadAvg; // for the ipcMain call hardwarestressload will return the percentage from (loadAvg/totalthread)*100
+let loadAvg=[0.0001, 0.0001, 0.0001]; // for the ipcMain call hardwarestressload will return the percentage from (loadAvg/totalthread)*100
+// Want the very current loadAvg? loadAvg[0] variable is your friend
 let totalAvailableThreads=8; //default fallback
 ipcMain.on("hardwarestressload", () => {
 // Function to fetch the current system load average
@@ -1560,7 +1577,7 @@ class ExternalLocalFileScraperBackgroundAgent {
 				//console.log(consoleLogPrefix,`📖 Debug ⛔ Skipping this Documents: ${filePath}, not yet supported!`);
 			}
         } catch (error) {
-            console.error(`${consoleLogPrefix} Error 📖 Learning document: ${filePath}: ${error.message}`);
+            console.error(`${consoleLogPrefix} Error 📖 ⛔ Learning ${this.documentsLearned} document: ${filePath}: ${error.message}`);
         }
     }
 
@@ -1582,6 +1599,9 @@ class ExternalLocalFileScraperBackgroundAgent {
         try {
             const files = await readdirAsync(directory);
             for (const file of files) {
+				if ((this.documentsLearned % 1000) == 0) {
+					console.log(consoleLogPrefix, `[📖 Documents Background RAG] I have Learned/re-learned ${this.documentsLearned} Literature in this session`);
+				}
                 const filePath = path.join(directory, file);
                 const stats = fs.statSync(filePath);
                 if (stats.isDirectory()) {
@@ -1589,6 +1609,8 @@ class ExternalLocalFileScraperBackgroundAgent {
                 } else {
                     await this.processDocument(filePath);
                 }
+				// Learning Documents Throttle based on loadAvg[0]*1
+				await delay(loadAvg[0]*1);
             }
         } catch (error) {
             console.error(`Error scanning directory ${directory}: ${error.message}`);
@@ -1596,16 +1618,18 @@ class ExternalLocalFileScraperBackgroundAgent {
     }
 
     async startScanning() {
-        if (this.isRunning) {
-            console.log('Scanning is already in progress.');
+        if (this.isRunning || externalLocalFileScrapingTextAgent_BackgroundAgentActive) {
+            console.log('📖 Learning is already in progress.');
             return;
         }
         this.isRunning = true;
+		externalLocalFileScrapingTextAgent_BackgroundAgentActive = true;
         await this.scanTargetDirectories();
         for (const directory of this.targetDirectoryList) {
             await this.scanAndProcessDocuments(directory);
         }
         this.isRunning = false;
+		externalLocalFileScrapingTextAgent_BackgroundAgentActive = false;
         console.log(`Scanning completed. Total documents learned: ${this.documentsLearned}`);
     }
 }
@@ -1977,15 +2001,12 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	// Initialize Unified Memory Array if this function called and its still blank
 	// Check if UnifiedMemoryArray is empty or undefined
 
-    //restore old UnifiedMemoryArray if foreverEtchedMemory turned on or true
+    //restore old UnifiedMemoryArray if foreverEtchedMemory turned on or true (it is now integrated with the load call for this function)
 
-
-
-
-	
 
 	//Split array if single index of the array is more than 256 Words or shall we say blocksize controller
 
+	/*
 	for (let i = 0; i < array.length; i++) {
 		let words = array[i].split(/\s+/); // Split the string into words using whitespace as delimiter
 		while (words.length > maxWordsPerArray) {
@@ -1998,6 +2019,9 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		}
 	}
 	console.log(consoleLogPrefix,"Debug UnifiedMemoryArrayDebugSplit Chunk Controller Result", UnifiedMemoryArray);
+
+	// We're just going to leave as it be for now not cut it 256 which may interfere with dedupe operation
+	*/
 
 	//remove all the Storage Header Array
 	//console.log(consoleLogPrefix, "Removing storage Header Array");

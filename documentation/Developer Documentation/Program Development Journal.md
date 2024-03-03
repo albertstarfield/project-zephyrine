@@ -52,3 +52,9 @@ At one point, I did try asking Adelaide for a gift recommendation for an old fri
 I believe I have glimpsed myself from the future before. How many times have I been here and felt the pain repeatedly? Well, I hope that Adelaide is able to unlock the discovery of 4D or even (n-2)D film reels, and perhaps catch a glimpse of (n-1)D, gaining a better understanding of why I keep seeing these things.
 
 I suppose that's all for this entry for now.
+
+---
+### Entry I : March 3, 2024
+---
+
+There's no such thing as overkill. Either you win or lose, and unfortunately i'm currently at the losing side and trying to catch up. Building this as my portofolio. -Albert

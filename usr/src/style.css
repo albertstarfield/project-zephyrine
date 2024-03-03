@@ -14,14 +14,7 @@
 	font-weight: normal;
 }
 
-h1.logo {
-	font-family: "TitleFont";
-	font-size: 4rem;
-	height:4rem ;
-	/* Additional title styling goes here */
-	margin: 1.1rem;
-	padding: 5;
-  }
+
 
 :root {
 	--primary-text: #d1d5db;
@@ -34,7 +27,8 @@ h1.logo {
 	--surface-alt: #56586992;
 	--surface-alt-bright: #acacbe;
 	--tertiary: #3e3f4b;
-	--accent: #00c1c1; /* Azure Turquoise Sweet Blue accent */
+	--accent: #0BBC02; /* Azure Turquoise Sweet Blue accent */
+	--oppositeaccent: #f7aa36;
 	--secondary: #1A7F64; /* Azure Turquoise Sweet Blue secondary */
 	--error: #ff5d5d;
 	--overlay: rgba(62, 61, 61, 0.676);
@@ -61,7 +55,8 @@ h1.logo {
 		--surface-alt: #7575755e;
 		--surface-alt-bright: #acacbe;
 		--tertiary: #f1f1f1;
-		--accent: #00c1c1; /* Azure Turquoise Sweet Blue accent */
+		--accent: #0BBC02; /* Azure Turquoise Sweet Blue accent */
+		--oppositeaccent: #f7aa36;
 		--secondary: #1A7F64; /* Azure Turquoise Sweet Blue secondary */
 		--error: #ff5d5d;
 		--overlay: rgba(240, 240, 240, 0.34); /* Light gray overlay */
@@ -77,6 +72,18 @@ h1.logo {
 		--contrast-black-overlay: #525252;
 	}
 }
+
+h1.logo {
+	font-family: "TitleFont";
+	font-size: 4rem;
+	height:4rem ;
+	/* Additional title styling goes here */
+	margin: 1.1rem;
+	padding: 2.4rem;
+	background-image: linear-gradient(to bottom right, var(--primary-text), var(--accent));
+    -webkit-background-clip: text;
+    color: transparent; /* Make the text transparent */
+  }
 
 *::-webkit-scrollbar {
 	-webkit-appearance: none;
@@ -108,7 +115,13 @@ h1.logo {
 	font-weight: normal;
 }
 h1,
-h2,
+h2 {
+	font-size: 1.2rem;
+    background-image: linear-gradient(to bottom right, var(--accent), var(--primary-text-alt));
+    -webkit-background-clip: text; /* For Safari */
+    background-clip: text;
+    color: transparent;
+}
 h3,
 h4,
 h5,
@@ -235,7 +248,7 @@ body {
 }
 #input {
 	white-space: pre-wrap;
-	padding: 5px;
+	padding: 0.3rem 0.3rem 0.3rem 1rem;
 	outline: none;
 	border: none;
 	flex-grow: 1;
@@ -320,7 +333,7 @@ html.darwin #main { /* b r u h */
 	max-width: 42rem;
 	margin: auto;
 	display: block;
-	margin: 13vh auto 8rem;
+	margin: 5vh auto 8rem;
 	
 }
 #feed-placeholder-alpaca:not(:last-child) {
@@ -527,9 +540,12 @@ form.running-model .loading {
 .about-section h2 {
     font-size: 24px;
     font-weight: bold;
-    color: #333;
+    color: transparent; /* Make the text transparent */
     margin-bottom: 20px;
-	text-align: center; /* Align text in the center */
+    text-align: center; /* Align text in the center */
+    background: linear-gradient(45deg, var(--accent), var(--primary-text-alt)); /* Define linear gradient */
+    -webkit-background-clip: text; /* Clip the background to the text */
+    background-clip: text; /* Clip the background to the text */
 }
 
 .about-section h5 {

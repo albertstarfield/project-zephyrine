@@ -94,7 +94,6 @@
 						<h1 class="logo">Adelaide Paradigm</h1>
 						<h4>
 							Greetings! I am Adelaide Zephyrine Charlotte. Delighted to make your acquaintance and wishing you a splendid day ahead. While I may possess greater capabilities, please bear in mind that my role is to assist you. You remain the driving force, the orchestrator of your own journey. Shall we embark on our interaction together?</h4>
-						<h3> ❤️ </h3>
 						<h3> </h3>
 						<div class="columns">
 							<!--  -->
@@ -243,7 +242,7 @@
 		<div id="info-dialog-bg" class="dialog-bg hidden">
 			<div class="dialog-box">
 				<div class="dialog-title">
-					<h2>About Adelaide</h2>
+					<h2>ℹ️ About Adelaide</h2>
 				</div>
 				<div id="info-dialog" class="dialog-content"> <!-- id info-dialog arent used to call anything -->
 					<div>
@@ -279,6 +278,18 @@
 							</div>
 							<div id="LLMChildEngineIndicator" class="resource-item">
 								<div class="text info"> LLMChild State : N/A </div>
+								<div class="bar">
+									<div class="bar-inner"></div>
+								</div>
+							</div>
+							<div id="BackBrainQueue" class="resource-item">
+								<div class="text info"> BackBrain Async Queue Line : N/A </div>
+								<div class="bar">
+									<div class="bar-inner"></div>
+								</div>
+							</div>
+							<div id="BackBrainFinished" class="resource-item">
+								<div class="text info"> BackBrain Finished Task : N/A </div>
 								<div class="bar">
 									<div class="bar-inner"></div>
 								</div>
@@ -396,12 +407,12 @@
 		<div id="settings-dialog-bg" class="dialog-bg hidden">
 			<div class="dialog-box">
 				<div class="dialog-title">
-					<h3>Settings</h3>
+					<h2>⚙️ Settings</h2>
 				</div>
 				<div id="settings-dialog" class="dialog-content">
 					<div class="settings-items">
 
-						<h3>Classic Mode</h3>
+						<h2>Configuration</h2>
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
 								<input type="checkbox" id="classicmode"/>
@@ -430,9 +441,7 @@
 						<h5>Enable the Adelaide to project its voice through either the speaker or any other hardware capable of rendering audio output.</h5>
 
 						<div style="height: 32px"></div>
-						<h3>Advanced Settings</h3>
-						<h5>If you don't know what you're expecting and doing, Turn back to prevent any further issue, Thank you</h5>
-						—————————————————————				
+						<h2>Basic LLM Binary Parameters Settings</h2>	
 						<div style="height: 8px"></div>		
 						<h3>Current Mode Model settings</h3>
 						
@@ -466,6 +475,9 @@
 							<input type="number" step="1" min="-1" id="seed" value="-1" placeholder="-1" />
 						</div>
 
+						<div style="height: 32px"></div>
+						<h2>QoS Performance Enforcement</h2>
+
 						<div class="item">
 							<p>QoS Internal Thought ms Timeout Global LLMChild (in ms)</p>
 							<input type="number" step="1" min="2000" max="2555536" id="QoSTimeoutLLMChildGlobal" value="40000" placeholder="60000" />
@@ -481,18 +493,26 @@
 							<input type="number" step="1" min="2000" max="99999999999999999999" id="QoSTimeoutLLMChildBackBrainGlobalQueueMax" value="10000" placeholder="36000000" />
 						</div>
 
-						<div style="height: 32px"></div>
-
-						<h3>Additional Context Settings</h3>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="QoSTimeoutSwitch" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">QoSTimeout (Not yet Implemented)</p>
+						</div>
+						<h5>QoS Cutout and QoS Timeout mechanisms ensures the swift resolution of program lockups while simultaneously identifying opportunities for enhancing interaction fluidity.</h5>
 
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
-								<input type="checkbox" id="MLCMCFSwitch" />
+								<input type="checkbox" id="BackbrainQueue" />
 								<span class="slider round"></span>
 							</label>
-							<p style="margin: 0">(MLCMCF) (Not yet Implemented)</p>
+							<p style="margin: 0">BackBrain (Not yet Implemented)</p>
 						</div>
-						<h5>Multi Level Condensed Memory Contextual Fetching (MLCMCF) Allows to fetch bigger context bigger than 4096 with some context summirization</h5>
+						<h5>The Backbrain QoS Switch enables the program to seamlessly transition its thought processes to the background when the processor's capacity is deemed insufficient or if there's significant delay. This feature is integral to the architecture designed to facilitate the smooth execution of tasks, particularly crucial for supporting the operation of a 146B Total Model at the speed required the same as 7b q4_0. However this queue will be processed purely on CPU.</h5>
+
+						<div style="height: 32px"></div>
+						<h2>Additional Context Settings</h2>
 
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
@@ -502,33 +522,7 @@
 							<p style="margin: 0">Let the Main LLM Model be The Decision Agent</p>
 						</div>
 						<h5>Refines the initial prompt into a more refined formulation, optimized for generating accurate responses.</h5>
-						<div style="display: flex; align-items: center">
-							<label class="switch" style="height: 1.153512rem">
-								<input type="checkbox" id="ExecuteActionCommand" />
-								<span class="slider round"></span>
-							</label>
-							<p style="margin: 0">Automatic Command Exec (Not Yet Implemented)</p>
-						</div>
-						<h5>Proceed with caution when executing the generated code. Any risks or potential issues arising from the program's output, including system disruptions or data loss, are solely your responsibility.</h5>
 						
-						<div style="display: flex; align-items: center">
-							<label class="switch" style="height: 1.153512rem">
-								<input type="checkbox" id="AutomateLoopback" />
-								<span class="slider round"></span>
-							</label>
-							<p style="margin: 0">Automata Mode (Not Yet Implemented)</p>
-						</div>
-						<h5>Enables the program to autonomously process input and output in a continuous loop. This functionality may result in sustained high CPU/GPU utilization.</h5>
-
-						<div style="display: flex; align-items: center">
-							<label class="switch" style="height: 1.153512rem">
-								<input type="checkbox" id="selfmodifyingcode" />
-								<span class="slider round"></span>
-							</label>
-							<p style="margin: 0">Adaptic Self Modification Code(Not Yet Implemented)</p>
-						</div>
-						<h5>Caution is warranted! This implementation empowers the software to exhibit autonomic behavior akin to a biological cell, thereby enabling autonomous self-maintenance, self-adaptation, and autonomous code evolution in response to environmental stimuli and exigencies.</h5>
-
 						<div class="item">
 							<p>Web search result amount</p>
 							<input type="number" step="1" min="1" max="10" id="websearch_amount" value="7" placeholder="7" />
@@ -595,7 +589,15 @@
 						</div>
 						<h5>Discard any initial response that may often be incongruous, particularly in LLaMa 2 mode. Instead, initiate the session from the second response following the initial incongruous one.</h5>
 						<div style="height: 32px"></div>
-						<h3>Use the previous session as context</h3>
+						<h2>Memory Context Management</h2>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="MLCMCFSwitch" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">(MLCMCF) (Not yet Implemented)</p>
+						</div>
+						<h5>Multi Level Condensed Memory Contextual Fetching (MLCMCF) Allows to fetch bigger context bigger than 4096 with some context summirization, By design there is L6, L5, L4, L3, L2, L1, L0 Memory to fit industrial scale processing in small tiny program</h5>
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
 								<input type="checkbox" id="historyChatCtx"/>
@@ -621,7 +623,7 @@
 						</div>
 						<h5>This toggle exclusively reinstates the interaction history within the graphical user interface, refraining from providing the AI or central LLM framework with prior conversation context. To grant the context and leverage the preceding dialogue history, it is imperative to activate the "Local File Access" and "Let LLM Decide and Craft the query" toggles as a minimum requirement.</h5>
 						<div style="height: 32px"></div>
-						<h3>Neural Hardware Acceleration</h3>
+						<h2>Neural Hardware Acceleration</h2>
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
 								<input type="checkbox" id="attemptaccelerate"/>
@@ -635,7 +637,7 @@
 						</div>
 						<h5>Specify the allocation of Neural Network Layers to the Dedicated Hardware Accelerator, aligning with your dedicated accelerator's memory budget.</h5>
 						<div style="height: 32px"></div>
-						<h3>Emotions</h3>
+						<h2>Emotions</h2>
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
 								<input type="checkbox" id="emotionalllmchildengine"/>
@@ -653,6 +655,36 @@
 						</div>
 						<h5>Facilitates the dynamic alteration of profile pictures in response to the emotions captured within the context. This functionality relies on the activation of the Emotion Engine; without it, this trigger remains inactive.</h5>
 						<div style="height: 32px"></div>
+						<div style="height: 32px"></div>
+
+						<h2>Automata Settings</h2>
+
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="ExecuteActionCommand" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Automatic Command Exec (Not Yet Implemented)</p>
+						</div>
+						<h5>Proceed with caution when executing the generated code. Any risks or potential issues arising from the program's output, including system disruptions or data loss, are solely your responsibility.</h5>
+						
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="AutomateLoopback" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Automata Mode (Not Yet Implemented)</p>
+						</div>
+						<h5>Enables the program to autonomously process input and output in a continuous loop. This functionality may result in sustained high CPU/GPU utilization.</h5>
+
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="selfmodifyingcode" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Adaptic Self Modification Code(Not Yet Implemented)</p>
+						</div>
+						<h5>Caution is warranted! This implementation empowers the software to exhibit autonomic behavior akin to a biological cell, thereby enabling autonomous self-maintenance, self-adaptation, and autonomous code evolution in response to environmental stimuli and exigencies.</h5>
 					</div>
 				</div>
 				<div class="dialog-button">
