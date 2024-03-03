@@ -5,7 +5,7 @@ For enabling the more verbose output of the console logs you could add this envi
 INTERNET_FETCH_DEBUG_MODE
 LOCAL_FETCH_DEBUG_MODE
 CoTMultiSteps_FETCH_DEBUG_MODE
-ptyChatStgDEBUG
+ptyinteractionStgDEBUG
 ptyStreamDEBUGMode
 HISTORY_CTX_FETCH_DEBUG_MODE
 
@@ -38,6 +38,7 @@ HISTORY_CTX_FETCH_DEBUG_MODE
 
 
 const { BrowserWindow, app, ipcMain, dialog } = require("electron");
+const { spawn } = require('child_process');
 const ipcRenderer = require("electron").ipcRenderer;
 const contextBridge = require('electron').contextBridge;
 const path = require("path");
@@ -52,8 +53,9 @@ const platform = os.platform();
 const arch = os.arch();
 const colorReset = "\x1b[0m";
 const colorBrightCyan = "\x1b[96m";
-const assistantName = "Adelaide Zephyrine Charlotte"
-const appName = `Project ${assistantName}`
+const assistantName = "Adelaide Zephyrine Charlotte";
+const natural = require('natural');
+const appName = `Project ${assistantName}`;
 const username = os.userInfo().username;
 const consoleLogPrefix = `[${colorBrightCyan}${appName}_${platform}_${arch}${colorReset}]:`;
 
@@ -505,59 +507,6 @@ async function externalInternetFetchingScraping(text) {
 	}	
 }
 
-async function searchAndConcatenateText(searchText) {
-	const userHomeDir = require('os').homedir();
-	const rootDirectory = path.join(userHomeDir, 'Documents'); // You can change the root directory as needed
-  
-	const result = [];
-	let totalChars = 0;
-  
-	async function searchInDirectory(directoryPath) {
-		const files = await readdir(dir);
-		const matches = [];
-	  
-		for (const file of files) {
-		  const filePath = path.join(dir, file);
-		  const fileStat = await stat(filePath);
-	  
-		  if (fileStat.isDirectory()) {
-			matches.push(...await searchFiles(filePath, keyword));
-		  } else if (fileStat.isFile() && /\.(pdf|docx|txt)$/i.test(file)) {
-			const content = await fs.promises.readFile(filePath, 'utf8');
-	  
-			if (content.includes(keyword)) {
-			  console.log(`Found ${keyword} in ${filePath}`);
-			  matches.push({
-				file: filePath,
-				match: content.match(new RegExp(`(.*${keyword}.*)`, 'i'))[0]
-			  });
-			}
-		  }
-		}
-	  
-		return matches;
-	}
-  
-	result = searchInDirectory(rootDirectory);
-	
-	return result.join('\n');
-  }
-
-
-const { exec } = require('child_process');
-function runShellCommand(command) {
-  return new Promise((resolve, reject) => {
-    exec(command, (error, stdout, stderr) => {
-      if (error) {
-        reject(error);
-      } else {
-        resolve(stdout);
-      }
-    });
-  });
-}
-
-
 // Filtering function section --------------------
 function onlyAllowNumber(inputString){
 	const regex = /\d/g;
@@ -667,13 +616,13 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	childLLMResultNotPassed = true;
 	let specializedModelReq="";
 	definedSeed_LLMchild = `${randSeed}`;
-	
+	console.log(consoleLogPrefix, "🍀⚙️", "LLMChild invoked!");
 	while(childLLMResultNotPassed){
 		//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
 		result = await callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild);
 		if (await hasAlphabet(result)){
 			childLLMResultNotPassed = false;
-			//console.log(consoleLogPrefix, "Result detected", result);
+			console.log(consoleLogPrefix, "Result detected", result);
 			childLLMDebugResultMode = false;
 			llmChildfailureCountSum = 0; //reset failure count if exists, because different seed different result
 		} else {
@@ -682,14 +631,14 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 			lengthGen = llmChildfailureCountSum + lengthGen;
 			childLLMDebugResultMode = true;
 			internalThoughtEngineTextProgress=`LLMChild Failed to execute no Output! Might be a bad model?`;
-			console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
+			console.log(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			console.log(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "Adjusting LengthGen Request to: ", lengthGen);
 			console.log(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
 			childLLMResultNotPassed = true;
 			if ( llmChildfailureCountSum >= 5 ){
 				defectiveLLMChildSpecificModel=true;
 				internalThoughtEngineTextProgress=`I yield! I gave up on using this specific Model! Reporting to LLMChild Engine!`;
-				console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
+				console.log(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			}
 		}
 } 
@@ -732,6 +681,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	let allowedAllocNPUDraftLayer;
 	
 	// --n-gpu-layers need to be adapted based on round(${store.get("params").hardwareLayerOffloading}*memAllocCutRatio)
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split");
 	if(isBlankOrWhitespaceTrue_CheckVariable(specificSpecializedModelPathRequest_LLMChild) || LLMChildDecisionModelMode || defectiveLLMChildSpecificModel){
 		if(LLMChildDecisionModelMode){
 			console.log(consoleLogPrefix, "LLMChild Model Decision Mode! Ignoring Specific Model Request!");
@@ -751,7 +701,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
 		currentUsedLLMChildModel=specificSpecializedModelPathRequest_LLMChild; // this will be decided by the main thought and processed and returned the path of specialized Model that is requested
 	}
-
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "NPU Split Decision");
 	if (allowedAllocNPULayer <= 0){
 		allowedAllocNPULayer = 1;
 	}
@@ -761,17 +711,18 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	} else {
 		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
 	}
-
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
 	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 4096 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
 	try {
-	//console.log(consoleLogPrefix, `LLMChild Inference ${command}`);
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Inference ${command}`);
 	outputLLMChild = await runShellCommand(command);
 	if(childLLMDebugResultMode){
-		console.log(consoleLogPrefix, 'LLMChild Raw output:', outputLLMChild);
+		//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
 	}
+	//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
 	//console.log(consoleLogPrefix, 'LLMChild Raw output:', outputLLMChild);
 	} catch (error) {
 	console.error('Error occoured spawning LLMChild!', flag, error.message);
@@ -859,10 +810,16 @@ let internalThoughtEngineProgress=0; // 0-100% just like progress
 let internalThoughtEngineTextProgress="";
 
 function interactionContextFetching(historyDistance){
-	//interactionArrayStorage("retrieve", "", false, false, chatStgOrder-1);
-	if (historyDistance >= chatStgOrder){
-		console.log(consoleLogPrefix, `Requested ${historyDistance} History Depth/Distances doesnt exist, Clamping to ${chatStgOrder}`);
-		historyDistance = chatStgOrder;
+
+	// Make this Access UMA rather than directly to Interactionstg array
+
+	// Also when accessing UMA make sure that its calling interactionArrayStorage(retrieve ) with the specific string that its needed something like interactionArrayStorage("retrieveMLCMCF", currentPrompt, false, false, interactionStgOrder-i) so that the interactionArrayStorage can get the context too which is required for the MLCMCF architecture
+
+
+	//interactionArrayStorage("retrieve", "", false, false, interactionStgOrder-1);
+	if (historyDistance >= interactionStgOrder){
+		console.log(consoleLogPrefix, `Requested ${historyDistance} History Depth/Distances doesnt exist, Clamping to ${interactionStgOrder}`);
+		historyDistance = interactionStgOrder;
 	}
 	console.log(consoleLogPrefix, `Retrieving Chat History with history Depth ${historyDistance}`);
 	let str = "";
@@ -872,7 +829,7 @@ function interactionContextFetching(historyDistance){
 		  } else {
 			str += `${assistantName}: `; // odd number on this version of zephyrine means the AI or the assistant is the one that answers
 		  }
-		  str += `${interactionArrayStorage("retrieve", "", false, false, chatStgOrder-i)} \n`
+		  str += `${interactionArrayStorage("retrieve", "", false, false, interactionStgOrder-i)} \n`
 		  //console.log(i + ": " + str);
 		  //deduplicate string to reduce the size need to be submitted which optimizes the input size and bandwidth
 		}
@@ -898,8 +855,7 @@ class sensorySubsystem{
 
 function isBlankOrWhitespaceTrue_CheckVariable(variable){
 	//console.log(consoleLogPrefix, "Checking Variable", variable)
-	if (variable.trim().length === 0 || variable === '') {
-		//console.log(consoleLogPrefix, "This is blank!");
+	if (variable === undefined || variable.trim().length === 0 || variable === '') {
 		return true;
 	  } else {
 		return false;
@@ -1129,7 +1085,7 @@ function checkFileExists(filePath) {
         return false;
     }
 }
-let validatedModelAlignedCategory; //defined 
+let validatedModelAlignedCategory=""; //defined with blankspace to prevent undefined issue 
 function specializedModelManagerRequestPath(modelCategory){
 	// "specializedModelKeyList" variable is going to be used as a listing of the available category or lists
 	console.log(consoleLogPrefix, specializedModelKeyList)
@@ -1140,8 +1096,8 @@ function specializedModelManagerRequestPath(modelCategory){
 	for (let i = 0; i < specializedModelKeyList.length; i++) {
 		const currentlySelectedSpecializedModelDictionary = specializedModelKeyList[i];
 		const DataDictionaryFetched = availableImplementedLLMModelSpecificCategory[currentlySelectedSpecializedModelDictionary];
-		console.log(consoleLogPrefix, "Checking Specialized Model", currentlySelectedSpecializedModelDictionary);
-		console.log(consoleLogPrefix, `\n Model Category Description ${DataDictionaryFetched.CategoryDescription} \n Download Link ${DataDictionaryFetched.downloadLink} \n Download Link ${DataDictionaryFetched.filename} `)
+		//console.log(consoleLogPrefix, "Checking Specialized Model", currentlySelectedSpecializedModelDictionary);
+		//console.log(consoleLogPrefix, `\n Model Category Description ${DataDictionaryFetched.CategoryDescription} \n Download Link ${DataDictionaryFetched.downloadLink} \n Download Link ${DataDictionaryFetched.filename} `)
 		if (!fs.existsSync(`${DataDictionaryFetched.filename}`) && (!isBlankOrWhitespaceTrue_CheckVariable(DataDictionaryFetched.downloadLink))) {
 			console.log("Attempting to Download", DataDictionaryFetched.downloadLink);
 			const currentlySelectedSpecializedModelURL = `${DataDictionaryFetched.downloadLink}`; // Replace with your download link
@@ -1181,12 +1137,14 @@ function specializedModelManagerRequestPath(modelCategory){
 
 async function callInternalThoughtEngine(prompt){
 	let decisionBinaryKey = ["yes", "no"];
+	console.log(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked!");
 	internalThoughtEngineProgress=2;
 	// were going to utilize this findClosestMatch(decision..., decisionBinaryKey); // new algo implemented to see whether it is yes or no from the unpredictable LLM Output
 	if (store.get("params").llmdecisionMode){
 		// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 		promptInput = `${username}:${prompt}\n Based on your evaluation of the request submitted by ${username}, could you please ascertain the number of sequential steps, ranging from 1 to 50, necessary to acquire the relevant historical context to understand the present situation? Answer only in numbers:`;
 		internalThoughtEngineTextProgress="Acquiring Interaction Context";
+		
 		historyDistanceReq = await callLLMChildThoughtProcessor(promptInput, 32);
 		historyDistanceReq = onlyAllowNumber(historyDistanceReq);
 		console.log(consoleLogPrefix, "Required History Distance as Context", historyDistanceReq);
@@ -1199,7 +1157,7 @@ async function callInternalThoughtEngine(prompt){
 		historyDistanceReq = 5;
 		console.log(consoleLogPrefix, "historyDistanceReq Mode");
 	}
-	console.log(consoleLogPrefix, "Retrieving History!");
+	console.log(consoleLogPrefix, "🍀", "Retrieving History!");
 	internalThoughtEngineTextProgress="Retrieving History!";
 	historyChatRetrieved=interactionContextFetching(historyDistanceReq);
 	concludeInformation_chatHistory=historyChatRetrieved;
@@ -1223,67 +1181,8 @@ async function callInternalThoughtEngine(prompt){
 		const seconds = String(currentDate.getSeconds()).padStart(2, '0');
 		fullCurrentDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 		//decision if yes then do the query optimization
-		// ./chat -p "___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"What are you doing?\"___[Thoughts Processor] " -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r "[User]" -n 2
-		// Chat History Context Call
 		// -----------------------------------------------------
 		console.log(consoleLogPrefix, "============================================================");
-		// This is for the ChatCTX Request
-
-		/*
-
-		//This large commented code is actually for retrieving on what loaded history Chat from the previous saved session that wanted to be used for the converation for getting the context
-		// Currently it is not yet implemented but its need to beimplemented to be a minimal standard if you want to be at least be usable on the public product! Its already 2024 and you're running late, actually too late.
-
-		//&& store.get("params").hisChatCTX
-		if (store.get("params").llmdecisionMode){
-			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
-			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Previous session out of scope chat history for context Yes or No? Answer:`;
-			console.log(consoleLogPrefix, "Checking Chat History Context Call Requirement!");
-			decisionChatHistoryCTX = await callLLMChildThoughtProcessor(promptInput, 44);
-			decisionChatHistoryCTX = decisionChatHistoryCTX.toLowerCase();
-			decisionChatHistoryCTX = findClosestMatch(decisionChatHistoryCTX, decisionBinaryKey);
-		} else {
-			decisionChatHistoryCTX = "yes"; // without LLM deep decision
-		}
-		//console.log(consoleLogPrefix, ` LLMChild ${decisionSearch}`);
-		// explanation on the inputPromptCounterThreshold
-		// Isn't the decision made by LLM? Certainly, while LLM or the LLMChild contributes to the decision-making process, it lacks the depth of the main thread. This can potentially disrupt the coherence of the prompt context, underscoring the importance of implementing a safety measure like a word threshold before proceeding to the subsequent phase.
-		if ((((decisionChatHistoryCTX.includes("yes") || decisionChatHistoryCTX.includes("yep") || decisionChatHistoryCTX.includes("ok") || decisionChatHistoryCTX.includes("valid") || decisionChatHistoryCTX.includes("should") || decisionChatHistoryCTX.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.HISTORY_CTX_FETCH_DEBUG_MODE === "1") && store.get("params").hisChatCTX){
-			if (store.get("params").llmdecisionMode){
-				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. What should i search on the Internet on this interaction to help with my answer when i dont know the answer? Answer:`;
-				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
-			}else{
-				searchPrompt = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
-				console.log(consoleLogPrefix, "Using Legacy Backup Very Basic Search Prompt")
-				//searchPrompt = searchPrompt.replace(/None\./g, "");
-			}
-			console.log(consoleLogPrefix, `Created Search Prompt ${searchPrompt}`);
-			resultSearchScraping = await externalInternetFetchingScraping(searchPrompt);
-			if (store.get("params").llmdecisionMode){
-				inputPromptCounterSplit = resultSearchScraping.split(" ");
-				inputPromptCounter[3] = inputPromptCounterSplit.length;
-			if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
-				resultSearchScraping = stripProgramBreakingCharacters(resultSearchScraping);
-				promptInput = `What is the conclusion from this info: ${resultSearchScraping} Conclusion:`;
-				console.log(consoleLogPrefix, `LLMChild Concluding...`);
-				//let concludeInformation_Internet;
-				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(promptInput), 1024);
-				console.log(consoleLogPrefix, concludeInformation_Internet);
-			} else {
-				concludeInformation_Internet = "Nothing";
-			}
-			} else {
-				concludeInformation_Internet = resultSearchScraping;
-			}
-		} else {
-			console.log(consoleLogPrefix, "No Dont need to search it on the internet");
-			concludeInformation_Internet = "Nothing";
-			console.log(consoleLogPrefix, concludeInformation_Internet);
-		}
-
-		
-
-		*/
 		// Categorization of What Chat is this going to need to answer and does it require specialized Model
 		// 
 		//-------------------------------------------------------
@@ -1301,7 +1200,7 @@ async function callInternalThoughtEngine(prompt){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I use more specific LLM Model for better Answer, Only answer Yes or No! Answer:`;
 			internalThoughtEngineTextProgress="Checking Specific/Specialized/Experts Model Fetch Requirement!";
-			console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
+			console.log(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			LLMChildDecisionModelMode = true;
 			decisionSpecializationLLMChildRequirement = await callLLMChildThoughtProcessor(promptInput, 512);
 			decisionSpecializationLLMChildRequirement = decisionSpecializationLLMChildRequirement.toLowerCase();
@@ -1323,7 +1222,7 @@ async function callInternalThoughtEngine(prompt){
 			}
 		}else{
 			internalThoughtEngineTextProgress="Doesnt seem to require specific Category Model, reverting to null or default model";
-			console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
+			console.log(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			specificSpecializedModelCategoryRequest_LLMChild="";
 			specificSpecializedModelPathRequest_LLMChild="";
 		}
@@ -1339,7 +1238,7 @@ async function callInternalThoughtEngine(prompt){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Internet, Only answer Yes or No! Answer:`;
 			internalThoughtEngineTextProgress="Checking Internet Fetch Requirement!";
-			console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
+			console.log(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			LLMChildDecisionModelMode = true;
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 12);
 			decisionSearch = decisionSearch.toLowerCase();
@@ -1356,7 +1255,7 @@ async function callInternalThoughtEngine(prompt){
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. Do i have the knowledge to answer this then if i dont have the knowledge should i search it on the internet? Answer:`;
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
 				internalThoughtEngineTextProgress="Creating Search Prompt for Internet Search!";
-				console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
+				console.log(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 				console.log(consoleLogPrefix, `search prompt has been created`);
 			}else{
 				searchPrompt = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
@@ -1374,7 +1273,7 @@ async function callInternalThoughtEngine(prompt){
 				resultSearchScraping = stripProgramBreakingCharacters(resultSearchScraping);
 				promptInput = `What is the conclusion from this info: ${resultSearchScraping} Conclusion:`;
 				internalThoughtEngineTextProgress="Concluding LLMChild";
-				console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
+				console.log(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 				//let concludeInformation_Internet;
 				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(stripProgramBreakingCharacters(promptInput)), 1024);
 			} else {
@@ -1463,7 +1362,7 @@ async function callInternalThoughtEngine(prompt){
 				required_CoTSteps = await callLLMChildThoughtProcessor(promptInput, 16);
 				required_CoTSteps = onlyAllowNumber(required_CoTSteps);
 				internalThoughtEngineTextProgress=`Required ${required_CoTSteps} CoT steps`;
-				console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
+				console.log(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 
 				if (isVariableEmpty(required_CoTSteps)){
 					required_CoTSteps = 5;
@@ -1478,7 +1377,7 @@ async function callInternalThoughtEngine(prompt){
 				for(let iterate = 1; iterate <= required_CoTSteps; iterate++){
 					console.log(consoleLogPrefix, );
 					internalThoughtEngineTextProgress=`Processing Chain of Thoughts Step, ${iterate}`;
-					console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
+					console.log(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 					promptInput = ` What is the answer to the List number ${iterate} : ${todoList} Answer/NextStep:"`;
 					promptInput = stripProgramBreakingCharacters(promptInput);
 					todoListResult = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
@@ -1491,7 +1390,7 @@ async function callInternalThoughtEngine(prompt){
 			if (store.get("params").llmdecisionMode){
 			promptInput = `Conclusion from the internal Thoughts?  \\"${concatenatedCoT}\\" Conclusion:"`;
 			internalThoughtEngineTextProgress=`LLMChild Concluding Chain of Thoughts...`;
-			console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
+			console.log(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			promptInput = stripProgramBreakingCharacters(promptInput);
 			concludeInformation_CoTMultiSteps = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
 			} else {
@@ -1513,7 +1412,7 @@ async function callInternalThoughtEngine(prompt){
 			if (store.get("params").emotionalLLMChildengine){
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. From this conversation which from the following emotions ${emotionlist} are the correct one? Answer:`;
 				internalThoughtEngineTextProgress=`LLMChild Evaluating Interaction With Emotion Engine...`;
-				console.log(consoleLogPrefix, internalThoughtEngineTextProgress);
+				console.log(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 				promptInput = stripProgramBreakingCharacters(promptInput);
 				evaluateEmotionInteraction = await callLLMChildThoughtProcessor(promptInput, 64);
 				evaluateEmotionInteraction = evaluateEmotionInteraction.toLowerCase();
@@ -1590,14 +1489,221 @@ async function callInternalThoughtEngine(prompt){
 
 }
 
+// Local File Scraping Text Agent
+let externalLocalFileScrapingTextAgent_BackgroundAgentActive=false;
+let foundArticlesBackgroundAgentFileScraper;
+
+// this function instead of making the chat waiting too long, it job is to stay on background and fill what found on the drive into UMA with push command (UnifiedMemoryArray.push(...foundArticlesBackgroundAgentFileScraper);) and later on let the UMA cosine of similiarity decide which array should be picked
+//const { spawn } = require('child_process'); //already declared
+const { exec } = require('child_process');
+const { parse } = require('node-html-parser');
+// const { promisify } = require('util'); // Has been called
+
+
+const mammoth = require('mammoth');
+const pdf = require('pdf-parse');
+
+const readdirAsync = promisify(fs.readdir);
+const readFileAsync = promisify(fs.readFile);
+const execAsync = promisify(exec);
+
+class ExternalLocalFileScraperBackgroundAgent {
+    constructor(searchText) {
+        this.searchText = searchText;
+        this.targetDirectoryList = [];
+        //this.unifiedMemoryArray = []; // replace this directly with UnifiedMemoryArray
+        this.isRunning = false;
+        this.documentsLearned = 0;
+    }
+
+    async scanTargetDirectories() {
+        const platform = os.platform();
+        switch (platform) {
+            case 'darwin': // macOS
+                this.targetDirectoryList.push(os.homedir(), '/Volumes');
+                break;
+            case 'linux': // Linux
+                this.targetDirectoryList.push(os.homedir(), '/mnt', `/media/${os.userInfo().username}`);
+                break;
+            case 'win32': // Windows
+                const driveLetters = 'ABCDEFGHIJKLMNOPQRSTUVWXYZ';
+                for (let i = 0; i < driveLetters.length; i++) {
+                    const drivePath = `${driveLetters[i]}:\\`;
+                    if (fs.existsSync(drivePath)) {
+                        this.targetDirectoryList.push(drivePath);
+                    }
+                }
+                break;
+            default:
+                console.error('Unsupported platform:', platform);
+                break;
+        }
+    }
+
+    async processDocument(filePath) {
+        try {
+            const extension = path.extname(filePath).toLowerCase();
+            if (['.pdf', '.docx', '.doc', '.odt', '.ppt', '.pptx'].includes(extension)) {
+				// for formatted document
+				//console.log(consoleLogPrefix,`📖 Debug Learning text document: ${filePath}`);
+                await this.extractTextFromDocument(filePath);
+			
+            } else if ([ '.md', '.rtf', '.html', '.xml', '.json', '.tex', '.csv', '.yaml', '.textile', '.adoc', '.tex', '.postscript', '.sgml', '.tr', '.fountain', '.csv', '.xml', '.html','.c', '.cpp', '.java', '.py', '.js', '.css', '.rb', '.swift', '.go', '.php', '.sh', '.bat', '.sql', '.json', '.xml', '.md', '.yaml', '.asm', '.tex', '.r', '.m', '.rs', '.dart', '.scala', '.kt'].includes(extension)){
+				// md, rtf, html, xml, json, tex, csv, yaml, textile, adoc, tex, postscript, sgml, tr, fountain,.csv, .xml, .html, .xlsm, .xlsb, .c, .cpp, .java, .py, .js, .css, .rb, .swift, .go, .php, .sh, .bat, .sql, .json, .xml, .md, .yaml, .asm, .tex, .r, .m, .rs, .dart, .scala, .kt
+				// for not formatted document
+                const content = await readFileAsync(filePath, 'utf8');
+                UnifiedMemoryArray.push(content);
+				//console.log(consoleLogPrefix, "📖 Debug",UnifiedMemoryArray);
+                this.documentsLearned++;
+                //console.log(consoleLogPrefix,`📖 Debug Learning raw text document: ${filePath}`);
+            } else {
+				//console.log(consoleLogPrefix,`📖 Debug ⛔ Skipping this Documents: ${filePath}, not yet supported!`);
+			}
+        } catch (error) {
+            console.error(`${consoleLogPrefix} Error 📖 Learning document: ${filePath}: ${error.message}`);
+        }
+    }
+
+    async extractTextFromDocument(filePath) {
+        let text = '';
+        if (['.pdf'].includes(path.extname(filePath).toLowerCase())) {
+            const dataBuffer = await readFileAsync(filePath);
+            text = await pdf(dataBuffer);
+            text = text.text;
+        } else if (['.docx', '.doc', '.odt', '.ppt', '.pptx'].includes(path.extname(filePath).toLowerCase())) {
+            text = await mammoth.extractRawText({ path: filePath });
+        }
+        UnifiedMemoryArray.push(text);
+        this.documentsLearned++;
+        //console.log(`📖 Debug Processed document: ${filePath}`);
+    }
+
+    async scanAndProcessDocuments(directory) {
+        try {
+            const files = await readdirAsync(directory);
+            for (const file of files) {
+                const filePath = path.join(directory, file);
+                const stats = fs.statSync(filePath);
+                if (stats.isDirectory()) {
+                    await this.scanAndProcessDocuments(filePath);
+                } else {
+                    await this.processDocument(filePath);
+                }
+            }
+        } catch (error) {
+            console.error(`Error scanning directory ${directory}: ${error.message}`);
+        }
+    }
+
+    async startScanning() {
+        if (this.isRunning) {
+            console.log('Scanning is already in progress.');
+            return;
+        }
+        this.isRunning = true;
+        await this.scanTargetDirectories();
+        for (const directory of this.targetDirectoryList) {
+            await this.scanAndProcessDocuments(directory);
+        }
+        this.isRunning = false;
+        console.log(`Scanning completed. Total documents learned: ${this.documentsLearned}`);
+    }
+}
+
+async function externalLocalFileScraperBackgroundAgent(searchText) {
+
+	const userHomeDir = require('os').homedir();
+	const rootDirectory = path.join(userHomeDir, 'Documents'); // You can change the root directory as needed
+	// also make an exception for Windows users usually do C:\ D:\ Drive instead of unified folder or instead of mounting it directly into the folder (if you didn't know that even exist) they mount it into a diffrent letter
+
+	/*
+	Prompt with context code : 
+	
+	Make me a javascript code that will: List all the target directory into one variable named "targetDirectoryList" with array. For Darwin based macOS target it to require('os').homedir(); /Volumes directory. For Linux based OS target require('os').homedir(); /mnt /media/${USERNAME}. For Windows scan and list all available or mounted drive letter. Then after that do a for loop for each directory on the "targetDirectoryList" array, do a recursive scan and read all documents pdf, md, rtf, html, xml, json, tex, csv, yaml, textile, adoc, tex, postscript, sgml, tr(Troff), wpd(WordPerfect), odt, epub, pdf, fountain, docx, doc, pptx, .ppt, .ppt, .potx, .pot, .ppsx, .pps, .xls, .xlsx, .gsheet, .ods, .csv, .xml, .html, .xlsm, .xlsb, .c, .cpp, .java, .py, .js, .css, .rb, .swift, .go, .php, .sh, .bat, .sql, .json, .xml, .md, .yaml, .asm, .tex, .r, .m, .rs, .dart, .scala, .kt. Everytime those file found push the content to the variable array UnifiedMemoryArray.
+	sidenote: 
+	1. don't forget to implement interpretation for pdf docx doc odt ppt pptx to string of text (or extract the text only) then you can push to the UnifiedMemoryArray.
+	2. set timeout for each document access 10000ms.
+	3. expect some errors (access denied or garbled data) and handle it properly and do not let it disturb the operation or make javascript lockup. 
+	4. Make the code into one class but multiple function or method inside it for better code organization
+
+	
+	*/
+
+
+	// Lets implement class inside function just to make the transition seamless
+
+	const agent = new ExternalLocalFileScraperBackgroundAgent(searchText);
+    agent.startScanning();
+
+
+	/*
+	Old unusuable Code
+	const userHomeDir = require('os').homedir();
+	const rootDirectory = path.join(userHomeDir, 'Documents'); // You can change the root directory as needed
+  
+	const result = [];
+	let totalChars = 0;
+  
+	async function searchInDirectory(directoryPath) {
+		const files = await readdir(dir);
+		const matches = [];
+	  
+		for (const file of files) {
+		  const filePath = path.join(dir, file);
+		  const fileStat = await stat(filePath);
+	  
+		  if (fileStat.isDirectory()) {
+			matches.push(...await searchFiles(filePath, keyword));
+		  } else if (fileStat.isFile() && /\.(pdf|docx|txt)$/i.test(file)) {
+			const content = await fs.promises.readFile(filePath, 'utf8');
+	  
+			if (content.includes(keyword)) {
+			  console.log(`Found ${keyword} in ${filePath}`);
+			  matches.push({
+				file: filePath,
+				match: content.match(new RegExp(`(.*${keyword}.*)`, 'i'))[0]
+			  });
+			}
+		  }
+		}
+	  
+		return matches;
+	}
+  
+	result = searchInDirectory(rootDirectory);
+	
+	return result.join('\n');
+	 */
+  }
+
+//const { exec } = require('child_process'); // Already defined, thus not required
+function runShellCommand(command) {
+  return new Promise((resolve, reject) => {
+    exec(command, (error, stdout, stderr) => {
+      if (error) {
+        reject(error);
+      } else {
+        resolve(stdout);
+      }
+    });
+  });
+}
+
+
+
 async function externalLocalFileScraping(text){
 	console.log(consoleLogPrefix, "called Local File Scraping");
 	if (store.get("params").localAccess){
 		console.log(consoleLogPrefix, "externalLocalDataFetchingScraping");
 		//console.log(consoleLogPrefix, "xd");
-		var documentReadText = searchAndConcatenateText(text);
-		text = documentReadText.replace("[object Promise]", "");
-		console.log(consoleLogPrefix, documentReadText);
+
+		externalLocalFileScraperBackgroundAgent(text); // trigger the activation of background local file scraping
+		// TODO: Replace this with a UnifiedMemoryAccess Cosine Similiarity access rather than calling local file scraping!
+		console.log(consoleLogPrefix, "Accessing", UnifiedMemoryArray);
+
+		//var documentReadText = externalLocalFileScraperBackgroundAgent(text);
+		//text = documentReadText.replace("[object Promise]", "");
+		console.log(consoleLogPrefix, "stub");
 		return text;
 	} else {
 		console.log(consoleLogPrefix, "externalLocalFileScraping disabled");
@@ -1638,6 +1744,7 @@ let LLMBackendVariationBinaryFileName;
 let LLMBackendVariationFileSubFolder;
 let LLMBackendVariationSelected;
 let LLMBackendAttemptDedicatedHardwareAccel=false; //false by default but overidden if AttempAccelerate varible set to true!
+
 let basebin;
 let basebinLLMBackendParamPassedDedicatedHardwareAccel=""; //global variable so it can be used on main LLM thread and LLMChild
 let basebinBinaryMoreSpecificPathResolve;
@@ -1837,130 +1944,257 @@ var zephyrineReady,
 var checkAVX,
 	isAVX2 = false;
 
-let chatStg = [];
-let chatStgJson;
-let chatStgPersistentPath = `${path.resolve(__dirname, "storage", "presistentInteractionMem.json")}`;
-let chatStgOrder = 0;
-let retrievedChatStg;
-let chatStgOrderRequest;
+let interactionStg = []; // Interaction from the GUI Storage (Classic Depth Fetching Memory)
+// for MLCMCF refer back to "Basic Building Block of Adelaide Paradigm.drawio" Multi Level Condensed Memory Contextual Fetching tabs section
+
+
+// UnifiedMemoryArray will be stored on experience folder and will be deduplicated every runtime
+let UnifiedMemoryArray = []; // MLCMCF Multi Level Condensed Memory Contextual Fetching Architecture Unified memory Array
+let fourSegmentMemorySummerization = []; // All index total will be divided evenly and summerized each of the segment index content
+let focusMemoryIndexArray = []; // Three array only which Summerized couple of Array backwards until 1024 tokens filled[0], 1024 central [1] 1024 forward until tokens filled [2] from the UnifiedMemoryArray
+let RAGMemoryFetched; // Handle it in one string which fill it up until 2048 from how many LLMChild requested from the depth (Internal interactionArrayStorage LLMChild request)
+let RAGMemoryCompressedCosineMLRelevancyFetched; // Compressed array with threshold 0.5 by re-selecting only the most relevant strings
+
+
+let interactionStgJson;
+let interactionStgPersistentPath = `${path.resolve(__dirname, "storage", "presistentInteractionMem.json")}`;
+let experienceStgPersistentPath = `${path.resolve(__dirname, "storage", "foreverEtchedFirstHandExperienced.json")}`;
+let interactionStgOrder = 0;
+let retrievedinteractionStg;
+let interactionStgOrderRequest;
 let amiwritingonAIMessageStreamMode=false;
 function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
 	//mode save
 	//mode retrieve
 	//mode restore
-	if (chatStgOrder === 0){
-		chatStg[0]=`=========InteractionStorageHeader_${randSeed}========`;
+	if (interactionStgOrder === 0){
+		interactionStg[0]=`=========InteractionStorageHeader========`;
 	}
+
+	//proactive UnifiedMemoryArray Management System
+	//------------------------------------------------------------------------------------------------------
+
+	// Initialize Unified Memory Array if this function called and its still blank
+	// Check if UnifiedMemoryArray is empty or undefined
+
+    //restore old UnifiedMemoryArray if foreverEtchedMemory turned on or true
+
+
+
+
 	
+
+	//Split array if single index of the array is more than 256 Words or shall we say blocksize controller
+
+	for (let i = 0; i < array.length; i++) {
+		let words = array[i].split(/\s+/); // Split the string into words using whitespace as delimiter
+		while (words.length > maxWordsPerArray) {
+			const splitIndex = maxWordsPerArray;
+			const remainingWords = words.splice(splitIndex); // Extract the remaining words
+	
+			array[i] = words.join(" "); // Join the remaining words into a string
+			array.splice(i + 1, 0, remainingWords.join(" ")); // Insert the remaining words as a new element in the array
+			i++; // Ensure the loop processes the newly added array
+		}
+	}
+	console.log(consoleLogPrefix,"Debug UnifiedMemoryArrayDebugSplit Chunk Controller Result", UnifiedMemoryArray);
+
+	//remove all the Storage Header Array
+	//console.log(consoleLogPrefix, "Removing storage Header Array");
+	//InteractionStorageHeader
+	UnifiedMemoryArray = UnifiedMemoryArray.filter(array => {
+        // Check if array exists and if it includes interactionStg[0]
+        return array && !array.includes(interactionStg[0]);
+    });
+
+
+
+	//debug on what is the content of UnifiedMemoryArray
+	// Comment this debug message when its done
+	//console.log(consoleLogPrefix, "Debug UnifiedMemoryArray Content", UnifiedMemoryArray)
+	//------------------------------------------------------------------------------------------------------
+
 	if (mode === "save"){
         //console.log(consoleLogPrefix,"Saving...");
 		if(AITurn && !UserTurn){
 			if(!amiwritingonAIMessageStreamMode){
-				chatStgOrder = chatStgOrder + 1; // add the order number counter when we detect we did write it on AI mode and need confirmation, when its done we should add the order number
+				interactionStgOrder = interactionStgOrder + 1; // add the order number counter when we detect we did write it on AI mode and need confirmation, when its done we should add the order number
+				console.log(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
+				UnifiedMemoryArray.push(...interactionStg); //write once
 			}
 			amiwritingonAIMessageStreamMode=true;
 			
-			//chatStgOrder = chatStgOrder + 1; //we can't do this kind of stuff because the AI stream part by part and call the  in a continuous manner which auses the chatStgOrder number to go up insanely high and mess up with the storage
+			//interactionStgOrder = interactionStgOrder + 1; //we can't do this kind of stuff because the AI stream part by part and call the  in a continuous manner which auses the interactionStgOrder number to go up insanely high and mess up with the storage
 			// How to say that I'm done and stop appending to the same array and move to next Order?
-			chatStg[chatStgOrder] += prompt; //handling the partial stream by appending into the specific array
-			chatStg[chatStgOrder] = chatStg[chatStgOrder].replace("undefined", "");
-			if (process.env.ptyChatStgDEBUG === "1"){
+			interactionStg[interactionStgOrder] += prompt; //handling the partial stream by appending into the specific array
+			interactionStg[interactionStgOrder] = interactionStg[interactionStgOrder].replace("undefined", "");
+			if (process.env.ptyinteractionStgDEBUG === "1"){
 				console.log(consoleLogPrefix,"AITurn...");
-				console.log(consoleLogPrefix, "reconstructing from pty stream: ", chatStg[chatStgOrder]);
+				console.log(consoleLogPrefix, "reconstructing from pty stream: ", interactionStg[interactionStgOrder]);
 			}
+			
 		}
 		if(!AITurn && UserTurn){
 			amiwritingonAIMessageStreamMode=false;
 			
-			chatStgOrder = chatStgOrder + 1; //
-			chatStg[chatStgOrder] = prompt;
-			if (process.env.ptyChatStgDEBUG === "1"){
+			interactionStgOrder = interactionStgOrder + 1; //
+			interactionStg[interactionStgOrder] = prompt;
+			if (process.env.ptyinteractionStgDEBUG === "1"){
 				console.log(consoleLogPrefix,"UserTurn...");
-				console.log(consoleLogPrefix, "stg pty stream user:", chatStg[chatStgOrder]);
+				console.log(consoleLogPrefix, "stg pty stream user:", interactionStg[interactionStgOrder]);
 			}
+			
+			console.log(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
+			UnifiedMemoryArray.push(...interactionStg);
+			
 		}
-		if (process.env.ptyChatStgDEBUG === "1"){
-		console.log(consoleLogPrefix,"ChatStgOrder...", chatStgOrder);
+		if (process.env.ptyinteractionStgDEBUG === "1"){
+		console.log(consoleLogPrefix,"interactionStgOrder...", interactionStgOrder);
 		}
+
+			// dedupe content on UnifiedMemoryArray to save storage proactively
+		//console.log(consoleLogPrefix, "Debug Dedupe UnifiedMemoryArray Content");
+		// Iterate over each array in UnifiedMemoryArray
+		UnifiedMemoryArray.forEach((array, index) => {
+			// Check if the current element is an array
+			if (Array.isArray(array)) {
+				// Convert the array to a Set to remove duplicates
+				const uniqueSet = new Set(array);
+				// Convert the Set back to an array and assign it to UnifiedMemoryArray
+				UnifiedMemoryArray[index] = [...uniqueSet];
+			}
+		});
+		
+    }else if (mode === "retrieve_MLCMCF_Mode"){
+		console.log(consoleLogPrefix,"Retrieving From \"Unified Memory Array\" Target: ", prompt);
+
+		// refer back to the drawio
+
+		// Total index 
+
+
     } else if (mode === "retrieve"){
-		console.log(consoleLogPrefix,"retrieving Chat Storage Order ", arraySelection);
-		if (arraySelection >= 1 && arraySelection <= chatStgOrder)
+		console.log(consoleLogPrefix,"retrieving Interaction Storage Order ", arraySelection);
+		if (arraySelection >= 1 && arraySelection <= interactionStgOrder)
         {
-		retrievedChatStg = chatStg[arraySelection];
+		retrievedinteractionStg = interactionStg[arraySelection];
 		} else {
-			retrievedChatStg = "None.";
+			retrievedinteractionStg = "None.";
 		}
-		return retrievedChatStg;
+		return retrievedinteractionStg;
+
     } else if (mode === "restoreLoadPersistentMem"){
 		if (store.get("params").SaveandRestoreInteraction) {
-			console.log(consoleLogPrefix, "Restoring Chat Context... Reading from File to Array");
-			chatStgOrder = 0;
+			console.log(consoleLogPrefix, "Restoring Interaction Context... Reading from File to Array");
+			interactionStgOrder = 0;
 			try {
-				const data = fs.readFileSync(chatStgPersistentPath, 'utf8');
+				const data = fs.readFileSync(interactionStgPersistentPath, 'utf8');
 				const jsonData = JSON.parse(data);
 				console.log(consoleLogPrefix, "Interpreting JSON and Converting to Array");
-				chatStg = jsonData;
-				chatStgOrder = chatStgOrder + chatStg.length;
-				//console.log(consoleLogPrefix, "Loaded dddx: ", chatStg, chatStgOrder);
+				interactionStg = jsonData;
+				interactionStgOrder = interactionStgOrder + interactionStg.length;
+				//console.log(consoleLogPrefix, "Loaded dddx: ", interactionStg, interactionStgOrder);
 			} catch (err) {
 				console.error('Error reading JSON file:', err);
 				return;
 			}
 		
-			console.log(consoleLogPrefix, "Loaded: ", chatStg, chatStgOrder);
+			console.log(consoleLogPrefix, "Loaded: ", interactionStg, interactionStgOrder);
 			console.log(consoleLogPrefix, "Triggering Restoration Mode for the UI and main LLM Thread!");
-			console.log(consoleLogPrefix, "Stub! for UI Context Restoring, Coming soon");
 			// create a javascript for loop logic to send data to the main UI which uses odd order for the User input whilst even order for the AI input (this may fail categorized when the user tried change ) where the array 0 skipped and 1 and beyond are processed
-			for (let i = 1; i < chatStg.length; i++) {
+			for (let i = 1; i < interactionStg.length; i++) {
 				// Check if the index is odd (user input message)
 				if (i % 2 === 1) {
 					// Posting the message for the user side into the UI
-					console.log("User input message:", chatStg[i]);
-					const dataChatForwarding=chatStg[i];
+					console.log("User input message:", interactionStg[i]);
+					const dataChatForwarding=interactionStg[i];
 					win.webContents.send("manualUserPromptGUIHijack", {
 						data: dataChatForwarding
 					});
 				} else { // Even index (servant input message)
 					// Posting the message for the AI side into the UI
-					console.log("Servant input message:", chatStg[i]);
-					const dataChatForwarding=chatStg[i];
+					console.log("Servant input message:", interactionStg[i]);
+					const dataChatForwarding=interactionStg[i];
 					win.webContents.send("manualAIAnswerGUIHijack", {
 						data: dataChatForwarding
 					});
 				}
+			}
+			// Read into the UMA -<
+			if (UnifiedMemoryArray.length === 0 || !UnifiedMemoryArray) {
+				// if its blank then try to load the array from experienceStgPersistentPath
+				// Load the json if exists
+				if (store.get("params").foreverEtchedMemory) {
+					console.log(consoleLogPrefix, "foreverEtchedMemory parameters enabled");
+					try {
+						const data = fs.readFileSync(interactionStgPersistentPath, 'utf8');
+						if (!data) {
+							// File is empty, assign an empty array to UnifiedMemoryArray
+							console.log(consoleLogPrefix, "UnifiedMemoryArray file is empty");
+							UnifiedMemoryArray = [];
+						} else {
+							const jsonData = JSON.parse(data);
+							console.log(consoleLogPrefix, "Interpreting JSON and Converting to Array");
+							UnifiedMemoryArray = jsonData;
+						}
+					} catch (err) {
+						if (err instanceof SyntaxError && err.message === 'Unexpected end of JSON input') {
+							// JSON parsing error due to unexpected end of JSON input
+							console.error('Error reading JSON UnifiedMemoryArray file: JSON input is incomplete');
+							UnifiedMemoryArray = [];
+						} else {
+							// Other error
+							console.error('Error reading JSON UnifiedMemoryArray file:', err);
+							return;
+						}
+					}
+				}
+		
+				UnifiedMemoryArray[0] = "=========UnifiedMemoryArrayHeader========" // If empty or undefined, directly assign Header on [0]
 			}
 			console.log(consoleLogPrefix, "Done!")
 		} else {
 			console.log(consoleLogPrefix, "Save and Restore Chat Disabled");
 		}
 
-		// then after that set to the appropriate chatStgOrder from the header of the file
+		// then after that set to the appropriate interactionStgOrder from the header of the file
 	} else if (mode === "reset"){
 		console.log(consoleLogPrefix, "Resetting Temporary Storage Order and Overwriting to Null!");
-		chatStgOrder=0;
-		chatStg = [];
+		interactionStgOrder=0;
+		interactionStg = [];
 		
 	} else if (mode === "flushPersistentMem"){
 		if (store.get("params").SaveandRestoreInteraction) {
 			//example of the directory writing 
 			//basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
 			//console.log(consoleLogPrefix, "Flushing context into disk!");
-			//console.log(consoleLogPrefix, chatStg);
-			chatStgJson = JSON.stringify(chatStg)
-			//console.log(consoleLogPrefix, chatStgJson);
-			//console.log(consoleLogPrefix, chatStgPersistentPath)
-			fs.writeFile(chatStgPersistentPath, chatStgJson, (err) => {
+			//console.log(consoleLogPrefix, interactionStg);
+			interactionStgJson = JSON.stringify(interactionStg)
+			//console.log(consoleLogPrefix, interactionStgJson);
+			//console.log(consoleLogPrefix, interactionStgPersistentPath)
+			fs.writeFile(interactionStgPersistentPath, interactionStgJson, (err) => {
 				if (err) {
 				console.error(consoleLogPrefix, 'Error writing file:', err);
 				}
 			});
+			// write from the UMA ->
+			// Dump all the UnifiedMemoryArray if foreverEtchedMemory turned on or true store.get("params").foreverEtchedMemory
+			if (store.get("params").foreverEtchedMemory){
+				const UMAJSON = JSON.stringify(UnifiedMemoryArray)
+					//console.log(consoleLogPrefix, interactionStgJson);
+					fs.writeFile(experienceStgPersistentPath, UMAJSON, (err) => {
+						if (err) {
+						console.error(consoleLogPrefix, 'Error writing file:', err);
+						}
+					});
+			}
 			return "";
 		}
 	} else if (mode === "resetPersistentStorage") {
 		if (store.get("params").SaveandRestoreInteraction) {
-			chatStgJson = ""
+			interactionStgJson = ""
 			console.log(consoleLogPrefix, "Chat History Backend has been Reset!")
-			fs.writeFile(chatStgPersistentPath, chatStgJson, (err) => {
+			fs.writeFile(interactionStgPersistentPath, interactionStgJson, (err) => {
 				if (err) {
 				console.error(consoleLogPrefix, 'Error writing file:', err);
 				}
@@ -1973,7 +2207,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	
 }
 
-// if chatStg blank try to load 
+// if interactionStg blank try to load 
 
 
 
@@ -2076,7 +2310,7 @@ function initChat() {
 			initChat();
 		} else if (((res.match(/PS [A-Z]:.*>/) && platform == "win32") || (res.match(/bash-[0-9]+\.?[0-9]*\$/) && platform == "darwin") || (res.match(/([a-zA-Z0-9]|_|-)+@([a-zA-Z0-9]|_|-)+:?~(\$|#)/) && platform == "linux")) && zephyrineReady) {
 			restart();
-		} else if ((res.includes("\n>") || res.includes("\n>\n")) && zephyrineReady && !blockGUIForwarding) {
+		} else if ((res.includes("\n>") || res.includes("\n> ") || res.includes("\n>\n")) && zephyrineReady && !blockGUIForwarding) {
 			console.log(consoleLogPrefix, "Done Generating and Primed to be Generating");
 			if (store.get("params").throwInitResponse && !isitPassedtheFirstPromptYet){
 				console.log(consoleLogPrefix, "Passed the initial Uselesss response initialization state, unblocking GUI IO");
@@ -2125,7 +2359,7 @@ ipcMain.on("message", async (_event, { data }) => {
 		interactionArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 		blockGUIForwarding = true;
 		//console.log(consoleLogPrefix, `Forwarding manipulated Input to processor ${data}`);
-		inputFetch = await callInternalThoughtEngine(data);
+		inputFetch = await callInternalThoughtEngine(data); // push to internal thought engine
 		inputFetch = `${inputFetch}`
 		//console.log(consoleLogPrefix, `Forwarding manipulated Input ${inputFetch}`);
 		runningShell.write(inputFetch);
