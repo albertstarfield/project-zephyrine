@@ -420,14 +420,6 @@
 					<div class="settings-items">
 
 						<h2>Configuration</h2>
-						<div style="display: flex; align-items: center">
-							<label class="switch" style="height: 1.153512rem">
-								<input type="checkbox" id="classicmode"/>
-								<span class="slider round"></span>
-							</label>
-							<p style="margin: 0">Classic Direct Mode</p>
-						</div>
-						<h5>Classic Mode entails bypassing supplementary contextual elements and countermeasure parameters, instead transmitting data directly to the Main LLM Engine Backend.</h5>
 						
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
@@ -446,6 +438,15 @@
 							<p style="margin: 0">Speaking Mode (Not yet Implemented)</p>
 						</div>
 						<h5>Enable the Adelaide to project its voice through either the speaker or any other hardware capable of rendering audio output.</h5>
+
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="audioautospeakmode" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Framebuffer Ctx (Not yet Implemented)</p>
+						</div>
+						<h5>Enable Adelaide to see through cameras and display server frame as context</h5>
 
 						<div style="height: 32px"></div>
 						<h2>Basic LLM Binary Parameters Settings</h2>	
@@ -654,9 +655,15 @@
 						</div>
 						<h5>Facilitates the dynamic alteration of profile pictures in response to the emotions captured within the context. This functionality relies on the activation of the Emotion Engine; without it, this trigger remains inactive.</h5>
 						<div style="height: 32px"></div>
-						<div style="height: 32px"></div>
-
 						<h2>Automata Settings</h2>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="AutomateLoopback" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Automata Mode</p>
+						</div>
+						<h5>This functionality allows the program to operate autonomously, potentially leading to sustained high CPU/GPU utilization. It represents a legacy of Project Charlotte, characterized by some degree of memorization, which commenced on June 8, 2023.</h5>
 
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
@@ -669,21 +676,21 @@
 						
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
-								<input type="checkbox" id="AutomateLoopback" />
-								<span class="slider round"></span>
-							</label>
-							<p style="margin: 0">Automata Mode (Not Yet Implemented)</p>
-						</div>
-						<h5>Enables the program to autonomously process input and output in a continuous loop. This functionality may result in sustained high CPU/GPU utilization.</h5>
-
-						<div style="display: flex; align-items: center">
-							<label class="switch" style="height: 1.153512rem">
 								<input type="checkbox" id="selfmodifyingcode" />
 								<span class="slider round"></span>
 							</label>
 							<p style="margin: 0">Adaptic Self Modification Code(Not Yet Implemented)</p>
 						</div>
 						<h5>Caution is warranted! This implementation empowers the software to exhibit autonomic behavior akin to a biological cell, thereby enabling autonomous self-maintenance, self-adaptation, and autonomous code evolution in response to environmental stimuli and exigencies.</h5>
+						<h2> Fallback Compatibility Mode </h2>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="classicmode"/>
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Alpaca Electron Mode</p>
+						</div>
+						<h5>Alpaca Electron Mode is designed to closely mimic the handling style of the original Alpaca Electron program, particularly itsPi3141 style. Since the original Alpaca Electron program is more popular than the Adelaide Paradigm, there may already be extensions or automations based on it. However, it should be noted that it does not provide a 1:1 handling, as most of the pipeline has been significantly modified.</h5>
 					</div>
 				</div>
 				<div class="dialog-button">

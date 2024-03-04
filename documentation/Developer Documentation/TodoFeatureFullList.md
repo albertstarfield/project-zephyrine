@@ -14,11 +14,12 @@
 - [x] Progress bar for internal thoughts rather than leaving the user without any information on the GUI why is it Stuck.
 - [x] First gemma.cpp engine model modes integration initial implementation (experimental) 
 - [x] Re-render old Adelaide Zephyrine Charlotte character from Anything-v3.5 to SDXL+MeinaMix_V11+Anything-v5+ESRGANx2+ESRGANx4 Mix with DDIM DPM2M++ Kerra Euler Ancestral+Euler Kerras scheduler FP16 VAE Fix
+- [x] Automata Mode (autoGPT agent like functionality).
+- [x] Multi-LLMChild Background Queue Prompt to Experience when can't catch up with QoS time (Improving experience 100B Parameter Adelaide Paradigm Experience) (Backbrain).
+- [x] Implementing ms QoS for LLMChild to prevent unecessary Lock-up Implementing a Proactive Lockup Timeout Verification Mechanism in the Quest for External Context Acquisition.
 - [ ] Aiming for the minimum professional quality = "NO MISTAKES OR ERROR ARE ALLOWED FOR REACHING THE TARGET"
 - [ ] Multi format communication Real-time communication and collaboration
 - [ ] Static compilation Mobile Working
-- [ ] Multi-LLMChild Background Queue Prompt to Experience when can't catch up with QoS time (Improving experience 100B Parameter Adelaide Paradigm Experience).
-- [ ] Implementing ms QoS for LLMChild to prevent unecessary Lock-up Implementing a Proactive Lockup Timeout Verification Mechanism in the Quest for External Context Acquisition.
 - [ ] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.
 - [ ] Auto Idle Sleep Detection auto fine-tune (Mimicking real-life brain retraining while sleep) maybe augment it to LoRA later on.
 - [ ] Categorize into Classes based on the subsystem drawio for cleaner Code and easier debugging
@@ -27,7 +28,6 @@
 - [ ] Interaction Experience Sideloading Subsystem.
 - [ ] Implementing Native Windows Support.
 - [ ] Autoexec for generated command.
-- [ ] Automata Mode (autoGPT agent like functionality).
 - [ ] Mobile HTML5 UI.
 - [ ] Self-updating, Self-maintaning, and Self-Adapting Code.
 - [ ] Mobile static-version precompiled.
@@ -35,5 +35,4 @@
 - [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
 - [ ] Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands.
 - [ ] Adding Docker Support
-
 - [ ] AI Blackbox Issue required Reference if Possible like Bing AI

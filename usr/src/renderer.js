@@ -552,7 +552,13 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			console.log("responsesStreamCaptureTrace_markedConverted_InterpretedPrep:", totalStreamResultData);
 			existing.innerHTML = totalStreamResultData; // existing innerHTML is a final form which send the stream into the GUI (so basically it replaces all the chunks of message from the responses[id] on the existing.innerHTML)
 			console.log(prefixConsoleLogStreamCapture, "It should be done");
+
+			//responses[id] forward to Automata Mode if its Turned on then it will continue
+			// Why i put the Automata Triggering ipcRenderer in here? : because when the stream finished, it stopped in here
+			ipcRenderer.send("AutomataLLMMainResultReciever", { data: responses[id] });
+
 			console.log(prefixConsoleLogStreamCapture, "current ID of Output", id);
+
 			form.setAttribute("class", isRunningModel ? "running-model" : "");
 			existing.style.opacity = 1;
 		}, 200);
@@ -667,9 +673,11 @@ setInterval(async () => {
 	ipcRenderer.send("BackBrainQueueCheck");
 	ipcRenderer.send("BackBrainQueueResultCheck");
 }, 5000);
+
 // For some reason cpuUsage and freemem everytime its updating its eating huge amount of GPU power ?
 // internalTEProgress for recieving internalThoughtEngineProgress;
 // const cpuText = document.querySelector("#cpu .text"); //("#id .text") make an example from how to choose the specific part of the html that wanted to be changed
+
 let dynamicTips = document.querySelector("#dynamicTipsUIPart .info-bottom-changable");
 let dynamicTipsBar = document.querySelector("#dynamicTipsUIPart .loading-bar");
 
@@ -684,7 +692,7 @@ setInterval(async () => {
 
 setInterval(async () => {
 	ipcRenderer.send("SystemBackplateHotplugCheck");
-}, 600000);
+}, 60000);
 
 
 let dynamicTipsProgressLLMChild="";
@@ -717,6 +725,7 @@ ipcRenderer.on("BackBrainQueueCheck_render", (_event, {data}) => {
 	BackBrainQueueText.style.transition = 'opacity 0.5s ease-in-out';
 	BackBrainQueueBar.style.transition = 'transform 2s ease-in-out';
 	BackBrainQueueBar.style.transform = `scaleX(${data/maxBackBrainQueue_Fallback})`; //since it uses 0.0 to 1.0
+	if (BackBrainQueueBar.style.transform > 1){BackBrainQueueBar.style.transform=1}
 	// later on the bar is going to be color spectrum representing the emotion
 	setTimeout(() => {
 		BackBrainQueueText.innerText = `BackBrain Async Queue Line : ${data}`;
@@ -729,6 +738,7 @@ ipcRenderer.on("BackBrainQueueResultCheck_render", (_event, {data}) => {
 	BackBrainResultQueueText.style.transition = 'opacity 0.5s ease-in-out';
 	BackBrainResultQueueBar.style.transition = 'transform 2s ease-in-out';
 	BackBrainResultQueueBar.style.transform = `scaleX(${data/maxBackBrainQueue_Fallback})`; //since it uses 0.0 to 1.0
+	if (BackBrainResultQueueBar.style.transform > 1){BackBrainResultQueueBar.style.transform=1}
 	// later on the bar is going to be color spectrum representing the emotion
 	setTimeout(() => {
 		BackBrainResultQueueText.innerText = `BackBrain Submission Queue: ${data}`;
@@ -910,6 +920,7 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("emotionalllmchildengine").checked = data.emotionalLLMChildengine;
 	document.getElementById("profilepictureemotion").checked = data.profilePictureEmotion;
 	document.getElementById("longchainthought-neverfeelenough").checked = data.longChainThoughtNeverFeelenough;
+	document.getElementById("AutomateLoopback").checked = data.automateLoopback;
 });
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
@@ -927,6 +938,7 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			qostimeoutswitch: document.getElementById("QoSTimeoutSwitch").checked,
 			backbrainqueue: document.getElementById("BackbrainQueue").checked,
 			webAccess: document.getElementById("web-access").checked,
+			automateLoopback: document.getElementById("AutomateLoopback").checked,
 			localAccess: document.getElementById("local-file-access").checked,
             llmdecisionMode: document.getElementById("LLMChildDecision").checked,
             extensiveThought: document.getElementById("longchainthought").checked,
@@ -960,6 +972,10 @@ document.querySelector("#info-dialog-bg > div > div.dialog-button > button.secon
 
 document.getElementById("BackbrainQueue").addEventListener("change", () => {
 	ipcRenderer.send("backbrainqueue", document.getElementById("BackbrainQueue").checked);
+});
+
+document.getElementById("AutomateLoopback").addEventListener("change", () => {
+	ipcRenderer.send("automateLoopback", document.getElementById("AutomateLoopback").checked);
 });
 
 document.getElementById("QoSTimeoutSwitch").addEventListener("change", () => {

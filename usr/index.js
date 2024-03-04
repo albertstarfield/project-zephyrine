@@ -198,23 +198,6 @@ function getSystemInfo() {
         ⏱️ CPU Hz: ${osInfo.cpuSpeed / 10} GHz
         🤹‍♂️ Cores: ${osInfo.cpuCores}
     `;
-    // If not Windows, gather CPU usage information
-    if (osInfo.platform !== 'win32') {
-        const cpuUsage = osUtils.cpuUsage();
-        systemInfoStr += `Usage: ${Math.round(cpuUsage * 100)}%`;
-    }
-
-    // If not Windows, gather GPU information
-	/*
-    if (osInfo.platform !== 'win32') {
-        const gpuInfoStr = gpuInfo.get().map(gpu => {
-            return `GPU ${gpu.index + 1}: ${gpu.name}`;
-        }).join('\n');
-
-        // Concatenate GPU information
-        systemInfoStr += `\n${gpuInfoStr}\n`;
-    }
-	*/
     return systemInfoStr;
 }
 
@@ -521,7 +504,7 @@ async function externalInternetFetchingScraping(text) {
 			}
 		}
 		combinedText = convertedText.replace("[object Promise]", "");
-		UnifiedMemoryArray.push(...combinedText); // Pushing to UnifiedMemoryArray
+		UnifiedMemoryArray.push(combinedText); // Pushing to UnifiedMemoryArray
 		console.log(consoleLogPrefix, "externalInternetFetchingScraping Final", combinedText);
 		
 		return combinedText;
@@ -1518,7 +1501,7 @@ async function callInternalThoughtEngine(prompt){
 			const latestIndex = BackBrainResultQueue.length - 1;
 			BackBrainResultPop = BackBrainResultQueue[latestIndex];
 			BackBrainResultQueue.pop();
-			passedOutput = `Also I just finished Processing for this one ${BackBrainResultPop}`
+			passedOutput = passedOutput + `Also I just finished thinking for this one ${BackBrainResultPop}`;
 		}
 
 		internalThoughtEngineProgress=93; // Randomly represent progress (its not representing the real division so precision may be not present)
@@ -1547,7 +1530,7 @@ async function callInternalThoughtEngine(prompt){
 	internalThoughtEngineProgress=0; // Randomly represent progress (its not representing the real division so precision may be not present)
 	console.log(consoleLogPrefix, passedOutput);
 	if (BackbrainMode || BackbrainModeInternal){ // if Backbrainmode detected then push it into BackBrainResultQueue to 
-		BackBrainResultQueue.push(...passedOutput); // This will push to the result queue when the user asks something again then this will be pushed too
+		BackBrainResultQueue.push(passedOutput); // This will push to the result queue when the user asks something again then this will be pushed too
 		BackbrainModeInternal = false;
 		BackbrainMode = false;
 	}
@@ -1559,14 +1542,17 @@ async function callInternalThoughtEngine(prompt){
 // Wrapper for internalThoughtWithTimeout
 async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 	let result;
+	const globalQoSTimeoutMultiplier = BackBrainQueue.length + 1;
+	const globalQoSTimeoutAdjusted = store.get("params").qostimeoutllmchildglobal * globalQoSTimeoutMultiplier;
     // Create a promise that resolves after the specified timeout
     const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => {
             resolve({ timeout: true });
-        }, store.get("params").qostimeoutllmchildglobal);
+        }, globalQoSTimeoutAdjusted);
     });
-	console.log(consoleLogPrefix, `DEBUG QoS Global Target `, store.get("params").qostimeoutllmchildglobal)
+	
 	const consoleLogPrefixQoSDebug = "[🏃⌛ QoS Enforcement Manager]";
+	console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, `DEBUG QoS Global Target `, globalQoSTimeoutAdjusted);
     // Create a promise for the call to callInternalThoughtEngine
     const callPromise = callInternalThoughtEngine(data);
 
@@ -1599,7 +1585,8 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 		if (((((BackbrainRequest.includes("yes") || BackbrainRequest.includes("yep") || BackbrainRequest.includes("ok") || BackbrainRequest.includes("valid") || BackbrainRequest.includes("should") || BackbrainRequest.includes("true"))) || process.env.BACKBRAIN_FORCE_DEBUG_MODE === "1")) && store.get("params").backbrainqueue ){
 			//passthrough with queueing
 			console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Exec');
-			BackBrainQueue.push(...data); //add to the array later on it will be executed by async function BackBrainQueueManager() that constantly check whether there is a required
+			BackBrainQueue.push(data); //add to the array later on it will be executed by async function BackBrainQueueManager() that constantly check whether there is a required
+			console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, BackBrainQueue);
 			BackBrainQueueManager(); //Launch/invoke the thread and check if its already running
 			console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Spawning Background Task Backbrain');
 			// Move this into async Function BackBrainQueueManager
@@ -2183,7 +2170,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			if(!amiwritingonAIMessageStreamMode){
 				interactionStgOrder = interactionStgOrder + 1; // add the order number counter when we detect we did write it on AI mode and need confirmation, when its done we should add the order number
 				console.log(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
-				UnifiedMemoryArray.push(...interactionStg); //write once
+				UnifiedMemoryArray.push(interactionStg); //write once
 			}
 			amiwritingonAIMessageStreamMode=true;
 			
@@ -2208,7 +2195,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			}
 			
 			console.log(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
-			UnifiedMemoryArray.push(...interactionStg);
+			UnifiedMemoryArray.push(interactionStg);
 			
 		}
 		if (process.env.ptyinteractionStgDEBUG === "1"){
@@ -2231,9 +2218,11 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
     }else if (mode === "retrieve_MLCMCF_Mode"){
 		console.log(consoleLogPrefix,"Retrieving From \"Unified Memory Array\" Target: ", prompt);
 
-		// refer back to the drawio
+		// Just directly connect to all of it
+		// do natural language processing cosine similiarity
+		// Trim the shit out of it
+		// done profit!
 
-		// Total index 
 
 
     } else if (mode === "retrieve"){
@@ -2510,6 +2499,8 @@ function initChat() {
 			win.webContents.send("result", {
 				data: res
 			});
+			
+			
 		}
 	});
 
@@ -2532,19 +2523,18 @@ ipcMain.on("startChat", () => {
 ipcMain.on("message", async (_event, { data }) => {
 	currentPrompt = data;
 	if (runningShell) {
-		//runningShell.write(`${await externalInternetFetchingScraping(data)}\r`);
 		//zephyrineHalfReady = false;
 		interactionArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 		blockGUIForwarding = true;
 		//console.log(consoleLogPrefix, `Forwarding manipulated Input to processor ${data}`);
 		 // push to internal thought engine
+		 
 		if(store.get("params").qostimeoutswitch){
 			inputFetch = await callInternalThoughtEngineWithTimeoutandBackbrain(data);
 		} else {
 			inputFetch = await callInternalThoughtEngine(data);
 		}
 		inputFetch = `${inputFetch}`
-		//console.log(consoleLogPrefix, `Forwarding manipulated Input ${inputFetch}`);
 		runningShell.write(inputFetch);
 		runningShell.write(`\r`);
 		await new Promise(resolve => setTimeout(resolve, 500));
@@ -2593,6 +2583,62 @@ ipcMain.on("pickFile", () => {
 			}
 		});
 });
+
+// -------------------------------------------------------------------------------------- [AUTOMATA PROJECT CHARLOTTE]
+//------------------------------Automata Mode Injection------------------------------------
+			// Backend Sending injection, don't show on the gui Automata Mode
+			// It's time for you to able to walk by yourself Adelaide... There will be time you won't need me anymore to do maintanance
+let automataLLMMainresultReciever;
+let automataConsolePrefix="[✨🕊️  AUTOMATA MODE ⚙️ ]"
+async function AutomataProcessing(){
+	if (store.get("params").automateLoopback){
+		/*
+		example on how to submit into the backend LLM main threads
+
+		runningShell.write(inputFetch);
+		runningShell.write(`\r`);
+		await new Promise(resolve => setTimeout(resolve, 500));
+		*/
+		console.log(consoleLogPrefix, automataConsolePrefix, "Invoked!, Its my turn!");
+		// Fetch memory interactionContextFetching(historyDistanceReq); recieved in array// how about for now we going to implement it by requesting 2
+		console.log(consoleLogPrefix, automataConsolePrefix, "Fetchmem!");
+		const historyChatRetrieved = interactionContextFetching(2);
+		console.log(consoleLogPrefix, automataConsolePrefix, "Thinking what is the prompt");
+		const promptAutomataInput = `With the previous internal thought are ${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. and ${assistantName} answer is ${automataLLMMainresultReciever} What is the best question or answer for this that is critical and smart? Answer:`;
+		const AutomataReInjection = await callLLMChildThoughtProcessor(promptAutomataInput, 3192);
+		let RAGAutomataPostProcessing;
+		if(store.get("params").qostimeoutswitch){
+			RAGAutomataPostProcessing = await callInternalThoughtEngineWithTimeoutandBackbrain(AutomataReInjection);
+		} else {
+			RAGAutomataPostProcessing = await callInternalThoughtEngine(AutomataReInjection);
+		}
+		console.log(consoleLogPrefix, automataConsolePrefix, "Re-inject to LLMMain", RAGAutomataPostProcessing);
+		win.webContents.send("manualUserPromptGUIHijack", {
+			data: ""
+		});
+		win.webContents.send("manualAIAnswerGUIHijack", {
+			data: `[ 🤔 Internal Thought : ${AutomataReInjection} ] \n`
+		});
+		blockGUIForwarding = true;
+		interactionArrayStorage("save", `[🤔 ${assistantName} Internal Automata Thought : ${AutomataReInjection}] : `, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
+		runningShell.write(RAGAutomataPostProcessing); //submit to the shell! LLMMain Threads
+		runningShell.write(`\r`);
+		console.log(consoleLogPrefix, automataConsolePrefix, "Delay 500ms");
+		await new Promise(resolve => setTimeout(resolve, 500)); // add delay for the pty to flush the prompt and going to the next line, so basically we able to prevent the Additional Context leak like on the Alpaca-electron original code
+		blockGUIForwarding = false; // make sure the prompt isn't visible on the GUI
+
+		//--------------------------------------------------------------------------------------------
+	}
+}
+
+ipcMain.on("AutomataLLMMainResultReciever", (_event, resultFeedloop) => {
+	console.log(consoleLogPrefix, automataConsolePrefix, "Triggered!");
+	automataLLMMainresultReciever = resultFeedloop.data;
+	console.log(consoleLogPrefix, automataConsolePrefix, automataLLMMainresultReciever);
+	AutomataProcessing();
+});
+
+//---------------------------------------------------------------------------------------
 
 ipcMain.on("storeParams", (_event, { params }) => {
 	console.log(params);
