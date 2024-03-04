@@ -626,10 +626,25 @@ const SystemBackplateInfoText = document.querySelector("#SystemBackendPlateInfo 
 const HardwareStressLoadText = document.querySelector("#stressload .text");
 const HardwareStressLoadBar = document.querySelector("#stressload .bar-inner");
 
+const UMALoadText = document.querySelector("#UMAMemAlloc .text"); //GB usage
+const UMALoadBar = document.querySelector("#UMAMemAlloc .bar-inner");
+const maxDefaultUMAJavascriptAlloc = 3.8 ;//tested before the js v8 engine crashes due to ran out of memory 3.8GB
+
+let maxBackBrainQueue_Fallback=3; //I Don't know the max queue for the BackBrain just yet so i'm just going to assume 3
+
+const BackBrainQueueText = document.querySelector("#BackBrainQueue .text"); 
+const BackBrainQueueBar = document.querySelector("#BackBrainQueue .bar-inner");
+
+const BackBrainResultQueueText = document.querySelector("#BackBrainFinished .text"); 
+const BackBrainResultQueueBar = document.querySelector("#BackBrainFinished .bar-inner");
+
 var cpuCount, threadUtilized, totalmem, cpuPercent, freemem;
 ipcRenderer.send("cpuCount");
 ipcRenderer.send("threadUtilized");
 ipcRenderer.send("totalmem");
+
+
+
 ipcRenderer.on("cpuCount", (_event, { data }) => {
 	cpuCount = data;
 });
@@ -648,6 +663,9 @@ setInterval(async () => {
 	ipcRenderer.send("freemem");
 	ipcRenderer.send("hardwarestressload");
 	ipcRenderer.send("emotioncurrentDebugInterfaceFetch");
+	ipcRenderer.send("UMACheckUsage");
+	ipcRenderer.send("BackBrainQueueCheck");
+	ipcRenderer.send("BackBrainQueueResultCheck");
 }, 5000);
 // For some reason cpuUsage and freemem everytime its updating its eating huge amount of GPU power ?
 // internalTEProgress for recieving internalThoughtEngineProgress;
@@ -666,7 +684,7 @@ setInterval(async () => {
 
 setInterval(async () => {
 	ipcRenderer.send("SystemBackplateHotplugCheck");
-}, 10000);
+}, 600000);
 
 
 let dynamicTipsProgressLLMChild="";
@@ -694,6 +712,29 @@ ipcRenderer.on("emotionDebugInterfaceStatistics", (_event, {data}) => {
 	}, 1000);
 });
 
+ipcRenderer.on("BackBrainQueueCheck_render", (_event, {data}) => {
+	BackBrainQueueText.style.opacity = 0;
+	BackBrainQueueText.style.transition = 'opacity 0.5s ease-in-out';
+	BackBrainQueueBar.style.transition = 'transform 2s ease-in-out';
+	BackBrainQueueBar.style.transform = `scaleX(${data/maxBackBrainQueue_Fallback})`; //since it uses 0.0 to 1.0
+	// later on the bar is going to be color spectrum representing the emotion
+	setTimeout(() => {
+		BackBrainQueueText.innerText = `BackBrain Async Queue Line : ${data}`;
+		BackBrainQueueText.style.opacity = 1;
+	}, 1000);
+});
+
+ipcRenderer.on("BackBrainQueueResultCheck_render", (_event, {data}) => {
+	BackBrainResultQueueText.style.opacity = 0;
+	BackBrainResultQueueText.style.transition = 'opacity 0.5s ease-in-out';
+	BackBrainResultQueueBar.style.transition = 'transform 2s ease-in-out';
+	BackBrainResultQueueBar.style.transform = `scaleX(${data/maxBackBrainQueue_Fallback})`; //since it uses 0.0 to 1.0
+	// later on the bar is going to be color spectrum representing the emotion
+	setTimeout(() => {
+		BackBrainResultQueueText.innerText = `BackBrain Submission Queue: ${data}`;
+		BackBrainResultQueueText.style.opacity = 1;
+	}, 1000);
+});
 
 ipcRenderer.on("internalTEProgress", (_event, { data }) => {
 	if (data == 0){
@@ -757,6 +798,20 @@ ipcRenderer.on("freemem", (_event, { data }) => {
 		// Add fade-in effect to the new text
 		ramText.style.transition = 'opacity 0.5s ease-in-out';
 		ramText.style.opacity = 1;
+	}, 1000); // Adjust the delay as needed to match the transition duration
+});
+
+ipcRenderer.on("UMAAllocSizeStatisticsGB", (_event, { data }) => {
+	const UMAallocGB = data;
+	UMALoadText.style.opacity = 0;
+	UMALoadText.style.transition = 'opacity 1.5s ease-in-out';
+	UMALoadBar.style.transition = 'transform 2s ease-in-out';
+	UMALoadBar.style.transform = `scaleX(${ UMAallocGB / maxDefaultUMAJavascriptAlloc })`;
+	setTimeout(() => {
+		UMALoadText.innerText = `UMA MLCMCF Alloc ${UMAallocGB}/${maxDefaultUMAJavascriptAlloc} GB`;
+		// Add fade-in effect to the new text
+		UMALoadText.style.transition = 'opacity 0.5s ease-in-out';
+		UMALoadText.style.opacity = 1;
 	}, 1000); // Adjust the delay as needed to match the transition duration
 });
 
@@ -839,6 +894,8 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("QoSTimeoutLLMChildGlobal").value = data.qostimeoutllmchildglobal;
 	document.getElementById("QoSTimeoutLLMChildSubCategory").value = data.qostimeoutllmchildsubcategory;
 	document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").value = data.qostimeoutllmchildbackbrainglobalqueuemax;
+	document.getElementById("QoSTimeoutSwitch").checked = data.qostimeoutswitch;
+	document.getElementById("BackbrainQueue").checked = data.backbrainqueue;
 	document.getElementById("web-access").checked = data.webAccess;
 	document.getElementById("local-file-access").checked = data.localAccess;
 	document.getElementById("LLMChildDecision").checked = data.llmdecisionMode;
@@ -867,6 +924,8 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			qostimeoutllmchildglobal: document.getElementById("QoSTimeoutLLMChildGlobal").value || document.getElementById("QoSTimeoutLLMChildGlobal").placeholder,
 			qostimeoutllmchildsubcategory: document.getElementById("QoSTimeoutLLMChildSubCategory").value || document.getElementById("QoSTimeoutLLMChildSubCategory").placeholder,
 			qostimeoutllmchildbackbrainglobalqueuemax: document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").value || document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").placeholder,
+			qostimeoutswitch: document.getElementById("QoSTimeoutSwitch").checked,
+			backbrainqueue: document.getElementById("BackbrainQueue").checked,
 			webAccess: document.getElementById("web-access").checked,
 			localAccess: document.getElementById("local-file-access").checked,
             llmdecisionMode: document.getElementById("LLMChildDecision").checked,
@@ -898,6 +957,15 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.s
 document.querySelector("#info-dialog-bg > div > div.dialog-button > button.secondary").addEventListener("click", () => {
 	document.getElementById("info-dialog-bg").classList.add("hidden");
 });
+
+document.getElementById("BackbrainQueue").addEventListener("change", () => {
+	ipcRenderer.send("backbrainqueue", document.getElementById("BackbrainQueue").checked);
+});
+
+document.getElementById("QoSTimeoutSwitch").addEventListener("change", () => {
+	ipcRenderer.send("qostimeoutswitch", document.getElementById("QoSTimeoutSwitch").checked);
+});
+
 
 document.getElementById("web-access").addEventListener("change", () => {
 	ipcRenderer.send("webAccess", document.getElementById("web-access").checked);

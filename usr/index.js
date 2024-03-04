@@ -154,6 +154,20 @@ ipcMain.on("cpuUsage", () => {
 	});
 });
 
+ipcMain.on("UMACheckUsage", () => {
+	win.webContents.send("UMAAllocSizeStatisticsGB", { data: UMAGBSize });
+});
+
+ipcMain.on("BackBrainQueueCheck", () => {
+	const BackBrainQueueLength = BackBrainQueue.length;
+	win.webContents.send("BackBrainQueueCheck_render", { data: BackBrainQueueLength });
+});
+
+ipcMain.on("BackBrainQueueResultCheck", () => {
+	const BackBrainResultQueueLength = BackBrainResultQueue.length;
+	win.webContents.send("BackBrainQueueResultCheck_render", { data: BackBrainResultQueueLength });
+});
+
 // Function to gather system information
 function getSystemInfo() {
     let systemInfoStr = '';
@@ -507,6 +521,7 @@ async function externalInternetFetchingScraping(text) {
 			}
 		}
 		combinedText = convertedText.replace("[object Promise]", "");
+		UnifiedMemoryArray.push(...combinedText); // Pushing to UnifiedMemoryArray
 		console.log(consoleLogPrefix, "externalInternetFetchingScraping Final", combinedText);
 		
 		return combinedText;
@@ -633,7 +648,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	childLLMResultNotPassed = true;
 	let specializedModelReq="";
 	definedSeed_LLMchild = `${randSeed}`;
-	console.log(consoleLogPrefix, "🍀⚙️", "LLMChild invoked!");
+	console.log(consoleLogPrefix, "🍀⚙️", "CallLLMChildThoughtProcessor invoked!");
 	while(childLLMResultNotPassed){
 		//console.log(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
 		result = await callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild);
@@ -792,21 +807,12 @@ const startEndThoughtProcessor_Flag = "OutputResponse:"; // we can remove [Thoug
 const startEndAdditionalContext_Flag = ""; //global variable so every function can see and exclude it from the chat view
 // we can savely blank out the startEndAdditionalContext flag because we are now based on the blockGUI forwarding concept rather than flag matching
 const DDG = require("duck-duck-scrape"); // might migrate later near the scraping subsystem
-let passedOutput="";
-let concludeInformation_CoTMultiSteps = "Nothing";
-let required_CoTSteps;
-let historyDistanceReq;
-let concatenatedCoT="";
-let concludeInformation_Internet = "Nothing";
-let concludeInformation_LocalFiles = "Nothing";
-let concludeInformation_chatHistory = "Nothing";
-let todoList;
-let todoListResult;
-let fullCurrentDate;
-let searchPrompt="";
-let decisionSearch;
-let decisionSpecializationLLMChildRequirement;
-let decisionChatHistoryCTX;
+//BackBrainQueue Global Var
+let BackBrainQueue = [];
+let BackBrainResultQueue = [];
+
+
+
 let resultSearchScraping;
 let promptInput;
 let mergeText;
@@ -817,8 +823,6 @@ let inputPromptCounterThreshold = 6;
 let emotionlist;
 let evaluateEmotionInteraction;
 let emotionalEvaluationResult = "happy"; //default is the "happy" value 
-let reevaluateAdCtx;
-let reevaluateAdCtxDecisionAgent;
 let specificSpecializedModelPathRequest_LLMChild=""; //Globally inform on what currently needed for the specialized model branch 
 let specificSpecializedModelCategoryRequest_LLMChild=""; //Globally inform on what currently needed for the specialized model branch 
 let LLMChildDecisionModelMode=false;
@@ -829,6 +833,7 @@ let internalThoughtEngineTextProgress="";
 function interactionContextFetching(historyDistance){
 
 	// Make this Access UMA rather than directly to Interactionstg array
+	// Actually no, Mix it! UMA Retrieval + Interaction Array Storage
 
 	// Also when accessing UMA make sure that its calling interactionArrayStorage(retrieve ) with the specific string that its needed something like interactionArrayStorage("retrieveMLCMCF", currentPrompt, false, false, interactionStgOrder-i) so that the interactionArrayStorage can get the context too which is required for the MLCMCF architecture
 
@@ -1151,10 +1156,39 @@ function specializedModelManagerRequestPath(modelCategory){
 }
 
 
-
+let BackbrainMode=false;
 async function callInternalThoughtEngine(prompt){
+	let passedOutput="";
 	let decisionBinaryKey = ["yes", "no"];
+	let BackbrainModeInternal = false;
+	let reevaluateAdCtx;
+	let reevaluateAdCtxDecisionAgent;
+	let concludeInformation_CoTMultiSteps = "Nothing";
+	let required_CoTSteps;
+	let historyDistanceReq;
+	let concatenatedCoT="";
+	let concludeInformation_Internet = "Nothing";
+	let concludeInformation_LocalFiles = "Nothing";
+	let concludeInformation_chatHistory = "Nothing";
+	let todoList;
+	let todoListResult;
+	let fullCurrentDate;
+	let searchPrompt="";
+	let decisionSearch;
+	let decisionSpecializationLLMChildRequirement;
+	let decisionChatHistoryCTX;
+
+
 	console.log(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked!");
+	if (BackbrainMode || BackbrainModeInternal){
+		console.log(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked with Backbrain MODE!, EXPERIMENTAL ASYNC LLM PROCESSING INITIATED");
+		BackbrainModeInternal=true;
+		BackbrainMode=false;
+	}else{
+		BackbrainModeInternal=false;
+		BackbrainMode=false;
+	}
+
 	internalThoughtEngineProgress=2;
 	// were going to utilize this findClosestMatch(decision..., decisionBinaryKey); // new algo implemented to see whether it is yes or no from the unpredictable LLM Output
 	if (store.get("params").llmdecisionMode){
@@ -1477,6 +1511,16 @@ async function callInternalThoughtEngine(prompt){
 		}else{
 			passedOutput = prompt;
 		}
+
+		//If detected there's BackBrainResultQueue then Merge it with the new prompt 
+		let BackBrainResultPop
+		if (BackBrainResultQueue > 0){
+			const latestIndex = BackBrainResultQueue.length - 1;
+			BackBrainResultPop = BackBrainResultQueue[latestIndex];
+			BackBrainResultQueue.pop();
+			passedOutput = `Also I just finished Processing for this one ${BackBrainResultPop}`
+		}
+
 		internalThoughtEngineProgress=93; // Randomly represent progress (its not representing the real division so precision may be not present)
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
 			promptInput = `This is the previous conversation ${historyChatRetrieved}\n. \n This is the current ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No! Answer:`;
@@ -1502,7 +1546,101 @@ async function callInternalThoughtEngine(prompt){
 	//reset to 0 to when it finished
 	internalThoughtEngineProgress=0; // Randomly represent progress (its not representing the real division so precision may be not present)
 	console.log(consoleLogPrefix, passedOutput);
+	if (BackbrainMode || BackbrainModeInternal){ // if Backbrainmode detected then push it into BackBrainResultQueue to 
+		BackBrainResultQueue.push(...passedOutput); // This will push to the result queue when the user asks something again then this will be pushed too
+		BackbrainModeInternal = false;
+		BackbrainMode = false;
+	}
 	return passedOutput;
+
+}
+
+
+// Wrapper for internalThoughtWithTimeout
+async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
+	let result;
+    // Create a promise that resolves after the specified timeout
+    const timeoutPromise = new Promise((resolve) => {
+        setTimeout(() => {
+            resolve({ timeout: true });
+        }, store.get("params").qostimeoutllmchildglobal);
+    });
+	console.log(consoleLogPrefix, `DEBUG QoS Global Target `, store.get("params").qostimeoutllmchildglobal)
+	const consoleLogPrefixQoSDebug = "[🏃⌛ QoS Enforcement Manager]";
+    // Create a promise for the call to callInternalThoughtEngine
+    const callPromise = callInternalThoughtEngine(data);
+
+    // Race between the call promise and the timeout promise
+    result = await Promise.race([callPromise, timeoutPromise]);
+
+	let BackbrainRequest;
+    // Check if the result is from the timeout
+    if (result.timeout) {
+        console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, 'QoS Global Timeout occurred');
+		result = `This is the user prompt: ${data}, Additional Context is not available!`
+		console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, result);
+		// Ask LLM if its require to do backbrain async operation?
+		if (store.get("params").llmdecisionMode){
+			// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
+			console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Prompting Decision LLM for Backbrain...');
+			promptInput = `${username}:${data}\n Based on your evaluation of the request submitted by ${username}, Should you continue to think deeper even if you did timed out before and is it worth it to continue? Answer only in Yes or No:`;
+			console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Request LLM');
+			BackbrainRequest = await callLLMChildThoughtProcessor(promptInput, 32);
+			if (isVariableEmpty(BackbrainRequest)){
+				console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, "BackbrainRequest Failure due to model failed to comply, Falling back to no");
+				BackbrainRequest = no;
+			}
+		}else{
+			console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, "Continuing with Backbrain Mode! LLM aren't allowed to decide");
+			BackbrainRequest = yes;
+		}
+
+		// So what's the answer?
+		if (((((BackbrainRequest.includes("yes") || BackbrainRequest.includes("yep") || BackbrainRequest.includes("ok") || BackbrainRequest.includes("valid") || BackbrainRequest.includes("should") || BackbrainRequest.includes("true"))) || process.env.BACKBRAIN_FORCE_DEBUG_MODE === "1")) && store.get("params").backbrainqueue ){
+			//passthrough with queueing
+			console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Exec');
+			BackBrainQueue.push(...data); //add to the array later on it will be executed by async function BackBrainQueueManager() that constantly check whether there is a required
+			BackBrainQueueManager(); //Launch/invoke the thread and check if its already running
+			console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Spawning Background Task Backbrain');
+			// Move this into async Function BackBrainQueueManager
+			
+			console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Pushing classic prompt non RAG Model');
+			result = `This is the user prompt: ${data}, Additional Context is not yet available!`
+		}else{
+			//passthrough without queuing
+			console.log(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Better not to do Backbrain Queueing');
+			result = `This is the user prompt: ${data}, Additional Context is not available!`
+		}
+
+    } else {
+        // Handle the result from callInternalThoughtEngine
+        console.log(consoleLogPrefix, consoleLogPrefixQoSDebug,'Internal thought engine completed successfully:', result);
+    }
+
+	return result;
+}
+
+// Backbrain manager is the one that manages and when it is the best time to Process the Unfinished Processing that got caught on the QoS Global LLMChild Timeout
+let BackBrainQueueManager_isRunning=false;
+async function BackBrainQueueManager(){
+	//call this function to spawn the Loop threads and it only happened once
+	if(BackBrainQueueManager_isRunning){
+		console.log(consoleLogPrefix, "BackBrainQueueManager Invoked but already running! Declining");
+	}else{
+		console.log(consoleLogPrefix, "Running BackBrainQueueManager!");
+		BackBrainQueueManager_isRunning=true;
+		//Loop every 30 seconds check or every QoSTimeoutGlobal parameter
+		while(true){
+			if( BackBrainQueue.length > 0 && internalThoughtEngineProgress == 0 ){ // Only launch when its idle or after the timed out thread expired
+				const latestIndex = BackBrainQueue.length - 1;
+				const queuePrompt = BackBrainQueue[latestIndex];
+				BackBrainQueue.pop();
+				BackbrainMode=true; // when recieved the callInternalThoughtEngine quickly flip it back to false and transfer it into const BackbrainModeInternal=true; ; to make sure there isn't any conflict
+				callInternalThoughtEngine(queuePrompt); //spawn it in async fashion
+			}
+			await new Promise(resolve => setTimeout(resolve, store.get("params").qostimeoutllmchildglobal));
+		}
+	}
 
 }
 
@@ -1978,7 +2116,7 @@ let fourSegmentMemorySummerization = []; // All index total will be divided even
 let focusMemoryIndexArray = []; // Three array only which Summerized couple of Array backwards until 1024 tokens filled[0], 1024 central [1] 1024 forward until tokens filled [2] from the UnifiedMemoryArray
 let RAGMemoryFetched; // Handle it in one string which fill it up until 2048 from how many LLMChild requested from the depth (Internal interactionArrayStorage LLMChild request)
 let RAGMemoryCompressedCosineMLRelevancyFetched; // Compressed array with threshold 0.5 by re-selecting only the most relevant strings
-
+let UMAGBSize=0; //Global variable on how many gigs does the UMA takes on the runtime
 
 let interactionStgJson;
 let interactionStgPersistentPath = `${path.resolve(__dirname, "storage", "presistentInteractionMem.json")}`;
@@ -2031,7 +2169,8 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
         return array && !array.includes(interactionStg[0]);
     });
 
-
+	// Calculate GB UMA Usage
+	UMAGBSize = calculateMemoryUsageInGB(UnifiedMemoryArray);
 
 	//debug on what is the content of UnifiedMemoryArray
 	// Comment this debug message when its done
@@ -2160,6 +2299,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 							const jsonData = JSON.parse(data);
 							console.log(consoleLogPrefix, "Interpreting JSON and Converting to Array");
 							UnifiedMemoryArray = jsonData;
+							console.log(consoleLogPrefix, "Loaded UMA: ", UnifiedMemoryArray);
 						}
 					} catch (err) {
 						if (err instanceof SyntaxError && err.message === 'Unexpected end of JSON input') {
@@ -2231,7 +2371,21 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	
 }
 
-// if interactionStg blank try to load 
+function calculateMemoryUsageInGB(array) {
+    // Get the size of each element in bytes
+    const elementSizeInBytes = 8; // Assuming each element is a double-precision float (8 bytes)
+
+    // Get the length of the array
+    const length = array.length;
+
+    // Calculate the total memory usage in bytes
+    const totalMemoryInBytes = elementSizeInBytes * length;
+
+    // Convert bytes to gigabytes
+    const totalMemoryInGB = totalMemoryInBytes / (1024 * 1024 * 1024); // 1 GB = 1024^3 bytes
+
+    return totalMemoryInGB;
+}
 
 
 
@@ -2383,7 +2537,12 @@ ipcMain.on("message", async (_event, { data }) => {
 		interactionArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 		blockGUIForwarding = true;
 		//console.log(consoleLogPrefix, `Forwarding manipulated Input to processor ${data}`);
-		inputFetch = await callInternalThoughtEngine(data); // push to internal thought engine
+		 // push to internal thought engine
+		if(store.get("params").qostimeoutswitch){
+			inputFetch = await callInternalThoughtEngineWithTimeoutandBackbrain(data);
+		} else {
+			inputFetch = await callInternalThoughtEngine(data);
+		}
 		inputFetch = `${inputFetch}`
 		//console.log(consoleLogPrefix, `Forwarding manipulated Input ${inputFetch}`);
 		runningShell.write(inputFetch);

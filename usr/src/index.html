@@ -92,6 +92,7 @@
 					<!-- Begin placeholder alpaca -->
 					<div id="feed-placeholder-alpaca">
 						<h1 class="logo">Adelaide Paradigm</h1>
+						<img src="img/AdelaideEntity.png" style="width: 19rem; height: auto;">
 						<h4>
 							Greetings! I am Adelaide Zephyrine Charlotte. Delighted to make your acquaintance and wishing you a splendid day ahead. While I may possess greater capabilities, please bear in mind that my role is to assist you. You remain the driving force, the orchestrator of your own journey. Shall we embark on our interaction together?</h4>
 						<h3> </h3>
@@ -118,7 +119,7 @@
 									<path stroke-linecap="round" stroke-linejoin="round" d="M3.75 13.5l10.5-11.25L12 10.5h8.25L9.75 21.75 12 13.5H3.75z"></path>
 								</svg>
 								<h3>Capabilities</h3>
-								<div class="card">Zephyrine can access web and your user data to augment contextual understanding.</div>
+								<div class="card">Adelaide can access web and your user data to augment contextual understanding.</div>
 								<div class="card">Can engage in veritable colloquy.</div>
 								<div class="card">Exhibit ratiocination in relation to addressing your inquiry.</div>
 							</div>
@@ -290,6 +291,12 @@
 							</div>
 							<div id="BackBrainFinished" class="resource-item">
 								<div class="text info"> BackBrain Finished Task : N/A </div>
+								<div class="bar">
+									<div class="bar-inner"></div>
+								</div>
+							</div>
+							<div id="UMAMemAlloc" class="resource-item">
+								<div class="text info"> UMA MLCMCF Alloc : ?/3.8GB </div>
 								<div class="bar">
 									<div class="bar-inner"></div>
 								</div>
@@ -498,7 +505,7 @@
 								<input type="checkbox" id="QoSTimeoutSwitch" />
 								<span class="slider round"></span>
 							</label>
-							<p style="margin: 0">QoSTimeout (Not yet Implemented)</p>
+							<p style="margin: 0">QoSTimeout</p>
 						</div>
 						<h5>QoS Cutout and QoS Timeout mechanisms ensures the swift resolution of program lockups while simultaneously identifying opportunities for enhancing interaction fluidity.</h5>
 
@@ -507,7 +514,7 @@
 								<input type="checkbox" id="BackbrainQueue" />
 								<span class="slider round"></span>
 							</label>
-							<p style="margin: 0">BackBrain (Not yet Implemented)</p>
+							<p style="margin: 0">BackBrain</p>
 						</div>
 						<h5>The Backbrain QoS Switch enables the program to seamlessly transition its thought processes to the background when the processor's capacity is deemed insufficient or if there's significant delay. This feature is integral to the architecture designed to facilitate the smooth execution of tasks, particularly crucial for supporting the operation of a 146B Total Model at the speed required the same as 7b q4_0. However this queue will be processed purely on CPU.</h5>
 
@@ -579,7 +586,7 @@
 							</label>
 							<p style="margin: 0">Reevaluate Context and Attempt to Learn More</p>
 						</div>
-						<h5>Grant the Zephyrine the space to reconsider her acquisitions and ruminations. Should they prove insufficient, she is granted permission to delve further into her contemplations. This necessitates the activation of 'Let the Main LLM Model be The Decision Agent.' Caution is advised, as this course may entail extended processor engagement, demanding ample cooling provisions to preclude potential hardware ramifications.</h5>
+						<h5>Grant the Adelaide the space to reconsider her acquisitions and ruminations. Should they prove insufficient, she is granted permission to delve further into her contemplations. This necessitates the activation of 'Let the Main LLM Model be The Decision Agent.' Caution is advised, as this course may entail extended processor engagement, demanding ample cooling provisions to preclude potential hardware ramifications.</h5>
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
 								<input type="checkbox" id="throwInitialGarbageResponse"/>
@@ -590,14 +597,6 @@
 						<h5>Discard any initial response that may often be incongruous, particularly in LLaMa 2 mode. Instead, initiate the session from the second response following the initial incongruous one.</h5>
 						<div style="height: 32px"></div>
 						<h2>Memory Context Management</h2>
-						<div style="display: flex; align-items: center">
-							<label class="switch" style="height: 1.153512rem">
-								<input type="checkbox" id="MLCMCFSwitch" />
-								<span class="slider round"></span>
-							</label>
-							<p style="margin: 0">(MLCMCF) (Not yet Implemented)</p>
-						</div>
-						<h5>Multi Level Condensed Memory Contextual Fetching (MLCMCF) Allows to fetch bigger context bigger than 4096 with some context summirization, By design there is L6, L5, L4, L3, L2, L1, L0 Memory to fit industrial scale processing in small tiny program</h5>
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
 								<input type="checkbox" id="historyChatCtx"/>
