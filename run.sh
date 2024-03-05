@@ -1,5 +1,8 @@
 #!/bin/bash
 
+#Convert this into powershell that is runnable and focused towards native Windows platform
+#also change the package manager to chocolatey and winget and adapt the package into windows available packages that can be automatically installed
+
 set -e
 
 # Initialize Variables and check the platform and architecture
@@ -142,6 +145,29 @@ detect_metal() {
 #chat binary building
 # Function to build and install LLaMa
 
+
+# Clone submodule repositories
+# Function to clone submodule
+clone_submodule() {
+    local path="$1"
+    local url="$2"
+    local commit="$3"
+    echo "Cloning submodule: $path from $url"
+    git clone --recurse-submodules --single-branch --branch "$commit" "$url" "$path"
+}
+
+
+importsubModuleManually(){
+    clone_submodule "usr/vendor/llama.cpp" "https://github.com/ggerganov/llama.cpp" "93356bd"
+    clone_submodule "usr/vendor/ggllm.cpp" "https://github.com/cmp-nct/ggllm.cpp" "master"
+    clone_submodule "usr/vendor/ggml" "https://github.com/ggerganov/ggml" "master"
+    clone_submodule "usr/vendor/llama-gguf.cpp" "https://github.com/ggerganov/llama.cpp" "master"
+    clone_submodule "usr/vendor/whisper.cpp" "https://github.com/ggerganov/whisper.cpp" "master"
+    clone_submodule "usr/vendor/gemma.cpp" "https://github.com/google/gemma.cpp" "master"
+    # Screw git submodule and .gitmodules system, its useless, crap, and ignore all the listing and only focused llama.cpp as always and ignore everything else
+}
+
+
 cleanInstalledFolder(){
     set +e
     echo "Cleaning Installed Folder to lower the chance of interfering with the installation process"
@@ -149,6 +175,7 @@ cleanInstalledFolder(){
     
     rm -rf ${rootdir}/usr/vendor/ggllm.cpp ${rootdir}/usr/vendor/ggml ${rootdir}/usr/vendor/llama-gguf.cpp ${rootdir}/usr/vendor/llama.cpp ${rootdir}/usr/vendor/whisper.cpp ${rootdir}/usr/node_modules ${CONDA_PREFIX}
     mkdir ${rootdir}/usr/vendor/ggllm.cpp ${rootdir}/usr/vendor/ggml ${rootdir}/usr/vendor/llama-gguf.cpp ${rootdir}/usr/vendor/llama.cpp ${rootdir}/usr/vendor/whisper.cpp ${rootdir}/usr/node_modules ${CONDA_PREFIX}
+
     echo "Should be done"
     set -e
 }
@@ -241,9 +268,7 @@ build_llama() {
 }
 
 build_llama_gguf() {
-    # Clone submodule and update
-    git submodule update --init --recursive
-    git submodule update --remote --merge
+    
     
     # Change directory to llama.cpp
     cd usr/vendor/llama-gguf.cpp || exit 1
@@ -477,9 +502,7 @@ git submodule update --remote --merge
 
 
 build_falcon() {
-    # Clone submodule and update
-    git submodule update --init --recursive
-    git submodule update --remote --merge
+    
     
     # Change directory to llama.cpp
     cd usr/vendor/ggllm.cpp || exit 1
@@ -867,6 +890,7 @@ if [[ ! -f ${rootdir}/installed.flag || "${FORCE_REBUILD}" == "1" ]]; then
     echo "Installing Modules"
     npm install --save-dev
     npx --openssl_fips='' electron-rebuild
+    importsubModuleManually
     buildLLMBackend
     touch ${rootdir}/installed.flag
 fi
