@@ -158,7 +158,8 @@ clone_submodule() {
 
 
 importsubModuleManually(){
-    clone_submodule "usr/vendor/llama.cpp" "https://github.com/ggerganov/llama.cpp" "93356bd"
+    #clone_submodule "usr/vendor/llama.cpp" "https://github.com/ggerganov/llama.cpp" "93356bd"
+    clone_submodule "usr/vendor/llama.cpp" "https://github.com/ggerganov/llama.cpp" "master"
     clone_submodule "usr/vendor/ggllm.cpp" "https://github.com/cmp-nct/ggllm.cpp" "master"
     clone_submodule "usr/vendor/ggml" "https://github.com/ggerganov/ggml" "master"
     clone_submodule "usr/vendor/llama-gguf.cpp" "https://github.com/ggerganov/llama.cpp" "master"
@@ -181,9 +182,6 @@ cleanInstalledFolder(){
 }
 build_llama() {
     # Clone submodule and update
-    # Clean the submodule folders fist
-    
-    git submodule update --init --recursive
     
     # Change directory to llama.cpp
     cd usr/vendor/llama.cpp || exit 1

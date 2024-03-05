@@ -48,7 +48,6 @@
 		"jsdom": "^22.1.0",
 		"mammoth": "^1.7.0",
 		"marked": "^9.1.2",
-		"n": "^9.2.1",
 		"natural": "^6.10.5",
 		"node-html-parser": "^6.1.12",
 		"node-pty": "1.0.0",
