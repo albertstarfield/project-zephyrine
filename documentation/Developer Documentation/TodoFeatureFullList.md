@@ -17,6 +17,7 @@
 - [x] Automata Mode (autoGPT agent like functionality).
 - [x] Multi-LLMChild Background Queue Prompt to Experience when can't catch up with QoS time (Improving experience 100B Parameter Adelaide Paradigm Experience) (Backbrain).
 - [x] Implementing ms QoS for LLMChild to prevent unecessary Lock-up Implementing a Proactive Lockup Timeout Verification Mechanism in the Quest for External Context Acquisition.
+- [x] Developing Workaround for the Adelaide Paradigm Achilles Heel v8 4GB memory enforced limit by electron. (v8 pointer compression memory heap limitation) (--max-old-space-size=1342177280 Bumping up the size to 1TB) There is no such thing as overkill, Albert always under standard anyway.
 - [ ] Aiming for the minimum professional quality = "NO MISTAKES OR ERROR ARE ALLOWED FOR REACHING THE TARGET"
 - [ ] Multi format communication Real-time communication and collaboration
 - [ ] Static compilation Mobile Working

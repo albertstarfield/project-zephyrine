@@ -58,7 +58,7 @@ const natural = require('natural');
 const appName = `Project ${assistantName}`;
 const username = os.userInfo().username;
 const consoleLogPrefix = `[${colorBrightCyan}${appName}_${platform}_${arch}${colorReset}]:`;
-
+const { memoryUsage } = require('node:process');
 
 
 var win;
@@ -328,35 +328,37 @@ const Store = require("electron-store");
 const schema = {
 	params: {
 		default: {
-			llmBackendMode: 'LLaMa2gguf',
 			repeat_last_n: '328',
 			repeat_penalty: '6.9',
 			top_k: '10',
 			top_p: '0.9',
 			temp: '1.0',
 			seed: '-1',
+			qostimeoutllmchildglobal: '60000',
+			qostimeoutllmchildsubcategory: '10000',
+			qostimeoutllmchildbackbrainglobalqueuemax: '3600000',
+			qostimeoutswitch: true,
+			backbrainqueue: true,
 			webAccess: true,
-			localAccess: false,
+			automateLoopback: false,
+			localAccess: true,
 			llmdecisionMode: true,
 			extensiveThought: true,
 			SaveandRestoreInteraction: true,
-			hisChatCTX: false,
+			hisChatCTX: true,
+			foreverEtchedMemory: true,
 			throwInitResponse: true,
 			classicMode: false,
 			AttemptAccelerate: true,
 			emotionalLLMChildengine: true,
 			profilePictureEmotion: true,
-			foreverEtchedMemory: true,
-			websearch_amount: '16',
+			websearch_amount: '7',
 			maxWebSearchChar: '1024',
 			maxLocalSearchChar: '1024',
 			maxLocalSearchPerFileChar: '512',
 			keywordContentFileMatchPercentageThreshold: '27',
 			hardwareLayerOffloading: '512',
-			longChainThoughtNeverFeelenough: true,
-			qostimeoutllmchildglobal: '60000',
-			qostimeoutllmchildsubcategory: '30000',
-			qostimeoutllmchildbackbrainglobalqueuemax: '3600000'
+			longChainThoughtNeverFeelenough: true
 		  }		  
 	},
 	modelPath: {
@@ -2157,8 +2159,8 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
     });
 
 	// Calculate GB UMA Usage
-	UMAGBSize = calculateMemoryUsageInGB(UnifiedMemoryArray);
-
+	//UMAGBSize = calculateMemoryUsageInGB(UnifiedMemoryArray);
+	UMAGBSize = `${process.memoryUsage().heapUsed / (1024 * 1024 * 1024)}`
 	//debug on what is the content of UnifiedMemoryArray
 	// Comment this debug message when its done
 	//console.log(consoleLogPrefix, "Debug UnifiedMemoryArray Content", UnifiedMemoryArray)
@@ -2599,12 +2601,14 @@ async function AutomataProcessing(){
 		runningShell.write(`\r`);
 		await new Promise(resolve => setTimeout(resolve, 500));
 		*/
-		console.log(consoleLogPrefix, automataConsolePrefix, "Invoked!, Its my turn!");
+		console.log(consoleLogPrefix, automataConsolePrefix, "Hmm my turn");
 		// Fetch memory interactionContextFetching(historyDistanceReq); recieved in array// how about for now we going to implement it by requesting 2
 		console.log(consoleLogPrefix, automataConsolePrefix, "Fetchmem!");
 		const historyChatRetrieved = interactionContextFetching(2);
 		console.log(consoleLogPrefix, automataConsolePrefix, "Thinking what is the prompt");
-		const promptAutomataInput = `With the previous internal thought are ${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. and ${assistantName} answer is ${automataLLMMainresultReciever} What is the best question or answer for this that is critical and smart? Answer:`;
+		//The preceding internal reflections consist of ${historyChatRetrieved[2]}, ${historyChatRetrieved[1]}, and the response from ${assistantName} is ${automataLLMMainresultReciever}. What would be the optimal next conversation topic, with the flexibility to shift topics to prevent stagnation, while rigorously testing the idea to its fullest extent? Additionally, ensure that responses are not generic, akin to those found on forums like ANSWER.MICROSOFT.COM, but rather focus on specialized case problem-solving.
+		const promptAutomataInput = `
+		The previous internal reflections comprise ${historyChatRetrieved[2]}, ${historyChatRetrieved[1]}, and the response from ${assistantName} is ${automataLLMMainresultReciever}. What would be the most suitable next conversation topic, allowing for topic flexibility to prevent stagnation, yet rigorously testing the idea to its fullest extent? Furthermore, ensure that responses do not mimic generic answers found on platforms such as on the tech support forums, but rather focus on specialized technical nerdy thesis defense endless depth case problem-solving answer style.`;
 		const AutomataReInjection = await callLLMChildThoughtProcessor(promptAutomataInput, 3192);
 		let RAGAutomataPostProcessing;
 		if(store.get("params").qostimeoutswitch){
@@ -2617,7 +2621,7 @@ async function AutomataProcessing(){
 			data: ""
 		});
 		win.webContents.send("manualAIAnswerGUIHijack", {
-			data: `[ 🤔 Internal Thought : ${AutomataReInjection} ] \n`
+			data: `[ 🤔 Internal Thought : ${AutomataReInjection} ] \n\n\n Answer: `
 		});
 		blockGUIForwarding = true;
 		interactionArrayStorage("save", `[🤔 ${assistantName} Internal Automata Thought : ${AutomataReInjection}] : `, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
