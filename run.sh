@@ -156,7 +156,7 @@ build_llama() {
     # Clone submodule and update
     # Clean the submodule folders fist
     
-    git submodule update --init --recursive --remote --merge
+    git submodule update --init --recursive
     
     # Change directory to llama.cpp
     cd usr/vendor/llama.cpp || exit 1
@@ -242,7 +242,8 @@ build_llama() {
 
 build_llama_gguf() {
     # Clone submodule and update
-    git submodule update --init --recursive --remote --merge
+    git submodule update --init --recursive
+    git submodule update --remote --merge
     
     # Change directory to llama.cpp
     cd usr/vendor/llama-gguf.cpp || exit 1
@@ -325,7 +326,8 @@ build_llama_gguf() {
 build_ggml_base() {
     echo "Requesting GGML Binary"
     # Clone submodule and update
-    git submodule update --init --recursive --remote --merge
+git submodule update --init --recursive
+git submodule update --remote --merge
     
     # Change directory to llama.cpp
     cd usr/vendor/ggml || exit 1
@@ -408,7 +410,8 @@ build_ggml_base() {
 build_gemma_base() {
     echo "Requesting Google Gemma Binary"
     # Clone submodule and update
-    git submodule update --init --recursive --remote --merge
+git submodule update --init --recursive
+git submodule update --remote --merge
     
     # Change directory to llama.cpp
     cd usr/vendor/gemma.cpp || exit 1
@@ -475,7 +478,8 @@ build_gemma_base() {
 
 build_falcon() {
     # Clone submodule and update
-    git submodule update --init --recursive --remote --merge
+    git submodule update --init --recursive
+    git submodule update --remote --merge
     
     # Change directory to llama.cpp
     cd usr/vendor/ggllm.cpp || exit 1
