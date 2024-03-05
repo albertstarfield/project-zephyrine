@@ -23,9 +23,6 @@
 [submodule "usr/vendor/ggml"]
 	path = usr/vendor/ggml
 	url = https://github.com/ggerganov/ggml
-[submodule "usr/vendor/whisper.cpp"]
-	path = usr/vendor/whisper.cpp
-	url = https://github.com/ggerganov/whisper.cpp
 [submodule "usr/vendor/gemma.cpp"]
 	path = usr/vendor/gemma.cpp
 	url = https://github.com/google/gemma.cpp
