@@ -2,6 +2,26 @@
 $platform = [System.Environment]::OSVersion.Platform
 $arch = [System.Environment]::Is64BitOperatingSystem
 
+
+# Get the current platform
+$currentPlatform = [System.Environment]::GetEnvironmentVariable("PROCESSOR_ARCHITECTURE")
+
+# Check if the platform is ARM64
+if ($currentPlatform -eq "ARM64") {
+    Write-Host "Regrettably, Windows 10+ arm64 is not currently supported. It is important to clarify that this limitation is not due to any deliberate effort to restrict support exclusively to Apple devices or their proprietary arm64 CPUs. Rather, the backend infrastructure currently lacks the capability to compile for non-Apple arm64 architectures, as its focus is primarily on supporting Apple silicon. Efforts are underway to implement workaround solutions, albeit through somewhat unconventional means. An alternative approach involves running the application on a Linux arm64 virtual machine, which is likely to yield favorable results."
+    Exit
+}
+
+# Check if the script is running with administrative privileges
+$isAdmin = ([Security.Principal.WindowsPrincipal] [Security.Principal.WindowsIdentity]::GetCurrent()).IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)
+
+# If not running as administrator, relaunch with administrative rights
+if (-not $isAdmin) {
+    Write-Host "Script is not running as superuser. Relaunching with superuser privileges..."
+    Start-Process powershell.exe -Verb RunAs -ArgumentList ("-File `"$PSCommandPath`"") -Wait
+    Exit
+}
+
 # Save the current working directory to "rootdir" variable (compensate spaces)
 $rootdir = Get-Location
 $env:CONDA_PREFIX = "$rootdir\conda_python_modules"
@@ -57,17 +77,18 @@ function Install-DependenciesWindows {
     choco install -y python3 git nodejs
     # Now where is build-essential equivalent?
     choco install -y make msys2
-    
 
     # Check if nmake is installed, if not, install it
     $nmakePath = Get-Command -Name nmake -ErrorAction SilentlyContinue
+    
+
     if (-not $nmakePath) {
         Write-Output "Installing build-essential bundle package but for Windows 10+..."
         Write-Output "Yes, it's possible to do it without seen or manual GUI on Windows"
         Write-Output "Console may stay here for a while until 4-6 GB downloads some necessary dependencies!"
         Invoke-WebRequest -Uri "https://aka.ms/vs/16/release/vs_buildtools.exe" -OutFile vs_buildtools.exe
         #Reference : https://learn.microsoft.com/en-us/visualstudio/install/workload-component-id-vs-community?view=vs-2022
-        Start-Process -FilePath .\vs_buildtools.exe -ArgumentList "-q --wait --nocache --installPath C:\BuildTools --add Microsoft.VisualStudio.Component.VC.CoreIde --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.Component.MSBuild --add Microsoft.VisualStudio.Component.NuGet --add Microsoft.Component.MSBuild --add Microsoft.VisualStudio.ComponentGroup.NativeDesktop.Core --add Microsoft.VisualStudio.Component.VC.CoreIde --add Microsoft.VisualStudio.Component.Roslyn.Compiler" -Wait
+        Start-Process -FilePath .\vs_buildtools.exe -ArgumentList "-q --wait --norestart --nocache --installPath C:\BuildTools --add Microsoft.VisualStudio.Component.VC.CoreIde --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.Component.MSBuild --add Microsoft.VisualStudio.Component.NuGet --add Microsoft.Component.MSBuild --add Microsoft.VisualStudio.ComponentGroup.NativeDesktop.Core --add Microsoft.VisualStudio.Component.VC.CoreIde --add Microsoft.VisualStudio.Component.Roslyn.Compiler" -Wait
         Start-Sleep -Seconds 10
         # Define the path to nmake.exe
         $nmakePath = Get-ChildItem -Path "C:\BuildTools\VC\Tools\MSVC\" -Filter "16.*.*" -Directory | Select-Object -ExpandProperty FullName | ForEach-Object { Join-Path -Path $_ -ChildPath "bin\Hostx64\x64" }
