@@ -61,7 +61,7 @@ That's it! You're ready to go.
 > **Note**  
 > For Windows the launch sequence command are currently broken, You could try running the following command but it is under heavy development, you can see the update on the Issue section about Windows Native Support. In the meantime you could run it using wsl2 and wslg
 
-### Linux and macOS
+### Linux and macOS (Running manually)
 
 > The procedure will encompass an automated compilation process, wherein all components shall be seamlessly and effortlessly installed. Consequently, the necessity for specific release binaries shall be obviated.
 
@@ -74,11 +74,11 @@ That's it! You're ready to go.
 >
 >Install application specific dependencies: 
 >
-> ```chmod +x ./run.sh ```
+> ```chmod +x ./launchcontrol/run.sh ```
 >
 > Run it
 >
-> ```./run.sh```
+> ```./launchcontrol/run.sh```
 
 
 3. The program will commence automatically, affording you the opportunity to initiate a conversation at your convenience.
