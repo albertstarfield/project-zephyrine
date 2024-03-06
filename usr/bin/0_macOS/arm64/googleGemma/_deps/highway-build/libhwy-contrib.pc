@@ -1,0 +1,10 @@
+prefix=/usr/local
+exec_prefix=${prefix}
+libdir=${exec_prefix}/lib
+includedir=${prefix}/include
+
+Name: libhwy-contrib
+Description: Additions to Highway: dot product, image, math, sort
+Version: 1.1.0
+Libs: -L${libdir} -lhwy_contrib
+Cflags: -I${includedir}

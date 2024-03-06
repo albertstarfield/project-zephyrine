@@ -1,0 +1,46 @@
+{
+	"sources" : 
+	[
+		{
+			"file" : "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/CMakeFiles/highway-populate"
+		},
+		{
+			"file" : "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/CMakeFiles/highway-populate.rule"
+		},
+		{
+			"file" : "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/CMakeFiles/highway-populate-complete.rule"
+		},
+		{
+			"file" : "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/highway-populate-prefix/src/highway-populate-stamp/highway-populate-build.rule"
+		},
+		{
+			"file" : "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/highway-populate-prefix/src/highway-populate-stamp/highway-populate-configure.rule"
+		},
+		{
+			"file" : "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/highway-populate-prefix/src/highway-populate-stamp/highway-populate-download.rule"
+		},
+		{
+			"file" : "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/highway-populate-prefix/src/highway-populate-stamp/highway-populate-install.rule"
+		},
+		{
+			"file" : "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/highway-populate-prefix/src/highway-populate-stamp/highway-populate-mkdir.rule"
+		},
+		{
+			"file" : "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/highway-populate-prefix/src/highway-populate-stamp/highway-populate-patch.rule"
+		},
+		{
+			"file" : "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/highway-populate-prefix/src/highway-populate-stamp/highway-populate-test.rule"
+		},
+		{
+			"file" : "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/highway-populate-prefix/src/highway-populate-stamp/highway-populate-update.rule"
+		}
+	],
+	"target" : 
+	{
+		"labels" : 
+		[
+			"highway-populate"
+		],
+		"name" : "highway-populate"
+	}
+}

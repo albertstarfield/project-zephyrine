@@ -27,6 +27,7 @@ usr/error.log
 usr/storage/presistentInteractionMem.json
 **conda_python_modules**
 **nodeLocalRuntime**
+usr/nodeLocalRuntime
 **/*Mem.json
 **/*.log
 usr/storage/foreverEtchedFirstHandExperienced.json

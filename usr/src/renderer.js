@@ -28,6 +28,29 @@ const { ipcRenderer, dialog } = require("electron");
 
 const win = remote.getCurrentWindow();
 
+const path = require("path");
+let logPathFile;
+const { createLogger, transports, format } = require('winston');
+
+
+logPathFile = path.resolve(__dirname, "AdelaideFrontendHandler.log");
+console.log(logPathFile);
+
+
+const logger = createLogger({
+    level: 'info',
+    format: format.combine(
+        format.timestamp({ format: 'YYYY-MM-DD HH:mm:ss' }),
+        format.printf(info => `${info.timestamp} ${info.level}: ${info.message}`)
+    ),
+    transports: [
+        // Console transport (removed to prevent logging to console)
+        // new transports.Console(),
+
+        // File transport for info level messages only
+        new transports.File({ filename: logPathFile, level: 'info' })
+    ]
+});
 
 document.addEventListener("DOMContentLoaded", function() {
     const feedPlaceholder = document.getElementById("messages");
@@ -201,7 +224,7 @@ document.querySelector("#path-dialog-bg > div > div.dialog-button > button.secon
 });
 
 ipcRenderer.on("pathIsValid", (_event, { data }) => {
-	console.log(data);
+	logger.info(data);
 	if (data) {
 		document.querySelector("#path-dialog > p.error-text").style.display = "none";
 		document.getElementById("path-dialog-bg").classList.add("hidden");
@@ -365,7 +388,7 @@ const sha256 = async (input) => {
 let profilePictureEmotions;
 ipcRenderer.on('emotionalEvaluationResult', (event, data) => {
 	// Use the received data in your renderer process
-	console.log('Received emotionalEvaluationResult:', data);
+	logger.info('Received emotionalEvaluationResult:', data);
 	profilePictureEmotions = data;
   });  
 
@@ -412,7 +435,7 @@ const say = (msg, id, isUser) => {
 	} else {
 		item.classList.add("bot-default");
 	}
-	console.log(msg); //debug message
+	logger.info(msg); //debug message
 
 	//escape html tag
 	if (isUser) {
@@ -420,7 +443,7 @@ const say = (msg, id, isUser) => {
 		msg = msg.replaceAll(/</g, "&lt;");
 		msg = msg.replaceAll(/>/g, "&gt;");
 	}
-	//console.log("reverseEngMessage", msg)
+	//logger.info("reverseEngMessage", msg)
 	item.innerHTML = msg;
 	if (document.getElementById("bottom").getBoundingClientRect().y - 40 < window.innerHeight) {
 		setTimeout(() => {
@@ -429,7 +452,7 @@ const say = (msg, id, isUser) => {
 	}
 	messages.append(item);
 };
-//console.log("responsesTraceDebug", responses)
+//logger.info("responsesTraceDebug", responses)
 var responses = []; // This is probably appending the continous stream of llama-2 LLM
 
 Date.prototype.timeNow = function () {
@@ -498,12 +521,12 @@ ipcRenderer.on("manualAIAnswerGUIHijack", async (_event, { data }) => {
 	let existing = document.querySelector(`[data-id='${id}']`);
 
 	if (existing) {
-		//console.log("responsesStreamCaptureTrace_init:", responses[id]);
+		//logger.info("responsesStreamCaptureTrace_init:", responses[id]);
 		if (!responses[id]) {
 			responses[id] = document.querySelector(`[data-id='${id}']`).innerHTML;
 		}
 		responses[id] = responses[id] + response;
-		//console.log("responsesStreamCaptureTrace_first:", responses[id]);
+		//logger.info("responsesStreamCaptureTrace_first:", responses[id]);
 
 		if (responses[id].startsWith("<br>")) {
 			responses[id] = responses[id].replace("<br>", "");
@@ -541,23 +564,23 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			isRunningModel = false;
 			existing.style.opacity = 0;
 			existing.style.transition = 'opacity 1s ease-in-out';
-			console.log(prefixConsoleLogStreamCapture, "Stream Ended!");
-			console.log(prefixConsoleLogStreamCapture, "Assuming LLM Main Backend Done Typing!");
-			console.log(prefixConsoleLogStreamCapture, "Sending Stream to GUI");
+			logger.info(prefixConsoleLogStreamCapture, "Stream Ended!");
+			logger.info(prefixConsoleLogStreamCapture, "Assuming LLM Main Backend Done Typing!");
+			logger.info(prefixConsoleLogStreamCapture, "Sending Stream to GUI");
 			//totalStreamResultData = responses[id];
 			totalStreamResultData = marked.parse(responses[id]);
 			totalStreamResultData = firstLineParagraphCleaner(totalStreamResultData);
-			console.log("responsesStreamCaptureTrace_markedConverted:", totalStreamResultData);
+			logger.info("responsesStreamCaptureTrace_markedConverted:", totalStreamResultData);
 			//totalStreamResultData = HTMLInterpreterPreparation(totalStreamResultData); //legacy old alpaca-electron interpretation
-			console.log("responsesStreamCaptureTrace_markedConverted_InterpretedPrep:", totalStreamResultData);
+			logger.info("responsesStreamCaptureTrace_markedConverted_InterpretedPrep:", totalStreamResultData);
 			existing.innerHTML = totalStreamResultData; // existing innerHTML is a final form which send the stream into the GUI (so basically it replaces all the chunks of message from the responses[id] on the existing.innerHTML)
-			console.log(prefixConsoleLogStreamCapture, "It should be done");
+			logger.info(prefixConsoleLogStreamCapture, "It should be done");
 
 			//responses[id] forward to Automata Mode if its Turned on then it will continue
 			// Why i put the Automata Triggering ipcRenderer in here? : because when the stream finished, it stopped in here
 			ipcRenderer.send("AutomataLLMMainResultReciever", { data: responses[id] });
 
-			console.log(prefixConsoleLogStreamCapture, "current ID of Output", id);
+			logger.info(prefixConsoleLogStreamCapture, "current ID of Output", id);
 
 			form.setAttribute("class", isRunningModel ? "running-model" : "");
 			existing.style.opacity = 1;
@@ -568,12 +591,12 @@ ipcRenderer.on("result", async (_event, { data }) => {
 		isRunningModel = true;
 		form.setAttribute("class", isRunningModel ? "running-model" : "");
 		if (existing) {
-			//console.log("responsesStreamCaptureTrace_init:", responses[id]);
+			//logger.info("responsesStreamCaptureTrace_init:", responses[id]);
 			if (!responses[id]) {
 				responses[id] = document.querySelector(`[data-id='${id}']`).innerHTML;
 			}
 			responses[id] = responses[id] + response;
-			//console.log("responsesStreamCaptureTrace_first:", responses[id]);
+			//logger.info("responsesStreamCaptureTrace_first:", responses[id]);
 
 			if (responses[id].startsWith("<br>")) {
 				responses[id] = responses[id].replace("<br>", "");
@@ -613,11 +636,11 @@ ipcRenderer.send("username") //send request of that specific data from all proce
 ipcRenderer.send("assistantName") //send request
 ipcRenderer.on("username", (_event, { data }) => {
 	username = data;
-	console.log("The username is: ", username);
+	logger.info("The username is: ", username);
 });
 ipcRenderer.on("assistantName", (_event, { data }) => {
 	assistantName = data;
-	console.log("I am :", assistantName);
+	logger.info("I am :", assistantName);
 });
 
 const cpuText = document.querySelector("#cpu .text"); //("id .text")
@@ -683,7 +706,7 @@ let dynamicTipsBar = document.querySelector("#dynamicTipsUIPart .loading-bar");
 
 setInterval(async () => {
 	ipcRenderer.send("internalThoughtProgressGUI");
-	//console.log("fetching progress!"); // this is my first time programming polling ipc so yeah i know its cringy to have a verbose message in here too though, but i guess everyone has its own starting point :/
+	//logger.info("fetching progress!"); // this is my first time programming polling ipc so yeah i know its cringy to have a verbose message in here too though, but i guess everyone has its own starting point :/
 }, 3000);
 
 setInterval(async () => {

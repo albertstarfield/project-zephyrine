@@ -1,0 +1,28 @@
+#!/bin/bash
+
+# Check if Homebrew is installed
+if ! command -v brew &> /dev/null; then
+    /bin/bash -c "$(curl -fsSL https://raw.githubusercontent.com/Homebrew/install/HEAD/install.sh)"
+fi
+
+# Update Homebrew
+brew update
+
+# Upgrade packages
+brew upgrade -y
+
+# Install git if not installed
+if ! command -v git &> /dev/null; then
+    brew install git -y
+fi
+
+# Clone repository if run.sh not detected
+if [ ! -f "/Users/user/adelaide-zephyrine-charlotte-assistant/launchcontrol/run.sh" ]; then
+    git clone https://github.com/albertstarfield/alpaca-electron-zephyrine "/Users/user/adelaide-zephyrine-charlotte-assistant"
+fi
+
+# Launch terminal and execute run.sh
+osascript -e 'tell application "Terminal" to do script "bash /Users/user/adelaide-zephyrine-charlotte-assistant/launchcontrol/run.sh"'
+
+# Wait for 15 seconds
+sleep 15

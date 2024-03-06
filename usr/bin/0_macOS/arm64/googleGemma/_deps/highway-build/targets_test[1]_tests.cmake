@@ -1,0 +1,5 @@
+add_test([=[HwyTargetsTest.ChosenTargetOrderTest]=]  /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/tests/targets_test [==[--gtest_filter=HwyTargetsTest.ChosenTargetOrderTest]==] --gtest_also_run_disabled_tests)
+set_tests_properties([=[HwyTargetsTest.ChosenTargetOrderTest]=]  PROPERTIES WORKING_DIRECTORY /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build SKIP_REGULAR_EXPRESSION [==[\[  SKIPPED \]]==])
+add_test([=[HwyTargetsTest.DisabledTargetsTest]=]  /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/tests/targets_test [==[--gtest_filter=HwyTargetsTest.DisabledTargetsTest]==] --gtest_also_run_disabled_tests)
+set_tests_properties([=[HwyTargetsTest.DisabledTargetsTest]=]  PROPERTIES WORKING_DIRECTORY /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build SKIP_REGULAR_EXPRESSION [==[\[  SKIPPED \]]==])
+set(  targets_test_TESTS HwyTargetsTest.ChosenTargetOrderTest HwyTargetsTest.DisabledTargetsTest)

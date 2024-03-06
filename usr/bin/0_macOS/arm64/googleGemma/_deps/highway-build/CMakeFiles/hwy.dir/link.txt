@@ -1,0 +1,2 @@
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ar qc libhwy.a CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o CMakeFiles/hwy.dir/hwy/per_target.cc.o CMakeFiles/hwy.dir/hwy/print.cc.o CMakeFiles/hwy.dir/hwy/targets.cc.o CMakeFiles/hwy.dir/hwy/timer.cc.o
+/Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/ranlib libhwy.a

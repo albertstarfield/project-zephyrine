@@ -1,0 +1,14 @@
+# Target labels
+ googletest
+# Source files and their labels
+/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-download/CMakeFiles/googletest
+/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-download/CMakeFiles/googletest.rule
+/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-download/CMakeFiles/googletest-complete.rule
+/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-download/googletest-prefix/src/googletest-stamp/googletest-build.rule
+/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-download/googletest-prefix/src/googletest-stamp/googletest-configure.rule
+/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-download/googletest-prefix/src/googletest-stamp/googletest-download.rule
+/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-download/googletest-prefix/src/googletest-stamp/googletest-install.rule
+/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-download/googletest-prefix/src/googletest-stamp/googletest-mkdir.rule
+/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-download/googletest-prefix/src/googletest-stamp/googletest-patch.rule
+/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-download/googletest-prefix/src/googletest-stamp/googletest-test.rule
+/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-download/googletest-prefix/src/googletest-stamp/googletest-update.rule
