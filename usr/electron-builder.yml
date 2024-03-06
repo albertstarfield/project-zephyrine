@@ -1,0 +1,11 @@
+appId: com.as.zephyrine.electron
+nsis:
+    artifactName: Zephyrine-Electron-win-x64-v${version}.${ext}
+    shortcutName: ${productName}
+    uninstallDisplayName: ${productName}
+    createDesktopShortcut: always
+    installerIcon: icon/win/icon.ico
+    uninstallerIcon: icon/win/icon.ico
+    deleteAppDataOnUninstall: true
+npmRebuild: false
+asar: false
