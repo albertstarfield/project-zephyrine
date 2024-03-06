@@ -1,5 +1,5 @@
 #!/bin/bash
-#Wrapper to launch exec_L1 from osascript Launching Terminal
+#Wrapper to launch exec_L1 from osascript Launching Terminal so its viewable
 echo "Extracting Wrapper L1"
 cat > /tmp/exec_L1 << EOL
 #!/bin/bash
@@ -37,12 +37,6 @@ fi
 # Launch terminal and execute run.sh script
 echo "Launching terminal..."
 osascript -e 'tell application "Terminal" to do script "bash \$HOME/adelaide-zephyrine-charlotte-assistant/launchcontrol/run.sh"'
-
-# Sleep for 15 seconds
-echo "Waiting for 15 seconds..."
-sleep 15
-
-open -a safari
 
 EOL
 osascript -e 'tell application "Terminal" to do script "/bin/bash -c \"bash /tmp/exec_L1 ; rm /tmp/exec_L1 ; exit\"'\"
