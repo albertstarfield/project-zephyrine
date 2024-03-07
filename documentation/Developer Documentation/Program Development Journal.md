@@ -58,3 +58,10 @@ I suppose that's all for this entry for now.
 ---
 
 There's no such thing as overkill. Either you win or lose, and unfortunately i'm currently at the losing side and trying to catch up. Building this as my portofolio. -Albert
+
+---
+### Entry I : March 6, 2024
+---
+
+Why am I always at the bottom even I'm trying to improve my skill? Maybe that's my fate. People said that I'm always lack skill to even enter any enterprise. This is probably a trash project anyway. I think I'm going to give up now. There's no point on continuing if success isn't my destiny.
+ 
