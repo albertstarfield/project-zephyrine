@@ -191,11 +191,12 @@ document.addEventListener("DOMContentLoaded", function() {
 
 document.onreadystatechange = (event) => {
 	ipcRenderer.send("os");
+	console.log("docReadyState", document.readyState);
 	if (document.readyState == "complete") {
 		handleWindowControls();
 	}
 	document.querySelector("#path-dialog-bg > div > div.dialog-button > button.secondary").style.display = "none";
-	document.querySelector("#path-dialog-bg > div > div.dialog-title > h3").innerText = "Couldn't load model";
+	document.querySelector("#path-dialog-bg > div > div.dialog-title > h2").innerText = "Couldn't load model";
 	ipcRenderer.send("checkModelPath");
 };
 
