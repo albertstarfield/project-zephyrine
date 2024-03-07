@@ -356,13 +356,13 @@ const schema = {
 			repeat_penalty: '6.9',
 			top_k: '10',
 			top_p: '0.9',
-			temp: '1.0',
+			temp: '0.9',
 			seed: '-1',
 			qostimeoutllmchildglobal: '60000',
-			qostimeoutllmchildsubcategory: '10000',
-			qostimeoutllmchildbackbrainglobalqueuemax: '3600000',
-			qostimeoutswitch: true,
-			backbrainqueue: true,
+			qostimeoutllmchildsubcategory: '30000',
+			qostimeoutllmchildbackbrainglobalqueuemax: '36000000',
+			qostimeoutswitch: false,
+			backbrainqueue: false,
 			webAccess: true,
 			automateLoopback: false,
 			localAccess: true,
@@ -393,6 +393,7 @@ const schema = {
 	}
 };
 
+log.info(consoleLogPrefix, schema);
 // for chat initialization
 // 
 
@@ -429,12 +430,13 @@ let initStage2 = decodeBase64Init(encodedInitStage2);
 
 const store = new Store({ schema });
 const fs = require("fs");
-var modelPath = `${availableImplementedLLMModelSpecificCategory.general_conversation.filename}`
+let modelPath = `${availableImplementedLLMModelSpecificCategory.general_conversation.filename}`
 
 // Note : The developer need to find out how to load modelPath var before Legacy LoadPathSection being called which break the automation and return null for the modelPath and never able to proceed
 //var modelPath = store.get("modelPath"); // This is legacy code from the original program code, where the user need to manually input the modelPath at startup rather than automatically download
 
 function checkModelPath() {
+	log.info(consoleLogPrefix, "Checking Main General Model...")
 	if (fs.existsSync(path.resolve(modelPath))) {
 		win.webContents.send("modelPathValid", { data: true });
 		log.info(`${consoleLogPrefix} General Conversation Model Detected`);
@@ -460,7 +462,9 @@ function checkModelPath() {
 }
 
 // Legacy LoadPathSection
+// Where are you even want to send this thing if the index.js already contains the necessar checkModelPath and none of the other js code contain the ipc Reciever witht he checkModelPath name
 ipcMain.on("checkModelPath", checkModelPath);
+//checkModelPath();
 // Replaced with automatic selection using the dictionary implemented at the start of the index.js code
 /*
 ipcMain.on("checkPath", (_event, { data }) => {
@@ -1904,7 +1908,7 @@ let targetPlatform = '';
 
 
 
-// Function to blacklist seed, the seed that detected to make the model repeats the word from the input or leaks the AdditionalContext RAG method that the program used even if its instructed to not repeats the very thing 
+// Function to blacklist seed, the seed that detected to make the model repeats the word from the input or leaks the , "AdditionalContext", "DO NOT mirror the Additional Context" "The current time and date is now" "There are additional context to answer" method that the program used even if its instructed to not repeats the very thing 
 let seedBlacklist=[];
 let seedBlacklistListFile=`${path.resolve(__dirname, "badSeedTerminationList.json")}`;
 class BadSeedDetector {
@@ -1928,9 +1932,17 @@ class BadSeedDetector {
         const previousWords = this.extractWords(previousInteraction);
 
         const repeatingWords = this.findRepeatingWords(currentWords, previousWords);
-
+		log.info(consoleLogPrefix, "Detecting Repeating Word!");
         if (repeatingWords.length > 0) {
-            this.blacklistSeed(repeatingWords.join(', '));
+            this.blacklistSeed(randSeed);
+        }
+		log.info(consoleLogPrefix, "Detecting Trash Word!");
+        // New detection for specified words and phrases
+        const trashWords = ["AdditionalContext", "DO NOT mirror the Additional Context", "The current time and date is now", "There are additional context to answer", "Current time and date", "verbos"];
+        const detectedTrash = trashWords.filter(word => currentInteraction.includes(word));
+        if (detectedTrash.length > 0) {
+            log.error(consoleLogPrefix, "Trash Seed detected! Detected Keyword:", detectedTrash);
+            this.blacklistSeed(randSeed);
         }
     }
 
@@ -2589,11 +2601,13 @@ function restart() {
 let blockGUIForwarding;
 let initChatContent;
 let isitPassedtheFirstPromptYet;
+let params = store.get("params");
 
 log.info(consoleLogPrefix, "entering primed mode")
 function initChat() {
 	if (runningShell) {
 		win.webContents.send("ready");
+		log.info(consoleLogPrefix, "LLMMain Thread Ready");
 		blockGUIForwarding = false;
 		return;
 	}
@@ -2606,8 +2620,8 @@ function initChat() {
 		//res = stripAdditionalContext(res);
 		if (process.env.ptyStreamDEBUGMode === "1"){
 		log.info(consoleLogPrefix, "pty Stream",`//> ${res}`);
+		log.info(consoleLogPrefix, "debug", zephyrineHalfReady, zephyrineReady);
 		}
-		//log.info(consoleLogPrefix, "debug", zephyrineHalfReady, zephyrineReady)
 		if ((res.includes("invalid model file") || res.includes("failed to open") || (res.includes("failed to load model")) && res.includes("main: error: failed to load model")) || res.includes("command buffer 0 failed with status 5") /* Metal ggml ran out of memory vram */ || res.includes ("invalid magic number") || res.includes ("out of memory")) {
 			if (runningShell) runningShell.kill();
 			//log.info(consoleLogPrefix, res);
@@ -2671,12 +2685,11 @@ function initChat() {
 			win.webContents.send("result", {
 				data: res
 			});
-			
-			
+
 		}
 	});
 
-	const params = store.get("params");
+	//const params = store.get("params");
 	//revPrompt = "### Instruction: \n {prompt}";
 	let revPrompt = "‌‌";
 	var promptFile = "universalPrompt.txt";
