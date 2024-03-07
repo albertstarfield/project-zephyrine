@@ -53,10 +53,10 @@ RM = /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp
+CMAKE_SOURCE_DIR = /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build
+CMAKE_BINARY_DIR = /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build
 
 # Include any dependencies generated for this target.
 include _deps/highway-build/CMakeFiles/hwy.dir/depend.make
@@ -72,86 +72,86 @@ include _deps/highway-build/CMakeFiles/hwy.dir/flags.make
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/flags.make
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o: _deps/highway-src/hwy/aligned_allocator.cc
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o -MF CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o.d -o CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o -c /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/aligned_allocator.cc
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o -MF CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o.d -o CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o -c /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/aligned_allocator.cc
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.i"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/aligned_allocator.cc > CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/aligned_allocator.cc > CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.i
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.s"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/aligned_allocator.cc -o CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/aligned_allocator.cc -o CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.s
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/flags.make
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o: _deps/highway-src/hwy/nanobenchmark.cc
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o -MF CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o.d -o CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o -c /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/nanobenchmark.cc
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o -MF CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o.d -o CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o -c /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/nanobenchmark.cc
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.i"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/nanobenchmark.cc > CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/nanobenchmark.cc > CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.i
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.s"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/nanobenchmark.cc -o CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/nanobenchmark.cc -o CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.s
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/flags.make
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.o: _deps/highway-src/hwy/per_target.cc
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.o"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.o -MF CMakeFiles/hwy.dir/hwy/per_target.cc.o.d -o CMakeFiles/hwy.dir/hwy/per_target.cc.o -c /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/per_target.cc
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.o"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.o -MF CMakeFiles/hwy.dir/hwy/per_target.cc.o.d -o CMakeFiles/hwy.dir/hwy/per_target.cc.o -c /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/per_target.cc
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/hwy.dir/hwy/per_target.cc.i"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/per_target.cc > CMakeFiles/hwy.dir/hwy/per_target.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/per_target.cc > CMakeFiles/hwy.dir/hwy/per_target.cc.i
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/hwy.dir/hwy/per_target.cc.s"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/per_target.cc -o CMakeFiles/hwy.dir/hwy/per_target.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/per_target.cc -o CMakeFiles/hwy.dir/hwy/per_target.cc.s
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/flags.make
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.o: _deps/highway-src/hwy/print.cc
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.o"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.o -MF CMakeFiles/hwy.dir/hwy/print.cc.o.d -o CMakeFiles/hwy.dir/hwy/print.cc.o -c /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/print.cc
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.o"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.o -MF CMakeFiles/hwy.dir/hwy/print.cc.o.d -o CMakeFiles/hwy.dir/hwy/print.cc.o -c /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/print.cc
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/hwy.dir/hwy/print.cc.i"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/print.cc > CMakeFiles/hwy.dir/hwy/print.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/print.cc > CMakeFiles/hwy.dir/hwy/print.cc.i
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/hwy.dir/hwy/print.cc.s"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/print.cc -o CMakeFiles/hwy.dir/hwy/print.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/print.cc -o CMakeFiles/hwy.dir/hwy/print.cc.s
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/flags.make
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.o: _deps/highway-src/hwy/targets.cc
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.o"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.o -MF CMakeFiles/hwy.dir/hwy/targets.cc.o.d -o CMakeFiles/hwy.dir/hwy/targets.cc.o -c /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/targets.cc
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.o"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.o -MF CMakeFiles/hwy.dir/hwy/targets.cc.o.d -o CMakeFiles/hwy.dir/hwy/targets.cc.o -c /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/targets.cc
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/hwy.dir/hwy/targets.cc.i"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/targets.cc > CMakeFiles/hwy.dir/hwy/targets.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/targets.cc > CMakeFiles/hwy.dir/hwy/targets.cc.i
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/hwy.dir/hwy/targets.cc.s"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/targets.cc -o CMakeFiles/hwy.dir/hwy/targets.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/targets.cc -o CMakeFiles/hwy.dir/hwy/targets.cc.s
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/flags.make
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.o: _deps/highway-src/hwy/timer.cc
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.o: _deps/highway-build/CMakeFiles/hwy.dir/compiler_depend.ts
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.o"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.o -MF CMakeFiles/hwy.dir/hwy/timer.cc.o.d -o CMakeFiles/hwy.dir/hwy/timer.cc.o -c /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/timer.cc
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Building CXX object _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.o"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -MD -MT _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.o -MF CMakeFiles/hwy.dir/hwy/timer.cc.o.d -o CMakeFiles/hwy.dir/hwy/timer.cc.o -c /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/timer.cc
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.i: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Preprocessing CXX source to CMakeFiles/hwy.dir/hwy/timer.cc.i"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/timer.cc > CMakeFiles/hwy.dir/hwy/timer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -E /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/timer.cc > CMakeFiles/hwy.dir/hwy/timer.cc.i
 
 _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.s: cmake_force
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green "Compiling CXX source to assembly CMakeFiles/hwy.dir/hwy/timer.cc.s"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/timer.cc -o CMakeFiles/hwy.dir/hwy/timer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && /Applications/Xcode.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++ $(CXX_DEFINES) $(CXX_INCLUDES) $(CXX_FLAGS) -S /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/timer.cc -o CMakeFiles/hwy.dir/hwy/timer.cc.s
 
 # Object files for target hwy
 hwy_OBJECTS = \
@@ -174,19 +174,19 @@ _deps/highway-build/libhwy.a: _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.c
 _deps/highway-build/libhwy.a: _deps/highway-build/CMakeFiles/hwy.dir/build.make
 _deps/highway-build/libhwy.a: _deps/highway-src/hwy/hwy.version
 _deps/highway-build/libhwy.a: _deps/highway-build/CMakeFiles/hwy.dir/link.txt
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Linking CXX static library libhwy.a"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && $(CMAKE_COMMAND) -P CMakeFiles/hwy.dir/cmake_clean_target.cmake
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/hwy.dir/link.txt --verbose=$(VERBOSE)
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --green --bold --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "Linking CXX static library libhwy.a"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && $(CMAKE_COMMAND) -P CMakeFiles/hwy.dir/cmake_clean_target.cmake
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && $(CMAKE_COMMAND) -E cmake_link_script CMakeFiles/hwy.dir/link.txt --verbose=$(VERBOSE)
 
 # Rule to build all files generated by this target.
 _deps/highway-build/CMakeFiles/hwy.dir/build: _deps/highway-build/libhwy.a
 .PHONY : _deps/highway-build/CMakeFiles/hwy.dir/build
 
 _deps/highway-build/CMakeFiles/hwy.dir/clean:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build && $(CMAKE_COMMAND) -P CMakeFiles/hwy.dir/cmake_clean.cmake
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build && $(CMAKE_COMMAND) -P CMakeFiles/hwy.dir/cmake_clean.cmake
 .PHONY : _deps/highway-build/CMakeFiles/hwy.dir/clean
 
 _deps/highway-build/CMakeFiles/hwy.dir/depend:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-src /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/CMakeFiles/hwy.dir/DependInfo.cmake "--color=$(COLOR)"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build/CMakeFiles/hwy.dir/DependInfo.cmake "--color=$(COLOR)"
 .PHONY : _deps/highway-build/CMakeFiles/hwy.dir/depend
 

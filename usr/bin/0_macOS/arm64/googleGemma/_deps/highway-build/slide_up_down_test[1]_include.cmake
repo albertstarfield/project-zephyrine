@@ -1,5 +1,5 @@
-if(EXISTS "/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/slide_up_down_test[1]_tests.cmake")
-  include("/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/slide_up_down_test[1]_tests.cmake")
+if(EXISTS "/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build/slide_up_down_test[1]_tests.cmake")
+  include("/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build/slide_up_down_test[1]_tests.cmake")
 else()
   add_test(slide_up_down_test_NOT_BUILT slide_up_down_test_NOT_BUILT)
 endif()

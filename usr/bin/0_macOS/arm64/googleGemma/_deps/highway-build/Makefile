@@ -57,10 +57,10 @@ RM = /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp
+CMAKE_SOURCE_DIR = /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build
+CMAKE_BINARY_DIR = /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -68,7 +68,7 @@ CMAKE_BINARY_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/u
 # Special rule for the target package
 package: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Run CPack packaging tool..."
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackConfig.cmake
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackConfig.cmake
 .PHONY : package
 
 # Special rule for the target package
@@ -78,7 +78,7 @@ package/fast: package
 # Special rule for the target package_source
 package_source:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Run CPack packaging tool for source..."
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackSourceConfig.cmake /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CPackSourceConfig.cmake
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackSourceConfig.cmake /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CPackSourceConfig.cmake
 .PHONY : package_source
 
 # Special rule for the target package_source
@@ -152,14 +152,14 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -E cmake_progress_start /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build//CMakeFiles/progress.marks
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles 0
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -E cmake_progress_start /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build//CMakeFiles/progress.marks
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/clean
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/clean
 .PHONY : clean
 
 # The main clean target
@@ -168,22 +168,22 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/preinstall
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/preinstall
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/hwy.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/hwy.dir/rule
 
 # Convenience name for target.
@@ -192,12 +192,12 @@ hwy: _deps/highway-build/CMakeFiles/hwy.dir/rule
 
 # fast build rule for target.
 hwy/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/build
 .PHONY : hwy/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/hwy_contrib.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy_contrib.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy_contrib.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/hwy_contrib.dir/rule
 
 # Convenience name for target.
@@ -206,12 +206,12 @@ hwy_contrib: _deps/highway-build/CMakeFiles/hwy_contrib.dir/rule
 
 # fast build rule for target.
 hwy_contrib/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/build
 .PHONY : hwy_contrib/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/hwy_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/hwy_test.dir/rule
 
 # Convenience name for target.
@@ -220,12 +220,12 @@ hwy_test: _deps/highway-build/CMakeFiles/hwy_test.dir/rule
 
 # fast build rule for target.
 hwy_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_test.dir/build.make _deps/highway-build/CMakeFiles/hwy_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_test.dir/build.make _deps/highway-build/CMakeFiles/hwy_test.dir/build
 .PHONY : hwy_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/hwy_list_targets.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy_list_targets.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy_list_targets.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/hwy_list_targets.dir/rule
 
 # Convenience name for target.
@@ -234,12 +234,12 @@ hwy_list_targets: _deps/highway-build/CMakeFiles/hwy_list_targets.dir/rule
 
 # fast build rule for target.
 hwy_list_targets/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_list_targets.dir/build.make _deps/highway-build/CMakeFiles/hwy_list_targets.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_list_targets.dir/build.make _deps/highway-build/CMakeFiles/hwy_list_targets.dir/build
 .PHONY : hwy_list_targets/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/hwy_benchmark.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy_benchmark.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy_benchmark.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/hwy_benchmark.dir/rule
 
 # Convenience name for target.
@@ -248,12 +248,12 @@ hwy_benchmark: _deps/highway-build/CMakeFiles/hwy_benchmark.dir/rule
 
 # fast build rule for target.
 hwy_benchmark/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_benchmark.dir/build.make _deps/highway-build/CMakeFiles/hwy_benchmark.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_benchmark.dir/build.make _deps/highway-build/CMakeFiles/hwy_benchmark.dir/build
 .PHONY : hwy_benchmark/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/rule
 
 # Convenience name for target.
@@ -262,12 +262,12 @@ hwy_profiler_example: _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/ru
 
 # fast build rule for target.
 hwy_profiler_example/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/build.make _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/build.make _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/build
 .PHONY : hwy_profiler_example/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/Experimental.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/Experimental.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/Experimental.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/Experimental.dir/rule
 
 # Convenience name for target.
@@ -276,12 +276,12 @@ Experimental: _deps/highway-build/CMakeFiles/Experimental.dir/rule
 
 # fast build rule for target.
 Experimental/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/Experimental.dir/build.make _deps/highway-build/CMakeFiles/Experimental.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/Experimental.dir/build.make _deps/highway-build/CMakeFiles/Experimental.dir/build
 .PHONY : Experimental/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/Nightly.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/Nightly.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/Nightly.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/Nightly.dir/rule
 
 # Convenience name for target.
@@ -290,12 +290,12 @@ Nightly: _deps/highway-build/CMakeFiles/Nightly.dir/rule
 
 # fast build rule for target.
 Nightly/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/Nightly.dir/build.make _deps/highway-build/CMakeFiles/Nightly.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/Nightly.dir/build.make _deps/highway-build/CMakeFiles/Nightly.dir/build
 .PHONY : Nightly/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/Continuous.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/Continuous.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/Continuous.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/Continuous.dir/rule
 
 # Convenience name for target.
@@ -304,12 +304,12 @@ Continuous: _deps/highway-build/CMakeFiles/Continuous.dir/rule
 
 # fast build rule for target.
 Continuous/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/Continuous.dir/build.make _deps/highway-build/CMakeFiles/Continuous.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/Continuous.dir/build.make _deps/highway-build/CMakeFiles/Continuous.dir/build
 .PHONY : Continuous/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/NightlyMemoryCheck.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyMemoryCheck.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyMemoryCheck.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/NightlyMemoryCheck.dir/rule
 
 # Convenience name for target.
@@ -318,12 +318,12 @@ NightlyMemoryCheck: _deps/highway-build/CMakeFiles/NightlyMemoryCheck.dir/rule
 
 # fast build rule for target.
 NightlyMemoryCheck/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyMemoryCheck.dir/build.make _deps/highway-build/CMakeFiles/NightlyMemoryCheck.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyMemoryCheck.dir/build.make _deps/highway-build/CMakeFiles/NightlyMemoryCheck.dir/build
 .PHONY : NightlyMemoryCheck/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/NightlyStart.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyStart.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyStart.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/NightlyStart.dir/rule
 
 # Convenience name for target.
@@ -332,12 +332,12 @@ NightlyStart: _deps/highway-build/CMakeFiles/NightlyStart.dir/rule
 
 # fast build rule for target.
 NightlyStart/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyStart.dir/build.make _deps/highway-build/CMakeFiles/NightlyStart.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyStart.dir/build.make _deps/highway-build/CMakeFiles/NightlyStart.dir/build
 .PHONY : NightlyStart/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/NightlyUpdate.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyUpdate.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyUpdate.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/NightlyUpdate.dir/rule
 
 # Convenience name for target.
@@ -346,12 +346,12 @@ NightlyUpdate: _deps/highway-build/CMakeFiles/NightlyUpdate.dir/rule
 
 # fast build rule for target.
 NightlyUpdate/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyUpdate.dir/build.make _deps/highway-build/CMakeFiles/NightlyUpdate.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyUpdate.dir/build.make _deps/highway-build/CMakeFiles/NightlyUpdate.dir/build
 .PHONY : NightlyUpdate/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/NightlyConfigure.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyConfigure.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyConfigure.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/NightlyConfigure.dir/rule
 
 # Convenience name for target.
@@ -360,12 +360,12 @@ NightlyConfigure: _deps/highway-build/CMakeFiles/NightlyConfigure.dir/rule
 
 # fast build rule for target.
 NightlyConfigure/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyConfigure.dir/build.make _deps/highway-build/CMakeFiles/NightlyConfigure.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyConfigure.dir/build.make _deps/highway-build/CMakeFiles/NightlyConfigure.dir/build
 .PHONY : NightlyConfigure/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/NightlyBuild.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyBuild.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyBuild.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/NightlyBuild.dir/rule
 
 # Convenience name for target.
@@ -374,12 +374,12 @@ NightlyBuild: _deps/highway-build/CMakeFiles/NightlyBuild.dir/rule
 
 # fast build rule for target.
 NightlyBuild/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyBuild.dir/build.make _deps/highway-build/CMakeFiles/NightlyBuild.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyBuild.dir/build.make _deps/highway-build/CMakeFiles/NightlyBuild.dir/build
 .PHONY : NightlyBuild/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/NightlyTest.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyTest.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyTest.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/NightlyTest.dir/rule
 
 # Convenience name for target.
@@ -388,12 +388,12 @@ NightlyTest: _deps/highway-build/CMakeFiles/NightlyTest.dir/rule
 
 # fast build rule for target.
 NightlyTest/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyTest.dir/build.make _deps/highway-build/CMakeFiles/NightlyTest.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyTest.dir/build.make _deps/highway-build/CMakeFiles/NightlyTest.dir/build
 .PHONY : NightlyTest/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/NightlyCoverage.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyCoverage.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyCoverage.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/NightlyCoverage.dir/rule
 
 # Convenience name for target.
@@ -402,12 +402,12 @@ NightlyCoverage: _deps/highway-build/CMakeFiles/NightlyCoverage.dir/rule
 
 # fast build rule for target.
 NightlyCoverage/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyCoverage.dir/build.make _deps/highway-build/CMakeFiles/NightlyCoverage.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyCoverage.dir/build.make _deps/highway-build/CMakeFiles/NightlyCoverage.dir/build
 .PHONY : NightlyCoverage/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/NightlyMemCheck.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyMemCheck.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlyMemCheck.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/NightlyMemCheck.dir/rule
 
 # Convenience name for target.
@@ -416,12 +416,12 @@ NightlyMemCheck: _deps/highway-build/CMakeFiles/NightlyMemCheck.dir/rule
 
 # fast build rule for target.
 NightlyMemCheck/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyMemCheck.dir/build.make _deps/highway-build/CMakeFiles/NightlyMemCheck.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlyMemCheck.dir/build.make _deps/highway-build/CMakeFiles/NightlyMemCheck.dir/build
 .PHONY : NightlyMemCheck/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/NightlySubmit.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlySubmit.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/NightlySubmit.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/NightlySubmit.dir/rule
 
 # Convenience name for target.
@@ -430,12 +430,12 @@ NightlySubmit: _deps/highway-build/CMakeFiles/NightlySubmit.dir/rule
 
 # fast build rule for target.
 NightlySubmit/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlySubmit.dir/build.make _deps/highway-build/CMakeFiles/NightlySubmit.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/NightlySubmit.dir/build.make _deps/highway-build/CMakeFiles/NightlySubmit.dir/build
 .PHONY : NightlySubmit/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ExperimentalStart.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalStart.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalStart.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ExperimentalStart.dir/rule
 
 # Convenience name for target.
@@ -444,12 +444,12 @@ ExperimentalStart: _deps/highway-build/CMakeFiles/ExperimentalStart.dir/rule
 
 # fast build rule for target.
 ExperimentalStart/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalStart.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalStart.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalStart.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalStart.dir/build
 .PHONY : ExperimentalStart/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ExperimentalUpdate.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalUpdate.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalUpdate.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ExperimentalUpdate.dir/rule
 
 # Convenience name for target.
@@ -458,12 +458,12 @@ ExperimentalUpdate: _deps/highway-build/CMakeFiles/ExperimentalUpdate.dir/rule
 
 # fast build rule for target.
 ExperimentalUpdate/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalUpdate.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalUpdate.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalUpdate.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalUpdate.dir/build
 .PHONY : ExperimentalUpdate/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ExperimentalConfigure.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalConfigure.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalConfigure.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ExperimentalConfigure.dir/rule
 
 # Convenience name for target.
@@ -472,12 +472,12 @@ ExperimentalConfigure: _deps/highway-build/CMakeFiles/ExperimentalConfigure.dir/
 
 # fast build rule for target.
 ExperimentalConfigure/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalConfigure.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalConfigure.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalConfigure.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalConfigure.dir/build
 .PHONY : ExperimentalConfigure/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ExperimentalBuild.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalBuild.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalBuild.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ExperimentalBuild.dir/rule
 
 # Convenience name for target.
@@ -486,12 +486,12 @@ ExperimentalBuild: _deps/highway-build/CMakeFiles/ExperimentalBuild.dir/rule
 
 # fast build rule for target.
 ExperimentalBuild/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalBuild.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalBuild.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalBuild.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalBuild.dir/build
 .PHONY : ExperimentalBuild/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ExperimentalTest.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalTest.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalTest.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ExperimentalTest.dir/rule
 
 # Convenience name for target.
@@ -500,12 +500,12 @@ ExperimentalTest: _deps/highway-build/CMakeFiles/ExperimentalTest.dir/rule
 
 # fast build rule for target.
 ExperimentalTest/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalTest.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalTest.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalTest.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalTest.dir/build
 .PHONY : ExperimentalTest/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ExperimentalCoverage.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalCoverage.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalCoverage.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ExperimentalCoverage.dir/rule
 
 # Convenience name for target.
@@ -514,12 +514,12 @@ ExperimentalCoverage: _deps/highway-build/CMakeFiles/ExperimentalCoverage.dir/ru
 
 # fast build rule for target.
 ExperimentalCoverage/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalCoverage.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalCoverage.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalCoverage.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalCoverage.dir/build
 .PHONY : ExperimentalCoverage/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ExperimentalMemCheck.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalMemCheck.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalMemCheck.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ExperimentalMemCheck.dir/rule
 
 # Convenience name for target.
@@ -528,12 +528,12 @@ ExperimentalMemCheck: _deps/highway-build/CMakeFiles/ExperimentalMemCheck.dir/ru
 
 # fast build rule for target.
 ExperimentalMemCheck/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalMemCheck.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalMemCheck.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalMemCheck.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalMemCheck.dir/build
 .PHONY : ExperimentalMemCheck/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ExperimentalSubmit.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalSubmit.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ExperimentalSubmit.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ExperimentalSubmit.dir/rule
 
 # Convenience name for target.
@@ -542,12 +542,12 @@ ExperimentalSubmit: _deps/highway-build/CMakeFiles/ExperimentalSubmit.dir/rule
 
 # fast build rule for target.
 ExperimentalSubmit/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalSubmit.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalSubmit.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ExperimentalSubmit.dir/build.make _deps/highway-build/CMakeFiles/ExperimentalSubmit.dir/build
 .PHONY : ExperimentalSubmit/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ContinuousStart.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousStart.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousStart.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ContinuousStart.dir/rule
 
 # Convenience name for target.
@@ -556,12 +556,12 @@ ContinuousStart: _deps/highway-build/CMakeFiles/ContinuousStart.dir/rule
 
 # fast build rule for target.
 ContinuousStart/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousStart.dir/build.make _deps/highway-build/CMakeFiles/ContinuousStart.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousStart.dir/build.make _deps/highway-build/CMakeFiles/ContinuousStart.dir/build
 .PHONY : ContinuousStart/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ContinuousUpdate.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousUpdate.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousUpdate.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ContinuousUpdate.dir/rule
 
 # Convenience name for target.
@@ -570,12 +570,12 @@ ContinuousUpdate: _deps/highway-build/CMakeFiles/ContinuousUpdate.dir/rule
 
 # fast build rule for target.
 ContinuousUpdate/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousUpdate.dir/build.make _deps/highway-build/CMakeFiles/ContinuousUpdate.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousUpdate.dir/build.make _deps/highway-build/CMakeFiles/ContinuousUpdate.dir/build
 .PHONY : ContinuousUpdate/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ContinuousConfigure.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousConfigure.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousConfigure.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ContinuousConfigure.dir/rule
 
 # Convenience name for target.
@@ -584,12 +584,12 @@ ContinuousConfigure: _deps/highway-build/CMakeFiles/ContinuousConfigure.dir/rule
 
 # fast build rule for target.
 ContinuousConfigure/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousConfigure.dir/build.make _deps/highway-build/CMakeFiles/ContinuousConfigure.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousConfigure.dir/build.make _deps/highway-build/CMakeFiles/ContinuousConfigure.dir/build
 .PHONY : ContinuousConfigure/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ContinuousBuild.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousBuild.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousBuild.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ContinuousBuild.dir/rule
 
 # Convenience name for target.
@@ -598,12 +598,12 @@ ContinuousBuild: _deps/highway-build/CMakeFiles/ContinuousBuild.dir/rule
 
 # fast build rule for target.
 ContinuousBuild/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousBuild.dir/build.make _deps/highway-build/CMakeFiles/ContinuousBuild.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousBuild.dir/build.make _deps/highway-build/CMakeFiles/ContinuousBuild.dir/build
 .PHONY : ContinuousBuild/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ContinuousTest.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousTest.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousTest.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ContinuousTest.dir/rule
 
 # Convenience name for target.
@@ -612,12 +612,12 @@ ContinuousTest: _deps/highway-build/CMakeFiles/ContinuousTest.dir/rule
 
 # fast build rule for target.
 ContinuousTest/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousTest.dir/build.make _deps/highway-build/CMakeFiles/ContinuousTest.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousTest.dir/build.make _deps/highway-build/CMakeFiles/ContinuousTest.dir/build
 .PHONY : ContinuousTest/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ContinuousCoverage.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousCoverage.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousCoverage.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ContinuousCoverage.dir/rule
 
 # Convenience name for target.
@@ -626,12 +626,12 @@ ContinuousCoverage: _deps/highway-build/CMakeFiles/ContinuousCoverage.dir/rule
 
 # fast build rule for target.
 ContinuousCoverage/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousCoverage.dir/build.make _deps/highway-build/CMakeFiles/ContinuousCoverage.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousCoverage.dir/build.make _deps/highway-build/CMakeFiles/ContinuousCoverage.dir/build
 .PHONY : ContinuousCoverage/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ContinuousMemCheck.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousMemCheck.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousMemCheck.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ContinuousMemCheck.dir/rule
 
 # Convenience name for target.
@@ -640,12 +640,12 @@ ContinuousMemCheck: _deps/highway-build/CMakeFiles/ContinuousMemCheck.dir/rule
 
 # fast build rule for target.
 ContinuousMemCheck/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousMemCheck.dir/build.make _deps/highway-build/CMakeFiles/ContinuousMemCheck.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousMemCheck.dir/build.make _deps/highway-build/CMakeFiles/ContinuousMemCheck.dir/build
 .PHONY : ContinuousMemCheck/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/ContinuousSubmit.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousSubmit.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/ContinuousSubmit.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/ContinuousSubmit.dir/rule
 
 # Convenience name for target.
@@ -654,12 +654,12 @@ ContinuousSubmit: _deps/highway-build/CMakeFiles/ContinuousSubmit.dir/rule
 
 # fast build rule for target.
 ContinuousSubmit/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousSubmit.dir/build.make _deps/highway-build/CMakeFiles/ContinuousSubmit.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/ContinuousSubmit.dir/build.make _deps/highway-build/CMakeFiles/ContinuousSubmit.dir/build
 .PHONY : ContinuousSubmit/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/copy_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/copy_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/copy_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/copy_test.dir/rule
 
 # Convenience name for target.
@@ -668,12 +668,12 @@ copy_test: _deps/highway-build/CMakeFiles/copy_test.dir/rule
 
 # fast build rule for target.
 copy_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/copy_test.dir/build.make _deps/highway-build/CMakeFiles/copy_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/copy_test.dir/build.make _deps/highway-build/CMakeFiles/copy_test.dir/build
 .PHONY : copy_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/find_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/find_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/find_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/find_test.dir/rule
 
 # Convenience name for target.
@@ -682,12 +682,12 @@ find_test: _deps/highway-build/CMakeFiles/find_test.dir/rule
 
 # fast build rule for target.
 find_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/find_test.dir/build.make _deps/highway-build/CMakeFiles/find_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/find_test.dir/build.make _deps/highway-build/CMakeFiles/find_test.dir/build
 .PHONY : find_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/transform_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/transform_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/transform_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/transform_test.dir/rule
 
 # Convenience name for target.
@@ -696,12 +696,12 @@ transform_test: _deps/highway-build/CMakeFiles/transform_test.dir/rule
 
 # fast build rule for target.
 transform_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/transform_test.dir/build.make _deps/highway-build/CMakeFiles/transform_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/transform_test.dir/build.make _deps/highway-build/CMakeFiles/transform_test.dir/build
 .PHONY : transform_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/rule
 
 # Convenience name for target.
@@ -710,12 +710,12 @@ aligned_allocator_test: _deps/highway-build/CMakeFiles/aligned_allocator_test.di
 
 # fast build rule for target.
 aligned_allocator_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/build.make _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/build.make _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/build
 .PHONY : aligned_allocator_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/base_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/base_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/base_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/base_test.dir/rule
 
 # Convenience name for target.
@@ -724,12 +724,12 @@ base_test: _deps/highway-build/CMakeFiles/base_test.dir/rule
 
 # fast build rule for target.
 base_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/base_test.dir/build.make _deps/highway-build/CMakeFiles/base_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/base_test.dir/build.make _deps/highway-build/CMakeFiles/base_test.dir/build
 .PHONY : base_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/highway_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/highway_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/highway_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/highway_test.dir/rule
 
 # Convenience name for target.
@@ -738,12 +738,12 @@ highway_test: _deps/highway-build/CMakeFiles/highway_test.dir/rule
 
 # fast build rule for target.
 highway_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/highway_test.dir/build.make _deps/highway-build/CMakeFiles/highway_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/highway_test.dir/build.make _deps/highway-build/CMakeFiles/highway_test.dir/build
 .PHONY : highway_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/rule
 
 # Convenience name for target.
@@ -752,12 +752,12 @@ nanobenchmark_test: _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/rule
 
 # fast build rule for target.
 nanobenchmark_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/build.make _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/build.make _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/build
 .PHONY : nanobenchmark_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/targets_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/targets_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/targets_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/targets_test.dir/rule
 
 # Convenience name for target.
@@ -766,12 +766,12 @@ targets_test: _deps/highway-build/CMakeFiles/targets_test.dir/rule
 
 # fast build rule for target.
 targets_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/targets_test.dir/build.make _deps/highway-build/CMakeFiles/targets_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/targets_test.dir/build.make _deps/highway-build/CMakeFiles/targets_test.dir/build
 .PHONY : targets_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/skeleton_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/skeleton_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/skeleton_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/skeleton_test.dir/rule
 
 # Convenience name for target.
@@ -780,12 +780,12 @@ skeleton_test: _deps/highway-build/CMakeFiles/skeleton_test.dir/rule
 
 # fast build rule for target.
 skeleton_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/build
 .PHONY : skeleton_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/arithmetic_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/arithmetic_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/arithmetic_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/arithmetic_test.dir/rule
 
 # Convenience name for target.
@@ -794,12 +794,12 @@ arithmetic_test: _deps/highway-build/CMakeFiles/arithmetic_test.dir/rule
 
 # fast build rule for target.
 arithmetic_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/arithmetic_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/arithmetic_test.dir/build
 .PHONY : arithmetic_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/rule
 
 # Convenience name for target.
@@ -808,12 +808,12 @@ blockwise_shift_test: _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/ru
 
 # fast build rule for target.
 blockwise_shift_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/build
 .PHONY : blockwise_shift_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/blockwise_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/blockwise_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/blockwise_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/blockwise_test.dir/rule
 
 # Convenience name for target.
@@ -822,12 +822,12 @@ blockwise_test: _deps/highway-build/CMakeFiles/blockwise_test.dir/rule
 
 # fast build rule for target.
 blockwise_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_test.dir/build
 .PHONY : blockwise_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/cast_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/cast_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/cast_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/cast_test.dir/rule
 
 # Convenience name for target.
@@ -836,12 +836,12 @@ cast_test: _deps/highway-build/CMakeFiles/cast_test.dir/rule
 
 # fast build rule for target.
 cast_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/cast_test.dir/build.make _deps/highway-build/CMakeFiles/cast_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/cast_test.dir/build.make _deps/highway-build/CMakeFiles/cast_test.dir/build
 .PHONY : cast_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/combine_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/combine_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/combine_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/combine_test.dir/rule
 
 # Convenience name for target.
@@ -850,12 +850,12 @@ combine_test: _deps/highway-build/CMakeFiles/combine_test.dir/rule
 
 # fast build rule for target.
 combine_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/combine_test.dir/build.make _deps/highway-build/CMakeFiles/combine_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/combine_test.dir/build.make _deps/highway-build/CMakeFiles/combine_test.dir/build
 .PHONY : combine_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/compare_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/compare_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/compare_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/compare_test.dir/rule
 
 # Convenience name for target.
@@ -864,12 +864,12 @@ compare_test: _deps/highway-build/CMakeFiles/compare_test.dir/rule
 
 # fast build rule for target.
 compare_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compare_test.dir/build.make _deps/highway-build/CMakeFiles/compare_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compare_test.dir/build.make _deps/highway-build/CMakeFiles/compare_test.dir/build
 .PHONY : compare_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/compress_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/compress_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/compress_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/compress_test.dir/rule
 
 # Convenience name for target.
@@ -878,12 +878,12 @@ compress_test: _deps/highway-build/CMakeFiles/compress_test.dir/rule
 
 # fast build rule for target.
 compress_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compress_test.dir/build.make _deps/highway-build/CMakeFiles/compress_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compress_test.dir/build.make _deps/highway-build/CMakeFiles/compress_test.dir/build
 .PHONY : compress_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/convert_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/convert_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/convert_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/convert_test.dir/rule
 
 # Convenience name for target.
@@ -892,12 +892,12 @@ convert_test: _deps/highway-build/CMakeFiles/convert_test.dir/rule
 
 # fast build rule for target.
 convert_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/convert_test.dir/build.make _deps/highway-build/CMakeFiles/convert_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/convert_test.dir/build.make _deps/highway-build/CMakeFiles/convert_test.dir/build
 .PHONY : convert_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/count_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/count_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/count_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/count_test.dir/rule
 
 # Convenience name for target.
@@ -906,12 +906,12 @@ count_test: _deps/highway-build/CMakeFiles/count_test.dir/rule
 
 # fast build rule for target.
 count_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/count_test.dir/build.make _deps/highway-build/CMakeFiles/count_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/count_test.dir/build.make _deps/highway-build/CMakeFiles/count_test.dir/build
 .PHONY : count_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/crypto_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/crypto_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/crypto_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/crypto_test.dir/rule
 
 # Convenience name for target.
@@ -920,12 +920,12 @@ crypto_test: _deps/highway-build/CMakeFiles/crypto_test.dir/rule
 
 # fast build rule for target.
 crypto_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/crypto_test.dir/build.make _deps/highway-build/CMakeFiles/crypto_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/crypto_test.dir/build.make _deps/highway-build/CMakeFiles/crypto_test.dir/build
 .PHONY : crypto_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/demote_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/demote_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/demote_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/demote_test.dir/rule
 
 # Convenience name for target.
@@ -934,12 +934,12 @@ demote_test: _deps/highway-build/CMakeFiles/demote_test.dir/rule
 
 # fast build rule for target.
 demote_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/demote_test.dir/build.make _deps/highway-build/CMakeFiles/demote_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/demote_test.dir/build.make _deps/highway-build/CMakeFiles/demote_test.dir/build
 .PHONY : demote_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/dup128_vec_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/dup128_vec_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/dup128_vec_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/dup128_vec_test.dir/rule
 
 # Convenience name for target.
@@ -948,12 +948,12 @@ dup128_vec_test: _deps/highway-build/CMakeFiles/dup128_vec_test.dir/rule
 
 # fast build rule for target.
 dup128_vec_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dup128_vec_test.dir/build.make _deps/highway-build/CMakeFiles/dup128_vec_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dup128_vec_test.dir/build.make _deps/highway-build/CMakeFiles/dup128_vec_test.dir/build
 .PHONY : dup128_vec_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/expand_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/expand_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/expand_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/expand_test.dir/rule
 
 # Convenience name for target.
@@ -962,12 +962,12 @@ expand_test: _deps/highway-build/CMakeFiles/expand_test.dir/rule
 
 # fast build rule for target.
 expand_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/expand_test.dir/build.make _deps/highway-build/CMakeFiles/expand_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/expand_test.dir/build.make _deps/highway-build/CMakeFiles/expand_test.dir/build
 .PHONY : expand_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/float_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/float_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/float_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/float_test.dir/rule
 
 # Convenience name for target.
@@ -976,12 +976,12 @@ float_test: _deps/highway-build/CMakeFiles/float_test.dir/rule
 
 # fast build rule for target.
 float_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/float_test.dir/build.make _deps/highway-build/CMakeFiles/float_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/float_test.dir/build.make _deps/highway-build/CMakeFiles/float_test.dir/build
 .PHONY : float_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/foreach_vec_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/foreach_vec_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/foreach_vec_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/foreach_vec_test.dir/rule
 
 # Convenience name for target.
@@ -990,12 +990,12 @@ foreach_vec_test: _deps/highway-build/CMakeFiles/foreach_vec_test.dir/rule
 
 # fast build rule for target.
 foreach_vec_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/foreach_vec_test.dir/build.make _deps/highway-build/CMakeFiles/foreach_vec_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/foreach_vec_test.dir/build.make _deps/highway-build/CMakeFiles/foreach_vec_test.dir/build
 .PHONY : foreach_vec_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/if_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/if_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/if_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/if_test.dir/rule
 
 # Convenience name for target.
@@ -1004,12 +1004,12 @@ if_test: _deps/highway-build/CMakeFiles/if_test.dir/rule
 
 # fast build rule for target.
 if_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/if_test.dir/build.make _deps/highway-build/CMakeFiles/if_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/if_test.dir/build.make _deps/highway-build/CMakeFiles/if_test.dir/build
 .PHONY : if_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/interleaved_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/interleaved_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/interleaved_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/interleaved_test.dir/rule
 
 # Convenience name for target.
@@ -1018,12 +1018,12 @@ interleaved_test: _deps/highway-build/CMakeFiles/interleaved_test.dir/rule
 
 # fast build rule for target.
 interleaved_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/interleaved_test.dir/build.make _deps/highway-build/CMakeFiles/interleaved_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/interleaved_test.dir/build.make _deps/highway-build/CMakeFiles/interleaved_test.dir/build
 .PHONY : interleaved_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/logical_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/logical_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/logical_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/logical_test.dir/rule
 
 # Convenience name for target.
@@ -1032,12 +1032,12 @@ logical_test: _deps/highway-build/CMakeFiles/logical_test.dir/rule
 
 # fast build rule for target.
 logical_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/logical_test.dir/build.make _deps/highway-build/CMakeFiles/logical_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/logical_test.dir/build.make _deps/highway-build/CMakeFiles/logical_test.dir/build
 .PHONY : logical_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/mask_combine_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mask_combine_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mask_combine_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/mask_combine_test.dir/rule
 
 # Convenience name for target.
@@ -1046,12 +1046,12 @@ mask_combine_test: _deps/highway-build/CMakeFiles/mask_combine_test.dir/rule
 
 # fast build rule for target.
 mask_combine_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_combine_test.dir/build.make _deps/highway-build/CMakeFiles/mask_combine_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_combine_test.dir/build.make _deps/highway-build/CMakeFiles/mask_combine_test.dir/build
 .PHONY : mask_combine_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/mask_convert_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mask_convert_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mask_convert_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/mask_convert_test.dir/rule
 
 # Convenience name for target.
@@ -1060,12 +1060,12 @@ mask_convert_test: _deps/highway-build/CMakeFiles/mask_convert_test.dir/rule
 
 # fast build rule for target.
 mask_convert_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_convert_test.dir/build.make _deps/highway-build/CMakeFiles/mask_convert_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_convert_test.dir/build.make _deps/highway-build/CMakeFiles/mask_convert_test.dir/build
 .PHONY : mask_convert_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/mask_mem_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mask_mem_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mask_mem_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/mask_mem_test.dir/rule
 
 # Convenience name for target.
@@ -1074,12 +1074,12 @@ mask_mem_test: _deps/highway-build/CMakeFiles/mask_mem_test.dir/rule
 
 # fast build rule for target.
 mask_mem_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_mem_test.dir/build.make _deps/highway-build/CMakeFiles/mask_mem_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_mem_test.dir/build.make _deps/highway-build/CMakeFiles/mask_mem_test.dir/build
 .PHONY : mask_mem_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/mask_slide_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mask_slide_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mask_slide_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/mask_slide_test.dir/rule
 
 # Convenience name for target.
@@ -1088,12 +1088,12 @@ mask_slide_test: _deps/highway-build/CMakeFiles/mask_slide_test.dir/rule
 
 # fast build rule for target.
 mask_slide_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_slide_test.dir/build.make _deps/highway-build/CMakeFiles/mask_slide_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_slide_test.dir/build.make _deps/highway-build/CMakeFiles/mask_slide_test.dir/build
 .PHONY : mask_slide_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/mask_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mask_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mask_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/mask_test.dir/rule
 
 # Convenience name for target.
@@ -1102,12 +1102,12 @@ mask_test: _deps/highway-build/CMakeFiles/mask_test.dir/rule
 
 # fast build rule for target.
 mask_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_test.dir/build.make _deps/highway-build/CMakeFiles/mask_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_test.dir/build.make _deps/highway-build/CMakeFiles/mask_test.dir/build
 .PHONY : mask_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/rule
 
 # Convenience name for target.
@@ -1116,12 +1116,12 @@ masked_arithmetic_test: _deps/highway-build/CMakeFiles/masked_arithmetic_test.di
 
 # fast build rule for target.
 masked_arithmetic_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/build
 .PHONY : masked_arithmetic_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/memory_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/memory_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/memory_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/memory_test.dir/rule
 
 # Convenience name for target.
@@ -1130,12 +1130,12 @@ memory_test: _deps/highway-build/CMakeFiles/memory_test.dir/rule
 
 # fast build rule for target.
 memory_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/memory_test.dir/build.make _deps/highway-build/CMakeFiles/memory_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/memory_test.dir/build.make _deps/highway-build/CMakeFiles/memory_test.dir/build
 .PHONY : memory_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/minmax_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/minmax_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/minmax_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/minmax_test.dir/rule
 
 # Convenience name for target.
@@ -1144,12 +1144,12 @@ minmax_test: _deps/highway-build/CMakeFiles/minmax_test.dir/rule
 
 # fast build rule for target.
 minmax_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/minmax_test.dir/build.make _deps/highway-build/CMakeFiles/minmax_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/minmax_test.dir/build.make _deps/highway-build/CMakeFiles/minmax_test.dir/build
 .PHONY : minmax_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/mul_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mul_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/mul_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/mul_test.dir/rule
 
 # Convenience name for target.
@@ -1158,12 +1158,12 @@ mul_test: _deps/highway-build/CMakeFiles/mul_test.dir/rule
 
 # fast build rule for target.
 mul_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mul_test.dir/build.make _deps/highway-build/CMakeFiles/mul_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mul_test.dir/build.make _deps/highway-build/CMakeFiles/mul_test.dir/build
 .PHONY : mul_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/reduction_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/reduction_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/reduction_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/reduction_test.dir/rule
 
 # Convenience name for target.
@@ -1172,12 +1172,12 @@ reduction_test: _deps/highway-build/CMakeFiles/reduction_test.dir/rule
 
 # fast build rule for target.
 reduction_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reduction_test.dir/build.make _deps/highway-build/CMakeFiles/reduction_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reduction_test.dir/build.make _deps/highway-build/CMakeFiles/reduction_test.dir/build
 .PHONY : reduction_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/resize_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/resize_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/resize_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/resize_test.dir/rule
 
 # Convenience name for target.
@@ -1186,12 +1186,12 @@ resize_test: _deps/highway-build/CMakeFiles/resize_test.dir/rule
 
 # fast build rule for target.
 resize_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/resize_test.dir/build.make _deps/highway-build/CMakeFiles/resize_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/resize_test.dir/build.make _deps/highway-build/CMakeFiles/resize_test.dir/build
 .PHONY : resize_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/reverse_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/reverse_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/reverse_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/reverse_test.dir/rule
 
 # Convenience name for target.
@@ -1200,12 +1200,12 @@ reverse_test: _deps/highway-build/CMakeFiles/reverse_test.dir/rule
 
 # fast build rule for target.
 reverse_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reverse_test.dir/build.make _deps/highway-build/CMakeFiles/reverse_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reverse_test.dir/build.make _deps/highway-build/CMakeFiles/reverse_test.dir/build
 .PHONY : reverse_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/shift_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/shift_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/shift_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/shift_test.dir/rule
 
 # Convenience name for target.
@@ -1214,12 +1214,12 @@ shift_test: _deps/highway-build/CMakeFiles/shift_test.dir/rule
 
 # fast build rule for target.
 shift_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shift_test.dir/build.make _deps/highway-build/CMakeFiles/shift_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shift_test.dir/build.make _deps/highway-build/CMakeFiles/shift_test.dir/build
 .PHONY : shift_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/shuffle4_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/shuffle4_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/shuffle4_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/shuffle4_test.dir/rule
 
 # Convenience name for target.
@@ -1228,12 +1228,12 @@ shuffle4_test: _deps/highway-build/CMakeFiles/shuffle4_test.dir/rule
 
 # fast build rule for target.
 shuffle4_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shuffle4_test.dir/build.make _deps/highway-build/CMakeFiles/shuffle4_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shuffle4_test.dir/build.make _deps/highway-build/CMakeFiles/shuffle4_test.dir/build
 .PHONY : shuffle4_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/slide_up_down_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/slide_up_down_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/slide_up_down_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/slide_up_down_test.dir/rule
 
 # Convenience name for target.
@@ -1242,12 +1242,12 @@ slide_up_down_test: _deps/highway-build/CMakeFiles/slide_up_down_test.dir/rule
 
 # fast build rule for target.
 slide_up_down_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/slide_up_down_test.dir/build.make _deps/highway-build/CMakeFiles/slide_up_down_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/slide_up_down_test.dir/build.make _deps/highway-build/CMakeFiles/slide_up_down_test.dir/build
 .PHONY : slide_up_down_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/rule
 
 # Convenience name for target.
@@ -1256,12 +1256,12 @@ sums_abs_diff_test: _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/rule
 
 # fast build rule for target.
 sums_abs_diff_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/build.make _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/build.make _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/build
 .PHONY : sums_abs_diff_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/swizzle_block_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/swizzle_block_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/swizzle_block_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/swizzle_block_test.dir/rule
 
 # Convenience name for target.
@@ -1270,12 +1270,12 @@ swizzle_block_test: _deps/highway-build/CMakeFiles/swizzle_block_test.dir/rule
 
 # fast build rule for target.
 swizzle_block_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_block_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_block_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_block_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_block_test.dir/build
 .PHONY : swizzle_block_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/swizzle_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/swizzle_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/swizzle_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/swizzle_test.dir/rule
 
 # Convenience name for target.
@@ -1284,12 +1284,12 @@ swizzle_test: _deps/highway-build/CMakeFiles/swizzle_test.dir/rule
 
 # fast build rule for target.
 swizzle_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_test.dir/build
 .PHONY : swizzle_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/table_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/table_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/table_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/table_test.dir/rule
 
 # Convenience name for target.
@@ -1298,12 +1298,12 @@ table_test: _deps/highway-build/CMakeFiles/table_test.dir/rule
 
 # fast build rule for target.
 table_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/table_test.dir/build.make _deps/highway-build/CMakeFiles/table_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/table_test.dir/build.make _deps/highway-build/CMakeFiles/table_test.dir/build
 .PHONY : table_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/test_util_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/test_util_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/test_util_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/test_util_test.dir/rule
 
 # Convenience name for target.
@@ -1312,12 +1312,12 @@ test_util_test: _deps/highway-build/CMakeFiles/test_util_test.dir/rule
 
 # fast build rule for target.
 test_util_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/test_util_test.dir/build.make _deps/highway-build/CMakeFiles/test_util_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/test_util_test.dir/build.make _deps/highway-build/CMakeFiles/test_util_test.dir/build
 .PHONY : test_util_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/truncate_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/truncate_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/truncate_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/truncate_test.dir/rule
 
 # Convenience name for target.
@@ -1326,12 +1326,12 @@ truncate_test: _deps/highway-build/CMakeFiles/truncate_test.dir/rule
 
 # fast build rule for target.
 truncate_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/truncate_test.dir/build.make _deps/highway-build/CMakeFiles/truncate_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/truncate_test.dir/build.make _deps/highway-build/CMakeFiles/truncate_test.dir/build
 .PHONY : truncate_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/tuple_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/tuple_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/tuple_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/tuple_test.dir/rule
 
 # Convenience name for target.
@@ -1340,12 +1340,12 @@ tuple_test: _deps/highway-build/CMakeFiles/tuple_test.dir/rule
 
 # fast build rule for target.
 tuple_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/tuple_test.dir/build.make _deps/highway-build/CMakeFiles/tuple_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/tuple_test.dir/build.make _deps/highway-build/CMakeFiles/tuple_test.dir/build
 .PHONY : tuple_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/widen_mul_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/widen_mul_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/widen_mul_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/widen_mul_test.dir/rule
 
 # Convenience name for target.
@@ -1354,12 +1354,12 @@ widen_mul_test: _deps/highway-build/CMakeFiles/widen_mul_test.dir/rule
 
 # fast build rule for target.
 widen_mul_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/widen_mul_test.dir/build.make _deps/highway-build/CMakeFiles/widen_mul_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/widen_mul_test.dir/build.make _deps/highway-build/CMakeFiles/widen_mul_test.dir/build
 .PHONY : widen_mul_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/dot_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/dot_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/dot_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/dot_test.dir/rule
 
 # Convenience name for target.
@@ -1368,12 +1368,12 @@ dot_test: _deps/highway-build/CMakeFiles/dot_test.dir/rule
 
 # fast build rule for target.
 dot_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dot_test.dir/build.make _deps/highway-build/CMakeFiles/dot_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dot_test.dir/build.make _deps/highway-build/CMakeFiles/dot_test.dir/build
 .PHONY : dot_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/matvec_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/matvec_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/matvec_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/matvec_test.dir/rule
 
 # Convenience name for target.
@@ -1382,12 +1382,12 @@ matvec_test: _deps/highway-build/CMakeFiles/matvec_test.dir/rule
 
 # fast build rule for target.
 matvec_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/matvec_test.dir/build.make _deps/highway-build/CMakeFiles/matvec_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/matvec_test.dir/build.make _deps/highway-build/CMakeFiles/matvec_test.dir/build
 .PHONY : matvec_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/image_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/image_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/image_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/image_test.dir/rule
 
 # Convenience name for target.
@@ -1396,12 +1396,12 @@ image_test: _deps/highway-build/CMakeFiles/image_test.dir/rule
 
 # fast build rule for target.
 image_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/image_test.dir/build.make _deps/highway-build/CMakeFiles/image_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/image_test.dir/build.make _deps/highway-build/CMakeFiles/image_test.dir/build
 .PHONY : image_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/math_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/math_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/math_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/math_test.dir/rule
 
 # Convenience name for target.
@@ -1410,12 +1410,12 @@ math_test: _deps/highway-build/CMakeFiles/math_test.dir/rule
 
 # fast build rule for target.
 math_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/math_test.dir/build.make _deps/highway-build/CMakeFiles/math_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/math_test.dir/build.make _deps/highway-build/CMakeFiles/math_test.dir/build
 .PHONY : math_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/sort_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/sort_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/sort_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/sort_test.dir/rule
 
 # Convenience name for target.
@@ -1424,12 +1424,12 @@ sort_test: _deps/highway-build/CMakeFiles/sort_test.dir/rule
 
 # fast build rule for target.
 sort_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sort_test.dir/build.make _deps/highway-build/CMakeFiles/sort_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sort_test.dir/build.make _deps/highway-build/CMakeFiles/sort_test.dir/build
 .PHONY : sort_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/bench_sort.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/bench_sort.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/bench_sort.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/bench_sort.dir/rule
 
 # Convenience name for target.
@@ -1438,12 +1438,12 @@ bench_sort: _deps/highway-build/CMakeFiles/bench_sort.dir/rule
 
 # fast build rule for target.
 bench_sort/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/bench_sort.dir/build.make _deps/highway-build/CMakeFiles/bench_sort.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/bench_sort.dir/build.make _deps/highway-build/CMakeFiles/bench_sort.dir/build
 .PHONY : bench_sort/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/thread_pool_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/thread_pool_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/thread_pool_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/thread_pool_test.dir/rule
 
 # Convenience name for target.
@@ -1452,12 +1452,12 @@ thread_pool_test: _deps/highway-build/CMakeFiles/thread_pool_test.dir/rule
 
 # fast build rule for target.
 thread_pool_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/thread_pool_test.dir/build.make _deps/highway-build/CMakeFiles/thread_pool_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/thread_pool_test.dir/build.make _deps/highway-build/CMakeFiles/thread_pool_test.dir/build
 .PHONY : thread_pool_test/fast
 
 # Convenience name for target.
 _deps/highway-build/CMakeFiles/unroller_test.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/unroller_test.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/CMakeFiles/unroller_test.dir/rule
 .PHONY : _deps/highway-build/CMakeFiles/unroller_test.dir/rule
 
 # Convenience name for target.
@@ -1466,7 +1466,7 @@ unroller_test: _deps/highway-build/CMakeFiles/unroller_test.dir/rule
 
 # fast build rule for target.
 unroller_test/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/unroller_test.dir/build.make _deps/highway-build/CMakeFiles/unroller_test.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/unroller_test.dir/build.make _deps/highway-build/CMakeFiles/unroller_test.dir/build
 .PHONY : unroller_test/fast
 
 hwy/aligned_allocator.o: hwy/aligned_allocator.cc.o
@@ -1474,7 +1474,7 @@ hwy/aligned_allocator.o: hwy/aligned_allocator.cc.o
 
 # target to build an object file
 hwy/aligned_allocator.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.o
 .PHONY : hwy/aligned_allocator.cc.o
 
 hwy/aligned_allocator.i: hwy/aligned_allocator.cc.i
@@ -1482,7 +1482,7 @@ hwy/aligned_allocator.i: hwy/aligned_allocator.cc.i
 
 # target to preprocess a source file
 hwy/aligned_allocator.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.i
 .PHONY : hwy/aligned_allocator.cc.i
 
 hwy/aligned_allocator.s: hwy/aligned_allocator.cc.s
@@ -1490,7 +1490,7 @@ hwy/aligned_allocator.s: hwy/aligned_allocator.cc.s
 
 # target to generate assembly for a file
 hwy/aligned_allocator.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/aligned_allocator.cc.s
 .PHONY : hwy/aligned_allocator.cc.s
 
 hwy/aligned_allocator_test.o: hwy/aligned_allocator_test.cc.o
@@ -1498,7 +1498,7 @@ hwy/aligned_allocator_test.o: hwy/aligned_allocator_test.cc.o
 
 # target to build an object file
 hwy/aligned_allocator_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/build.make _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/hwy/aligned_allocator_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/build.make _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/hwy/aligned_allocator_test.cc.o
 .PHONY : hwy/aligned_allocator_test.cc.o
 
 hwy/aligned_allocator_test.i: hwy/aligned_allocator_test.cc.i
@@ -1506,7 +1506,7 @@ hwy/aligned_allocator_test.i: hwy/aligned_allocator_test.cc.i
 
 # target to preprocess a source file
 hwy/aligned_allocator_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/build.make _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/hwy/aligned_allocator_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/build.make _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/hwy/aligned_allocator_test.cc.i
 .PHONY : hwy/aligned_allocator_test.cc.i
 
 hwy/aligned_allocator_test.s: hwy/aligned_allocator_test.cc.s
@@ -1514,7 +1514,7 @@ hwy/aligned_allocator_test.s: hwy/aligned_allocator_test.cc.s
 
 # target to generate assembly for a file
 hwy/aligned_allocator_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/build.make _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/hwy/aligned_allocator_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/build.make _deps/highway-build/CMakeFiles/aligned_allocator_test.dir/hwy/aligned_allocator_test.cc.s
 .PHONY : hwy/aligned_allocator_test.cc.s
 
 hwy/base_test.o: hwy/base_test.cc.o
@@ -1522,7 +1522,7 @@ hwy/base_test.o: hwy/base_test.cc.o
 
 # target to build an object file
 hwy/base_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/base_test.dir/build.make _deps/highway-build/CMakeFiles/base_test.dir/hwy/base_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/base_test.dir/build.make _deps/highway-build/CMakeFiles/base_test.dir/hwy/base_test.cc.o
 .PHONY : hwy/base_test.cc.o
 
 hwy/base_test.i: hwy/base_test.cc.i
@@ -1530,7 +1530,7 @@ hwy/base_test.i: hwy/base_test.cc.i
 
 # target to preprocess a source file
 hwy/base_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/base_test.dir/build.make _deps/highway-build/CMakeFiles/base_test.dir/hwy/base_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/base_test.dir/build.make _deps/highway-build/CMakeFiles/base_test.dir/hwy/base_test.cc.i
 .PHONY : hwy/base_test.cc.i
 
 hwy/base_test.s: hwy/base_test.cc.s
@@ -1538,7 +1538,7 @@ hwy/base_test.s: hwy/base_test.cc.s
 
 # target to generate assembly for a file
 hwy/base_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/base_test.dir/build.make _deps/highway-build/CMakeFiles/base_test.dir/hwy/base_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/base_test.dir/build.make _deps/highway-build/CMakeFiles/base_test.dir/hwy/base_test.cc.s
 .PHONY : hwy/base_test.cc.s
 
 hwy/contrib/algo/copy_test.o: hwy/contrib/algo/copy_test.cc.o
@@ -1546,7 +1546,7 @@ hwy/contrib/algo/copy_test.o: hwy/contrib/algo/copy_test.cc.o
 
 # target to build an object file
 hwy/contrib/algo/copy_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/copy_test.dir/build.make _deps/highway-build/CMakeFiles/copy_test.dir/hwy/contrib/algo/copy_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/copy_test.dir/build.make _deps/highway-build/CMakeFiles/copy_test.dir/hwy/contrib/algo/copy_test.cc.o
 .PHONY : hwy/contrib/algo/copy_test.cc.o
 
 hwy/contrib/algo/copy_test.i: hwy/contrib/algo/copy_test.cc.i
@@ -1554,7 +1554,7 @@ hwy/contrib/algo/copy_test.i: hwy/contrib/algo/copy_test.cc.i
 
 # target to preprocess a source file
 hwy/contrib/algo/copy_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/copy_test.dir/build.make _deps/highway-build/CMakeFiles/copy_test.dir/hwy/contrib/algo/copy_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/copy_test.dir/build.make _deps/highway-build/CMakeFiles/copy_test.dir/hwy/contrib/algo/copy_test.cc.i
 .PHONY : hwy/contrib/algo/copy_test.cc.i
 
 hwy/contrib/algo/copy_test.s: hwy/contrib/algo/copy_test.cc.s
@@ -1562,7 +1562,7 @@ hwy/contrib/algo/copy_test.s: hwy/contrib/algo/copy_test.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/algo/copy_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/copy_test.dir/build.make _deps/highway-build/CMakeFiles/copy_test.dir/hwy/contrib/algo/copy_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/copy_test.dir/build.make _deps/highway-build/CMakeFiles/copy_test.dir/hwy/contrib/algo/copy_test.cc.s
 .PHONY : hwy/contrib/algo/copy_test.cc.s
 
 hwy/contrib/algo/find_test.o: hwy/contrib/algo/find_test.cc.o
@@ -1570,7 +1570,7 @@ hwy/contrib/algo/find_test.o: hwy/contrib/algo/find_test.cc.o
 
 # target to build an object file
 hwy/contrib/algo/find_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/find_test.dir/build.make _deps/highway-build/CMakeFiles/find_test.dir/hwy/contrib/algo/find_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/find_test.dir/build.make _deps/highway-build/CMakeFiles/find_test.dir/hwy/contrib/algo/find_test.cc.o
 .PHONY : hwy/contrib/algo/find_test.cc.o
 
 hwy/contrib/algo/find_test.i: hwy/contrib/algo/find_test.cc.i
@@ -1578,7 +1578,7 @@ hwy/contrib/algo/find_test.i: hwy/contrib/algo/find_test.cc.i
 
 # target to preprocess a source file
 hwy/contrib/algo/find_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/find_test.dir/build.make _deps/highway-build/CMakeFiles/find_test.dir/hwy/contrib/algo/find_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/find_test.dir/build.make _deps/highway-build/CMakeFiles/find_test.dir/hwy/contrib/algo/find_test.cc.i
 .PHONY : hwy/contrib/algo/find_test.cc.i
 
 hwy/contrib/algo/find_test.s: hwy/contrib/algo/find_test.cc.s
@@ -1586,7 +1586,7 @@ hwy/contrib/algo/find_test.s: hwy/contrib/algo/find_test.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/algo/find_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/find_test.dir/build.make _deps/highway-build/CMakeFiles/find_test.dir/hwy/contrib/algo/find_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/find_test.dir/build.make _deps/highway-build/CMakeFiles/find_test.dir/hwy/contrib/algo/find_test.cc.s
 .PHONY : hwy/contrib/algo/find_test.cc.s
 
 hwy/contrib/algo/transform_test.o: hwy/contrib/algo/transform_test.cc.o
@@ -1594,7 +1594,7 @@ hwy/contrib/algo/transform_test.o: hwy/contrib/algo/transform_test.cc.o
 
 # target to build an object file
 hwy/contrib/algo/transform_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/transform_test.dir/build.make _deps/highway-build/CMakeFiles/transform_test.dir/hwy/contrib/algo/transform_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/transform_test.dir/build.make _deps/highway-build/CMakeFiles/transform_test.dir/hwy/contrib/algo/transform_test.cc.o
 .PHONY : hwy/contrib/algo/transform_test.cc.o
 
 hwy/contrib/algo/transform_test.i: hwy/contrib/algo/transform_test.cc.i
@@ -1602,7 +1602,7 @@ hwy/contrib/algo/transform_test.i: hwy/contrib/algo/transform_test.cc.i
 
 # target to preprocess a source file
 hwy/contrib/algo/transform_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/transform_test.dir/build.make _deps/highway-build/CMakeFiles/transform_test.dir/hwy/contrib/algo/transform_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/transform_test.dir/build.make _deps/highway-build/CMakeFiles/transform_test.dir/hwy/contrib/algo/transform_test.cc.i
 .PHONY : hwy/contrib/algo/transform_test.cc.i
 
 hwy/contrib/algo/transform_test.s: hwy/contrib/algo/transform_test.cc.s
@@ -1610,7 +1610,7 @@ hwy/contrib/algo/transform_test.s: hwy/contrib/algo/transform_test.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/algo/transform_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/transform_test.dir/build.make _deps/highway-build/CMakeFiles/transform_test.dir/hwy/contrib/algo/transform_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/transform_test.dir/build.make _deps/highway-build/CMakeFiles/transform_test.dir/hwy/contrib/algo/transform_test.cc.s
 .PHONY : hwy/contrib/algo/transform_test.cc.s
 
 hwy/contrib/dot/dot_test.o: hwy/contrib/dot/dot_test.cc.o
@@ -1618,7 +1618,7 @@ hwy/contrib/dot/dot_test.o: hwy/contrib/dot/dot_test.cc.o
 
 # target to build an object file
 hwy/contrib/dot/dot_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dot_test.dir/build.make _deps/highway-build/CMakeFiles/dot_test.dir/hwy/contrib/dot/dot_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dot_test.dir/build.make _deps/highway-build/CMakeFiles/dot_test.dir/hwy/contrib/dot/dot_test.cc.o
 .PHONY : hwy/contrib/dot/dot_test.cc.o
 
 hwy/contrib/dot/dot_test.i: hwy/contrib/dot/dot_test.cc.i
@@ -1626,7 +1626,7 @@ hwy/contrib/dot/dot_test.i: hwy/contrib/dot/dot_test.cc.i
 
 # target to preprocess a source file
 hwy/contrib/dot/dot_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dot_test.dir/build.make _deps/highway-build/CMakeFiles/dot_test.dir/hwy/contrib/dot/dot_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dot_test.dir/build.make _deps/highway-build/CMakeFiles/dot_test.dir/hwy/contrib/dot/dot_test.cc.i
 .PHONY : hwy/contrib/dot/dot_test.cc.i
 
 hwy/contrib/dot/dot_test.s: hwy/contrib/dot/dot_test.cc.s
@@ -1634,7 +1634,7 @@ hwy/contrib/dot/dot_test.s: hwy/contrib/dot/dot_test.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/dot/dot_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dot_test.dir/build.make _deps/highway-build/CMakeFiles/dot_test.dir/hwy/contrib/dot/dot_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dot_test.dir/build.make _deps/highway-build/CMakeFiles/dot_test.dir/hwy/contrib/dot/dot_test.cc.s
 .PHONY : hwy/contrib/dot/dot_test.cc.s
 
 hwy/contrib/image/image.o: hwy/contrib/image/image.cc.o
@@ -1642,7 +1642,7 @@ hwy/contrib/image/image.o: hwy/contrib/image/image.cc.o
 
 # target to build an object file
 hwy/contrib/image/image.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/image/image.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/image/image.cc.o
 .PHONY : hwy/contrib/image/image.cc.o
 
 hwy/contrib/image/image.i: hwy/contrib/image/image.cc.i
@@ -1650,7 +1650,7 @@ hwy/contrib/image/image.i: hwy/contrib/image/image.cc.i
 
 # target to preprocess a source file
 hwy/contrib/image/image.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/image/image.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/image/image.cc.i
 .PHONY : hwy/contrib/image/image.cc.i
 
 hwy/contrib/image/image.s: hwy/contrib/image/image.cc.s
@@ -1658,7 +1658,7 @@ hwy/contrib/image/image.s: hwy/contrib/image/image.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/image/image.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/image/image.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/image/image.cc.s
 .PHONY : hwy/contrib/image/image.cc.s
 
 hwy/contrib/image/image_test.o: hwy/contrib/image/image_test.cc.o
@@ -1666,7 +1666,7 @@ hwy/contrib/image/image_test.o: hwy/contrib/image/image_test.cc.o
 
 # target to build an object file
 hwy/contrib/image/image_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/image_test.dir/build.make _deps/highway-build/CMakeFiles/image_test.dir/hwy/contrib/image/image_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/image_test.dir/build.make _deps/highway-build/CMakeFiles/image_test.dir/hwy/contrib/image/image_test.cc.o
 .PHONY : hwy/contrib/image/image_test.cc.o
 
 hwy/contrib/image/image_test.i: hwy/contrib/image/image_test.cc.i
@@ -1674,7 +1674,7 @@ hwy/contrib/image/image_test.i: hwy/contrib/image/image_test.cc.i
 
 # target to preprocess a source file
 hwy/contrib/image/image_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/image_test.dir/build.make _deps/highway-build/CMakeFiles/image_test.dir/hwy/contrib/image/image_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/image_test.dir/build.make _deps/highway-build/CMakeFiles/image_test.dir/hwy/contrib/image/image_test.cc.i
 .PHONY : hwy/contrib/image/image_test.cc.i
 
 hwy/contrib/image/image_test.s: hwy/contrib/image/image_test.cc.s
@@ -1682,7 +1682,7 @@ hwy/contrib/image/image_test.s: hwy/contrib/image/image_test.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/image/image_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/image_test.dir/build.make _deps/highway-build/CMakeFiles/image_test.dir/hwy/contrib/image/image_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/image_test.dir/build.make _deps/highway-build/CMakeFiles/image_test.dir/hwy/contrib/image/image_test.cc.s
 .PHONY : hwy/contrib/image/image_test.cc.s
 
 hwy/contrib/math/math_test.o: hwy/contrib/math/math_test.cc.o
@@ -1690,7 +1690,7 @@ hwy/contrib/math/math_test.o: hwy/contrib/math/math_test.cc.o
 
 # target to build an object file
 hwy/contrib/math/math_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/math_test.dir/build.make _deps/highway-build/CMakeFiles/math_test.dir/hwy/contrib/math/math_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/math_test.dir/build.make _deps/highway-build/CMakeFiles/math_test.dir/hwy/contrib/math/math_test.cc.o
 .PHONY : hwy/contrib/math/math_test.cc.o
 
 hwy/contrib/math/math_test.i: hwy/contrib/math/math_test.cc.i
@@ -1698,7 +1698,7 @@ hwy/contrib/math/math_test.i: hwy/contrib/math/math_test.cc.i
 
 # target to preprocess a source file
 hwy/contrib/math/math_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/math_test.dir/build.make _deps/highway-build/CMakeFiles/math_test.dir/hwy/contrib/math/math_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/math_test.dir/build.make _deps/highway-build/CMakeFiles/math_test.dir/hwy/contrib/math/math_test.cc.i
 .PHONY : hwy/contrib/math/math_test.cc.i
 
 hwy/contrib/math/math_test.s: hwy/contrib/math/math_test.cc.s
@@ -1706,7 +1706,7 @@ hwy/contrib/math/math_test.s: hwy/contrib/math/math_test.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/math/math_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/math_test.dir/build.make _deps/highway-build/CMakeFiles/math_test.dir/hwy/contrib/math/math_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/math_test.dir/build.make _deps/highway-build/CMakeFiles/math_test.dir/hwy/contrib/math/math_test.cc.s
 .PHONY : hwy/contrib/math/math_test.cc.s
 
 hwy/contrib/matvec/matvec_test.o: hwy/contrib/matvec/matvec_test.cc.o
@@ -1714,7 +1714,7 @@ hwy/contrib/matvec/matvec_test.o: hwy/contrib/matvec/matvec_test.cc.o
 
 # target to build an object file
 hwy/contrib/matvec/matvec_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/matvec_test.dir/build.make _deps/highway-build/CMakeFiles/matvec_test.dir/hwy/contrib/matvec/matvec_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/matvec_test.dir/build.make _deps/highway-build/CMakeFiles/matvec_test.dir/hwy/contrib/matvec/matvec_test.cc.o
 .PHONY : hwy/contrib/matvec/matvec_test.cc.o
 
 hwy/contrib/matvec/matvec_test.i: hwy/contrib/matvec/matvec_test.cc.i
@@ -1722,7 +1722,7 @@ hwy/contrib/matvec/matvec_test.i: hwy/contrib/matvec/matvec_test.cc.i
 
 # target to preprocess a source file
 hwy/contrib/matvec/matvec_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/matvec_test.dir/build.make _deps/highway-build/CMakeFiles/matvec_test.dir/hwy/contrib/matvec/matvec_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/matvec_test.dir/build.make _deps/highway-build/CMakeFiles/matvec_test.dir/hwy/contrib/matvec/matvec_test.cc.i
 .PHONY : hwy/contrib/matvec/matvec_test.cc.i
 
 hwy/contrib/matvec/matvec_test.s: hwy/contrib/matvec/matvec_test.cc.s
@@ -1730,7 +1730,7 @@ hwy/contrib/matvec/matvec_test.s: hwy/contrib/matvec/matvec_test.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/matvec/matvec_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/matvec_test.dir/build.make _deps/highway-build/CMakeFiles/matvec_test.dir/hwy/contrib/matvec/matvec_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/matvec_test.dir/build.make _deps/highway-build/CMakeFiles/matvec_test.dir/hwy/contrib/matvec/matvec_test.cc.s
 .PHONY : hwy/contrib/matvec/matvec_test.cc.s
 
 hwy/contrib/sort/bench_sort.o: hwy/contrib/sort/bench_sort.cc.o
@@ -1738,7 +1738,7 @@ hwy/contrib/sort/bench_sort.o: hwy/contrib/sort/bench_sort.cc.o
 
 # target to build an object file
 hwy/contrib/sort/bench_sort.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/bench_sort.dir/build.make _deps/highway-build/CMakeFiles/bench_sort.dir/hwy/contrib/sort/bench_sort.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/bench_sort.dir/build.make _deps/highway-build/CMakeFiles/bench_sort.dir/hwy/contrib/sort/bench_sort.cc.o
 .PHONY : hwy/contrib/sort/bench_sort.cc.o
 
 hwy/contrib/sort/bench_sort.i: hwy/contrib/sort/bench_sort.cc.i
@@ -1746,7 +1746,7 @@ hwy/contrib/sort/bench_sort.i: hwy/contrib/sort/bench_sort.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/bench_sort.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/bench_sort.dir/build.make _deps/highway-build/CMakeFiles/bench_sort.dir/hwy/contrib/sort/bench_sort.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/bench_sort.dir/build.make _deps/highway-build/CMakeFiles/bench_sort.dir/hwy/contrib/sort/bench_sort.cc.i
 .PHONY : hwy/contrib/sort/bench_sort.cc.i
 
 hwy/contrib/sort/bench_sort.s: hwy/contrib/sort/bench_sort.cc.s
@@ -1754,7 +1754,7 @@ hwy/contrib/sort/bench_sort.s: hwy/contrib/sort/bench_sort.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/bench_sort.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/bench_sort.dir/build.make _deps/highway-build/CMakeFiles/bench_sort.dir/hwy/contrib/sort/bench_sort.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/bench_sort.dir/build.make _deps/highway-build/CMakeFiles/bench_sort.dir/hwy/contrib/sort/bench_sort.cc.s
 .PHONY : hwy/contrib/sort/bench_sort.cc.s
 
 hwy/contrib/sort/sort_test.o: hwy/contrib/sort/sort_test.cc.o
@@ -1762,7 +1762,7 @@ hwy/contrib/sort/sort_test.o: hwy/contrib/sort/sort_test.cc.o
 
 # target to build an object file
 hwy/contrib/sort/sort_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sort_test.dir/build.make _deps/highway-build/CMakeFiles/sort_test.dir/hwy/contrib/sort/sort_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sort_test.dir/build.make _deps/highway-build/CMakeFiles/sort_test.dir/hwy/contrib/sort/sort_test.cc.o
 .PHONY : hwy/contrib/sort/sort_test.cc.o
 
 hwy/contrib/sort/sort_test.i: hwy/contrib/sort/sort_test.cc.i
@@ -1770,7 +1770,7 @@ hwy/contrib/sort/sort_test.i: hwy/contrib/sort/sort_test.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/sort_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sort_test.dir/build.make _deps/highway-build/CMakeFiles/sort_test.dir/hwy/contrib/sort/sort_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sort_test.dir/build.make _deps/highway-build/CMakeFiles/sort_test.dir/hwy/contrib/sort/sort_test.cc.i
 .PHONY : hwy/contrib/sort/sort_test.cc.i
 
 hwy/contrib/sort/sort_test.s: hwy/contrib/sort/sort_test.cc.s
@@ -1778,7 +1778,7 @@ hwy/contrib/sort/sort_test.s: hwy/contrib/sort/sort_test.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/sort_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sort_test.dir/build.make _deps/highway-build/CMakeFiles/sort_test.dir/hwy/contrib/sort/sort_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sort_test.dir/build.make _deps/highway-build/CMakeFiles/sort_test.dir/hwy/contrib/sort/sort_test.cc.s
 .PHONY : hwy/contrib/sort/sort_test.cc.s
 
 hwy/contrib/sort/vqsort.o: hwy/contrib/sort/vqsort.cc.o
@@ -1786,7 +1786,7 @@ hwy/contrib/sort/vqsort.o: hwy/contrib/sort/vqsort.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort.cc.o
 .PHONY : hwy/contrib/sort/vqsort.cc.o
 
 hwy/contrib/sort/vqsort.i: hwy/contrib/sort/vqsort.cc.i
@@ -1794,7 +1794,7 @@ hwy/contrib/sort/vqsort.i: hwy/contrib/sort/vqsort.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort.cc.i
 .PHONY : hwy/contrib/sort/vqsort.cc.i
 
 hwy/contrib/sort/vqsort.s: hwy/contrib/sort/vqsort.cc.s
@@ -1802,7 +1802,7 @@ hwy/contrib/sort/vqsort.s: hwy/contrib/sort/vqsort.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort.cc.s
 .PHONY : hwy/contrib/sort/vqsort.cc.s
 
 hwy/contrib/sort/vqsort_128a.o: hwy/contrib/sort/vqsort_128a.cc.o
@@ -1810,7 +1810,7 @@ hwy/contrib/sort/vqsort_128a.o: hwy/contrib/sort/vqsort_128a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_128a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_128a.cc.o
 
 hwy/contrib/sort/vqsort_128a.i: hwy/contrib/sort/vqsort_128a.cc.i
@@ -1818,7 +1818,7 @@ hwy/contrib/sort/vqsort_128a.i: hwy/contrib/sort/vqsort_128a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_128a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_128a.cc.i
 
 hwy/contrib/sort/vqsort_128a.s: hwy/contrib/sort/vqsort_128a.cc.s
@@ -1826,7 +1826,7 @@ hwy/contrib/sort/vqsort_128a.s: hwy/contrib/sort/vqsort_128a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_128a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_128a.cc.s
 
 hwy/contrib/sort/vqsort_128d.o: hwy/contrib/sort/vqsort_128d.cc.o
@@ -1834,7 +1834,7 @@ hwy/contrib/sort/vqsort_128d.o: hwy/contrib/sort/vqsort_128d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_128d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_128d.cc.o
 
 hwy/contrib/sort/vqsort_128d.i: hwy/contrib/sort/vqsort_128d.cc.i
@@ -1842,7 +1842,7 @@ hwy/contrib/sort/vqsort_128d.i: hwy/contrib/sort/vqsort_128d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_128d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_128d.cc.i
 
 hwy/contrib/sort/vqsort_128d.s: hwy/contrib/sort/vqsort_128d.cc.s
@@ -1850,7 +1850,7 @@ hwy/contrib/sort/vqsort_128d.s: hwy/contrib/sort/vqsort_128d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_128d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_128d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_128d.cc.s
 
 hwy/contrib/sort/vqsort_f16a.o: hwy/contrib/sort/vqsort_f16a.cc.o
@@ -1858,7 +1858,7 @@ hwy/contrib/sort/vqsort_f16a.o: hwy/contrib/sort/vqsort_f16a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_f16a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_f16a.cc.o
 
 hwy/contrib/sort/vqsort_f16a.i: hwy/contrib/sort/vqsort_f16a.cc.i
@@ -1866,7 +1866,7 @@ hwy/contrib/sort/vqsort_f16a.i: hwy/contrib/sort/vqsort_f16a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_f16a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_f16a.cc.i
 
 hwy/contrib/sort/vqsort_f16a.s: hwy/contrib/sort/vqsort_f16a.cc.s
@@ -1874,7 +1874,7 @@ hwy/contrib/sort/vqsort_f16a.s: hwy/contrib/sort/vqsort_f16a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_f16a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_f16a.cc.s
 
 hwy/contrib/sort/vqsort_f16d.o: hwy/contrib/sort/vqsort_f16d.cc.o
@@ -1882,7 +1882,7 @@ hwy/contrib/sort/vqsort_f16d.o: hwy/contrib/sort/vqsort_f16d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_f16d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_f16d.cc.o
 
 hwy/contrib/sort/vqsort_f16d.i: hwy/contrib/sort/vqsort_f16d.cc.i
@@ -1890,7 +1890,7 @@ hwy/contrib/sort/vqsort_f16d.i: hwy/contrib/sort/vqsort_f16d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_f16d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_f16d.cc.i
 
 hwy/contrib/sort/vqsort_f16d.s: hwy/contrib/sort/vqsort_f16d.cc.s
@@ -1898,7 +1898,7 @@ hwy/contrib/sort/vqsort_f16d.s: hwy/contrib/sort/vqsort_f16d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_f16d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f16d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_f16d.cc.s
 
 hwy/contrib/sort/vqsort_f32a.o: hwy/contrib/sort/vqsort_f32a.cc.o
@@ -1906,7 +1906,7 @@ hwy/contrib/sort/vqsort_f32a.o: hwy/contrib/sort/vqsort_f32a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_f32a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_f32a.cc.o
 
 hwy/contrib/sort/vqsort_f32a.i: hwy/contrib/sort/vqsort_f32a.cc.i
@@ -1914,7 +1914,7 @@ hwy/contrib/sort/vqsort_f32a.i: hwy/contrib/sort/vqsort_f32a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_f32a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_f32a.cc.i
 
 hwy/contrib/sort/vqsort_f32a.s: hwy/contrib/sort/vqsort_f32a.cc.s
@@ -1922,7 +1922,7 @@ hwy/contrib/sort/vqsort_f32a.s: hwy/contrib/sort/vqsort_f32a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_f32a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_f32a.cc.s
 
 hwy/contrib/sort/vqsort_f32d.o: hwy/contrib/sort/vqsort_f32d.cc.o
@@ -1930,7 +1930,7 @@ hwy/contrib/sort/vqsort_f32d.o: hwy/contrib/sort/vqsort_f32d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_f32d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_f32d.cc.o
 
 hwy/contrib/sort/vqsort_f32d.i: hwy/contrib/sort/vqsort_f32d.cc.i
@@ -1938,7 +1938,7 @@ hwy/contrib/sort/vqsort_f32d.i: hwy/contrib/sort/vqsort_f32d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_f32d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_f32d.cc.i
 
 hwy/contrib/sort/vqsort_f32d.s: hwy/contrib/sort/vqsort_f32d.cc.s
@@ -1946,7 +1946,7 @@ hwy/contrib/sort/vqsort_f32d.s: hwy/contrib/sort/vqsort_f32d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_f32d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f32d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_f32d.cc.s
 
 hwy/contrib/sort/vqsort_f64a.o: hwy/contrib/sort/vqsort_f64a.cc.o
@@ -1954,7 +1954,7 @@ hwy/contrib/sort/vqsort_f64a.o: hwy/contrib/sort/vqsort_f64a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_f64a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_f64a.cc.o
 
 hwy/contrib/sort/vqsort_f64a.i: hwy/contrib/sort/vqsort_f64a.cc.i
@@ -1962,7 +1962,7 @@ hwy/contrib/sort/vqsort_f64a.i: hwy/contrib/sort/vqsort_f64a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_f64a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_f64a.cc.i
 
 hwy/contrib/sort/vqsort_f64a.s: hwy/contrib/sort/vqsort_f64a.cc.s
@@ -1970,7 +1970,7 @@ hwy/contrib/sort/vqsort_f64a.s: hwy/contrib/sort/vqsort_f64a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_f64a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_f64a.cc.s
 
 hwy/contrib/sort/vqsort_f64d.o: hwy/contrib/sort/vqsort_f64d.cc.o
@@ -1978,7 +1978,7 @@ hwy/contrib/sort/vqsort_f64d.o: hwy/contrib/sort/vqsort_f64d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_f64d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_f64d.cc.o
 
 hwy/contrib/sort/vqsort_f64d.i: hwy/contrib/sort/vqsort_f64d.cc.i
@@ -1986,7 +1986,7 @@ hwy/contrib/sort/vqsort_f64d.i: hwy/contrib/sort/vqsort_f64d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_f64d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_f64d.cc.i
 
 hwy/contrib/sort/vqsort_f64d.s: hwy/contrib/sort/vqsort_f64d.cc.s
@@ -1994,7 +1994,7 @@ hwy/contrib/sort/vqsort_f64d.s: hwy/contrib/sort/vqsort_f64d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_f64d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_f64d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_f64d.cc.s
 
 hwy/contrib/sort/vqsort_i16a.o: hwy/contrib/sort/vqsort_i16a.cc.o
@@ -2002,7 +2002,7 @@ hwy/contrib/sort/vqsort_i16a.o: hwy/contrib/sort/vqsort_i16a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_i16a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_i16a.cc.o
 
 hwy/contrib/sort/vqsort_i16a.i: hwy/contrib/sort/vqsort_i16a.cc.i
@@ -2010,7 +2010,7 @@ hwy/contrib/sort/vqsort_i16a.i: hwy/contrib/sort/vqsort_i16a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_i16a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_i16a.cc.i
 
 hwy/contrib/sort/vqsort_i16a.s: hwy/contrib/sort/vqsort_i16a.cc.s
@@ -2018,7 +2018,7 @@ hwy/contrib/sort/vqsort_i16a.s: hwy/contrib/sort/vqsort_i16a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_i16a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_i16a.cc.s
 
 hwy/contrib/sort/vqsort_i16d.o: hwy/contrib/sort/vqsort_i16d.cc.o
@@ -2026,7 +2026,7 @@ hwy/contrib/sort/vqsort_i16d.o: hwy/contrib/sort/vqsort_i16d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_i16d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_i16d.cc.o
 
 hwy/contrib/sort/vqsort_i16d.i: hwy/contrib/sort/vqsort_i16d.cc.i
@@ -2034,7 +2034,7 @@ hwy/contrib/sort/vqsort_i16d.i: hwy/contrib/sort/vqsort_i16d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_i16d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_i16d.cc.i
 
 hwy/contrib/sort/vqsort_i16d.s: hwy/contrib/sort/vqsort_i16d.cc.s
@@ -2042,7 +2042,7 @@ hwy/contrib/sort/vqsort_i16d.s: hwy/contrib/sort/vqsort_i16d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_i16d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i16d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_i16d.cc.s
 
 hwy/contrib/sort/vqsort_i32a.o: hwy/contrib/sort/vqsort_i32a.cc.o
@@ -2050,7 +2050,7 @@ hwy/contrib/sort/vqsort_i32a.o: hwy/contrib/sort/vqsort_i32a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_i32a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_i32a.cc.o
 
 hwy/contrib/sort/vqsort_i32a.i: hwy/contrib/sort/vqsort_i32a.cc.i
@@ -2058,7 +2058,7 @@ hwy/contrib/sort/vqsort_i32a.i: hwy/contrib/sort/vqsort_i32a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_i32a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_i32a.cc.i
 
 hwy/contrib/sort/vqsort_i32a.s: hwy/contrib/sort/vqsort_i32a.cc.s
@@ -2066,7 +2066,7 @@ hwy/contrib/sort/vqsort_i32a.s: hwy/contrib/sort/vqsort_i32a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_i32a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_i32a.cc.s
 
 hwy/contrib/sort/vqsort_i32d.o: hwy/contrib/sort/vqsort_i32d.cc.o
@@ -2074,7 +2074,7 @@ hwy/contrib/sort/vqsort_i32d.o: hwy/contrib/sort/vqsort_i32d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_i32d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_i32d.cc.o
 
 hwy/contrib/sort/vqsort_i32d.i: hwy/contrib/sort/vqsort_i32d.cc.i
@@ -2082,7 +2082,7 @@ hwy/contrib/sort/vqsort_i32d.i: hwy/contrib/sort/vqsort_i32d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_i32d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_i32d.cc.i
 
 hwy/contrib/sort/vqsort_i32d.s: hwy/contrib/sort/vqsort_i32d.cc.s
@@ -2090,7 +2090,7 @@ hwy/contrib/sort/vqsort_i32d.s: hwy/contrib/sort/vqsort_i32d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_i32d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i32d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_i32d.cc.s
 
 hwy/contrib/sort/vqsort_i64a.o: hwy/contrib/sort/vqsort_i64a.cc.o
@@ -2098,7 +2098,7 @@ hwy/contrib/sort/vqsort_i64a.o: hwy/contrib/sort/vqsort_i64a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_i64a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_i64a.cc.o
 
 hwy/contrib/sort/vqsort_i64a.i: hwy/contrib/sort/vqsort_i64a.cc.i
@@ -2106,7 +2106,7 @@ hwy/contrib/sort/vqsort_i64a.i: hwy/contrib/sort/vqsort_i64a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_i64a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_i64a.cc.i
 
 hwy/contrib/sort/vqsort_i64a.s: hwy/contrib/sort/vqsort_i64a.cc.s
@@ -2114,7 +2114,7 @@ hwy/contrib/sort/vqsort_i64a.s: hwy/contrib/sort/vqsort_i64a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_i64a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_i64a.cc.s
 
 hwy/contrib/sort/vqsort_i64d.o: hwy/contrib/sort/vqsort_i64d.cc.o
@@ -2122,7 +2122,7 @@ hwy/contrib/sort/vqsort_i64d.o: hwy/contrib/sort/vqsort_i64d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_i64d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_i64d.cc.o
 
 hwy/contrib/sort/vqsort_i64d.i: hwy/contrib/sort/vqsort_i64d.cc.i
@@ -2130,7 +2130,7 @@ hwy/contrib/sort/vqsort_i64d.i: hwy/contrib/sort/vqsort_i64d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_i64d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_i64d.cc.i
 
 hwy/contrib/sort/vqsort_i64d.s: hwy/contrib/sort/vqsort_i64d.cc.s
@@ -2138,7 +2138,7 @@ hwy/contrib/sort/vqsort_i64d.s: hwy/contrib/sort/vqsort_i64d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_i64d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_i64d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_i64d.cc.s
 
 hwy/contrib/sort/vqsort_kv128a.o: hwy/contrib/sort/vqsort_kv128a.cc.o
@@ -2146,7 +2146,7 @@ hwy/contrib/sort/vqsort_kv128a.o: hwy/contrib/sort/vqsort_kv128a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_kv128a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_kv128a.cc.o
 
 hwy/contrib/sort/vqsort_kv128a.i: hwy/contrib/sort/vqsort_kv128a.cc.i
@@ -2154,7 +2154,7 @@ hwy/contrib/sort/vqsort_kv128a.i: hwy/contrib/sort/vqsort_kv128a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_kv128a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_kv128a.cc.i
 
 hwy/contrib/sort/vqsort_kv128a.s: hwy/contrib/sort/vqsort_kv128a.cc.s
@@ -2162,7 +2162,7 @@ hwy/contrib/sort/vqsort_kv128a.s: hwy/contrib/sort/vqsort_kv128a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_kv128a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_kv128a.cc.s
 
 hwy/contrib/sort/vqsort_kv128d.o: hwy/contrib/sort/vqsort_kv128d.cc.o
@@ -2170,7 +2170,7 @@ hwy/contrib/sort/vqsort_kv128d.o: hwy/contrib/sort/vqsort_kv128d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_kv128d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_kv128d.cc.o
 
 hwy/contrib/sort/vqsort_kv128d.i: hwy/contrib/sort/vqsort_kv128d.cc.i
@@ -2178,7 +2178,7 @@ hwy/contrib/sort/vqsort_kv128d.i: hwy/contrib/sort/vqsort_kv128d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_kv128d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_kv128d.cc.i
 
 hwy/contrib/sort/vqsort_kv128d.s: hwy/contrib/sort/vqsort_kv128d.cc.s
@@ -2186,7 +2186,7 @@ hwy/contrib/sort/vqsort_kv128d.s: hwy/contrib/sort/vqsort_kv128d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_kv128d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv128d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_kv128d.cc.s
 
 hwy/contrib/sort/vqsort_kv64a.o: hwy/contrib/sort/vqsort_kv64a.cc.o
@@ -2194,7 +2194,7 @@ hwy/contrib/sort/vqsort_kv64a.o: hwy/contrib/sort/vqsort_kv64a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_kv64a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_kv64a.cc.o
 
 hwy/contrib/sort/vqsort_kv64a.i: hwy/contrib/sort/vqsort_kv64a.cc.i
@@ -2202,7 +2202,7 @@ hwy/contrib/sort/vqsort_kv64a.i: hwy/contrib/sort/vqsort_kv64a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_kv64a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_kv64a.cc.i
 
 hwy/contrib/sort/vqsort_kv64a.s: hwy/contrib/sort/vqsort_kv64a.cc.s
@@ -2210,7 +2210,7 @@ hwy/contrib/sort/vqsort_kv64a.s: hwy/contrib/sort/vqsort_kv64a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_kv64a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_kv64a.cc.s
 
 hwy/contrib/sort/vqsort_kv64d.o: hwy/contrib/sort/vqsort_kv64d.cc.o
@@ -2218,7 +2218,7 @@ hwy/contrib/sort/vqsort_kv64d.o: hwy/contrib/sort/vqsort_kv64d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_kv64d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_kv64d.cc.o
 
 hwy/contrib/sort/vqsort_kv64d.i: hwy/contrib/sort/vqsort_kv64d.cc.i
@@ -2226,7 +2226,7 @@ hwy/contrib/sort/vqsort_kv64d.i: hwy/contrib/sort/vqsort_kv64d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_kv64d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_kv64d.cc.i
 
 hwy/contrib/sort/vqsort_kv64d.s: hwy/contrib/sort/vqsort_kv64d.cc.s
@@ -2234,7 +2234,7 @@ hwy/contrib/sort/vqsort_kv64d.s: hwy/contrib/sort/vqsort_kv64d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_kv64d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_kv64d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_kv64d.cc.s
 
 hwy/contrib/sort/vqsort_u16a.o: hwy/contrib/sort/vqsort_u16a.cc.o
@@ -2242,7 +2242,7 @@ hwy/contrib/sort/vqsort_u16a.o: hwy/contrib/sort/vqsort_u16a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_u16a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_u16a.cc.o
 
 hwy/contrib/sort/vqsort_u16a.i: hwy/contrib/sort/vqsort_u16a.cc.i
@@ -2250,7 +2250,7 @@ hwy/contrib/sort/vqsort_u16a.i: hwy/contrib/sort/vqsort_u16a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_u16a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_u16a.cc.i
 
 hwy/contrib/sort/vqsort_u16a.s: hwy/contrib/sort/vqsort_u16a.cc.s
@@ -2258,7 +2258,7 @@ hwy/contrib/sort/vqsort_u16a.s: hwy/contrib/sort/vqsort_u16a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_u16a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_u16a.cc.s
 
 hwy/contrib/sort/vqsort_u16d.o: hwy/contrib/sort/vqsort_u16d.cc.o
@@ -2266,7 +2266,7 @@ hwy/contrib/sort/vqsort_u16d.o: hwy/contrib/sort/vqsort_u16d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_u16d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_u16d.cc.o
 
 hwy/contrib/sort/vqsort_u16d.i: hwy/contrib/sort/vqsort_u16d.cc.i
@@ -2274,7 +2274,7 @@ hwy/contrib/sort/vqsort_u16d.i: hwy/contrib/sort/vqsort_u16d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_u16d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_u16d.cc.i
 
 hwy/contrib/sort/vqsort_u16d.s: hwy/contrib/sort/vqsort_u16d.cc.s
@@ -2282,7 +2282,7 @@ hwy/contrib/sort/vqsort_u16d.s: hwy/contrib/sort/vqsort_u16d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_u16d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u16d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_u16d.cc.s
 
 hwy/contrib/sort/vqsort_u32a.o: hwy/contrib/sort/vqsort_u32a.cc.o
@@ -2290,7 +2290,7 @@ hwy/contrib/sort/vqsort_u32a.o: hwy/contrib/sort/vqsort_u32a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_u32a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_u32a.cc.o
 
 hwy/contrib/sort/vqsort_u32a.i: hwy/contrib/sort/vqsort_u32a.cc.i
@@ -2298,7 +2298,7 @@ hwy/contrib/sort/vqsort_u32a.i: hwy/contrib/sort/vqsort_u32a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_u32a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_u32a.cc.i
 
 hwy/contrib/sort/vqsort_u32a.s: hwy/contrib/sort/vqsort_u32a.cc.s
@@ -2306,7 +2306,7 @@ hwy/contrib/sort/vqsort_u32a.s: hwy/contrib/sort/vqsort_u32a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_u32a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_u32a.cc.s
 
 hwy/contrib/sort/vqsort_u32d.o: hwy/contrib/sort/vqsort_u32d.cc.o
@@ -2314,7 +2314,7 @@ hwy/contrib/sort/vqsort_u32d.o: hwy/contrib/sort/vqsort_u32d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_u32d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_u32d.cc.o
 
 hwy/contrib/sort/vqsort_u32d.i: hwy/contrib/sort/vqsort_u32d.cc.i
@@ -2322,7 +2322,7 @@ hwy/contrib/sort/vqsort_u32d.i: hwy/contrib/sort/vqsort_u32d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_u32d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_u32d.cc.i
 
 hwy/contrib/sort/vqsort_u32d.s: hwy/contrib/sort/vqsort_u32d.cc.s
@@ -2330,7 +2330,7 @@ hwy/contrib/sort/vqsort_u32d.s: hwy/contrib/sort/vqsort_u32d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_u32d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u32d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_u32d.cc.s
 
 hwy/contrib/sort/vqsort_u64a.o: hwy/contrib/sort/vqsort_u64a.cc.o
@@ -2338,7 +2338,7 @@ hwy/contrib/sort/vqsort_u64a.o: hwy/contrib/sort/vqsort_u64a.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_u64a.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64a.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64a.cc.o
 .PHONY : hwy/contrib/sort/vqsort_u64a.cc.o
 
 hwy/contrib/sort/vqsort_u64a.i: hwy/contrib/sort/vqsort_u64a.cc.i
@@ -2346,7 +2346,7 @@ hwy/contrib/sort/vqsort_u64a.i: hwy/contrib/sort/vqsort_u64a.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_u64a.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64a.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64a.cc.i
 .PHONY : hwy/contrib/sort/vqsort_u64a.cc.i
 
 hwy/contrib/sort/vqsort_u64a.s: hwy/contrib/sort/vqsort_u64a.cc.s
@@ -2354,7 +2354,7 @@ hwy/contrib/sort/vqsort_u64a.s: hwy/contrib/sort/vqsort_u64a.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_u64a.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64a.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64a.cc.s
 .PHONY : hwy/contrib/sort/vqsort_u64a.cc.s
 
 hwy/contrib/sort/vqsort_u64d.o: hwy/contrib/sort/vqsort_u64d.cc.o
@@ -2362,7 +2362,7 @@ hwy/contrib/sort/vqsort_u64d.o: hwy/contrib/sort/vqsort_u64d.cc.o
 
 # target to build an object file
 hwy/contrib/sort/vqsort_u64d.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64d.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64d.cc.o
 .PHONY : hwy/contrib/sort/vqsort_u64d.cc.o
 
 hwy/contrib/sort/vqsort_u64d.i: hwy/contrib/sort/vqsort_u64d.cc.i
@@ -2370,7 +2370,7 @@ hwy/contrib/sort/vqsort_u64d.i: hwy/contrib/sort/vqsort_u64d.cc.i
 
 # target to preprocess a source file
 hwy/contrib/sort/vqsort_u64d.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64d.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64d.cc.i
 .PHONY : hwy/contrib/sort/vqsort_u64d.cc.i
 
 hwy/contrib/sort/vqsort_u64d.s: hwy/contrib/sort/vqsort_u64d.cc.s
@@ -2378,7 +2378,7 @@ hwy/contrib/sort/vqsort_u64d.s: hwy/contrib/sort/vqsort_u64d.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/sort/vqsort_u64d.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64d.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_contrib.dir/build.make _deps/highway-build/CMakeFiles/hwy_contrib.dir/hwy/contrib/sort/vqsort_u64d.cc.s
 .PHONY : hwy/contrib/sort/vqsort_u64d.cc.s
 
 hwy/contrib/thread_pool/thread_pool_test.o: hwy/contrib/thread_pool/thread_pool_test.cc.o
@@ -2386,7 +2386,7 @@ hwy/contrib/thread_pool/thread_pool_test.o: hwy/contrib/thread_pool/thread_pool_
 
 # target to build an object file
 hwy/contrib/thread_pool/thread_pool_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/thread_pool_test.dir/build.make _deps/highway-build/CMakeFiles/thread_pool_test.dir/hwy/contrib/thread_pool/thread_pool_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/thread_pool_test.dir/build.make _deps/highway-build/CMakeFiles/thread_pool_test.dir/hwy/contrib/thread_pool/thread_pool_test.cc.o
 .PHONY : hwy/contrib/thread_pool/thread_pool_test.cc.o
 
 hwy/contrib/thread_pool/thread_pool_test.i: hwy/contrib/thread_pool/thread_pool_test.cc.i
@@ -2394,7 +2394,7 @@ hwy/contrib/thread_pool/thread_pool_test.i: hwy/contrib/thread_pool/thread_pool_
 
 # target to preprocess a source file
 hwy/contrib/thread_pool/thread_pool_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/thread_pool_test.dir/build.make _deps/highway-build/CMakeFiles/thread_pool_test.dir/hwy/contrib/thread_pool/thread_pool_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/thread_pool_test.dir/build.make _deps/highway-build/CMakeFiles/thread_pool_test.dir/hwy/contrib/thread_pool/thread_pool_test.cc.i
 .PHONY : hwy/contrib/thread_pool/thread_pool_test.cc.i
 
 hwy/contrib/thread_pool/thread_pool_test.s: hwy/contrib/thread_pool/thread_pool_test.cc.s
@@ -2402,7 +2402,7 @@ hwy/contrib/thread_pool/thread_pool_test.s: hwy/contrib/thread_pool/thread_pool_
 
 # target to generate assembly for a file
 hwy/contrib/thread_pool/thread_pool_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/thread_pool_test.dir/build.make _deps/highway-build/CMakeFiles/thread_pool_test.dir/hwy/contrib/thread_pool/thread_pool_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/thread_pool_test.dir/build.make _deps/highway-build/CMakeFiles/thread_pool_test.dir/hwy/contrib/thread_pool/thread_pool_test.cc.s
 .PHONY : hwy/contrib/thread_pool/thread_pool_test.cc.s
 
 hwy/contrib/unroller/unroller_test.o: hwy/contrib/unroller/unroller_test.cc.o
@@ -2410,7 +2410,7 @@ hwy/contrib/unroller/unroller_test.o: hwy/contrib/unroller/unroller_test.cc.o
 
 # target to build an object file
 hwy/contrib/unroller/unroller_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/unroller_test.dir/build.make _deps/highway-build/CMakeFiles/unroller_test.dir/hwy/contrib/unroller/unroller_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/unroller_test.dir/build.make _deps/highway-build/CMakeFiles/unroller_test.dir/hwy/contrib/unroller/unroller_test.cc.o
 .PHONY : hwy/contrib/unroller/unroller_test.cc.o
 
 hwy/contrib/unroller/unroller_test.i: hwy/contrib/unroller/unroller_test.cc.i
@@ -2418,7 +2418,7 @@ hwy/contrib/unroller/unroller_test.i: hwy/contrib/unroller/unroller_test.cc.i
 
 # target to preprocess a source file
 hwy/contrib/unroller/unroller_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/unroller_test.dir/build.make _deps/highway-build/CMakeFiles/unroller_test.dir/hwy/contrib/unroller/unroller_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/unroller_test.dir/build.make _deps/highway-build/CMakeFiles/unroller_test.dir/hwy/contrib/unroller/unroller_test.cc.i
 .PHONY : hwy/contrib/unroller/unroller_test.cc.i
 
 hwy/contrib/unroller/unroller_test.s: hwy/contrib/unroller/unroller_test.cc.s
@@ -2426,7 +2426,7 @@ hwy/contrib/unroller/unroller_test.s: hwy/contrib/unroller/unroller_test.cc.s
 
 # target to generate assembly for a file
 hwy/contrib/unroller/unroller_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/unroller_test.dir/build.make _deps/highway-build/CMakeFiles/unroller_test.dir/hwy/contrib/unroller/unroller_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/unroller_test.dir/build.make _deps/highway-build/CMakeFiles/unroller_test.dir/hwy/contrib/unroller/unroller_test.cc.s
 .PHONY : hwy/contrib/unroller/unroller_test.cc.s
 
 hwy/examples/benchmark.o: hwy/examples/benchmark.cc.o
@@ -2434,7 +2434,7 @@ hwy/examples/benchmark.o: hwy/examples/benchmark.cc.o
 
 # target to build an object file
 hwy/examples/benchmark.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_benchmark.dir/build.make _deps/highway-build/CMakeFiles/hwy_benchmark.dir/hwy/examples/benchmark.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_benchmark.dir/build.make _deps/highway-build/CMakeFiles/hwy_benchmark.dir/hwy/examples/benchmark.cc.o
 .PHONY : hwy/examples/benchmark.cc.o
 
 hwy/examples/benchmark.i: hwy/examples/benchmark.cc.i
@@ -2442,7 +2442,7 @@ hwy/examples/benchmark.i: hwy/examples/benchmark.cc.i
 
 # target to preprocess a source file
 hwy/examples/benchmark.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_benchmark.dir/build.make _deps/highway-build/CMakeFiles/hwy_benchmark.dir/hwy/examples/benchmark.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_benchmark.dir/build.make _deps/highway-build/CMakeFiles/hwy_benchmark.dir/hwy/examples/benchmark.cc.i
 .PHONY : hwy/examples/benchmark.cc.i
 
 hwy/examples/benchmark.s: hwy/examples/benchmark.cc.s
@@ -2450,7 +2450,7 @@ hwy/examples/benchmark.s: hwy/examples/benchmark.cc.s
 
 # target to generate assembly for a file
 hwy/examples/benchmark.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_benchmark.dir/build.make _deps/highway-build/CMakeFiles/hwy_benchmark.dir/hwy/examples/benchmark.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_benchmark.dir/build.make _deps/highway-build/CMakeFiles/hwy_benchmark.dir/hwy/examples/benchmark.cc.s
 .PHONY : hwy/examples/benchmark.cc.s
 
 hwy/examples/profiler_example.o: hwy/examples/profiler_example.cc.o
@@ -2458,7 +2458,7 @@ hwy/examples/profiler_example.o: hwy/examples/profiler_example.cc.o
 
 # target to build an object file
 hwy/examples/profiler_example.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/build.make _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/hwy/examples/profiler_example.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/build.make _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/hwy/examples/profiler_example.cc.o
 .PHONY : hwy/examples/profiler_example.cc.o
 
 hwy/examples/profiler_example.i: hwy/examples/profiler_example.cc.i
@@ -2466,7 +2466,7 @@ hwy/examples/profiler_example.i: hwy/examples/profiler_example.cc.i
 
 # target to preprocess a source file
 hwy/examples/profiler_example.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/build.make _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/hwy/examples/profiler_example.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/build.make _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/hwy/examples/profiler_example.cc.i
 .PHONY : hwy/examples/profiler_example.cc.i
 
 hwy/examples/profiler_example.s: hwy/examples/profiler_example.cc.s
@@ -2474,7 +2474,7 @@ hwy/examples/profiler_example.s: hwy/examples/profiler_example.cc.s
 
 # target to generate assembly for a file
 hwy/examples/profiler_example.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/build.make _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/hwy/examples/profiler_example.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/build.make _deps/highway-build/CMakeFiles/hwy_profiler_example.dir/hwy/examples/profiler_example.cc.s
 .PHONY : hwy/examples/profiler_example.cc.s
 
 hwy/examples/skeleton.o: hwy/examples/skeleton.cc.o
@@ -2482,7 +2482,7 @@ hwy/examples/skeleton.o: hwy/examples/skeleton.cc.o
 
 # target to build an object file
 hwy/examples/skeleton.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton.cc.o
 .PHONY : hwy/examples/skeleton.cc.o
 
 hwy/examples/skeleton.i: hwy/examples/skeleton.cc.i
@@ -2490,7 +2490,7 @@ hwy/examples/skeleton.i: hwy/examples/skeleton.cc.i
 
 # target to preprocess a source file
 hwy/examples/skeleton.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton.cc.i
 .PHONY : hwy/examples/skeleton.cc.i
 
 hwy/examples/skeleton.s: hwy/examples/skeleton.cc.s
@@ -2498,7 +2498,7 @@ hwy/examples/skeleton.s: hwy/examples/skeleton.cc.s
 
 # target to generate assembly for a file
 hwy/examples/skeleton.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton.cc.s
 .PHONY : hwy/examples/skeleton.cc.s
 
 hwy/examples/skeleton_test.o: hwy/examples/skeleton_test.cc.o
@@ -2506,7 +2506,7 @@ hwy/examples/skeleton_test.o: hwy/examples/skeleton_test.cc.o
 
 # target to build an object file
 hwy/examples/skeleton_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton_test.cc.o
 .PHONY : hwy/examples/skeleton_test.cc.o
 
 hwy/examples/skeleton_test.i: hwy/examples/skeleton_test.cc.i
@@ -2514,7 +2514,7 @@ hwy/examples/skeleton_test.i: hwy/examples/skeleton_test.cc.i
 
 # target to preprocess a source file
 hwy/examples/skeleton_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton_test.cc.i
 .PHONY : hwy/examples/skeleton_test.cc.i
 
 hwy/examples/skeleton_test.s: hwy/examples/skeleton_test.cc.s
@@ -2522,7 +2522,7 @@ hwy/examples/skeleton_test.s: hwy/examples/skeleton_test.cc.s
 
 # target to generate assembly for a file
 hwy/examples/skeleton_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/skeleton_test.dir/build.make _deps/highway-build/CMakeFiles/skeleton_test.dir/hwy/examples/skeleton_test.cc.s
 .PHONY : hwy/examples/skeleton_test.cc.s
 
 hwy/highway_test.o: hwy/highway_test.cc.o
@@ -2530,7 +2530,7 @@ hwy/highway_test.o: hwy/highway_test.cc.o
 
 # target to build an object file
 hwy/highway_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/highway_test.dir/build.make _deps/highway-build/CMakeFiles/highway_test.dir/hwy/highway_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/highway_test.dir/build.make _deps/highway-build/CMakeFiles/highway_test.dir/hwy/highway_test.cc.o
 .PHONY : hwy/highway_test.cc.o
 
 hwy/highway_test.i: hwy/highway_test.cc.i
@@ -2538,7 +2538,7 @@ hwy/highway_test.i: hwy/highway_test.cc.i
 
 # target to preprocess a source file
 hwy/highway_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/highway_test.dir/build.make _deps/highway-build/CMakeFiles/highway_test.dir/hwy/highway_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/highway_test.dir/build.make _deps/highway-build/CMakeFiles/highway_test.dir/hwy/highway_test.cc.i
 .PHONY : hwy/highway_test.cc.i
 
 hwy/highway_test.s: hwy/highway_test.cc.s
@@ -2546,7 +2546,7 @@ hwy/highway_test.s: hwy/highway_test.cc.s
 
 # target to generate assembly for a file
 hwy/highway_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/highway_test.dir/build.make _deps/highway-build/CMakeFiles/highway_test.dir/hwy/highway_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/highway_test.dir/build.make _deps/highway-build/CMakeFiles/highway_test.dir/hwy/highway_test.cc.s
 .PHONY : hwy/highway_test.cc.s
 
 hwy/nanobenchmark.o: hwy/nanobenchmark.cc.o
@@ -2554,7 +2554,7 @@ hwy/nanobenchmark.o: hwy/nanobenchmark.cc.o
 
 # target to build an object file
 hwy/nanobenchmark.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.o
 .PHONY : hwy/nanobenchmark.cc.o
 
 hwy/nanobenchmark.i: hwy/nanobenchmark.cc.i
@@ -2562,7 +2562,7 @@ hwy/nanobenchmark.i: hwy/nanobenchmark.cc.i
 
 # target to preprocess a source file
 hwy/nanobenchmark.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.i
 .PHONY : hwy/nanobenchmark.cc.i
 
 hwy/nanobenchmark.s: hwy/nanobenchmark.cc.s
@@ -2570,7 +2570,7 @@ hwy/nanobenchmark.s: hwy/nanobenchmark.cc.s
 
 # target to generate assembly for a file
 hwy/nanobenchmark.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/nanobenchmark.cc.s
 .PHONY : hwy/nanobenchmark.cc.s
 
 hwy/nanobenchmark_test.o: hwy/nanobenchmark_test.cc.o
@@ -2578,7 +2578,7 @@ hwy/nanobenchmark_test.o: hwy/nanobenchmark_test.cc.o
 
 # target to build an object file
 hwy/nanobenchmark_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/build.make _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/hwy/nanobenchmark_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/build.make _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/hwy/nanobenchmark_test.cc.o
 .PHONY : hwy/nanobenchmark_test.cc.o
 
 hwy/nanobenchmark_test.i: hwy/nanobenchmark_test.cc.i
@@ -2586,7 +2586,7 @@ hwy/nanobenchmark_test.i: hwy/nanobenchmark_test.cc.i
 
 # target to preprocess a source file
 hwy/nanobenchmark_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/build.make _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/hwy/nanobenchmark_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/build.make _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/hwy/nanobenchmark_test.cc.i
 .PHONY : hwy/nanobenchmark_test.cc.i
 
 hwy/nanobenchmark_test.s: hwy/nanobenchmark_test.cc.s
@@ -2594,7 +2594,7 @@ hwy/nanobenchmark_test.s: hwy/nanobenchmark_test.cc.s
 
 # target to generate assembly for a file
 hwy/nanobenchmark_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/build.make _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/hwy/nanobenchmark_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/build.make _deps/highway-build/CMakeFiles/nanobenchmark_test.dir/hwy/nanobenchmark_test.cc.s
 .PHONY : hwy/nanobenchmark_test.cc.s
 
 hwy/per_target.o: hwy/per_target.cc.o
@@ -2602,7 +2602,7 @@ hwy/per_target.o: hwy/per_target.cc.o
 
 # target to build an object file
 hwy/per_target.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.o
 .PHONY : hwy/per_target.cc.o
 
 hwy/per_target.i: hwy/per_target.cc.i
@@ -2610,7 +2610,7 @@ hwy/per_target.i: hwy/per_target.cc.i
 
 # target to preprocess a source file
 hwy/per_target.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.i
 .PHONY : hwy/per_target.cc.i
 
 hwy/per_target.s: hwy/per_target.cc.s
@@ -2618,7 +2618,7 @@ hwy/per_target.s: hwy/per_target.cc.s
 
 # target to generate assembly for a file
 hwy/per_target.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/per_target.cc.s
 .PHONY : hwy/per_target.cc.s
 
 hwy/print.o: hwy/print.cc.o
@@ -2626,7 +2626,7 @@ hwy/print.o: hwy/print.cc.o
 
 # target to build an object file
 hwy/print.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.o
 .PHONY : hwy/print.cc.o
 
 hwy/print.i: hwy/print.cc.i
@@ -2634,7 +2634,7 @@ hwy/print.i: hwy/print.cc.i
 
 # target to preprocess a source file
 hwy/print.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.i
 .PHONY : hwy/print.cc.i
 
 hwy/print.s: hwy/print.cc.s
@@ -2642,7 +2642,7 @@ hwy/print.s: hwy/print.cc.s
 
 # target to generate assembly for a file
 hwy/print.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/print.cc.s
 .PHONY : hwy/print.cc.s
 
 hwy/targets.o: hwy/targets.cc.o
@@ -2650,7 +2650,7 @@ hwy/targets.o: hwy/targets.cc.o
 
 # target to build an object file
 hwy/targets.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.o
 .PHONY : hwy/targets.cc.o
 
 hwy/targets.i: hwy/targets.cc.i
@@ -2658,7 +2658,7 @@ hwy/targets.i: hwy/targets.cc.i
 
 # target to preprocess a source file
 hwy/targets.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.i
 .PHONY : hwy/targets.cc.i
 
 hwy/targets.s: hwy/targets.cc.s
@@ -2666,7 +2666,7 @@ hwy/targets.s: hwy/targets.cc.s
 
 # target to generate assembly for a file
 hwy/targets.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/targets.cc.s
 .PHONY : hwy/targets.cc.s
 
 hwy/targets_test.o: hwy/targets_test.cc.o
@@ -2674,7 +2674,7 @@ hwy/targets_test.o: hwy/targets_test.cc.o
 
 # target to build an object file
 hwy/targets_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/targets_test.dir/build.make _deps/highway-build/CMakeFiles/targets_test.dir/hwy/targets_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/targets_test.dir/build.make _deps/highway-build/CMakeFiles/targets_test.dir/hwy/targets_test.cc.o
 .PHONY : hwy/targets_test.cc.o
 
 hwy/targets_test.i: hwy/targets_test.cc.i
@@ -2682,7 +2682,7 @@ hwy/targets_test.i: hwy/targets_test.cc.i
 
 # target to preprocess a source file
 hwy/targets_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/targets_test.dir/build.make _deps/highway-build/CMakeFiles/targets_test.dir/hwy/targets_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/targets_test.dir/build.make _deps/highway-build/CMakeFiles/targets_test.dir/hwy/targets_test.cc.i
 .PHONY : hwy/targets_test.cc.i
 
 hwy/targets_test.s: hwy/targets_test.cc.s
@@ -2690,7 +2690,7 @@ hwy/targets_test.s: hwy/targets_test.cc.s
 
 # target to generate assembly for a file
 hwy/targets_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/targets_test.dir/build.make _deps/highway-build/CMakeFiles/targets_test.dir/hwy/targets_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/targets_test.dir/build.make _deps/highway-build/CMakeFiles/targets_test.dir/hwy/targets_test.cc.s
 .PHONY : hwy/targets_test.cc.s
 
 hwy/tests/arithmetic_test.o: hwy/tests/arithmetic_test.cc.o
@@ -2698,7 +2698,7 @@ hwy/tests/arithmetic_test.o: hwy/tests/arithmetic_test.cc.o
 
 # target to build an object file
 hwy/tests/arithmetic_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/arithmetic_test.dir/hwy/tests/arithmetic_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/arithmetic_test.dir/hwy/tests/arithmetic_test.cc.o
 .PHONY : hwy/tests/arithmetic_test.cc.o
 
 hwy/tests/arithmetic_test.i: hwy/tests/arithmetic_test.cc.i
@@ -2706,7 +2706,7 @@ hwy/tests/arithmetic_test.i: hwy/tests/arithmetic_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/arithmetic_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/arithmetic_test.dir/hwy/tests/arithmetic_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/arithmetic_test.dir/hwy/tests/arithmetic_test.cc.i
 .PHONY : hwy/tests/arithmetic_test.cc.i
 
 hwy/tests/arithmetic_test.s: hwy/tests/arithmetic_test.cc.s
@@ -2714,7 +2714,7 @@ hwy/tests/arithmetic_test.s: hwy/tests/arithmetic_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/arithmetic_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/arithmetic_test.dir/hwy/tests/arithmetic_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/arithmetic_test.dir/hwy/tests/arithmetic_test.cc.s
 .PHONY : hwy/tests/arithmetic_test.cc.s
 
 hwy/tests/blockwise_shift_test.o: hwy/tests/blockwise_shift_test.cc.o
@@ -2722,7 +2722,7 @@ hwy/tests/blockwise_shift_test.o: hwy/tests/blockwise_shift_test.cc.o
 
 # target to build an object file
 hwy/tests/blockwise_shift_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/hwy/tests/blockwise_shift_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/hwy/tests/blockwise_shift_test.cc.o
 .PHONY : hwy/tests/blockwise_shift_test.cc.o
 
 hwy/tests/blockwise_shift_test.i: hwy/tests/blockwise_shift_test.cc.i
@@ -2730,7 +2730,7 @@ hwy/tests/blockwise_shift_test.i: hwy/tests/blockwise_shift_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/blockwise_shift_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/hwy/tests/blockwise_shift_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/hwy/tests/blockwise_shift_test.cc.i
 .PHONY : hwy/tests/blockwise_shift_test.cc.i
 
 hwy/tests/blockwise_shift_test.s: hwy/tests/blockwise_shift_test.cc.s
@@ -2738,7 +2738,7 @@ hwy/tests/blockwise_shift_test.s: hwy/tests/blockwise_shift_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/blockwise_shift_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/hwy/tests/blockwise_shift_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_shift_test.dir/hwy/tests/blockwise_shift_test.cc.s
 .PHONY : hwy/tests/blockwise_shift_test.cc.s
 
 hwy/tests/blockwise_test.o: hwy/tests/blockwise_test.cc.o
@@ -2746,7 +2746,7 @@ hwy/tests/blockwise_test.o: hwy/tests/blockwise_test.cc.o
 
 # target to build an object file
 hwy/tests/blockwise_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_test.dir/hwy/tests/blockwise_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_test.dir/hwy/tests/blockwise_test.cc.o
 .PHONY : hwy/tests/blockwise_test.cc.o
 
 hwy/tests/blockwise_test.i: hwy/tests/blockwise_test.cc.i
@@ -2754,7 +2754,7 @@ hwy/tests/blockwise_test.i: hwy/tests/blockwise_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/blockwise_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_test.dir/hwy/tests/blockwise_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_test.dir/hwy/tests/blockwise_test.cc.i
 .PHONY : hwy/tests/blockwise_test.cc.i
 
 hwy/tests/blockwise_test.s: hwy/tests/blockwise_test.cc.s
@@ -2762,7 +2762,7 @@ hwy/tests/blockwise_test.s: hwy/tests/blockwise_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/blockwise_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_test.dir/hwy/tests/blockwise_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/blockwise_test.dir/build.make _deps/highway-build/CMakeFiles/blockwise_test.dir/hwy/tests/blockwise_test.cc.s
 .PHONY : hwy/tests/blockwise_test.cc.s
 
 hwy/tests/cast_test.o: hwy/tests/cast_test.cc.o
@@ -2770,7 +2770,7 @@ hwy/tests/cast_test.o: hwy/tests/cast_test.cc.o
 
 # target to build an object file
 hwy/tests/cast_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/cast_test.dir/build.make _deps/highway-build/CMakeFiles/cast_test.dir/hwy/tests/cast_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/cast_test.dir/build.make _deps/highway-build/CMakeFiles/cast_test.dir/hwy/tests/cast_test.cc.o
 .PHONY : hwy/tests/cast_test.cc.o
 
 hwy/tests/cast_test.i: hwy/tests/cast_test.cc.i
@@ -2778,7 +2778,7 @@ hwy/tests/cast_test.i: hwy/tests/cast_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/cast_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/cast_test.dir/build.make _deps/highway-build/CMakeFiles/cast_test.dir/hwy/tests/cast_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/cast_test.dir/build.make _deps/highway-build/CMakeFiles/cast_test.dir/hwy/tests/cast_test.cc.i
 .PHONY : hwy/tests/cast_test.cc.i
 
 hwy/tests/cast_test.s: hwy/tests/cast_test.cc.s
@@ -2786,7 +2786,7 @@ hwy/tests/cast_test.s: hwy/tests/cast_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/cast_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/cast_test.dir/build.make _deps/highway-build/CMakeFiles/cast_test.dir/hwy/tests/cast_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/cast_test.dir/build.make _deps/highway-build/CMakeFiles/cast_test.dir/hwy/tests/cast_test.cc.s
 .PHONY : hwy/tests/cast_test.cc.s
 
 hwy/tests/combine_test.o: hwy/tests/combine_test.cc.o
@@ -2794,7 +2794,7 @@ hwy/tests/combine_test.o: hwy/tests/combine_test.cc.o
 
 # target to build an object file
 hwy/tests/combine_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/combine_test.dir/build.make _deps/highway-build/CMakeFiles/combine_test.dir/hwy/tests/combine_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/combine_test.dir/build.make _deps/highway-build/CMakeFiles/combine_test.dir/hwy/tests/combine_test.cc.o
 .PHONY : hwy/tests/combine_test.cc.o
 
 hwy/tests/combine_test.i: hwy/tests/combine_test.cc.i
@@ -2802,7 +2802,7 @@ hwy/tests/combine_test.i: hwy/tests/combine_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/combine_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/combine_test.dir/build.make _deps/highway-build/CMakeFiles/combine_test.dir/hwy/tests/combine_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/combine_test.dir/build.make _deps/highway-build/CMakeFiles/combine_test.dir/hwy/tests/combine_test.cc.i
 .PHONY : hwy/tests/combine_test.cc.i
 
 hwy/tests/combine_test.s: hwy/tests/combine_test.cc.s
@@ -2810,7 +2810,7 @@ hwy/tests/combine_test.s: hwy/tests/combine_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/combine_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/combine_test.dir/build.make _deps/highway-build/CMakeFiles/combine_test.dir/hwy/tests/combine_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/combine_test.dir/build.make _deps/highway-build/CMakeFiles/combine_test.dir/hwy/tests/combine_test.cc.s
 .PHONY : hwy/tests/combine_test.cc.s
 
 hwy/tests/compare_test.o: hwy/tests/compare_test.cc.o
@@ -2818,7 +2818,7 @@ hwy/tests/compare_test.o: hwy/tests/compare_test.cc.o
 
 # target to build an object file
 hwy/tests/compare_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compare_test.dir/build.make _deps/highway-build/CMakeFiles/compare_test.dir/hwy/tests/compare_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compare_test.dir/build.make _deps/highway-build/CMakeFiles/compare_test.dir/hwy/tests/compare_test.cc.o
 .PHONY : hwy/tests/compare_test.cc.o
 
 hwy/tests/compare_test.i: hwy/tests/compare_test.cc.i
@@ -2826,7 +2826,7 @@ hwy/tests/compare_test.i: hwy/tests/compare_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/compare_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compare_test.dir/build.make _deps/highway-build/CMakeFiles/compare_test.dir/hwy/tests/compare_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compare_test.dir/build.make _deps/highway-build/CMakeFiles/compare_test.dir/hwy/tests/compare_test.cc.i
 .PHONY : hwy/tests/compare_test.cc.i
 
 hwy/tests/compare_test.s: hwy/tests/compare_test.cc.s
@@ -2834,7 +2834,7 @@ hwy/tests/compare_test.s: hwy/tests/compare_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/compare_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compare_test.dir/build.make _deps/highway-build/CMakeFiles/compare_test.dir/hwy/tests/compare_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compare_test.dir/build.make _deps/highway-build/CMakeFiles/compare_test.dir/hwy/tests/compare_test.cc.s
 .PHONY : hwy/tests/compare_test.cc.s
 
 hwy/tests/compress_test.o: hwy/tests/compress_test.cc.o
@@ -2842,7 +2842,7 @@ hwy/tests/compress_test.o: hwy/tests/compress_test.cc.o
 
 # target to build an object file
 hwy/tests/compress_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compress_test.dir/build.make _deps/highway-build/CMakeFiles/compress_test.dir/hwy/tests/compress_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compress_test.dir/build.make _deps/highway-build/CMakeFiles/compress_test.dir/hwy/tests/compress_test.cc.o
 .PHONY : hwy/tests/compress_test.cc.o
 
 hwy/tests/compress_test.i: hwy/tests/compress_test.cc.i
@@ -2850,7 +2850,7 @@ hwy/tests/compress_test.i: hwy/tests/compress_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/compress_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compress_test.dir/build.make _deps/highway-build/CMakeFiles/compress_test.dir/hwy/tests/compress_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compress_test.dir/build.make _deps/highway-build/CMakeFiles/compress_test.dir/hwy/tests/compress_test.cc.i
 .PHONY : hwy/tests/compress_test.cc.i
 
 hwy/tests/compress_test.s: hwy/tests/compress_test.cc.s
@@ -2858,7 +2858,7 @@ hwy/tests/compress_test.s: hwy/tests/compress_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/compress_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compress_test.dir/build.make _deps/highway-build/CMakeFiles/compress_test.dir/hwy/tests/compress_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/compress_test.dir/build.make _deps/highway-build/CMakeFiles/compress_test.dir/hwy/tests/compress_test.cc.s
 .PHONY : hwy/tests/compress_test.cc.s
 
 hwy/tests/convert_test.o: hwy/tests/convert_test.cc.o
@@ -2866,7 +2866,7 @@ hwy/tests/convert_test.o: hwy/tests/convert_test.cc.o
 
 # target to build an object file
 hwy/tests/convert_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/convert_test.dir/build.make _deps/highway-build/CMakeFiles/convert_test.dir/hwy/tests/convert_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/convert_test.dir/build.make _deps/highway-build/CMakeFiles/convert_test.dir/hwy/tests/convert_test.cc.o
 .PHONY : hwy/tests/convert_test.cc.o
 
 hwy/tests/convert_test.i: hwy/tests/convert_test.cc.i
@@ -2874,7 +2874,7 @@ hwy/tests/convert_test.i: hwy/tests/convert_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/convert_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/convert_test.dir/build.make _deps/highway-build/CMakeFiles/convert_test.dir/hwy/tests/convert_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/convert_test.dir/build.make _deps/highway-build/CMakeFiles/convert_test.dir/hwy/tests/convert_test.cc.i
 .PHONY : hwy/tests/convert_test.cc.i
 
 hwy/tests/convert_test.s: hwy/tests/convert_test.cc.s
@@ -2882,7 +2882,7 @@ hwy/tests/convert_test.s: hwy/tests/convert_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/convert_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/convert_test.dir/build.make _deps/highway-build/CMakeFiles/convert_test.dir/hwy/tests/convert_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/convert_test.dir/build.make _deps/highway-build/CMakeFiles/convert_test.dir/hwy/tests/convert_test.cc.s
 .PHONY : hwy/tests/convert_test.cc.s
 
 hwy/tests/count_test.o: hwy/tests/count_test.cc.o
@@ -2890,7 +2890,7 @@ hwy/tests/count_test.o: hwy/tests/count_test.cc.o
 
 # target to build an object file
 hwy/tests/count_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/count_test.dir/build.make _deps/highway-build/CMakeFiles/count_test.dir/hwy/tests/count_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/count_test.dir/build.make _deps/highway-build/CMakeFiles/count_test.dir/hwy/tests/count_test.cc.o
 .PHONY : hwy/tests/count_test.cc.o
 
 hwy/tests/count_test.i: hwy/tests/count_test.cc.i
@@ -2898,7 +2898,7 @@ hwy/tests/count_test.i: hwy/tests/count_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/count_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/count_test.dir/build.make _deps/highway-build/CMakeFiles/count_test.dir/hwy/tests/count_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/count_test.dir/build.make _deps/highway-build/CMakeFiles/count_test.dir/hwy/tests/count_test.cc.i
 .PHONY : hwy/tests/count_test.cc.i
 
 hwy/tests/count_test.s: hwy/tests/count_test.cc.s
@@ -2906,7 +2906,7 @@ hwy/tests/count_test.s: hwy/tests/count_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/count_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/count_test.dir/build.make _deps/highway-build/CMakeFiles/count_test.dir/hwy/tests/count_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/count_test.dir/build.make _deps/highway-build/CMakeFiles/count_test.dir/hwy/tests/count_test.cc.s
 .PHONY : hwy/tests/count_test.cc.s
 
 hwy/tests/crypto_test.o: hwy/tests/crypto_test.cc.o
@@ -2914,7 +2914,7 @@ hwy/tests/crypto_test.o: hwy/tests/crypto_test.cc.o
 
 # target to build an object file
 hwy/tests/crypto_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/crypto_test.dir/build.make _deps/highway-build/CMakeFiles/crypto_test.dir/hwy/tests/crypto_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/crypto_test.dir/build.make _deps/highway-build/CMakeFiles/crypto_test.dir/hwy/tests/crypto_test.cc.o
 .PHONY : hwy/tests/crypto_test.cc.o
 
 hwy/tests/crypto_test.i: hwy/tests/crypto_test.cc.i
@@ -2922,7 +2922,7 @@ hwy/tests/crypto_test.i: hwy/tests/crypto_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/crypto_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/crypto_test.dir/build.make _deps/highway-build/CMakeFiles/crypto_test.dir/hwy/tests/crypto_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/crypto_test.dir/build.make _deps/highway-build/CMakeFiles/crypto_test.dir/hwy/tests/crypto_test.cc.i
 .PHONY : hwy/tests/crypto_test.cc.i
 
 hwy/tests/crypto_test.s: hwy/tests/crypto_test.cc.s
@@ -2930,7 +2930,7 @@ hwy/tests/crypto_test.s: hwy/tests/crypto_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/crypto_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/crypto_test.dir/build.make _deps/highway-build/CMakeFiles/crypto_test.dir/hwy/tests/crypto_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/crypto_test.dir/build.make _deps/highway-build/CMakeFiles/crypto_test.dir/hwy/tests/crypto_test.cc.s
 .PHONY : hwy/tests/crypto_test.cc.s
 
 hwy/tests/demote_test.o: hwy/tests/demote_test.cc.o
@@ -2938,7 +2938,7 @@ hwy/tests/demote_test.o: hwy/tests/demote_test.cc.o
 
 # target to build an object file
 hwy/tests/demote_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/demote_test.dir/build.make _deps/highway-build/CMakeFiles/demote_test.dir/hwy/tests/demote_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/demote_test.dir/build.make _deps/highway-build/CMakeFiles/demote_test.dir/hwy/tests/demote_test.cc.o
 .PHONY : hwy/tests/demote_test.cc.o
 
 hwy/tests/demote_test.i: hwy/tests/demote_test.cc.i
@@ -2946,7 +2946,7 @@ hwy/tests/demote_test.i: hwy/tests/demote_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/demote_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/demote_test.dir/build.make _deps/highway-build/CMakeFiles/demote_test.dir/hwy/tests/demote_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/demote_test.dir/build.make _deps/highway-build/CMakeFiles/demote_test.dir/hwy/tests/demote_test.cc.i
 .PHONY : hwy/tests/demote_test.cc.i
 
 hwy/tests/demote_test.s: hwy/tests/demote_test.cc.s
@@ -2954,7 +2954,7 @@ hwy/tests/demote_test.s: hwy/tests/demote_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/demote_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/demote_test.dir/build.make _deps/highway-build/CMakeFiles/demote_test.dir/hwy/tests/demote_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/demote_test.dir/build.make _deps/highway-build/CMakeFiles/demote_test.dir/hwy/tests/demote_test.cc.s
 .PHONY : hwy/tests/demote_test.cc.s
 
 hwy/tests/dup128_vec_test.o: hwy/tests/dup128_vec_test.cc.o
@@ -2962,7 +2962,7 @@ hwy/tests/dup128_vec_test.o: hwy/tests/dup128_vec_test.cc.o
 
 # target to build an object file
 hwy/tests/dup128_vec_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dup128_vec_test.dir/build.make _deps/highway-build/CMakeFiles/dup128_vec_test.dir/hwy/tests/dup128_vec_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dup128_vec_test.dir/build.make _deps/highway-build/CMakeFiles/dup128_vec_test.dir/hwy/tests/dup128_vec_test.cc.o
 .PHONY : hwy/tests/dup128_vec_test.cc.o
 
 hwy/tests/dup128_vec_test.i: hwy/tests/dup128_vec_test.cc.i
@@ -2970,7 +2970,7 @@ hwy/tests/dup128_vec_test.i: hwy/tests/dup128_vec_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/dup128_vec_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dup128_vec_test.dir/build.make _deps/highway-build/CMakeFiles/dup128_vec_test.dir/hwy/tests/dup128_vec_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dup128_vec_test.dir/build.make _deps/highway-build/CMakeFiles/dup128_vec_test.dir/hwy/tests/dup128_vec_test.cc.i
 .PHONY : hwy/tests/dup128_vec_test.cc.i
 
 hwy/tests/dup128_vec_test.s: hwy/tests/dup128_vec_test.cc.s
@@ -2978,7 +2978,7 @@ hwy/tests/dup128_vec_test.s: hwy/tests/dup128_vec_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/dup128_vec_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dup128_vec_test.dir/build.make _deps/highway-build/CMakeFiles/dup128_vec_test.dir/hwy/tests/dup128_vec_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/dup128_vec_test.dir/build.make _deps/highway-build/CMakeFiles/dup128_vec_test.dir/hwy/tests/dup128_vec_test.cc.s
 .PHONY : hwy/tests/dup128_vec_test.cc.s
 
 hwy/tests/expand_test.o: hwy/tests/expand_test.cc.o
@@ -2986,7 +2986,7 @@ hwy/tests/expand_test.o: hwy/tests/expand_test.cc.o
 
 # target to build an object file
 hwy/tests/expand_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/expand_test.dir/build.make _deps/highway-build/CMakeFiles/expand_test.dir/hwy/tests/expand_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/expand_test.dir/build.make _deps/highway-build/CMakeFiles/expand_test.dir/hwy/tests/expand_test.cc.o
 .PHONY : hwy/tests/expand_test.cc.o
 
 hwy/tests/expand_test.i: hwy/tests/expand_test.cc.i
@@ -2994,7 +2994,7 @@ hwy/tests/expand_test.i: hwy/tests/expand_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/expand_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/expand_test.dir/build.make _deps/highway-build/CMakeFiles/expand_test.dir/hwy/tests/expand_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/expand_test.dir/build.make _deps/highway-build/CMakeFiles/expand_test.dir/hwy/tests/expand_test.cc.i
 .PHONY : hwy/tests/expand_test.cc.i
 
 hwy/tests/expand_test.s: hwy/tests/expand_test.cc.s
@@ -3002,7 +3002,7 @@ hwy/tests/expand_test.s: hwy/tests/expand_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/expand_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/expand_test.dir/build.make _deps/highway-build/CMakeFiles/expand_test.dir/hwy/tests/expand_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/expand_test.dir/build.make _deps/highway-build/CMakeFiles/expand_test.dir/hwy/tests/expand_test.cc.s
 .PHONY : hwy/tests/expand_test.cc.s
 
 hwy/tests/float_test.o: hwy/tests/float_test.cc.o
@@ -3010,7 +3010,7 @@ hwy/tests/float_test.o: hwy/tests/float_test.cc.o
 
 # target to build an object file
 hwy/tests/float_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/float_test.dir/build.make _deps/highway-build/CMakeFiles/float_test.dir/hwy/tests/float_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/float_test.dir/build.make _deps/highway-build/CMakeFiles/float_test.dir/hwy/tests/float_test.cc.o
 .PHONY : hwy/tests/float_test.cc.o
 
 hwy/tests/float_test.i: hwy/tests/float_test.cc.i
@@ -3018,7 +3018,7 @@ hwy/tests/float_test.i: hwy/tests/float_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/float_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/float_test.dir/build.make _deps/highway-build/CMakeFiles/float_test.dir/hwy/tests/float_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/float_test.dir/build.make _deps/highway-build/CMakeFiles/float_test.dir/hwy/tests/float_test.cc.i
 .PHONY : hwy/tests/float_test.cc.i
 
 hwy/tests/float_test.s: hwy/tests/float_test.cc.s
@@ -3026,7 +3026,7 @@ hwy/tests/float_test.s: hwy/tests/float_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/float_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/float_test.dir/build.make _deps/highway-build/CMakeFiles/float_test.dir/hwy/tests/float_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/float_test.dir/build.make _deps/highway-build/CMakeFiles/float_test.dir/hwy/tests/float_test.cc.s
 .PHONY : hwy/tests/float_test.cc.s
 
 hwy/tests/foreach_vec_test.o: hwy/tests/foreach_vec_test.cc.o
@@ -3034,7 +3034,7 @@ hwy/tests/foreach_vec_test.o: hwy/tests/foreach_vec_test.cc.o
 
 # target to build an object file
 hwy/tests/foreach_vec_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/foreach_vec_test.dir/build.make _deps/highway-build/CMakeFiles/foreach_vec_test.dir/hwy/tests/foreach_vec_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/foreach_vec_test.dir/build.make _deps/highway-build/CMakeFiles/foreach_vec_test.dir/hwy/tests/foreach_vec_test.cc.o
 .PHONY : hwy/tests/foreach_vec_test.cc.o
 
 hwy/tests/foreach_vec_test.i: hwy/tests/foreach_vec_test.cc.i
@@ -3042,7 +3042,7 @@ hwy/tests/foreach_vec_test.i: hwy/tests/foreach_vec_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/foreach_vec_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/foreach_vec_test.dir/build.make _deps/highway-build/CMakeFiles/foreach_vec_test.dir/hwy/tests/foreach_vec_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/foreach_vec_test.dir/build.make _deps/highway-build/CMakeFiles/foreach_vec_test.dir/hwy/tests/foreach_vec_test.cc.i
 .PHONY : hwy/tests/foreach_vec_test.cc.i
 
 hwy/tests/foreach_vec_test.s: hwy/tests/foreach_vec_test.cc.s
@@ -3050,7 +3050,7 @@ hwy/tests/foreach_vec_test.s: hwy/tests/foreach_vec_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/foreach_vec_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/foreach_vec_test.dir/build.make _deps/highway-build/CMakeFiles/foreach_vec_test.dir/hwy/tests/foreach_vec_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/foreach_vec_test.dir/build.make _deps/highway-build/CMakeFiles/foreach_vec_test.dir/hwy/tests/foreach_vec_test.cc.s
 .PHONY : hwy/tests/foreach_vec_test.cc.s
 
 hwy/tests/if_test.o: hwy/tests/if_test.cc.o
@@ -3058,7 +3058,7 @@ hwy/tests/if_test.o: hwy/tests/if_test.cc.o
 
 # target to build an object file
 hwy/tests/if_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/if_test.dir/build.make _deps/highway-build/CMakeFiles/if_test.dir/hwy/tests/if_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/if_test.dir/build.make _deps/highway-build/CMakeFiles/if_test.dir/hwy/tests/if_test.cc.o
 .PHONY : hwy/tests/if_test.cc.o
 
 hwy/tests/if_test.i: hwy/tests/if_test.cc.i
@@ -3066,7 +3066,7 @@ hwy/tests/if_test.i: hwy/tests/if_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/if_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/if_test.dir/build.make _deps/highway-build/CMakeFiles/if_test.dir/hwy/tests/if_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/if_test.dir/build.make _deps/highway-build/CMakeFiles/if_test.dir/hwy/tests/if_test.cc.i
 .PHONY : hwy/tests/if_test.cc.i
 
 hwy/tests/if_test.s: hwy/tests/if_test.cc.s
@@ -3074,7 +3074,7 @@ hwy/tests/if_test.s: hwy/tests/if_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/if_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/if_test.dir/build.make _deps/highway-build/CMakeFiles/if_test.dir/hwy/tests/if_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/if_test.dir/build.make _deps/highway-build/CMakeFiles/if_test.dir/hwy/tests/if_test.cc.s
 .PHONY : hwy/tests/if_test.cc.s
 
 hwy/tests/interleaved_test.o: hwy/tests/interleaved_test.cc.o
@@ -3082,7 +3082,7 @@ hwy/tests/interleaved_test.o: hwy/tests/interleaved_test.cc.o
 
 # target to build an object file
 hwy/tests/interleaved_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/interleaved_test.dir/build.make _deps/highway-build/CMakeFiles/interleaved_test.dir/hwy/tests/interleaved_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/interleaved_test.dir/build.make _deps/highway-build/CMakeFiles/interleaved_test.dir/hwy/tests/interleaved_test.cc.o
 .PHONY : hwy/tests/interleaved_test.cc.o
 
 hwy/tests/interleaved_test.i: hwy/tests/interleaved_test.cc.i
@@ -3090,7 +3090,7 @@ hwy/tests/interleaved_test.i: hwy/tests/interleaved_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/interleaved_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/interleaved_test.dir/build.make _deps/highway-build/CMakeFiles/interleaved_test.dir/hwy/tests/interleaved_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/interleaved_test.dir/build.make _deps/highway-build/CMakeFiles/interleaved_test.dir/hwy/tests/interleaved_test.cc.i
 .PHONY : hwy/tests/interleaved_test.cc.i
 
 hwy/tests/interleaved_test.s: hwy/tests/interleaved_test.cc.s
@@ -3098,7 +3098,7 @@ hwy/tests/interleaved_test.s: hwy/tests/interleaved_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/interleaved_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/interleaved_test.dir/build.make _deps/highway-build/CMakeFiles/interleaved_test.dir/hwy/tests/interleaved_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/interleaved_test.dir/build.make _deps/highway-build/CMakeFiles/interleaved_test.dir/hwy/tests/interleaved_test.cc.s
 .PHONY : hwy/tests/interleaved_test.cc.s
 
 hwy/tests/list_targets.o: hwy/tests/list_targets.cc.o
@@ -3106,7 +3106,7 @@ hwy/tests/list_targets.o: hwy/tests/list_targets.cc.o
 
 # target to build an object file
 hwy/tests/list_targets.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_list_targets.dir/build.make _deps/highway-build/CMakeFiles/hwy_list_targets.dir/hwy/tests/list_targets.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_list_targets.dir/build.make _deps/highway-build/CMakeFiles/hwy_list_targets.dir/hwy/tests/list_targets.cc.o
 .PHONY : hwy/tests/list_targets.cc.o
 
 hwy/tests/list_targets.i: hwy/tests/list_targets.cc.i
@@ -3114,7 +3114,7 @@ hwy/tests/list_targets.i: hwy/tests/list_targets.cc.i
 
 # target to preprocess a source file
 hwy/tests/list_targets.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_list_targets.dir/build.make _deps/highway-build/CMakeFiles/hwy_list_targets.dir/hwy/tests/list_targets.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_list_targets.dir/build.make _deps/highway-build/CMakeFiles/hwy_list_targets.dir/hwy/tests/list_targets.cc.i
 .PHONY : hwy/tests/list_targets.cc.i
 
 hwy/tests/list_targets.s: hwy/tests/list_targets.cc.s
@@ -3122,7 +3122,7 @@ hwy/tests/list_targets.s: hwy/tests/list_targets.cc.s
 
 # target to generate assembly for a file
 hwy/tests/list_targets.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_list_targets.dir/build.make _deps/highway-build/CMakeFiles/hwy_list_targets.dir/hwy/tests/list_targets.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_list_targets.dir/build.make _deps/highway-build/CMakeFiles/hwy_list_targets.dir/hwy/tests/list_targets.cc.s
 .PHONY : hwy/tests/list_targets.cc.s
 
 hwy/tests/logical_test.o: hwy/tests/logical_test.cc.o
@@ -3130,7 +3130,7 @@ hwy/tests/logical_test.o: hwy/tests/logical_test.cc.o
 
 # target to build an object file
 hwy/tests/logical_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/logical_test.dir/build.make _deps/highway-build/CMakeFiles/logical_test.dir/hwy/tests/logical_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/logical_test.dir/build.make _deps/highway-build/CMakeFiles/logical_test.dir/hwy/tests/logical_test.cc.o
 .PHONY : hwy/tests/logical_test.cc.o
 
 hwy/tests/logical_test.i: hwy/tests/logical_test.cc.i
@@ -3138,7 +3138,7 @@ hwy/tests/logical_test.i: hwy/tests/logical_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/logical_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/logical_test.dir/build.make _deps/highway-build/CMakeFiles/logical_test.dir/hwy/tests/logical_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/logical_test.dir/build.make _deps/highway-build/CMakeFiles/logical_test.dir/hwy/tests/logical_test.cc.i
 .PHONY : hwy/tests/logical_test.cc.i
 
 hwy/tests/logical_test.s: hwy/tests/logical_test.cc.s
@@ -3146,7 +3146,7 @@ hwy/tests/logical_test.s: hwy/tests/logical_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/logical_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/logical_test.dir/build.make _deps/highway-build/CMakeFiles/logical_test.dir/hwy/tests/logical_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/logical_test.dir/build.make _deps/highway-build/CMakeFiles/logical_test.dir/hwy/tests/logical_test.cc.s
 .PHONY : hwy/tests/logical_test.cc.s
 
 hwy/tests/mask_combine_test.o: hwy/tests/mask_combine_test.cc.o
@@ -3154,7 +3154,7 @@ hwy/tests/mask_combine_test.o: hwy/tests/mask_combine_test.cc.o
 
 # target to build an object file
 hwy/tests/mask_combine_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_combine_test.dir/build.make _deps/highway-build/CMakeFiles/mask_combine_test.dir/hwy/tests/mask_combine_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_combine_test.dir/build.make _deps/highway-build/CMakeFiles/mask_combine_test.dir/hwy/tests/mask_combine_test.cc.o
 .PHONY : hwy/tests/mask_combine_test.cc.o
 
 hwy/tests/mask_combine_test.i: hwy/tests/mask_combine_test.cc.i
@@ -3162,7 +3162,7 @@ hwy/tests/mask_combine_test.i: hwy/tests/mask_combine_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/mask_combine_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_combine_test.dir/build.make _deps/highway-build/CMakeFiles/mask_combine_test.dir/hwy/tests/mask_combine_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_combine_test.dir/build.make _deps/highway-build/CMakeFiles/mask_combine_test.dir/hwy/tests/mask_combine_test.cc.i
 .PHONY : hwy/tests/mask_combine_test.cc.i
 
 hwy/tests/mask_combine_test.s: hwy/tests/mask_combine_test.cc.s
@@ -3170,7 +3170,7 @@ hwy/tests/mask_combine_test.s: hwy/tests/mask_combine_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/mask_combine_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_combine_test.dir/build.make _deps/highway-build/CMakeFiles/mask_combine_test.dir/hwy/tests/mask_combine_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_combine_test.dir/build.make _deps/highway-build/CMakeFiles/mask_combine_test.dir/hwy/tests/mask_combine_test.cc.s
 .PHONY : hwy/tests/mask_combine_test.cc.s
 
 hwy/tests/mask_convert_test.o: hwy/tests/mask_convert_test.cc.o
@@ -3178,7 +3178,7 @@ hwy/tests/mask_convert_test.o: hwy/tests/mask_convert_test.cc.o
 
 # target to build an object file
 hwy/tests/mask_convert_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_convert_test.dir/build.make _deps/highway-build/CMakeFiles/mask_convert_test.dir/hwy/tests/mask_convert_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_convert_test.dir/build.make _deps/highway-build/CMakeFiles/mask_convert_test.dir/hwy/tests/mask_convert_test.cc.o
 .PHONY : hwy/tests/mask_convert_test.cc.o
 
 hwy/tests/mask_convert_test.i: hwy/tests/mask_convert_test.cc.i
@@ -3186,7 +3186,7 @@ hwy/tests/mask_convert_test.i: hwy/tests/mask_convert_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/mask_convert_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_convert_test.dir/build.make _deps/highway-build/CMakeFiles/mask_convert_test.dir/hwy/tests/mask_convert_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_convert_test.dir/build.make _deps/highway-build/CMakeFiles/mask_convert_test.dir/hwy/tests/mask_convert_test.cc.i
 .PHONY : hwy/tests/mask_convert_test.cc.i
 
 hwy/tests/mask_convert_test.s: hwy/tests/mask_convert_test.cc.s
@@ -3194,7 +3194,7 @@ hwy/tests/mask_convert_test.s: hwy/tests/mask_convert_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/mask_convert_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_convert_test.dir/build.make _deps/highway-build/CMakeFiles/mask_convert_test.dir/hwy/tests/mask_convert_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_convert_test.dir/build.make _deps/highway-build/CMakeFiles/mask_convert_test.dir/hwy/tests/mask_convert_test.cc.s
 .PHONY : hwy/tests/mask_convert_test.cc.s
 
 hwy/tests/mask_mem_test.o: hwy/tests/mask_mem_test.cc.o
@@ -3202,7 +3202,7 @@ hwy/tests/mask_mem_test.o: hwy/tests/mask_mem_test.cc.o
 
 # target to build an object file
 hwy/tests/mask_mem_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_mem_test.dir/build.make _deps/highway-build/CMakeFiles/mask_mem_test.dir/hwy/tests/mask_mem_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_mem_test.dir/build.make _deps/highway-build/CMakeFiles/mask_mem_test.dir/hwy/tests/mask_mem_test.cc.o
 .PHONY : hwy/tests/mask_mem_test.cc.o
 
 hwy/tests/mask_mem_test.i: hwy/tests/mask_mem_test.cc.i
@@ -3210,7 +3210,7 @@ hwy/tests/mask_mem_test.i: hwy/tests/mask_mem_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/mask_mem_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_mem_test.dir/build.make _deps/highway-build/CMakeFiles/mask_mem_test.dir/hwy/tests/mask_mem_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_mem_test.dir/build.make _deps/highway-build/CMakeFiles/mask_mem_test.dir/hwy/tests/mask_mem_test.cc.i
 .PHONY : hwy/tests/mask_mem_test.cc.i
 
 hwy/tests/mask_mem_test.s: hwy/tests/mask_mem_test.cc.s
@@ -3218,7 +3218,7 @@ hwy/tests/mask_mem_test.s: hwy/tests/mask_mem_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/mask_mem_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_mem_test.dir/build.make _deps/highway-build/CMakeFiles/mask_mem_test.dir/hwy/tests/mask_mem_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_mem_test.dir/build.make _deps/highway-build/CMakeFiles/mask_mem_test.dir/hwy/tests/mask_mem_test.cc.s
 .PHONY : hwy/tests/mask_mem_test.cc.s
 
 hwy/tests/mask_slide_test.o: hwy/tests/mask_slide_test.cc.o
@@ -3226,7 +3226,7 @@ hwy/tests/mask_slide_test.o: hwy/tests/mask_slide_test.cc.o
 
 # target to build an object file
 hwy/tests/mask_slide_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_slide_test.dir/build.make _deps/highway-build/CMakeFiles/mask_slide_test.dir/hwy/tests/mask_slide_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_slide_test.dir/build.make _deps/highway-build/CMakeFiles/mask_slide_test.dir/hwy/tests/mask_slide_test.cc.o
 .PHONY : hwy/tests/mask_slide_test.cc.o
 
 hwy/tests/mask_slide_test.i: hwy/tests/mask_slide_test.cc.i
@@ -3234,7 +3234,7 @@ hwy/tests/mask_slide_test.i: hwy/tests/mask_slide_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/mask_slide_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_slide_test.dir/build.make _deps/highway-build/CMakeFiles/mask_slide_test.dir/hwy/tests/mask_slide_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_slide_test.dir/build.make _deps/highway-build/CMakeFiles/mask_slide_test.dir/hwy/tests/mask_slide_test.cc.i
 .PHONY : hwy/tests/mask_slide_test.cc.i
 
 hwy/tests/mask_slide_test.s: hwy/tests/mask_slide_test.cc.s
@@ -3242,7 +3242,7 @@ hwy/tests/mask_slide_test.s: hwy/tests/mask_slide_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/mask_slide_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_slide_test.dir/build.make _deps/highway-build/CMakeFiles/mask_slide_test.dir/hwy/tests/mask_slide_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_slide_test.dir/build.make _deps/highway-build/CMakeFiles/mask_slide_test.dir/hwy/tests/mask_slide_test.cc.s
 .PHONY : hwy/tests/mask_slide_test.cc.s
 
 hwy/tests/mask_test.o: hwy/tests/mask_test.cc.o
@@ -3250,7 +3250,7 @@ hwy/tests/mask_test.o: hwy/tests/mask_test.cc.o
 
 # target to build an object file
 hwy/tests/mask_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_test.dir/build.make _deps/highway-build/CMakeFiles/mask_test.dir/hwy/tests/mask_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_test.dir/build.make _deps/highway-build/CMakeFiles/mask_test.dir/hwy/tests/mask_test.cc.o
 .PHONY : hwy/tests/mask_test.cc.o
 
 hwy/tests/mask_test.i: hwy/tests/mask_test.cc.i
@@ -3258,7 +3258,7 @@ hwy/tests/mask_test.i: hwy/tests/mask_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/mask_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_test.dir/build.make _deps/highway-build/CMakeFiles/mask_test.dir/hwy/tests/mask_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_test.dir/build.make _deps/highway-build/CMakeFiles/mask_test.dir/hwy/tests/mask_test.cc.i
 .PHONY : hwy/tests/mask_test.cc.i
 
 hwy/tests/mask_test.s: hwy/tests/mask_test.cc.s
@@ -3266,7 +3266,7 @@ hwy/tests/mask_test.s: hwy/tests/mask_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/mask_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_test.dir/build.make _deps/highway-build/CMakeFiles/mask_test.dir/hwy/tests/mask_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mask_test.dir/build.make _deps/highway-build/CMakeFiles/mask_test.dir/hwy/tests/mask_test.cc.s
 .PHONY : hwy/tests/mask_test.cc.s
 
 hwy/tests/masked_arithmetic_test.o: hwy/tests/masked_arithmetic_test.cc.o
@@ -3274,7 +3274,7 @@ hwy/tests/masked_arithmetic_test.o: hwy/tests/masked_arithmetic_test.cc.o
 
 # target to build an object file
 hwy/tests/masked_arithmetic_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/hwy/tests/masked_arithmetic_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/hwy/tests/masked_arithmetic_test.cc.o
 .PHONY : hwy/tests/masked_arithmetic_test.cc.o
 
 hwy/tests/masked_arithmetic_test.i: hwy/tests/masked_arithmetic_test.cc.i
@@ -3282,7 +3282,7 @@ hwy/tests/masked_arithmetic_test.i: hwy/tests/masked_arithmetic_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/masked_arithmetic_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/hwy/tests/masked_arithmetic_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/hwy/tests/masked_arithmetic_test.cc.i
 .PHONY : hwy/tests/masked_arithmetic_test.cc.i
 
 hwy/tests/masked_arithmetic_test.s: hwy/tests/masked_arithmetic_test.cc.s
@@ -3290,7 +3290,7 @@ hwy/tests/masked_arithmetic_test.s: hwy/tests/masked_arithmetic_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/masked_arithmetic_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/hwy/tests/masked_arithmetic_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/build.make _deps/highway-build/CMakeFiles/masked_arithmetic_test.dir/hwy/tests/masked_arithmetic_test.cc.s
 .PHONY : hwy/tests/masked_arithmetic_test.cc.s
 
 hwy/tests/memory_test.o: hwy/tests/memory_test.cc.o
@@ -3298,7 +3298,7 @@ hwy/tests/memory_test.o: hwy/tests/memory_test.cc.o
 
 # target to build an object file
 hwy/tests/memory_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/memory_test.dir/build.make _deps/highway-build/CMakeFiles/memory_test.dir/hwy/tests/memory_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/memory_test.dir/build.make _deps/highway-build/CMakeFiles/memory_test.dir/hwy/tests/memory_test.cc.o
 .PHONY : hwy/tests/memory_test.cc.o
 
 hwy/tests/memory_test.i: hwy/tests/memory_test.cc.i
@@ -3306,7 +3306,7 @@ hwy/tests/memory_test.i: hwy/tests/memory_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/memory_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/memory_test.dir/build.make _deps/highway-build/CMakeFiles/memory_test.dir/hwy/tests/memory_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/memory_test.dir/build.make _deps/highway-build/CMakeFiles/memory_test.dir/hwy/tests/memory_test.cc.i
 .PHONY : hwy/tests/memory_test.cc.i
 
 hwy/tests/memory_test.s: hwy/tests/memory_test.cc.s
@@ -3314,7 +3314,7 @@ hwy/tests/memory_test.s: hwy/tests/memory_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/memory_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/memory_test.dir/build.make _deps/highway-build/CMakeFiles/memory_test.dir/hwy/tests/memory_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/memory_test.dir/build.make _deps/highway-build/CMakeFiles/memory_test.dir/hwy/tests/memory_test.cc.s
 .PHONY : hwy/tests/memory_test.cc.s
 
 hwy/tests/minmax_test.o: hwy/tests/minmax_test.cc.o
@@ -3322,7 +3322,7 @@ hwy/tests/minmax_test.o: hwy/tests/minmax_test.cc.o
 
 # target to build an object file
 hwy/tests/minmax_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/minmax_test.dir/build.make _deps/highway-build/CMakeFiles/minmax_test.dir/hwy/tests/minmax_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/minmax_test.dir/build.make _deps/highway-build/CMakeFiles/minmax_test.dir/hwy/tests/minmax_test.cc.o
 .PHONY : hwy/tests/minmax_test.cc.o
 
 hwy/tests/minmax_test.i: hwy/tests/minmax_test.cc.i
@@ -3330,7 +3330,7 @@ hwy/tests/minmax_test.i: hwy/tests/minmax_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/minmax_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/minmax_test.dir/build.make _deps/highway-build/CMakeFiles/minmax_test.dir/hwy/tests/minmax_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/minmax_test.dir/build.make _deps/highway-build/CMakeFiles/minmax_test.dir/hwy/tests/minmax_test.cc.i
 .PHONY : hwy/tests/minmax_test.cc.i
 
 hwy/tests/minmax_test.s: hwy/tests/minmax_test.cc.s
@@ -3338,7 +3338,7 @@ hwy/tests/minmax_test.s: hwy/tests/minmax_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/minmax_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/minmax_test.dir/build.make _deps/highway-build/CMakeFiles/minmax_test.dir/hwy/tests/minmax_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/minmax_test.dir/build.make _deps/highway-build/CMakeFiles/minmax_test.dir/hwy/tests/minmax_test.cc.s
 .PHONY : hwy/tests/minmax_test.cc.s
 
 hwy/tests/mul_test.o: hwy/tests/mul_test.cc.o
@@ -3346,7 +3346,7 @@ hwy/tests/mul_test.o: hwy/tests/mul_test.cc.o
 
 # target to build an object file
 hwy/tests/mul_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mul_test.dir/build.make _deps/highway-build/CMakeFiles/mul_test.dir/hwy/tests/mul_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mul_test.dir/build.make _deps/highway-build/CMakeFiles/mul_test.dir/hwy/tests/mul_test.cc.o
 .PHONY : hwy/tests/mul_test.cc.o
 
 hwy/tests/mul_test.i: hwy/tests/mul_test.cc.i
@@ -3354,7 +3354,7 @@ hwy/tests/mul_test.i: hwy/tests/mul_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/mul_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mul_test.dir/build.make _deps/highway-build/CMakeFiles/mul_test.dir/hwy/tests/mul_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mul_test.dir/build.make _deps/highway-build/CMakeFiles/mul_test.dir/hwy/tests/mul_test.cc.i
 .PHONY : hwy/tests/mul_test.cc.i
 
 hwy/tests/mul_test.s: hwy/tests/mul_test.cc.s
@@ -3362,7 +3362,7 @@ hwy/tests/mul_test.s: hwy/tests/mul_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/mul_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mul_test.dir/build.make _deps/highway-build/CMakeFiles/mul_test.dir/hwy/tests/mul_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/mul_test.dir/build.make _deps/highway-build/CMakeFiles/mul_test.dir/hwy/tests/mul_test.cc.s
 .PHONY : hwy/tests/mul_test.cc.s
 
 hwy/tests/reduction_test.o: hwy/tests/reduction_test.cc.o
@@ -3370,7 +3370,7 @@ hwy/tests/reduction_test.o: hwy/tests/reduction_test.cc.o
 
 # target to build an object file
 hwy/tests/reduction_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reduction_test.dir/build.make _deps/highway-build/CMakeFiles/reduction_test.dir/hwy/tests/reduction_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reduction_test.dir/build.make _deps/highway-build/CMakeFiles/reduction_test.dir/hwy/tests/reduction_test.cc.o
 .PHONY : hwy/tests/reduction_test.cc.o
 
 hwy/tests/reduction_test.i: hwy/tests/reduction_test.cc.i
@@ -3378,7 +3378,7 @@ hwy/tests/reduction_test.i: hwy/tests/reduction_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/reduction_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reduction_test.dir/build.make _deps/highway-build/CMakeFiles/reduction_test.dir/hwy/tests/reduction_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reduction_test.dir/build.make _deps/highway-build/CMakeFiles/reduction_test.dir/hwy/tests/reduction_test.cc.i
 .PHONY : hwy/tests/reduction_test.cc.i
 
 hwy/tests/reduction_test.s: hwy/tests/reduction_test.cc.s
@@ -3386,7 +3386,7 @@ hwy/tests/reduction_test.s: hwy/tests/reduction_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/reduction_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reduction_test.dir/build.make _deps/highway-build/CMakeFiles/reduction_test.dir/hwy/tests/reduction_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reduction_test.dir/build.make _deps/highway-build/CMakeFiles/reduction_test.dir/hwy/tests/reduction_test.cc.s
 .PHONY : hwy/tests/reduction_test.cc.s
 
 hwy/tests/resize_test.o: hwy/tests/resize_test.cc.o
@@ -3394,7 +3394,7 @@ hwy/tests/resize_test.o: hwy/tests/resize_test.cc.o
 
 # target to build an object file
 hwy/tests/resize_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/resize_test.dir/build.make _deps/highway-build/CMakeFiles/resize_test.dir/hwy/tests/resize_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/resize_test.dir/build.make _deps/highway-build/CMakeFiles/resize_test.dir/hwy/tests/resize_test.cc.o
 .PHONY : hwy/tests/resize_test.cc.o
 
 hwy/tests/resize_test.i: hwy/tests/resize_test.cc.i
@@ -3402,7 +3402,7 @@ hwy/tests/resize_test.i: hwy/tests/resize_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/resize_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/resize_test.dir/build.make _deps/highway-build/CMakeFiles/resize_test.dir/hwy/tests/resize_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/resize_test.dir/build.make _deps/highway-build/CMakeFiles/resize_test.dir/hwy/tests/resize_test.cc.i
 .PHONY : hwy/tests/resize_test.cc.i
 
 hwy/tests/resize_test.s: hwy/tests/resize_test.cc.s
@@ -3410,7 +3410,7 @@ hwy/tests/resize_test.s: hwy/tests/resize_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/resize_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/resize_test.dir/build.make _deps/highway-build/CMakeFiles/resize_test.dir/hwy/tests/resize_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/resize_test.dir/build.make _deps/highway-build/CMakeFiles/resize_test.dir/hwy/tests/resize_test.cc.s
 .PHONY : hwy/tests/resize_test.cc.s
 
 hwy/tests/reverse_test.o: hwy/tests/reverse_test.cc.o
@@ -3418,7 +3418,7 @@ hwy/tests/reverse_test.o: hwy/tests/reverse_test.cc.o
 
 # target to build an object file
 hwy/tests/reverse_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reverse_test.dir/build.make _deps/highway-build/CMakeFiles/reverse_test.dir/hwy/tests/reverse_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reverse_test.dir/build.make _deps/highway-build/CMakeFiles/reverse_test.dir/hwy/tests/reverse_test.cc.o
 .PHONY : hwy/tests/reverse_test.cc.o
 
 hwy/tests/reverse_test.i: hwy/tests/reverse_test.cc.i
@@ -3426,7 +3426,7 @@ hwy/tests/reverse_test.i: hwy/tests/reverse_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/reverse_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reverse_test.dir/build.make _deps/highway-build/CMakeFiles/reverse_test.dir/hwy/tests/reverse_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reverse_test.dir/build.make _deps/highway-build/CMakeFiles/reverse_test.dir/hwy/tests/reverse_test.cc.i
 .PHONY : hwy/tests/reverse_test.cc.i
 
 hwy/tests/reverse_test.s: hwy/tests/reverse_test.cc.s
@@ -3434,7 +3434,7 @@ hwy/tests/reverse_test.s: hwy/tests/reverse_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/reverse_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reverse_test.dir/build.make _deps/highway-build/CMakeFiles/reverse_test.dir/hwy/tests/reverse_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/reverse_test.dir/build.make _deps/highway-build/CMakeFiles/reverse_test.dir/hwy/tests/reverse_test.cc.s
 .PHONY : hwy/tests/reverse_test.cc.s
 
 hwy/tests/shift_test.o: hwy/tests/shift_test.cc.o
@@ -3442,7 +3442,7 @@ hwy/tests/shift_test.o: hwy/tests/shift_test.cc.o
 
 # target to build an object file
 hwy/tests/shift_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shift_test.dir/build.make _deps/highway-build/CMakeFiles/shift_test.dir/hwy/tests/shift_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shift_test.dir/build.make _deps/highway-build/CMakeFiles/shift_test.dir/hwy/tests/shift_test.cc.o
 .PHONY : hwy/tests/shift_test.cc.o
 
 hwy/tests/shift_test.i: hwy/tests/shift_test.cc.i
@@ -3450,7 +3450,7 @@ hwy/tests/shift_test.i: hwy/tests/shift_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/shift_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shift_test.dir/build.make _deps/highway-build/CMakeFiles/shift_test.dir/hwy/tests/shift_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shift_test.dir/build.make _deps/highway-build/CMakeFiles/shift_test.dir/hwy/tests/shift_test.cc.i
 .PHONY : hwy/tests/shift_test.cc.i
 
 hwy/tests/shift_test.s: hwy/tests/shift_test.cc.s
@@ -3458,7 +3458,7 @@ hwy/tests/shift_test.s: hwy/tests/shift_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/shift_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shift_test.dir/build.make _deps/highway-build/CMakeFiles/shift_test.dir/hwy/tests/shift_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shift_test.dir/build.make _deps/highway-build/CMakeFiles/shift_test.dir/hwy/tests/shift_test.cc.s
 .PHONY : hwy/tests/shift_test.cc.s
 
 hwy/tests/shuffle4_test.o: hwy/tests/shuffle4_test.cc.o
@@ -3466,7 +3466,7 @@ hwy/tests/shuffle4_test.o: hwy/tests/shuffle4_test.cc.o
 
 # target to build an object file
 hwy/tests/shuffle4_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shuffle4_test.dir/build.make _deps/highway-build/CMakeFiles/shuffle4_test.dir/hwy/tests/shuffle4_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shuffle4_test.dir/build.make _deps/highway-build/CMakeFiles/shuffle4_test.dir/hwy/tests/shuffle4_test.cc.o
 .PHONY : hwy/tests/shuffle4_test.cc.o
 
 hwy/tests/shuffle4_test.i: hwy/tests/shuffle4_test.cc.i
@@ -3474,7 +3474,7 @@ hwy/tests/shuffle4_test.i: hwy/tests/shuffle4_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/shuffle4_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shuffle4_test.dir/build.make _deps/highway-build/CMakeFiles/shuffle4_test.dir/hwy/tests/shuffle4_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shuffle4_test.dir/build.make _deps/highway-build/CMakeFiles/shuffle4_test.dir/hwy/tests/shuffle4_test.cc.i
 .PHONY : hwy/tests/shuffle4_test.cc.i
 
 hwy/tests/shuffle4_test.s: hwy/tests/shuffle4_test.cc.s
@@ -3482,7 +3482,7 @@ hwy/tests/shuffle4_test.s: hwy/tests/shuffle4_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/shuffle4_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shuffle4_test.dir/build.make _deps/highway-build/CMakeFiles/shuffle4_test.dir/hwy/tests/shuffle4_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/shuffle4_test.dir/build.make _deps/highway-build/CMakeFiles/shuffle4_test.dir/hwy/tests/shuffle4_test.cc.s
 .PHONY : hwy/tests/shuffle4_test.cc.s
 
 hwy/tests/slide_up_down_test.o: hwy/tests/slide_up_down_test.cc.o
@@ -3490,7 +3490,7 @@ hwy/tests/slide_up_down_test.o: hwy/tests/slide_up_down_test.cc.o
 
 # target to build an object file
 hwy/tests/slide_up_down_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/slide_up_down_test.dir/build.make _deps/highway-build/CMakeFiles/slide_up_down_test.dir/hwy/tests/slide_up_down_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/slide_up_down_test.dir/build.make _deps/highway-build/CMakeFiles/slide_up_down_test.dir/hwy/tests/slide_up_down_test.cc.o
 .PHONY : hwy/tests/slide_up_down_test.cc.o
 
 hwy/tests/slide_up_down_test.i: hwy/tests/slide_up_down_test.cc.i
@@ -3498,7 +3498,7 @@ hwy/tests/slide_up_down_test.i: hwy/tests/slide_up_down_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/slide_up_down_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/slide_up_down_test.dir/build.make _deps/highway-build/CMakeFiles/slide_up_down_test.dir/hwy/tests/slide_up_down_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/slide_up_down_test.dir/build.make _deps/highway-build/CMakeFiles/slide_up_down_test.dir/hwy/tests/slide_up_down_test.cc.i
 .PHONY : hwy/tests/slide_up_down_test.cc.i
 
 hwy/tests/slide_up_down_test.s: hwy/tests/slide_up_down_test.cc.s
@@ -3506,7 +3506,7 @@ hwy/tests/slide_up_down_test.s: hwy/tests/slide_up_down_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/slide_up_down_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/slide_up_down_test.dir/build.make _deps/highway-build/CMakeFiles/slide_up_down_test.dir/hwy/tests/slide_up_down_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/slide_up_down_test.dir/build.make _deps/highway-build/CMakeFiles/slide_up_down_test.dir/hwy/tests/slide_up_down_test.cc.s
 .PHONY : hwy/tests/slide_up_down_test.cc.s
 
 hwy/tests/sums_abs_diff_test.o: hwy/tests/sums_abs_diff_test.cc.o
@@ -3514,7 +3514,7 @@ hwy/tests/sums_abs_diff_test.o: hwy/tests/sums_abs_diff_test.cc.o
 
 # target to build an object file
 hwy/tests/sums_abs_diff_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/build.make _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/hwy/tests/sums_abs_diff_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/build.make _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/hwy/tests/sums_abs_diff_test.cc.o
 .PHONY : hwy/tests/sums_abs_diff_test.cc.o
 
 hwy/tests/sums_abs_diff_test.i: hwy/tests/sums_abs_diff_test.cc.i
@@ -3522,7 +3522,7 @@ hwy/tests/sums_abs_diff_test.i: hwy/tests/sums_abs_diff_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/sums_abs_diff_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/build.make _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/hwy/tests/sums_abs_diff_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/build.make _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/hwy/tests/sums_abs_diff_test.cc.i
 .PHONY : hwy/tests/sums_abs_diff_test.cc.i
 
 hwy/tests/sums_abs_diff_test.s: hwy/tests/sums_abs_diff_test.cc.s
@@ -3530,7 +3530,7 @@ hwy/tests/sums_abs_diff_test.s: hwy/tests/sums_abs_diff_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/sums_abs_diff_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/build.make _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/hwy/tests/sums_abs_diff_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/build.make _deps/highway-build/CMakeFiles/sums_abs_diff_test.dir/hwy/tests/sums_abs_diff_test.cc.s
 .PHONY : hwy/tests/sums_abs_diff_test.cc.s
 
 hwy/tests/swizzle_block_test.o: hwy/tests/swizzle_block_test.cc.o
@@ -3538,7 +3538,7 @@ hwy/tests/swizzle_block_test.o: hwy/tests/swizzle_block_test.cc.o
 
 # target to build an object file
 hwy/tests/swizzle_block_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_block_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_block_test.dir/hwy/tests/swizzle_block_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_block_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_block_test.dir/hwy/tests/swizzle_block_test.cc.o
 .PHONY : hwy/tests/swizzle_block_test.cc.o
 
 hwy/tests/swizzle_block_test.i: hwy/tests/swizzle_block_test.cc.i
@@ -3546,7 +3546,7 @@ hwy/tests/swizzle_block_test.i: hwy/tests/swizzle_block_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/swizzle_block_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_block_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_block_test.dir/hwy/tests/swizzle_block_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_block_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_block_test.dir/hwy/tests/swizzle_block_test.cc.i
 .PHONY : hwy/tests/swizzle_block_test.cc.i
 
 hwy/tests/swizzle_block_test.s: hwy/tests/swizzle_block_test.cc.s
@@ -3554,7 +3554,7 @@ hwy/tests/swizzle_block_test.s: hwy/tests/swizzle_block_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/swizzle_block_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_block_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_block_test.dir/hwy/tests/swizzle_block_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_block_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_block_test.dir/hwy/tests/swizzle_block_test.cc.s
 .PHONY : hwy/tests/swizzle_block_test.cc.s
 
 hwy/tests/swizzle_test.o: hwy/tests/swizzle_test.cc.o
@@ -3562,7 +3562,7 @@ hwy/tests/swizzle_test.o: hwy/tests/swizzle_test.cc.o
 
 # target to build an object file
 hwy/tests/swizzle_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_test.dir/hwy/tests/swizzle_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_test.dir/hwy/tests/swizzle_test.cc.o
 .PHONY : hwy/tests/swizzle_test.cc.o
 
 hwy/tests/swizzle_test.i: hwy/tests/swizzle_test.cc.i
@@ -3570,7 +3570,7 @@ hwy/tests/swizzle_test.i: hwy/tests/swizzle_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/swizzle_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_test.dir/hwy/tests/swizzle_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_test.dir/hwy/tests/swizzle_test.cc.i
 .PHONY : hwy/tests/swizzle_test.cc.i
 
 hwy/tests/swizzle_test.s: hwy/tests/swizzle_test.cc.s
@@ -3578,7 +3578,7 @@ hwy/tests/swizzle_test.s: hwy/tests/swizzle_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/swizzle_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_test.dir/hwy/tests/swizzle_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/swizzle_test.dir/build.make _deps/highway-build/CMakeFiles/swizzle_test.dir/hwy/tests/swizzle_test.cc.s
 .PHONY : hwy/tests/swizzle_test.cc.s
 
 hwy/tests/table_test.o: hwy/tests/table_test.cc.o
@@ -3586,7 +3586,7 @@ hwy/tests/table_test.o: hwy/tests/table_test.cc.o
 
 # target to build an object file
 hwy/tests/table_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/table_test.dir/build.make _deps/highway-build/CMakeFiles/table_test.dir/hwy/tests/table_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/table_test.dir/build.make _deps/highway-build/CMakeFiles/table_test.dir/hwy/tests/table_test.cc.o
 .PHONY : hwy/tests/table_test.cc.o
 
 hwy/tests/table_test.i: hwy/tests/table_test.cc.i
@@ -3594,7 +3594,7 @@ hwy/tests/table_test.i: hwy/tests/table_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/table_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/table_test.dir/build.make _deps/highway-build/CMakeFiles/table_test.dir/hwy/tests/table_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/table_test.dir/build.make _deps/highway-build/CMakeFiles/table_test.dir/hwy/tests/table_test.cc.i
 .PHONY : hwy/tests/table_test.cc.i
 
 hwy/tests/table_test.s: hwy/tests/table_test.cc.s
@@ -3602,7 +3602,7 @@ hwy/tests/table_test.s: hwy/tests/table_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/table_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/table_test.dir/build.make _deps/highway-build/CMakeFiles/table_test.dir/hwy/tests/table_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/table_test.dir/build.make _deps/highway-build/CMakeFiles/table_test.dir/hwy/tests/table_test.cc.s
 .PHONY : hwy/tests/table_test.cc.s
 
 hwy/tests/test_util.o: hwy/tests/test_util.cc.o
@@ -3610,7 +3610,7 @@ hwy/tests/test_util.o: hwy/tests/test_util.cc.o
 
 # target to build an object file
 hwy/tests/test_util.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_test.dir/build.make _deps/highway-build/CMakeFiles/hwy_test.dir/hwy/tests/test_util.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_test.dir/build.make _deps/highway-build/CMakeFiles/hwy_test.dir/hwy/tests/test_util.cc.o
 .PHONY : hwy/tests/test_util.cc.o
 
 hwy/tests/test_util.i: hwy/tests/test_util.cc.i
@@ -3618,7 +3618,7 @@ hwy/tests/test_util.i: hwy/tests/test_util.cc.i
 
 # target to preprocess a source file
 hwy/tests/test_util.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_test.dir/build.make _deps/highway-build/CMakeFiles/hwy_test.dir/hwy/tests/test_util.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_test.dir/build.make _deps/highway-build/CMakeFiles/hwy_test.dir/hwy/tests/test_util.cc.i
 .PHONY : hwy/tests/test_util.cc.i
 
 hwy/tests/test_util.s: hwy/tests/test_util.cc.s
@@ -3626,7 +3626,7 @@ hwy/tests/test_util.s: hwy/tests/test_util.cc.s
 
 # target to generate assembly for a file
 hwy/tests/test_util.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_test.dir/build.make _deps/highway-build/CMakeFiles/hwy_test.dir/hwy/tests/test_util.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy_test.dir/build.make _deps/highway-build/CMakeFiles/hwy_test.dir/hwy/tests/test_util.cc.s
 .PHONY : hwy/tests/test_util.cc.s
 
 hwy/tests/test_util_test.o: hwy/tests/test_util_test.cc.o
@@ -3634,7 +3634,7 @@ hwy/tests/test_util_test.o: hwy/tests/test_util_test.cc.o
 
 # target to build an object file
 hwy/tests/test_util_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/test_util_test.dir/build.make _deps/highway-build/CMakeFiles/test_util_test.dir/hwy/tests/test_util_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/test_util_test.dir/build.make _deps/highway-build/CMakeFiles/test_util_test.dir/hwy/tests/test_util_test.cc.o
 .PHONY : hwy/tests/test_util_test.cc.o
 
 hwy/tests/test_util_test.i: hwy/tests/test_util_test.cc.i
@@ -3642,7 +3642,7 @@ hwy/tests/test_util_test.i: hwy/tests/test_util_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/test_util_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/test_util_test.dir/build.make _deps/highway-build/CMakeFiles/test_util_test.dir/hwy/tests/test_util_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/test_util_test.dir/build.make _deps/highway-build/CMakeFiles/test_util_test.dir/hwy/tests/test_util_test.cc.i
 .PHONY : hwy/tests/test_util_test.cc.i
 
 hwy/tests/test_util_test.s: hwy/tests/test_util_test.cc.s
@@ -3650,7 +3650,7 @@ hwy/tests/test_util_test.s: hwy/tests/test_util_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/test_util_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/test_util_test.dir/build.make _deps/highway-build/CMakeFiles/test_util_test.dir/hwy/tests/test_util_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/test_util_test.dir/build.make _deps/highway-build/CMakeFiles/test_util_test.dir/hwy/tests/test_util_test.cc.s
 .PHONY : hwy/tests/test_util_test.cc.s
 
 hwy/tests/truncate_test.o: hwy/tests/truncate_test.cc.o
@@ -3658,7 +3658,7 @@ hwy/tests/truncate_test.o: hwy/tests/truncate_test.cc.o
 
 # target to build an object file
 hwy/tests/truncate_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/truncate_test.dir/build.make _deps/highway-build/CMakeFiles/truncate_test.dir/hwy/tests/truncate_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/truncate_test.dir/build.make _deps/highway-build/CMakeFiles/truncate_test.dir/hwy/tests/truncate_test.cc.o
 .PHONY : hwy/tests/truncate_test.cc.o
 
 hwy/tests/truncate_test.i: hwy/tests/truncate_test.cc.i
@@ -3666,7 +3666,7 @@ hwy/tests/truncate_test.i: hwy/tests/truncate_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/truncate_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/truncate_test.dir/build.make _deps/highway-build/CMakeFiles/truncate_test.dir/hwy/tests/truncate_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/truncate_test.dir/build.make _deps/highway-build/CMakeFiles/truncate_test.dir/hwy/tests/truncate_test.cc.i
 .PHONY : hwy/tests/truncate_test.cc.i
 
 hwy/tests/truncate_test.s: hwy/tests/truncate_test.cc.s
@@ -3674,7 +3674,7 @@ hwy/tests/truncate_test.s: hwy/tests/truncate_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/truncate_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/truncate_test.dir/build.make _deps/highway-build/CMakeFiles/truncate_test.dir/hwy/tests/truncate_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/truncate_test.dir/build.make _deps/highway-build/CMakeFiles/truncate_test.dir/hwy/tests/truncate_test.cc.s
 .PHONY : hwy/tests/truncate_test.cc.s
 
 hwy/tests/tuple_test.o: hwy/tests/tuple_test.cc.o
@@ -3682,7 +3682,7 @@ hwy/tests/tuple_test.o: hwy/tests/tuple_test.cc.o
 
 # target to build an object file
 hwy/tests/tuple_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/tuple_test.dir/build.make _deps/highway-build/CMakeFiles/tuple_test.dir/hwy/tests/tuple_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/tuple_test.dir/build.make _deps/highway-build/CMakeFiles/tuple_test.dir/hwy/tests/tuple_test.cc.o
 .PHONY : hwy/tests/tuple_test.cc.o
 
 hwy/tests/tuple_test.i: hwy/tests/tuple_test.cc.i
@@ -3690,7 +3690,7 @@ hwy/tests/tuple_test.i: hwy/tests/tuple_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/tuple_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/tuple_test.dir/build.make _deps/highway-build/CMakeFiles/tuple_test.dir/hwy/tests/tuple_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/tuple_test.dir/build.make _deps/highway-build/CMakeFiles/tuple_test.dir/hwy/tests/tuple_test.cc.i
 .PHONY : hwy/tests/tuple_test.cc.i
 
 hwy/tests/tuple_test.s: hwy/tests/tuple_test.cc.s
@@ -3698,7 +3698,7 @@ hwy/tests/tuple_test.s: hwy/tests/tuple_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/tuple_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/tuple_test.dir/build.make _deps/highway-build/CMakeFiles/tuple_test.dir/hwy/tests/tuple_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/tuple_test.dir/build.make _deps/highway-build/CMakeFiles/tuple_test.dir/hwy/tests/tuple_test.cc.s
 .PHONY : hwy/tests/tuple_test.cc.s
 
 hwy/tests/widen_mul_test.o: hwy/tests/widen_mul_test.cc.o
@@ -3706,7 +3706,7 @@ hwy/tests/widen_mul_test.o: hwy/tests/widen_mul_test.cc.o
 
 # target to build an object file
 hwy/tests/widen_mul_test.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/widen_mul_test.dir/build.make _deps/highway-build/CMakeFiles/widen_mul_test.dir/hwy/tests/widen_mul_test.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/widen_mul_test.dir/build.make _deps/highway-build/CMakeFiles/widen_mul_test.dir/hwy/tests/widen_mul_test.cc.o
 .PHONY : hwy/tests/widen_mul_test.cc.o
 
 hwy/tests/widen_mul_test.i: hwy/tests/widen_mul_test.cc.i
@@ -3714,7 +3714,7 @@ hwy/tests/widen_mul_test.i: hwy/tests/widen_mul_test.cc.i
 
 # target to preprocess a source file
 hwy/tests/widen_mul_test.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/widen_mul_test.dir/build.make _deps/highway-build/CMakeFiles/widen_mul_test.dir/hwy/tests/widen_mul_test.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/widen_mul_test.dir/build.make _deps/highway-build/CMakeFiles/widen_mul_test.dir/hwy/tests/widen_mul_test.cc.i
 .PHONY : hwy/tests/widen_mul_test.cc.i
 
 hwy/tests/widen_mul_test.s: hwy/tests/widen_mul_test.cc.s
@@ -3722,7 +3722,7 @@ hwy/tests/widen_mul_test.s: hwy/tests/widen_mul_test.cc.s
 
 # target to generate assembly for a file
 hwy/tests/widen_mul_test.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/widen_mul_test.dir/build.make _deps/highway-build/CMakeFiles/widen_mul_test.dir/hwy/tests/widen_mul_test.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/widen_mul_test.dir/build.make _deps/highway-build/CMakeFiles/widen_mul_test.dir/hwy/tests/widen_mul_test.cc.s
 .PHONY : hwy/tests/widen_mul_test.cc.s
 
 hwy/timer.o: hwy/timer.cc.o
@@ -3730,7 +3730,7 @@ hwy/timer.o: hwy/timer.cc.o
 
 # target to build an object file
 hwy/timer.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.o
 .PHONY : hwy/timer.cc.o
 
 hwy/timer.i: hwy/timer.cc.i
@@ -3738,7 +3738,7 @@ hwy/timer.i: hwy/timer.cc.i
 
 # target to preprocess a source file
 hwy/timer.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.i
 .PHONY : hwy/timer.cc.i
 
 hwy/timer.s: hwy/timer.cc.s
@@ -3746,7 +3746,7 @@ hwy/timer.s: hwy/timer.cc.s
 
 # target to generate assembly for a file
 hwy/timer.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/CMakeFiles/hwy.dir/build.make _deps/highway-build/CMakeFiles/hwy.dir/hwy/timer.cc.s
 .PHONY : hwy/timer.cc.s
 
 # Help Target
@@ -4151,6 +4151,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

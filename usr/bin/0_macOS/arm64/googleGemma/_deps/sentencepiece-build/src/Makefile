@@ -57,10 +57,10 @@ RM = /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp
+CMAKE_SOURCE_DIR = /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build
+CMAKE_BINARY_DIR = /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -68,7 +68,7 @@ CMAKE_BINARY_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/u
 # Special rule for the target package
 package: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Run CPack packaging tool..."
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackConfig.cmake
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackConfig.cmake
 .PHONY : package
 
 # Special rule for the target package
@@ -78,7 +78,7 @@ package/fast: package
 # Special rule for the target package_source
 package_source:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Run CPack packaging tool for source..."
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackSourceConfig.cmake /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CPackSourceConfig.cmake
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackSourceConfig.cmake /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CPackSourceConfig.cmake
 .PHONY : package_source
 
 # Special rule for the target package_source
@@ -152,14 +152,14 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -E cmake_progress_start /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build/src//CMakeFiles/progress.marks
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles 0
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -E cmake_progress_start /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build/src//CMakeFiles/progress.marks
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/clean
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/clean
 .PHONY : clean
 
 # The main clean target
@@ -168,22 +168,22 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/preinstall
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/preinstall
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
 # Convenience name for target.
 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/rule
 .PHONY : _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/rule
 
 # Convenience name for target.
@@ -192,12 +192,12 @@ sentencepiece: _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/rule
 
 # fast build rule for target.
 sentencepiece/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build
 .PHONY : sentencepiece/fast
 
 # Convenience name for target.
 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/rule
 .PHONY : _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/rule
 
 # Convenience name for target.
@@ -206,12 +206,12 @@ sentencepiece_train: _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_trai
 
 # fast build rule for target.
 sentencepiece_train/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build
 .PHONY : sentencepiece_train/fast
 
 # Convenience name for target.
 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/rule
 .PHONY : _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/rule
 
 # Convenience name for target.
@@ -220,12 +220,12 @@ sentencepiece-static: _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-sta
 
 # fast build rule for target.
 sentencepiece-static/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build
 .PHONY : sentencepiece-static/fast
 
 # Convenience name for target.
 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/rule
 .PHONY : _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/rule
 
 # Convenience name for target.
@@ -234,12 +234,12 @@ sentencepiece_train-static: _deps/sentencepiece-build/src/CMakeFiles/sentencepie
 
 # fast build rule for target.
 sentencepiece_train-static/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build
 .PHONY : sentencepiece_train-static/fast
 
 # Convenience name for target.
 _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/rule
 .PHONY : _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/rule
 
 # Convenience name for target.
@@ -248,12 +248,12 @@ spm_encode: _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/rule
 
 # fast build rule for target.
 spm_encode/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/build
 .PHONY : spm_encode/fast
 
 # Convenience name for target.
 _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/rule
 .PHONY : _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/rule
 
 # Convenience name for target.
@@ -262,12 +262,12 @@ spm_decode: _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/rule
 
 # fast build rule for target.
 spm_decode/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/build
 .PHONY : spm_decode/fast
 
 # Convenience name for target.
 _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/rule
 .PHONY : _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/rule
 
 # Convenience name for target.
@@ -276,12 +276,12 @@ spm_normalize: _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/rule
 
 # fast build rule for target.
 spm_normalize/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/build
 .PHONY : spm_normalize/fast
 
 # Convenience name for target.
 _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/rule
 .PHONY : _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/rule
 
 # Convenience name for target.
@@ -290,12 +290,12 @@ spm_train: _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/rule
 
 # fast build rule for target.
 spm_train/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/build
 .PHONY : spm_train/fast
 
 # Convenience name for target.
 _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/rule
 .PHONY : _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/rule
 
 # Convenience name for target.
@@ -304,7 +304,7 @@ spm_export_vocab: _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/
 
 # fast build rule for target.
 spm_export_vocab/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/build
 .PHONY : spm_export_vocab/fast
 
 __/third_party/absl/flags/flag.o: __/third_party/absl/flags/flag.cc.o
@@ -312,8 +312,8 @@ __/third_party/absl/flags/flag.o: __/third_party/absl/flags/flag.cc.o
 
 # target to build an object file
 __/third_party/absl/flags/flag.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/absl/flags/flag.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/absl/flags/flag.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/absl/flags/flag.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/absl/flags/flag.cc.o
 .PHONY : __/third_party/absl/flags/flag.cc.o
 
 __/third_party/absl/flags/flag.i: __/third_party/absl/flags/flag.cc.i
@@ -321,8 +321,8 @@ __/third_party/absl/flags/flag.i: __/third_party/absl/flags/flag.cc.i
 
 # target to preprocess a source file
 __/third_party/absl/flags/flag.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/absl/flags/flag.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/absl/flags/flag.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/absl/flags/flag.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/absl/flags/flag.cc.i
 .PHONY : __/third_party/absl/flags/flag.cc.i
 
 __/third_party/absl/flags/flag.s: __/third_party/absl/flags/flag.cc.s
@@ -330,8 +330,8 @@ __/third_party/absl/flags/flag.s: __/third_party/absl/flags/flag.cc.s
 
 # target to generate assembly for a file
 __/third_party/absl/flags/flag.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/absl/flags/flag.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/absl/flags/flag.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/absl/flags/flag.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/absl/flags/flag.cc.s
 .PHONY : __/third_party/absl/flags/flag.cc.s
 
 __/third_party/protobuf-lite/arena.o: __/third_party/protobuf-lite/arena.cc.o
@@ -339,8 +339,8 @@ __/third_party/protobuf-lite/arena.o: __/third_party/protobuf-lite/arena.cc.o
 
 # target to build an object file
 __/third_party/protobuf-lite/arena.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arena.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arena.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arena.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arena.cc.o
 .PHONY : __/third_party/protobuf-lite/arena.cc.o
 
 __/third_party/protobuf-lite/arena.i: __/third_party/protobuf-lite/arena.cc.i
@@ -348,8 +348,8 @@ __/third_party/protobuf-lite/arena.i: __/third_party/protobuf-lite/arena.cc.i
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/arena.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arena.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arena.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arena.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arena.cc.i
 .PHONY : __/third_party/protobuf-lite/arena.cc.i
 
 __/third_party/protobuf-lite/arena.s: __/third_party/protobuf-lite/arena.cc.s
@@ -357,8 +357,8 @@ __/third_party/protobuf-lite/arena.s: __/third_party/protobuf-lite/arena.cc.s
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/arena.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arena.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arena.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arena.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arena.cc.s
 .PHONY : __/third_party/protobuf-lite/arena.cc.s
 
 __/third_party/protobuf-lite/arenastring.o: __/third_party/protobuf-lite/arenastring.cc.o
@@ -366,8 +366,8 @@ __/third_party/protobuf-lite/arenastring.o: __/third_party/protobuf-lite/arenast
 
 # target to build an object file
 __/third_party/protobuf-lite/arenastring.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arenastring.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arenastring.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arenastring.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arenastring.cc.o
 .PHONY : __/third_party/protobuf-lite/arenastring.cc.o
 
 __/third_party/protobuf-lite/arenastring.i: __/third_party/protobuf-lite/arenastring.cc.i
@@ -375,8 +375,8 @@ __/third_party/protobuf-lite/arenastring.i: __/third_party/protobuf-lite/arenast
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/arenastring.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arenastring.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arenastring.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arenastring.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arenastring.cc.i
 .PHONY : __/third_party/protobuf-lite/arenastring.cc.i
 
 __/third_party/protobuf-lite/arenastring.s: __/third_party/protobuf-lite/arenastring.cc.s
@@ -384,8 +384,8 @@ __/third_party/protobuf-lite/arenastring.s: __/third_party/protobuf-lite/arenast
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/arenastring.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arenastring.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arenastring.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/arenastring.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/arenastring.cc.s
 .PHONY : __/third_party/protobuf-lite/arenastring.cc.s
 
 __/third_party/protobuf-lite/bytestream.o: __/third_party/protobuf-lite/bytestream.cc.o
@@ -393,8 +393,8 @@ __/third_party/protobuf-lite/bytestream.o: __/third_party/protobuf-lite/bytestre
 
 # target to build an object file
 __/third_party/protobuf-lite/bytestream.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/bytestream.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/bytestream.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/bytestream.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/bytestream.cc.o
 .PHONY : __/third_party/protobuf-lite/bytestream.cc.o
 
 __/third_party/protobuf-lite/bytestream.i: __/third_party/protobuf-lite/bytestream.cc.i
@@ -402,8 +402,8 @@ __/third_party/protobuf-lite/bytestream.i: __/third_party/protobuf-lite/bytestre
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/bytestream.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/bytestream.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/bytestream.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/bytestream.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/bytestream.cc.i
 .PHONY : __/third_party/protobuf-lite/bytestream.cc.i
 
 __/third_party/protobuf-lite/bytestream.s: __/third_party/protobuf-lite/bytestream.cc.s
@@ -411,8 +411,8 @@ __/third_party/protobuf-lite/bytestream.s: __/third_party/protobuf-lite/bytestre
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/bytestream.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/bytestream.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/bytestream.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/bytestream.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/bytestream.cc.s
 .PHONY : __/third_party/protobuf-lite/bytestream.cc.s
 
 __/third_party/protobuf-lite/coded_stream.o: __/third_party/protobuf-lite/coded_stream.cc.o
@@ -420,8 +420,8 @@ __/third_party/protobuf-lite/coded_stream.o: __/third_party/protobuf-lite/coded_
 
 # target to build an object file
 __/third_party/protobuf-lite/coded_stream.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/coded_stream.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/coded_stream.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/coded_stream.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/coded_stream.cc.o
 .PHONY : __/third_party/protobuf-lite/coded_stream.cc.o
 
 __/third_party/protobuf-lite/coded_stream.i: __/third_party/protobuf-lite/coded_stream.cc.i
@@ -429,8 +429,8 @@ __/third_party/protobuf-lite/coded_stream.i: __/third_party/protobuf-lite/coded_
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/coded_stream.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/coded_stream.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/coded_stream.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/coded_stream.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/coded_stream.cc.i
 .PHONY : __/third_party/protobuf-lite/coded_stream.cc.i
 
 __/third_party/protobuf-lite/coded_stream.s: __/third_party/protobuf-lite/coded_stream.cc.s
@@ -438,8 +438,8 @@ __/third_party/protobuf-lite/coded_stream.s: __/third_party/protobuf-lite/coded_
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/coded_stream.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/coded_stream.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/coded_stream.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/coded_stream.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/coded_stream.cc.s
 .PHONY : __/third_party/protobuf-lite/coded_stream.cc.s
 
 __/third_party/protobuf-lite/common.o: __/third_party/protobuf-lite/common.cc.o
@@ -447,8 +447,8 @@ __/third_party/protobuf-lite/common.o: __/third_party/protobuf-lite/common.cc.o
 
 # target to build an object file
 __/third_party/protobuf-lite/common.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/common.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/common.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/common.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/common.cc.o
 .PHONY : __/third_party/protobuf-lite/common.cc.o
 
 __/third_party/protobuf-lite/common.i: __/third_party/protobuf-lite/common.cc.i
@@ -456,8 +456,8 @@ __/third_party/protobuf-lite/common.i: __/third_party/protobuf-lite/common.cc.i
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/common.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/common.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/common.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/common.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/common.cc.i
 .PHONY : __/third_party/protobuf-lite/common.cc.i
 
 __/third_party/protobuf-lite/common.s: __/third_party/protobuf-lite/common.cc.s
@@ -465,8 +465,8 @@ __/third_party/protobuf-lite/common.s: __/third_party/protobuf-lite/common.cc.s
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/common.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/common.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/common.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/common.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/common.cc.s
 .PHONY : __/third_party/protobuf-lite/common.cc.s
 
 __/third_party/protobuf-lite/extension_set.o: __/third_party/protobuf-lite/extension_set.cc.o
@@ -474,8 +474,8 @@ __/third_party/protobuf-lite/extension_set.o: __/third_party/protobuf-lite/exten
 
 # target to build an object file
 __/third_party/protobuf-lite/extension_set.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/extension_set.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/extension_set.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/extension_set.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/extension_set.cc.o
 .PHONY : __/third_party/protobuf-lite/extension_set.cc.o
 
 __/third_party/protobuf-lite/extension_set.i: __/third_party/protobuf-lite/extension_set.cc.i
@@ -483,8 +483,8 @@ __/third_party/protobuf-lite/extension_set.i: __/third_party/protobuf-lite/exten
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/extension_set.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/extension_set.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/extension_set.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/extension_set.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/extension_set.cc.i
 .PHONY : __/third_party/protobuf-lite/extension_set.cc.i
 
 __/third_party/protobuf-lite/extension_set.s: __/third_party/protobuf-lite/extension_set.cc.s
@@ -492,8 +492,8 @@ __/third_party/protobuf-lite/extension_set.s: __/third_party/protobuf-lite/exten
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/extension_set.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/extension_set.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/extension_set.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/extension_set.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/extension_set.cc.s
 .PHONY : __/third_party/protobuf-lite/extension_set.cc.s
 
 __/third_party/protobuf-lite/generated_enum_util.o: __/third_party/protobuf-lite/generated_enum_util.cc.o
@@ -501,8 +501,8 @@ __/third_party/protobuf-lite/generated_enum_util.o: __/third_party/protobuf-lite
 
 # target to build an object file
 __/third_party/protobuf-lite/generated_enum_util.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_enum_util.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_enum_util.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_enum_util.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_enum_util.cc.o
 .PHONY : __/third_party/protobuf-lite/generated_enum_util.cc.o
 
 __/third_party/protobuf-lite/generated_enum_util.i: __/third_party/protobuf-lite/generated_enum_util.cc.i
@@ -510,8 +510,8 @@ __/third_party/protobuf-lite/generated_enum_util.i: __/third_party/protobuf-lite
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/generated_enum_util.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_enum_util.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_enum_util.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_enum_util.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_enum_util.cc.i
 .PHONY : __/third_party/protobuf-lite/generated_enum_util.cc.i
 
 __/third_party/protobuf-lite/generated_enum_util.s: __/third_party/protobuf-lite/generated_enum_util.cc.s
@@ -519,8 +519,8 @@ __/third_party/protobuf-lite/generated_enum_util.s: __/third_party/protobuf-lite
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/generated_enum_util.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_enum_util.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_enum_util.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_enum_util.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_enum_util.cc.s
 .PHONY : __/third_party/protobuf-lite/generated_enum_util.cc.s
 
 __/third_party/protobuf-lite/generated_message_table_driven_lite.o: __/third_party/protobuf-lite/generated_message_table_driven_lite.cc.o
@@ -528,8 +528,8 @@ __/third_party/protobuf-lite/generated_message_table_driven_lite.o: __/third_par
 
 # target to build an object file
 __/third_party/protobuf-lite/generated_message_table_driven_lite.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.o
 .PHONY : __/third_party/protobuf-lite/generated_message_table_driven_lite.cc.o
 
 __/third_party/protobuf-lite/generated_message_table_driven_lite.i: __/third_party/protobuf-lite/generated_message_table_driven_lite.cc.i
@@ -537,8 +537,8 @@ __/third_party/protobuf-lite/generated_message_table_driven_lite.i: __/third_par
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/generated_message_table_driven_lite.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.i
 .PHONY : __/third_party/protobuf-lite/generated_message_table_driven_lite.cc.i
 
 __/third_party/protobuf-lite/generated_message_table_driven_lite.s: __/third_party/protobuf-lite/generated_message_table_driven_lite.cc.s
@@ -546,8 +546,8 @@ __/third_party/protobuf-lite/generated_message_table_driven_lite.s: __/third_par
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/generated_message_table_driven_lite.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_table_driven_lite.cc.s
 .PHONY : __/third_party/protobuf-lite/generated_message_table_driven_lite.cc.s
 
 __/third_party/protobuf-lite/generated_message_util.o: __/third_party/protobuf-lite/generated_message_util.cc.o
@@ -555,8 +555,8 @@ __/third_party/protobuf-lite/generated_message_util.o: __/third_party/protobuf-l
 
 # target to build an object file
 __/third_party/protobuf-lite/generated_message_util.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_util.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_util.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_util.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_util.cc.o
 .PHONY : __/third_party/protobuf-lite/generated_message_util.cc.o
 
 __/third_party/protobuf-lite/generated_message_util.i: __/third_party/protobuf-lite/generated_message_util.cc.i
@@ -564,8 +564,8 @@ __/third_party/protobuf-lite/generated_message_util.i: __/third_party/protobuf-l
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/generated_message_util.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_util.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_util.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_util.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_util.cc.i
 .PHONY : __/third_party/protobuf-lite/generated_message_util.cc.i
 
 __/third_party/protobuf-lite/generated_message_util.s: __/third_party/protobuf-lite/generated_message_util.cc.s
@@ -573,8 +573,8 @@ __/third_party/protobuf-lite/generated_message_util.s: __/third_party/protobuf-l
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/generated_message_util.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_util.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_util.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/generated_message_util.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/generated_message_util.cc.s
 .PHONY : __/third_party/protobuf-lite/generated_message_util.cc.s
 
 __/third_party/protobuf-lite/implicit_weak_message.o: __/third_party/protobuf-lite/implicit_weak_message.cc.o
@@ -582,8 +582,8 @@ __/third_party/protobuf-lite/implicit_weak_message.o: __/third_party/protobuf-li
 
 # target to build an object file
 __/third_party/protobuf-lite/implicit_weak_message.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.o
 .PHONY : __/third_party/protobuf-lite/implicit_weak_message.cc.o
 
 __/third_party/protobuf-lite/implicit_weak_message.i: __/third_party/protobuf-lite/implicit_weak_message.cc.i
@@ -591,8 +591,8 @@ __/third_party/protobuf-lite/implicit_weak_message.i: __/third_party/protobuf-li
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/implicit_weak_message.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.i
 .PHONY : __/third_party/protobuf-lite/implicit_weak_message.cc.i
 
 __/third_party/protobuf-lite/implicit_weak_message.s: __/third_party/protobuf-lite/implicit_weak_message.cc.s
@@ -600,8 +600,8 @@ __/third_party/protobuf-lite/implicit_weak_message.s: __/third_party/protobuf-li
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/implicit_weak_message.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/implicit_weak_message.cc.s
 .PHONY : __/third_party/protobuf-lite/implicit_weak_message.cc.s
 
 __/third_party/protobuf-lite/int128.o: __/third_party/protobuf-lite/int128.cc.o
@@ -609,8 +609,8 @@ __/third_party/protobuf-lite/int128.o: __/third_party/protobuf-lite/int128.cc.o
 
 # target to build an object file
 __/third_party/protobuf-lite/int128.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/int128.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/int128.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/int128.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/int128.cc.o
 .PHONY : __/third_party/protobuf-lite/int128.cc.o
 
 __/third_party/protobuf-lite/int128.i: __/third_party/protobuf-lite/int128.cc.i
@@ -618,8 +618,8 @@ __/third_party/protobuf-lite/int128.i: __/third_party/protobuf-lite/int128.cc.i
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/int128.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/int128.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/int128.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/int128.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/int128.cc.i
 .PHONY : __/third_party/protobuf-lite/int128.cc.i
 
 __/third_party/protobuf-lite/int128.s: __/third_party/protobuf-lite/int128.cc.s
@@ -627,8 +627,8 @@ __/third_party/protobuf-lite/int128.s: __/third_party/protobuf-lite/int128.cc.s
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/int128.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/int128.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/int128.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/int128.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/int128.cc.s
 .PHONY : __/third_party/protobuf-lite/int128.cc.s
 
 __/third_party/protobuf-lite/io_win32.o: __/third_party/protobuf-lite/io_win32.cc.o
@@ -636,8 +636,8 @@ __/third_party/protobuf-lite/io_win32.o: __/third_party/protobuf-lite/io_win32.c
 
 # target to build an object file
 __/third_party/protobuf-lite/io_win32.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/io_win32.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/io_win32.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/io_win32.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/io_win32.cc.o
 .PHONY : __/third_party/protobuf-lite/io_win32.cc.o
 
 __/third_party/protobuf-lite/io_win32.i: __/third_party/protobuf-lite/io_win32.cc.i
@@ -645,8 +645,8 @@ __/third_party/protobuf-lite/io_win32.i: __/third_party/protobuf-lite/io_win32.c
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/io_win32.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/io_win32.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/io_win32.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/io_win32.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/io_win32.cc.i
 .PHONY : __/third_party/protobuf-lite/io_win32.cc.i
 
 __/third_party/protobuf-lite/io_win32.s: __/third_party/protobuf-lite/io_win32.cc.s
@@ -654,8 +654,8 @@ __/third_party/protobuf-lite/io_win32.s: __/third_party/protobuf-lite/io_win32.c
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/io_win32.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/io_win32.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/io_win32.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/io_win32.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/io_win32.cc.s
 .PHONY : __/third_party/protobuf-lite/io_win32.cc.s
 
 __/third_party/protobuf-lite/message_lite.o: __/third_party/protobuf-lite/message_lite.cc.o
@@ -663,8 +663,8 @@ __/third_party/protobuf-lite/message_lite.o: __/third_party/protobuf-lite/messag
 
 # target to build an object file
 __/third_party/protobuf-lite/message_lite.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/message_lite.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/message_lite.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/message_lite.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/message_lite.cc.o
 .PHONY : __/third_party/protobuf-lite/message_lite.cc.o
 
 __/third_party/protobuf-lite/message_lite.i: __/third_party/protobuf-lite/message_lite.cc.i
@@ -672,8 +672,8 @@ __/third_party/protobuf-lite/message_lite.i: __/third_party/protobuf-lite/messag
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/message_lite.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/message_lite.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/message_lite.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/message_lite.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/message_lite.cc.i
 .PHONY : __/third_party/protobuf-lite/message_lite.cc.i
 
 __/third_party/protobuf-lite/message_lite.s: __/third_party/protobuf-lite/message_lite.cc.s
@@ -681,8 +681,8 @@ __/third_party/protobuf-lite/message_lite.s: __/third_party/protobuf-lite/messag
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/message_lite.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/message_lite.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/message_lite.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/message_lite.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/message_lite.cc.s
 .PHONY : __/third_party/protobuf-lite/message_lite.cc.s
 
 __/third_party/protobuf-lite/parse_context.o: __/third_party/protobuf-lite/parse_context.cc.o
@@ -690,8 +690,8 @@ __/third_party/protobuf-lite/parse_context.o: __/third_party/protobuf-lite/parse
 
 # target to build an object file
 __/third_party/protobuf-lite/parse_context.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/parse_context.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/parse_context.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/parse_context.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/parse_context.cc.o
 .PHONY : __/third_party/protobuf-lite/parse_context.cc.o
 
 __/third_party/protobuf-lite/parse_context.i: __/third_party/protobuf-lite/parse_context.cc.i
@@ -699,8 +699,8 @@ __/third_party/protobuf-lite/parse_context.i: __/third_party/protobuf-lite/parse
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/parse_context.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/parse_context.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/parse_context.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/parse_context.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/parse_context.cc.i
 .PHONY : __/third_party/protobuf-lite/parse_context.cc.i
 
 __/third_party/protobuf-lite/parse_context.s: __/third_party/protobuf-lite/parse_context.cc.s
@@ -708,8 +708,8 @@ __/third_party/protobuf-lite/parse_context.s: __/third_party/protobuf-lite/parse
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/parse_context.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/parse_context.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/parse_context.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/parse_context.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/parse_context.cc.s
 .PHONY : __/third_party/protobuf-lite/parse_context.cc.s
 
 __/third_party/protobuf-lite/repeated_field.o: __/third_party/protobuf-lite/repeated_field.cc.o
@@ -717,8 +717,8 @@ __/third_party/protobuf-lite/repeated_field.o: __/third_party/protobuf-lite/repe
 
 # target to build an object file
 __/third_party/protobuf-lite/repeated_field.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/repeated_field.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/repeated_field.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/repeated_field.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/repeated_field.cc.o
 .PHONY : __/third_party/protobuf-lite/repeated_field.cc.o
 
 __/third_party/protobuf-lite/repeated_field.i: __/third_party/protobuf-lite/repeated_field.cc.i
@@ -726,8 +726,8 @@ __/third_party/protobuf-lite/repeated_field.i: __/third_party/protobuf-lite/repe
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/repeated_field.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/repeated_field.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/repeated_field.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/repeated_field.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/repeated_field.cc.i
 .PHONY : __/third_party/protobuf-lite/repeated_field.cc.i
 
 __/third_party/protobuf-lite/repeated_field.s: __/third_party/protobuf-lite/repeated_field.cc.s
@@ -735,8 +735,8 @@ __/third_party/protobuf-lite/repeated_field.s: __/third_party/protobuf-lite/repe
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/repeated_field.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/repeated_field.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/repeated_field.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/repeated_field.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/repeated_field.cc.s
 .PHONY : __/third_party/protobuf-lite/repeated_field.cc.s
 
 __/third_party/protobuf-lite/status.o: __/third_party/protobuf-lite/status.cc.o
@@ -744,8 +744,8 @@ __/third_party/protobuf-lite/status.o: __/third_party/protobuf-lite/status.cc.o
 
 # target to build an object file
 __/third_party/protobuf-lite/status.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/status.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/status.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/status.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/status.cc.o
 .PHONY : __/third_party/protobuf-lite/status.cc.o
 
 __/third_party/protobuf-lite/status.i: __/third_party/protobuf-lite/status.cc.i
@@ -753,8 +753,8 @@ __/third_party/protobuf-lite/status.i: __/third_party/protobuf-lite/status.cc.i
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/status.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/status.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/status.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/status.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/status.cc.i
 .PHONY : __/third_party/protobuf-lite/status.cc.i
 
 __/third_party/protobuf-lite/status.s: __/third_party/protobuf-lite/status.cc.s
@@ -762,8 +762,8 @@ __/third_party/protobuf-lite/status.s: __/third_party/protobuf-lite/status.cc.s
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/status.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/status.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/status.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/status.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/status.cc.s
 .PHONY : __/third_party/protobuf-lite/status.cc.s
 
 __/third_party/protobuf-lite/statusor.o: __/third_party/protobuf-lite/statusor.cc.o
@@ -771,8 +771,8 @@ __/third_party/protobuf-lite/statusor.o: __/third_party/protobuf-lite/statusor.c
 
 # target to build an object file
 __/third_party/protobuf-lite/statusor.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/statusor.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/statusor.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/statusor.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/statusor.cc.o
 .PHONY : __/third_party/protobuf-lite/statusor.cc.o
 
 __/third_party/protobuf-lite/statusor.i: __/third_party/protobuf-lite/statusor.cc.i
@@ -780,8 +780,8 @@ __/third_party/protobuf-lite/statusor.i: __/third_party/protobuf-lite/statusor.c
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/statusor.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/statusor.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/statusor.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/statusor.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/statusor.cc.i
 .PHONY : __/third_party/protobuf-lite/statusor.cc.i
 
 __/third_party/protobuf-lite/statusor.s: __/third_party/protobuf-lite/statusor.cc.s
@@ -789,8 +789,8 @@ __/third_party/protobuf-lite/statusor.s: __/third_party/protobuf-lite/statusor.c
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/statusor.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/statusor.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/statusor.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/statusor.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/statusor.cc.s
 .PHONY : __/third_party/protobuf-lite/statusor.cc.s
 
 __/third_party/protobuf-lite/stringpiece.o: __/third_party/protobuf-lite/stringpiece.cc.o
@@ -798,8 +798,8 @@ __/third_party/protobuf-lite/stringpiece.o: __/third_party/protobuf-lite/stringp
 
 # target to build an object file
 __/third_party/protobuf-lite/stringpiece.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringpiece.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringpiece.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringpiece.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringpiece.cc.o
 .PHONY : __/third_party/protobuf-lite/stringpiece.cc.o
 
 __/third_party/protobuf-lite/stringpiece.i: __/third_party/protobuf-lite/stringpiece.cc.i
@@ -807,8 +807,8 @@ __/third_party/protobuf-lite/stringpiece.i: __/third_party/protobuf-lite/stringp
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/stringpiece.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringpiece.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringpiece.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringpiece.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringpiece.cc.i
 .PHONY : __/third_party/protobuf-lite/stringpiece.cc.i
 
 __/third_party/protobuf-lite/stringpiece.s: __/third_party/protobuf-lite/stringpiece.cc.s
@@ -816,8 +816,8 @@ __/third_party/protobuf-lite/stringpiece.s: __/third_party/protobuf-lite/stringp
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/stringpiece.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringpiece.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringpiece.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringpiece.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringpiece.cc.s
 .PHONY : __/third_party/protobuf-lite/stringpiece.cc.s
 
 __/third_party/protobuf-lite/stringprintf.o: __/third_party/protobuf-lite/stringprintf.cc.o
@@ -825,8 +825,8 @@ __/third_party/protobuf-lite/stringprintf.o: __/third_party/protobuf-lite/string
 
 # target to build an object file
 __/third_party/protobuf-lite/stringprintf.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringprintf.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringprintf.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringprintf.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringprintf.cc.o
 .PHONY : __/third_party/protobuf-lite/stringprintf.cc.o
 
 __/third_party/protobuf-lite/stringprintf.i: __/third_party/protobuf-lite/stringprintf.cc.i
@@ -834,8 +834,8 @@ __/third_party/protobuf-lite/stringprintf.i: __/third_party/protobuf-lite/string
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/stringprintf.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringprintf.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringprintf.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringprintf.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringprintf.cc.i
 .PHONY : __/third_party/protobuf-lite/stringprintf.cc.i
 
 __/third_party/protobuf-lite/stringprintf.s: __/third_party/protobuf-lite/stringprintf.cc.s
@@ -843,8 +843,8 @@ __/third_party/protobuf-lite/stringprintf.s: __/third_party/protobuf-lite/string
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/stringprintf.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringprintf.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringprintf.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/stringprintf.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/stringprintf.cc.s
 .PHONY : __/third_party/protobuf-lite/stringprintf.cc.s
 
 __/third_party/protobuf-lite/structurally_valid.o: __/third_party/protobuf-lite/structurally_valid.cc.o
@@ -852,8 +852,8 @@ __/third_party/protobuf-lite/structurally_valid.o: __/third_party/protobuf-lite/
 
 # target to build an object file
 __/third_party/protobuf-lite/structurally_valid.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/structurally_valid.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/structurally_valid.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/structurally_valid.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/structurally_valid.cc.o
 .PHONY : __/third_party/protobuf-lite/structurally_valid.cc.o
 
 __/third_party/protobuf-lite/structurally_valid.i: __/third_party/protobuf-lite/structurally_valid.cc.i
@@ -861,8 +861,8 @@ __/third_party/protobuf-lite/structurally_valid.i: __/third_party/protobuf-lite/
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/structurally_valid.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/structurally_valid.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/structurally_valid.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/structurally_valid.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/structurally_valid.cc.i
 .PHONY : __/third_party/protobuf-lite/structurally_valid.cc.i
 
 __/third_party/protobuf-lite/structurally_valid.s: __/third_party/protobuf-lite/structurally_valid.cc.s
@@ -870,8 +870,8 @@ __/third_party/protobuf-lite/structurally_valid.s: __/third_party/protobuf-lite/
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/structurally_valid.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/structurally_valid.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/structurally_valid.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/structurally_valid.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/structurally_valid.cc.s
 .PHONY : __/third_party/protobuf-lite/structurally_valid.cc.s
 
 __/third_party/protobuf-lite/strutil.o: __/third_party/protobuf-lite/strutil.cc.o
@@ -879,8 +879,8 @@ __/third_party/protobuf-lite/strutil.o: __/third_party/protobuf-lite/strutil.cc.
 
 # target to build an object file
 __/third_party/protobuf-lite/strutil.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/strutil.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/strutil.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/strutil.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/strutil.cc.o
 .PHONY : __/third_party/protobuf-lite/strutil.cc.o
 
 __/third_party/protobuf-lite/strutil.i: __/third_party/protobuf-lite/strutil.cc.i
@@ -888,8 +888,8 @@ __/third_party/protobuf-lite/strutil.i: __/third_party/protobuf-lite/strutil.cc.
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/strutil.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/strutil.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/strutil.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/strutil.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/strutil.cc.i
 .PHONY : __/third_party/protobuf-lite/strutil.cc.i
 
 __/third_party/protobuf-lite/strutil.s: __/third_party/protobuf-lite/strutil.cc.s
@@ -897,8 +897,8 @@ __/third_party/protobuf-lite/strutil.s: __/third_party/protobuf-lite/strutil.cc.
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/strutil.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/strutil.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/strutil.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/strutil.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/strutil.cc.s
 .PHONY : __/third_party/protobuf-lite/strutil.cc.s
 
 __/third_party/protobuf-lite/time.o: __/third_party/protobuf-lite/time.cc.o
@@ -906,8 +906,8 @@ __/third_party/protobuf-lite/time.o: __/third_party/protobuf-lite/time.cc.o
 
 # target to build an object file
 __/third_party/protobuf-lite/time.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/time.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/time.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/time.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/time.cc.o
 .PHONY : __/third_party/protobuf-lite/time.cc.o
 
 __/third_party/protobuf-lite/time.i: __/third_party/protobuf-lite/time.cc.i
@@ -915,8 +915,8 @@ __/third_party/protobuf-lite/time.i: __/third_party/protobuf-lite/time.cc.i
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/time.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/time.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/time.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/time.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/time.cc.i
 .PHONY : __/third_party/protobuf-lite/time.cc.i
 
 __/third_party/protobuf-lite/time.s: __/third_party/protobuf-lite/time.cc.s
@@ -924,8 +924,8 @@ __/third_party/protobuf-lite/time.s: __/third_party/protobuf-lite/time.cc.s
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/time.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/time.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/time.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/time.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/time.cc.s
 .PHONY : __/third_party/protobuf-lite/time.cc.s
 
 __/third_party/protobuf-lite/wire_format_lite.o: __/third_party/protobuf-lite/wire_format_lite.cc.o
@@ -933,8 +933,8 @@ __/third_party/protobuf-lite/wire_format_lite.o: __/third_party/protobuf-lite/wi
 
 # target to build an object file
 __/third_party/protobuf-lite/wire_format_lite.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/wire_format_lite.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/wire_format_lite.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/wire_format_lite.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/wire_format_lite.cc.o
 .PHONY : __/third_party/protobuf-lite/wire_format_lite.cc.o
 
 __/third_party/protobuf-lite/wire_format_lite.i: __/third_party/protobuf-lite/wire_format_lite.cc.i
@@ -942,8 +942,8 @@ __/third_party/protobuf-lite/wire_format_lite.i: __/third_party/protobuf-lite/wi
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/wire_format_lite.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/wire_format_lite.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/wire_format_lite.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/wire_format_lite.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/wire_format_lite.cc.i
 .PHONY : __/third_party/protobuf-lite/wire_format_lite.cc.i
 
 __/third_party/protobuf-lite/wire_format_lite.s: __/third_party/protobuf-lite/wire_format_lite.cc.s
@@ -951,8 +951,8 @@ __/third_party/protobuf-lite/wire_format_lite.s: __/third_party/protobuf-lite/wi
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/wire_format_lite.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/wire_format_lite.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/wire_format_lite.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/wire_format_lite.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/wire_format_lite.cc.s
 .PHONY : __/third_party/protobuf-lite/wire_format_lite.cc.s
 
 __/third_party/protobuf-lite/zero_copy_stream.o: __/third_party/protobuf-lite/zero_copy_stream.cc.o
@@ -960,8 +960,8 @@ __/third_party/protobuf-lite/zero_copy_stream.o: __/third_party/protobuf-lite/ze
 
 # target to build an object file
 __/third_party/protobuf-lite/zero_copy_stream.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.o
 .PHONY : __/third_party/protobuf-lite/zero_copy_stream.cc.o
 
 __/third_party/protobuf-lite/zero_copy_stream.i: __/third_party/protobuf-lite/zero_copy_stream.cc.i
@@ -969,8 +969,8 @@ __/third_party/protobuf-lite/zero_copy_stream.i: __/third_party/protobuf-lite/ze
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/zero_copy_stream.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.i
 .PHONY : __/third_party/protobuf-lite/zero_copy_stream.cc.i
 
 __/third_party/protobuf-lite/zero_copy_stream.s: __/third_party/protobuf-lite/zero_copy_stream.cc.s
@@ -978,8 +978,8 @@ __/third_party/protobuf-lite/zero_copy_stream.s: __/third_party/protobuf-lite/ze
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/zero_copy_stream.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream.cc.s
 .PHONY : __/third_party/protobuf-lite/zero_copy_stream.cc.s
 
 __/third_party/protobuf-lite/zero_copy_stream_impl.o: __/third_party/protobuf-lite/zero_copy_stream_impl.cc.o
@@ -987,8 +987,8 @@ __/third_party/protobuf-lite/zero_copy_stream_impl.o: __/third_party/protobuf-li
 
 # target to build an object file
 __/third_party/protobuf-lite/zero_copy_stream_impl.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.o
 .PHONY : __/third_party/protobuf-lite/zero_copy_stream_impl.cc.o
 
 __/third_party/protobuf-lite/zero_copy_stream_impl.i: __/third_party/protobuf-lite/zero_copy_stream_impl.cc.i
@@ -996,8 +996,8 @@ __/third_party/protobuf-lite/zero_copy_stream_impl.i: __/third_party/protobuf-li
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/zero_copy_stream_impl.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.i
 .PHONY : __/third_party/protobuf-lite/zero_copy_stream_impl.cc.i
 
 __/third_party/protobuf-lite/zero_copy_stream_impl.s: __/third_party/protobuf-lite/zero_copy_stream_impl.cc.s
@@ -1005,8 +1005,8 @@ __/third_party/protobuf-lite/zero_copy_stream_impl.s: __/third_party/protobuf-li
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/zero_copy_stream_impl.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl.cc.s
 .PHONY : __/third_party/protobuf-lite/zero_copy_stream_impl.cc.s
 
 __/third_party/protobuf-lite/zero_copy_stream_impl_lite.o: __/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.o
@@ -1014,8 +1014,8 @@ __/third_party/protobuf-lite/zero_copy_stream_impl_lite.o: __/third_party/protob
 
 # target to build an object file
 __/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.o
 .PHONY : __/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.o
 
 __/third_party/protobuf-lite/zero_copy_stream_impl_lite.i: __/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.i
@@ -1023,8 +1023,8 @@ __/third_party/protobuf-lite/zero_copy_stream_impl_lite.i: __/third_party/protob
 
 # target to preprocess a source file
 __/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.i
 .PHONY : __/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.i
 
 __/third_party/protobuf-lite/zero_copy_stream_impl_lite.s: __/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.s
@@ -1032,8 +1032,8 @@ __/third_party/protobuf-lite/zero_copy_stream_impl_lite.s: __/third_party/protob
 
 # target to generate assembly for a file
 __/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/__/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.s
 .PHONY : __/third_party/protobuf-lite/zero_copy_stream_impl_lite.cc.s
 
 bpe_model.o: bpe_model.cc.o
@@ -1041,8 +1041,8 @@ bpe_model.o: bpe_model.cc.o
 
 # target to build an object file
 bpe_model.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/bpe_model.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/bpe_model.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/bpe_model.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/bpe_model.cc.o
 .PHONY : bpe_model.cc.o
 
 bpe_model.i: bpe_model.cc.i
@@ -1050,8 +1050,8 @@ bpe_model.i: bpe_model.cc.i
 
 # target to preprocess a source file
 bpe_model.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/bpe_model.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/bpe_model.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/bpe_model.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/bpe_model.cc.i
 .PHONY : bpe_model.cc.i
 
 bpe_model.s: bpe_model.cc.s
@@ -1059,8 +1059,8 @@ bpe_model.s: bpe_model.cc.s
 
 # target to generate assembly for a file
 bpe_model.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/bpe_model.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/bpe_model.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/bpe_model.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/bpe_model.cc.s
 .PHONY : bpe_model.cc.s
 
 bpe_model_trainer.o: bpe_model_trainer.cc.o
@@ -1068,8 +1068,8 @@ bpe_model_trainer.o: bpe_model_trainer.cc.o
 
 # target to build an object file
 bpe_model_trainer.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/bpe_model_trainer.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/bpe_model_trainer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/bpe_model_trainer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/bpe_model_trainer.cc.o
 .PHONY : bpe_model_trainer.cc.o
 
 bpe_model_trainer.i: bpe_model_trainer.cc.i
@@ -1077,8 +1077,8 @@ bpe_model_trainer.i: bpe_model_trainer.cc.i
 
 # target to preprocess a source file
 bpe_model_trainer.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/bpe_model_trainer.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/bpe_model_trainer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/bpe_model_trainer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/bpe_model_trainer.cc.i
 .PHONY : bpe_model_trainer.cc.i
 
 bpe_model_trainer.s: bpe_model_trainer.cc.s
@@ -1086,8 +1086,8 @@ bpe_model_trainer.s: bpe_model_trainer.cc.s
 
 # target to generate assembly for a file
 bpe_model_trainer.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/bpe_model_trainer.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/bpe_model_trainer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/bpe_model_trainer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/bpe_model_trainer.cc.s
 .PHONY : bpe_model_trainer.cc.s
 
 builder.o: builder.cc.o
@@ -1095,8 +1095,8 @@ builder.o: builder.cc.o
 
 # target to build an object file
 builder.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/builder.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/builder.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/builder.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/builder.cc.o
 .PHONY : builder.cc.o
 
 builder.i: builder.cc.i
@@ -1104,8 +1104,8 @@ builder.i: builder.cc.i
 
 # target to preprocess a source file
 builder.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/builder.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/builder.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/builder.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/builder.cc.i
 .PHONY : builder.cc.i
 
 builder.s: builder.cc.s
@@ -1113,8 +1113,8 @@ builder.s: builder.cc.s
 
 # target to generate assembly for a file
 builder.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/builder.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/builder.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/builder.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/builder.cc.s
 .PHONY : builder.cc.s
 
 builtin_pb/sentencepiece.pb.o: builtin_pb/sentencepiece.pb.cc.o
@@ -1122,8 +1122,8 @@ builtin_pb/sentencepiece.pb.o: builtin_pb/sentencepiece.pb.cc.o
 
 # target to build an object file
 builtin_pb/sentencepiece.pb.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece.pb.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece.pb.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece.pb.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece.pb.cc.o
 .PHONY : builtin_pb/sentencepiece.pb.cc.o
 
 builtin_pb/sentencepiece.pb.i: builtin_pb/sentencepiece.pb.cc.i
@@ -1131,8 +1131,8 @@ builtin_pb/sentencepiece.pb.i: builtin_pb/sentencepiece.pb.cc.i
 
 # target to preprocess a source file
 builtin_pb/sentencepiece.pb.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece.pb.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece.pb.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece.pb.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece.pb.cc.i
 .PHONY : builtin_pb/sentencepiece.pb.cc.i
 
 builtin_pb/sentencepiece.pb.s: builtin_pb/sentencepiece.pb.cc.s
@@ -1140,8 +1140,8 @@ builtin_pb/sentencepiece.pb.s: builtin_pb/sentencepiece.pb.cc.s
 
 # target to generate assembly for a file
 builtin_pb/sentencepiece.pb.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece.pb.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece.pb.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece.pb.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece.pb.cc.s
 .PHONY : builtin_pb/sentencepiece.pb.cc.s
 
 builtin_pb/sentencepiece_model.pb.o: builtin_pb/sentencepiece_model.pb.cc.o
@@ -1149,8 +1149,8 @@ builtin_pb/sentencepiece_model.pb.o: builtin_pb/sentencepiece_model.pb.cc.o
 
 # target to build an object file
 builtin_pb/sentencepiece_model.pb.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece_model.pb.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece_model.pb.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece_model.pb.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece_model.pb.cc.o
 .PHONY : builtin_pb/sentencepiece_model.pb.cc.o
 
 builtin_pb/sentencepiece_model.pb.i: builtin_pb/sentencepiece_model.pb.cc.i
@@ -1158,8 +1158,8 @@ builtin_pb/sentencepiece_model.pb.i: builtin_pb/sentencepiece_model.pb.cc.i
 
 # target to preprocess a source file
 builtin_pb/sentencepiece_model.pb.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece_model.pb.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece_model.pb.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece_model.pb.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece_model.pb.cc.i
 .PHONY : builtin_pb/sentencepiece_model.pb.cc.i
 
 builtin_pb/sentencepiece_model.pb.s: builtin_pb/sentencepiece_model.pb.cc.s
@@ -1167,8 +1167,8 @@ builtin_pb/sentencepiece_model.pb.s: builtin_pb/sentencepiece_model.pb.cc.s
 
 # target to generate assembly for a file
 builtin_pb/sentencepiece_model.pb.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece_model.pb.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece_model.pb.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/builtin_pb/sentencepiece_model.pb.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/builtin_pb/sentencepiece_model.pb.cc.s
 .PHONY : builtin_pb/sentencepiece_model.pb.cc.s
 
 char_model.o: char_model.cc.o
@@ -1176,8 +1176,8 @@ char_model.o: char_model.cc.o
 
 # target to build an object file
 char_model.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/char_model.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/char_model.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/char_model.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/char_model.cc.o
 .PHONY : char_model.cc.o
 
 char_model.i: char_model.cc.i
@@ -1185,8 +1185,8 @@ char_model.i: char_model.cc.i
 
 # target to preprocess a source file
 char_model.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/char_model.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/char_model.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/char_model.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/char_model.cc.i
 .PHONY : char_model.cc.i
 
 char_model.s: char_model.cc.s
@@ -1194,8 +1194,8 @@ char_model.s: char_model.cc.s
 
 # target to generate assembly for a file
 char_model.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/char_model.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/char_model.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/char_model.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/char_model.cc.s
 .PHONY : char_model.cc.s
 
 char_model_trainer.o: char_model_trainer.cc.o
@@ -1203,8 +1203,8 @@ char_model_trainer.o: char_model_trainer.cc.o
 
 # target to build an object file
 char_model_trainer.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/char_model_trainer.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/char_model_trainer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/char_model_trainer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/char_model_trainer.cc.o
 .PHONY : char_model_trainer.cc.o
 
 char_model_trainer.i: char_model_trainer.cc.i
@@ -1212,8 +1212,8 @@ char_model_trainer.i: char_model_trainer.cc.i
 
 # target to preprocess a source file
 char_model_trainer.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/char_model_trainer.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/char_model_trainer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/char_model_trainer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/char_model_trainer.cc.i
 .PHONY : char_model_trainer.cc.i
 
 char_model_trainer.s: char_model_trainer.cc.s
@@ -1221,8 +1221,8 @@ char_model_trainer.s: char_model_trainer.cc.s
 
 # target to generate assembly for a file
 char_model_trainer.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/char_model_trainer.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/char_model_trainer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/char_model_trainer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/char_model_trainer.cc.s
 .PHONY : char_model_trainer.cc.s
 
 error.o: error.cc.o
@@ -1230,8 +1230,8 @@ error.o: error.cc.o
 
 # target to build an object file
 error.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/error.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/error.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/error.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/error.cc.o
 .PHONY : error.cc.o
 
 error.i: error.cc.i
@@ -1239,8 +1239,8 @@ error.i: error.cc.i
 
 # target to preprocess a source file
 error.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/error.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/error.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/error.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/error.cc.i
 .PHONY : error.cc.i
 
 error.s: error.cc.s
@@ -1248,8 +1248,8 @@ error.s: error.cc.s
 
 # target to generate assembly for a file
 error.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/error.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/error.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/error.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/error.cc.s
 .PHONY : error.cc.s
 
 filesystem.o: filesystem.cc.o
@@ -1257,8 +1257,8 @@ filesystem.o: filesystem.cc.o
 
 # target to build an object file
 filesystem.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/filesystem.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/filesystem.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/filesystem.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/filesystem.cc.o
 .PHONY : filesystem.cc.o
 
 filesystem.i: filesystem.cc.i
@@ -1266,8 +1266,8 @@ filesystem.i: filesystem.cc.i
 
 # target to preprocess a source file
 filesystem.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/filesystem.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/filesystem.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/filesystem.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/filesystem.cc.i
 .PHONY : filesystem.cc.i
 
 filesystem.s: filesystem.cc.s
@@ -1275,8 +1275,8 @@ filesystem.s: filesystem.cc.s
 
 # target to generate assembly for a file
 filesystem.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/filesystem.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/filesystem.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/filesystem.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/filesystem.cc.s
 .PHONY : filesystem.cc.s
 
 model_factory.o: model_factory.cc.o
@@ -1284,8 +1284,8 @@ model_factory.o: model_factory.cc.o
 
 # target to build an object file
 model_factory.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_factory.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_factory.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_factory.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_factory.cc.o
 .PHONY : model_factory.cc.o
 
 model_factory.i: model_factory.cc.i
@@ -1293,8 +1293,8 @@ model_factory.i: model_factory.cc.i
 
 # target to preprocess a source file
 model_factory.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_factory.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_factory.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_factory.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_factory.cc.i
 .PHONY : model_factory.cc.i
 
 model_factory.s: model_factory.cc.s
@@ -1302,8 +1302,8 @@ model_factory.s: model_factory.cc.s
 
 # target to generate assembly for a file
 model_factory.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_factory.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_factory.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_factory.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_factory.cc.s
 .PHONY : model_factory.cc.s
 
 model_interface.o: model_interface.cc.o
@@ -1311,8 +1311,8 @@ model_interface.o: model_interface.cc.o
 
 # target to build an object file
 model_interface.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_interface.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_interface.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_interface.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_interface.cc.o
 .PHONY : model_interface.cc.o
 
 model_interface.i: model_interface.cc.i
@@ -1320,8 +1320,8 @@ model_interface.i: model_interface.cc.i
 
 # target to preprocess a source file
 model_interface.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_interface.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_interface.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_interface.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_interface.cc.i
 .PHONY : model_interface.cc.i
 
 model_interface.s: model_interface.cc.s
@@ -1329,8 +1329,8 @@ model_interface.s: model_interface.cc.s
 
 # target to generate assembly for a file
 model_interface.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_interface.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_interface.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/model_interface.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/model_interface.cc.s
 .PHONY : model_interface.cc.s
 
 normalizer.o: normalizer.cc.o
@@ -1338,8 +1338,8 @@ normalizer.o: normalizer.cc.o
 
 # target to build an object file
 normalizer.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/normalizer.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/normalizer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/normalizer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/normalizer.cc.o
 .PHONY : normalizer.cc.o
 
 normalizer.i: normalizer.cc.i
@@ -1347,8 +1347,8 @@ normalizer.i: normalizer.cc.i
 
 # target to preprocess a source file
 normalizer.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/normalizer.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/normalizer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/normalizer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/normalizer.cc.i
 .PHONY : normalizer.cc.i
 
 normalizer.s: normalizer.cc.s
@@ -1356,8 +1356,8 @@ normalizer.s: normalizer.cc.s
 
 # target to generate assembly for a file
 normalizer.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/normalizer.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/normalizer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/normalizer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/normalizer.cc.s
 .PHONY : normalizer.cc.s
 
 pretokenizer_for_training.o: pretokenizer_for_training.cc.o
@@ -1365,8 +1365,8 @@ pretokenizer_for_training.o: pretokenizer_for_training.cc.o
 
 # target to build an object file
 pretokenizer_for_training.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/pretokenizer_for_training.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/pretokenizer_for_training.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/pretokenizer_for_training.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/pretokenizer_for_training.cc.o
 .PHONY : pretokenizer_for_training.cc.o
 
 pretokenizer_for_training.i: pretokenizer_for_training.cc.i
@@ -1374,8 +1374,8 @@ pretokenizer_for_training.i: pretokenizer_for_training.cc.i
 
 # target to preprocess a source file
 pretokenizer_for_training.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/pretokenizer_for_training.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/pretokenizer_for_training.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/pretokenizer_for_training.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/pretokenizer_for_training.cc.i
 .PHONY : pretokenizer_for_training.cc.i
 
 pretokenizer_for_training.s: pretokenizer_for_training.cc.s
@@ -1383,8 +1383,8 @@ pretokenizer_for_training.s: pretokenizer_for_training.cc.s
 
 # target to generate assembly for a file
 pretokenizer_for_training.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/pretokenizer_for_training.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/pretokenizer_for_training.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/pretokenizer_for_training.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/pretokenizer_for_training.cc.s
 .PHONY : pretokenizer_for_training.cc.s
 
 sentencepiece_processor.o: sentencepiece_processor.cc.o
@@ -1392,8 +1392,8 @@ sentencepiece_processor.o: sentencepiece_processor.cc.o
 
 # target to build an object file
 sentencepiece_processor.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/sentencepiece_processor.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/sentencepiece_processor.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/sentencepiece_processor.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/sentencepiece_processor.cc.o
 .PHONY : sentencepiece_processor.cc.o
 
 sentencepiece_processor.i: sentencepiece_processor.cc.i
@@ -1401,8 +1401,8 @@ sentencepiece_processor.i: sentencepiece_processor.cc.i
 
 # target to preprocess a source file
 sentencepiece_processor.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/sentencepiece_processor.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/sentencepiece_processor.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/sentencepiece_processor.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/sentencepiece_processor.cc.i
 .PHONY : sentencepiece_processor.cc.i
 
 sentencepiece_processor.s: sentencepiece_processor.cc.s
@@ -1410,8 +1410,8 @@ sentencepiece_processor.s: sentencepiece_processor.cc.s
 
 # target to generate assembly for a file
 sentencepiece_processor.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/sentencepiece_processor.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/sentencepiece_processor.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/sentencepiece_processor.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/sentencepiece_processor.cc.s
 .PHONY : sentencepiece_processor.cc.s
 
 sentencepiece_trainer.o: sentencepiece_trainer.cc.o
@@ -1419,8 +1419,8 @@ sentencepiece_trainer.o: sentencepiece_trainer.cc.o
 
 # target to build an object file
 sentencepiece_trainer.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/sentencepiece_trainer.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/sentencepiece_trainer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/sentencepiece_trainer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/sentencepiece_trainer.cc.o
 .PHONY : sentencepiece_trainer.cc.o
 
 sentencepiece_trainer.i: sentencepiece_trainer.cc.i
@@ -1428,8 +1428,8 @@ sentencepiece_trainer.i: sentencepiece_trainer.cc.i
 
 # target to preprocess a source file
 sentencepiece_trainer.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/sentencepiece_trainer.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/sentencepiece_trainer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/sentencepiece_trainer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/sentencepiece_trainer.cc.i
 .PHONY : sentencepiece_trainer.cc.i
 
 sentencepiece_trainer.s: sentencepiece_trainer.cc.s
@@ -1437,8 +1437,8 @@ sentencepiece_trainer.s: sentencepiece_trainer.cc.s
 
 # target to generate assembly for a file
 sentencepiece_trainer.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/sentencepiece_trainer.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/sentencepiece_trainer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/sentencepiece_trainer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/sentencepiece_trainer.cc.s
 .PHONY : sentencepiece_trainer.cc.s
 
 spm_decode_main.o: spm_decode_main.cc.o
@@ -1446,7 +1446,7 @@ spm_decode_main.o: spm_decode_main.cc.o
 
 # target to build an object file
 spm_decode_main.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/spm_decode_main.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/spm_decode_main.cc.o
 .PHONY : spm_decode_main.cc.o
 
 spm_decode_main.i: spm_decode_main.cc.i
@@ -1454,7 +1454,7 @@ spm_decode_main.i: spm_decode_main.cc.i
 
 # target to preprocess a source file
 spm_decode_main.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/spm_decode_main.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/spm_decode_main.cc.i
 .PHONY : spm_decode_main.cc.i
 
 spm_decode_main.s: spm_decode_main.cc.s
@@ -1462,7 +1462,7 @@ spm_decode_main.s: spm_decode_main.cc.s
 
 # target to generate assembly for a file
 spm_decode_main.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/spm_decode_main.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_decode.dir/spm_decode_main.cc.s
 .PHONY : spm_decode_main.cc.s
 
 spm_encode_main.o: spm_encode_main.cc.o
@@ -1470,7 +1470,7 @@ spm_encode_main.o: spm_encode_main.cc.o
 
 # target to build an object file
 spm_encode_main.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/spm_encode_main.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/spm_encode_main.cc.o
 .PHONY : spm_encode_main.cc.o
 
 spm_encode_main.i: spm_encode_main.cc.i
@@ -1478,7 +1478,7 @@ spm_encode_main.i: spm_encode_main.cc.i
 
 # target to preprocess a source file
 spm_encode_main.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/spm_encode_main.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/spm_encode_main.cc.i
 .PHONY : spm_encode_main.cc.i
 
 spm_encode_main.s: spm_encode_main.cc.s
@@ -1486,7 +1486,7 @@ spm_encode_main.s: spm_encode_main.cc.s
 
 # target to generate assembly for a file
 spm_encode_main.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/spm_encode_main.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_encode.dir/spm_encode_main.cc.s
 .PHONY : spm_encode_main.cc.s
 
 spm_export_vocab_main.o: spm_export_vocab_main.cc.o
@@ -1494,7 +1494,7 @@ spm_export_vocab_main.o: spm_export_vocab_main.cc.o
 
 # target to build an object file
 spm_export_vocab_main.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/spm_export_vocab_main.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/spm_export_vocab_main.cc.o
 .PHONY : spm_export_vocab_main.cc.o
 
 spm_export_vocab_main.i: spm_export_vocab_main.cc.i
@@ -1502,7 +1502,7 @@ spm_export_vocab_main.i: spm_export_vocab_main.cc.i
 
 # target to preprocess a source file
 spm_export_vocab_main.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/spm_export_vocab_main.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/spm_export_vocab_main.cc.i
 .PHONY : spm_export_vocab_main.cc.i
 
 spm_export_vocab_main.s: spm_export_vocab_main.cc.s
@@ -1510,7 +1510,7 @@ spm_export_vocab_main.s: spm_export_vocab_main.cc.s
 
 # target to generate assembly for a file
 spm_export_vocab_main.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/spm_export_vocab_main.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_export_vocab.dir/spm_export_vocab_main.cc.s
 .PHONY : spm_export_vocab_main.cc.s
 
 spm_normalize_main.o: spm_normalize_main.cc.o
@@ -1518,7 +1518,7 @@ spm_normalize_main.o: spm_normalize_main.cc.o
 
 # target to build an object file
 spm_normalize_main.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/spm_normalize_main.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/spm_normalize_main.cc.o
 .PHONY : spm_normalize_main.cc.o
 
 spm_normalize_main.i: spm_normalize_main.cc.i
@@ -1526,7 +1526,7 @@ spm_normalize_main.i: spm_normalize_main.cc.i
 
 # target to preprocess a source file
 spm_normalize_main.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/spm_normalize_main.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/spm_normalize_main.cc.i
 .PHONY : spm_normalize_main.cc.i
 
 spm_normalize_main.s: spm_normalize_main.cc.s
@@ -1534,7 +1534,7 @@ spm_normalize_main.s: spm_normalize_main.cc.s
 
 # target to generate assembly for a file
 spm_normalize_main.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/spm_normalize_main.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_normalize.dir/spm_normalize_main.cc.s
 .PHONY : spm_normalize_main.cc.s
 
 spm_train_main.o: spm_train_main.cc.o
@@ -1542,7 +1542,7 @@ spm_train_main.o: spm_train_main.cc.o
 
 # target to build an object file
 spm_train_main.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/spm_train_main.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/spm_train_main.cc.o
 .PHONY : spm_train_main.cc.o
 
 spm_train_main.i: spm_train_main.cc.i
@@ -1550,7 +1550,7 @@ spm_train_main.i: spm_train_main.cc.i
 
 # target to preprocess a source file
 spm_train_main.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/spm_train_main.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/spm_train_main.cc.i
 .PHONY : spm_train_main.cc.i
 
 spm_train_main.s: spm_train_main.cc.s
@@ -1558,7 +1558,7 @@ spm_train_main.s: spm_train_main.cc.s
 
 # target to generate assembly for a file
 spm_train_main.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/spm_train_main.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/spm_train.dir/spm_train_main.cc.s
 .PHONY : spm_train_main.cc.s
 
 trainer_factory.o: trainer_factory.cc.o
@@ -1566,8 +1566,8 @@ trainer_factory.o: trainer_factory.cc.o
 
 # target to build an object file
 trainer_factory.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_factory.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_factory.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_factory.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_factory.cc.o
 .PHONY : trainer_factory.cc.o
 
 trainer_factory.i: trainer_factory.cc.i
@@ -1575,8 +1575,8 @@ trainer_factory.i: trainer_factory.cc.i
 
 # target to preprocess a source file
 trainer_factory.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_factory.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_factory.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_factory.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_factory.cc.i
 .PHONY : trainer_factory.cc.i
 
 trainer_factory.s: trainer_factory.cc.s
@@ -1584,8 +1584,8 @@ trainer_factory.s: trainer_factory.cc.s
 
 # target to generate assembly for a file
 trainer_factory.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_factory.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_factory.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_factory.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_factory.cc.s
 .PHONY : trainer_factory.cc.s
 
 trainer_interface.o: trainer_interface.cc.o
@@ -1593,8 +1593,8 @@ trainer_interface.o: trainer_interface.cc.o
 
 # target to build an object file
 trainer_interface.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_interface.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_interface.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_interface.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_interface.cc.o
 .PHONY : trainer_interface.cc.o
 
 trainer_interface.i: trainer_interface.cc.i
@@ -1602,8 +1602,8 @@ trainer_interface.i: trainer_interface.cc.i
 
 # target to preprocess a source file
 trainer_interface.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_interface.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_interface.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_interface.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_interface.cc.i
 .PHONY : trainer_interface.cc.i
 
 trainer_interface.s: trainer_interface.cc.s
@@ -1611,8 +1611,8 @@ trainer_interface.s: trainer_interface.cc.s
 
 # target to generate assembly for a file
 trainer_interface.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_interface.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_interface.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/trainer_interface.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/trainer_interface.cc.s
 .PHONY : trainer_interface.cc.s
 
 unicode_script.o: unicode_script.cc.o
@@ -1620,8 +1620,8 @@ unicode_script.o: unicode_script.cc.o
 
 # target to build an object file
 unicode_script.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unicode_script.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unicode_script.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unicode_script.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unicode_script.cc.o
 .PHONY : unicode_script.cc.o
 
 unicode_script.i: unicode_script.cc.i
@@ -1629,8 +1629,8 @@ unicode_script.i: unicode_script.cc.i
 
 # target to preprocess a source file
 unicode_script.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unicode_script.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unicode_script.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unicode_script.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unicode_script.cc.i
 .PHONY : unicode_script.cc.i
 
 unicode_script.s: unicode_script.cc.s
@@ -1638,8 +1638,8 @@ unicode_script.s: unicode_script.cc.s
 
 # target to generate assembly for a file
 unicode_script.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unicode_script.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unicode_script.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unicode_script.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unicode_script.cc.s
 .PHONY : unicode_script.cc.s
 
 unigram_model.o: unigram_model.cc.o
@@ -1647,8 +1647,8 @@ unigram_model.o: unigram_model.cc.o
 
 # target to build an object file
 unigram_model.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/unigram_model.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/unigram_model.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/unigram_model.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/unigram_model.cc.o
 .PHONY : unigram_model.cc.o
 
 unigram_model.i: unigram_model.cc.i
@@ -1656,8 +1656,8 @@ unigram_model.i: unigram_model.cc.i
 
 # target to preprocess a source file
 unigram_model.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/unigram_model.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/unigram_model.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/unigram_model.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/unigram_model.cc.i
 .PHONY : unigram_model.cc.i
 
 unigram_model.s: unigram_model.cc.s
@@ -1665,8 +1665,8 @@ unigram_model.s: unigram_model.cc.s
 
 # target to generate assembly for a file
 unigram_model.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/unigram_model.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/unigram_model.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/unigram_model.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/unigram_model.cc.s
 .PHONY : unigram_model.cc.s
 
 unigram_model_trainer.o: unigram_model_trainer.cc.o
@@ -1674,8 +1674,8 @@ unigram_model_trainer.o: unigram_model_trainer.cc.o
 
 # target to build an object file
 unigram_model_trainer.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unigram_model_trainer.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unigram_model_trainer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unigram_model_trainer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unigram_model_trainer.cc.o
 .PHONY : unigram_model_trainer.cc.o
 
 unigram_model_trainer.i: unigram_model_trainer.cc.i
@@ -1683,8 +1683,8 @@ unigram_model_trainer.i: unigram_model_trainer.cc.i
 
 # target to preprocess a source file
 unigram_model_trainer.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unigram_model_trainer.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unigram_model_trainer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unigram_model_trainer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unigram_model_trainer.cc.i
 .PHONY : unigram_model_trainer.cc.i
 
 unigram_model_trainer.s: unigram_model_trainer.cc.s
@@ -1692,8 +1692,8 @@ unigram_model_trainer.s: unigram_model_trainer.cc.s
 
 # target to generate assembly for a file
 unigram_model_trainer.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unigram_model_trainer.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unigram_model_trainer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/unigram_model_trainer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/unigram_model_trainer.cc.s
 .PHONY : unigram_model_trainer.cc.s
 
 util.o: util.cc.o
@@ -1701,8 +1701,8 @@ util.o: util.cc.o
 
 # target to build an object file
 util.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/util.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/util.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/util.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/util.cc.o
 .PHONY : util.cc.o
 
 util.i: util.cc.i
@@ -1710,8 +1710,8 @@ util.i: util.cc.i
 
 # target to preprocess a source file
 util.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/util.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/util.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/util.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/util.cc.i
 .PHONY : util.cc.i
 
 util.s: util.cc.s
@@ -1719,8 +1719,8 @@ util.s: util.cc.s
 
 # target to generate assembly for a file
 util.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/util.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/util.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/util.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/util.cc.s
 .PHONY : util.cc.s
 
 word_model.o: word_model.cc.o
@@ -1728,8 +1728,8 @@ word_model.o: word_model.cc.o
 
 # target to build an object file
 word_model.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/word_model.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/word_model.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/word_model.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/word_model.cc.o
 .PHONY : word_model.cc.o
 
 word_model.i: word_model.cc.i
@@ -1737,8 +1737,8 @@ word_model.i: word_model.cc.i
 
 # target to preprocess a source file
 word_model.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/word_model.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/word_model.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/word_model.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/word_model.cc.i
 .PHONY : word_model.cc.i
 
 word_model.s: word_model.cc.s
@@ -1746,8 +1746,8 @@ word_model.s: word_model.cc.s
 
 # target to generate assembly for a file
 word_model.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/word_model.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/word_model.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece.dir/word_model.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece-static.dir/word_model.cc.s
 .PHONY : word_model.cc.s
 
 word_model_trainer.o: word_model_trainer.cc.o
@@ -1755,8 +1755,8 @@ word_model_trainer.o: word_model_trainer.cc.o
 
 # target to build an object file
 word_model_trainer.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/word_model_trainer.cc.o
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/word_model_trainer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/word_model_trainer.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/word_model_trainer.cc.o
 .PHONY : word_model_trainer.cc.o
 
 word_model_trainer.i: word_model_trainer.cc.i
@@ -1764,8 +1764,8 @@ word_model_trainer.i: word_model_trainer.cc.i
 
 # target to preprocess a source file
 word_model_trainer.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/word_model_trainer.cc.i
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/word_model_trainer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/word_model_trainer.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/word_model_trainer.cc.i
 .PHONY : word_model_trainer.cc.i
 
 word_model_trainer.s: word_model_trainer.cc.s
@@ -1773,8 +1773,8 @@ word_model_trainer.s: word_model_trainer.cc.s
 
 # target to generate assembly for a file
 word_model_trainer.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/word_model_trainer.cc.s
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/word_model_trainer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train.dir/word_model_trainer.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/build.make _deps/sentencepiece-build/src/CMakeFiles/sentencepiece_train-static.dir/word_model_trainer.cc.s
 .PHONY : word_model_trainer.cc.s
 
 # Help Target
@@ -1976,6 +1976,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

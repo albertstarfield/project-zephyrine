@@ -57,10 +57,10 @@ RM = /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp
+CMAKE_SOURCE_DIR = /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build
+CMAKE_BINARY_DIR = /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build
 
 #=============================================================================
 # Targets provided globally by CMake.
@@ -68,7 +68,7 @@ CMAKE_BINARY_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/u
 # Special rule for the target package
 package: preinstall
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Run CPack packaging tool..."
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackConfig.cmake
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackConfig.cmake
 .PHONY : package
 
 # Special rule for the target package
@@ -78,7 +78,7 @@ package/fast: package
 # Special rule for the target package_source
 package_source:
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --cyan "Run CPack packaging tool for source..."
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackSourceConfig.cmake /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CPackSourceConfig.cmake
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cpack --config ./CPackSourceConfig.cmake /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CPackSourceConfig.cmake
 .PHONY : package_source
 
 # Special rule for the target package_source
@@ -152,14 +152,14 @@ install/strip/fast: preinstall/fast
 
 # The main all target
 all: cmake_check_build_system
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -E cmake_progress_start /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-build/googlemock//CMakeFiles/progress.marks
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/CMakeFiles 0
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -E cmake_progress_start /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-build/googletest-build/googlemock//CMakeFiles/progress.marks
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/all
+	$(CMAKE_COMMAND) -E cmake_progress_start /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/CMakeFiles 0
 .PHONY : all
 
 # The main clean target
 clean:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/clean
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/clean
 .PHONY : clean
 
 # The main clean target
@@ -168,22 +168,22 @@ clean/fast: clean
 
 # Prepare targets for installation.
 preinstall: all
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/preinstall
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/preinstall
 .PHONY : preinstall
 
 # Prepare targets for installation.
 preinstall/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/preinstall
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/preinstall
 .PHONY : preinstall/fast
 
 # clear depends
 depend:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 1
 .PHONY : depend
 
 # Convenience name for target.
 _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/rule
 .PHONY : _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/rule
 
 # Convenience name for target.
@@ -192,12 +192,12 @@ gmock: _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/rule
 
 # fast build rule for target.
 gmock/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/build
 .PHONY : gmock/fast
 
 # Convenience name for target.
 _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/rule:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/rule
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/rule
 .PHONY : _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/rule
 
 # Convenience name for target.
@@ -206,7 +206,7 @@ gmock_main: _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_mai
 
 # fast build rule for target.
 gmock_main/fast:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/build
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/build
 .PHONY : gmock_main/fast
 
 src/gmock-all.o: src/gmock-all.cc.o
@@ -214,7 +214,7 @@ src/gmock-all.o: src/gmock-all.cc.o
 
 # target to build an object file
 src/gmock-all.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/src/gmock-all.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/src/gmock-all.cc.o
 .PHONY : src/gmock-all.cc.o
 
 src/gmock-all.i: src/gmock-all.cc.i
@@ -222,7 +222,7 @@ src/gmock-all.i: src/gmock-all.cc.i
 
 # target to preprocess a source file
 src/gmock-all.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/src/gmock-all.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/src/gmock-all.cc.i
 .PHONY : src/gmock-all.cc.i
 
 src/gmock-all.s: src/gmock-all.cc.s
@@ -230,7 +230,7 @@ src/gmock-all.s: src/gmock-all.cc.s
 
 # target to generate assembly for a file
 src/gmock-all.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/src/gmock-all.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock.dir/src/gmock-all.cc.s
 .PHONY : src/gmock-all.cc.s
 
 src/gmock_main.o: src/gmock_main.cc.o
@@ -238,7 +238,7 @@ src/gmock_main.o: src/gmock_main.cc.o
 
 # target to build an object file
 src/gmock_main.cc.o:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.o
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.o
 .PHONY : src/gmock_main.cc.o
 
 src/gmock_main.i: src/gmock_main.cc.i
@@ -246,7 +246,7 @@ src/gmock_main.i: src/gmock_main.cc.i
 
 # target to preprocess a source file
 src/gmock_main.cc.i:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.i
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.i
 .PHONY : src/gmock_main.cc.i
 
 src/gmock_main.s: src/gmock_main.cc.s
@@ -254,7 +254,7 @@ src/gmock_main.s: src/gmock_main.cc.s
 
 # target to generate assembly for a file
 src/gmock_main.cc.s:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.s
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(MAKE) $(MAKESILENT) -f _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/build.make _deps/highway-build/googletest-build/googlemock/CMakeFiles/gmock_main.dir/src/gmock_main.cc.s
 .PHONY : src/gmock_main.cc.s
 
 # Help Target
@@ -290,6 +290,6 @@ help:
 # No rule that depends on this can have commands that come from listfiles
 # because they might be regenerated.
 cmake_check_build_system:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build && $(CMAKE_COMMAND) -S$(CMAKE_SOURCE_DIR) -B$(CMAKE_BINARY_DIR) --check-build-system CMakeFiles/Makefile.cmake 0
 .PHONY : cmake_check_build_system
 

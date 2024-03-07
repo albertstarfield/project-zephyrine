@@ -53,10 +53,10 @@ RM = /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E rm -f
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild
+CMAKE_SOURCE_DIR = /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild
+CMAKE_BINARY_DIR = /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild
 
 # Utility rule file for sentencepiece-populate.
 
@@ -77,60 +77,60 @@ CMakeFiles/sentencepiece-populate-complete: sentencepiece-populate-prefix/src/se
 CMakeFiles/sentencepiece-populate-complete: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-build
 CMakeFiles/sentencepiece-populate-complete: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-install
 CMakeFiles/sentencepiece-populate-complete: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-test
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Completed 'sentencepiece-populate'"
-	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E make_directory /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles
-	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles/sentencepiece-populate-complete
-	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-done
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Completed 'sentencepiece-populate'"
+	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E make_directory /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles
+	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles/sentencepiece-populate-complete
+	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-done
 
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-update:
 .PHONY : sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-update
 
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-build: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-configure
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "No build step for 'sentencepiece-populate'"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E echo_append
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-build
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_2) "No build step for 'sentencepiece-populate'"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E echo_append
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-build
 
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-configure: sentencepiece-populate-prefix/tmp/sentencepiece-populate-cfgcmd.txt
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-configure: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-patch
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "No configure step for 'sentencepiece-populate'"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E echo_append
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-configure
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_3) "No configure step for 'sentencepiece-populate'"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E echo_append
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-configure
 
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-download: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-gitinfo.txt
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-download: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-mkdir
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Performing download step (git clone) for 'sentencepiece-populate'"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -P /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/tmp/sentencepiece-populate-gitclone.cmake
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-download
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_4) "Performing download step (git clone) for 'sentencepiece-populate'"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -P /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/tmp/sentencepiece-populate-gitclone.cmake
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-download
 
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-install: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "No install step for 'sentencepiece-populate'"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E echo_append
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-install
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_5) "No install step for 'sentencepiece-populate'"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E echo_append
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-install
 
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-mkdir:
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Creating directories for 'sentencepiece-populate'"
-	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -Dcfgdir= -P /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/tmp/sentencepiece-populate-mkdirs.cmake
-	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-mkdir
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_6) "Creating directories for 'sentencepiece-populate'"
+	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -Dcfgdir= -P /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/tmp/sentencepiece-populate-mkdirs.cmake
+	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-mkdir
 
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-patch: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-patch-info.txt
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-patch: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-update
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "No patch step for 'sentencepiece-populate'"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_7) "No patch step for 'sentencepiece-populate'"
 	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E echo_append
-	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-patch
+	/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-patch
 
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-update:
 .PHONY : sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-update
 
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-test: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-install
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "No test step for 'sentencepiece-populate'"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E echo_append
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-test
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_8) "No test step for 'sentencepiece-populate'"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E echo_append
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-build && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -E touch /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-test
 
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-update: sentencepiece-populate-prefix/tmp/sentencepiece-populate-gitupdate.cmake
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-update: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-update-info.txt
 sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-update: sentencepiece-populate-prefix/src/sentencepiece-populate-stamp/sentencepiece-populate-download
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Performing update step for 'sentencepiece-populate'"
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-src && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -Dcan_fetch=YES -P /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/tmp/sentencepiece-populate-gitupdate.cmake
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles --progress-num=$(CMAKE_PROGRESS_9) "Performing update step for 'sentencepiece-populate'"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-src && /opt/homebrew/Cellar/cmake/3.28.3/bin/cmake -Dcan_fetch=YES -P /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/tmp/sentencepiece-populate-gitupdate.cmake
 
 sentencepiece-populate: CMakeFiles/sentencepiece-populate
 sentencepiece-populate: CMakeFiles/sentencepiece-populate-complete
@@ -154,6 +154,6 @@ CMakeFiles/sentencepiece-populate.dir/clean:
 .PHONY : CMakeFiles/sentencepiece-populate.dir/clean
 
 CMakeFiles/sentencepiece-populate.dir/depend:
-	cd /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild /Users/user/Documents/misc/AI/LLM/alpaca-electron-zephyrine/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles/sentencepiece-populate.dir/DependInfo.cmake "--color=$(COLOR)"
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild && $(CMAKE_COMMAND) -E cmake_depends "Unix Makefiles" /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/CMakeFiles/sentencepiece-populate.dir/DependInfo.cmake "--color=$(COLOR)"
 .PHONY : CMakeFiles/sentencepiece-populate.dir/depend
 
