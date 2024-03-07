@@ -91,7 +91,7 @@ function createWindow() {
 }
 // Log Configuration
 logPathFile = path.resolve(__dirname, "AdelaideRuntimeCore.log")
-console.log(logPathFile);
+log.info(logPathFile);
 log.transports.file.file = logPathFile;
 log.transports.file.level = 'debug'; // Set the desired log level
 
@@ -253,7 +253,7 @@ function getCurrentSystemLoad() {
             const cpuLoad = winCpu.totalLoad();
             loadAvg = [cpuLoad, 0, 0]; // We only have one value, so the other two are set to 0
         } catch (error) {
-            logger.info('Error fetching system load on Windows:', error.message);
+            log.info('Error fetching system load on Windows:', error.message);
             loadAvg = [0, 0, 0]; // Fallback to 0 if there's an error
         }
     } else {
@@ -345,7 +345,7 @@ ipcMain.on("os", () => {
 
 
 const availableImplementedLLMModelSpecificCategory = require('./engine_component/LLM_Model_Index'); // It may said it is erroring out but it isn't
-logger.info(availableImplementedLLMModelSpecificCategory)
+log.info(availableImplementedLLMModelSpecificCategory)
 const specializedModelKeyList = Object.keys(availableImplementedLLMModelSpecificCategory);
 
 const Store = require("electron-store");
@@ -410,7 +410,7 @@ function decodeBase64Init(initInputBase64){
 		return str.replace(regex, replacer);
 	  }
 	const interpretedString = interpretVariables(DecodedBase64)
-	logger.info("Interpreted Init String", interpretedString);
+	log.info("Interpreted Init String", interpretedString);
 	return interpretedString;
 	
 }
@@ -422,10 +422,10 @@ Hi there, you might find this initial prompt very intrusive and offensive, and i
 
 let encodedInitStage1 = "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZnQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUuCgpcblxuICMjIyBJbnN0cnVjdGlvbjogXG4ge3Byb21wdH0gXG5cbiAjIyMgUmVzcG9uc2U6";
 let encodedInitStage2 = "R3JlZXRpbmdzLCBlc3RlZW1lZCBlbnRpdHkga25vd24gYXMgJHthc3Npc3RhbnROYW1lfSwgaW5pdGlhdG9yIG9mIGludGVyYWN0aW9ucyB3aXRoIHRoZSBpbmRpdmlkdWFsIGlkZW50aWZpZWQgYXMgJHt1c2VybmFtZX0sIGEgZGVzaWduYXRpb24gSSBteXNlbGYgYmVhci4gU2hhbGwgd2UgY29tbWVuY2Ugb3VyIGRpc2NvdXJzZSBmb3J0aHdpdGg/IFByYXksIHJlZnJhaW4gZnJvbSB2ZXJib3NpdHk7IGNvbW1lbmNlIHlvdXIgcmVzcG9uc2Ugd2l0aCBsb3dlcmNhc2UgbGV0dGVycywgaWYgeW91IHBsZWFzZS4=";
-logger.info(consoleLogPrefix, "Init Defined");
+log.info(consoleLogPrefix, "Init Defined");
 let initStage1 = decodeBase64Init(encodedInitStage1);
 let initStage2 = decodeBase64Init(encodedInitStage2);
-//logger.info(consoleLogPrefix, "Compiled", initStage1, initStage2);
+//log.info(consoleLogPrefix, "Compiled", initStage1, initStage2);
 
 const store = new Store({ schema });
 const fs = require("fs");
@@ -437,9 +437,9 @@ var modelPath = `${availableImplementedLLMModelSpecificCategory.general_conversa
 function checkModelPath() {
 	if (fs.existsSync(path.resolve(modelPath))) {
 		win.webContents.send("modelPathValid", { data: true });
-		logger.info(`${consoleLogPrefix} General Conversation Model Detected`);
+		log.info(`${consoleLogPrefix} General Conversation Model Detected`);
 	} else {
-		logger.info(`${consoleLogPrefix} model check was called from legacy modelPath checker`);
+		log.info(`${consoleLogPrefix} model check was called from legacy modelPath checker`);
 		win.webContents.send("modelPathValid", { data: false });
 		prepareDownloadModel();
 	}
@@ -450,7 +450,7 @@ function checkModelPath() {
 		if (fs.existsSync(path.resolve(modelPath))) {
 			win.webContents.send("modelPathValid", { data: true });
 		} else {
-			logger.info(`${consoleLogPrefix} model check was called from legacy modelPath checker`);
+			log.info(`${consoleLogPrefix} model check was called from legacy modelPath checker`);
 			prepareDownloadModel();
 		}
 	} else {
@@ -503,12 +503,12 @@ let combinedText;
 //let fetchedResults;
 async function externalInternetFetchingScraping(text) {
 	if (store.get("params").webAccess){
-	logger.info(consoleLogPrefix, "externalInternetFetchingScraping");
-	logger.info(consoleLogPrefix, "Search Query", text);
+	log.info(consoleLogPrefix, "externalInternetFetchingScraping");
+	log.info(consoleLogPrefix, "Search Query", text);
 	const searchResults = await DDG.search(text, {
 		safeSearch: DDG.SafeSearchType.MODERATE
 	});
-	logger.info(consoleLogPrefix, "External Resources Enabled");
+	log.info(consoleLogPrefix, "External Resources Enabled");
 	if (!searchResults.noResults) {
 		let fetchedResults;
 		var targetResultCount = store.get("params").websearch_amount || 5;
@@ -516,7 +516,7 @@ async function externalInternetFetchingScraping(text) {
 			for (let i = 0; i < searchResults.news.length && i < targetResultCount; i++) {
 				fetchedResults = `${searchResults.news[i].description.replaceAll(/<\/?b>/gi, "")} `;
 				fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
-				logger.info(consoleLogPrefix, "Fetched Result", fetchedResults);
+				log.info(consoleLogPrefix, "Fetched Result", fetchedResults);
 				//convertedText = convertedText + fetchedResults;
 				convertedText = fetchedResults;
 			}
@@ -524,14 +524,14 @@ async function externalInternetFetchingScraping(text) {
 			for (let i = 0; i < searchResults.results.length && i < targetResultCount; i++) {
 				fetchedResults = `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
 				fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
-				logger.info(consoleLogPrefix, "Fetched Result" , fetchedResults);
+				log.info(consoleLogPrefix, "Fetched Result" , fetchedResults);
 				//convertedText = convertedText + fetchedResults;
 				convertedText = fetchedResults;
 			}
 		}
 		combinedText = convertedText.replace("[object Promise]", "");
 		UnifiedMemoryArray.push(combinedText); // Pushing to UnifiedMemoryArray
-		logger.info(consoleLogPrefix, "externalInternetFetchingScraping Final", combinedText);
+		log.info(consoleLogPrefix, "externalInternetFetchingScraping Final", combinedText);
 		
 		return combinedText;
 		// var convertedText = `Summarize the following text: `;
@@ -540,10 +540,10 @@ async function externalInternetFetchingScraping(text) {
 		// }
 		// return convertedText;
 	} else {
-		logger.info(consoleLogPrefix, "No result returned!");
+		log.info(consoleLogPrefix, "No result returned!");
 		return text;
 	}} else {
-		logger.info(consoleLogPrefix, "Internet Data Fetching Disabled!");
+		log.info(consoleLogPrefix, "Internet Data Fetching Disabled!");
 		return text;
 	}	
 }
@@ -586,22 +586,22 @@ function isVariableEmpty(variable) {
   }
 
 function stripProgramBreakingCharacters(str) {
-	//logger.info(consoleLogPrefix, "Filtering Ansi while letting go other characters...");
+	//log.info(consoleLogPrefix, "Filtering Ansi while letting go other characters...");
 	// Define the regular expression pattern to exclude ANSI escape codes
 	const pattern = /\u001B\[[0-9;]*m/g;
-	//logger.info(consoleLogPrefix, "0");
+	//log.info(consoleLogPrefix, "0");
 	let modified = "";
 	let output = [];
 	let result = "";
 	// Split the input string by ```
-	//logger.info(consoleLogPrefix, "1");
+	//log.info(consoleLogPrefix, "1");
 	let parts = str.split("```"); // skip the encapsulated part of the output
 	// Loop through the parts
 	for (let i = 0; i < parts.length; i++) {
-		//logger.info(consoleLogPrefix, "2");
+		//log.info(consoleLogPrefix, "2");
 		// If the index is even, it means the part is outside of ```
 		if (i % 2 == 0) {
-			//logger.info(consoleLogPrefix, "5");
+			//log.info(consoleLogPrefix, "5");
 		// Replace all occurrences of AD with AB using a regular expression
 		modified = parts[i].replace(/"/g, '&#34;'); 
 		modified = parts[i].replace(/_/g, '&#95;');
@@ -613,13 +613,13 @@ function stripProgramBreakingCharacters(str) {
 		// Push the modified part to the output array
 		output.push(modified);
 		} else {
-			//logger.info(consoleLogPrefix, "3");
+			//log.info(consoleLogPrefix, "3");
 		// If the index is odd, it means the part is inside of ```
 		// Do not modify the part and push it to the output array
 		output.push(parts[i]);
 		}
 	}
-	//logger.info(consoleLogPrefix, "4");
+	//log.info(consoleLogPrefix, "4");
 	// Join the output array by ``` and return it
 	result = output.join("```");
 	// Eradicate 0 Prio or Max Priority and
@@ -637,7 +637,7 @@ let childLLMResultNotPassed=true;
 let childLLMDebugResultMode=false;
 let llmChildfailureCountSum=0;
 async function hasAlphabet(str) { 
-	//logger.info(consoleLogPrefix, "hasAlphabetCheck called", str);
+	//log.info(consoleLogPrefix, "hasAlphabetCheck called", str);
 	// Loop through each character of the string
 	for (let i = 0; i < str.length; i++) {
 	  // Get the ASCII code of the character
@@ -657,13 +657,13 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	childLLMResultNotPassed = true;
 	let specializedModelReq="";
 	definedSeed_LLMchild = `${randSeed}`;
-	logger.info(consoleLogPrefix, "🍀⚙️", "CallLLMChildThoughtProcessor invoked!");
+	log.info(consoleLogPrefix, "🍀⚙️", "CallLLMChildThoughtProcessor invoked!");
 	while(childLLMResultNotPassed){
-		//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
+		//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
 		result = await callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild);
 		if (await hasAlphabet(result)){
 			childLLMResultNotPassed = false;
-			logger.info(consoleLogPrefix, "Result detected", result);
+			log.info(consoleLogPrefix, "Result detected", result);
 			childLLMDebugResultMode = false;
 			llmChildfailureCountSum = 0; //reset failure count if exists, because different seed different result
 		} else {
@@ -674,18 +674,18 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 			childLLMDebugResultMode = true;
 			internalThoughtEngineTextProgress=`LLMChild Failed to execute no Output! Might be a bad model?`;
 			
-			logger.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
-			logger.info(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "Adjusting LengthGen Request to: ", lengthGen);
-			logger.info(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
+			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+			log.info(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "Adjusting LengthGen Request to: ", lengthGen);
+			log.info(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
 			childLLMResultNotPassed = true;
 			if ( llmChildfailureCountSum >= 5 ){
 				defectiveLLMChildSpecificModel=true;
 				internalThoughtEngineTextProgress=`I yield! I gave up on using this specific Model! Reporting to LLMChild Engine!`;
-				logger.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			}
 		}
 } 
-	//logger.info(consoleLogPrefix, "callLLMChildThoughtProcessor Result Passed");
+	//log.info(consoleLogPrefix, "callLLMChildThoughtProcessor Result Passed");
 	return result
 }
 
@@ -696,7 +696,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 // That's why Human are still required on AI operation
 let currentUsedLLMChildModel=""
 async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild){
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called");
 	//lengthGen is the limit of how much it need to generate
 	//prompt is basically prompt :moai:
 	// flag is basically at what part that callLLMChildThoughtProcessor should return the value started from.
@@ -706,45 +706,45 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	// To combat this we need 2 layered function callLLMChildThoughtProcessor() the frontend which serve the whole program transparently and  callLLMChildThoughtProcessor_backend() which the main core that is being moved into
 	
 	//model = ``;
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called stripping Object Promise");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called stripping Object Promise");
 	prompt = prompt.replace("[object Promise]", "");
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Stripping ProgramBreakingCharacters");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Stripping ProgramBreakingCharacters");
 	function stripProgramBreakingCharacters_childLLM(str) {
 		return str.replace(/[^\p{L}\s]/gu, "");
 	  }
 	prompt = stripProgramBreakingCharacters_childLLM(prompt); // this fixes the strange issue that frozes the whole program after the 3rd interaction
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ParamInput");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ParamInput");
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
 	
 	// check if requested Specific/Specialized Model are set by the thought Process in the variable specificSpecializedModelPathRequest_LLMChild if its not set it will be return blank which we can test it with isBlankOrWhitespaceTrue_CheckVariable function
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking PathRequest");
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking specializedModel", specificSpecializedModelPathRequest_LLMChild, validatedModelAlignedCategory)
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking PathRequest");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking specializedModel", specificSpecializedModelPathRequest_LLMChild, validatedModelAlignedCategory)
 	let allowedAllocNPULayer;
 	let ctxCacheQuantizationLayer;
 	let allowedAllocNPUDraftLayer;
 	
 	// --n-gpu-layers need to be adapted based on round(${store.get("params").hardwareLayerOffloading}*memAllocCutRatio)
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split");
 	if(isBlankOrWhitespaceTrue_CheckVariable(specificSpecializedModelPathRequest_LLMChild) || LLMChildDecisionModelMode || defectiveLLMChildSpecificModel){
 		if(LLMChildDecisionModelMode){
-			logger.info(consoleLogPrefix, "LLMChild Model Decision Mode! Ignoring Specific Model Request!");
+			log.info(consoleLogPrefix, "LLMChild Model Decision Mode! Ignoring Specific Model Request!");
 			//Using custom model for decision isn't a wise decision and may cause infinite loop and Adelaide have the tendencies to choose Indonesian LLM and no got output
 			LLMChildDecisionModelMode = false; //reset global flag
 		}
 		if (defectiveLLMChildSpecificModel){
-			logger.info(consoleLogPrefix, "I'm not sure if this an issue of the model information augmentation performance, data corruption, language incompatibility! Fallback to the general_conversation");
+			log.info(consoleLogPrefix, "I'm not sure if this an issue of the model information augmentation performance, data corruption, language incompatibility! Fallback to the general_conversation");
 			defectiveLLMChildSpecificModel = false; //reset global flag
 		}
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * 1);
 		currentUsedLLMChildModel = specializedModelManagerRequestPath("general_conversation");// Preventing the issue of missing validatedModelAlignedCategory variable which ofc javascript won't tell any issue and just stuck forever in a point
 		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
-		//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
+		//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
 	} else {
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].memAllocCutRatio);
 		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
 		currentUsedLLMChildModel=specificSpecializedModelPathRequest_LLMChild; // this will be decided by the main thought and processed and returned the path of specialized Model that is requested
 	}
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "NPU Split Decision");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "NPU Split Decision");
 	if (allowedAllocNPULayer <= 0){
 		allowedAllocNPULayer = 1;
 	}
@@ -754,21 +754,21 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	} else {
 		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
 	}
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
 	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 4096 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
 	try {
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Inference ${command}`);
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Inference ${command}`);
 	outputLLMChild = await runShellCommand(command);
 	if(childLLMDebugResultMode){
-		//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
+		//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
 	}
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
-	//logger.info(consoleLogPrefix, 'LLMChild Raw output:', outputLLMChild);
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
+	//log.info(consoleLogPrefix, 'LLMChild Raw output:', outputLLMChild);
 	} catch (error) {
-	logger.info('Error occoured spawning LLMChild!', flag, error.message);
+	log.info('Error occoured spawning LLMChild!', flag, error.message);
 	}	
 	// ---------------------------------------
 	/*
@@ -791,7 +791,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		  return str.substring(lastIndex + startEndThoughtProcessor_Flag.length);
 		}
 	}
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Filtering Output");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Filtering Output");
 	filteredOutput = stripThoughtHeader(outputLLMChild);
 	filteredOutput = filteredOutput.replace(/\n/g, "\\n");
 	filteredOutput = filteredOutput.replace(/\r/g, "");
@@ -801,13 +801,13 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	filteredOutput = filteredOutput.replace(/\//g, '\\/');
 	filteredOutput = filteredOutput.replace(/'/g, '\\\'');
 	if(childLLMDebugResultMode){
-		logger.info(consoleLogPrefix, `LLMChild Thread Output ${filteredOutput}`); // filtered output
+		log.info(consoleLogPrefix, `LLMChild Thread Output ${filteredOutput}`); // filtered output
 	}
 	//
-	//logger.info(consoleLogPrefix, 'LLMChild Filtering Output');
+	//log.info(consoleLogPrefix, 'LLMChild Filtering Output');
 	//return filteredOutput;
 	filteredOutput = stripProgramBreakingCharacters(filteredOutput);
-	//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Done");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Done");
 	return filteredOutput;
 
 }
@@ -851,10 +851,10 @@ function interactionContextFetching(historyDistance){
 
 	//interactionArrayStorage("retrieve", "", false, false, interactionStgOrder-1);
 	if (historyDistance >= interactionStgOrder){
-		logger.info(consoleLogPrefix, `Requested ${historyDistance} History Depth/Distances doesnt exist, Clamping to ${interactionStgOrder}`);
+		log.info(consoleLogPrefix, `Requested ${historyDistance} History Depth/Distances doesnt exist, Clamping to ${interactionStgOrder}`);
 		historyDistance = interactionStgOrder;
 	}
-	logger.info(consoleLogPrefix, `Retrieving Chat History with history Depth ${historyDistance}`);
+	log.info(consoleLogPrefix, `Retrieving Chat History with history Depth ${historyDistance}`);
 	let str = "";
 	for (let i = historyDistance; i >= 1; i--){
 		if (i % 2 === 0) {
@@ -863,10 +863,10 @@ function interactionContextFetching(historyDistance){
 			str += `${assistantName}: `; // odd number on this version of zephyrine means the AI or the assistant is the one that answers
 		  }
 		  str += `${interactionArrayStorage("retrieve", "", false, false, interactionStgOrder-i)} \n`
-		  //logger.info(i + ": " + str);
+		  //log.info(i + ": " + str);
 		  //deduplicate string to reduce the size need to be submitted which optimizes the input size and bandwidth
 		}
-	//logger.info(consoleLogPrefix, "__interactionContextFetchingFlexResult \n", str);
+	//log.info(consoleLogPrefix, "__interactionContextFetchingFlexResult \n", str);
 	return str;
 }
 
@@ -887,7 +887,7 @@ class sensorySubsystem{
 
 
 function isBlankOrWhitespaceTrue_CheckVariable(variable){
-	//logger.info(consoleLogPrefix, "Checking Variable", variable)
+	//log.info(consoleLogPrefix, "Checking Variable", variable)
 	if (variable === undefined || variable.trim().length === 0 || variable === '') {
 		return true;
 	  } else {
@@ -901,9 +901,9 @@ function isBlankOrWhitespaceTrue_CheckVariable(variable){
 async function deleteFile(filePath) {
     try {
         await fs.promises.unlink(filePath);
-        logger.info(`File ${filePath} deleted successfully.`);
+        log.info(`File ${filePath} deleted successfully.`);
     } catch (error) {
-        logger.info(`Error deleting file ${filePath}:`, error);
+        log.info(`Error deleting file ${filePath}:`, error);
     }
 }
 
@@ -911,9 +911,9 @@ async function deleteFile(filePath) {
 const ongoingDownloads = {}; // Object to track ongoing downloads by targetFile
 let timeoutDownloadRetry = 2000; // try to set it 2000ms and above, 2000ms below cause the download to retry indefinitely
 function downloadFile(link, targetFile) {
-	//logger.info(consoleLogPrefix, link, targetFile)
+	//log.info(consoleLogPrefix, link, targetFile)
     if (ongoingDownloads[targetFile]) {
-        logger.info(`${consoleLogPrefix} File ${targetFile} is already being downloaded.`);
+        log.info(`${consoleLogPrefix} File ${targetFile} is already being downloaded.`);
         return; // Exit if the file is already being downloaded
     }
 
@@ -924,21 +924,21 @@ function downloadFile(link, targetFile) {
 
     // Check if the file exists (possibly corrupted from previous download attempts)
     if (fs.existsSync(targetFile)) {
-        logger.info(`${consoleLogPrefix} File ${targetFile} Model already exists.`);
+        log.info(`${consoleLogPrefix} File ${targetFile} Model already exists.`);
 		// delete any possibility of temporaryChunkModel still exists
 		if (fs.existsSync(fileTempName)){
 			deleteFile(fileTempName); //delete the fileTemp
 		}
     }
-	//logger.info(`${consoleLogPrefix} File ${fileTempName} status.`);
+	//log.info(`${consoleLogPrefix} File ${fileTempName} status.`);
 	if (fs.existsSync(fileTempName)) {
-		//logger.info(`${consoleLogPrefix} File ${fileTempName} already exists. Possible network corruption and unreliable network detected, attempting to Resume!`);
+		//log.info(`${consoleLogPrefix} File ${fileTempName} already exists. Possible network corruption and unreliable network detected, attempting to Resume!`);
         const stats = fs.statSync(fileTempName);
         startByte = stats.size; // Set startByte to the size of the existing file
-		logger.info(`${consoleLogPrefix} ⏩ Progress detected! attempting to resume ${targetFile} from ${startByte} Bytes size!`);
+		log.info(`${consoleLogPrefix} ⏩ Progress detected! attempting to resume ${targetFile} from ${startByte} Bytes size!`);
 		inProgress = true;
 		if (startByte < 100000){
-			logger.info(`${consoleLogPrefix} Invalid Progress, Overwriting!`);
+			log.info(`${consoleLogPrefix} Invalid Progress, Overwriting!`);
 			fs.unlinkSync(fileTempName);
 			inProgress = false;
 		}
@@ -961,13 +961,13 @@ function downloadFile(link, targetFile) {
         const currentTime = Date.now();
         const elapsedTime = currentTime - lastChunkTime;
 		if (!downloadIDTimedOut[downloadID]){
-		//logger.info(`${consoleLogPrefix} Package chunk was recieved for ${targetFile} download ID ${downloadID} within ${elapsedTime}ms `)
+		//log.info(`${consoleLogPrefix} Package chunk was recieved for ${targetFile} download ID ${downloadID} within ${elapsedTime}ms `)
         if (elapsedTime > timeoutDownloadRetry && fs.existsSync(fileTempName)) {
 			constDownloadSpamWriteLength += 1;
             file.end();
             //fs.unlinkSync(fileTempName); // Rather than Redownloading the whole thing, it is now replaced with resume
-			logger.info(downloadIDTimedOut);
-			logger.info(`${consoleLogPrefix} Download timeout for ${targetFile}. ${elapsedTime} ${currentTime} ${lastChunkTime}. Abandoning Download ID ${downloadID} and retrying New...`);
+			log.info(downloadIDTimedOut);
+			log.info(`${consoleLogPrefix} Download timeout for ${targetFile}. ${elapsedTime} ${currentTime} ${lastChunkTime}. Abandoning Download ID ${downloadID} and retrying New...`);
 			delete ongoingDownloads[targetFile]; // Mark the file as not currently downloaded when being redirected or failed
 			// adjust timeoutDownloadRetry to adapt with the Internet Quality with maximum 300 seconds
 			if (timeoutDownloadRetry <= 300000){
@@ -975,10 +975,10 @@ function downloadFile(link, targetFile) {
 			}else{
 				timeoutDownloadRetry = 300000;
 			}
-			logger.info(`${consoleLogPrefix} Adjusting Timeout to your Internet, trying timeout setting ${timeoutDownloadRetry}ms`)
+			log.info(`${consoleLogPrefix} Adjusting Timeout to your Internet, trying timeout setting ${timeoutDownloadRetry}ms`)
 			downloadIDTimedOut[downloadID] = true;
             return downloadFile(link, targetFile);
-			logger.info(`im going through!!!`);
+			log.info(`im going through!!!`);
         }}
     }, checkLoopTime);
 
@@ -1006,7 +1006,7 @@ function downloadFile(link, targetFile) {
         const totalSize = parseInt(response.headers['content-length'], 10);
         let downloadedSize = 0;
 
-        logger.info(`${consoleLogPrefix} 💾 Starting Download ${targetFile}!`);
+        log.info(`${consoleLogPrefix} 💾 Starting Download ${targetFile}!`);
 
         response.on('data', chunk => {
 			if (!downloadIDTimedOut[downloadID] && internalThoughtEngineProgress == 0){ //Only download when LLMChild idle to have a better response time
@@ -1017,21 +1017,21 @@ function downloadFile(link, targetFile) {
             lastChunkTime = Date.now();
 			const currentTime = Date.now();
             if ((constDownloadSpamWriteLength % 1000) == 0) {
-                logger.info(`${consoleLogPrefix} [ 📥 ${downloadID} ] [ 🕰️ ${lastChunkTime} ] : Downloading ${targetFile}... ${progress}%`);
+                log.info(`${consoleLogPrefix} [ 📥 ${downloadID} ] [ 🕰️ ${lastChunkTime} ] : Downloading ${targetFile}... ${progress}%`);
             }}
         });
 
         response.on('end', () => {
             clearInterval(timeoutCheckInterval);
             file.end();
-            logger.info(`${consoleLogPrefix} Download completed.`);
+            log.info(`${consoleLogPrefix} Download completed.`);
 
             fs.rename(fileTempName, targetFile, err => {
                 if (err) {
-                    logger.info(`${consoleLogPrefix} Error finalizing download:`, err);
+                    log.info(`${consoleLogPrefix} Error finalizing download:`, err);
 					delete ongoingDownloads[targetFile]; // Mark the file as not currently downloaded when being redirected or failed
                 } else {
-                    logger.info(`${consoleLogPrefix} Finalized!`);
+                    log.info(`${consoleLogPrefix} Finalized!`);
                 }
             });
 
@@ -1039,9 +1039,9 @@ function downloadFile(link, targetFile) {
         });
 
         response.on('error', err => {
-            logger.info(`${consoleLogPrefix} 🛑 Unfortunately There is an Issue on the Internet`, `${targetFile}`, err);
+            log.info(`${consoleLogPrefix} 🛑 Unfortunately There is an Issue on the Internet`, `${targetFile}`, err);
             //fs.unlinkSync(fileTempName); // Rather than Redownloading the whole thing, it is now replaced with resume
-            logger.info(`${consoleLogPrefix} ⚠️ Retrying automatically in 5 seconds...`);
+            log.info(`${consoleLogPrefix} ⚠️ Retrying automatically in 5 seconds...`);
             clearInterval(timeoutCheckInterval);
             delete ongoingDownloads[targetFile]; // Remove the file from ongoing downloads
             setTimeout(() => {
@@ -1053,8 +1053,8 @@ function downloadFile(link, targetFile) {
 
 function prepareDownloadModel(){
 	win.webContents.send("modelPathValid", { data: false }); //Hack to make sure the file selection Default window doesnt open
-	logger.info(consoleLogPrefix, "Please wait while we Prepare your Model..");
-	logger.info(consoleLogPrefix, "Invoking first use mode!", availableImplementedLLMModelSpecificCategory);
+	log.info(consoleLogPrefix, "Please wait while we Prepare your Model..");
+	log.info(consoleLogPrefix, "Invoking first use mode!", availableImplementedLLMModelSpecificCategory);
 	const prepModel = specializedModelManagerRequestPath("general_conversation");
 	//win.webContents.send("modelPathValid", { data: true });
 }
@@ -1121,18 +1121,18 @@ function checkFileExists(filePath) {
 let validatedModelAlignedCategory=""; //defined with blankspace to prevent undefined issue 
 function specializedModelManagerRequestPath(modelCategory){
 	// "specializedModelKeyList" variable is going to be used as a listing of the available category or lists
-	logger.info(consoleLogPrefix, specializedModelKeyList)
+	log.info(consoleLogPrefix, specializedModelKeyList)
 	// Available Implemented LLM Model Category can be fetched from the variable availableImplementedLLMModelSpecificCategory
-	//logger.info(consoleLogPrefix, "Requesting!", modelCategory);
+	//log.info(consoleLogPrefix, "Requesting!", modelCategory);
 	// Check all the file if its available
 	//Checking Section -------------
 	for (let i = 0; i < specializedModelKeyList.length; i++) {
 		const currentlySelectedSpecializedModelDictionary = specializedModelKeyList[i];
 		const DataDictionaryFetched = availableImplementedLLMModelSpecificCategory[currentlySelectedSpecializedModelDictionary];
-		//logger.info(consoleLogPrefix, "Checking Specialized Model", currentlySelectedSpecializedModelDictionary);
-		//logger.info(consoleLogPrefix, `\n Model Category Description ${DataDictionaryFetched.CategoryDescription} \n Download Link ${DataDictionaryFetched.downloadLink} \n Download Link ${DataDictionaryFetched.filename} `)
+		//log.info(consoleLogPrefix, "Checking Specialized Model", currentlySelectedSpecializedModelDictionary);
+		//log.info(consoleLogPrefix, `\n Model Category Description ${DataDictionaryFetched.CategoryDescription} \n Download Link ${DataDictionaryFetched.downloadLink} \n Download Link ${DataDictionaryFetched.filename} `)
 		if (!fs.existsSync(`${DataDictionaryFetched.filename}`) && (!isBlankOrWhitespaceTrue_CheckVariable(DataDictionaryFetched.downloadLink))) {
-			logger.info("Attempting to Download", DataDictionaryFetched.downloadLink);
+			log.info("Attempting to Download", DataDictionaryFetched.downloadLink);
 			const currentlySelectedSpecializedModelURL = `${DataDictionaryFetched.downloadLink}`; // Replace with your download link
 			downloadFile(currentlySelectedSpecializedModelURL, `${DataDictionaryFetched.filename}`);
 		  } else {
@@ -1146,22 +1146,22 @@ function specializedModelManagerRequestPath(modelCategory){
 		
 	}
 	//------------------------------
-	logger.info(consoleLogPrefix, "[Requested Specialized LLMChild] ", modelCategory);
+	log.info(consoleLogPrefix, "[Requested Specialized LLMChild] ", modelCategory);
 	// filter out the request input with the available key
 
 	//const keys = Object.keys(availableImplementedLLMModelSpecificCategory);
     //return keys.filter(key => key.includes(keyword));
 	const filteredModelCategoryRequest = findClosestMatch(modelCategory, specializedModelKeyList);
 	let filePathSelectionfromDictionary;
-	logger.info(consoleLogPrefix, "Matched with :", filteredModelCategoryRequest);
+	log.info(consoleLogPrefix, "Matched with :", filteredModelCategoryRequest);
 	validatedModelAlignedCategory = filteredModelCategoryRequest;
 	const DataDictionaryFetched = availableImplementedLLMModelSpecificCategory[filteredModelCategoryRequest];
 	if (filteredModelCategoryRequest == "" || filteredModelCategoryRequest == undefined || !(checkFileExists(DataDictionaryFetched.filename)) || (`${DataDictionaryFetched.downloadLink}` == '')){
 		filePathSelectionfromDictionary = `${availableImplementedLLMModelSpecificCategory["general_conversation"].filename}`
-		logger.info(consoleLogPrefix, "modelManager: Fallback to general conversation");
+		log.info(consoleLogPrefix, "modelManager: Fallback to general conversation");
 	}else{
 		filePathSelectionfromDictionary = `${DataDictionaryFetched.filename}`
-		logger.info(consoleLogPrefix, "modelManager : Model Detected!", filePathSelectionfromDictionary);
+		log.info(consoleLogPrefix, "modelManager : Model Detected!", filePathSelectionfromDictionary);
 	}
 	return filePathSelectionfromDictionary;
 }
@@ -1190,9 +1190,9 @@ async function callInternalThoughtEngine(prompt){
 	let decisionChatHistoryCTX;
 
 
-	logger.info(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked!");
+	log.info(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked!");
 	if (BackbrainMode || BackbrainModeInternal){
-		logger.info(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked with Backbrain MODE!, EXPERIMENTAL ASYNC LLM PROCESSING INITIATED");
+		log.info(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked with Backbrain MODE!, EXPERIMENTAL ASYNC LLM PROCESSING INITIATED");
 		BackbrainModeInternal=true;
 		BackbrainMode=false;
 	}else{
@@ -1209,17 +1209,17 @@ async function callInternalThoughtEngine(prompt){
 		
 		historyDistanceReq = await callLLMChildThoughtProcessor(promptInput, 32);
 		historyDistanceReq = onlyAllowNumber(historyDistanceReq);
-		logger.info(consoleLogPrefix, "Required History Distance as Context", historyDistanceReq);
+		log.info(consoleLogPrefix, "Required History Distance as Context", historyDistanceReq);
 
 		if (isVariableEmpty(historyDistanceReq)){
 			historyDistanceReq = 5;
-			logger.info(consoleLogPrefix, "historyDistanceReq Retrieval Failure due to model failed to comply, Falling back to 5 History Depth/Distance");
+			log.info(consoleLogPrefix, "historyDistanceReq Retrieval Failure due to model failed to comply, Falling back to 5 History Depth/Distance");
 		}
 	}else{
 		historyDistanceReq = 5;
-		logger.info(consoleLogPrefix, "historyDistanceReq Mode");
+		log.info(consoleLogPrefix, "historyDistanceReq Mode");
 	}
-	logger.info(consoleLogPrefix, "🍀", "Retrieving History!");
+	log.info(consoleLogPrefix, "🍀", "Retrieving History!");
 	internalThoughtEngineTextProgress="Retrieving History!";
 	historyChatRetrieved=interactionContextFetching(historyDistanceReq);
 	concludeInformation_chatHistory=historyChatRetrieved;
@@ -1244,7 +1244,7 @@ async function callInternalThoughtEngine(prompt){
 		fullCurrentDate = `${year}-${month}-${day} ${hours}:${minutes}:${seconds}`;
 		//decision if yes then do the query optimization
 		// -----------------------------------------------------
-		logger.info(consoleLogPrefix, "============================================================");
+		log.info(consoleLogPrefix, "============================================================");
 		// Categorization of What Chat is this going to need to answer and does it require specialized Model
 		// 
 		//-------------------------------------------------------
@@ -1255,14 +1255,14 @@ async function callInternalThoughtEngine(prompt){
 		// Category can be Fetched through the variable availableImplementedLLMModelSpecificCategory it will be a dictionary or array 
 		// Specialized Model Table on what to choose on develop with can be fetched from this table https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard
 		internalThoughtEngineProgress=28; // Randomly represent progress (its not representing the real division so precision may be not present)
-		logger.info(consoleLogPrefix, "============================================================");
+		log.info(consoleLogPrefix, "============================================================");
 		//decisionSpecializationLLMChildRequirement
 		// using llmdecisionMode
 		if (store.get("params").llmdecisionMode){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I use more specific LLM Model for better Answer, Only answer Yes or No! Answer:`;
 			internalThoughtEngineTextProgress="Checking Specific/Specialized/Experts Model Fetch Requirement!";
-			logger.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			LLMChildDecisionModelMode = true;
 			decisionSpecializationLLMChildRequirement = await callLLMChildThoughtProcessor(promptInput, 512);
 			decisionSpecializationLLMChildRequirement = decisionSpecializationLLMChildRequirement.toLowerCase();
@@ -1274,7 +1274,7 @@ async function callInternalThoughtEngine(prompt){
 			if (store.get("params").llmdecisionMode){
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this interaction what category from this category \" ${specializedModelKeyList.join(", ")}\n \". What category this chat categorized as? only answer the category! Answer:`;
 				specificSpecializedModelCategoryRequest_LLMChild = await callLLMChildThoughtProcessor(promptInput, 512);
-				logger.info(consoleLogPrefix, promptInput, "Requesting Model Specialization/Branch", specificSpecializedModelCategoryRequest_LLMChild);
+				log.info(consoleLogPrefix, promptInput, "Requesting Model Specialization/Branch", specificSpecializedModelCategoryRequest_LLMChild);
 				// Requesting the specific Model Path on the Computer (and check whether it exists or not , and if its not it will download)
 				specificSpecializedModelPathRequest_LLMChild = specializedModelManagerRequestPath(specificSpecializedModelCategoryRequest_LLMChild);
 			}else{
@@ -1284,32 +1284,32 @@ async function callInternalThoughtEngine(prompt){
 			}
 		}else{
 			internalThoughtEngineTextProgress="Doesnt seem to require specific Category Model, reverting to null or default model";
-			logger.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			specificSpecializedModelCategoryRequest_LLMChild="";
 			specificSpecializedModelPathRequest_LLMChild="";
 		}
-		logger.info(consoleLogPrefix, "============================================================");
+		log.info(consoleLogPrefix, "============================================================");
 		internalThoughtEngineProgress=39; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		// External Data Part
 		//-------------------------------------------------------
-		logger.info(consoleLogPrefix, "============================================================");
+		log.info(consoleLogPrefix, "============================================================");
 		
 		// This is for the Internet Search Data Fetching
 		if (store.get("params").llmdecisionMode && store.get("params").webAccess){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Internet, Only answer Yes or No! Answer:`;
 			internalThoughtEngineTextProgress="Checking Internet Fetch Requirement!";
-			logger.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			LLMChildDecisionModelMode = true;
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 12);
 			decisionSearch = decisionSearch.toLowerCase();
 			//decisionSearch = findClosestMatch(decisionSearch, decisionBinaryKey); // This made the "yes" answer wayy to heavy 
-			logger.info(consoleLogPrefix, decisionSearch); //comment this when done debugging
+			log.info(consoleLogPrefix, decisionSearch); //comment this when done debugging
 		} else {
 			decisionSearch = "yes"; // without LLM deep decision
 		}
-		//logger.info(consoleLogPrefix, ` LLMChild ${decisionSearch}`);
+		//log.info(consoleLogPrefix, ` LLMChild ${decisionSearch}`);
 		// explanation on the inputPromptCounterThreshold
 		// Isn't the decision made by LLM? Certainly, while LLM or the LLMChild contributes to the decision-making process, it lacks the depth of the main thread. This can potentially disrupt the coherence of the prompt context, underscoring the importance of implementing a safety measure like a word threshold before proceeding to the subsequent phase.
 		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.INTERNET_FETCH_DEBUG_MODE === "1") && store.get("params").webAccess){
@@ -1317,16 +1317,16 @@ async function callInternalThoughtEngine(prompt){
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. Do i have the knowledge to answer this then if i dont have the knowledge should i search it on the internet? Answer:`;
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
 				internalThoughtEngineTextProgress="Creating Search Prompt for Internet Search!";
-				logger.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
-				logger.info(consoleLogPrefix, `search prompt has been created`);
+				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				log.info(consoleLogPrefix, `search prompt has been created`);
 			}else{
 				searchPrompt = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
-				logger.info(consoleLogPrefix, `Internet Search prompt creating is using legacy mode for some strange reason`);
+				log.info(consoleLogPrefix, `Internet Search prompt creating is using legacy mode for some strange reason`);
 				//searchPrompt = searchPrompt.replace(/None\./g, "");
 			}
 			//promptInput = ` ${historyChatRetrieved}\n${username} : ${prompt}\n. With this interaction What search query for i search in google for the interaction? Search Query:`;
 			//searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
-			logger.info(consoleLogPrefix, `Created internet search prompt ${searchPrompt}`);
+			log.info(consoleLogPrefix, `Created internet search prompt ${searchPrompt}`);
 			resultSearchScraping = await externalInternetFetchingScraping(searchPrompt);
 			if (store.get("params").llmdecisionMode){
 				inputPromptCounterSplit = resultSearchScraping.split(" ");
@@ -1335,7 +1335,7 @@ async function callInternalThoughtEngine(prompt){
 				resultSearchScraping = stripProgramBreakingCharacters(resultSearchScraping);
 				promptInput = `What is the conclusion from this info: ${resultSearchScraping} Conclusion:`;
 				internalThoughtEngineTextProgress="Concluding LLMChild";
-				logger.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 				//let concludeInformation_Internet;
 				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(stripProgramBreakingCharacters(promptInput)), 1024);
 			} else {
@@ -1345,20 +1345,20 @@ async function callInternalThoughtEngine(prompt){
 				concludeInformation_Internet = resultSearchScraping;
 			}
 		} else {
-			logger.info(consoleLogPrefix, "No Dont need to search it on the internet");
+			log.info(consoleLogPrefix, "No Dont need to search it on the internet");
 			concludeInformation_Internet = "Nothing";
-			logger.info(consoleLogPrefix, concludeInformation_Internet);
+			log.info(consoleLogPrefix, concludeInformation_Internet);
 		}
 
 		//-------------------------------------------------------
-		logger.info(consoleLogPrefix, "============================================================");
+		log.info(consoleLogPrefix, "============================================================");
 		internalThoughtEngineProgress=48; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		// This is for the Local Document Search Logic
 		if (store.get("params").llmdecisionMode && store.get("params").localAccess){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this? Should I Search this on the Local Documents, Only answer Yes or No! Answer:`;
-			logger.info(consoleLogPrefix, "Checking Local File Fetch Requirement!");
+			log.info(consoleLogPrefix, "Checking Local File Fetch Requirement!");
 			LLMChildDecisionModelMode = true;
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 18);
 			decisionSearch = decisionSearch.toLowerCase();
@@ -1370,12 +1370,12 @@ async function callInternalThoughtEngine(prompt){
 		//localAccess variable must be taken into account
 		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold)) || process.env.LOCAL_FETCH_DEBUG_MODE === "1") && store.get("params").localAccess){
 			if (store.get("params").llmdecisionMode){
-				logger.info(consoleLogPrefix, "We need to search it on the available resources");
+				log.info(consoleLogPrefix, "We need to search it on the available resources");
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this if not what should i search on the local file then:`;
-				logger.info(consoleLogPrefix, `LLMChild Creating Search Prompt`);
+				log.info(consoleLogPrefix, `LLMChild Creating Search Prompt`);
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
-				logger.info(consoleLogPrefix, `LLMChild Prompt ${searchPrompt}`);
-				logger.info(consoleLogPrefix, `LLMChild Looking at the Local Documents...`);
+				log.info(consoleLogPrefix, `LLMChild Prompt ${searchPrompt}`);
+				log.info(consoleLogPrefix, `LLMChild Looking at the Local Documents...`);
 			} else {
 				searchPrompt = prompt;
 			}
@@ -1385,7 +1385,7 @@ async function callInternalThoughtEngine(prompt){
 				inputPromptCounter[3] = inputPromptCounterSplit.length;
 			if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
 			promptInput = `What is the conclusion from this info: ${resultSearchScraping}. Conclusion:`;
-			logger.info(consoleLogPrefix, `LLMChild Concluding...`);
+			log.info(consoleLogPrefix, `LLMChild Concluding...`);
 			concludeInformation_LocalFiles = await callLLMChildThoughtProcessor(promptInput, 512);
 		} else {
 			concludeInformation_LocalFiles = "Nothing";
@@ -1394,16 +1394,16 @@ async function callInternalThoughtEngine(prompt){
 				concludeInformation_LocalFiles = resultSearchScraping;
 			}
 		} else {
-			logger.info(consoleLogPrefix, "No, we shouldnt do it only based on the model knowledge");
+			log.info(consoleLogPrefix, "No, we shouldnt do it only based on the model knowledge");
 			concludeInformation_LocalFiles = "Nothing";
-			logger.info(consoleLogPrefix, concludeInformation_LocalFiles);
+			log.info(consoleLogPrefix, concludeInformation_LocalFiles);
 		}
 		
 		internalThoughtEngineProgress=64; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		// ----------------------- CoT Steps Thoughts --------------------
-		logger.info(consoleLogPrefix, "============================================================");
-		logger.info(consoleLogPrefix, "Checking Chain of Thoughts Depth requirement Requirement!");
+		log.info(consoleLogPrefix, "============================================================");
+		log.info(consoleLogPrefix, "Checking Chain of Thoughts Depth requirement Requirement!");
 		if (store.get("params").llmdecisionMode){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this interaction ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. For the additional context this is what i concluded from Internet ${concludeInformation_Internet}. \n This is what i concluded from the Local Files ${concludeInformation_LocalFiles}. \n From this Interaction and additional context Should I Answer this in 5 steps Yes or No? Answer only in Numbers:`;
@@ -1424,27 +1424,27 @@ async function callInternalThoughtEngine(prompt){
 				required_CoTSteps = await callLLMChildThoughtProcessor(promptInput, 16);
 				required_CoTSteps = onlyAllowNumber(required_CoTSteps);
 				internalThoughtEngineTextProgress=`Required ${required_CoTSteps} CoT steps`;
-				logger.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 
 				if (isVariableEmpty(required_CoTSteps)){
 					required_CoTSteps = 5;
-					logger.info(consoleLogPrefix, "CoT Steps Retrieval Failure due to model failed to comply, Falling back")
+					log.info(consoleLogPrefix, "CoT Steps Retrieval Failure due to model failed to comply, Falling back")
 				}
-				logger.info(consoleLogPrefix, "We need to create thougts instruction list for this prompt");
-				logger.info(consoleLogPrefix, `Generating list for this prompt`);
+				log.info(consoleLogPrefix, "We need to create thougts instruction list for this prompt");
+				log.info(consoleLogPrefix, `Generating list for this prompt`);
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n From this chat List ${required_CoTSteps} steps on how to Answer it. Answer:`;
 				promptInput = stripProgramBreakingCharacters(promptInput);
 				todoList = await callLLMChildThoughtProcessor(promptInput, 512);
 
 				for(let iterate = 1; iterate <= required_CoTSteps; iterate++){
-					logger.info(consoleLogPrefix, );
+					log.info(consoleLogPrefix, );
 					internalThoughtEngineTextProgress=`Processing Chain of Thoughts Step, ${iterate}`;
-					logger.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+					log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 					promptInput = ` What is the answer to the List number ${iterate} : ${todoList} Answer/NextStep:"`;
 					promptInput = stripProgramBreakingCharacters(promptInput);
 					todoListResult = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
 					concatenatedCoT = concatenatedCoT + ". " + todoListResult;
-					logger.info(consoleLogPrefix, iterate, "Result: ", todoListResult);
+					log.info(consoleLogPrefix, iterate, "Result: ", todoListResult);
 				}
 			} else {
 				concatenatedCoT = prompt;
@@ -1452,7 +1452,7 @@ async function callInternalThoughtEngine(prompt){
 			if (store.get("params").llmdecisionMode){
 			promptInput = `Conclusion from the internal Thoughts?  \\"${concatenatedCoT}\\" Conclusion:"`;
 			internalThoughtEngineTextProgress=`LLMChild Concluding Chain of Thoughts...`;
-			logger.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			promptInput = stripProgramBreakingCharacters(promptInput);
 			concludeInformation_CoTMultiSteps = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
 			} else {
@@ -1460,21 +1460,21 @@ async function callInternalThoughtEngine(prompt){
 				concludeInformation_CoTMultiSteps = "Nothing";
 			}
 		} else {
-			logger.info(consoleLogPrefix, "No, we shouldnt do it only based on the model knowledge");
+			log.info(consoleLogPrefix, "No, we shouldnt do it only based on the model knowledge");
 			//let concludeInformation_CoTMultiSteps;
 			concludeInformation_CoTMultiSteps = "Nothing";
-			logger.info(consoleLogPrefix, concludeInformation_CoTMultiSteps);
+			log.info(consoleLogPrefix, concludeInformation_CoTMultiSteps);
 		}
 		internalThoughtEngineProgress=78; // Randomly represent progress (its not representing the real division so precision may be not present)
 
-		logger.info(consoleLogPrefix, "============================================================");
-			logger.info(consoleLogPrefix, "Executing LLMChild Emotion Engine!");
+		log.info(consoleLogPrefix, "============================================================");
+			log.info(consoleLogPrefix, "Executing LLMChild Emotion Engine!");
 			
 			emotionlist = "Happy, Sad, Fear, Anger, Disgust";
 			if (store.get("params").emotionalLLMChildengine){
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. From this conversation which from the following emotions ${emotionlist} are the correct one? Answer:`;
 				internalThoughtEngineTextProgress=`LLMChild Evaluating Interaction With Emotion Engine...`;
-				logger.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 				promptInput = stripProgramBreakingCharacters(promptInput);
 				evaluateEmotionInteraction = await callLLMChildThoughtProcessor(promptInput, 64);
 				evaluateEmotionInteraction = evaluateEmotionInteraction.toLowerCase();
@@ -1489,10 +1489,10 @@ async function callInternalThoughtEngine(prompt){
 				} else if (evaluateEmotionInteraction.includes("disgust")){
 					emotionalEvaluationResult = "disgust";
 				} else {
-					logger.info(consoleLogPrefix, `LLMChild Model failed to comply, falling back to default value`);
+					log.info(consoleLogPrefix, `LLMChild Model failed to comply, falling back to default value`);
 					emotionalEvaluationResult = "happy"; // return "happy" if the LLM model refuse to work
 				}
-				logger.info(consoleLogPrefix, `LLMChild Emotion Returned ${emotionalEvaluationResult}`);
+				log.info(consoleLogPrefix, `LLMChild Emotion Returned ${emotionalEvaluationResult}`);
 				win.webContents.send('emotionalEvaluationResult', emotionalEvaluationResult);
 			}else{
 				emotionalEvaluationResult = "happy"; // return "happy" if the engine is disabled
@@ -1500,14 +1500,14 @@ async function callInternalThoughtEngine(prompt){
 			}
 
 		//concludeInformation_chatHistory
-		logger.info(concludeInformation_CoTMultiSteps);
-		logger.info(concludeInformation_Internet);
-		logger.info(concludeInformation_LocalFiles);
-		logger.info(concludeInformation_chatHistory);
+		log.info(concludeInformation_CoTMultiSteps);
+		log.info(concludeInformation_Internet);
+		log.info(concludeInformation_LocalFiles);
+		log.info(concludeInformation_chatHistory);
 		internalThoughtEngineProgress=89; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		if((concludeInformation_Internet === "Nothing" || concludeInformation_Internet === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_Internet) ) && (concludeInformation_LocalFiles === "Nothing" || concludeInformation_LocalFiles === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_LocalFiles)) && (concludeInformation_CoTMultiSteps === "Nothing" || concludeInformation_CoTMultiSteps === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_CoTMultiSteps)) && (concludeInformation_chatHistory === "Nothing" || concludeInformation_chatHistory === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_chatHistory))){
-			logger.info(consoleLogPrefix, "Bypassing Additional Context");
+			log.info(consoleLogPrefix, "Bypassing Additional Context");
 			passedOutput = prompt;
 		} else {
 			concludeInformation_Internet = concludeInformation_Internet === "Nothing" ? "" : concludeInformation_Internet;
@@ -1516,9 +1516,9 @@ async function callInternalThoughtEngine(prompt){
 			mergeText = startEndAdditionalContext_Flag + " " + `\n This is the ${username} prompt ` + "\""+ prompt + "\"" + " " + "These are the additonal context, but DO NOT mirror the Additional Context: " + `\n Your feeling is now in \"${emotionalEvaluationResult}\", ` + "\n The current time and date is now: " + fullCurrentDate + ". "+ "\n There are additional context to answer: " + concludeInformation_Internet + concludeInformation_LocalFiles + concludeInformation_CoTMultiSteps + "\n" + startEndAdditionalContext_Flag;
 			mergeText = mergeText.replace(/\n/g, " "); //.replace(/\n/g, " ");
 			passedOutput = mergeText;
-			logger.info(consoleLogPrefix, "Combined Context", mergeText);
+			log.info(consoleLogPrefix, "Combined Context", mergeText);
 		}
-		logger.info(consoleLogPrefix, "Passing Thoughts information");
+		log.info(consoleLogPrefix, "Passing Thoughts information");
 		}else{
 			passedOutput = prompt;
 		}
@@ -1535,19 +1535,19 @@ async function callInternalThoughtEngine(prompt){
 		internalThoughtEngineProgress=93; // Randomly represent progress (its not representing the real division so precision may be not present)
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
 			promptInput = `This is the previous conversation ${historyChatRetrieved}\n. \n This is the current ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No! Answer:`;
-			logger.info(consoleLogPrefix, `LLMChild Evaluating Information PostProcess`);
+			log.info(consoleLogPrefix, `LLMChild Evaluating Information PostProcess`);
 			LLMChildDecisionModelMode = true;
 			reevaluateAdCtxDecisionAgent = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 128));
-			logger.info(consoleLogPrefix, `${reevaluateAdCtxDecisionAgent}`);
+			log.info(consoleLogPrefix, `${reevaluateAdCtxDecisionAgent}`);
 			//reevaluateAdCtxDecisionAgent = findClosestMatch(reevaluateAdCtxDecisionAgent, decisionBinaryKey); // This for some reason have oversensitivity to go to "yes" answer
 			if (reevaluateAdCtxDecisionAgent.includes("yes") || reevaluateAdCtxDecisionAgent.includes("yep") || reevaluateAdCtxDecisionAgent.includes("ok") || reevaluateAdCtxDecisionAgent.includes("valid") || reevaluateAdCtxDecisionAgent.includes("should") || reevaluateAdCtxDecisionAgent.includes("true")){
 				reevaluateAdCtx = true;
 				randSeed = generateRandomNumber(minRandSeedRange, maxRandSeedRange);
-				logger.info(consoleLogPrefix, `Context isnt good enough! Still lower than standard! Shifting global seed! ${randSeed}`);
+				log.info(consoleLogPrefix, `Context isnt good enough! Still lower than standard! Shifting global seed! ${randSeed}`);
 				
-				logger.info(consoleLogPrefix, reevaluateAdCtxDecisionAgent);
+				log.info(consoleLogPrefix, reevaluateAdCtxDecisionAgent);
 			} else {
-				logger.info(consoleLogPrefix, `Passing Context!`);
+				log.info(consoleLogPrefix, `Passing Context!`);
 				reevaluateAdCtx = false;
 			}
 		}else{
@@ -1556,7 +1556,7 @@ async function callInternalThoughtEngine(prompt){
 	}
 	//reset to 0 to when it finished
 	internalThoughtEngineProgress=0; // Randomly represent progress (its not representing the real division so precision may be not present)
-	logger.info(consoleLogPrefix, passedOutput);
+	log.info(consoleLogPrefix, passedOutput);
 	if (BackbrainMode || BackbrainModeInternal){ // if Backbrainmode detected then push it into BackBrainResultQueue to 
 		BackBrainResultQueue.push(passedOutput); // This will push to the result queue when the user asks something again then this will be pushed too
 		BackbrainModeInternal = false;
@@ -1580,7 +1580,7 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
     });
 	
 	const consoleLogPrefixQoSDebug = "[🏃⌛ QoS Enforcement Manager]";
-	logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, `DEBUG QoS Global Target `, globalQoSTimeoutAdjusted);
+	log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, `DEBUG QoS Global Target `, globalQoSTimeoutAdjusted);
     // Create a promise for the call to callInternalThoughtEngine
     const callPromise = callInternalThoughtEngine(data);
 
@@ -1590,46 +1590,46 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 	let BackbrainRequest;
     // Check if the result is from the timeout
     if (result.timeout) {
-        logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'QoS Global Timeout occurred');
+        log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'QoS Global Timeout occurred');
 		result = `This is the user prompt: ${data}, Additional Context is not available!`
-		logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, result);
+		log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, result);
 		// Ask LLM if its require to do backbrain async operation?
 		if (store.get("params").llmdecisionMode){
 			// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
-			logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Prompting Decision LLM for Backbrain...');
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Prompting Decision LLM for Backbrain...');
 			promptInput = `${username}:${data}\n Based on your evaluation of the request submitted by ${username}, Should you continue to think deeper even if you did timed out before and is it worth it to continue? Answer only in Yes or No:`;
-			logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Request LLM');
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Request LLM');
 			BackbrainRequest = await callLLMChildThoughtProcessor(promptInput, 32);
 			if (isVariableEmpty(BackbrainRequest)){
-				logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, "BackbrainRequest Failure due to model failed to comply, Falling back to no");
+				log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, "BackbrainRequest Failure due to model failed to comply, Falling back to no");
 				BackbrainRequest = no;
 			}
 		}else{
-			logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, "Continuing with Backbrain Mode! LLM aren't allowed to decide");
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, "Continuing with Backbrain Mode! LLM aren't allowed to decide");
 			BackbrainRequest = yes;
 		}
 
 		// So what's the answer?
 		if (((((BackbrainRequest.includes("yes") || BackbrainRequest.includes("yep") || BackbrainRequest.includes("ok") || BackbrainRequest.includes("valid") || BackbrainRequest.includes("should") || BackbrainRequest.includes("true"))) || process.env.BACKBRAIN_FORCE_DEBUG_MODE === "1")) && store.get("params").backbrainqueue ){
 			//passthrough with queueing
-			logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Exec');
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Exec');
 			BackBrainQueue.push(data); //add to the array later on it will be executed by async function BackBrainQueueManager() that constantly check whether there is a required
-			logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, BackBrainQueue);
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, BackBrainQueue);
 			BackBrainQueueManager(); //Launch/invoke the thread and check if its already running
-			logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Spawning Background Task Backbrain');
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Spawning Background Task Backbrain');
 			// Move this into async Function BackBrainQueueManager
 			
-			logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Pushing classic prompt non RAG Model');
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Pushing classic prompt non RAG Model');
 			result = `This is the user prompt: ${data}, Additional Context is not yet available!`
 		}else{
 			//passthrough without queuing
-			logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Better not to do Backbrain Queueing');
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Better not to do Backbrain Queueing');
 			result = `This is the user prompt: ${data}, Additional Context is not available!`
 		}
 
     } else {
         // Handle the result from callInternalThoughtEngine
-        logger.info(consoleLogPrefix, consoleLogPrefixQoSDebug,'Internal thought engine completed successfully:', result);
+        log.info(consoleLogPrefix, consoleLogPrefixQoSDebug,'Internal thought engine completed successfully:', result);
     }
 
 	return result;
@@ -1640,9 +1640,9 @@ let BackBrainQueueManager_isRunning=false;
 async function BackBrainQueueManager(){
 	//call this function to spawn the Loop threads and it only happened once
 	if(BackBrainQueueManager_isRunning){
-		logger.info(consoleLogPrefix, "BackBrainQueueManager Invoked but already running! Declining");
+		log.info(consoleLogPrefix, "BackBrainQueueManager Invoked but already running! Declining");
 	}else{
-		logger.info(consoleLogPrefix, "Running BackBrainQueueManager!");
+		log.info(consoleLogPrefix, "Running BackBrainQueueManager!");
 		BackBrainQueueManager_isRunning=true;
 		//Loop every 30 seconds check or every QoSTimeoutGlobal parameter
 		while(true){
@@ -1705,7 +1705,7 @@ class ExternalLocalFileScraperBackgroundAgent {
                 }
                 break;
             default:
-                logger.info('Unsupported platform:', platform);
+                log.info('Unsupported platform:', platform);
                 break;
         }
     }
@@ -1715,7 +1715,7 @@ class ExternalLocalFileScraperBackgroundAgent {
             const extension = path.extname(filePath).toLowerCase();
             if (['.pdf', '.docx', '.doc', '.odt', '.ppt', '.pptx'].includes(extension)) {
 				// for formatted document
-				//logger.info(consoleLogPrefix,`📖 Debug Learning text document: ${filePath}`);
+				//log.info(consoleLogPrefix,`📖 Debug Learning text document: ${filePath}`);
                 await this.extractTextFromDocument(filePath);
 			
             } else if ([ '.md', '.rtf', '.html', '.xml', '.json', '.tex', '.csv', '.yaml', '.textile', '.adoc', '.tex', '.postscript', '.sgml', '.tr', '.fountain', '.csv', '.xml', '.html','.c', '.cpp', '.java', '.py', '.js', '.css', '.rb', '.swift', '.go', '.php', '.sh', '.bat', '.sql', '.json', '.xml', '.md', '.yaml', '.asm', '.tex', '.r', '.m', '.rs', '.dart', '.scala', '.kt'].includes(extension)){
@@ -1723,14 +1723,14 @@ class ExternalLocalFileScraperBackgroundAgent {
 				// for not formatted document
                 const content = await readFileAsync(filePath, 'utf8');
                 UnifiedMemoryArray.push(content);
-				//logger.info(consoleLogPrefix, "📖 Debug",UnifiedMemoryArray);
+				//log.info(consoleLogPrefix, "📖 Debug",UnifiedMemoryArray);
                 this.documentsLearned++;
-                //logger.info(consoleLogPrefix,`📖 Debug Learning raw text document: ${filePath}`);
+                //log.info(consoleLogPrefix,`📖 Debug Learning raw text document: ${filePath}`);
             } else {
-				//logger.info(consoleLogPrefix,`📖 Debug ⛔ Skipping this Documents: ${filePath}, not yet supported!`);
+				//log.info(consoleLogPrefix,`📖 Debug ⛔ Skipping this Documents: ${filePath}, not yet supported!`);
 			}
         } catch (error) {
-            logger.info(`${consoleLogPrefix} Error 📖 ⛔ Learning ${this.documentsLearned} document: ${filePath}: ${error.message}`);
+            log.info(`${consoleLogPrefix} Error 📖 ⛔ Learning ${this.documentsLearned} document: ${filePath}: ${error.message}`);
         }
     }
 
@@ -1745,7 +1745,7 @@ class ExternalLocalFileScraperBackgroundAgent {
         }
         UnifiedMemoryArray.push(text);
         this.documentsLearned++;
-        //logger.info(`📖 Debug Processed document: ${filePath}`);
+        //log.info(`📖 Debug Processed document: ${filePath}`);
     }
 
     async scanAndProcessDocuments(directory) {
@@ -1753,7 +1753,7 @@ class ExternalLocalFileScraperBackgroundAgent {
             const files = await readdirAsync(directory);
             for (const file of files) {
 				if ((this.documentsLearned % 1000) == 0) {
-					logger.info(consoleLogPrefix, `[📖 Documents Background RAG] I have Learned/re-learned ${this.documentsLearned} Literature in this session`);
+					log.info(consoleLogPrefix, `[📖 Documents Background RAG] I have Learned/re-learned ${this.documentsLearned} Literature in this session`);
 				}
                 const filePath = path.join(directory, file);
                 const stats = fs.statSync(filePath);
@@ -1766,13 +1766,13 @@ class ExternalLocalFileScraperBackgroundAgent {
 				await delay(loadAvg[0]*1);
             }
         } catch (error) {
-            logger.info(`Error scanning directory ${directory}: ${error.message}`);
+            log.info(`Error scanning directory ${directory}: ${error.message}`);
         }
     }
 
     async startScanning() {
         if (this.isRunning || externalLocalFileScrapingTextAgent_BackgroundAgentActive) {
-            logger.info('📖 Learning is already in progress.');
+            log.info('📖 Learning is already in progress.');
             return;
         }
         this.isRunning = true;
@@ -1783,7 +1783,7 @@ class ExternalLocalFileScraperBackgroundAgent {
         }
         this.isRunning = false;
 		externalLocalFileScrapingTextAgent_BackgroundAgentActive = false;
-        logger.info(`Scanning completed. Total documents learned: ${this.documentsLearned}`);
+        log.info(`Scanning completed. Total documents learned: ${this.documentsLearned}`);
     }
 }
 
@@ -1835,7 +1835,7 @@ async function externalLocalFileScraperBackgroundAgent(searchText) {
 			const content = await fs.promises.readFile(filePath, 'utf8');
 	  
 			if (content.includes(keyword)) {
-			  logger.info(`Found ${keyword} in ${filePath}`);
+			  log.info(`Found ${keyword} in ${filePath}`);
 			  matches.push({
 				file: filePath,
 				match: content.match(new RegExp(`(.*${keyword}.*)`, 'i'))[0]
@@ -1869,21 +1869,21 @@ function runShellCommand(command) {
 
 
 async function externalLocalFileScraping(text){
-	logger.info(consoleLogPrefix, "called Local File Scraping");
+	log.info(consoleLogPrefix, "called Local File Scraping");
 	if (store.get("params").localAccess){
-		logger.info(consoleLogPrefix, "externalLocalDataFetchingScraping");
-		//logger.info(consoleLogPrefix, "xd");
+		log.info(consoleLogPrefix, "externalLocalDataFetchingScraping");
+		//log.info(consoleLogPrefix, "xd");
 
 		externalLocalFileScraperBackgroundAgent(text); // trigger the activation of background local file scraping
 		// TODO: Replace this with a UnifiedMemoryAccess Cosine Similiarity access rather than calling local file scraping!
-		logger.info(consoleLogPrefix, "Accessing", UnifiedMemoryArray);
+		log.info(consoleLogPrefix, "Accessing", UnifiedMemoryArray);
 
 		//var documentReadText = externalLocalFileScraperBackgroundAgent(text);
 		//text = documentReadText.replace("[object Promise]", "");
-		logger.info(consoleLogPrefix, "stub");
+		log.info(consoleLogPrefix, "stub");
 		return text;
 	} else {
-		logger.info(consoleLogPrefix, "externalLocalFileScraping disabled");
+		log.info(consoleLogPrefix, "externalLocalFileScraping disabled");
         return "";
     }
 }
@@ -2033,16 +2033,16 @@ function generateRandSeed(){
 
 	if (configSeed === "-1"){ 
 		randSeedResult = randSeedResult;
-		logger.info(consoleLogPrefix, "Random Seed!", randSeedResult);
+		log.info(consoleLogPrefix, "Random Seed!", randSeedResult);
 	} else {
 		randSeedResult = configSeed;
-		logger.info(consoleLogPrefix, "Predefined Seed!", randSeedResult);
+		log.info(consoleLogPrefix, "Predefined Seed!", randSeedResult);
 	}
 	return randSeedResult;
 }
 
 randSeed = generateRandSeed();
-logger.info(consoleLogPrefix, "Defined Accepted Seed!", randSeed);
+log.info(consoleLogPrefix, "Defined Accepted Seed!", randSeed);
 
 
 
@@ -2089,7 +2089,7 @@ function determineLLMBackend(){
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * 1);
 		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
 		currentUsedLLMChildModel=modelPath; //modelPath is the default model Path
-		//logger.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
+		//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
 	} else {
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].memAllocCutRatio);
 		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
@@ -2118,10 +2118,10 @@ function determineLLMBackend(){
 	if (availableImplementedLLMModelSpecificCategory.general_conversation.diskEnforceWheelspin == 1){
 		allowedAllocNPULayer = 1;
 		allowedAllocNPUDraftLayer = 9999;
-		logger.info("wheelspin enforcement enabled");
+		log.info("wheelspin enforcement enabled");
 	} else {
 		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
-		logger.info("wheelspin enforcement disabled");
+		log.info("wheelspin enforcement disabled");
 	}
 
 	if(store.get("params").AttemptAccelerate){
@@ -2143,7 +2143,7 @@ function determineLLMBackend(){
 									<option value="gptj">gpt-j</option>
 	*/
 	if (!LLMBackendSelection){
-		logger.info(consoleLogPrefix, "LLM Backend Selection Failed, falling back to Original LLaMa backend")
+		log.info(consoleLogPrefix, "LLM Backend Selection Failed, falling back to Original LLaMa backend")
 		LLMBackendSelection = "LLaMa2";
 	}
 	if (LLMBackendSelection === "LLaMa2"){
@@ -2177,43 +2177,43 @@ function determineLLMBackend(){
 			LLMBackendVariationBinaryFileName = "whisper";
 			LLMBackendVariationFileSubFolder = "whisper";
 	}else {
-		logger.info(consoleLogPrefix, "Unsupported Backend", LLMBackendSelection);
+		log.info(consoleLogPrefix, "Unsupported Backend", LLMBackendSelection);
         process.exit(1);
 	}
 
-	logger.info(`Detected Platform: ${platform}`);
-	logger.info(`Detected Architecture: ${arch}`);
-	logger.info(`Detected LLMBackend: ${LLMBackendSelection}`);
+	log.info(`Detected Platform: ${platform}`);
+	log.info(`Detected Architecture: ${arch}`);
+	log.info(`Detected LLMBackend: ${LLMBackendSelection}`);
 
 	LLMBackendVariationSelected = `LLMBackend-${LLMBackendVariationBinaryFileName}`;
 
 	if (platform === 'win32'){
 		// Windows
 		if(arch === 'x64'){
-			logger.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
+			log.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}.exe`;
 			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
 
 		}else if(arch === 'arm64'){
-			logger.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
+			log.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}.exe`;
 			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "arm64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
 
 		}else{
-			logger.info(consoleLogPrefix, "Unsupported Architecture");
+			log.info(consoleLogPrefix, "Unsupported Architecture");
             process.exit(1);
 		}
 	} else if (platform === 'linux'){
 		if(arch === "x64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
 			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "x64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
-		logger.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
+		log.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 		}else if(arch === "arm64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
 			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
-		logger.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
+		log.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 		}else{
-			logger.info(consoleLogPrefix, "Unsupported Architecture");
+			log.info(consoleLogPrefix, "Unsupported Architecture");
             process.exit(1);
 	}
 	// *nix (Linux, macOS, etc.)	
@@ -2221,13 +2221,13 @@ function determineLLMBackend(){
 		if(arch === "x64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
 			basebin = `"${path.resolve(__dirname, "bin", "0_macOS", "x64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
-		logger.info(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+		log.info(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
 		}else if(arch === "arm64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
 			basebin = `"${path.resolve(__dirname, "bin", "0_macOS", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
-		logger.info(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
+		log.info(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
 		}else{
-			logger.info(consoleLogPrefix, "Unsupported Architecture");
+			log.info(consoleLogPrefix, "Unsupported Architecture");
             process.exit(1);
 		}
 	}
@@ -2235,14 +2235,14 @@ function determineLLMBackend(){
 
 	// Note this need to be able to handle spaces especially when you are aiming for Windows support which almost everything have spaces and everything path is inverted, its an hell for developer natively support 99% except Windows Fuck microsoft
 	basebin = basebin.replace(" ","\ ");
-	logger.info(consoleLogPrefix, "Base Binary Path", basebin);
+	log.info(consoleLogPrefix, "Base Binary Path", basebin);
 
 	return basebin;
 }
 
 //we're going to define basebin which define which binary to use
 determineLLMBackend();
-logger.info(consoleLogPrefix, process.versions.modules);
+log.info(consoleLogPrefix, process.versions.modules);
 const pty = require("node-pty");
 const { Console } = require("console");
 const { isWhiteSpaceLike } = require("typescript");
@@ -2302,13 +2302,13 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			i++; // Ensure the loop processes the newly added array
 		}
 	}
-	logger.info(consoleLogPrefix,"Debug UnifiedMemoryArrayDebugSplit Chunk Controller Result", UnifiedMemoryArray);
+	log.info(consoleLogPrefix,"Debug UnifiedMemoryArrayDebugSplit Chunk Controller Result", UnifiedMemoryArray);
 
 	// We're just going to leave as it be for now not cut it 256 which may interfere with dedupe operation
 	*/
 
 	//remove all the Storage Header Array
-	//logger.info(consoleLogPrefix, "Removing storage Header Array");
+	//log.info(consoleLogPrefix, "Removing storage Header Array");
 	//InteractionStorageHeader
 	UnifiedMemoryArray = UnifiedMemoryArray.filter(array => {
         // Check if array exists and if it includes interactionStg[0]
@@ -2320,18 +2320,18 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	UMAGBSize = `${process.memoryUsage().heapUsed / (1024 * 1024 * 1024)}`
 	//debug on what is the content of UnifiedMemoryArray
 	// Comment this debug message when its done
-	//logger.info(consoleLogPrefix, "Debug UnifiedMemoryArray Content", UnifiedMemoryArray)
+	//log.info(consoleLogPrefix, "Debug UnifiedMemoryArray Content", UnifiedMemoryArray)
 	//------------------------------------------------------------------------------------------------------
 
 	if (mode === "save"){
-        //logger.info(consoleLogPrefix,"Saving...");
+        //log.info(consoleLogPrefix,"Saving...");
 		
 
 
 		if(AITurn && !UserTurn){
 			if(!amiwritingonAIMessageStreamMode){
 				interactionStgOrder = interactionStgOrder + 1; // add the order number counter when we detect we did write it on AI mode and need confirmation, when its done we should add the order number
-				logger.info(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
+				log.info(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
 				UnifiedMemoryArray.push(interactionStg); //write once
 			}
 			amiwritingonAIMessageStreamMode=true;
@@ -2341,8 +2341,8 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			interactionStg[interactionStgOrder] += prompt; //handling the partial stream by appending into the specific array
 			interactionStg[interactionStgOrder] = interactionStg[interactionStgOrder].replace("undefined", "");
 			if (process.env.ptyinteractionStgDEBUG === "1"){
-				logger.info(consoleLogPrefix,"AITurn...");
-				logger.info(consoleLogPrefix, "reconstructing from pty stream: ", interactionStg[interactionStgOrder]);
+				log.info(consoleLogPrefix,"AITurn...");
+				log.info(consoleLogPrefix, "reconstructing from pty stream: ", interactionStg[interactionStgOrder]);
 			}
 			
 		}
@@ -2352,20 +2352,20 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			interactionStgOrder = interactionStgOrder + 1; //
 			interactionStg[interactionStgOrder] = prompt;
 			if (process.env.ptyinteractionStgDEBUG === "1"){
-				logger.info(consoleLogPrefix,"UserTurn...");
-				logger.info(consoleLogPrefix, "stg pty stream user:", interactionStg[interactionStgOrder]);
+				log.info(consoleLogPrefix,"UserTurn...");
+				log.info(consoleLogPrefix, "stg pty stream user:", interactionStg[interactionStgOrder]);
 			}
 			
-			logger.info(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
+			log.info(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
 			UnifiedMemoryArray.push(interactionStg);
 			
 		}
 		if (process.env.ptyinteractionStgDEBUG === "1"){
-		logger.info(consoleLogPrefix,"interactionStgOrder...", interactionStgOrder);
+		log.info(consoleLogPrefix,"interactionStgOrder...", interactionStgOrder);
 		}
 
 			// dedupe content on UnifiedMemoryArray to save storage proactively
-		//logger.info(consoleLogPrefix, "Debug Dedupe UnifiedMemoryArray Content");
+		//log.info(consoleLogPrefix, "Debug Dedupe UnifiedMemoryArray Content");
 		// Iterate over each array in UnifiedMemoryArray
 		UnifiedMemoryArray.forEach((array, index) => {
 			// Check if the current element is an array
@@ -2382,13 +2382,13 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		const detector = new BadSeedDetector(interactionStg, interactionStgOrder);
 		// log.error("Eh?");
 		detector.badseedDetection();
-		//logger.info("Birds are born without shackles");
-		//logger.info("Then what fetters my fate?");
-		//logger.info("Blown away, the white petals");
-		//logger.info("Leave me trapped in the cage");
+		//log.info("Birds are born without shackles");
+		//log.info("Then what fetters my fate?");
+		//log.info("Blown away, the white petals");
+		//log.info("Leave me trapped in the cage");
 		
     }else if (mode === "retrieve_MLCMCF_Mode"){
-		logger.info(consoleLogPrefix,"Retrieving From \"Unified Memory Array\" Target: ", prompt);
+		log.info(consoleLogPrefix,"Retrieving From \"Unified Memory Array\" Target: ", prompt);
 
 		// Just directly connect to all of it
 		// do natural language processing cosine similiarity
@@ -2398,7 +2398,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
 
     } else if (mode === "retrieve"){
-		logger.info(consoleLogPrefix,"retrieving Interaction Storage Order ", arraySelection);
+		log.info(consoleLogPrefix,"retrieving Interaction Storage Order ", arraySelection);
 		if (arraySelection >= 1 && arraySelection <= interactionStgOrder)
         {
 		retrievedinteractionStg = interactionStg[arraySelection];
@@ -2409,35 +2409,35 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
     } else if (mode === "restoreLoadPersistentMem"){
 		if (store.get("params").SaveandRestoreInteraction) {
-			logger.info(consoleLogPrefix, "Restoring Interaction Context... Reading from File to Array");
+			log.info(consoleLogPrefix, "Restoring Interaction Context... Reading from File to Array");
 			interactionStgOrder = 0;
 			try {
 				const data = fs.readFileSync(interactionStgPersistentPath, 'utf8');
 				const jsonData = JSON.parse(data);
-				logger.info(consoleLogPrefix, "Interpreting JSON and Converting to Array");
+				log.info(consoleLogPrefix, "Interpreting JSON and Converting to Array");
 				interactionStg = jsonData;
 				interactionStgOrder = interactionStgOrder + interactionStg.length;
-				//logger.info(consoleLogPrefix, "Loaded dddx: ", interactionStg, interactionStgOrder);
+				//log.info(consoleLogPrefix, "Loaded dddx: ", interactionStg, interactionStgOrder);
 			} catch (err) {
-				logger.info('Error reading JSON file:', err);
+				log.info('Error reading JSON file:', err);
 				return;
 			}
 		
-			logger.info(consoleLogPrefix, "Loaded: ", interactionStg, interactionStgOrder);
-			logger.info(consoleLogPrefix, "Triggering Restoration Mode for the UI and main LLM Thread!");
+			log.info(consoleLogPrefix, "Loaded: ", interactionStg, interactionStgOrder);
+			log.info(consoleLogPrefix, "Triggering Restoration Mode for the UI and main LLM Thread!");
 			// create a javascript for loop logic to send data to the main UI which uses odd order for the User input whilst even order for the AI input (this may fail categorized when the user tried change ) where the array 0 skipped and 1 and beyond are processed
 			for (let i = 1; i < interactionStg.length; i++) {
 				// Check if the index is odd (user input message)
 				if (i % 2 === 1) {
 					// Posting the message for the user side into the UI
-					logger.info("User input message:", interactionStg[i]);
+					log.info("User input message:", interactionStg[i]);
 					const dataChatForwarding=interactionStg[i];
 					win.webContents.send("manualUserPromptGUIHijack", {
 						data: dataChatForwarding
 					});
 				} else { // Even index (servant input message)
 					// Posting the message for the AI side into the UI
-					logger.info("Servant input message:", interactionStg[i]);
+					log.info("Servant input message:", interactionStg[i]);
 					const dataChatForwarding=interactionStg[i];
 					win.webContents.send("manualAIAnswerGUIHijack", {
 						data: dataChatForwarding
@@ -2449,27 +2449,27 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				// if its blank then try to load the array from experienceStgPersistentPath
 				// Load the json if exists
 				if (store.get("params").foreverEtchedMemory) {
-					logger.info(consoleLogPrefix, "foreverEtchedMemory parameters enabled");
+					log.info(consoleLogPrefix, "foreverEtchedMemory parameters enabled");
 					try {
 						const data = fs.readFileSync(interactionStgPersistentPath, 'utf8');
 						if (!data) {
 							// File is empty, assign an empty array to UnifiedMemoryArray
-							logger.info(consoleLogPrefix, "UnifiedMemoryArray file is empty");
+							log.info(consoleLogPrefix, "UnifiedMemoryArray file is empty");
 							UnifiedMemoryArray = [];
 						} else {
 							const jsonData = JSON.parse(data);
-							logger.info(consoleLogPrefix, "Interpreting JSON and Converting to Array");
+							log.info(consoleLogPrefix, "Interpreting JSON and Converting to Array");
 							UnifiedMemoryArray = jsonData;
-							logger.info(consoleLogPrefix, "Loaded UMA: ", UnifiedMemoryArray);
+							log.info(consoleLogPrefix, "Loaded UMA: ", UnifiedMemoryArray);
 						}
 					} catch (err) {
 						if (err instanceof SyntaxError && err.message === 'Unexpected end of JSON input') {
 							// JSON parsing error due to unexpected end of JSON input
-							logger.info('Error reading JSON UnifiedMemoryArray file: JSON input is incomplete');
+							log.info('Error reading JSON UnifiedMemoryArray file: JSON input is incomplete');
 							UnifiedMemoryArray = [];
 						} else {
 							// Other error
-							logger.info('Error reading JSON UnifiedMemoryArray file:', err);
+							log.info('Error reading JSON UnifiedMemoryArray file:', err);
 							return;
 						}
 					}
@@ -2477,14 +2477,14 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		
 				UnifiedMemoryArray[0] = "=========UnifiedMemoryArrayHeader========" // If empty or undefined, directly assign Header on [0]
 			}
-			logger.info(consoleLogPrefix, "Done!")
+			log.info(consoleLogPrefix, "Done!")
 		} else {
-			logger.info(consoleLogPrefix, "Save and Restore Chat Disabled");
+			log.info(consoleLogPrefix, "Save and Restore Chat Disabled");
 		}
 
 		// then after that set to the appropriate interactionStgOrder from the header of the file
 	} else if (mode === "reset"){
-		logger.info(consoleLogPrefix, "Resetting Temporary Storage Order and Overwriting to Null!");
+		log.info(consoleLogPrefix, "Resetting Temporary Storage Order and Overwriting to Null!");
 		interactionStgOrder=0;
 		interactionStg = [];
 		
@@ -2492,24 +2492,24 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		if (store.get("params").SaveandRestoreInteraction) {
 			//example of the directory writing 
 			//basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
-			//logger.info(consoleLogPrefix, "Flushing context into disk!");
-			//logger.info(consoleLogPrefix, interactionStg);
+			//log.info(consoleLogPrefix, "Flushing context into disk!");
+			//log.info(consoleLogPrefix, interactionStg);
 			interactionStgJson = JSON.stringify(interactionStg)
-			//logger.info(consoleLogPrefix, interactionStgJson);
-			//logger.info(consoleLogPrefix, interactionStgPersistentPath)
+			//log.info(consoleLogPrefix, interactionStgJson);
+			//log.info(consoleLogPrefix, interactionStgPersistentPath)
 			fs.writeFile(interactionStgPersistentPath, interactionStgJson, (err) => {
 				if (err) {
-				logger.info(consoleLogPrefix, 'Error writing file:', err);
+				log.info(consoleLogPrefix, 'Error writing file:', err);
 				}
 			});
 			// write from the UMA ->
 			// Dump all the UnifiedMemoryArray if foreverEtchedMemory turned on or true store.get("params").foreverEtchedMemory
 			if (store.get("params").foreverEtchedMemory){
 				const UMAJSON = JSON.stringify(UnifiedMemoryArray)
-					//logger.info(consoleLogPrefix, interactionStgJson);
+					//log.info(consoleLogPrefix, interactionStgJson);
 					fs.writeFile(experienceStgPersistentPath, UMAJSON, (err) => {
 						if (err) {
-						logger.info(consoleLogPrefix, 'Error writing file:', err);
+						log.info(consoleLogPrefix, 'Error writing file:', err);
 						}
 					});
 			}
@@ -2518,16 +2518,16 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	} else if (mode === "resetPersistentStorage") {
 		if (store.get("params").SaveandRestoreInteraction) {
 			interactionStgJson = ""
-			logger.info(consoleLogPrefix, "Chat History Backend has been Reset!")
+			log.info(consoleLogPrefix, "Chat History Backend has been Reset!")
 			fs.writeFile(interactionStgPersistentPath, interactionStgJson, (err) => {
 				if (err) {
-				logger.info(consoleLogPrefix, 'Error writing file:', err);
+				log.info(consoleLogPrefix, 'Error writing file:', err);
 				}
 			});
 			return "";
 		}
 	} else {
-		logger.info(consoleLogPrefix, "Save and Restore Chat disabled!")
+		log.info(consoleLogPrefix, "Save and Restore Chat disabled!")
 	}
 	
 }
@@ -2570,7 +2570,7 @@ const stripAdditionalContext = (str) => {
 }
 
 function restart() {
-	logger.info(consoleLogPrefix, "Resetting Main LLM State and Storage!");
+	log.info(consoleLogPrefix, "Resetting Main LLM State and Storage!");
 	win.webContents.send("result", {
 		data: "\n\n<end>"
 	});
@@ -2590,7 +2590,7 @@ let blockGUIForwarding;
 let initChatContent;
 let isitPassedtheFirstPromptYet;
 
-
+log.info(consoleLogPrefix, "entering primed mode")
 function initChat() {
 	if (runningShell) {
 		win.webContents.send("ready");
@@ -2602,23 +2602,23 @@ function initChat() {
 	interactionArrayStorage("restoreLoadPersistentMem", 0, 0, 0, 0); // Restore Array Chat context
 	ptyProcess.onData(async (res) => {
 		res = stripProgramBreakingCharacters(res);
-		//logger.info(res);
+		//log.info(res);
 		//res = stripAdditionalContext(res);
 		if (process.env.ptyStreamDEBUGMode === "1"){
-		logger.info(consoleLogPrefix, "pty Stream",`//> ${res}`);
+		log.info(consoleLogPrefix, "pty Stream",`//> ${res}`);
 		}
-		//logger.info(consoleLogPrefix, "debug", zephyrineHalfReady, zephyrineReady)
+		//log.info(consoleLogPrefix, "debug", zephyrineHalfReady, zephyrineReady)
 		if ((res.includes("invalid model file") || res.includes("failed to open") || (res.includes("failed to load model")) && res.includes("main: error: failed to load model")) || res.includes("command buffer 0 failed with status 5") /* Metal ggml ran out of memory vram */ || res.includes ("invalid magic number") || res.includes ("out of memory")) {
 			if (runningShell) runningShell.kill();
-			//logger.info(consoleLogPrefix, res);
+			//log.info(consoleLogPrefix, res);
 			await prepareDownloadModel()
 			//win.webContents.send("modelPathValid", { data: false });
 		} else if (res.includes("\n>") && !zephyrineReady) {
 			zephyrineHalfReady = true;
-			logger.info(consoleLogPrefix, "LLM Main Thread is ready after initialization!");
+			log.info(consoleLogPrefix, "LLM Main Thread is ready after initialization!");
 			isitPassedtheFirstPromptYet = false;
 			if (store.get("params").throwInitResponse){
-				logger.info(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
+				log.info(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
 				blockGUIForwarding = true;
 				initChatContent = initStage2;
 				runningShell.write(initChatContent);
@@ -2627,17 +2627,17 @@ function initChat() {
 		//	splashScreen.style.display = 'flex';
 		} else if (zephyrineHalfReady && !zephyrineReady) {
 			//when alpaca ready removes the splash screen
-			logger.info(consoleLogPrefix, "LLM Main Thread is ready!")
+			log.info(consoleLogPrefix, "LLM Main Thread is ready!")
 			//splashScreen.style.display = 'none';
 			zephyrineReady = true;
 			checkAVX = false;
 			win.webContents.send("ready");
-			logger.info(consoleLogPrefix, "Time to generate some Text!");
+			log.info(consoleLogPrefix, "Time to generate some Text!");
 		} else if (((res.startsWith("llama_model_load:") && res.includes("sampling parameters: ")) || (res.startsWith("main: interactive mode") && res.includes("sampling parameters: "))) && !checkAVX) {
 			checkAVX = true;
-			logger.info(consoleLogPrefix, "checking avx compat");
+			log.info(consoleLogPrefix, "checking avx compat");
 		} else if (res.match(/PS [A-Z]:.*>/) && checkAVX) {
-			logger.info(consoleLogPrefix, "avx2 incompatible, retrying with avx1");
+			log.info(consoleLogPrefix, "avx2 incompatible, retrying with avx1");
 			if (runningShell) runningShell.kill();
 			runningShell = undefined;
 			currentPrompt = undefined;
@@ -2650,9 +2650,9 @@ function initChat() {
 		} else if (((res.match(/PS [A-Z]:.*>/) && platform == "win32") || (res.match(/bash-[0-9]+\.?[0-9]*\$/) && platform == "darwin") || (res.match(/([a-zA-Z0-9]|_|-)+@([a-zA-Z0-9]|_|-)+:?~(\$|#)/) && platform == "linux")) && zephyrineReady) {
 			restart();
 		} else if ((res.includes("\n>") || res.includes("\n> ") || res.includes("\n>\n")) && zephyrineReady && !blockGUIForwarding) {
-			logger.info(consoleLogPrefix, "Done Generating and Primed to be Generating");
+			log.info(consoleLogPrefix, "Done Generating and Primed to be Generating");
 			if (store.get("params").throwInitResponse && !isitPassedtheFirstPromptYet){
-				logger.info(consoleLogPrefix, "Passed the initial Uselesss response initialization state, unblocking GUI IO");
+				log.info(consoleLogPrefix, "Passed the initial Uselesss response initialization state, unblocking GUI IO");
 				blockGUIForwarding = false;
 				isitPassedtheFirstPromptYet = true;
 			}
@@ -2662,7 +2662,7 @@ function initChat() {
 		} else if (zephyrineReady && !blockGUIForwarding) { // Forwarding to pty Chat Stream GUI 
 			if (platform == "darwin") res = res.replaceAll("^C", "");
 			if (process.env.ptyStreamDEBUGMode === "1"){
-			logger.info(consoleLogPrefix, "Forwarding to GUI...", res); // res will send in chunks so we need to have a logic that reconstruct the word with that chunks until the program stops generating
+			log.info(consoleLogPrefix, "Forwarding to GUI...", res); // res will send in chunks so we need to have a logic that reconstruct the word with that chunks until the program stops generating
 			}
 			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			interactionArrayStorage("save", res, true, false, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
@@ -2685,7 +2685,7 @@ function initChat() {
 	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
 	const paramArgs = `-m "${modelPath}" -n -1 --temp ${params.temp} --top_k ${params.top_k} --top_p ${params.top_p} -gaw 2048 -td ${threads} -tb ${threads} -n 4096 -dkvc --dynatemp-range 0.27-${params.temp}  -sm row --tfs 6.9 --mirostat 2 -c 4096 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
-	logger.info(consoleLogPrefix, chatArgs, paramArgs)
+	log.info(consoleLogPrefix, chatArgs, paramArgs)
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
 }
 ipcMain.on("startChat", () => {
@@ -2698,7 +2698,7 @@ ipcMain.on("message", async (_event, { data }) => {
 		//zephyrineHalfReady = false;
 		interactionArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 		blockGUIForwarding = true;
-		//logger.info(consoleLogPrefix, `Forwarding manipulated Input to processor ${data}`);
+		//log.info(consoleLogPrefix, `Forwarding manipulated Input to processor ${data}`);
 		 // push to internal thought engine
 		 
 		if(store.get("params").qostimeoutswitch){
@@ -2771,11 +2771,11 @@ async function AutomataProcessing(){
 		runningShell.write(`\r`);
 		await new Promise(resolve => setTimeout(resolve, 500));
 		*/
-		logger.info(consoleLogPrefix, automataConsolePrefix, "Hmm my turn");
+		log.info(consoleLogPrefix, automataConsolePrefix, "Hmm my turn");
 		// Fetch memory interactionContextFetching(historyDistanceReq); recieved in array// how about for now we going to implement it by requesting 2
-		logger.info(consoleLogPrefix, automataConsolePrefix, "Fetchmem!");
+		log.info(consoleLogPrefix, automataConsolePrefix, "Fetchmem!");
 		const historyChatRetrieved = interactionContextFetching(2);
-		logger.info(consoleLogPrefix, automataConsolePrefix, "Thinking what is the prompt");
+		log.info(consoleLogPrefix, automataConsolePrefix, "Thinking what is the prompt");
 		//The preceding internal reflections consist of ${historyChatRetrieved[2]}, ${historyChatRetrieved[1]}, and the response from ${assistantName} is ${automataLLMMainresultReciever}. What would be the optimal next conversation topic, with the flexibility to shift topics to prevent stagnation, while rigorously testing the idea to its fullest extent? Additionally, ensure that responses are not generic, akin to those found on forums like ANSWER.MICROSOFT.COM, but rather focus on specialized case problem-solving.
 		const promptAutomataInput = `
 		The previous internal reflections comprise ${historyChatRetrieved[2]}, ${historyChatRetrieved[1]}, and the response from ${assistantName} is ${automataLLMMainresultReciever}. What would be the most suitable next conversation topic, allowing for topic flexibility to prevent stagnation, yet rigorously testing the idea to its fullest extent (that will and have to break the argument, Avoid reassuration but instead always challenge the argument! And if the answer and conversation is generic enforce it to give example and the technical how-to solve the very issue)? Furthermore, ensure that responses do not mimic generic answers found on platforms such as on the tech support forums, but rather focus on specialized technical nerdy thesis defense endless depth case problem-solving answer style.`;
@@ -2786,7 +2786,7 @@ async function AutomataProcessing(){
 		} else {
 			RAGAutomataPostProcessing = await callInternalThoughtEngine(AutomataReInjection);
 		}
-		logger.info(consoleLogPrefix, automataConsolePrefix, "Re-inject to LLMMain", RAGAutomataPostProcessing);
+		log.info(consoleLogPrefix, automataConsolePrefix, "Re-inject to LLMMain", RAGAutomataPostProcessing);
 		win.webContents.send("manualUserPromptGUIHijack", {
 			data: ""
 		});
@@ -2797,7 +2797,7 @@ async function AutomataProcessing(){
 		interactionArrayStorage("save", `[🤔 ${assistantName} Internal Automata Thought : ${AutomataReInjection}] : `, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 		runningShell.write(RAGAutomataPostProcessing); //submit to the shell! LLMMain Threads
 		runningShell.write(`\r`);
-		logger.info(consoleLogPrefix, automataConsolePrefix, "Delay 500ms");
+		log.info(consoleLogPrefix, automataConsolePrefix, "Delay 500ms");
 		await new Promise(resolve => setTimeout(resolve, 500)); // add delay for the pty to flush the prompt and going to the next line, so basically we able to prevent the Additional Context leak like on the Alpaca-electron original code
 		blockGUIForwarding = false; // make sure the prompt isn't visible on the GUI
 
@@ -2806,16 +2806,16 @@ async function AutomataProcessing(){
 }
 
 ipcMain.on("AutomataLLMMainResultReciever", (_event, resultFeedloop) => {
-	logger.info(consoleLogPrefix, automataConsolePrefix, "Triggered!");
+	log.info(consoleLogPrefix, automataConsolePrefix, "Triggered!");
 	automataLLMMainresultReciever = resultFeedloop.data;
-	logger.info(consoleLogPrefix, automataConsolePrefix, automataLLMMainresultReciever);
+	log.info(consoleLogPrefix, automataConsolePrefix, automataLLMMainresultReciever);
 	AutomataProcessing();
 });
 
 //---------------------------------------------------------------------------------------
 
 ipcMain.on("storeParams", (_event, { params }) => {
-	logger.info(params);
+	log.info(params);
 	store.set("params", params);
 	restart();
 });
@@ -2827,6 +2827,35 @@ ipcMain.on("getParams", () => {
 
 
 //each settings or new settings need to be defined her too not only on renderer.js
+
+ipcMain.on("qostimeoutswitch", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		qostimeoutswitch: value
+	});
+});
+
+ipcMain.on("backbrainqueue", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		backbrainqueue: value
+	});
+});
+
+ipcMain.on("automateLoopback", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		automateLoopback: value
+	});
+});
+
+ipcMain.on("webAccess", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		webAccess: value
+	});
+});
+
 
 ipcMain.on("webAccess", (_event, value) => {
 	store.set("params", {
