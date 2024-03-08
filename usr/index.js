@@ -509,36 +509,73 @@ let combinedText;
 //let fetchedResults;
 async function externalInternetFetchingScraping(text) {
 	if (store.get("params").webAccess){
+
 	log.info(consoleLogPrefix, "externalInternetFetchingScraping");
 	log.info(consoleLogPrefix, "Search Query", text);
+	const timeoutPromise = new Promise((resolve) => {
+        setTimeout(() => {
+            resolve({ timeout: true });
+        }, QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig);
+    });
+
+	// Enwrap this with Subcategory Timeout with var QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig
+	/*
+	// Create a promise for the call to callInternalThoughtEngine
+		const callPromise = callInternalThoughtEngine(data);
+
+		// Race between the call promise and the timeout promise
+		result = await Promise.race([callPromise, timeoutPromise]);
+
+	*/
+
+
+	// Legacy original itspi3141 program searching Handling
+	/*
 	const searchResults = await DDG.search(text, {
 		safeSearch: DDG.SafeSearchType.MODERATE
 	});
-	log.info(consoleLogPrefix, "External Resources Enabled");
-	if (!searchResults.noResults) {
-		let fetchedResults;
-		var targetResultCount = store.get("params").websearch_amount || 5;
-		if (searchResults.news) {
-			for (let i = 0; i < searchResults.news.length && i < targetResultCount; i++) {
-				fetchedResults = `${searchResults.news[i].description.replaceAll(/<\/?b>/gi, "")} `;
-				fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
-				log.info(consoleLogPrefix, "Fetched Result", fetchedResults);
-				//convertedText = convertedText + fetchedResults;
-				convertedText = fetchedResults;
+	*/
+	// New Handling which uses timeout to not get stuck
+	const callPromise = DDG.search(text, {
+		safeSearch: DDG.SafeSearchType.MODERATE
+	});
+
+	result = await Promise.race([callPromise, timeoutPromise]);
+
+	if (result.timeout) {
+		log.error(consoleLogPrefix, "Internet Fetching Internal system Response Timing out!");
+		combinedText = "No result";
+	}else{
+		if (!searchResults.noResults) {
+			let fetchedResults;
+			var targetResultCount = store.get("params").websearch_amount || 5;
+			if (searchResults.news) {
+				for (let i = 0; i < searchResults.news.length && i < targetResultCount; i++) {
+					fetchedResults = `${searchResults.news[i].description.replaceAll(/<\/?b>/gi, "")} `;
+					fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
+					log.info(consoleLogPrefix, "Fetched Result", fetchedResults);
+					//convertedText = convertedText + fetchedResults;
+					convertedText = fetchedResults;
+				}
+			} else {
+				for (let i = 0; i < searchResults.results.length && i < targetResultCount; i++) {
+					fetchedResults = `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
+					fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
+					log.info(consoleLogPrefix, "Fetched Result" , fetchedResults);
+					//convertedText = convertedText + fetchedResults;
+					convertedText = fetchedResults;
+				}
 			}
+			combinedText = convertedText.replace("[object Promise]", "");
 		} else {
-			for (let i = 0; i < searchResults.results.length && i < targetResultCount; i++) {
-				fetchedResults = `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
-				fetchedResults = fetchedResults.substring(0, store.get("params").maxWebSearchChar);
-				log.info(consoleLogPrefix, "Fetched Result" , fetchedResults);
-				//convertedText = convertedText + fetchedResults;
-				convertedText = fetchedResults;
-			}
+			log.info(consoleLogPrefix, "No result returned!");
+			combinedText = "No result";
 		}
-		combinedText = convertedText.replace("[object Promise]", "");
+	}
+
+		UnifiedMemoryArray.push(text); // Pushing to UnifiedMemoryArray
 		UnifiedMemoryArray.push(combinedText); // Pushing to UnifiedMemoryArray
 		log.info(consoleLogPrefix, "externalInternetFetchingScraping Final", combinedText);
-		
 		return combinedText;
 		// var convertedText = `Summarize the following text: `;
 		// for (let i = 0; i < searchResults.results.length && i < 3; i++) {
@@ -546,9 +583,6 @@ async function externalInternetFetchingScraping(text) {
 		// }
 		// return convertedText;
 	} else {
-		log.info(consoleLogPrefix, "No result returned!");
-		return text;
-	}} else {
 		log.info(consoleLogPrefix, "Internet Data Fetching Disabled!");
 		return text;
 	}	
@@ -1341,6 +1375,8 @@ async function callInternalThoughtEngine(prompt){
 			//promptInput = ` ${historyChatRetrieved}\n${username} : ${prompt}\n. With this interaction What search query for i search in google for the interaction? Search Query:`;
 			//searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
 			log.info(consoleLogPrefix, `Created internet search prompt ${searchPrompt}`);
+			// TODO : Upgrade externalInternetFetchingScraping to recursive function that would scour the internet and download the html
+			// TODO : Add timeout take parameter from store.get("params").qostimeoutllmchildsubcategory
 			resultSearchScraping = await externalInternetFetchingScraping(searchPrompt);
 			if (store.get("params").llmdecisionMode){
 				inputPromptCounterSplit = resultSearchScraping.split(" ");
@@ -1580,12 +1616,14 @@ async function callInternalThoughtEngine(prompt){
 
 }
 
-
+// define it globally
+let QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig = store.get("params").qostimeoutllmchildsubcategory;
+let QoSTimeoutGlobal_beforeAdjustedConfig = store.get("params").qostimeoutllmchildglobal;
 // Wrapper for internalThoughtWithTimeout
 async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 	let result;
 	const globalQoSTimeoutMultiplier = BackBrainQueue.length + 1;
-	const globalQoSTimeoutAdjusted = store.get("params").qostimeoutllmchildglobal * globalQoSTimeoutMultiplier;
+	const globalQoSTimeoutAdjusted = QoSTimeoutGlobal_beforeAdjustedConfig * globalQoSTimeoutMultiplier;
     // Create a promise that resolves after the specified timeout
     const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => {
@@ -2585,37 +2623,33 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				}
 			}
 			// Read into the UMA -<
-			if (UnifiedMemoryArray.length === 0 || !UnifiedMemoryArray) {
-				// if its blank then try to load the array from experienceStgPersistentPath
-				// Load the json if exists
-				if (store.get("params").foreverEtchedMemory) {
-					// log.debug(consoleLogPrefix, "foreverEtchedMemory parameters enabled");
-					try {
-						const data = fs.readFileSync(interactionStgPersistentPath, 'utf8');
-						if (!data) {
-							// File is empty, assign an empty array to UnifiedMemoryArray
-							log.error(consoleLogPrefix, "UnifiedMemoryArray file is empty");
-							UnifiedMemoryArray = [];
-						} else {
-							const jsonData = JSON.parse(data);
-							log.info(consoleLogPrefix, "Interpreting JSON and Converting to Array");
-							UnifiedMemoryArray = jsonData;
-							log.info(consoleLogPrefix, "Loaded UMA: ", UnifiedMemoryArray);
-						}
-					} catch (err) {
-						if (err instanceof SyntaxError && err.message === 'Unexpected end of JSON input') {
-							// JSON parsing error due to unexpected end of JSON input
-							log.info('Error reading JSON UnifiedMemoryArray file: JSON input is incomplete');
-							UnifiedMemoryArray = [];
-						} else {
-							// Other error
-							log.info('Error reading JSON UnifiedMemoryArray file:', err);
-							return;
-						}
+			if (store.get("params").foreverEtchedMemory) {
+				// log.debug(consoleLogPrefix, "foreverEtchedMemory parameters enabled");
+				try {
+					const data = fs.readFileSync(experienceStgPersistentPath, 'utf8');
+					if (!data) {
+						// File is empty, assign an empty array to UnifiedMemoryArray
+						log.error(consoleLogPrefix, "UnifiedMemoryArray file is empty");
+						UnifiedMemoryArray = [];
+					} else {
+						const jsonData = JSON.parse(data);
+						log.info(consoleLogPrefix, "Interpreting JSON and Converting to Array");
+						UnifiedMemoryArray = jsonData;
+						log.info(consoleLogPrefix, "Loaded UMA: ", UnifiedMemoryArray);
+					}
+				} catch (err) {
+					if (err instanceof SyntaxError && err.message === 'Unexpected end of JSON input') {
+						// JSON parsing error due to unexpected end of JSON input
+						log.info('Error reading JSON UnifiedMemoryArray file: JSON input is incomplete, Enforcing it anyway!');
+						const jsonData = JSON.parse(data);
+						//UnifiedMemoryArray = [];
+						UnifiedMemoryArray = jsonData;
+					} else {
+						// Other error
+						log.info('Error reading JSON UnifiedMemoryArray file:', err);
+						return;
 					}
 				}
-		
-				UnifiedMemoryArray[0] = "=========UnifiedMemoryArrayHeader========" // If empty or undefined, directly assign Header on [0]
 			}
 			log.info(consoleLogPrefix, "Done!")
 		} else {
