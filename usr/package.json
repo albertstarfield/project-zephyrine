@@ -38,6 +38,7 @@
 		"@npmcli/fs": "^3.1.0",
 		"@types/jest": "^29.5.4",
 		"@types/mocha": "^10.0.1",
+		"compromise": "^14.12.0",
 		"dompurify": "^3.0.6",
 		"duck-duck-scrape": "^2.2.3",
 		"electron-log": "^5.1.1",
@@ -56,9 +57,12 @@
 		"os-utils": "^0.0.14",
 		"path": "^0.12.7",
 		"pdf-parse": "^1.1.1",
+		"spacy": "^0.0.4",
 		"timeout-promise": "^1.0.2",
 		"typescript": "^5.2.2",
-		"winston": "^3.12.0"
+		"winston": "^3.12.0",
+		"compromise-plugin": "^0.0.9",
+		"compromiser": "^1.0.4"
 	},
 	"devDependencies": {
 		"@electron/rebuild": "^3.2.10",
