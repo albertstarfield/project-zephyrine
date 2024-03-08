@@ -62,6 +62,8 @@ const { memoryUsage } = require('node:process');
 const log = require('electron-log');
 let logPathFile;
 const { createLogger, transports, format } = require('winston');
+const nlp = require('compromise');
+
 
 
 var win;
@@ -845,7 +847,7 @@ let defectiveLLMChildSpecificModel=false; //Some LLM Model cause a havoc on the 
 let internalThoughtEngineProgress=0; // 0-100% just like progress
 let internalThoughtEngineTextProgress="";
 
-function interactionContextFetching(historyDistance){
+function interactionContextFetching(requestedPrompt, historyDistance){
 
 	// Make this Access UMA rather than directly to Interactionstg array
 	// Actually no, Mix it! UMA Retrieval + Interaction Array Storage
@@ -860,6 +862,7 @@ function interactionContextFetching(historyDistance){
 	}
 	log.info(consoleLogPrefix, `Retrieving Chat History with history Depth ${historyDistance}`);
 	let str = "";
+	// log.debug(consoleLogPrefix, "Retrieving bigger scope from UMA using MLCMCF ", historyDistance)
 	for (let i = historyDistance; i >= 1; i--){
 		if (i % 2 === 0) {
 			str += `${username}: `; // even number on this version of zephyrine means the User that makes the prompt or user input prompt 
@@ -867,10 +870,17 @@ function interactionContextFetching(historyDistance){
 			str += `${assistantName}: `; // odd number on this version of zephyrine means the AI or the assistant is the one that answers
 		  }
 		  str += `${interactionArrayStorage("retrieve", "", false, false, interactionStgOrder-i)} \n`
+		  
 		  //log.info(i + ": " + str);
 		  //deduplicate string to reduce the size need to be submitted which optimizes the input size and bandwidth
 		}
 	//log.info(consoleLogPrefix, "__interactionContextFetchingFlexResult \n", str);
+	if (requestedPrompt == "SKIP_MLCMCF"){
+		str = str;
+	}else{
+		const additionalContextLargeScope = interactionArrayStorage("retrieve_MLCMCF_Mode", requestedPrompt, false, false, historyDistance); // rather than -i or in for loop it can be directly called historyDistance as the depth request
+		str += `Addendum: ${additionalContextLargeScope.join('')}`;
+	}
 	return str;
 }
 
@@ -1225,7 +1235,7 @@ async function callInternalThoughtEngine(prompt){
 	}
 	log.info(consoleLogPrefix, "🍀", "Retrieving History!");
 	internalThoughtEngineTextProgress="Retrieving History!";
-	historyChatRetrieved=interactionContextFetching(historyDistanceReq);
+	historyChatRetrieved=interactionContextFetching(prompt, historyDistanceReq);
 	concludeInformation_chatHistory=historyChatRetrieved;
 	
 	// Counting the number of words in the Chat prompt and history
@@ -1758,6 +1768,7 @@ class ExternalLocalFileScraperBackgroundAgent {
             for (const file of files) {
 				if ((this.documentsLearned % 1000) == 0) {
 					log.info(consoleLogPrefix, `[📖 Documents Background RAG] I have Learned/re-learned ${this.documentsLearned} Literature in this session`);
+					interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush UMA MLCMCF and all memory to save progress
 				}
                 const filePath = path.join(directory, file);
                 const stats = fs.statSync(filePath);
@@ -1880,12 +1891,14 @@ async function externalLocalFileScraping(text){
 
 		externalLocalFileScraperBackgroundAgent(text); // trigger the activation of background local file scraping
 		// TODO: Replace this with a UnifiedMemoryAccess Cosine Similiarity access rather than calling local file scraping!
+		// Content of the File will be indexed and stored in UMA, so to get it you need to access the UMA retrieve_MLCMCF_mode!
 		log.info(consoleLogPrefix, "Accessing", UnifiedMemoryArray);
 
 		//var documentReadText = externalLocalFileScraperBackgroundAgent(text);
 		//text = documentReadText.replace("[object Promise]", "");
-		log.info(consoleLogPrefix, "stub");
-		return text;
+		log.info(consoleLogPrefix, "Fetching Documents data from MLCMCF UMA architecture!");
+		const resulttext = interactionArrayStorage("retrieve_MLCMCF_Mode", text, false, false, 3).join(''); // rather than -i or in for loop it can be directly called historyDistance as the depth request
+		return resulttext;
 	} else {
 		log.info(consoleLogPrefix, "externalLocalFileScraping disabled");
         return "";
@@ -1932,11 +1945,11 @@ class BadSeedDetector {
         const previousWords = this.extractWords(previousInteraction);
 
         const repeatingWords = this.findRepeatingWords(currentWords, previousWords);
-		log.info(consoleLogPrefix, "Detecting Repeating Word!");
+		//// log.debug(consoleLogPrefix, "Detecting Repeating Word!");
         if (repeatingWords.length > 0) {
             this.blacklistSeed(randSeed);
         }
-		log.info(consoleLogPrefix, "Detecting Trash Word!");
+		//// log.debug(consoleLogPrefix, "Detecting Trash Word!");
         // New detection for specified words and phrases
         const trashWords = ["AdditionalContext", "DO NOT mirror the Additional Context", "The current time and date is now", "There are additional context to answer", "Current time and date", "verbos"];
         const detectedTrash = trashWords.filter(word => currentInteraction.includes(word));
@@ -2270,10 +2283,8 @@ let interactionStg = []; // Interaction from the GUI Storage (Classic Depth Fetc
 
 // UnifiedMemoryArray will be stored on experience folder and will be deduplicated every runtime
 let UnifiedMemoryArray = []; // MLCMCF Multi Level Condensed Memory Contextual Fetching Architecture Unified memory Array
-let fourSegmentMemorySummerization = []; // All index total will be divided evenly and summerized each of the segment index content
-let focusMemoryIndexArray = []; // Three array only which Summerized couple of Array backwards until 1024 tokens filled[0], 1024 central [1] 1024 forward until tokens filled [2] from the UnifiedMemoryArray
-let RAGMemoryFetched; // Handle it in one string which fill it up until 2048 from how many LLMChild requested from the depth (Internal interactionArrayStorage LLMChild request)
-let RAGMemoryCompressedCosineMLRelevancyFetched; // Compressed array with threshold 0.5 by re-selecting only the most relevant strings
+// UMA minimum and the runtime can handle 7 Billion Arrays and should scale up to 1 Trillion Arrays. NO EXCEPTION!
+
 let UMAGBSize=0; //Global variable on how many gigs does the UMA takes on the runtime
 
 let interactionStgJson;
@@ -2284,6 +2295,8 @@ let retrievedinteractionStg;
 let interactionStgOrderRequest;
 let amiwritingonAIMessageStreamMode=false;
 function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
+	
+
 	//mode save
 	//mode retrieve
 	//mode restore
@@ -2319,14 +2332,6 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	// We're just going to leave as it be for now not cut it 256 which may interfere with dedupe operation
 	*/
 
-	//remove all the Storage Header Array
-	//log.info(consoleLogPrefix, "Removing storage Header Array");
-	//InteractionStorageHeader
-	UnifiedMemoryArray = UnifiedMemoryArray.filter(array => {
-        // Check if array exists and if it includes interactionStg[0]
-        return array && !array.includes(interactionStg[0]);
-    });
-
 	// Calculate GB UMA Usage
 	//UMAGBSize = calculateMemoryUsageInGB(UnifiedMemoryArray);
 	UMAGBSize = `${process.memoryUsage().heapUsed / (1024 * 1024 * 1024)}`
@@ -2338,8 +2343,6 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	if (mode === "save"){
         //log.info(consoleLogPrefix,"Saving...");
 		
-
-
 		if(AITurn && !UserTurn){
 			if(!amiwritingonAIMessageStreamMode){
 				interactionStgOrder = interactionStgOrder + 1; // add the order number counter when we detect we did write it on AI mode and need confirmation, when its done we should add the order number
@@ -2368,7 +2371,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				log.info(consoleLogPrefix, "stg pty stream user:", interactionStg[interactionStgOrder]);
 			}
 			
-			log.info(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
+			log.debug(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
 			UnifiedMemoryArray.push(interactionStg);
 			
 		}
@@ -2400,13 +2403,138 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		//log.info("Leave me trapped in the cage");
 		
     }else if (mode === "retrieve_MLCMCF_Mode"){
-		log.info(consoleLogPrefix,"Retrieving From \"Unified Memory Array\" Target: ", prompt);
+		log.info(consoleLogPrefix,"Retrieving From \"Unified Memory Array\" Target: ", prompt, arraySelection);
 
 		// Just directly connect to all of it
 		// do natural language processing cosine similiarity
 		// Trim the shit out of it
 		// done profit!
+		// Returns with Array format that uses Natural Language to find which is the highest possibility picked as the middle array then delta +- with arrayselection as the depth seeker
+		//const delta = arraySelection; // convert to delta variable locally
+		//const string = prompt;
+		// Search for string in UnifiedMemoryArray
+		// 1. Receive a "string" "array Delta number value"
+		
+		let maxScore;
+		let maxIndex;
+		let selectedChunkIndex;
+		const queryString = prompt;
+		const delta = arraySelection;
+	    // log.debug("Igniting MLCMCF", UnifiedMemoryArray);
+		// 2. Search "string" in the array of variable UnifiedMemoryArray to find the string using NLP and select the index with highest value of similarity.
 
+		maxScore = 0;
+		maxIndex = 0;
+
+		for (let idx = 0; idx < UnifiedMemoryArray.length; idx++) {
+			const text = UnifiedMemoryArray[idx];
+			// Skip non-textual or non-meaningful strings
+			const nonTextualRegex = /^=+\s*UnifiedMemoryArrayHeader\s*=+$/;
+			if (nonTextualRegex.test(text)) {
+				continue;
+			}
+		
+			// log.debug("Scoring Index MLCMCF Normalizing array?");
+			const distance = natural.JaroWinklerDistance(queryString, text); //Its my Cosine Distance 
+			// log.debug("Scoring Index MLCMCF Jaro-winkler Standard non Tokenizer Mode!", distance);
+			// Update maxScore and maxIndex if the distance is higher
+			if (distance > maxScore) {
+				maxScore = distance;
+				maxIndex = idx;
+			}
+		}
+		
+		// log.debug("Max Score:", maxScore);
+		// log.debug("Max Index:", maxIndex);
+		selectedChunkIndex = maxIndex;
+		// 3. Copy the selected index with from index to index-(delta number value) (Backwards) also index+(delta number value) forward into a variable array.
+		// log.debug("Defining L1 UMA array FullLength");
+		let L1_focusedUMAArrayFullLength = [];
+		// Push to L1_focusedUMAArrayFullLength for every string got fetch into the .length
+
+		//for loop backward
+		// log.debug("Pushing L1 Back");
+		for (let idx = selectedChunkIndex; idx >= 0 && Math.abs(selectedChunkIndex-idx) <= delta; idx--) {
+			L1_focusedUMAArrayFullLength.push(UnifiedMemoryArray[idx]);
+		}
+
+		// log.debug("Pushing L1 Mid");
+		// Middle part of the Selection
+		L1_focusedUMAArrayFullLength.push(UnifiedMemoryArray[selectedChunkIndex]);
+
+		// log.debug("Pushing L1 Top");
+		//for loop forward
+		for (let idx = selectedChunkIndex; idx < UnifiedMemoryArray.length && Math.abs(selectedChunkIndex-idx) <= delta; idx++) {
+			L1_focusedUMAArrayFullLength.push(UnifiedMemoryArray[idx]);
+		}
+
+		// log.debug(consoleLogPrefix, "MLCMCF L1 Full Length", L1_focusedUMAArrayFullLength)
+		
+	  
+		// 4. That variable array then divide and skip part where the array is under 256 characters but if the array is more than 256 characters then split it. Then all of this processing where there is the splitted and the unsplitted array store it into variable L1_focusedUMAArrayChunk (already defined)
+		// Chunk will be divided using Tokens
+		
+		/*
+			example on how to do tokenizing
+			const textTokens = nlp(text).normalize().out('array');
+			const queryTokens = nlp(queryString).normalize().out('array');
+			NOTE : THE INPUT NEED TO BE IN STRING NOT IN ARRAY
+		*/
+
+
+		let L1_focusedUMAArrayChunk = [];
+		// log.debug('converting L1_focusedUMAArrayFullLength to L1_focusedUMAArrayFullLength', L1_focusedUMAArrayChunk, L1_focusedUMAArrayFullLength);
+		L1_focusedUMAArrayChunk = nlp(L1_focusedUMAArrayFullLength.join(' ')).normalize().out('array'); //Tokenize it rather than cut it without context
+
+		// log.debug('L1_focusedUMAArrayChunk:', L1_focusedUMAArrayChunk);
+	  
+		// 5. That variable array then calculate and find with the "string" that been given earlier with the compromise module to find the string using NLP then select the array index that have the highest similarity score. After that fetch the selected index with from index to index-(delta number value) (Backwards) also index+(delta number value) forward into a variable array named L2_focusedUMAArrayChunkDelta (already defined).
+		let L2_focusedUMAArrayChunkDelta = [];
+		// log.debug('L2 Reset Memory Storage, Entering Checking For Loop');
+		maxScore = 0;
+		maxIndex = 0;
+		for (let idx = 0; idx < L1_focusedUMAArrayChunk.length; idx++) {
+			const text = L1_focusedUMAArrayChunk[idx];
+			// Skip non-textual or non-meaningful strings
+			const nonTextualRegex = /^=+\s*UnifiedMemoryArrayHeader\s*=+$/;
+			if (nonTextualRegex.test(text)) {
+				continue;
+			}
+		
+			// log.debug("Scoring Index MLCMCF Normalizing array?");
+			const distance = natural.JaroWinklerDistance(queryString, text); //Its my Cosine Distance 
+			// log.debug("Scoring Index MLCMCF Jaro-winkler Standard non Tokenizer Mode!", distance);
+			// Update maxScore and maxIndex if the distance is higher
+			if (distance > maxScore) {
+				maxScore = distance;
+				maxIndex = idx;
+			}
+		}
+		
+		// log.debug("Max Score:", maxScore);
+		// log.debug("Max Index:", maxIndex);
+		selectedChunkIndex = maxIndex
+
+
+		//for loop backward
+
+		for (let idx = selectedChunkIndex; idx >= 0 && Math.abs(selectedChunkIndex-idx) <= delta; idx--) {
+			L2_focusedUMAArrayChunkDelta.push(L1_focusedUMAArrayChunk[idx]);
+		}
+
+		// Middle part of the Selection
+		L2_focusedUMAArrayChunkDelta.push(L1_focusedUMAArrayChunk[selectedChunkIndex]);
+
+		//for loop forward
+		for (let idx = selectedChunkIndex; idx < L1_focusedUMAArrayChunk.length && Math.abs(selectedChunkIndex-idx) <= delta; idx++) {
+			L2_focusedUMAArrayChunkDelta.push(L1_focusedUMAArrayChunk[idx]);
+		}
+
+		
+		
+		// log.debug(consoleLogPrefix, "MLCMCF L2 Focused Retrieved Array", L2_focusedUMAArrayChunkDelta);
+
+		return L2_focusedUMAArrayChunkDelta;
 
 
     } else if (mode === "retrieve"){
@@ -2461,12 +2589,12 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				// if its blank then try to load the array from experienceStgPersistentPath
 				// Load the json if exists
 				if (store.get("params").foreverEtchedMemory) {
-					log.info(consoleLogPrefix, "foreverEtchedMemory parameters enabled");
+					// log.debug(consoleLogPrefix, "foreverEtchedMemory parameters enabled");
 					try {
 						const data = fs.readFileSync(interactionStgPersistentPath, 'utf8');
 						if (!data) {
 							// File is empty, assign an empty array to UnifiedMemoryArray
-							log.info(consoleLogPrefix, "UnifiedMemoryArray file is empty");
+							log.error(consoleLogPrefix, "UnifiedMemoryArray file is empty");
 							UnifiedMemoryArray = [];
 						} else {
 							const jsonData = JSON.parse(data);
@@ -2785,9 +2913,9 @@ async function AutomataProcessing(){
 		await new Promise(resolve => setTimeout(resolve, 500));
 		*/
 		log.info(consoleLogPrefix, automataConsolePrefix, "Hmm my turn");
-		// Fetch memory interactionContextFetching(historyDistanceReq); recieved in array// how about for now we going to implement it by requesting 2
+		// Fetch memory interactionContextFetching(prompt, historyDistanceReq); recieved in array// how about for now we going to implement it by requesting 2
 		log.info(consoleLogPrefix, automataConsolePrefix, "Fetchmem!");
-		const historyChatRetrieved = interactionContextFetching(2);
+		const historyChatRetrieved = interactionContextFetching("SKIP_MLCMCF", 2);
 		log.info(consoleLogPrefix, automataConsolePrefix, "Thinking what is the prompt");
 		//The preceding internal reflections consist of ${historyChatRetrieved[2]}, ${historyChatRetrieved[1]}, and the response from ${assistantName} is ${automataLLMMainresultReciever}. What would be the optimal next conversation topic, with the flexibility to shift topics to prevent stagnation, while rigorously testing the idea to its fullest extent? Additionally, ensure that responses are not generic, akin to those found on forums like ANSWER.MICROSOFT.COM, but rather focus on specialized case problem-solving.
 		const promptAutomataInput = `
@@ -2819,9 +2947,9 @@ async function AutomataProcessing(){
 }
 
 ipcMain.on("AutomataLLMMainResultReciever", (_event, resultFeedloop) => {
-	log.info(consoleLogPrefix, automataConsolePrefix, "Triggered!");
+	//log.debug(consoleLogPrefix, automataConsolePrefix, "Triggered!");
 	automataLLMMainresultReciever = resultFeedloop.data;
-	log.info(consoleLogPrefix, automataConsolePrefix, automataLLMMainresultReciever);
+	//log.debug(consoleLogPrefix, automataConsolePrefix, automataLLMMainresultReciever);
 	AutomataProcessing();
 });
 
