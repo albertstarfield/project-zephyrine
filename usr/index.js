@@ -64,6 +64,7 @@ let logPathFile;
 const { createLogger, transports, format } = require('winston');
 const nlp = require('compromise');
 
+let resumeFeatureReadyRelease = false; // Download resume feature after timeout is ready yet or no? (true or false)?
 
 
 var win;
@@ -541,7 +542,7 @@ async function externalInternetFetchingScraping(text) {
 		safeSearch: DDG.SafeSearchType.MODERATE
 	});
 
-	log.debug(consoleLogPrefix, "🌐 Calling DDG Search");
+	log.debug(consoleLogPrefix, "🌐 Calling DDG Search with timeout", QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig);
 	log.debug(consoleLogPrefix, "🌐 DDG Classic itspi3141 method is going to be Deprecated Sooner!");
 	log.debug(consoleLogPrefix, timeoutPromise, callPromise)
 	resultInternetSearch = await Promise.race([callPromise, timeoutPromise]);
@@ -800,13 +801,13 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	} else {
 		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
 	}
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
+	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
 	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 4096 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
+	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
 	try {
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Inference ${command}`);
+	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Inference ${command}`);
 	outputLLMChild = await runShellCommand(command);
 	if(childLLMDebugResultMode){
 		//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
@@ -814,7 +815,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
 	//log.info(consoleLogPrefix, 'LLMChild Raw output:', outputLLMChild);
 	} catch (error) {
-	log.info('Error occoured spawning LLMChild!', flag, error.message);
+	log.error('Error occoured spawning LLMChild!', flag, error.message);
 	}	
 	// ---------------------------------------
 	/*
@@ -989,10 +990,18 @@ function downloadFile(link, targetFile) {
 		//log.info(`${consoleLogPrefix} File ${fileTempName} already exists. Possible network corruption and unreliable network detected, attempting to Resume!`);
         const stats = fs.statSync(fileTempName);
         startByte = stats.size; // Set startByte to the size of the existing file
-		log.info(`${consoleLogPrefix} ⏩ Progress detected! attempting to resume ${targetFile} from ${startByte} Bytes size!`);
+		if (!resumeFeatureReadyRelease){
+			log.error(`${consoleLogPrefix} ⏩ Progress detected! Not going to attempt resume. Complete reset progress`);
+		} else {
+			log.info(`${consoleLogPrefix} ⏩ Progress detected! attempting to resume ${targetFile} from ${startByte} Bytes size!`);
+		}
 		inProgress = true;
-		if (startByte < 100000){
-			log.info(`${consoleLogPrefix} Invalid Progress, Overwriting!`);
+		if (startByte < 100000 || !resumeFeatureReadyRelease ){
+			if(!resumeFeatureReadyRelease){
+				log.error(`Download resume feature is disabled due to issue on corruption`)
+			}else{
+				log.error(`${consoleLogPrefix} Invalid Progress, Overwriting!`);
+			}
 			fs.unlinkSync(fileTempName);
 			inProgress = false;
 		}
@@ -1002,6 +1011,7 @@ function downloadFile(link, targetFile) {
 
 	let file
 	if (inProgress){
+		log.info(`Continuing ${targetFile}`)
 		file = fs.createWriteStream(fileTempName, { flags: 'a' }); // 'a' flag to append to existing file
 	}else{
 		file = fs.createWriteStream(fileTempName); // 'w' flag to completely overwrite the progress file
@@ -1063,7 +1073,7 @@ function downloadFile(link, targetFile) {
         log.info(`${consoleLogPrefix} 💾 Starting Download ${targetFile}!`);
 
         response.on('data', chunk => {
-			if (!downloadIDTimedOut[downloadID] && internalThoughtEngineProgress == 0){ //Only download when LLMChild idle to have a better response time
+			if (!downloadIDTimedOut[downloadID]){ //Only download when LLMChild idle to have a better response time
             file.write(chunk);
             downloadedSize += chunk.length;
             const progress = ((downloadedSize / totalSize) * 100).toFixed(2);
@@ -1246,7 +1256,7 @@ async function callInternalThoughtEngine(prompt){
 
 	log.info(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked!");
 	if (BackbrainMode || BackbrainModeInternal){
-		log.info(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked with Backbrain MODE!, EXPERIMENTAL ASYNC LLM PROCESSING INITIATED");
+		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked with Backbrain MODE!, EXPERIMENTAL ASYNC LLM PROCESSING INITIATED");
 		BackbrainModeInternal=true;
 		BackbrainMode=false;
 	}else{
@@ -1370,9 +1380,9 @@ async function callInternalThoughtEngine(prompt){
 			if (store.get("params").llmdecisionMode){
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. Do i have the knowledge to answer this then if i dont have the knowledge should i search it on the internet? Answer:`;
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
-				internalThoughtEngineTextProgress="Creating Search Prompt for Internet Search!";
-				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
-				log.info(consoleLogPrefix, `search prompt has been created`);
+				internalThoughtEngineTextProgress="🍀🌐 Creating Search Prompt for Internet Search!";
+				log.debug(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				log.debug(consoleLogPrefix, `search prompt has been created`);
 			}else{
 				searchPrompt = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
 				log.info(consoleLogPrefix, `Internet Search prompt creating is using legacy mode for some strange reason`);
@@ -1383,6 +1393,7 @@ async function callInternalThoughtEngine(prompt){
 			log.info(consoleLogPrefix, `Created internet search prompt ${searchPrompt}`);
 			// TODO : Upgrade externalInternetFetchingScraping to recursive function that would scour the internet and download the html
 			// TODO : Add timeout take parameter from store.get("params").qostimeoutllmchildsubcategory
+			log.debug(consoleLogPrefix, "🍀🌐 externalInternetFetchingScraping Triggering");
 			resultSearchScraping = await externalInternetFetchingScraping(searchPrompt);
 			if (store.get("params").llmdecisionMode){
 				inputPromptCounterSplit = resultSearchScraping.split(" ");
@@ -1556,10 +1567,10 @@ async function callInternalThoughtEngine(prompt){
 			}
 
 		//concludeInformation_chatHistory
-		log.info(concludeInformation_CoTMultiSteps);
-		log.info(concludeInformation_Internet);
-		log.info(concludeInformation_LocalFiles);
-		log.info(concludeInformation_chatHistory);
+		//log.info(concludeInformation_CoTMultiSteps);
+		//log.info(concludeInformation_Internet);
+		//log.info(concludeInformation_LocalFiles);
+		//log.info(concludeInformation_chatHistory);
 		internalThoughtEngineProgress=89; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		if((concludeInformation_Internet === "Nothing" || concludeInformation_Internet === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_Internet) ) && (concludeInformation_LocalFiles === "Nothing" || concludeInformation_LocalFiles === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_LocalFiles)) && (concludeInformation_CoTMultiSteps === "Nothing" || concludeInformation_CoTMultiSteps === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_CoTMultiSteps)) && (concludeInformation_chatHistory === "Nothing" || concludeInformation_chatHistory === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_chatHistory))){
@@ -2637,8 +2648,12 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			// Read into the UMA -<
 			if (store.get("params").foreverEtchedMemory) {
 				// log.debug(consoleLogPrefix, "foreverEtchedMemory parameters enabled");
-				try {
-					const data = fs.readFileSync(experienceStgPersistentPath, 'utf8');
+				let data;
+				if (fileExists(experienceStgPersistentPath)){
+					data = fs.readFileSync(experienceStgPersistentPath, 'utf8');
+				}else{
+					data = false;
+				}
 					if (!data) {
 						// File is empty, assign an empty array to UnifiedMemoryArray
 						log.error(consoleLogPrefix, "UnifiedMemoryArray file is empty");
@@ -2650,19 +2665,6 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 						log.info(consoleLogPrefix, "UMA state has been loaded!")
 						//log.debug(consoleLogPrefix, "Loaded UMA: ", UnifiedMemoryArray);
 					}
-				} catch (err) {
-					if (err instanceof SyntaxError && err.message === 'Unexpected end of JSON input') {
-						// JSON parsing error due to unexpected end of JSON input
-						log.info('Error reading JSON UnifiedMemoryArray file: JSON input is incomplete, Enforcing it anyway!');
-						const jsonData = JSON.parse(data);
-						//UnifiedMemoryArray = [];
-						UnifiedMemoryArray = jsonData;
-					} else {
-						// Other error
-						log.info('Error reading JSON UnifiedMemoryArray file:', err);
-						return;
-					}
-				}
 			}
 			log.info(consoleLogPrefix, "Done!")
 		} else {
