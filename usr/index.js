@@ -508,10 +508,11 @@ let convertedText;
 let combinedText;
 //let fetchedResults;
 async function externalInternetFetchingScraping(text) {
+	let resultInternetSearch;
 	if (store.get("params").webAccess){
 
-	log.info(consoleLogPrefix, "externalInternetFetchingScraping");
-	log.info(consoleLogPrefix, "Search Query", text);
+	log.debug(consoleLogPrefix, "🌐 externalInternetFetchingScraping");
+	log.info(consoleLogPrefix, "🌐 Search Query", text);
 	const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => {
             resolve({ timeout: true });
@@ -540,12 +541,17 @@ async function externalInternetFetchingScraping(text) {
 		safeSearch: DDG.SafeSearchType.MODERATE
 	});
 
-	result = await Promise.race([callPromise, timeoutPromise]);
-
-	if (result.timeout) {
-		log.error(consoleLogPrefix, "Internet Fetching Internal system Response Timing out!");
+	log.debug(consoleLogPrefix, "🌐 Calling DDG Search");
+	log.debug(consoleLogPrefix, "🌐 DDG Classic itspi3141 method is going to be Deprecated Sooner!");
+	log.debug(consoleLogPrefix, timeoutPromise, callPromise)
+	resultInternetSearch = await Promise.race([callPromise, timeoutPromise]);
+	log.debug(consoleLogPrefix, "🌐 Called! and done!");
+	searchResults = resultInternetSearch; // Layer of compatibility with itspi31411 
+	if (resultInternetSearch.timeout) {
+		log.error(consoleLogPrefix, "🌐 Internet Fetching Internal system Response Timing out!");
 		combinedText = "No result";
 	}else{
+		log.info(consoleLogPrefix, "🌐 Executed right on time!")
 		if (!searchResults.noResults) {
 			let fetchedResults;
 			var targetResultCount = store.get("params").websearch_amount || 5;
@@ -568,7 +574,7 @@ async function externalInternetFetchingScraping(text) {
 			}
 			combinedText = convertedText.replace("[object Promise]", "");
 		} else {
-			log.info(consoleLogPrefix, "No result returned!");
+			log.error(consoleLogPrefix, "🌐 No result returned!");
 			combinedText = "No result";
 		}
 	}
@@ -767,7 +773,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split");
 	if(isBlankOrWhitespaceTrue_CheckVariable(specificSpecializedModelPathRequest_LLMChild) || LLMChildDecisionModelMode || defectiveLLMChildSpecificModel){
 		if(LLMChildDecisionModelMode){
-			log.info(consoleLogPrefix, "LLMChild Model Decision Mode! Ignoring Specific Model Request!");
+			log.debug(consoleLogPrefix, "LLMChild Model Decision Mode! Ignoring Specific Model Request!");
 			//Using custom model for decision isn't a wise decision and may cause infinite loop and Adelaide have the tendencies to choose Indonesian LLM and no got output
 			LLMChildDecisionModelMode = false; //reset global flag
 		}
@@ -1924,13 +1930,11 @@ function runShellCommand(command) {
 async function externalLocalFileScraping(text){
 	log.info(consoleLogPrefix, "called Local File Scraping");
 	if (store.get("params").localAccess){
-		log.info(consoleLogPrefix, "externalLocalDataFetchingScraping");
-		//log.info(consoleLogPrefix, "xd");
-
+		log.debug(consoleLogPrefix, "externalLocalDataFetchingScraping");
 		externalLocalFileScraperBackgroundAgent(text); // trigger the activation of background local file scraping
 		// TODO: Replace this with a UnifiedMemoryAccess Cosine Similiarity access rather than calling local file scraping!
 		// Content of the File will be indexed and stored in UMA, so to get it you need to access the UMA retrieve_MLCMCF_mode!
-		log.info(consoleLogPrefix, "Accessing", UnifiedMemoryArray);
+		log.info(consoleLogPrefix, "Accessing: ", "UnifiedMemoryArray");
 
 		//var documentReadText = externalLocalFileScraperBackgroundAgent(text);
 		//text = documentReadText.replace("[object Promise]", "");
@@ -1989,7 +1993,7 @@ class BadSeedDetector {
         }
 		//// log.debug(consoleLogPrefix, "Detecting Trash Word!");
         // New detection for specified words and phrases
-        const trashWords = ["AdditionalContext", "DO NOT mirror the Additional Context", "The current time and date is now", "There are additional context to answer", "Current time and date", "verbos"];
+        const trashWords = ["AdditionalContext", "DO NOT mirror the Additional Context", "DO NOT", "There are additional context to answer", "The current time and date is now", "There are additional context to answer", "Current time and date", "verbos"];
         const detectedTrash = trashWords.filter(word => currentInteraction.includes(word));
         if (detectedTrash.length > 0) {
             log.error(consoleLogPrefix, "Trash Seed detected! Detected Keyword:", detectedTrash);
@@ -2036,14 +2040,15 @@ class BadSeedDetector {
     }
 
     blacklistSeed(badseed) {
-        if (seedBlacklist.length === 0) {
+		log.error(consoleLogPrefix, "Adding Seed to the Blacklist!", badseed);
+        if (seedBlacklist.length === 0 && fileExists(seedBlacklistListFile)) {
             // Read json
             const data = fs.readFileSync(seedBlacklistListFile, 'utf8');
             const jsonData = JSON.parse(data);
             seedBlacklist.push(jsonData);
         } else {
             const jsonData = JSON.stringify(seedBlacklist);
-            fs.writeFile(seedBlacklistListFile, seedBlacklist, (err) => {
+            fs.writeFile(seedBlacklistListFile, jsonData, (err) => {
                 if (err) {
                     log.error(consoleLogPrefix, 'Error writing file:', err);
                 }
@@ -2091,6 +2096,13 @@ function generateRandSeed(){
         randSeedResult = generateRandomNumber(minRandSeedRange, maxRandSeedRange);
 
         // Check if the generated seed is blacklisted
+		if (seedBlacklist.length === 0 && fileExists(seedBlacklistListFile)) {
+            // Read json
+			log.error(consoleLogPrefix, "seedBlacklist isn't loaded yet, Loading!");
+            const data = fs.readFileSync(seedBlacklistListFile, 'utf8');
+            const jsonData = JSON.parse(data);
+            seedBlacklist.push(jsonData);
+        } 
         isBlacklisted = seedBlacklist.includes(randSeed);
     }
 
@@ -2601,7 +2613,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				return;
 			}
 		
-			log.info(consoleLogPrefix, "Loaded: ", interactionStg, interactionStgOrder);
+			//log.debug(consoleLogPrefix, "Loaded: ", interactionStg, interactionStgOrder);
 			log.info(consoleLogPrefix, "Triggering Restoration Mode for the UI and main LLM Thread!");
 			// create a javascript for loop logic to send data to the main UI which uses odd order for the User input whilst even order for the AI input (this may fail categorized when the user tried change ) where the array 0 skipped and 1 and beyond are processed
 			for (let i = 1; i < interactionStg.length; i++) {
@@ -2635,7 +2647,8 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 						const jsonData = JSON.parse(data);
 						log.info(consoleLogPrefix, "Interpreting JSON and Converting to Array");
 						UnifiedMemoryArray = jsonData;
-						log.info(consoleLogPrefix, "Loaded UMA: ", UnifiedMemoryArray);
+						log.info(consoleLogPrefix, "UMA state has been loaded!")
+						//log.debug(consoleLogPrefix, "Loaded UMA: ", UnifiedMemoryArray);
 					}
 				} catch (err) {
 					if (err instanceof SyntaxError && err.message === 'Unexpected end of JSON input') {
