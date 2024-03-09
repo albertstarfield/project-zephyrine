@@ -65,3 +65,17 @@ There's no such thing as overkill. Either you win or lose, and unfortunately i'm
 
 Why am I always at the bottom even I'm trying to improve my skill? Maybe that's my fate. People said that I'm always lack skill to even enter any enterprise. This is probably a trash project anyway. I think I'm going to give up now. There's no point on continuing if success isn't my destiny.
  
+---
+### Entry I : March 9, 2024
+---
+
+New Entry from Albert.
+
+You might seeing that I'm Overdriving the specification of this software, No. The concept is overdriving doesn't exist. What exists is to adapt the software or any hardware to what I need to catch up, and not what to its limit or cap. Yes if its mean its need to work 1000x more than its specs, then so be it, you will do it and NEED DO IT! Never rest until your work is done (for machine), that word was inspired by me from seeing a quotes on from a work office. So NO exception on Error or Crash or Overloaded! Either you win or lose (crash overloaded, bad quality, etc) that's the Natural Selection and fate on play. I'm developing this software and hardware because I'm not lucky to find community that would understand what is the concept and keep loosing on Natural Selection (for now). so there's that and hoping this will helps me (Highly unlikely, but still small chance can be exploited). 
+
+---
+### Entry II : March 9, 2024
+---
+
+Hi there, this is Albert. 
+I've been on a lecturer class and he said that AI can't innovate, and always using old previous dataset. He might be true, but he forgot that new innovation is caused by chain of thoughts and the dynamic data input surrounding them (either expected or unexpected). So... 
