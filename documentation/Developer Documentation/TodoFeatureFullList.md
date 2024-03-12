@@ -17,24 +17,25 @@
 - [x] Automata Mode (autoGPT agent like functionality).
 - [x] Multi-LLMChild Background Queue Prompt to Experience when can't catch up with QoS time (Improving experience 100B Parameter Adelaide Paradigm Experience) (Backbrain).
 - [x] Implementing ms QoS for LLMChild to prevent unecessary Lock-up Implementing a Proactive Lockup Timeout Verification Mechanism in the Quest for External Context Acquisition.
-- [x] Developing Workaround for the Adelaide Paradigm Achilles Heel v8 4GB memory enforced limit by electron. (v8 pointer compression memory heap limitation) (--max-old-space-size=1342177280 Bumping up the size to 1TB) There is no such thing as overkill, Albert always under standard anyway.
-- [x] Implemented UMA MLCMCF Big context window manager LLM Agnostic design.
-- [ ] Aiming for the minimum professional quality = "NO MISTAKES OR ERROR ARE ALLOWED FOR REACHING THE TARGET"
-- [ ] Multi format communication Real-time communication and collaboration
-- [ ] Static compilation Mobile Working
-- [ ] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.
+- [x] Developing Workaround for the Adelaide Paradigm Achilles Heel v8 4GB memory enforced limit by electron. (v8 pointer compression memory heap limitation) (--max-old-space-size=1342177280 Bumping up the size to 1TB) There is no such thing as overkill.
+- [x] Implemented UMA MLCMCF "Bigger" context window manager LLM Agnostic design.
 - [ ] Auto Idle Sleep Detection auto fine-tune (Mimicking real-life brain retraining while sleep) maybe augment it to LoRA later on.
+- [ ] OpenAI API Implementation Bridge for Quality Testing standard of the engine model.
+- [ ] Autoexec for generated command.
+- [ ] Multi format communication Real-time communication and collaboration (Audio, Video, Actuator)
+- [ ] Static compilation Mobile (No AI Dynamics)
+- [ ] Self-updating, Self-maintaning, and Self-Adapting Code.
+- [ ] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents.
 - [ ] Categorize into Classes based on the subsystem drawio for cleaner Code and easier debugging
 - [ ] Implementing multi language support with Frontend Automatic Translation and Backend EN Processing.
 - [ ] Implement and Replace Context Depth fetching to (Multi Level Condensed Memory Contextual Fetching).
 - [ ] Interaction Experience Sideloading Subsystem.
 - [ ] Implementing Native Windows Support.
-- [ ] Autoexec for generated command.
 - [ ] Mobile HTML5 UI.
-- [ ] Self-updating, Self-maintaning, and Self-Adapting Code.
+
 - [ ] Mobile static-version precompiled.
 - [ ] Very strict jailed version of Mobile version for iOS support.
 - [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
 - [ ] Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands.
 - [ ] Adding Docker Support
-- [ ] AI Blackbox Issue required Reference if Possible like Bing AI
+- [ ] AI Blackbox Issue required Reference if its plausible be like Bing AI on the referencing system
