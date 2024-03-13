@@ -1955,7 +1955,7 @@ class ExternalLocalFileScraperBackgroundAgent {
                     await this.processDocument(filePath);
                 }
 				// Learning Documents Throttle based on loadAvg[0]*1
-				await delay(loadAvg[0]*10);
+				await delay(timeInnacDegradationms);
             }
         } catch (error) {
             log.info(`Error scanning directory ${directory}: ${error.message}`);
@@ -3113,6 +3113,51 @@ ipcMain.on("AutomataLLMMainResultReciever", (_event, resultFeedloop) => {
 
 //---------------------------------------------------------------------------------------
 
+// Performance Latency Degradation Measure ----------------------------------------
+// Degradation factor will be from 0.0 to 1.0 (0.0 means no, degradation detected and 1.0 is complete crap unusable response javascript quality)
+
+let respCheckpoint0=0;
+let respCheckpoint1=0;
+let respDegradationLatency=0;
+let responseTimeSyncms=1000; //Time Refresh Sync
+let targetDegradationMaxms=200; //Determining at what Max ms the 1.0 Factor is
+let degradedFactor=0;
+let timeInnacDegradationms=0;
+function measureResponseLatency() {
+    
+	if(respCheckpoint0 == 0 && respCheckpoint1 == 0){
+		respDegradationLatency = 0
+		respCheckpoint0=performance.now();
+	}else if(respCheckpoint1 == 0){
+		respDegradationLatency = 0
+		respCheckpoint1=performance.now();
+	}else{
+		respDegradationLatency = respCheckpoint1 - respCheckpoint0
+		//log.debug(consoleLogPrefix, `Response ${respDegradationLatency} ms ${respCheckpoint1} ${respCheckpoint0}`)
+		//reset respCheckpoint0 and respCheckpoint1 to 0
+		respCheckpoint0=0
+		respCheckpoint1=0
+	}
+    //console.log(`Response latency: ${latency} ms`);
+    
+    return respDegradationLatency;
+}
+setInterval(async () => {
+	
+	const msResponse = measureResponseLatency();
+	// Measure timing shift 1000 ms with the real timer on the 
+	if (msResponse != 0){
+		//log.debug(consoleLogPrefix, "Adelaide Engine Response Alignment:", msResponse, "ms");
+		//log.debug(consoleLogPrefix, "Adelaide Engine Response Degradation:", `${Math.abs(responseTimeSyncms-msResponse)} ms`)
+		timeInnacDegradationms=Math.abs(responseTimeSyncms-msResponse)
+		degradedFactor=timeInnacDegradationms/targetDegradationMaxms
+		log.debug(consoleLogPrefix, "Adelaide Engine Response Degradation Factor:", degradedFactor)
+	}
+
+}, responseTimeSyncms);
+
+
+// --------------------------------------------------------------------------------
 ipcMain.on("storeParams", (_event, { params }) => {
 	log.info(params);
 	store.set("params", params);
