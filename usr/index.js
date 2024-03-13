@@ -63,6 +63,10 @@ const log = require('electron-log');
 let logPathFile;
 const { createLogger, transports, format } = require('winston');
 const nlp = require('compromise');
+const axios = require('axios');
+const cheerio = require('cheerio');
+// for accessing the internet
+let internetUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36'
 
 let resumeFeatureReadyRelease = false; // Download resume feature after timeout is ready yet or no? (true or false)?
 
@@ -570,12 +574,7 @@ async function externalInternetFetchingScraping(text) {
 
 	log.debug(consoleLogPrefix, "🌐 externalInternetFetchingScraping");
 	log.info(consoleLogPrefix, "🌐 Search Query", text);
-	const timeoutPromise = new Promise((resolve) => {
-        setTimeout(() => {
-            resolve({ timeout: true });
-        }, QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig);
-    });
-
+	
 	// Enwrap this with Subcategory Timeout with var QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig
 	/*
 	// Create a promise for the call to callInternalThoughtEngine
@@ -585,7 +584,7 @@ async function externalInternetFetchingScraping(text) {
 		result = await Promise.race([callPromise, timeoutPromise]);
 
 	*/
-
+		
 
 	// Legacy original itspi3141 program searching Handling
 	/*
@@ -594,11 +593,14 @@ async function externalInternetFetchingScraping(text) {
 	});
 	*/
 	// New Handling which uses timeout to not get stuck
+
 	/*
-	Doesn't Work!
-	const callPromise = DDG.search(text, 
-		{ safeSearch: DDG.SafeSearchType.MODERATE });
-		*/
+
+	const timeoutPromise = new Promise((resolve) => {
+        setTimeout(() => {
+            resolve({ timeout: true });
+        }, QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig);
+    });
 
 	const callPromise = DDG.search(text, { safeSearch: DDG.SafeSearchType.MODERATE });	
 	try {
@@ -646,20 +648,72 @@ async function externalInternetFetchingScraping(text) {
 			combinedText = "No result";
 		}
 	}
-	log.debug(consoleLogPrefix, "Internet Pushing Search Queue");
-		UnifiedMemoryArray.push(text); // Pushing input request to UnifiedMemoryArray
-		
-		log.debug(consoleLogPrefix, "Pushing Search Result");
-		UnifiedMemoryArray.push(combinedText); // Pushing to UnifiedMemoryArray
-		log.info(consoleLogPrefix, "externalInternetFetchingScraping Final", combinedText);
-		return combinedText;
+	itspi3141 Legacy based on DDG (Duck Duck Go) summarized description and not delve deep into the content of the page
+	*/
+
+	// New Method using startpage.com
+	log.debug(consoleLogPrefix, "Internet Pushing Search query");
+	UnifiedMemoryArray.push(text); // Pushing input request to UnifiedMemoryArray	
+	log.debug(consoleLogPrefix, "🌐 Initializing New Engine!");
+	const query = text;
+	const userAgent = internetUserAgent;
+	log.debug(consoleLogPrefix, "🌐 Recieving new Query", query);
+    //const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
+    const pageLimit = store.get("params").websearch_amount; // Number of pages to download
+	log.debug(consoleLogPrefix, "🌐 Entering Search Mode");
+    try {
+        // Perform search and get search results
+		log.debug(consoleLogPrefix, "🌐 Acessing the Search Engine!");
+        const searchResults = await DDG.search(query, { proxy: false });
+		//const searchResults = await DDG.search("test", { proxy: false });
+		//log.debug(consoleLogPrefix, "🌐 Done Acessing StubTest", searchResults);
+		const resultsCheck = searchResults.results.length
+        //const $ = cheerio.load(searchResponse.data);
+		//log.debug(consoleLogPrefix, "🌐 Links List Length?", resultsCheck);
+		//log.debug(consoleLogPrefix, "🌐 InternalData", searchResults.results);
+		//log.debug(consoleLogPrefix, "🌐 Understanding Array 0 URL", searchResults.results[0].url);
+		for (let i = 0; i < searchResults.results.length && i <= pageLimit; i++) {
+            const url = searchResults.results[i].url;
+            log.info(consoleLogPrefix,`Reading: ${url}`);
+            
+            const response = await axios.get(url);
+            const htmlData = response.data;
+            const $ = cheerio.load(htmlData);
+            
+            // Process the HTML data as needed
+            // For example, extract text from specific elements:
+            const title = $('title').text();
+            const bodyText = $('body').text();
+
+            //log.debug(`Title: ${title}`);
+            //log.debug(`Body Text: ${bodyText}`);
+			UnifiedMemoryArray.push(title); // push the content 
+			UnifiedMemoryArray.push(bodyText); // push the content 
+
+        }
+		log.debug(consoleLogPrefix, "🌐 Concatenated the HTML Content to UMA MLCMCF");
+        // Return the concatenated HTML content
+		combinedText = plainText
+        //return htmlContent;
+    } catch (error) {
+		log.error(consoleLogPrefix, "🌐 No result returned or partially returned result!");
+        log.error(consoleLogPrefix,'Cause:', error);
+		UnifiedMemoryArray.push(query); // Give an dataset on what query that is error
+		UnifiedMemoryArray.push(error); // give the error
+        //return null;
+    }
+		log.debug(consoleLogPrefix, "🌐 The part where acessing Accessing UMA MLCMCF!");
+		const combinedTextMLCMCFProcessed = interactionArrayStorage("retrieve_MLCMCF_Mode", query, false, false, store.get("params").websearch_amount).join('');
+
+		log.info(consoleLogPrefix, "🌐 Final Result String", combinedTextMLCMCFProcessed);
+		return combinedTextMLCMCFProcessed;
 		// var convertedText = `Summarize the following text: `;
 		// for (let i = 0; i < searchResults.results.length && i < 3; i++) {
 		// 	convertedText += `${searchResults.results[i].description.replaceAll(/<\/?b>/gi, "")} `;
 		// }
 		// return convertedText;
 	} else {
-		log.info(consoleLogPrefix, "Internet Data Fetching Disabled!");
+		log.info(consoleLogPrefix, "🌐 Internet Data Fetching Disabled!");
 		return text;
 	}	
 }
@@ -779,7 +833,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 		result = await callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild);
 		if (await hasAlphabet(result)){
 			childLLMResultNotPassed = false;
-			log.debug(consoleLogPrefix, "LLMChild Result detected", result);
+			//log.debug(consoleLogPrefix, "LLMChild Result detected", result);
 			childLLMDebugResultMode = false;
 			llmChildfailureCountSum = 0; //reset failure count if exists, because different seed different result
 		} else {
@@ -791,8 +845,8 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 			internalThoughtEngineTextProgress=`LLMChild Failed to execute no Output! Might be a bad model?`;
 			
 			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
-			log.info(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "Adjusting LengthGen Request to: ", lengthGen);
-			log.info(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
+			log.error(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "Adjusting LengthGen Request to: ", lengthGen);
+			log.error(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
 			childLLMResultNotPassed = true;
 			if ( llmChildfailureCountSum >= 5 ){
 				defectiveLLMChildSpecificModel=true;
@@ -848,7 +902,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 			LLMChildDecisionModelMode = false; //reset global flag
 		}
 		if (defectiveLLMChildSpecificModel){
-			log.info(consoleLogPrefix, "I'm not sure if this an issue of the model information augmentation performance, data corruption, language incompatibility! Fallback to the general_conversation");
+			log.error(consoleLogPrefix, "I'm not sure if this an issue of the model information augmentation performance, data corruption, language incompatibility! Fallback to the general_conversation");
 			defectiveLLMChildSpecificModel = false; //reset global flag
 		}
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * 1);
@@ -924,6 +978,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	//return filteredOutput;
 	filteredOutput = stripProgramBreakingCharacters(filteredOutput);
 	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Done");
+	filteredOutput = `${filteredOutput}`
 	return filteredOutput;
 
 }
@@ -1122,11 +1177,11 @@ function downloadFile(link, targetFile) {
 	options = {
         headers: {
             Range: `bytes=${startByte}-`, // Set the range to resume download from startByte
-            'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36'
+            'User-Agent': internetUserAgent
         }
     };
 	}else{
-		options = { headers: { 'User-Agent': 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/97.0.4692.71 Safari/537.36' } };
+		options = { headers: { 'User-Agent': internetUserAgent } };
 	}
 
     https.get(link, options, response => {
@@ -1460,8 +1515,6 @@ async function callInternalThoughtEngine(prompt){
 			//promptInput = ` ${historyChatRetrieved}\n${username} : ${prompt}\n. With this interaction What search query for i search in google for the interaction? Search Query:`;
 			//searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
 			log.info(consoleLogPrefix, `Created internet search prompt ${searchPrompt}`);
-			// TODO : Upgrade externalInternetFetchingScraping to recursive function that would scour the internet and download the html
-			// TODO : Add timeout take parameter from store.get("params").qostimeoutllmchildsubcategory
 			log.debug(consoleLogPrefix, "🍀🌐 externalInternetFetchingScraping Triggering");
 			resultSearchScraping = await externalInternetFetchingScraping(searchPrompt);
 			if (store.get("params").llmdecisionMode){
@@ -1470,7 +1523,7 @@ async function callInternalThoughtEngine(prompt){
 			if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
 				resultSearchScraping = stripProgramBreakingCharacters(resultSearchScraping);
 				promptInput = `Summerize this info: ${resultSearchScraping} Summerization:`;
-				internalThoughtEngineTextProgress="Concluding LLMChild";
+				internalThoughtEngineTextProgress="Summarizing LLMChild";
 				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 				//let concludeInformation_Internet;
 				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(stripProgramBreakingCharacters(promptInput)), 1024);
@@ -1902,7 +1955,7 @@ class ExternalLocalFileScraperBackgroundAgent {
                     await this.processDocument(filePath);
                 }
 				// Learning Documents Throttle based on loadAvg[0]*1
-				await delay(loadAvg[0]*1);
+				await delay(loadAvg[0]*10);
             }
         } catch (error) {
             log.info(`Error scanning directory ${directory}: ${error.message}`);
@@ -1931,19 +1984,6 @@ async function externalLocalFileScraperBackgroundAgent(searchText) {
 	const userHomeDir = require('os').homedir();
 	const rootDirectory = path.join(userHomeDir, 'Documents'); // You can change the root directory as needed
 	// also make an exception for Windows users usually do C:\ D:\ Drive instead of unified folder or instead of mounting it directly into the folder (if you didn't know that even exist) they mount it into a diffrent letter
-
-	/*
-	Prompt with context code : 
-	
-	Make me a javascript code that will: List all the target directory into one variable named "targetDirectoryList" with array. For Darwin based macOS target it to require('os').homedir(); /Volumes directory. For Linux based OS target require('os').homedir(); /mnt /media/${USERNAME}. For Windows scan and list all available or mounted drive letter. Then after that do a for loop for each directory on the "targetDirectoryList" array, do a recursive scan and read all documents pdf, md, rtf, html, xml, json, tex, csv, yaml, textile, adoc, tex, postscript, sgml, tr(Troff), wpd(WordPerfect), odt, epub, pdf, fountain, docx, doc, pptx, .ppt, .ppt, .potx, .pot, .ppsx, .pps, .xls, .xlsx, .gsheet, .ods, .csv, .xml, .html, .xlsm, .xlsb, .c, .cpp, .java, .py, .js, .css, .rb, .swift, .go, .php, .sh, .bat, .sql, .json, .xml, .md, .yaml, .asm, .tex, .r, .m, .rs, .dart, .scala, .kt. Everytime those file found push the content to the variable array UnifiedMemoryArray.
-	sidenote: 
-	1. don't forget to implement interpretation for pdf docx doc odt ppt pptx to string of text (or extract the text only) then you can push to the UnifiedMemoryArray.
-	2. set timeout for each document access 10000ms.
-	3. expect some errors (access denied or garbled data) and handle it properly and do not let it disturb the operation or make javascript lockup. 
-	4. Make the code into one class but multiple function or method inside it for better code organization
-
-	
-	*/
 
 
 	// Lets implement class inside function just to make the transition seamless
@@ -2476,7 +2516,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		if(AITurn && !UserTurn){
 			if(!amiwritingonAIMessageStreamMode){
 				interactionStgOrder = interactionStgOrder + 1; // add the order number counter when we detect we did write it on AI mode and need confirmation, when its done we should add the order number
-				log.info(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
+				log.debug(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
 				UnifiedMemoryArray.push(interactionStg); //write once
 			}
 			amiwritingonAIMessageStreamMode=true;
@@ -2533,7 +2573,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		//log.info("Leave me trapped in the cage");
 		
     }else if (mode === "retrieve_MLCMCF_Mode"){
-		log.info(consoleLogPrefix,"Searching Information \"Unified Memory Array\" Target: ", prompt, arraySelection);
+		log.info(consoleLogPrefix,"Calling \"Unified Memory Array\" Target: ", `${prompt}`, arraySelection);
 
 		// Just directly connect to all of it
 		// do natural language processing cosine similiarity
@@ -2548,7 +2588,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		let maxScore;
 		let maxIndex;
 		let selectedChunkIndex;
-		const queryString = prompt;
+		const queryString = `${prompt}`;
 		const delta = arraySelection;
 	    // log.debug("Igniting MLCMCF", UnifiedMemoryArray);
 		// 2. Search "string" in the array of variable UnifiedMemoryArray to find the string using NLP and select the index with highest value of similarity.
@@ -2578,12 +2618,12 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		// log.debug("Max Index:", maxIndex);
 		selectedChunkIndex = maxIndex;
 		// 3. Copy the selected index with from index to index-(delta number value) (Backwards) also index+(delta number value) forward into a variable array.
-		log.debug("Defining L1 UMA array FullLength");
+		//log.debug("Defining L1 UMA array FullLength");
 		let L1_focusedUMAArrayFullLength = [];
 		// Push to L1_focusedUMAArrayFullLength for every string got fetch into the .length
 
 		//for loop backward
-		log.debug("Pushing L1 Back");
+		//log.debug("Pushing L1 Back");
 		for (let idx = selectedChunkIndex; idx >= 0 && Math.abs(selectedChunkIndex-idx) <= delta; idx--) {
 			L1_focusedUMAArrayFullLength.push(UnifiedMemoryArray[idx]);
 		}
@@ -2598,7 +2638,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			L1_focusedUMAArrayFullLength.push(UnifiedMemoryArray[idx]);
 		}
 
-		log.debug(consoleLogPrefix, "MLCMCF L1 Full Length", L1_focusedUMAArrayFullLength)
+		//log.debug(consoleLogPrefix, "MLCMCF L1 Full Length", L1_focusedUMAArrayFullLength)
 		
 	  
 		// 4. That variable array then divide and skip part where the array is under 256 characters but if the array is more than 256 characters then split it. Then all of this processing where there is the splitted and the unsplitted array store it into variable L1_focusedUMAArrayChunk (already defined)
@@ -2613,14 +2653,14 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
 
 		let L1_focusedUMAArrayChunk = [];
-		log.debug('converting L1_focusedUMAArrayFullLength to L1_focusedUMAArrayFullLength', L1_focusedUMAArrayChunk, L1_focusedUMAArrayFullLength);
+		//log.debug('converting L1_focusedUMAArrayFullLength to L1_focusedUMAArrayFullLength', L1_focusedUMAArrayChunk, L1_focusedUMAArrayFullLength);
 		L1_focusedUMAArrayChunk = nlp(L1_focusedUMAArrayFullLength.join(' ')).normalize().out('array'); //Tokenize it rather than cut it without context
 
-		log.debug('L1_focusedUMAArrayChunk:', L1_focusedUMAArrayChunk);
+		//log.debug('L1_focusedUMAArrayChunk:', L1_focusedUMAArrayChunk);
 	  
 		// 5. That variable array then calculate and find with the "string" that been given earlier with the compromise module to find the string using NLP then select the array index that have the highest similarity score. After that fetch the selected index with from index to index-(delta number value) (Backwards) also index+(delta number value) forward into a variable array named L2_focusedUMAArrayChunkDelta (already defined).
 		let L2_focusedUMAArrayChunkDelta = [];
-		log.debug('L2 Reset Memory Storage, Entering Checking For Loop');
+		//log.debug('L2 Reset Memory Storage, Entering Checking For Loop');
 		maxScore = 0;
 		maxIndex = 0;
 		for (let idx = 0; idx < L1_focusedUMAArrayChunk.length; idx++) {
@@ -2700,14 +2740,14 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				// Check if the index is odd (user input message)
 				if (i % 2 === 1) {
 					// Posting the message for the user side into the UI
-					log.info("User input message:", interactionStg[i]);
+					//log.debug("User input message:", interactionStg[i]);
 					const dataChatForwarding=interactionStg[i];
 					win.webContents.send("manualUserPromptGUIHijack", {
 						data: dataChatForwarding
 					});
 				} else { // Even index (servant input message)
 					// Posting the message for the AI side into the UI
-					log.info("Servant input message:", interactionStg[i]);
+					//log.debug("Servant input message:", interactionStg[i]);
 					const dataChatForwarding=interactionStg[i];
 					win.webContents.send("manualAIAnswerGUIHijack", {
 						data: dataChatForwarding

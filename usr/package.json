@@ -2,7 +2,7 @@
 	"name": "project-zephyrine",
 	"productName": "Project Zephyrine",
 	"description": "An amicable, ensorcelled, and refined modality for engaging the Learned Language Model.",
-	"version": "0.1.5",
+	"version": "0.1.6",
 	"engines": {
 		"node": "v20.11.1"
 	},
@@ -38,7 +38,10 @@
 		"@npmcli/fs": "^3.1.0",
 		"@types/jest": "^29.5.4",
 		"@types/mocha": "^10.0.1",
+		"axios": "^1.6.7",
+		"cheerio": "^1.0.0-rc.12",
 		"compromise": "^14.12.0",
+		"compromiser": "^1.0.4",
 		"dompurify": "^3.0.6",
 		"duck-duck-scrape": "^2.2.3",
 		"electron-log": "^5.1.1",
@@ -60,9 +63,7 @@
 		"spacy": "^0.0.4",
 		"timeout-promise": "^1.0.2",
 		"typescript": "^5.2.2",
-		"winston": "^3.12.0",
-		"compromise-plugin": "^0.0.9",
-		"compromiser": "^1.0.4"
+		"winston": "^3.12.0"
 	},
 	"devDependencies": {
 		"@electron/rebuild": "^3.2.10",
