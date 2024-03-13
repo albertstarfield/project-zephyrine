@@ -32,6 +32,13 @@ const path = require("path");
 let logPathFile;
 const { createLogger, transports, format } = require('winston');
 
+function generateRandomNumber(min, max) {
+	return Math.floor(Math.random() * (max - min + 1)) + min;
+}
+
+function delay(ms) {
+    return new Promise(resolve => setTimeout(resolve, ms));
+}
 
 logPathFile = path.resolve(__dirname, "AdelaideFrontendHandler.log");
 console.log(logPathFile);
@@ -53,28 +60,37 @@ const logger = createLogger({
 });
 
 document.addEventListener("DOMContentLoaded", function() {
+	//Messages
     const feedPlaceholder = document.getElementById("messages");
+	feedPlaceholder.classList.add("fade-in");
+	
+    //document.getElementById("sky").classList.remove("hidden");
+	//document.getElementById("sky").classList.add("fade-in");
 
+	//document.getElementById("sky").classList.add("hidden");
+	//document.getElementById("sky").classList.remove("fade-in");
     // Function to show the element with fade-in effect
     function fadeInElement() {
         feedPlaceholder.classList.remove("hidden");
-        feedPlaceholder.classList.add("fade-in");
     }
 
     // Function to hide the element with fade-out effect
     function fadeOutElement() {
-        feedPlaceholder.classList.remove("fade-in");
         feedPlaceholder.classList.add("hidden");
     }
 
     // Call the fadeInElement function after a short delay to ensure smoother transition
+	// Intro Fade-in with the feed
     setTimeout(fadeInElement, 500); // Adjust the delay as needed
+
 });
 
 
 document.addEventListener("DOMContentLoaded", function() {
     const content = document.getElementById("content");
-
+	const skyStarHolder = document.getElementById("sky")
+	document.getElementById("sky").classList.add("fade-in");
+	
     // Function to fade in content gradually
     function fadeInContent() {
         content.classList.remove("hidden");
@@ -103,42 +119,25 @@ document.addEventListener("DOMContentLoaded", function() {
         return Math.random() * (max - min) + min;
     }
 
-    // Function to calculate the distance between two points
-    function calculateDistance(x1, y1, x2, y2) {
-        const dx = x2 - x1;
-        const dy = y2 - y1;
-        return Math.sqrt(dx * dx + dy * dy);
-    }
-
     // Function to create a star
     function createStar() {
-        const star = document.createElement("div");
-        star.className = "star";
-        star.style.width = getRandom(3, 5) + "px";
-        star.style.height = star.style.width;
-        star.style.top = getRandom(0, sky.offsetHeight) + "px";
-        star.style.left = getRandom(0, sky.offsetWidth) + "px";
-        star.style.backgroundColor = getRandomColor();
+        const star = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+        star.setAttribute("width", generateRandomNumber(1,5));
+        star.setAttribute("height", generateRandomNumber(1,5));
+        star.setAttribute("viewBox", "0 0 24 24");
+        star.innerHTML = `<path d="M9.15316 5.40838C10.4198 3.13613 11.0531 2 12 2C12.9469 2 13.5802 3.13612 14.8468 5.40837L15.1745 5.99623C15.5345 6.64193 15.7144 6.96479 15.9951 7.17781C16.2757 7.39083 16.6251 7.4699 17.3241 7.62805L17.9605 7.77203C20.4201 8.32856 21.65 8.60682 21.9426 9.54773C22.2352 10.4886 21.3968 11.4691 19.7199 13.4299L19.2861 13.9372C18.8096 14.4944 18.5713 14.773 18.4641 15.1177C18.357 15.4624 18.393 15.8341 18.465 16.5776L18.5306 17.2544C18.7841 19.8706 18.9109 21.1787 18.1449 21.7602C17.3788 22.3417 16.2273 21.8115 13.9243 20.7512L13.3285 20.4768C12.6741 20.1755 12.3469 20.0248 12 20.0248C11.6531 20.0248 11.3259 20.1755 10.6715 20.4768L10.0757 20.7512C7.77268 21.8115 6.62118 22.3417 5.85515 21.7602C5.08912 21.1787 5.21588 19.8706 5.4694 17.2544L5.53498 16.5776C5.60703 15.8341 5.64305 15.4624 5.53586 15.1177C5.42868 14.773 5.19043 14.4944 4.71392 13.9372L4.2801 13.4299C2.60325 11.4691 1.76482 10.4886 2.05742 9.54773C2.35002 8.60682 3.57986 8.32856 6.03954 7.77203L6.67589 7.62805C7.37485 7.4699 7.72433 7.39083 8.00494 7.17781C8.28555 6.96479 8.46553 6.64194 8.82547 5.99623L9.15316 5.40838Z" fill="#ffe070"></path>`;
+        star.style.position = "absolute";
+        star.style.top = getRandom(0, sky.offsetHeight - 24) + "px";
+        star.style.left = getRandom(0, sky.offsetWidth - 24) + "px";
         sky.appendChild(star);
-
-        // Add twinkling effect
-        star.style.animation = "twinkling " + getRandom(2, 5) + "s infinite";
-
-        // Add bloom effect
-        star.addEventListener("mouseover", function() {
-            this.style.boxShadow = "0 0 20px 10px rgba(255, 255, 255, 0.7)";
-        });
-        star.addEventListener("mouseout", function() {
-            this.style.boxShadow = "0 0 20px 10px rgba(255, 255, 255, 0)";
-        });
 
         // Store star object
         stars.push({
             element: star,
             x: parseFloat(star.style.left),
             y: parseFloat(star.style.top),
-            xSpeed: getRandom(-1, 1),
-            ySpeed: getRandom(-1, 1)
+            xSpeed: getRandom(-1, 1000),
+            ySpeed: getRandom(-1, 1000)
         });
     }
 
@@ -148,11 +147,11 @@ document.addEventListener("DOMContentLoaded", function() {
             star.x += star.xSpeed;
             star.y += star.ySpeed;
 
-            if (star.x < 0 || star.x > sky.offsetWidth - parseFloat(star.element.style.width)) {
+            if (star.x < 0 || star.x > sky.offsetWidth - 24) {
                 star.xSpeed *= -1; // Reverse direction on collision with left or right boundary
             }
 
-            if (star.y < 0 || star.y > sky.offsetHeight - parseFloat(star.element.style.height)) {
+            if (star.y < 0 || star.y > sky.offsetHeight - 24) {
                 star.ySpeed *= -1; // Reverse direction on collision with top or bottom boundary
             }
 
@@ -160,15 +159,9 @@ document.addEventListener("DOMContentLoaded", function() {
             star.element.style.top = star.y + "px";
         });
 
-        requestAnimationFrame(moveStars);
-    }
-
-    // Function to generate a random color
-    function getRandomColor() {
-        const r = Math.floor(Math.random() * 50) + 200; // Red component
-        const g = Math.floor(Math.random() * 50) + 200; // Green component
-        const b = Math.floor(Math.random() * 50); // Blue component
-        return `rgb(${r},${g},${b})`;
+        // Call moveStars() recursively
+        setTimeout(moveStars, generateRandomNumber(60,30000)); //ms frame request
+		//requestAnimationFrame(moveStars)
     }
 
     // Function to generate stars
@@ -176,12 +169,12 @@ document.addEventListener("DOMContentLoaded", function() {
         for (let i = 0; i < 50; i++) {
             createStar();
         }
-        moveStars(); // Start moving stars after generating them
     }
 
-    // Generate stars
     generateStars();
+    moveStars();
 });
+
 
 
 
@@ -585,7 +578,7 @@ ipcRenderer.on("result", async (_event, { data }) => {
 
 			form.setAttribute("class", isRunningModel ? "running-model" : "");
 			existing.style.opacity = 1;
-		}, 200);
+		}, 60); // previously 30 now adjust it to 60 just to make sure it doesn't cut the stream midway
 	} else {
 		document.body.classList.remove("llama");
 		document.body.classList.remove("alpaca");
@@ -686,9 +679,12 @@ ipcRenderer.on("totalmem", (_event, { data }) => {
 });
 
 
+//Render Alloc buffet Graphics Processing Allocator Manager
+
+
 
 // This basically set and send the data into ipcRenderer cpuUsage which manipulate the "green bar", maybe we can learn from this to create a progress bar 
-setInterval(async () => {
+function engineStatsFetchReq(){
 	ipcRenderer.send("cpuUsage");
 	ipcRenderer.send("freemem");
 	ipcRenderer.send("hardwarestressload");
@@ -696,7 +692,13 @@ setInterval(async () => {
 	ipcRenderer.send("UMACheckUsage");
 	ipcRenderer.send("BackBrainQueueCheck");
 	ipcRenderer.send("BackBrainQueueResultCheck");
-}, 5000);
+}
+
+engineStatsFetchReq
+setInterval(async () => {
+	engineStatsFetchReq();
+	
+}, generateRandomNumber(60000,120000)); //Randomize so it doesn't run in one frame
 
 // For some reason cpuUsage and freemem everytime its updating its eating huge amount of GPU power ?
 // internalTEProgress for recieving internalThoughtEngineProgress;
@@ -705,18 +707,23 @@ setInterval(async () => {
 let dynamicTips = document.querySelector("#dynamicTipsUIPart .info-bottom-changable");
 let dynamicTipsBar = document.querySelector("#dynamicTipsUIPart .loading-bar");
 
-setInterval(async () => {
+function requestInternalThoughtStat(){
 	ipcRenderer.send("internalThoughtProgressGUI");
-	//console.log("fetching progress!"); // this is my first time programming polling ipc so yeah i know its cringy to have a verbose message in here too though, but i guess everyone has its own starting point :/
-}, 3000);
-
-setInterval(async () => {
 	ipcRenderer.send("internalThoughtProgressTextGUI");
-}, 3000);
+}
 
+requestInternalThoughtStat();
+setInterval(async () => {
+	requestInternalThoughtStat();
+	//console.log("fetching progress!"); // this is my first time programming polling ipc so yeah i know its cringy to have a verbose message in here too though, but i guess everyone has its own starting point :/
+}, generateRandomNumber(10000,20000));
+
+
+
+ipcRenderer.send("SystemBackplateHotplugCheck");
 setInterval(async () => {
 	ipcRenderer.send("SystemBackplateHotplugCheck");
-}, 60000);
+}, generateRandomNumber(60000,120000));
 
 
 let dynamicTipsProgressLLMChild="";
