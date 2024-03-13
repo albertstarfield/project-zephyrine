@@ -2,7 +2,7 @@
 	"name": "project-zephyrine",
 	"productName": "Project Zephyrine",
 	"description": "An amicable, ensorcelled, and refined modality for engaging the Learned Language Model.",
-	"version": "0.1.4",
+	"version": "0.1.5",
 	"engines": {
 		"node": "v20.11.1"
 	},
