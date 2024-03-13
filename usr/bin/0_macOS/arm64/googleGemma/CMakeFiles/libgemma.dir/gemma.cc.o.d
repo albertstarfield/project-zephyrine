@@ -837,7 +837,6 @@ CMakeFiles/libgemma.dir/gemma.cc.o: \
   /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/contrib/algo/transform-inl.h \
   /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/contrib/math/math-inl.h \
   /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src/hwy/contrib/matvec/matvec-inl.h \
-  /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/./util/args.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX14.2.sdk/usr/include/c++/v1/filesystem \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX14.2.sdk/usr/include/c++/v1/__filesystem/copy_options.h \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX14.2.sdk/usr/include/c++/v1/__filesystem/directory_entry.h \
@@ -910,4 +909,5 @@ CMakeFiles/libgemma.dir/gemma.cc.o: \
   /Applications/Xcode.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX14.2.sdk/usr/include/c++/v1/iostream \
   /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/./configs.h \
   /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/./gemma.h \
+  /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/./util/args.h \
   /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-src/src/sentencepiece_processor.h
