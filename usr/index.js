@@ -91,6 +91,60 @@ function createWindow() {
 	// after main window and main process initialize the electron core send the global.username and global.assistantName to the global bot
 	win.setMenu(null);
 	// win.webContents.openDevTools();
+
+
+	//Monitor User Interaction, and if its idle then throttle back to 1 fps after 2 seconds inactivity
+	// Set the initial frame rate to full FPS
+    let isIdle = false;
+
+    // Function to set frame rate
+    const setFrameRate = (fps) => {
+        win.webContents.executeJavaScript(`document.body.style.setProperty('--fps', '${fps}')`);
+    };
+	/*
+    // Detect mouse move event
+    let mouseTimeout;
+    const resetMouseTimeout = () => {
+        clearTimeout(mouseTimeout);
+        mouseTimeout = setTimeout(() => {
+            if (!isIdle) {
+                isIdle = true;
+                setFrameRate(1); // Set frame rate to 1 FPS
+            }
+        }, 15000); // 15 seconds idle timeout
+    };
+
+    win.on('mousemove', resetMouseTimeout);
+
+    // Detect keyboard input event
+    let keyboardTimeout;
+    const resetKeyboardTimeout = () => {
+        clearTimeout(keyboardTimeout);
+        keyboardTimeout = setTimeout(() => {
+            if (!isIdle) {
+                isIdle = true;
+                setFrameRate(1); // Set frame rate to 1 FPS
+            }
+        }, 30000); // 30 seconds idle timeout
+    };
+
+    win.on('keydown', resetKeyboardTimeout);
+
+    // Reset idle state when mouse or keyboard is detected
+    win.on('mousemove', () => {
+        if (isIdle) {
+            isIdle = false;
+            setFrameRate(60); // Resume full FPS
+        }
+    });
+
+    win.on('keydown', () => {
+        if (isIdle) {
+            isIdle = false;
+            setFrameRate(60); // Resume full FPS
+        }
+    });
+	*/
 }
 // Log Configuration
 logPathFile = path.resolve(__dirname, "AdelaideRuntimeCore.log")
@@ -137,7 +191,8 @@ app.on("second-instance", () => {
 });
 
 app.on("ready", () => {
-	createWindow();
+	createWindow(); //Loads html
+
 });
 
 app.on("window-all-closed", () => {
@@ -505,10 +560,11 @@ const stat = promisify(fs.stat);
 
 
 
-let convertedText;
-let combinedText;
+
 //let fetchedResults;
 async function externalInternetFetchingScraping(text) {
+	let convertedText;
+	let combinedText;
 	let resultInternetSearch;
 	if (store.get("params").webAccess){
 
@@ -538,21 +594,32 @@ async function externalInternetFetchingScraping(text) {
 	});
 	*/
 	// New Handling which uses timeout to not get stuck
-	const callPromise = DDG.search(text, {
-		safeSearch: DDG.SafeSearchType.MODERATE
-	});
+	/*
+	Doesn't Work!
+	const callPromise = DDG.search(text, 
+		{ safeSearch: DDG.SafeSearchType.MODERATE });
+		*/
 
-	log.debug(consoleLogPrefix, "🌐 Calling DDG Search with timeout", QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig);
-	log.debug(consoleLogPrefix, "🌐 DDG Classic itspi3141 method is going to be Deprecated Sooner!");
-	log.debug(consoleLogPrefix, timeoutPromise, callPromise)
-	resultInternetSearch = await Promise.race([callPromise, timeoutPromise]);
-	log.debug(consoleLogPrefix, "🌐 Called! and done!");
-	searchResults = resultInternetSearch; // Layer of compatibility with itspi31411 
+	const callPromise = DDG.search(text, { safeSearch: DDG.SafeSearchType.MODERATE });	
+	try {
+		log.debug(consoleLogPrefix, "🌐 Calling DDG Search with timeout", QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig);
+		log.debug(consoleLogPrefix, "🌐 DDG Classic itspi3141 method is going to be Deprecated Sooner!");
+		resultInternetSearch = await Promise.race([callPromise, timeoutPromise]);
+		log.debug(consoleLogPrefix, "🌐 Called! and done!");
+		searchResults = resultInternetSearch; // Layer of compatibility with itspi31411 
+	} catch (error) {
+		log.error('Error occurred during search:', error);
+		log.error(resultInternetSearch);
+		log.error(resultInternetSearch.timeout);
+		// Handle errors
+	}
+
 	if (resultInternetSearch.timeout) {
 		log.error(consoleLogPrefix, "🌐 Internet Fetching Internal system Response Timing out!");
 		combinedText = "No result";
 	}else{
-		log.info(consoleLogPrefix, "🌐 Executed right on time!")
+		log.debug(consoleLogPrefix, "🌐 Executed right on time!");
+		log.debug(consoleLogPrefix, searchResults);
 		if (!searchResults.noResults) {
 			let fetchedResults;
 			var targetResultCount = store.get("params").websearch_amount || 5;
@@ -579,8 +646,10 @@ async function externalInternetFetchingScraping(text) {
 			combinedText = "No result";
 		}
 	}
-
-		UnifiedMemoryArray.push(text); // Pushing to UnifiedMemoryArray
+	log.debug(consoleLogPrefix, "Internet Pushing Search Queue");
+		UnifiedMemoryArray.push(text); // Pushing input request to UnifiedMemoryArray
+		
+		log.debug(consoleLogPrefix, "Pushing Search Result");
 		UnifiedMemoryArray.push(combinedText); // Pushing to UnifiedMemoryArray
 		log.info(consoleLogPrefix, "externalInternetFetchingScraping Final", combinedText);
 		return combinedText;
@@ -710,7 +779,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 		result = await callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild);
 		if (await hasAlphabet(result)){
 			childLLMResultNotPassed = false;
-			log.info(consoleLogPrefix, "Result detected", result);
+			log.debug(consoleLogPrefix, "LLMChild Result detected", result);
 			childLLMDebugResultMode = false;
 			llmChildfailureCountSum = 0; //reset failure count if exists, because different seed different result
 		} else {
@@ -1580,7 +1649,7 @@ async function callInternalThoughtEngine(prompt){
 			concludeInformation_Internet = concludeInformation_Internet === "Nothing" ? "" : concludeInformation_Internet;
 			concludeInformation_LocalFiles = concludeInformation_LocalFiles === "Nothing" ? "" : concludeInformation_LocalFiles;
 			concludeInformation_CoTMultiSteps = concludeInformation_CoTMultiSteps === "Nothing" ? "" : concludeInformation_CoTMultiSteps;
-			mergeText = startEndAdditionalContext_Flag + " " + `\n This is the ${username} prompt ` + "\""+ prompt + "\"" + " " + "These are the additonal context, but DO NOT mirror the Additional Context: " + `\n Your feeling is now in \"${emotionalEvaluationResult}\", ` + "\n The current time and date is now: " + fullCurrentDate + ". "+ "\n There are additional context to answer: " + concludeInformation_Internet + concludeInformation_LocalFiles + concludeInformation_CoTMultiSteps + "\n" + startEndAdditionalContext_Flag;
+			mergeText = startEndAdditionalContext_Flag + " " + `\n This is my message: ` + "\""+ prompt + "\"" + " " + "These are the information you might need for answering the prompt or conversation, " + `\n You feel \"${emotionalEvaluationResult}\", ` + "\n Right now is: " + fullCurrentDate + ". "+ "\n I also found this, " + concludeInformation_Internet + concludeInformation_LocalFiles + concludeInformation_CoTMultiSteps + "\n" + startEndAdditionalContext_Flag;
 			mergeText = mergeText.replace(/\n/g, " "); //.replace(/\n/g, " ");
 			passedOutput = mergeText;
 			log.info(consoleLogPrefix, "Combined Context", mergeText);
@@ -1601,7 +1670,7 @@ async function callInternalThoughtEngine(prompt){
 
 		internalThoughtEngineProgress=93; // Randomly represent progress (its not representing the real division so precision may be not present)
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
-			promptInput = `This is the previous conversation ${historyChatRetrieved}\n. \n This is the current ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No! Answer:`;
+			promptInput = `This is the previous conversation ${historyChatRetrieved}\n. \n This is the conversation ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No! Answer:`;
 			log.info(consoleLogPrefix, `LLMChild Evaluating Information PostProcess`);
 			LLMChildDecisionModelMode = true;
 			reevaluateAdCtxDecisionAgent = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 128));
@@ -2004,8 +2073,8 @@ class BadSeedDetector {
         }
 		//// log.debug(consoleLogPrefix, "Detecting Trash Word!");
         // New detection for specified words and phrases
-        const trashWords = ["AdditionalContext", "DO NOT mirror the Additional Context", "DO NOT", "There are additional context to answer", "The current time and date is now", "There are additional context to answer", "Current time and date", "verbos"];
-        const detectedTrash = trashWords.filter(word => currentInteraction.includes(word));
+        const trashWords = ["AdditionalContext", "DO NOT mirror the Additional Context", "DO NOT", "There are additional context to answer", "The current time and date is now", "There are additional context to answer", "Current time and date", "verbos", "These are the information you might need for answering the prompt or conversation"];
+        const detectedTrash = trashWords.filter(word => currentInteraction.includes(word)) + trashWords.filter(word => previousInteraction.includes(word));
         if (detectedTrash.length > 0) {
             log.error(consoleLogPrefix, "Trash Seed detected! Detected Keyword:", detectedTrash);
             this.blacklistSeed(randSeed);
@@ -2464,7 +2533,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		//log.info("Leave me trapped in the cage");
 		
     }else if (mode === "retrieve_MLCMCF_Mode"){
-		log.info(consoleLogPrefix,"Retrieving From \"Unified Memory Array\" Target: ", prompt, arraySelection);
+		log.info(consoleLogPrefix,"Searching Information \"Unified Memory Array\" Target: ", prompt, arraySelection);
 
 		// Just directly connect to all of it
 		// do natural language processing cosine similiarity
@@ -2509,12 +2578,12 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		// log.debug("Max Index:", maxIndex);
 		selectedChunkIndex = maxIndex;
 		// 3. Copy the selected index with from index to index-(delta number value) (Backwards) also index+(delta number value) forward into a variable array.
-		// log.debug("Defining L1 UMA array FullLength");
+		log.debug("Defining L1 UMA array FullLength");
 		let L1_focusedUMAArrayFullLength = [];
 		// Push to L1_focusedUMAArrayFullLength for every string got fetch into the .length
 
 		//for loop backward
-		// log.debug("Pushing L1 Back");
+		log.debug("Pushing L1 Back");
 		for (let idx = selectedChunkIndex; idx >= 0 && Math.abs(selectedChunkIndex-idx) <= delta; idx--) {
 			L1_focusedUMAArrayFullLength.push(UnifiedMemoryArray[idx]);
 		}
@@ -2529,7 +2598,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			L1_focusedUMAArrayFullLength.push(UnifiedMemoryArray[idx]);
 		}
 
-		// log.debug(consoleLogPrefix, "MLCMCF L1 Full Length", L1_focusedUMAArrayFullLength)
+		log.debug(consoleLogPrefix, "MLCMCF L1 Full Length", L1_focusedUMAArrayFullLength)
 		
 	  
 		// 4. That variable array then divide and skip part where the array is under 256 characters but if the array is more than 256 characters then split it. Then all of this processing where there is the splitted and the unsplitted array store it into variable L1_focusedUMAArrayChunk (already defined)
@@ -2544,14 +2613,14 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
 
 		let L1_focusedUMAArrayChunk = [];
-		// log.debug('converting L1_focusedUMAArrayFullLength to L1_focusedUMAArrayFullLength', L1_focusedUMAArrayChunk, L1_focusedUMAArrayFullLength);
+		log.debug('converting L1_focusedUMAArrayFullLength to L1_focusedUMAArrayFullLength', L1_focusedUMAArrayChunk, L1_focusedUMAArrayFullLength);
 		L1_focusedUMAArrayChunk = nlp(L1_focusedUMAArrayFullLength.join(' ')).normalize().out('array'); //Tokenize it rather than cut it without context
 
-		// log.debug('L1_focusedUMAArrayChunk:', L1_focusedUMAArrayChunk);
+		log.debug('L1_focusedUMAArrayChunk:', L1_focusedUMAArrayChunk);
 	  
 		// 5. That variable array then calculate and find with the "string" that been given earlier with the compromise module to find the string using NLP then select the array index that have the highest similarity score. After that fetch the selected index with from index to index-(delta number value) (Backwards) also index+(delta number value) forward into a variable array named L2_focusedUMAArrayChunkDelta (already defined).
 		let L2_focusedUMAArrayChunkDelta = [];
-		// log.debug('L2 Reset Memory Storage, Entering Checking For Loop');
+		log.debug('L2 Reset Memory Storage, Entering Checking For Loop');
 		maxScore = 0;
 		maxIndex = 0;
 		for (let idx = 0; idx < L1_focusedUMAArrayChunk.length; idx++) {
