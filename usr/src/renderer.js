@@ -136,8 +136,8 @@ document.addEventListener("DOMContentLoaded", function() {
             element: star,
             x: parseFloat(star.style.left),
             y: parseFloat(star.style.top),
-            xSpeed: getRandom(-1, 1000),
-            ySpeed: getRandom(-1, 1000)
+            xSpeed: getRandom(1, 256),
+            ySpeed: getRandom(1, 256)
         });
     }
 
@@ -160,7 +160,7 @@ document.addEventListener("DOMContentLoaded", function() {
         });
 
         // Call moveStars() recursively
-        setTimeout(moveStars, generateRandomNumber(60,30000)); //ms frame request
+        setTimeout(moveStars, 60000); //ms frame request
 		//requestAnimationFrame(moveStars)
     }
 
