@@ -331,10 +331,10 @@ html.darwin #main { /* b r u h */
 }
 #feed-placeholder-alpaca {
 	text-align: center;
-	max-width: 42rem;
+	max-width: 50rem;
 	margin: auto;
 	display: block;
-	margin: 5vh auto 8rem;
+	margin: 4vh auto 8rem;
 	
 }
 #feed-placeholder-alpaca:not(:last-child) {
@@ -346,7 +346,7 @@ html.darwin #main { /* b r u h */
 		max-width: 48rem;
 		margin: auto;
 		display: block;
-		margin: 20vh 1.5rem 12rem;
+		margin: 2vh 1.5rem 12rem;
 	}
 }
 
@@ -376,6 +376,7 @@ html.darwin #main { /* b r u h */
 	border-radius: 0.694rem;
 	width: calc(100% - 1.75rem);
 	color: var(--primary-text-alt);
+	min-height: 14.8rem;
 }
 .column button.card {
 	width: 100%;
