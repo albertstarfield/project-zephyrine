@@ -711,8 +711,6 @@ ipcRenderer.on("totalmem", (_event, { data }) => {
 
 //Render Alloc buffet Graphics Processing Allocator Manager
 
-
-
 // This basically set and send the data into ipcRenderer cpuUsage which manipulate the "green bar", maybe we can learn from this to create a progress bar 
 function engineStatsFetchReq(){
 	ipcRenderer.send("cpuUsage");
