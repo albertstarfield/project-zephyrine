@@ -240,6 +240,16 @@ ipcMain.on("cpuUsage", () => {
 	});
 });
 
+ipcMain.on("timingDegradationCheckFactor", () => {
+	win.webContents.send("timingDegradationFactorReciever_renderer", { data: degradedFactor });
+});
+
+
+ipcMain.on("timingDegradationCheck", () => {
+	win.webContents.send("timingDegradationReciever_renderer", { data: timeInnacDegradationms });
+});
+
+
 ipcMain.on("UMACheckUsage", () => {
 	win.webContents.send("UMAAllocSizeStatisticsGB", { data: UMAGBSize });
 });
@@ -1955,7 +1965,7 @@ class ExternalLocalFileScraperBackgroundAgent {
                     await this.processDocument(filePath);
                 }
 				// Learning Documents Throttle based on loadAvg[0]*1
-				await delay(timeInnacDegradationms);
+				await delay(timeDegradationSmoothingPause);
             }
         } catch (error) {
             log.info(`Error scanning directory ${directory}: ${error.message}`);
@@ -3096,8 +3106,8 @@ async function AutomataProcessing(){
 		interactionArrayStorage("save", `[🤔 ${assistantName} Internal Automata Thought : ${AutomataReInjection}] : `, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 		runningShell.write(RAGAutomataPostProcessing); //submit to the shell! LLMMain Threads
 		runningShell.write(`\r`);
-		log.info(consoleLogPrefix, automataConsolePrefix, "Delay 500ms");
-		await new Promise(resolve => setTimeout(resolve, 500)); // add delay for the pty to flush the prompt and going to the next line, so basically we able to prevent the Additional Context leak like on the Alpaca-electron original code
+		//log.info(consoleLogPrefix, automataConsolePrefix, "Delay 3000ms");
+		//await delay(3000+timeDegradationSmoothingPause); // add delay for the pty to flush the prompt and going to the next line, so basically we able to prevent the Additional Context leak like on the Alpaca-electron original code
 		blockGUIForwarding = false; // make sure the prompt isn't visible on the GUI
 
 		//--------------------------------------------------------------------------------------------
@@ -3123,6 +3133,9 @@ let responseTimeSyncms=1000; //Time Refresh Sync
 let targetDegradationMaxms=200; //Determining at what Max ms the 1.0 Factor is
 let degradedFactor=0;
 let timeInnacDegradationms=0;
+let timeDegradationSmoothingPause=0; //ms of pause on some process execution like the Local Document to prevent GUI Forwarding Time miss cause havoc on the system and lockup
+let timeDegradationPointCount=0;//1000 then reset
+let timeDegradationSmoothingExpiry=1000; // To count how long this will last you can do timeDegradationSmoothingExpiry*responseTimeSyncms = expiry on ms
 function measureResponseLatency() {
     
 	if(respCheckpoint0 == 0 && respCheckpoint1 == 0){
@@ -3151,7 +3164,18 @@ setInterval(async () => {
 		//log.debug(consoleLogPrefix, "Adelaide Engine Response Degradation:", `${Math.abs(responseTimeSyncms-msResponse)} ms`)
 		timeInnacDegradationms=Math.abs(responseTimeSyncms-msResponse)
 		degradedFactor=timeInnacDegradationms/targetDegradationMaxms
-		log.debug(consoleLogPrefix, "Adelaide Engine Response Degradation Factor:", degradedFactor)
+		const viewableFactorPercent = degradedFactor.toFixed(3) * 100
+		log.debug(consoleLogPrefix, "Adelaide Engine Time Response Degradation Percent:", viewableFactorPercent, "%")
+		log.debug(consoleLogPrefix, "Adelaide Engine Time Degradation Smoothing:", timeDegradationSmoothingPause , "ms")
+		timeDegradationPointCount = timeDegradationPointCount + 1;
+		if (timeDegradationPointCount >= timeDegradationSmoothingExpiry){
+			timeDegradationPointCount=0;
+			timeDegradationSmoothingPause=0;
+		}else{
+			if(timeDegradationSmoothingPause <= timeInnacDegradationms){
+				timeDegradationSmoothingPause=Math.round(timeInnacDegradationms);
+			}
+		}
 	}
 
 }, responseTimeSyncms);
