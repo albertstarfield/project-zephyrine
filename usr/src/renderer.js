@@ -386,7 +386,8 @@ ipcRenderer.on('emotionalEvaluationResult', (event, data) => {
 	profilePictureEmotions = data;
   });  
 
-const marked = require('marked') // call marked marked.js to convert output to Markdown
+const marked = require('marked'); // call marked marked.js to convert output to Markdown
+const katex = require('katex');
 
 const say = (msg, id, isUser) => {
 	// Sidenote : Reverse Engineering Conclusion : Only captures one data stream iteration
@@ -562,7 +563,36 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			console.log(prefixConsoleLogStreamCapture, "Assuming LLM Main Backend Done Typing!");
 			console.log(prefixConsoleLogStreamCapture, "Sending Stream to GUI");
 			//totalStreamResultData = responses[id];
-			totalStreamResultData = marked.parse(responses[id]);
+			console.log("Response Raw DEBUG",responses[id]);
+			// So i have found the issue where it finishes responding but the text disappears its because the marked.parse throw some error and the text failed to go through. so instead of complete failure, we can just use try and catch the error and forcefully do the thing
+			try{
+				totalStreamResultData = marked.parse(responses[id]);
+			}catch(error){
+				console.error(prefixConsoleLogStreamCapture, "ERROR Marked, Preventing Disappearing", error)
+				totalStreamResultData = responses[id];
+			}
+			/*
+			totalStreamResultData = marked.parse(responses[id], {
+				renderer: new marked.Renderer(),
+				gfm: true,
+				breaks: true,
+				smartLists: true,
+				smartypants: true,
+				// Add a callback to render LaTeX expressions
+				sanitize: false,
+				// Callback to render LaTeX expressions using KaTeX
+				// Replace 'katex.renderToString' with 'MathJax.tex2svg' if using MathJax
+				// Note: You need to include the KaTeX or MathJax library in your project
+				// and configure it properly for rendering LaTeX expressions.
+				// Check the documentation of KaTeX or MathJax for more details.
+				renderer: {
+					text: function(text) {
+						return katex.renderToString(text, { displayMode: true });
+						// return MathJax.tex2svg(text, { display: true }).outerHTML;
+					}
+				}
+			});
+			*/
 			totalStreamResultData = firstLineParagraphCleaner(totalStreamResultData);
 			console.log("responsesStreamCaptureTrace_markedConverted:", totalStreamResultData);
 			//totalStreamResultData = HTMLInterpreterPreparation(totalStreamResultData); //legacy old alpaca-electron interpretation
@@ -692,6 +722,8 @@ function engineStatsFetchReq(){
 	ipcRenderer.send("UMACheckUsage");
 	ipcRenderer.send("BackBrainQueueCheck");
 	ipcRenderer.send("BackBrainQueueResultCheck");
+	ipcRenderer.send("timingDegradationCheckFactor");
+	ipcRenderer.send("timingDegradationCheck");
 }
 
 engineStatsFetchReq
@@ -730,6 +762,17 @@ let dynamicTipsProgressLLMChild="";
 ipcRenderer.on("internalTEProgressText", (_event, { data }) => {
 	dynamicTipsProgressLLMChild=data;
 });
+
+
+ipcRenderer.on("timingDegradationFactorReciever_renderer", (_event, { data }) => {
+	console.debug("Factor Degradation GUI", data);
+});
+
+ipcRenderer.on("timingDegradationReciever_renderer", (_event, { data }) => {
+	console.debug("Timing Degradation GUI (ms)", data);
+});
+
+
 
 ipcRenderer.on("systemBackPlateInfoView", (_event, { data }) => {
 	SystemBackplateInfoText.style.opacity = 0;
