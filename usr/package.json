@@ -1,8 +1,8 @@
 {
 	"name": "project-zephyrine",
 	"productName": "Project Zephyrine",
-	"description": "An amicable, ensorcelled, and refined modality for engaging the Learned Language Model.",
-	"version": "0.1.6",
+	"description": "An amicable, ensorcelled, and refined modality for engaging the Large Language Model.",
+	"version": "0.1.7",
 	"engines": {
 		"node": "v20.11.1"
 	},

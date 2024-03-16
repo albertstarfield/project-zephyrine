@@ -402,6 +402,15 @@
 						</div>
 						<h5>Enable Adelaide to see through cameras and display server frame as context</h5>
 
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="locationSeekMode" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Fetch Location (Not yet Implemented)</p>
+						</div>
+						<h5>Enable Adelaide to see through location API for better pin pointing response</h5>
+
 						<div style="height: 32px"></div>
 						<h2>Basic LLM Binary Parameters Settings</h2>	
 						<div style="height: 8px"></div>		
@@ -438,21 +447,21 @@
 						</div>
 
 						<div style="height: 32px"></div>
-						<h2>QoS Performance Enforcement</h2>
+						<h2>Performance Enforcement</h2>
 
 						<div class="item">
 							<p>QoS Internal Thought ms Timeout Global LLMChild (in ms)</p>
-							<input type="number" step="1" min="2000" max="2555536" id="QoSTimeoutLLMChildGlobal" value="40000" placeholder="60000" />
+							<input type="number" step="1000" min="2000" max="2555536" id="QoSTimeoutLLMChildGlobal" value="40000" placeholder="60000" />
 						</div>
 
 						<div class="item">
 							<p>QoS Internal Thought ms Timeout SubCategory LLMChild (in ms)</p>
-							<input type="number" step="1" min="2000" max="65536" id="QoSTimeoutLLMChildSubCategory" value="10000" placeholder="30000" />
+							<input type="number" step="100" min="2000" max="65536" id="QoSTimeoutLLMChildSubCategory" value="10000" placeholder="30000" />
 						</div>
 
 						<div class="item">
 							<p>QoS BackBrain Internal Thought ms Timeout Global LLMChild (in ms)</p>
-							<input type="number" step="1" min="2000" max="99999999999999999999" id="QoSTimeoutLLMChildBackBrainGlobalQueueMax" value="10000" placeholder="36000000" />
+							<input type="number" step="1000" min="2000" max="99999999999999999999" id="QoSTimeoutLLMChildBackBrainGlobalQueueMax" value="10000" placeholder="36000000" />
 						</div>
 
 						<div style="display: flex; align-items: center">
@@ -471,7 +480,20 @@
 							</label>
 							<p style="margin: 0">BackBrain</p>
 						</div>
-						<h5>The Backbrain QoS Switch enables the program to seamlessly transition its thought processes to the background when the processor's capacity is deemed insufficient or if there's significant delay. This feature is integral to the architecture designed to facilitate the smooth execution of tasks, particularly crucial for supporting the operation of a 146B Total Model at the speed required the same as 7b q4_0. However this queue will be processed purely on CPU.</h5>
+						<h5>The Backbrain QoS Switch enables the program to seamlessly transition its thought processes to the background when the processor's capacity is deemed insufficient or if there's significant delay. This feature is integral to the architecture designed to facilitate the smooth execution of tasks, particularly crucial for supporting the operation of a 146B Total Model at the speed required the same as 7b q4_0.</h5>
+
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="attemptaccelerate"/>
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Attempt to Use any Available Acceleration</p>
+						</div>
+						<div class="item">
+							<p>Layers Hardware Acceleration Offloading</p>
+							<input type="number" step="1" min="1" max="69" id="hardwarelayeroffloading" value="3" placeholder="2" />
+						</div>
+						<h5>Specify the allocation of Neural Network Layers to the Dedicated Hardware Accelerator, aligning with your dedicated accelerator's memory budget.</h5>
 
 						<div style="height: 32px"></div>
 						<h2>Additional Context Settings</h2>
@@ -561,20 +583,7 @@
 							<p style="margin: 0">Save and Restore Interaction Session</p>
 						</div>
 						<h5>This toggle exclusively reinstates the interaction history within the graphical user interface, refraining from providing the AI or central LLM framework with prior conversation context. To grant the context and leverage the preceding dialogue history, it is imperative to activate the "Local File Access" and "Let LLM Decide and Craft the query" toggles as a minimum requirement.</h5>
-						<div style="height: 32px"></div>
-						<h2>Neural Hardware Acceleration</h2>
-						<div style="display: flex; align-items: center">
-							<label class="switch" style="height: 1.153512rem">
-								<input type="checkbox" id="attemptaccelerate"/>
-								<span class="slider round"></span>
-							</label>
-							<p style="margin: 0">Attempt to Use any Available Acceleration</p>
-						</div>
-						<div class="item">
-							<p>Layers Hardware Acceleration Offloading</p>
-							<input type="number" step="1" min="1" max="69" id="hardwarelayeroffloading" value="3" placeholder="2" />
-						</div>
-						<h5>Specify the allocation of Neural Network Layers to the Dedicated Hardware Accelerator, aligning with your dedicated accelerator's memory budget.</h5>
+						
 						<div style="height: 32px"></div>
 						<h2>Emotions</h2>
 						<div style="display: flex; align-items: center">
@@ -593,6 +602,27 @@
 							<p style="margin: 0">Enable Emotion Profile Picture</p>
 						</div>
 						<h5>Facilitates the dynamic alteration of profile pictures in response to the emotions captured within the context. This functionality relies on the activation of the Emotion Engine; without it, this trigger remains inactive.</h5>
+						
+						<div style="height: 32px"></div>
+						<h2>Pinokio Inspired Toolbox</h2>
+						<h5>This part requires python3 and virtualenv compatibility to be installed!</h5>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="stablediffusiondeqare"/>
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Enable Stable-Diffusion dE_QARE (Not yet Implemented)</p>
+						</div>
+						<h5>Enable AI image generated capabilities dE_QARE Engine based on the Questandachievement built AI tool</h5>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="audiolm_craft"/>
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">Enable audiolm_craft (Not yet Implemented)</p>
+						</div>
+						<h5>Enable Audio LM Craft that would craft tunes and stuff.</h5>
+
 						<div style="height: 32px"></div>
 						<h2>Automata Settings</h2>
 						<div style="display: flex; align-items: center">
@@ -602,7 +632,7 @@
 							</label>
 							<p style="margin: 0">Automata Agent Mode</p>
 						</div>
-						<h5>This functionality allows the program to operate autonomously, potentially leading to sustained high CPU/GPU utilization. It represents a legacy of Project Charlotte, characterized by some degree of memorization, which commenced on June 8, 2023.</h5>
+						<h5>This functionality allows the program to operate autonomously, potentially leading to sustained high CPU/GPU utilization. It represents a legacy of Project Charlotte, characterized by some degree of memorization, which commenced on June 8, 2023 Brawijaya University Electrical Engineering RisTIE.</h5>
 
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
@@ -618,9 +648,10 @@
 								<input type="checkbox" id="selfmodifyingcode" />
 								<span class="slider round"></span>
 							</label>
-							<p style="margin: 0">Adaptic Self Modification Code(Not Yet Implemented)</p>
+							<p style="margin: 0">Adaptic Self Modification Code (Not Yet Implemented)</p>
 						</div>
 						<h5>Caution is warranted! This implementation empowers the software to exhibit autonomic behavior akin to a biological cell, thereby enabling autonomous self-maintenance, self-adaptation, and autonomous code evolution in response to environmental stimuli and exigencies.</h5>
+						<div style="height: 32px"></div>
 						<h2> Fallback Compatibility Mode </h2>
 						<div style="display: flex; align-items: center">
 							<label class="switch" style="height: 1.153512rem">
