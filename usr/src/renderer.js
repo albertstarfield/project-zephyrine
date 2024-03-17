@@ -387,7 +387,7 @@ ipcRenderer.on('emotionalEvaluationResult', (event, data) => {
   });  
 
 const marked = require('marked'); // call marked marked.js to convert output to Markdown
-const katex = require('katex');
+const katex = require('katex'); // LaTeX Conversion! We're going scientific m8!
 
 const say = (msg, id, isUser) => {
 	// Sidenote : Reverse Engineering Conclusion : Only captures one data stream iteration
@@ -505,14 +505,14 @@ let prefixConsoleLogStreamCapture = "[LLMMainBackendStreamCapture]: ";
 
 // this is for recieving (load User input) message from the saved message routines
 ipcRenderer.on("manualUserPromptGUIHijack", async (_event, { data }) => { 
-	var userPretendInput = data; //marked.parse(responses[id]);
+	var userPretendInput = data.interactionTextData; //marked.parse(responses[id]);
 	say(userPretendInput, `user${gen}`, true);
 	gen++;
 });
 // this is for recieving (load AI Output) message from the saved message routines
 ipcRenderer.on("manualAIAnswerGUIHijack", async (_event, { data }) => { 
 	const id = gen;
-	var response = data;
+	var response = data.interactionTextData;
 	let existing = document.querySelector(`[data-id='${id}']`);
 
 	if (existing) {
@@ -543,7 +543,9 @@ ipcRenderer.on("manualAIAnswerGUIHijack", async (_event, { data }) => {
 	// okay it seems that it works but its saying about "Uncaught (in promise) TypeError: Cannot read properties of undefined (reading 'toLowerCase()')
 
 	// Oh its about the profile picture emotion issue we can just stub it out using the normal profile picture, nobody will notice for now (define using default)
-	profilePictureEmotions = "happy"; 
+	//profilePictureEmotions = "happy"; 
+	// Since the data now have the emotions we can use the emotion data to replace the profilePictureEmotions based on what is saved
+	profilePictureEmotions = data.emotion;
 	existing.innerHTML = response; // no submitting this thing will result in error "Uncaught (in promise) TypeError: Cannot set properties of null (setting 'innerHTML')"
 	// Something is missing. Ah th emissing part is that on the let existing need to end with .innerHTML, Nope. Still erroring out.
 });
@@ -993,6 +995,7 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("profilepictureemotion").checked = data.profilePictureEmotion;
 	document.getElementById("longchainthought-neverfeelenough").checked = data.longChainThoughtNeverFeelenough;
 	document.getElementById("AutomateLoopback").checked = data.automateLoopback;
+	document.getElementById("openaiapiserverhost").checked = data.openAPIServer;
 });
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
@@ -1010,6 +1013,7 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			qostimeoutswitch: document.getElementById("QoSTimeoutSwitch").checked,
 			backbrainqueue: document.getElementById("BackbrainQueue").checked,
 			webAccess: document.getElementById("web-access").checked,
+			openaiapiserverhost: document.getElementById("openaiapiserverhost").checked,
 			automateLoopback: document.getElementById("AutomateLoopback").checked,
 			localAccess: document.getElementById("local-file-access").checked,
             llmdecisionMode: document.getElementById("LLMChildDecision").checked,

@@ -21,6 +21,8 @@
 - [x] Implemented UMA MLCMCF "Bigger" context window manager LLM Agnostic design.
 - [x] Implement and Replace Context Depth fetching to MLCMCF (Multi Level Condensed Memory Contextual Fetching).
 - [x] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents, Implemented using UMA MLCMCF NLP Based matching.
+- [ ] Multi-session Interactions Tab save and restore
+- [ ] New JSON interaction database that handles emotion, more data, side of interaction, and multiple SessionID
 - [ ] OpenAI API Implementation Bridge for Quality Testing standard of the engine model (Scientific Research Requirement using Standard Testing Method).
 - [ ] Auto Idle Sleep Detection auto fine-tune (Mimicking real-life brain retraining while sleep) maybe augment it to LoRA later on.
 - [ ] Implementing multi language support with Frontend Automatic Translation and Backend EN Processing.
