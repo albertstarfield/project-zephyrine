@@ -2102,8 +2102,9 @@ class BadSeedDetector {
     }
 
     badseedDetection() {
-        let currentInteraction = interactionStg[interactionStgOrder - 1];
-        let previousInteraction = interactionStg[interactionStgOrder - 2];
+		//interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder - 1].content
+        let currentInteraction = interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder - 1].content;
+        let previousInteraction = interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder - 2].content;
         // Replace null values with an empty string
         if (!currentInteraction || !previousInteraction || interactionStgOrder === 0) {
 			if (!currentInteraction){currentInteraction=""}
@@ -2457,8 +2458,75 @@ var zephyrineReady,
 var checkAVX,
 	isAVX2 = false;
 
+
+// Initialization of the Array
+//-------------------------------------------
 let interactionStg = []; // Interaction from the GUI Storage (Classic Depth Fetching Memory)
 // for MLCMCF refer back to "Basic Building Block of Adelaide Paradigm.drawio" Multi Level Condensed Memory Contextual Fetching tabs section
+
+let interactionSessionMemoryArrayFocus=0;
+// Interaction Session need to be defined Globally and if there a switch then iit is required to switch the interaction storage Focus
+
+// if interactionStg 
+const initInteractionStgContentTemplate = {
+    "session-id": interactionSessionMemoryArrayFocus,
+    "name": "Initial Interaction Storage",
+    "data": [
+        {"content": "PlaceHolder0", "role": username, "emotion": "happy"},
+        {"content": "PlaceHolder1", "role": assistantName, "emotion": "happy"},
+		{"content": "PlaceHolder2", "role": username, "emotion": "happy"},
+        {"content": "PlaceHolder3", "role": assistantName, "emotion": "happy"},
+		{"content": "PlaceHolder4", "role": username, "emotion": "happy"},
+        {"content": "PlaceHolder5", "role": assistantName, "emotion": "happy"},
+		{"content": "PlaceHolder6", "role": username, "emotion": "happy"},
+        {"content": "PlaceHolder7", "role": assistantName, "emotion": "happy"}
+    ]
+};
+interactionStg.push(initInteractionStgContentTemplate); //Pushing the template
+/*
+Manual on how to use this
+
+// Session Title
+interactionStg[0].name ?
+
+// Session ID
+interactionStg[0].session-id ?
+
+// Content
+interactionStg[0].data[interactionArray (from 0)].content ?
+// What side?
+interactionStg[0].data[interactionArray (from 0)].role ?
+// emotion 
+interactionStg[0].data[interactionArray (from 0)].emotion ?
+
+// How does it look on multi session interaction?
+
+		ToDo : Please rewrite the storage into this kind of stuff to prepare multi-session interaction
+
+		interactionStg = [
+    {
+        "session-id": "1234567890",
+        "name": "Session Interaction Storage",
+        "data": [
+            {"content": "...[YOUR SYSTEM PROMPT]...", "role": "system", "emotion": "happy"},
+            {"content": "...[YOUR QUESTIONS]...", "role": "user", "emotion": "happy"},
+            {"content": "...[YOUR EXPECTED ANSWER]...", "role": "assistant", "emotion": "happy"}
+        ]
+    },
+    {
+        "session-id": "6969699",
+        "name": "Another one",
+        "data": [
+            {"content": "...[YOUR SYSTEM PROMPT]...", "role": "system", "emotion": "happy"},
+            {"content": "...[YOUR QUESTIONS]...", "role": "user", "emotion": "happy"},
+            {"content": "...[YOUR EXPECTED ANSWER]...", "role": "assistant", "emotion": "happy"}
+        ]
+    }
+];
+
+*/
+//-------------------------------------------
+
 
 
 // UnifiedMemoryArray will be stored on experience folder and will be deduplicated every runtime
@@ -2469,21 +2537,12 @@ let UMAGBSize=0; //Global variable on how many gigs does the UMA takes on the ru
 
 let interactionStgJson;
 let interactionStgPersistentPath = `${path.resolve(__dirname, "storage", "presistentInteractionMem.json")}`;
-let experienceStgPersistentPath = `${path.resolve(__dirname, "storage", "foreverEtchedFirstHandExperienced.json")}`;
+let experienceStgPersistentPath = `${path.resolve(__dirname, "storage", "UMA_State.json")}`;
 let interactionStgOrder = 0;
 let retrievedinteractionStg;
 let interactionStgOrderRequest;
 let amiwritingonAIMessageStreamMode=false;
 function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
-	
-
-	//mode save
-	//mode retrieve
-	//mode restore
-	if (interactionStgOrder === 0){
-		interactionStg[0]=`=========InteractionStorageHeader========`;
-	}
-
 	//proactive UnifiedMemoryArray Management System
 	//------------------------------------------------------------------------------------------------------
 
@@ -2522,41 +2581,55 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
 	if (mode === "save"){
         //log.info(consoleLogPrefix,"Saving...");
-		
+
 		if(AITurn && !UserTurn){
 			if(!amiwritingonAIMessageStreamMode){
 				interactionStgOrder = interactionStgOrder + 1; // add the order number counter when we detect we did write it on AI mode and need confirmation, when its done we should add the order number
 				log.debug(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
-				UnifiedMemoryArray.push(interactionStg); //write once
+				log.debug(consoleLogPrefix, "Debug UserTurn Interaction json format", interactionStg[interactionSessionMemoryArrayFocus].data);
+				UnifiedMemoryArray.push(prompt);
 			}
 			amiwritingonAIMessageStreamMode=true;
 			
+			/*
 			//interactionStgOrder = interactionStgOrder + 1; //we can't do this kind of stuff because the AI stream part by part and call the  in a continuous manner which auses the interactionStgOrder number to go up insanely high and mess up with the storage
 			// How to say that I'm done and stop appending to the same array and move to next Order?
 			interactionStg[interactionStgOrder] += prompt; //handling the partial stream by appending into the specific array
 			interactionStg[interactionStgOrder] = interactionStg[interactionStgOrder].replace("undefined", "");
+			
+			Since we are using the second revision on how to store messages on json, we got an educational training from AI engineer from a company on the standard training data, we could use that as a basis on how to do this, see at the initial function comment for details
+			*/
+			const resultAI=prompt // this one is recieving AI result generation
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder] = {"content": resultAI, "role": assistantName, "emotion": emotionalEvaluationResult};
+			// Writing on the thing
+			
 			if (process.env.ptyinteractionStgDEBUG === "1"){
 				log.info(consoleLogPrefix,"AITurn...");
-				log.info(consoleLogPrefix, "reconstructing from pty stream: ", interactionStg[interactionStgOrder]);
+				log.info(consoleLogPrefix, "reconstructing from pty stream: ", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
 			}
 			
 		}
+
 		if(!AITurn && UserTurn){
 			amiwritingonAIMessageStreamMode=false;
 			
 			interactionStgOrder = interactionStgOrder + 1; //
-			interactionStg[interactionStgOrder] = prompt;
+			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration JSON data");
+			// this one is recieving User OG prompt
+			//interactionStg[interactionStgOrder] = prompt;
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder] = {"content": prompt, "role": username, "emotion": emotionalEvaluationResult};
 			if (process.env.ptyinteractionStgDEBUG === "1"){
-				log.info(consoleLogPrefix,"UserTurn...");
-				log.info(consoleLogPrefix, "stg pty stream user:", interactionStg[interactionStgOrder]);
+				log.debug(consoleLogPrefix,"UserTurn...");
+				log.debug(consoleLogPrefix, "stg pty stream user:", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
 			}
 			
 			log.debug(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
-			UnifiedMemoryArray.push(interactionStg);
+			UnifiedMemoryArray.push(prompt);
 			
 		}
 		if (process.env.ptyinteractionStgDEBUG === "1"){
-		log.info(consoleLogPrefix,"interactionStgOrder...", interactionStgOrder);
+		log.debug(consoleLogPrefix,"interactionStgOrder...", interactionStgOrder);
+		log.debug(consoleLogPrefix,"interactionStg Content", interactionStg);
 		}
 
 			// dedupe content on UnifiedMemoryArray to save storage proactively
@@ -2574,9 +2647,13 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
 		// Checking storage whether it was a bad seed or not
 		// log.error("Im here and stuck");
-		const detector = new BadSeedDetector(interactionStg, interactionStgOrder);
+		if (interactionStgOrder >= 2){
+
+		log.debug(consoleLogPrefix, "Checking Bad Seed...");
+		const detector = new BadSeedDetector(prompt, interactionStgOrder);
 		// log.error("Eh?");
 		detector.badseedDetection();
+	}
 		//log.info("Birds are born without shackles");
 		//log.info("Then what fetters my fate?");
 		//log.info("Blown away, the white petals");
@@ -2721,7 +2798,8 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		log.info(consoleLogPrefix,"retrieving Interaction Storage Order ", arraySelection);
 		if (arraySelection >= 1 && arraySelection <= interactionStgOrder)
         {
-		retrievedinteractionStg = interactionStg[arraySelection];
+		//retrievedinteractionStg = interactionStg[arraySelection];
+		retrievedinteractionStg = interactionStg[interactionSessionMemoryArrayFocus].data[arraySelection].content
 		} else {
 			retrievedinteractionStg = "None.";
 		}
@@ -2739,28 +2817,48 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				interactionStgOrder = interactionStgOrder + interactionStg.length;
 				//log.info(consoleLogPrefix, "Loaded dddx: ", interactionStg, interactionStgOrder);
 			} catch (err) {
-				log.info('Error reading JSON file:', err);
+				log.error('Error reading JSON file:', err);
+				log.error('Falling back to default JSON Storage:', interactionStg);
+				log.error('Debug memory dump Memory Array Focus:', interactionStg[interactionSessionMemoryArrayFocus]);
+				log.error('Debug memory dump Memory Array Content Data:', interactionStg[interactionSessionMemoryArrayFocus].data);
 				return;
 			}
 		
 			//log.debug(consoleLogPrefix, "Loaded: ", interactionStg, interactionStgOrder);
 			log.info(consoleLogPrefix, "Triggering Restoration Mode for the UI and main LLM Thread!");
 			// create a javascript for loop logic to send data to the main UI which uses odd order for the User input whilst even order for the AI input (this may fail categorized when the user tried change ) where the array 0 skipped and 1 and beyond are processed
-			for (let i = 1; i < interactionStg.length; i++) {
+			
+			// change the length detection from interactionStg.length to interactionStg[interactionSessionMemoryArrayFocus].data.length
+			for (let i = 1; i < interactionStg[interactionSessionMemoryArrayFocus].data.length; i++) {
 				// Check if the index is odd (user input message)
-				if (i % 2 === 1) {
+				// PFFFT this is old, lets use the more legitimate complicated JSON that have multiple properties whether it is from the user or not
+				/*
+				interactionStg = [
+					{
+						"session-id": "1234567890",
+						"name": "Session Interaction Storage",
+						"data": [
+							{"content": "...[YOUR SYSTEM PROMPT]...", "role": "system", "emotion": "happy"},
+							{"content": "...[YOUR QUESTIONS]...", "role": "user", "emotion": "happy"},
+							{"content": "...[YOUR EXPECTED ANSWER]...", "role": "assistant", "emotion": "happy"}
+						]
+					}
+				*/
+				if (interactionStg[interactionSessionMemoryArrayFocus].data[i].role == username) {
 					// Posting the message for the user side into the UI
 					//log.debug("User input message:", interactionStg[i]);
-					const dataChatForwarding=interactionStg[i];
+					const dataTextInteractionForwarding=interactionStg[interactionSessionMemoryArrayFocus].data[i].content;
+					const dataTextInteractionEmotion=interactionStg[interactionSessionMemoryArrayFocus].data[i].emotion;
 					win.webContents.send("manualUserPromptGUIHijack", {
-						data: dataChatForwarding
+						data: {"interactionTextData": dataTextInteractionForwarding, "emotion": dataTextInteractionEmotion}
 					});
-				} else { // Even index (servant input message)
+				} else if (interactionStg[interactionSessionMemoryArrayFocus].data[i].role == assistantName){ // Even index (servant input message)
 					// Posting the message for the AI side into the UI
 					//log.debug("Servant input message:", interactionStg[i]);
-					const dataChatForwarding=interactionStg[i];
+					const dataTextInteractionForwarding=interactionStg[interactionSessionMemoryArrayFocus].data[i].content;
+					const dataTextInteractionEmotion=interactionStg[interactionSessionMemoryArrayFocus].data[i].emotion;
 					win.webContents.send("manualAIAnswerGUIHijack", {
-						data: dataChatForwarding
+						data: {"interactionTextData": dataTextInteractionForwarding, "emotion": dataTextInteractionEmotion}
 					});
 				}
 			}
@@ -3193,8 +3291,15 @@ ipcMain.on("getParams", () => {
 
 // different configuration
 
-
 //each settings or new settings need to be defined her too not only on renderer.js
+
+ipcMain.on("openaiapiserverhost", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		openaiapiserverhost: value
+	});
+});
+
 
 ipcMain.on("qostimeoutswitch", (_event, value) => {
 	store.set("params", {
