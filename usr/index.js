@@ -935,7 +935,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
 	}
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
-	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 4096 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 4096 -e -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
@@ -2096,12 +2096,12 @@ let targetPlatform = '';
 // Function to blacklist seed, the seed that detected to make the model repeats the word from the input or leaks the , "AdditionalContext", "DO NOT mirror the Additional Context" "The current time and date is now" "There are additional context to answer" method that the program used even if its instructed to not repeats the very thing 
 let seedBlacklist=[];
 let seedBlacklistListFile=`${path.resolve(__dirname, "badSeedTerminationList.json")}`;
-class BadSeedDetector {
+class DPORuntimeAutomator {
     constructor() {
         // No need to accept parameters for interactionStg and interactionStgOrder
     }
 
-    badseedDetection() {
+    badSignatureDetection() {
 		//interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder - 1].content
         let currentInteraction = interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder - 1].content;
         let previousInteraction = interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder - 2].content;
@@ -2202,8 +2202,8 @@ const interactionStg = [
 ];
 const interactionStgOrder = 2;
 
-const detector = new BadSeedDetector(interactionStg, interactionStgOrder);
-detector.badseedDetection();
+const detector = new DPORuntimeAutomator(interactionStg, interactionStgOrder);
+detector.badSignatureDetection();
 */
 
 
@@ -2473,13 +2473,7 @@ const initInteractionStgContentTemplate = {
     "name": "Initial Interaction Storage",
     "data": [
         {"content": "PlaceHolder0", "role": username, "emotion": "happy"},
-        {"content": "PlaceHolder1", "role": assistantName, "emotion": "happy"},
-		{"content": "PlaceHolder2", "role": username, "emotion": "happy"},
-        {"content": "PlaceHolder3", "role": assistantName, "emotion": "happy"},
-		{"content": "PlaceHolder4", "role": username, "emotion": "happy"},
-        {"content": "PlaceHolder5", "role": assistantName, "emotion": "happy"},
-		{"content": "PlaceHolder6", "role": username, "emotion": "happy"},
-        {"content": "PlaceHolder7", "role": assistantName, "emotion": "happy"}
+        {"content": "PlaceHolder1", "role": assistantName, "emotion": "happy"}
     ]
 };
 interactionStg.push(initInteractionStgContentTemplate); //Pushing the template
@@ -2649,10 +2643,10 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		// log.error("Im here and stuck");
 		if (interactionStgOrder >= 2){
 
-		log.debug(consoleLogPrefix, "Checking Bad Seed...");
-		const detector = new BadSeedDetector(prompt, interactionStgOrder);
+		log.debug(consoleLogPrefix, "Checking Signature for Bad Output...");
+		const detector = new DPORuntimeAutomator(prompt, interactionStgOrder);
 		// log.error("Eh?");
-		detector.badseedDetection();
+		detector.badSignatureDetection();
 	}
 		//log.info("Birds are born without shackles");
 		//log.info("Then what fetters my fate?");
@@ -3090,7 +3084,7 @@ function initChat() {
 	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
 	const chatArgs = `-i -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
 	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
-	const paramArgs = `-m "${modelPath}" -n -1 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} -sm row -c 3192 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -1 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --dynatemp-range 0.3-${params.temp} --repeat-penalty 128 -sm row -c 3192 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
 	log.info(consoleLogPrefix, chatArgs, paramArgs)
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
