@@ -79,3 +79,26 @@ You might seeing that I'm Overdriving the specification of this software, No. Th
 
 Hi there, this is Albert. 
 I've been on a lecturer class and he said that AI can't innovate, and always using old previous dataset. He might be true, but he forgot that new innovation is caused by chain of thoughts and the dynamic data input surrounding them (either expected or unexpected). So... 
+
+---
+### Entry I : March 17, 2024
+---
+
+So if this is the way that we're going to go (Mesh-to-Mesh training dataset)
+1. How to obfuscate personal identifiable data into the dataset
+2. How can we share and merge mesh-to-mesh networking (IPFS) for sharing dataset (Not relying on one server)
+3. How can we automatically train the data into the main LLM 7b when idle
+4. then when there's two model done retrained (how can we solve the two individual conflicting model issue)
+5. Checkpoint if the computer is slowly crawling on big data training?
+Of course this is opt-out able, for privacy and NDA reasons.
+
+I have been tasked to auto-develop a dataset for self-developing AI Model
+[
+{"content": "...[YOUR SYSTEM PROMPT]...", "role": "system"},
+{"content": "...[YOUR QUESTIONS]...", "role": "user"},
+{"content": "...[YOUR EXPECTED ANSWER]...", "role": "assistant"}
+]
+
+I would add another one to develop multi session interaction
+array L0 session and name
+array L1 content role and emotion
