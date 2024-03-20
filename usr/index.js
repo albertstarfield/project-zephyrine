@@ -425,7 +425,7 @@ const schema = {
 	params: {
 		default: {
 			repeat_last_n: '328',
-			repeat_penalty: '6.9',
+			repeat_penalty: '1.469',
 			top_k: '10',
 			top_p: '0.9',
 			temp: '0.99',
@@ -671,47 +671,54 @@ async function externalInternetFetchingScraping(text) {
     //const searchUrl = `https://duckduckgo.com/html/?q=${encodeURIComponent(query)}`;
     const pageLimit = store.get("params").websearch_amount; // Number of pages to download
 	log.debug(consoleLogPrefix, "🌐 Entering Search Mode");
-    try {
-        // Perform search and get search results
+	try {
+		// Perform search and get search results
 		log.debug(consoleLogPrefix, "🌐 Acessing the Search Engine!");
-        const searchResults = await DDG.search(query, { proxy: false });
-		//const searchResults = await DDG.search("test", { proxy: false });
-		//log.debug(consoleLogPrefix, "🌐 Done Acessing StubTest", searchResults);
-		const resultsCheck = searchResults.results.length
-        //const $ = cheerio.load(searchResponse.data);
-		//log.debug(consoleLogPrefix, "🌐 Links List Length?", resultsCheck);
-		//log.debug(consoleLogPrefix, "🌐 InternalData", searchResults.results);
-		//log.debug(consoleLogPrefix, "🌐 Understanding Array 0 URL", searchResults.results[0].url);
-		for (let i = 0; i < searchResults.results.length && i <= pageLimit; i++) {
-            const url = searchResults.results[i].url;
-            log.info(consoleLogPrefix,`Reading: ${url}`);
-            
-            const response = await axios.get(url);
-            const htmlData = response.data;
-            const $ = cheerio.load(htmlData);
-            
-            // Process the HTML data as needed
-            // For example, extract text from specific elements:
-            const title = $('title').text();
-            const bodyText = $('body').text();
 
-            //log.debug(`Title: ${title}`);
-            //log.debug(`Body Text: ${bodyText}`);
+		// Adding timeout for DDG search
+		const ddgSearchPromise = DDG.search(query, { proxy: false });
+		const ddgSearchWithTimeout = Promise.race([
+			ddgSearchPromise,
+			new Promise((_, reject) => setTimeout(() => reject(new Error('Search timeout')), QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig))
+		]);
+		const searchResults = await ddgSearchWithTimeout;
+
+		// Adding timeout for axios request
+		for (let i = 0; i < searchResults.results.length && i <= pageLimit; i++) {
+			const url = searchResults.results[i].url;
+			log.info(consoleLogPrefix, `Reading: ${url}`);
+
+			const responsePromise = axios.get(url);
+			const responseWithTimeout = Promise.race([
+				responsePromise,
+				new Promise((_, reject) => setTimeout(() => reject(new Error('Request timeout')), QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig))
+			]);
+			const response = await responseWithTimeout;
+
+			const htmlData = response.data;
+			const $ = cheerio.load(htmlData);
+
+			// Process the HTML data as needed
+			// For example, extract text from specific elements:
+			const title = $('title').text();
+			const bodyText = $('body').text();
+
 			UnifiedMemoryArray.push(title); // push the content 
 			UnifiedMemoryArray.push(bodyText); // push the content 
+		}
 
-        }
 		log.debug(consoleLogPrefix, "🌐 Concatenated the HTML Content to UMA MLCMCF");
-        // Return the concatenated HTML content
-		combinedText = plainText
-        //return htmlContent;
-    } catch (error) {
+		// Return the concatenated HTML content
+		combinedText = plainText;
+
+	} catch (error) {
 		log.error(consoleLogPrefix, "🌐 No result returned or partially returned result!");
-        log.error(consoleLogPrefix,'Cause:', error);
+		log.error(consoleLogPrefix, 'Cause:', error);
 		UnifiedMemoryArray.push(query); // Give an dataset on what query that is error
 		UnifiedMemoryArray.push(error); // give the error
-        //return null;
-    }
+		//return null;
+	}
+
 		log.debug(consoleLogPrefix, "🌐 The part where acessing Accessing UMA MLCMCF!");
 		const combinedTextMLCMCFProcessed = interactionArrayStorage("retrieve_MLCMCF_Mode", query, false, false, store.get("params").websearch_amount).join('');
 
@@ -890,8 +897,16 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	prompt = prompt.replace("[object Promise]", "");
 	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Stripping ProgramBreakingCharacters");
 	function stripProgramBreakingCharacters_childLLM(str) {
+		// Replace consecutive \n\n with a single \n using a loop
+		while (str.includes('\n\n')) {
+			str = str.replace(/\n\n/g, '\\n');
+		}
+		while (str.includes('nnnn')) {
+			str = str.replace(/nnnn/g, '');
+		}
+		// Remove characters other than letters (\p{L}) and whitespace (\s)
 		return str.replace(/[^\p{L}\s]/gu, "");
-	  }
+	}
 	prompt = stripProgramBreakingCharacters_childLLM(prompt); // this fixes the strange issue that frozes the whole program after the 3rd interaction
 	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ParamInput");
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
@@ -935,7 +950,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
 	}
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
-	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --repeat-penalty 256 --mirostat 2 --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 4096 -e -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 4096 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
@@ -987,6 +1002,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	//log.info(consoleLogPrefix, 'LLMChild Filtering Output');
 	//return filteredOutput;
 	filteredOutput = stripProgramBreakingCharacters(filteredOutput);
+	filteredOutput = stripProgramBreakingCharacters_childLLM(filteredOutput);
 	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Done");
 	filteredOutput = `${filteredOutput}`
 	return filteredOutput;
@@ -1741,7 +1757,7 @@ async function callInternalThoughtEngine(prompt){
 			//reevaluateAdCtxDecisionAgent = findClosestMatch(reevaluateAdCtxDecisionAgent, decisionBinaryKey); // This for some reason have oversensitivity to go to "yes" answer
 			if (reevaluateAdCtxDecisionAgent.includes("yes") || reevaluateAdCtxDecisionAgent.includes("yep") || reevaluateAdCtxDecisionAgent.includes("ok") || reevaluateAdCtxDecisionAgent.includes("valid") || reevaluateAdCtxDecisionAgent.includes("should") || reevaluateAdCtxDecisionAgent.includes("true")){
 				reevaluateAdCtx = true;
-				randSeed = generateRandomNumber(minRandSeedRange, maxRandSeedRange);
+				randSeed = generateRandSeed();
 				log.info(consoleLogPrefix, `Context isnt good enough! Still lower than standard! Shifting global seed! ${randSeed}`);
 				
 				log.info(consoleLogPrefix, reevaluateAdCtxDecisionAgent);
@@ -2217,11 +2233,27 @@ function generateRandomNumber(min, max) {
 let randSeed
 let configSeed = store.get("params").seed;
 let maxRandSeedRange=9999999999999999;
-let minRandSeedRange=0;
+let minRandSeedRange=2;
 
 function generateRandSeed(){
+
+	function isPrime(number) {
+		// If number is less than 2, it's not prime
+		if (number < 2) {
+			return false;
+		}
+		// Check for divisibility from 2 to the square root of the number
+		for (let i = 2; i <= Math.sqrt(number); i++) {
+			if (number % i === 0) {
+				return false; // If divisible by any number, not prime
+			}
+		}
+		return true; // If not divisible by any number, prime
+	}
+
     let isBlacklisted = true;
 	let randSeedResult;
+	log.info(consoleLogPrefix, "Loading Seed, Might take a while...");
     while (isBlacklisted) {
         // Generate a random seed
         randSeedResult = generateRandomNumber(minRandSeedRange, maxRandSeedRange);
@@ -2235,6 +2267,9 @@ function generateRandSeed(){
             seedBlacklist.push(jsonData);
         } 
         isBlacklisted = seedBlacklist.includes(randSeed);
+		if(!isPrime(randSeedResult)){
+			isBlacklisted = true;
+		}
     }
 
 	if (configSeed === "-1"){ 
@@ -2574,17 +2609,28 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	//------------------------------------------------------------------------------------------------------
 
 	if (mode === "save"){
-        //log.info(consoleLogPrefix,"Saving...");
-
+        log.debug(consoleLogPrefix,"Save Invoked!");
+		
+		
 		if(AITurn && !UserTurn){
 			if(!amiwritingonAIMessageStreamMode){
-				interactionStgOrder = interactionStgOrder + 1; // add the order number counter when we detect we did write it on AI mode and need confirmation, when its done we should add the order number
+				interactionStgOrder = interactionStgOrder + 1;
+				 // add the order number counter when we detect we did write it on AI mode and need confirmation, when its done we should add the order number
 				log.debug(consoleLogPrefix, "Debug Unifying User Turn Interactiong stg");
 				log.debug(consoleLogPrefix, "Debug UserTurn Interaction json format", interactionStg[interactionSessionMemoryArrayFocus].data);
 				UnifiedMemoryArray.push(prompt);
 			}
 			amiwritingonAIMessageStreamMode=true;
 			
+			if (process.env.ptyinteractionStgDEBUG === "1"){
+				log.debug(consoleLogPrefix, "Entering the interactionStg Order array json focus scheme, this is where i'm going to get stuck without error")
+			}
+			if (!interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]){
+				log.error("Prop doesn't exist yet!");
+				interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]={"content": ``, "role": "UNK", "emotion": "UNK"}
+				log.error("Scheme has been initialized", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
+			}
+
 			/*
 			//interactionStgOrder = interactionStgOrder + 1; //we can't do this kind of stuff because the AI stream part by part and call the  in a continuous manner which auses the interactionStgOrder number to go up insanely high and mess up with the storage
 			// How to say that I'm done and stop appending to the same array and move to next Order?
@@ -2593,10 +2639,16 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			
 			Since we are using the second revision on how to store messages on json, we got an educational training from AI engineer from a company on the standard training data, we could use that as a basis on how to do this, see at the initial function comment for details
 			*/
-			const resultAI=prompt // this one is recieving AI result generation
-			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder] = {"content": resultAI, "role": assistantName, "emotion": emotionalEvaluationResult};
-			// Writing on the thing
 			
+			const resultAIPartialStream=prompt // this one is recieving AI result generation
+			// Slowly reconstruct on the .content property
+			if (process.env.ptyinteractionStgDEBUG === "1"){
+				log.debug(consoleLogPrefix, "Catching AI Buffer!", resultAIPartialStream)
+			}
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].emotion = emotionalEvaluationResult
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].role = assistantName
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].content += resultAIPartialStream;
+			// Writing on the thing
 			if (process.env.ptyinteractionStgDEBUG === "1"){
 				log.info(consoleLogPrefix,"AITurn...");
 				log.info(consoleLogPrefix, "reconstructing from pty stream: ", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
@@ -2606,12 +2658,24 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
 		if(!AITurn && UserTurn){
 			amiwritingonAIMessageStreamMode=false;
-			
-			interactionStgOrder = interactionStgOrder + 1; //
-			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration JSON data");
+			interactionStgOrder = interactionStgOrder + 1;
+			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration Dictionary data");
+			if (process.env.ptyinteractionStgDEBUG === "1"){
+				log.debug(consoleLogPrefix, "current pty stream capture interactionStg", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
+			}
+			if (process.env.ptyinteractionStgDEBUG === "1"){
+				log.debug(consoleLogPrefix, "Entering the interactionStg Order array json focus scheme, this is where i'm going to get stuck without error")
+			}
+			if (!interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]){
+				log.error("Prop doesn't exist yet!");
+				interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]={"content": ``, "role": "UNK", "emotion": "UNK"}
+				log.error("Scheme has been initialized", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
+			}
 			// this one is recieving User OG prompt
 			//interactionStg[interactionStgOrder] = prompt;
-			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder] = {"content": prompt, "role": username, "emotion": emotionalEvaluationResult};
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].emotion = emotionalEvaluationResult;
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].role = username;
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].content = prompt;
 			if (process.env.ptyinteractionStgDEBUG === "1"){
 				log.debug(consoleLogPrefix,"UserTurn...");
 				log.debug(consoleLogPrefix, "stg pty stream user:", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
@@ -2654,6 +2718,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		//log.info("Leave me trapped in the cage");
 		
     }else if (mode === "retrieve_MLCMCF_Mode"){
+		const limitCharacterOutput=512; //put the limit 512 later on if its not enough the LLMChild can re-retrieve back what's required from MLCMCF iteratively
 		log.info(consoleLogPrefix,"Calling \"Unified Memory Array\" Target: ", `${prompt}`, arraySelection);
 
 		// Just directly connect to all of it
@@ -2735,10 +2800,8 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
 		let L1_focusedUMAArrayChunk = [];
 		//log.debug('converting L1_focusedUMAArrayFullLength to L1_focusedUMAArrayFullLength', L1_focusedUMAArrayChunk, L1_focusedUMAArrayFullLength);
-		L1_focusedUMAArrayChunk = nlp(L1_focusedUMAArrayFullLength.join(' ')).normalize().out('array'); //Tokenize it rather than cut it without context
+		L1_focusedUMAArrayChunk = nlp(L1_focusedUMAArrayFullLength.join(' ').slice(0, limitCharacterOutput)).normalize().out('array'); //Tokenize it rather than cut it without context
 
-		//log.debug('L1_focusedUMAArrayChunk:', L1_focusedUMAArrayChunk);
-	  
 		// 5. That variable array then calculate and find with the "string" that been given earlier with the compromise module to find the string using NLP then select the array index that have the highest similarity score. After that fetch the selected index with from index to index-(delta number value) (Backwards) also index+(delta number value) forward into a variable array named L2_focusedUMAArrayChunkDelta (already defined).
 		let L2_focusedUMAArrayChunkDelta = [];
 		//log.debug('L2 Reset Memory Storage, Entering Checking For Loop');
@@ -2784,19 +2847,21 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		
 		
 		// log.debug(consoleLogPrefix, "MLCMCF L2 Focused Retrieved Array", L2_focusedUMAArrayChunkDelta);
-
+		log.debug(consoleLogPrefix, "UMA Retrieval Peaked Score", maxScore);
 		return L2_focusedUMAArrayChunkDelta;
 
 
     } else if (mode === "retrieve"){
 		log.info(consoleLogPrefix,"retrieving Interaction Storage Order ", arraySelection);
-		if (arraySelection >= 1 && arraySelection <= interactionStgOrder)
+		if (arraySelection >= 1 && arraySelection <= interactionStgOrder && interactionStgOrder <= 2)
         {
 		//retrievedinteractionStg = interactionStg[arraySelection];
 		retrievedinteractionStg = interactionStg[interactionSessionMemoryArrayFocus].data[arraySelection].content
 		} else {
 			retrievedinteractionStg = "None.";
 		}
+
+		
 		return retrievedinteractionStg;
 
     } else if (mode === "restoreLoadPersistentMem"){
@@ -2873,11 +2938,11 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 						const jsonData = JSON.parse(data);
 						log.info(consoleLogPrefix, "Interpreting JSON and Converting to Array");
 						UnifiedMemoryArray = jsonData;
-						log.info(consoleLogPrefix, "UMA state has been loaded!")
+						log.info(consoleLogPrefix, "UMA state has been loaded!");
 						//log.debug(consoleLogPrefix, "Loaded UMA: ", UnifiedMemoryArray);
 					}
 			}
-			log.info(consoleLogPrefix, "Done!")
+			log.info(consoleLogPrefix, "Done!");
 		} else {
 			log.info(consoleLogPrefix, "Save and Restore Chat Disabled");
 		}
@@ -2886,7 +2951,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	} else if (mode === "reset"){
 		log.info(consoleLogPrefix, "Resetting Temporary Storage Order and Overwriting to Null!");
 		interactionStgOrder=0;
-		interactionStg = [];
+		interactionStg = initInteractionStgContentTemplate;
 		
 	} else if (mode === "flushPersistentMem"){
 		if (store.get("params").SaveandRestoreInteraction) {
@@ -3084,7 +3149,7 @@ function initChat() {
 	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
 	const chatArgs = `-i -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
 	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
-	const paramArgs = `-m "${modelPath}" -n -2 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --repeat-penalty 256 --mirostat 2 -sm row -c 3192 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -2 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --repeat-penalty 1.5 --mirostat 2 -sm row -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
 	log.info(consoleLogPrefix, chatArgs, paramArgs)
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
@@ -3099,7 +3164,7 @@ ipcMain.on("message", async (_event, { data }) => {
 		//zephyrineHalfReady = false;
 		interactionArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 		blockGUIForwarding = true;
-		//log.info(consoleLogPrefix, `Forwarding manipulated Input to processor ${data}`);
+		//log.info(consoleLogPrefix, `Forwarding manipulated Input RAG to mainLLM processor ${data}`);
 		 // push to internal thought engine
 		 
 		if(store.get("params").qostimeoutswitch){
@@ -3180,7 +3245,7 @@ async function AutomataProcessing(){
 		//The preceding internal reflections consist of ${historyChatRetrieved[2]}, ${historyChatRetrieved[1]}, and the response from ${assistantName} is ${automataLLMMainresultReciever}. What would be the optimal next conversation topic, with the flexibility to shift topics to prevent stagnation, while rigorously testing the idea to its fullest extent? Additionally, ensure that responses are not generic, akin to those found on forums like ANSWER.MICROSOFT.COM, but rather focus on specialized case problem-solving.
 		const promptAutomataInput = `
 		The previous internal reflections comprise ${historyChatRetrieved[2]}, ${historyChatRetrieved[1]}, and the response from ${assistantName} is ${automataLLMMainresultReciever}. What would be the most suitable next conversation topic, allowing for topic flexibility to prevent stagnation, yet rigorously testing the idea to its fullest extent (that will and have to break the argument, Avoid reassuration but instead always challenge the argument! And if the answer and conversation is generic enforce it to give example and the technical how-to solve the very issue)? Furthermore, ensure that responses do not mimic generic answers found on platforms such as on the tech support forums, but rather focus on specialized technical nerdy thesis defense endless depth case problem-solving answer style.`;
-		const AutomataReInjection = await callLLMChildThoughtProcessor(promptAutomataInput, 3192);
+		const AutomataReInjection = await callLLMChildThoughtProcessor(promptAutomataInput, 2048);
 		let RAGAutomataPostProcessing;
 		if(store.get("params").qostimeoutswitch){
 			RAGAutomataPostProcessing = await callInternalThoughtEngineWithTimeoutandBackbrain(AutomataReInjection);
