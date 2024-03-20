@@ -24,9 +24,9 @@ const availableImplementedLLMModelSpecificCategory = {
 		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
 	},
 	language_specific_indonesia : {
-		downloadLink: "https://huggingface.co/detakarang/sidrap-7b-v2-gguf/resolve/main/sidrap-7b-v2.q4_K_M.gguf?download=true", //change this later on
+		downloadLink: "https://huggingface.co/janhq/komodo-7b-chat-GGUF/resolve/main/komodo-7b-chat.Q3_K_M.gguf?download=true", //change this later on
 		filename: "specLM_IndonesiaLanguage.bin",
-		CategoryDescription: "Indonesian Language Conversation Maybe Translation or Something",
+		CategoryDescription: "Indonesian Multi cultural Komodo7b Conversation Language Model",
 		ParamSize: "7B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
