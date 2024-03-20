@@ -285,14 +285,35 @@ button#clear {
 }
 button#stop:hover,
 button#autocomplete:hover,
+/* Chat Tab*/
+button#session0:hover,
+button#addSession:hover,
+
+button#session0,
+button#addSession,
+
+/* Figure out how to adapt to the next added tab with the same css properties*/
+
+
+
 button#clear:hover {
 	background: var(--background-alt);
 }
 button#stop,
+/* Main culprit that causes autocomplete button to disappear! its not from the renderer.js but from the css instead*/
+/*
 .running-model button#autocomplete {
 	display: none;
 }
 .running-model button#stop,
+*/
+/* -------------------------------- */
+
+.running-model button#unknownRedirect {
+	display: none;
+}
+.running-model button#stop,
+
 button#autocomplete,
 button#clear {
 	display: flex;
@@ -489,6 +510,26 @@ li {
 	opacity: 0;
 	pointer-events: none;
 }
+
+.interactionSessionTab {
+	margin: 0rem 0rem 0rem 0rem;
+    padding: 1rem;
+    display: flex;
+    box-sizing: border-box;
+    background: rgba(0, 0, 0, 0.08);
+    border-radius: 4rem;
+    backdrop-filter: blur(2px);
+    pointer-events: none;
+    max-width: 11rem;
+    align-self: center;
+    box-shadow: 0 0 1.2794rem var(--shadow-color-less-intense);
+    align-items: center;
+    align-content: space-between;
+    flex-direction: column;
+    justify-content: space-between;
+}
+
+
 .loading-bar {
     height: 0.04rem; /* Adjust the height of the loading bar as needed */
 	top: 0;

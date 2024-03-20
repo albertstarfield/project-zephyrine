@@ -307,6 +307,11 @@ input.addEventListener("keyup", () => {
 
 let isRunningModel = false;
 
+/*
+
+We dont use Loading spinning wheel anymore
+
+// Loading Logo Spinning W
 const loading = (on) => {
 	if (on) {
 		document.querySelector(".loading").classList.remove("hidden");
@@ -314,6 +319,8 @@ const loading = (on) => {
 		document.querySelector(".loading").classList.add("hidden");
 	}
 };
+
+*/
 
 form.addEventListener("submit", (e) => {
 	e.preventDefault();
@@ -335,7 +342,7 @@ form.addEventListener("submit", (e) => {
 		//Haha reverse engineering done!
 		*/
 		say(input.value, `user${gen}`, true); // so ${gen} is for determining what part of the chat history that its belongs to, Nice!
-		loading(prompt);
+		//loading(prompt);
 		input.value = "";
 		isRunningModel = true;
 		stopButton.removeAttribute("disabled");
@@ -555,12 +562,12 @@ ipcRenderer.on("result", async (_event, { data }) => {
 	const id = gen;
 	let existing = document.querySelector(`[data-id='${id}']`);
 	let totalStreamResultData;
-	loading(false);
+	//loading(false);
 	if (data == "\n\n<end>") {
 		setTimeout(() => { // this timeout is for the final render, if somehow after the 
 			isRunningModel = false;
-			existing.style.opacity = 0;
-			existing.style.transition = 'opacity 1s ease-in-out';
+			//existing.style.opacity = 0;
+			//existing.style.transition = 'opacity 1s ease-in-out';
 			console.log(prefixConsoleLogStreamCapture, "Stream Ended!");
 			console.log(prefixConsoleLogStreamCapture, "Assuming LLM Main Backend Done Typing!");
 			console.log(prefixConsoleLogStreamCapture, "Sending Stream to GUI");
@@ -570,8 +577,12 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			try{
 				totalStreamResultData = marked.parse(responses[id]);
 			}catch(error){
-				console.error(prefixConsoleLogStreamCapture, "ERROR Marked, Preventing Disappearing", error)
+				console.error(prefixConsoleLogStreamCapture, "ERROR Marked, Preventing Disappearing", error, "Captured Content:", responses[id])
 				totalStreamResultData = responses[id];
+			}
+			if (!totalStreamResultData == undefined){
+				console.error("Capture Stream Broken!")
+				totalStreamResultData="🛑 An Unexpected Error has been occoured and Adelaide Engine lost context capture from mainLLM Thread. Please restart the program and try again!🛑 "
 			}
 			/*
 			totalStreamResultData = marked.parse(responses[id], {
@@ -605,6 +616,8 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			//responses[id] forward to Automata Mode if its Turned on then it will continue
 			// Why i put the Automata Triggering ipcRenderer in here? : because when the stream finished, it stopped in here
 			ipcRenderer.send("AutomataLLMMainResultReciever", { data: responses[id] });
+
+			ipcRenderer.send("CheckAsyncMessageQueue"); // Multiple-User submission support
 
 			console.log(prefixConsoleLogStreamCapture, "current ID of Output", id);
 
@@ -1027,10 +1040,6 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			emotionalLLMChildengine: document.getElementById("emotionalllmchildengine").checked,
 			profilePictureEmotion: document.getElementById("profilepictureemotion").checked,
 			websearch_amount: document.getElementById("websearch_amount").value || document.getElementById("websearch_amount").placeholder,
-			maxWebSearchChar: document.getElementById("max_websearch_character").value || document.getElementById("max_websearch_character").placeholder,
-			maxLocalSearchChar: document.getElementById("max_localsearch_character").value || document.getElementById("max_localsearch_character").placeholder,
-			maxLocalSearchPerFileChar: document.getElementById("max_localsearch_perfile_character").value || document.getElementById("max_localsearch_perfile_character").placeholder,
-			keywordContentFileMatchPercentageThreshold: document.getElementById("keywordcontentfilematchpercentthreshold").value || document.getElementById("keywordcontentfilematchpercentthreshold").placeholder,
 			hardwareLayerOffloading: document.getElementById("hardwarelayeroffloading").value || document.getElementById("hardwarelayeroffloading").placeholder,
 			longChainThoughtNeverFeelenough: document.getElementById("longchainthought-neverfeelenough").checked
 		}
