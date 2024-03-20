@@ -1785,11 +1785,17 @@ async function callInternalThoughtEngine(prompt){
 // define it globally
 let QoSTimeoutSpeicificSubcategory_beforeAdjustedConfig = store.get("params").qostimeoutllmchildsubcategory;
 let QoSTimeoutGlobal_beforeAdjustedConfig = store.get("params").qostimeoutllmchildglobal;
+let InternalEngineMainThreadOnFocusRunning = false;
 // Wrapper for internalThoughtWithTimeout
 async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 	let result;
+
 	const globalQoSTimeoutMultiplier = BackBrainQueue.length + 1;
 	const globalQoSTimeoutAdjusted = QoSTimeoutGlobal_beforeAdjustedConfig * globalQoSTimeoutMultiplier;
+	
+
+	if (!InternalEngineMainThreadOnFocusRunning){
+	InternalEngineMainThreadOnFocusRunning=true; // disable mainLLM pipeline, and if recieved a new request, then it will be redirected to backbrain thread
     // Create a promise that resolves after the specified timeout
     const timeoutPromise = new Promise((resolve) => {
         setTimeout(() => {
@@ -1849,7 +1855,41 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
         // Handle the result from callInternalThoughtEngine
         log.info(consoleLogPrefix, consoleLogPrefixQoSDebug,'Internal thought engine completed successfully:', result);
     }
+	}else{
+		log.error(consoleLogPrefix, `⚠️ ${username} Attempting to communicate Multi-input Human-like Mode!`);
+		// Asking whether it need to be processed and answered or just let it be
+		if (store.get("params").llmdecisionMode){
+			// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Prompting Decision LLM for Backbrain...');
+			promptInput = `${username}:${data}\n Based on your evaluation of the request submitted by ${username}, Should you continue to think deeper even if you did timed out before and is it worth it to continue? Answer only in Yes or No:`;
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Request LLM');
+			BackbrainRequest = await callLLMChildThoughtProcessor(promptInput, 32);
+			if (isVariableEmpty(BackbrainRequest)){
+				log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, "BackbrainRequest Failure due to model failed to comply, Falling back to no");
+				BackbrainRequest = no;
+			}
+		}else{
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, "Continuing with Backbrain Mode! LLM aren't allowed to decide");
+			BackbrainRequest = yes;
+		}
 
+		// If accepted to be answered then...
+		if (((((BackbrainRequest.includes("yes") || BackbrainRequest.includes("yep") || BackbrainRequest.includes("ok") || BackbrainRequest.includes("valid") || BackbrainRequest.includes("should") || BackbrainRequest.includes("true"))) || process.env.BACKBRAIN_FORCE_DEBUG_MODE === "1")) && store.get("params").backbrainqueue ){
+			//passthrough with queueing
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Exec');
+			BackBrainQueue.push(data); //add to the array later on it will be executed by async function BackBrainQueueManager() that constantly check whether there is a required
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, BackBrainQueue);
+			BackBrainQueueManager(); //Launch/invoke the thread and check if its already running
+			log.error(consoleLogPrefix, consoleLogPrefixQoSDebug, '⚠️ Queuing multi submission into Backbrain submission stack');
+		}else{
+			//passthrough without queuing
+			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Better not to do Backbrain Queueing');
+			log.error(consoleLogPrefix, consoleLogPrefixQoSDebug, '⚠️ Will not answer the Multi-Submission question');
+		}
+		// DO NOT CHANGE THIS RESULT, this is the key for Not submitting to mainLLM to allow multisubmission message, so if it detected then it will skip to be submitted to tty mainLLM
+		result = `THIS IS MULTISUBMISSION POWERED BY BACKBRAIN, IGNORE AND DO NOT SUBMIT TO MAINLLM`
+	}
+	InternalEngineMainThreadOnFocusRunning=false; // enable mainLLM pipeline
 	return result;
 }
 
@@ -3175,6 +3215,10 @@ ipcMain.on("startChat", () => {
 	initChat();
 });
 
+// Investigation Note : I was searching for why when i click submit or autocomplete button it can't be clicked again until response has been made, which this progrma don't want to be the same as other!
+// This thing allow to run on parallel so this isn't the issue
+let queueSubmissionForm=[];
+let invokedMainChat=false;
 ipcMain.on("message", async (_event, { data }) => {
 	currentPrompt = data;
 	if (runningShell) {
@@ -3183,18 +3227,23 @@ ipcMain.on("message", async (_event, { data }) => {
 		blockGUIForwarding = true;
 		//log.info(consoleLogPrefix, `Forwarding manipulated Input RAG to mainLLM processor ${data}`);
 		 // push to internal thought engine
-		 
-		if(store.get("params").qostimeoutswitch){
+		if(store.get("params").qostimeoutswitch || invokedMainChat){
 			inputFetch = await callInternalThoughtEngineWithTimeoutandBackbrain(data);
 		} else {
 			inputFetch = await callInternalThoughtEngine(data);
 		}
+		invokedMainChat=true;
+		const MultisubmissionSignature = `THIS IS MULTISUBMISSION POWERED BY BACKBRAIN, IGNORE AND DO NOT SUBMIT TO MAINLLM`
+		//submitting into the mainLLM thread tty
+		// skip if Signature detected
+		if ( inputFetch != MultisubmissionSignature ){
 		inputFetch = `${inputFetch}`
 		runningShell.write(inputFetch);
 		runningShell.write(`\r`);
-		await new Promise(resolve => setTimeout(resolve, 500));
+		}
+		await new Promise(resolve => setTimeout(resolve, 500)); //delay 500ms (I'm not sure what's this for)
 		blockGUIForwarding = false;
-		//zephyrineHalfReady = true;
+		invokedMainChat = false;
 	}
 });
 ipcMain.on("stopGeneration", () => {
