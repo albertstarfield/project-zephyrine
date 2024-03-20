@@ -322,12 +322,28 @@ const loading = (on) => {
 
 */
 
+
+// submit is where you click send and get processed by the mainLLM on alpaca-electron or dalai flip flop old model
+// Reverse Engineer Conclusion I : This is form DOM event listener, it listens if you clicks the submit or autocomplete button 
 form.addEventListener("submit", (e) => {
-	e.preventDefault();
+	console.debug("[DEBUG MULTISUBMISSION]: I Recieved a submission command")
+	if (input.value){
+		var prompt = input.value.replaceAll("\n", "\\n");
+		console.debug("[DEBUG MULTISUBMISSION]: It has a value! Forwarding to the system!")
+		say(input.value, `user${gen}`, true); // so ${gen} is for determining what part of the chat history that its belongs to, Nice!
+		gen++;
+		console.debug("[DEBUG MULTISUBMISSION]: Forwarding to main backend Engine!")
+		ipcRenderer.send("message", { data: prompt }); 
+		console.debug("[DEBUG MULTISUBMISSION]: Resetting GUI input form!")
+		input.value = "";
+	}
+	
+	e.preventDefault(); // if i disable this, it will make the UI reset every time i click and Loss control of the mainLLM prompting drive
 	e.stopPropagation();
+	// This stops the propagation of the process of the event listener if its already invoked single time
 	if (form.classList.contains("running-model")) return;
 	if (input.value) {
-		var prompt = input.value.replaceAll("\n", "\\n");
+
 		//Reverse engineering conclusion note : This is for sending the prompt or the User input to the GUI
 		// NO its not, this ipcRenderer is for sending the prompt to index.js then to whatever engine_component or can be said as interprocesscommunication for processing, not for rendering into the GUI
 		ipcRenderer.send("message", { data: prompt }); 
@@ -340,14 +356,14 @@ form.addEventListener("submit", (e) => {
 		gen++;
 
 		//Haha reverse engineering done!
-		*/
 		say(input.value, `user${gen}`, true); // so ${gen} is for determining what part of the chat history that its belongs to, Nice!
-		//loading(prompt);
+		gen++;
+		*/		
 		input.value = "";
 		isRunningModel = true;
 		stopButton.removeAttribute("disabled");
 		form.setAttribute("class", isRunningModel ? "running-model" : "");
-		gen++;
+		
 		setTimeout(() => {
 			input.style.height = "auto";
 			input.style.height = input.scrollHeight + "px";
