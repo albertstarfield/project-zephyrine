@@ -2253,7 +2253,7 @@ function generateRandSeed(){
 
     let isBlacklisted = true;
 	let randSeedResult;
-	log.info(consoleLogPrefix, "Loading Seed, Might take a while...");
+	log.info(consoleLogPrefix, "Loading new seed, Might take a while...");
     while (isBlacklisted) {
         // Generate a random seed
         randSeedResult = generateRandomNumber(minRandSeedRange, maxRandSeedRange);
@@ -2609,7 +2609,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	//------------------------------------------------------------------------------------------------------
 
 	if (mode === "save"){
-        log.debug(consoleLogPrefix,"Save Invoked!");
+        //log.debug(consoleLogPrefix,"Save Invoked!");
 		
 		
 		if(AITurn && !UserTurn){
@@ -2718,6 +2718,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		//log.info("Leave me trapped in the cage");
 		
     }else if (mode === "retrieve_MLCMCF_Mode"){
+		let MLCMCF_Match_threshold=0.69 // Below this MLCMCF match threshold causes it to break and worsen the output. Now why i chose 0.69? Well its simply because its nice ;)
 		const limitCharacterOutput=512; //put the limit 512 later on if its not enough the LLMChild can re-retrieve back what's required from MLCMCF iteratively
 		log.info(consoleLogPrefix,"Calling \"Unified Memory Array\" Target: ", `${prompt}`, arraySelection);
 
@@ -2844,7 +2845,10 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			L2_focusedUMAArrayChunkDelta.push(L1_focusedUMAArrayChunk[idx]);
 		}
 
-		
+		if ( maxScore <= MLCMCF_Match_threshold ){
+			log.error(consoleLogPrefix, "UMA No Matching Content that have the minima quality", maxScore);
+			L2_focusedUMAArrayChunkDelta=["none"];
+		}
 		
 		// log.debug(consoleLogPrefix, "MLCMCF L2 Focused Retrieved Array", L2_focusedUMAArrayChunkDelta);
 		log.debug(consoleLogPrefix, "UMA Retrieval Peaked Score", maxScore);
