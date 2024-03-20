@@ -869,6 +869,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 				defectiveLLMChildSpecificModel=true;
 				internalThoughtEngineTextProgress=`I yield! I gave up on using this specific Model! Reporting to LLMChild Engine!`;
 				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				seedBlacklist.push(definedSeed_LLMchild);
 			}
 		}
 } 
@@ -2240,11 +2241,13 @@ function generateRandSeed(){
 	function isPrime(number) {
 		// If number is less than 2, it's not prime
 		if (number < 2) {
+			seedBlacklist.push(definedSeed_LLMchild);
 			return false;
 		}
 		// Check for divisibility from 2 to the square root of the number
 		for (let i = 2; i <= Math.sqrt(number); i++) {
 			if (number % i === 0) {
+				seedBlacklist.push(definedSeed_LLMchild);
 				return false; // If divisible by any number, not prime
 			}
 		}
@@ -2262,8 +2265,18 @@ function generateRandSeed(){
 		if (seedBlacklist.length === 0 && fileExists(seedBlacklistListFile)) {
             // Read json
 			log.error(consoleLogPrefix, "seedBlacklist isn't loaded yet, Loading!");
-            const data = fs.readFileSync(seedBlacklistListFile, 'utf8');
-            const jsonData = JSON.parse(data);
+            let jsonData = []; // Default value if file doesn't exist
+			log.error(consoleLogPrefix, "seedBlacklist isn't loaded yet, Loading!");
+			try {
+				if (fs.existsSync(seedBlacklistListFile)) {
+					const data = fs.readFileSync(seedBlacklistListFile, 'utf8');
+					jsonData = JSON.parse(data);
+				} else {
+					log.error(consoleLogPrefix, `${seedBlacklistListFile} doesn't exist.`);
+				}
+			} catch (error) {
+				log.error(consoleLogPrefix, "Error reading seedBlacklistListFile:", error);
+			}
             seedBlacklist.push(jsonData);
         } 
         isBlacklisted = seedBlacklist.includes(randSeed);
@@ -2846,7 +2859,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		}
 
 		if ( maxScore <= MLCMCF_Match_threshold ){
-			log.error(consoleLogPrefix, "UMA No Matching Content that have the minima quality", maxScore);
+			log.error(consoleLogPrefix, "UMA No Matching Content that have the minima quality", maxScore, "<", MLCMCF_Match_threshold);
 			L2_focusedUMAArrayChunkDelta=["none"];
 		}
 		
