@@ -2,6 +2,6 @@
 # The patch step will be re-executed if anything in this file changes.
 # No other meaning or use of this file is supported.
 
-command (connected)=/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake;-Dcan_fetch=YES;-P;/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/tmp/sentencepiece-populate-gitupdate.cmake
-command (disconnected)=/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake;-Dcan_fetch=NO;-P;/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/tmp/sentencepiece-populate-gitupdate.cmake
+command (connected)=/opt/homebrew/Cellar/cmake/3.29.0/bin/cmake;-Dcan_fetch=YES;-P;/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/tmp/sentencepiece-populate-gitupdate.cmake
+command (disconnected)=/opt/homebrew/Cellar/cmake/3.29.0/bin/cmake;-Dcan_fetch=NO;-P;/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-subbuild/sentencepiece-populate-prefix/tmp/sentencepiece-populate-gitupdate.cmake
 work_dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/sentencepiece-src

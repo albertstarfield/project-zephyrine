@@ -3,7 +3,7 @@
 # No other meaning or use of this file is supported.
 
 method=git
-command=/opt/homebrew/Cellar/cmake/3.28.3/bin/cmake;-P;/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/highway-populate-prefix/tmp/highway-populate-gitclone.cmake
+command=/opt/homebrew/Cellar/cmake/3.29.0/bin/cmake;-P;/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-subbuild/highway-populate-prefix/tmp/highway-populate-gitclone.cmake
 source_dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps/highway-src
 work_dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/gemma.cpp/build/_deps
 repository=https://github.com/google/highway.git
