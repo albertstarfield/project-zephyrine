@@ -77,8 +77,10 @@ install_dependencies_macos() {
     fi
     echo "Upgrading to the recommended node Version!"
     set -e
+    node -v
     npm install n
-    n 20.11.1
+    #n 20.11.1 #They removed it!
+    n latest #To prevent this problem we might grab LTS or latest instead
     echo "did it work?"
     node -v
     
@@ -172,7 +174,7 @@ cleanInstalledFolder(){
     echo "Cleaning Installed Folder to lower the chance of interfering with the installation process"
     npm cache clean --force
     
-    rm -rf ${rootdir}/usr/vendor/ggllm.cpp ${rootdir}/usr/vendor/ggml ${rootdir}/usr/vendor/llama-gguf.cpp ${rootdir}/usr/vendor/gemma.cpp ${rootdir}/usr/vendor/llama.cpp ${rootdir}/usr/vendor/whisper.cpp ${rootdir}/usr/node_modules ${CONDA_PREFIX}
+    rm -rf ${rootdir}/usr/vendor/ggllm.cpp ${rootdir}/usr/vendor/ggml ${rootdir}/usr/vendor/llama-gguf.cpp ${rootdir}/usr/vendor/gemma.cpp ${rootdir}/usr/vendor/llama.cpp ${rootdir}/usr/vendor/whisper.cpp ${rootdir}/usr/node_modules ${CONDA_PREFIX} ${N_PREFIX}
     echo "Should be done"
     set -e
 }
@@ -858,23 +860,26 @@ install_dependencies_linux() {
 
     echo "Upgrading to the latest Node Version!"
     npm install n
-    n 20.11.1
+    #n 20.11.1 #They removed it!
+    n latest #To prevent this problem we might grab LTS or latest instead
     node -v
 }
 
 
+EnforcingDependencies(){
 # Install npm dependencie
-if [ -z "$(command -v npm)" ]; then
-    if [[ "$platform" == "Linux" ]]; then
-        install_dependencies_linux
-    elif [[ "$platform" == "Darwin" ]]; then
-        install_dependencies_macos
-    fi
+if [[ "$platform" == "Linux" ]]; then
+    install_dependencies_linux
+elif [[ "$platform" == "Darwin" ]]; then
+    install_dependencies_macos
 fi
+}
 
 # Install npm dependencies
 if [[ ! -f ${rootdir}/installed.flag || "${FORCE_REBUILD}" == "1" ]]; then
     cleanInstalledFolder
+    echo "Enforcing Check of Dependencies!"
+    EnforcingDependencies
     echo "Enforcing latest npm"
     npm install npm@latest
     echo "Installing Modules"
