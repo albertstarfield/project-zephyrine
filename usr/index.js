@@ -34,6 +34,14 @@ HISTORY_CTX_FETCH_DEBUG_MODE
  *              return await promiseName(data)
  *                  .then(() => { return result; })
  *          });
+ * 
+ * Who we are, how far we gone
+* Let us heal the misery and plant the seed we ever promised
+* Time is up, go grab your arms
+* No matter how hard we have been
+* We shall fight forever
+ * 
+ * 
  */
 
 
@@ -45,7 +53,7 @@ const path = require("path");
 //const { download } = require('electron-dl');
 const https = require('https');
 const http = require('http');
-require("@electron/remote/main").initialize();4
+require("@electron/remote/main").initialize();
 const os = require("os");
 const osUtils = require('os-utils');
 const gpuInfo = require('gpu-info');
@@ -57,7 +65,8 @@ const assistantName = "Adelaide Zephyrine Charlotte";
 const natural = require('natural');
 const appName = `Project ${assistantName}`;
 const username = os.userInfo().username;
-const consoleLogPrefix = `[${colorBrightCyan}${appName}_${platform}_${arch}${colorReset}]:`;
+const engineName = `Adelaide Paradigm Engine`
+const consoleLogPrefix = `[${colorBrightCyan}${engineName}_${platform}_${arch}${colorReset}]:`;
 const { memoryUsage } = require('node:process');
 const log = require('electron-log');
 let logPathFile;
@@ -453,7 +462,7 @@ const schema = {
 			maxLocalSearchChar: '1024',
 			maxLocalSearchPerFileChar: '512',
 			keywordContentFileMatchPercentageThreshold: '27',
-			hardwareLayerOffloading: '512',
+			hardwareLayerOffloading: '32',
 			longChainThoughtNeverFeelenough: true
 		  }		  
 	},
@@ -503,6 +512,20 @@ let initStage2 = decodeBase64Init(encodedInitStage2);
 const store = new Store({ schema });
 const fs = require("fs");
 let modelPath = `${availableImplementedLLMModelSpecificCategory.general_conversation.filename}`
+
+
+//Neural Processing Accelerator Check
+//---------------------------------------------------_
+
+// Allocate two engine of Neural Accelerator
+// Globally define if its 
+// This does not mean dedicated GPU chip 0 or chip 1, is just the allowed GPU engine to run at a time
+
+// Do not allow the LLMChild to allocate to GPU or Neural Accelerator if its Busy being used for generation by other thread
+// an issue arrises on apple silicon where if you pushed the GPU too hard all the window locked up, even if the CPU or Memory aren't fed up
+let NeuralAcceleratorEngineBusyState=false;
+
+//---------------------------------------------------_
 
 // Note : The developer need to find out how to load modelPath var before Legacy LoadPathSection being called which break the automation and return null for the modelPath and never able to proceed
 //var modelPath = store.get("modelPath"); // This is legacy code from the original program code, where the user need to manually input the modelPath at startup rather than automatically download
@@ -844,7 +867,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	childLLMResultNotPassed = true;
 	let specializedModelReq="";
 	definedSeed_LLMchild = `${randSeed}`;
-	log.info(consoleLogPrefix, "🍀⚙️", "CallLLMChildThoughtProcessor invoked!");
+	//log.debug(consoleLogPrefix, "🍀⚙️", "CallLLMChildThoughtProcessor invoked!", prompt);
 	while(childLLMResultNotPassed){
 		//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
 		result = await callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild);
@@ -864,12 +887,22 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			log.error(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "Adjusting LengthGen Request to: ", lengthGen);
 			log.error(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
+			if (result.includes("<dummy32000>")){
+				log.error(consoleLogPrefix, "Irrecoverable Dummy 32000 Error Detected! Will not attempt to process!")
+				llmChildfailureCountSum = 99999999; //Irrecoverable error
+				result = "";
+			}
 			childLLMResultNotPassed = true;
-			if ( llmChildfailureCountSum >= 5 ){
+			if ( llmChildfailureCountSum >= 2 ){
 				defectiveLLMChildSpecificModel=true;
 				internalThoughtEngineTextProgress=`I yield! I gave up on using this specific Model! Reporting to LLMChild Engine!`;
-				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				log.error(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 				seedBlacklist.push(definedSeed_LLMchild);
+			}
+			if ( llmChildfailureCountSum >= 4 ){ //3<dummy32000> issues on the mainLLM model
+				log.error(consoleLogPrefix, "Unrecoverable! Complete failure of LLMChild, Giving up!");
+				childLLMResultNotPassed = false;
+				result = "";
 			}
 		}
 } 
@@ -884,6 +917,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 // That's why Human are still required on AI operation
 let currentUsedLLMChildModel=""
 async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild){
+	let allowedNPULayerFactorDivision = 0.25; // make this to be lighter on vram or ram or the NPU memory so that it doesn't locks up the whole computer when it launched
 	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called");
 	//lengthGen is the limit of how much it need to generate
 	//prompt is basically prompt :moai:
@@ -905,6 +939,8 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		while (str.includes('nnnn')) {
 			str = str.replace(/nnnn/g, '');
 		}
+		// make it one line with \n
+		str = str.replace(/\n/g, " "); // make sure it doesn't leave with n instead of \n
 		// Remove characters other than letters (\p{L}) and whitespace (\s)
 		return str.replace(/[^\p{L}\s]/gu, "");
 	}
@@ -931,15 +967,16 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 			log.error(consoleLogPrefix, "I'm not sure if this an issue of the model information augmentation performance, data corruption, language incompatibility! Fallback to the general_conversation");
 			defectiveLLMChildSpecificModel = false; //reset global flag
 		}
-		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * 1);
+		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * allowedNPULayerFactorDivision); // by default LLMChild using default general conv will use 1/4 of the Main Layer Configuration ( The reason is that the launch of LLMChild on Apple M2 Pro causes lockup the whole computer, which mean the optimization is bad for the engine )
 		currentUsedLLMChildModel = specializedModelManagerRequestPath("general_conversation");// Preventing the issue of missing validatedModelAlignedCategory variable which ofc javascript won't tell any issue and just stuck forever in a point
 		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
 		//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
 	} else {
-		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].memAllocCutRatio);
+		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].memAllocCutRatio * allowedNPULayerFactorDivision);
 		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
 		currentUsedLLMChildModel=specificSpecializedModelPathRequest_LLMChild; // this will be decided by the main thought and processed and returned the path of specialized Model that is requested
 	}
+
 	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "NPU Split Decision");
 	if (allowedAllocNPULayer <= 0){
 		allowedAllocNPULayer = 1;
@@ -950,14 +987,23 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	} else {
 		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
 	}
+
+	// Do not allow the LLMChild to allocate to GPU or Neural Accelerator if its Busy being generated by other thread
+	if(NeuralAcceleratorEngineBusyState){
+		allowedAllocNPULayer=0;
+		allowedAllocNPUDraftLayer=0;
+	}
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
-	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 --temp ${store.get("params").temp} -n ${lengthGen} --threads ${threads} -c 4096 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Prompt`, prompt);
+	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -c 0 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
 	try {
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Inference ${command}`);
+	NeuralAcceleratorEngineBusyState=true;
 	outputLLMChild = await runShellCommand(command);
+	NeuralAcceleratorEngineBusyState=false;
 	if(childLLMDebugResultMode){
 		//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
 	}
@@ -987,7 +1033,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		  return str.substring(lastIndex + startEndThoughtProcessor_Flag.length);
 		}
 	}
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Filtering Output");
+	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend raw Output", outputLLMChild);
 	filteredOutput = stripThoughtHeader(outputLLMChild);
 	filteredOutput = filteredOutput.replace(/\n/g, "\\n");
 	filteredOutput = filteredOutput.replace(/\r/g, "");
@@ -997,7 +1043,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	filteredOutput = filteredOutput.replace(/\//g, '\\/');
 	filteredOutput = filteredOutput.replace(/'/g, '\\\'');
 	if(childLLMDebugResultMode){
-		log.info(consoleLogPrefix, `LLMChild Thread Output ${filteredOutput}`); // filtered output
+		log.debug(consoleLogPrefix, `LLMChild Thread Output`, filteredOutput); // filtered output
 	}
 	//
 	//log.info(consoleLogPrefix, 'LLMChild Filtering Output');
@@ -1038,6 +1084,8 @@ let LLMChildDecisionModelMode=false;
 let defectiveLLMChildSpecificModel=false; //Some LLM Model cause a havoc on the zero output text detection and stuck on infinite loop like for instance the LLMChild requesting Indonesian LLM which usually biased upon (I'm not sure why just yet), it will produces no output at all and stuck on loop forever (It maybe caused by corrupted model from the download Manager, further investigation required) 
 let internalThoughtEngineProgress=0; // 0-100% just like progress
 let internalThoughtEngineTextProgress="";
+let globalTPID = [0, 1, 2, 3]; // if removed go back to 0
+log.debug(consoleLogPrefix, "globalTPID Debug", globalTPID);
 
 function interactionContextFetching(requestedPrompt, historyDistance){
 
@@ -1082,12 +1130,21 @@ class sensorySubsystem{
 		// Graphic or Vision Neural Network
 	async graphicalSensorySubsystem(stub){ // requires a compatibility with LLMChild LLaVa Mode
 		// this is a stub function not yet to be implemented
+		// Create a framebuffer and Camera capture system
 	}
 	//Audio Neural Network subsystem
 	async audioSensorySubsystem(stub){
+		// Create a microphone and speaker system
 	}
 	// miscExtIOPlainText Neural Network Subsystem
 	async miscSensoryIOPlainTextsubsystem(stub){
+		// write something that represent cat /dev/... read in raw text string format
+	}
+}
+
+class pythonVenvSubsystem{
+	async stubfunc(stub){
+
 	}
 }
 
@@ -1381,6 +1438,26 @@ function specializedModelManagerRequestPath(modelCategory){
 	return filePathSelectionfromDictionary;
 }
 
+async function zombieTPIDGuardian(localTPID, globalTPID){
+	// make this function check whether the local TPID still exists on globalTPID array, if it doesn't then lock the localTPID caller into infinite loop and make it doesn't eat any percievable resources (usually timed out llmchild from QoS)
+	// Call this with await zombieTPIDGuardian(localTPID, globalTPID);
+	log.debug(consoleLogPrefix, "Checking ZombieTPIDGuardian");
+	log.debug(consoleLogPrefix, "Checking ZombieTPIDGuardian", localTPID, globalTPID);
+	if (!globalTPID.includes(localTPID)) {
+		internalThoughtEngineProgress=0;
+		internalThoughtEngineTextProgress="Zombie TPID Caught!";
+        while (true) {
+			log.error(consoleLogPrefix, "Zombie internal Thought Thread detected and tamed!")
+            await new Promise(resolve => setTimeout(resolve, 999999999));
+        }
+    }
+}
+
+function removeFromGlobalTPID(numberToRemove) {
+    globalTPID = globalTPID.filter(number => number !== numberToRemove);
+    log.debug(`Number ${numberToRemove} removed from globalTPID array.`);
+    return globalTPID;
+}
 
 let BackbrainMode=false;
 async function callInternalThoughtEngine(prompt){
@@ -1404,8 +1481,15 @@ async function callInternalThoughtEngine(prompt){
 	let decisionSpecializationLLMChildRequirement;
 	let decisionChatHistoryCTX;
 
+	// What is the different here? why there's two?
+	// globalTPID is the variable to the Global on the internal Thought Process ID that is running
+	// localTPID is for the local variable just to its aware of its self ID
+	log.debug(globalTPID);
+	const localTPID=generateRandomNumber(1, 99999999);
+	globalTPID.push(localTPID);
+	log.debug(globalTPID);
 
-	log.info(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked!");
+	log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked!");
 	if (BackbrainMode || BackbrainModeInternal){
 		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine invoked with Backbrain MODE!, EXPERIMENTAL ASYNC LLM PROCESSING INITIATED");
 		BackbrainModeInternal=true;
@@ -1421,14 +1505,14 @@ async function callInternalThoughtEngine(prompt){
 		// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 		promptInput = `${username}:${prompt}\n Based on your evaluation of the request submitted by ${username}, could you please ascertain the number of sequential steps, ranging from 1 to 50, necessary to acquire the relevant historical context to understand the present situation? Answer only in numbers:`;
 		internalThoughtEngineTextProgress="Acquiring Interaction Context";
-		
+		await zombieTPIDGuardian(localTPID, globalTPID);
 		historyDistanceReq = await callLLMChildThoughtProcessor(promptInput, 32);
 		historyDistanceReq = onlyAllowNumber(historyDistanceReq);
 		log.info(consoleLogPrefix, "Required History Distance as Context", historyDistanceReq);
 
 		if (isVariableEmpty(historyDistanceReq)){
 			historyDistanceReq = 5;
-			log.info(consoleLogPrefix, "historyDistanceReq Retrieval Failure due to model failed to comply, Falling back to 5 History Depth/Distance");
+			log.error(consoleLogPrefix, "historyDistanceReq Retrieval Failure due to model failed to comply, Falling back to 5 History Depth/Distance");
 		}
 	}else{
 		historyDistanceReq = 5;
@@ -1479,6 +1563,7 @@ async function callInternalThoughtEngine(prompt){
 			internalThoughtEngineTextProgress="Checking Specific/Specialized/Experts Model Fetch Requirement!";
 			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			LLMChildDecisionModelMode = true;
+			await zombieTPIDGuardian(localTPID, globalTPID);
 			decisionSpecializationLLMChildRequirement = await callLLMChildThoughtProcessor(promptInput, 512);
 			decisionSpecializationLLMChildRequirement = decisionSpecializationLLMChildRequirement.toLowerCase();
 			//decisionSpecializationLLMChildRequirement = findClosestMatch(decisionSpecializationLLMChildRequirement, decisionBinaryKey); // This makes heavy weight on the "yes" decision
@@ -1488,6 +1573,7 @@ async function callInternalThoughtEngine(prompt){
 		if ((((decisionSpecializationLLMChildRequirement.includes("yes") || decisionSpecializationLLMChildRequirement.includes("yep") || decisionSpecializationLLMChildRequirement.includes("ok") || decisionSpecializationLLMChildRequirement.includes("valid") || decisionSpecializationLLMChildRequirement.includes("should") || decisionSpecializationLLMChildRequirement.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.SPECIALIZED_MODEL_DEBUG_MODE === "1")){
 			if (store.get("params").llmdecisionMode){
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this interaction what category from this category \" ${specializedModelKeyList.join(", ")}\n \". What category this chat categorized as? only answer the category! Answer:`;
+				await zombieTPIDGuardian(localTPID, globalTPID);
 				specificSpecializedModelCategoryRequest_LLMChild = await callLLMChildThoughtProcessor(promptInput, 512);
 				log.info(consoleLogPrefix, promptInput, "Requesting Model Specialization/Branch", specificSpecializedModelCategoryRequest_LLMChild);
 				// Requesting the specific Model Path on the Computer (and check whether it exists or not , and if its not it will download)
@@ -1517,10 +1603,11 @@ async function callInternalThoughtEngine(prompt){
 			internalThoughtEngineTextProgress="Checking Internet Fetch Requirement!";
 			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			LLMChildDecisionModelMode = true;
+			await zombieTPIDGuardian(localTPID, globalTPID);
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 12);
 			decisionSearch = decisionSearch.toLowerCase();
 			//decisionSearch = findClosestMatch(decisionSearch, decisionBinaryKey); // This made the "yes" answer wayy to heavy 
-			log.info(consoleLogPrefix, decisionSearch); //comment this when done debugging
+			log.info(consoleLogPrefix, "Internet Fetch?", decisionSearch); //comment this when done debugging
 		} else {
 			decisionSearch = "yes"; // without LLM deep decision
 		}
@@ -1529,7 +1616,10 @@ async function callInternalThoughtEngine(prompt){
 		// Isn't the decision made by LLM? Certainly, while LLM or the LLMChild contributes to the decision-making process, it lacks the depth of the main thread. This can potentially disrupt the coherence of the prompt context, underscoring the importance of implementing a safety measure like a word threshold before proceeding to the subsequent phase.
 		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.INTERNET_FETCH_DEBUG_MODE === "1") && store.get("params").webAccess){
 			if (store.get("params").llmdecisionMode){
+				log.debug(consoleLogPrefix, "LLM Decision Prompting...");
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. Do i have the knowledge to answer this then if i dont have the knowledge should i search it on the internet? Answer:`;
+				log.debug(consoleLogPrefix, "Waiting Search Prompt...", ":", promptInput);
+				await zombieTPIDGuardian(localTPID, globalTPID);
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
 				internalThoughtEngineTextProgress="🍀🌐 Creating Search Prompt for Internet Search!";
 				log.debug(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
@@ -1553,6 +1643,7 @@ async function callInternalThoughtEngine(prompt){
 				internalThoughtEngineTextProgress="Summarizing LLMChild";
 				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 				//let concludeInformation_Internet;
+				await zombieTPIDGuardian(localTPID, globalTPID);
 				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(stripProgramBreakingCharacters(promptInput)), 1024);
 			} else {
 				concludeInformation_Internet = "Nothing";
@@ -1576,6 +1667,7 @@ async function callInternalThoughtEngine(prompt){
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this? Should I Search this on the Local Documents, Only answer Yes or No! Answer:`;
 			log.info(consoleLogPrefix, "Checking Local File Fetch Requirement!");
 			LLMChildDecisionModelMode = true;
+			await zombieTPIDGuardian(localTPID, globalTPID);
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 18);
 			decisionSearch = decisionSearch.toLowerCase();
 			//decisionSearch = findClosestMatch(decisionSearch, decisionBinaryKey); //As i said before
@@ -1589,6 +1681,7 @@ async function callInternalThoughtEngine(prompt){
 				log.info(consoleLogPrefix, "We need to search it on the available resources");
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this if not what should i search on the local file then:`;
 				log.info(consoleLogPrefix, `LLMChild Creating Search Prompt`);
+				await zombieTPIDGuardian(localTPID, globalTPID);
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
 				log.info(consoleLogPrefix, `LLMChild Prompt ${searchPrompt}`);
 				log.info(consoleLogPrefix, `LLMChild Looking at the Local Documents...`);
@@ -1602,6 +1695,7 @@ async function callInternalThoughtEngine(prompt){
 			if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
 			promptInput = `Summerize this info: ${resultSearchScraping}. Summerization:`;
 			log.info(consoleLogPrefix, `LLMChild Concluding...`);
+			await zombieTPIDGuardian(localTPID, globalTPID);
 			concludeInformation_LocalFiles = await callLLMChildThoughtProcessor(promptInput, 512);
 		} else {
 			concludeInformation_LocalFiles = "Nothing";
@@ -1624,6 +1718,7 @@ async function callInternalThoughtEngine(prompt){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this interaction ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. For the additional context this is what i summerize from Internet ${concludeInformation_Internet}. \n This is what i summerize from the Local Files ${concludeInformation_LocalFiles}. \n From this Interaction and additional context Should I Answer this in 5 steps Yes or No? Answer only in Numbers:`;
 			LLMChildDecisionModelMode = true;
+			await zombieTPIDGuardian(localTPID, globalTPID);
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 32);
 			decisionSearch = decisionSearch.toLowerCase();
 			//decisionSearch = findClosestMatch(decisionSearch, decisionBinaryKey); // I don't want to explain it 
@@ -1637,6 +1732,7 @@ async function callInternalThoughtEngine(prompt){
 				// required_CoTSteps
 				
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n From this context from 1 to 27 how many steps that is required to answer. Answer:`;
+				await zombieTPIDGuardian(localTPID, globalTPID);
 				required_CoTSteps = await callLLMChildThoughtProcessor(promptInput, 16);
 				required_CoTSteps = onlyAllowNumber(required_CoTSteps);
 				internalThoughtEngineTextProgress=`Required ${required_CoTSteps} CoT steps`;
@@ -1650,6 +1746,7 @@ async function callInternalThoughtEngine(prompt){
 				log.info(consoleLogPrefix, `Generating list for this prompt`);
 				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n From this chat List ${required_CoTSteps} steps on how to Answer it. Answer:`;
 				promptInput = stripProgramBreakingCharacters(promptInput);
+				await zombieTPIDGuardian(localTPID, globalTPID);
 				todoList = await callLLMChildThoughtProcessor(promptInput, 512);
 
 				for(let iterate = 1; iterate <= required_CoTSteps; iterate++){
@@ -1658,6 +1755,7 @@ async function callInternalThoughtEngine(prompt){
 					log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 					promptInput = ` What is the answer to the List number ${iterate} : ${todoList} Answer/NextStep:"`;
 					promptInput = stripProgramBreakingCharacters(promptInput);
+					await zombieTPIDGuardian(localTPID, globalTPID);
 					todoListResult = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
 					concatenatedCoT = concatenatedCoT + ". " + todoListResult;
 					log.info(consoleLogPrefix, iterate, "Result: ", todoListResult);
@@ -1670,6 +1768,7 @@ async function callInternalThoughtEngine(prompt){
 			internalThoughtEngineTextProgress=`LLMChild Concluding Chain of Thoughts...`;
 			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			promptInput = stripProgramBreakingCharacters(promptInput);
+			await zombieTPIDGuardian(localTPID, globalTPID);
 			concludeInformation_CoTMultiSteps = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
 			} else {
 				//let concludeInformation_CoTMultiSteps;
@@ -1692,6 +1791,7 @@ async function callInternalThoughtEngine(prompt){
 				internalThoughtEngineTextProgress=`LLMChild Evaluating Interaction With Emotion Engine...`;
 				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 				promptInput = stripProgramBreakingCharacters(promptInput);
+				await zombieTPIDGuardian(localTPID, globalTPID);
 				evaluateEmotionInteraction = await callLLMChildThoughtProcessor(promptInput, 64);
 				evaluateEmotionInteraction = evaluateEmotionInteraction.toLowerCase();
 				if (evaluateEmotionInteraction.includes("happy")){
@@ -1753,6 +1853,7 @@ async function callInternalThoughtEngine(prompt){
 			promptInput = `This is the previous conversation ${historyChatRetrieved}\n. \n This is the conversation ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No! Answer:`;
 			log.info(consoleLogPrefix, `LLMChild Evaluating Information PostProcess`);
 			LLMChildDecisionModelMode = true;
+			await zombieTPIDGuardian(localTPID, globalTPID);
 			reevaluateAdCtxDecisionAgent = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 128));
 			log.info(consoleLogPrefix, `${reevaluateAdCtxDecisionAgent}`);
 			//reevaluateAdCtxDecisionAgent = findClosestMatch(reevaluateAdCtxDecisionAgent, decisionBinaryKey); // This for some reason have oversensitivity to go to "yes" answer
@@ -1778,6 +1879,8 @@ async function callInternalThoughtEngine(prompt){
 		BackbrainModeInternal = false;
 		BackbrainMode = false;
 	}
+
+	removeFromGlobalTPID(localTPID);
 	return passedOutput;
 
 }
@@ -1789,7 +1892,7 @@ let InternalEngineMainThreadOnFocusRunning = false;
 // Wrapper for internalThoughtWithTimeout
 async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 	let result;
-
+	let detectedNewestTPIDatLaunch;
 	const globalQoSTimeoutMultiplier = BackBrainQueue.length + 1;
 	const globalQoSTimeoutAdjusted = QoSTimeoutGlobal_beforeAdjustedConfig * globalQoSTimeoutMultiplier;
 	
@@ -1811,10 +1914,23 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
     // Race between the call promise and the timeout promise
     result = await Promise.race([callPromise, timeoutPromise]);
 
+	detectedNewestTPIDatLaunch = globalTPID[globalTPID.length - 1];
 	let BackbrainRequest;
     // Check if the result is from the timeout
     if (result.timeout) {
-        log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'QoS Global Timeout occurred');
+        log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'QoS Global Timeout occurred');//
+		// Wait until NeuralAccelerator isn't busy using while loop
+		// Then report on what ID of childLLM that is driven by the internalThought that occoured a QoS
+		// then if childLLM aware that it is running on the one that timed out, then the process will lockup and in here we will remove the ID of the internal Thought from the list 
+		internalThoughtEngineProgress=0;
+		internalThoughtEngineTextProgress="QoS internal Thought Timeout!";
+		removeFromGlobalTPID(detectedNewestTPIDatLaunch);
+		while(NeuralAcceleratorEngineBusyState){
+			log.error(consoleLogPrefix, consoleLogPrefixQoSDebug, "🛑 Awaiting on the time Free Async Process Queue...")
+			await delay(1000);
+		}
+		
+
 		result = `This is the user prompt: ${data}, Additional Context is not available!`
 		log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, result);
 		// Ask LLM if its require to do backbrain async operation?
@@ -1890,6 +2006,7 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 		result = `THIS IS MULTISUBMISSION POWERED BY BACKBRAIN, IGNORE AND DO NOT SUBMIT TO MAINLLM`
 	}
 	InternalEngineMainThreadOnFocusRunning=false; // enable mainLLM pipeline
+	removeFromGlobalTPID(detectedNewestTPIDatLaunch);
 	return result;
 }
 
@@ -1897,6 +2014,7 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 let BackBrainQueueManager_isRunning=false;
 async function BackBrainQueueManager(){
 	//call this function to spawn the Loop threads and it only happened once
+	let detectedNewestTPIDatLaunch;
 	if(BackBrainQueueManager_isRunning){
 		log.info(consoleLogPrefix, "BackBrainQueueManager Invoked but already running! Declining");
 	}else{
@@ -1910,8 +2028,11 @@ async function BackBrainQueueManager(){
 				BackBrainQueue.pop();
 				BackbrainMode=true; // when recieved the callInternalThoughtEngine quickly flip it back to false and transfer it into const BackbrainModeInternal=true; ; to make sure there isn't any conflict
 				callInternalThoughtEngine(queuePrompt); //spawn it in async fashion
+				detectedNewestTPIDatLaunch = globalTPID[globalTPID.length - 1];
 			}
 			await new Promise(resolve => setTimeout(resolve, store.get("params").qostimeoutllmchildglobal));
+			removeFromGlobalTPID(detectedNewestTPIDatLaunch);
+
 		}
 	}
 
@@ -2011,7 +2132,7 @@ class ExternalLocalFileScraperBackgroundAgent {
             const files = await readdirAsync(directory);
             for (const file of files) {
 				if ((this.documentsLearned % 1000) == 0) {
-					log.info(consoleLogPrefix, `[📖 Documents Background RAG] I have Learned/re-learned ${this.documentsLearned} Literature in this session`);
+					log.info(consoleLogPrefix, `[📖 Documents Background RAG] I have Learned and refreshed ${this.documentsLearned} Literature in this session`);
 					interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush UMA MLCMCF and all memory to save progress
 				}
                 const filePath = path.join(directory, file);
@@ -2031,7 +2152,7 @@ class ExternalLocalFileScraperBackgroundAgent {
 
     async startScanning() {
         if (this.isRunning || externalLocalFileScrapingTextAgent_BackgroundAgentActive) {
-            log.info('📖 Learning is already in progress.');
+            log.error('📖 Another invocation detected! Learning is already in progress!');
             return;
         }
         this.isRunning = true;
@@ -2620,11 +2741,15 @@ let UMAGBSize=0; //Global variable on how many gigs does the UMA takes on the ru
 let interactionStgJson;
 let interactionStgPersistentPath = `${path.resolve(__dirname, "storage", "presistentInteractionMem.json")}`;
 let experienceStgPersistentPath = `${path.resolve(__dirname, "storage", "UMA_State.json")}`;
+let experienceSideloadFolder = `${path.resolve(__dirname, "storage", "experiencessideload_dataset")}`;
+let experienceSideload_Loaded = false; // globally and only triggered once
 let interactionStgOrder = 0;
 let retrievedinteractionStg;
 let interactionStgOrderRequest;
 let amiwritingonAIMessageStreamMode=false;
 function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection){
+	//
+
 	//proactive UnifiedMemoryArray Management System
 	//------------------------------------------------------------------------------------------------------
 
@@ -2760,7 +2885,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		// log.error("Im here and stuck");
 		if (interactionStgOrder >= 2){
 
-		log.debug(consoleLogPrefix, "Checking Signature for Bad Output...");
+		//log.debug(consoleLogPrefix, "Checking Signature for Bad Output...");
 		const detector = new DPORuntimeAutomator(prompt, interactionStgOrder);
 		// log.error("Eh?");
 		detector.badSignatureDetection();
@@ -2769,6 +2894,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		//log.info("Then what fetters my fate?");
 		//log.info("Blown away, the white petals");
 		//log.info("Leave me trapped in the cage");
+		
 		
     }else if (mode === "retrieve_MLCMCF_Mode"){
 		let MLCMCF_Match_threshold=0.69 // Below this MLCMCF match threshold causes it to break and worsen the output. Now why i chose 0.69? Well its simply because its nice ;)
@@ -2934,7 +3060,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				//log.info(consoleLogPrefix, "Loaded dddx: ", interactionStg, interactionStgOrder);
 			} catch (err) {
 				log.error('Error reading JSON file:', err);
-				log.error('Falling back to default JSON Storage:', interactionStg);
+				log.error('Falling back to default Storage:', interactionStg);
 				log.error('Debug memory dump Memory Array Focus:', interactionStg[interactionSessionMemoryArrayFocus]);
 				log.error('Debug memory dump Memory Array Content Data:', interactionStg[interactionSessionMemoryArrayFocus].data);
 				return;
@@ -2999,6 +3125,35 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 						//log.debug(consoleLogPrefix, "Loaded UMA: ", UnifiedMemoryArray);
 					}
 			}
+
+			//sideload Experience into UMA
+			if (store.get("params").sideloadExperienceUMA) {
+				//
+				//recursively scan Folder variable experienceSideloadFolder for .exp file and read it as plain text file and concatenate it into one long string
+				let concatenatedString = '';
+
+				function scanDirectory(dir) {
+					const files = fs.readdirSync(dir);
+
+					files.forEach(file => {
+						const filePath = path.join(dir, file);
+						const stat = fs.statSync(filePath);
+
+						if (stat.isDirectory()) {
+							scanDirectory(filePath);
+						} else {
+							if (path.extname(file) === '.exp') {
+								const fileContent = fs.readFileSync(filePath, 'utf-8');
+								concatenatedString += fileContent;
+							}
+						}
+					});
+				}
+				scanDirectory(folderPath);
+				UnifiedMemoryArray.push(concatenatedString);
+				log.debug(consoleLogPrefix, "Loaded UMA With Sideloaded Experience: ", UnifiedMemoryArray);
+			}
+
 			log.info(consoleLogPrefix, "Done!");
 		} else {
 			log.info(consoleLogPrefix, "Save and Restore Chat Disabled");
@@ -3142,11 +3297,13 @@ function initChat() {
 			log.info(consoleLogPrefix, "LLM Main Thread is ready after initialization!");
 			isitPassedtheFirstPromptYet = false;
 			if (store.get("params").throwInitResponse){
+				NeuralAcceleratorEngineBusyState=true;
 				log.info(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
 				blockGUIForwarding = true;
 				initChatContent = initStage2;
 				runningShell.write(initChatContent);
 				runningShell.write(`\r`);
+				NeuralAcceleratorEngineBusyState=false;
 			}
 		//	splashScreen.style.display = 'flex';
 		} else if (zephyrineHalfReady && !zephyrineReady) {
@@ -3157,6 +3314,7 @@ function initChat() {
 			checkAVX = false;
 			win.webContents.send("ready");
 			log.info(consoleLogPrefix, "Time to generate some Text!");
+			NeuralAcceleratorEngineBusyState=false;
 		} else if (((res.startsWith("llama_model_load:") && res.includes("sampling parameters: ")) || (res.startsWith("main: interactive mode") && res.includes("sampling parameters: "))) && !checkAVX) {
 			checkAVX = true;
 			log.info(consoleLogPrefix, "checking avx compat");
@@ -3186,8 +3344,9 @@ function initChat() {
 		} else if (zephyrineReady && !blockGUIForwarding) { // Forwarding to pty Chat Stream GUI 
 			if (platform == "darwin") res = res.replaceAll("^C", "");
 			if (process.env.ptyStreamDEBUGMode === "1"){
-			log.info(consoleLogPrefix, "Forwarding to GUI...", res); // res will send in chunks so we need to have a logic that reconstruct the word with that chunks until the program stops generating
+			log.debug(consoleLogPrefix, "Forwarding to GUI...", res); // res will send in chunks so we need to have a logic that reconstruct the word with that chunks until the program stops generating
 			}
+			NeuralAcceleratorEngineBusyState=true; // When it is intensely use, say globally that it is used and not be able to allocated by something else
 			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			interactionArrayStorage("save", res, true, false, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 			interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
@@ -3206,7 +3365,7 @@ function initChat() {
 	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
 	const chatArgs = `-i -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
 	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
-	const paramArgs = `-m "${modelPath}" -n -2 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --repeat-penalty 1.5 --mirostat 2 -sm row -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -1 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --rope-scaling yarn --repeat-penalty 1.5 --mirostat 2 -sm row -c 0 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
 	log.info(consoleLogPrefix, chatArgs, paramArgs)
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
@@ -3308,6 +3467,8 @@ async function AutomataProcessing(){
 		log.info(consoleLogPrefix, automataConsolePrefix, "Fetchmem!");
 		const historyChatRetrieved = interactionContextFetching("SKIP_MLCMCF", 2);
 		log.info(consoleLogPrefix, automataConsolePrefix, "Thinking what is the prompt");
+		log.info(consoleLogPrefix, automataConsolePrefix, "Using new Seed!");
+		randSeed = generateRandSeed();
 		//The preceding internal reflections consist of ${historyChatRetrieved[2]}, ${historyChatRetrieved[1]}, and the response from ${assistantName} is ${automataLLMMainresultReciever}. What would be the optimal next conversation topic, with the flexibility to shift topics to prevent stagnation, while rigorously testing the idea to its fullest extent? Additionally, ensure that responses are not generic, akin to those found on forums like ANSWER.MICROSOFT.COM, but rather focus on specialized case problem-solving.
 		const promptAutomataInput = `
 		The previous internal reflections comprise ${historyChatRetrieved[2]}, ${historyChatRetrieved[1]}, and the response from ${assistantName} is ${automataLLMMainresultReciever}. What would be the most suitable next conversation topic, allowing for topic flexibility to prevent stagnation, yet rigorously testing the idea to its fullest extent (that will and have to break the argument, Avoid reassuration but instead always challenge the argument! And if the answer and conversation is generic enforce it to give example and the technical how-to solve the very issue)? Furthermore, ensure that responses do not mimic generic answers found on platforms such as on the tech support forums, but rather focus on specialized technical nerdy thesis defense endless depth case problem-solving answer style.`;
@@ -3344,7 +3505,17 @@ ipcMain.on("AutomataLLMMainResultReciever", (_event, resultFeedloop) => {
 	AutomataProcessing();
 });
 
+// Automata Loop Processing 1000ms 
+
+
 //---------------------------------------------------------------------------------------
+
+
+// -------------------------------------------------------------------------------------- Backbrain AI Multisubmission into 
+
+
+// --------------------------------------------------------------------------------------
+
 
 // Performance Latency Degradation Measure ----------------------------------------
 // Degradation factor will be from 0.0 to 1.0 (0.0 means no, degradation detected and 1.0 is complete crap unusable response javascript quality)
@@ -3536,6 +3707,15 @@ ipcMain.on("SaveandRestoreInteraction", (_event, value) => {
 	store.set("params", {
 		...store.get("params"),
 		SaveandRestoreInteraction: value
+	});
+});
+
+//sideloadExperienceUMA
+
+ipcMain.on("sideloadExperienceUMA", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		sideloadExperienceUMA: value
 	});
 });
 
