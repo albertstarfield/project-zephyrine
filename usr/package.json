@@ -2,9 +2,9 @@
 	"name": "project-zephyrine",
 	"productName": "Project Zephyrine",
 	"description": "An amicable, ensorcelled, and refined modality for engaging the Large Language Model.",
-	"version": "0.1.8",
+	"version": "0.2.0",
 	"engines": {
-		"node": "v20.11.1"
+		"node": "v30.0.0-beta.2"
 	},
 	"author": "Albert Starfield Wahyu Suryo Samudro",
 	"license": "MIT",
@@ -64,6 +64,7 @@
 		"spacy": "^0.0.4",
 		"timeout-promise": "^1.0.2",
 		"typescript": "^5.2.2",
+		"webgl-info": "^0.1.5",
 		"winston": "^3.12.0"
 	},
 	"devDependencies": {

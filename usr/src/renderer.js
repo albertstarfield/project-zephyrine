@@ -995,6 +995,9 @@ document.getElementById("aboutSection").addEventListener("click", () => {
 	ipcRenderer.send("getParams");
 });
 
+
+
+
 ipcRenderer.on("params", (_event, data) => {
 	// don't forget to scroll down to the bottom of index.js to update the value too
 	//document.getElementById("LLMBackendMode").value = data.llmBackendMode; // since the program now come with predefined tuned model this won't be required and if its implemented it will make the program runs in buggy state or chaos like the button won't be able clicked without error and etc, and selection are implemented on dictionary on index.js in Engine section of the Data
@@ -1020,6 +1023,7 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("classicmode").checked = data.classicMode;
 	document.getElementById("attemptaccelerate").checked = data.AttemptAccelerate;
 	document.getElementById("hardwarelayeroffloading").value = data.hardwareLayerOffloading;
+	document.getElementById("sideloadexperienceuma").value = data.sideloadExperienceUMA;
 	document.getElementById("emotionalllmchildengine").checked = data.emotionalLLMChildengine;
 	document.getElementById("profilepictureemotion").checked = data.profilePictureEmotion;
 	document.getElementById("longchainthought-neverfeelenough").checked = data.longChainThoughtNeverFeelenough;
@@ -1040,6 +1044,7 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			qostimeoutllmchildsubcategory: document.getElementById("QoSTimeoutLLMChildSubCategory").value || document.getElementById("QoSTimeoutLLMChildSubCategory").placeholder,
 			qostimeoutllmchildbackbrainglobalqueuemax: document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").value || document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").placeholder,
 			qostimeoutswitch: document.getElementById("QoSTimeoutSwitch").checked,
+			sideloadExperienceUMA: document.getElementById("sideloadexperienceuma").checked,
 			backbrainqueue: document.getElementById("BackbrainQueue").checked,
 			webAccess: document.getElementById("web-access").checked,
 			openaiapiserverhost: document.getElementById("openaiapiserverhost").checked,
@@ -1124,7 +1129,13 @@ document.getElementById("longchainthought-neverfeelenough").addEventListener("ch
 	ipcRenderer.send("longChainThoughtNeverFeelenough", document.getElementById("longchainthought-neverfeelenough").checked);
 });
 
+ // sideloadexperienceuma sideloadExperienceUMA
 
+document.getElementById("sideloadexperienceuma").addEventListener("change", () => {
+	ipcRenderer.send("sideloadExperienceUMA", document.getElementById("sideloadexperienceuma").checked);
+});
+
+/*
 //default value
 //document.getElementById("model").value = "alpaca";
 document.getElementById("repeat_last_n").value = 64;
@@ -1133,3 +1144,4 @@ document.getElementById("top_k").value = 420;
 document.getElementById("top_p").value = 90;
 document.getElementById("temp").value = 0.9;
 
+*/
