@@ -463,7 +463,8 @@ const schema = {
 			maxLocalSearchPerFileChar: '512',
 			keywordContentFileMatchPercentageThreshold: '27',
 			hardwareLayerOffloading: '32',
-			longChainThoughtNeverFeelenough: true
+			longChainThoughtNeverFeelenough: true,
+			sideloadExperienceUMA: true
 		  }		  
 	},
 	modelPath: {
@@ -474,7 +475,7 @@ const schema = {
 	}
 };
 
-log.info(consoleLogPrefix, schema);
+log.info(consoleLogPrefix, "Initial Scheme Settings", schema);
 // for chat initialization
 // 
 
@@ -2787,9 +2788,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	//------------------------------------------------------------------------------------------------------
 
 	if (mode === "save"){
-        //log.debug(consoleLogPrefix,"Save Invoked!");
-		
-		
+        log.debug(consoleLogPrefix,"Save Invoked!");
 		if(AITurn && !UserTurn){
 			if(!amiwritingonAIMessageStreamMode){
 				interactionStgOrder = interactionStgOrder + 1;
@@ -3577,7 +3576,7 @@ setInterval(async () => {
 
 // --------------------------------------------------------------------------------
 ipcMain.on("storeParams", (_event, { params }) => {
-	log.info(params);
+	log.debug(consoleLogPrefix, "[Compare]",params, schema);
 	store.set("params", params);
 	restart();
 });
