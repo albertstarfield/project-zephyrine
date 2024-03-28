@@ -24,20 +24,20 @@
 - [x] New JSON interaction database that handles emotion, more data, side of interaction, and multiple SessionID
 - [x] Multi-submission input lifelike input rather than flip-flop wait for response type of classic interaction.
 - [x] Interaction Experience UMA MLCMCF Sideloading Subsystem.
+- [ ] Autoexec for generated command Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands and interacting with Hardware. (OS Adaptive (*nix Bash and Windows Powershell)).
+- [ ] Auto Idle Sleep Detection auto fine-tune self-training (Mimicking real-life brain retraining while sleep) augmented to LoRA 7B+
+- [ ] Auto Idle mainLLM Suspension to save memory and resources
 - [ ] LLaVa-Next Implementation LLMChild Framebuffer Capture and Camera Capture
-- [ ] Multi-session Interactions Tab save and restore
 - [ ] OpenAI API Implementation Bridge for Quality Testing standard of the engine model (Scientific Research Requirement using Standard Testing Method).
-- [ ] Auto Idle Sleep Detection auto fine-tune (Mimicking real-life brain retraining while sleep) maybe augment it to LoRA later on.
 - [ ] Implementing multi language support with Frontend Automatic Translation and Backend EN Processing.
 - [ ] Bing CoPilot AI and Pinokio AI toolbox inspired, invoked by Text LLM
 - [ ] dE_QARE QuestandAchievement (Stable-Diffusion) Engine integration with Adelaide Paradigm
 - [ ] AudioLM Integration with Adelaide Paradigm   
-- [ ] Autoexec for generated command Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands. (OS Adaptive (*nix Bash and Windows Powershell)).
 - [ ] Self-updating, Self-maintaning, and Self-Adapting Code.
 - [ ] Static compilation Mobile (No AI Dynamics on Self-Modification or Special Specific Hardware Compilation), Very strict jailed version of Mobile version for iOS support.
 - [ ] Mobile HTML5 UI.
 - [ ] Categorize into Classes based on the subsystem drawio for cleaner Code and easier debugging
--
+- [ ] Multi-session Interactions Tab save and restore
 - [ ] Implementing Native Windows Support.
 - [ ] Multi format communication Real-time communication and collaboration (Audio, Video, Actuator)
 - [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
