@@ -2616,7 +2616,7 @@ function determineLLMBackend(){
 			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "arm64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
 
 		}else{
-			log.info(consoleLogPrefix, "Unsupported Architecture");
+			log.error(consoleLogPrefix, "Unsupported Architecture");
             process.exit(1);
 		}
 	} else if (platform === 'linux'){
@@ -2629,7 +2629,7 @@ function determineLLMBackend(){
 			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
 		log.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 		}else{
-			log.info(consoleLogPrefix, "Unsupported Architecture");
+			log.error(consoleLogPrefix, "Unsupported Architecture");
             process.exit(1);
 	}
 	// *nix (Linux, macOS, etc.)	
@@ -2643,7 +2643,7 @@ function determineLLMBackend(){
 			basebin = `"${path.resolve(__dirname, "bin", "0_macOS", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
 		log.info(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
 		}else{
-			log.info(consoleLogPrefix, "Unsupported Architecture");
+			log.error(consoleLogPrefix, "Unsupported Architecture");
             process.exit(1);
 		}
 	}
