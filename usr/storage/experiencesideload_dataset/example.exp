@@ -1,0 +1,103 @@
+This is an example! how you can sideload it, its the same as prompt engineering! (you can remove this line later on)
+Case Trigger Word: "How can I control this room properly?" 
+
+Hey, given the room environment parameters like temperature at 25 degrees and humidity at 80%, I suggest targeting 23 degrees Celsius.
+Hey, considering the room environment's conditions such as temperature at 22 degrees and humidity at 75%, I recommend aiming for 20 degrees Celsius.
+Hey, with the room environment characterized by a temperature of 30 degrees and humidity at 85%, I propose adjusting to 27 degrees Celsius.
+Hey, looking at the room environment metrics, the temperature stands at 18 degrees with humidity at 70%. It might be ideal to target 16 degrees Celsius.
+Hey, analyzing the room environment variables, the temperature is 27 degrees and humidity is 78%. It could be beneficial to adjust to 25 degrees Celsius.
+Hey, in this scenario, the room environment parameters indicate a temperature of 23 degrees and humidity at 68%. Adjusting to 21 degrees Celsius seems reasonable.
+Hey, examining the room environment's features, the temperature is 26 degrees with humidity at 72%. Adjusting to 24 degrees Celsius might be preferable.
+Hey, observing the room environment's characteristics, the temperature stands at 20 degrees with humidity at 65%. Adjusting to 18 degrees Celsius could be beneficial.
+Hey, based on the room environment parameters, with a temperature of 28 degrees and humidity at 80%, adjusting to 26 degrees Celsius might be more comfortable.
+Hey, considering the room environment's conditions such as a temperature of 24 degrees and humidity at 73%, aiming for 22 degrees Celsius might be prudent.
+Hey, given the room environment parameters like temperature at 21 degrees and humidity at 75%, I suggest targeting 19 degrees Celsius.
+Hey, examining the room environment metrics, the temperature stands at 19 degrees with humidity at 68%. It might be ideal to target 17 degrees Celsius.
+Hey, looking at the room environment's variables, the temperature is 29 degrees and humidity is 82%. It could be beneficial to adjust to 27 degrees Celsius.
+Hey, analyzing the room environment parameters, the temperature is 25 degrees and humidity is 76%. It could be beneficial to adjust to 23 degrees Celsius.
+Hey, in this scenario, the room environment parameters indicate a temperature of 22 degrees and humidity at 72%. Adjusting to 20 degrees Celsius seems reasonable.
+Hey, examining the room environment's features, the temperature is 27 degrees with humidity at 75%. Adjusting to 25 degrees Celsius might be preferable.
+Hey, observing the room environment's characteristics, the temperature stands at 20 degrees with humidity at 63%. Adjusting to 18 degrees Celsius could be beneficial.
+Hey, based on the room environment parameters, with a temperature of 26 degrees and humidity at 78%, adjusting to 24 degrees Celsius might be more comfortable.
+Hey, considering the room environment's conditions such as a temperature of 23 degrees and humidity at 70%, aiming for 21 degrees Celsius might be prudent.
+Hey, given the room environment parameters like temperature at 20 degrees and humidity at 72%, I suggest targeting 18 degrees Celsius.
+Hey, examining the room environment metrics, the temperature stands at 18 degrees with humidity at 66%. It might be ideal to target 16 degrees Celsius.
+Hey, looking at the room environment's variables, the temperature is 28 degrees and humidity is 80%. It could be beneficial to adjust to 26 degrees Celsius.
+Hey, analyzing the room environment parameters, the temperature is 24 degrees and humidity is 74%. It could be beneficial to adjust to 22 degrees Celsius.
+Hey, in this scenario, the room environment parameters indicate a temperature of 21 degrees and humidity at 70%. Adjusting to 19 degrees Celsius seems reasonable.
+Hey, examining the room environment's features, the temperature is 26 degrees with humidity at 73%. Adjusting to 24 degrees Celsius might be preferable.
+Hey, observing the room environment's characteristics, the temperature stands at 19 degrees with humidity at 60%. Adjusting to 17 degrees Celsius could be beneficial.
+Hey, based on the room environment parameters, with a temperature of 27 degrees and humidity at 76%, adjusting to 25 degrees Celsius might be more comfortable.
+Hey, considering the room environment's conditions such as a temperature of 22 degrees and humidity at 68%, aiming for 20 degrees Celsius might be prudent.
+Hey, given the room environment parameters like temperature at 19 degrees and humidity at 71%, I suggest targeting 17 degrees Celsius.
+Hey, examining the room environment metrics, the temperature stands at 17 degrees with humidity at 64%. It might be ideal to target 15 degrees Celsius.
+Hey, looking at the room environment's variables, the temperature is 27 degrees and humidity is 78%. It could be beneficial to adjust to 25 degrees Celsius.
+Hey, analyzing the room environment parameters, the temperature is 23 degrees and humidity is 72%. It could be beneficial to adjust to 21 degrees Celsius.
+Hey, in this scenario, the room environment parameters indicate a temperature of 20 degrees and humidity at 68%. Adjusting to 18 degrees Celsius seems reasonable.
+Hey, examining the room environment's features, the temperature is 25 degrees with humidity at 70%. Adjusting to 23 degrees Celsius might be preferable.
+Hey, observing the room environment's characteristics, the temperature stands at 18 degrees with humidity at 58%. Adjusting to 16 degrees Celsius could be beneficial.
+Hey, based on the room environment parameters, with a temperature of 26 degrees and humidity at 74%, adjusting to 24 degrees Celsius might be more comfortable.
+Hey, considering the room environment's conditions such as a temperature of 21 degrees and humidity at 65%, aiming for 19 degrees Celsius might be prudent.
+Hey, given the room environment parameters like temperature at 18 degrees and humidity at 69%, I suggest targeting 16 degrees Celsius.
+Hey, examining the room environment metrics, the temperature stands at 16 degrees with humidity at 62%. It might be ideal to target 14 degrees Celsius.
+Hey, looking at the room environment's variables, the temperature is 25 degrees and humidity is 76%. It could be beneficial to adjust to 23 degrees Celsius.
+Hey, analyzing the room environment parameters, the temperature is 22 degrees and humidity is 70%. It could be beneficial to adjust to 20 degrees Celsius.
+Hey, in this scenario, the room environment parameters indicate a temperature of 19 degrees and humidity at 65%. Adjusting to 17 degrees Celsius seems reasonable.
+Hey, examining the room environment's features, the temperature is 24 degrees with humidity at 68%. Adjusting to 22 degrees Celsius might be preferable.
+Hey, observing the room environment's characteristics, the temperature stands at 17 degrees with humidity at 55%. Adjusting to 15 degrees Celsius could be beneficial.
+Hey, based on the room environment parameters, with a temperature of 25 degrees and humidity at 72%, adjusting to 23 degrees Celsius might be more comfortable.
+Hey, considering the room environment's conditions such as a temperature of 20 degrees and humidity at 63%, aiming for 18 degrees Celsius might be prudent.
+Hey, given the room environment parameters like temperature at 17 degrees and humidity at 67%, I suggest targeting 15 degrees Celsius.
+Hey, examining the room environment metrics, the temperature stands at 15 degrees with humidity at 60%. It might be ideal to target 13 degrees Celsius.
+Hey, looking at the room environment's variables, the temperature is 24 degrees and humidity is 72%. It could be beneficial to adjust to 22 degrees Celsius.
+Hey, analyzing the room environment parameters, the temperature is 21 degrees and humidity is 66%. It could be beneficial to adjust to 19 degrees Celsius.
+Hey, in this scenario, the room environment parameters indicate a temperature of 18 degrees and humidity at 62%. Adjusting to 16 degrees Celsius seems reasonable.
+Hey, examining the room environment's features, the temperature is 23 degrees with humidity at 65%. Adjusting to 21 degrees Celsius might be preferable.
+Hey, observing the room environment's characteristics, the temperature stands at 16 degrees with humidity at 52%. Adjusting to 14 degrees Celsius could be beneficial.
+Hey, based on the room environment parameters, with a temperature of 24 degrees and humidity at 70%, adjusting to 22 degrees Celsius might be more comfortable.
+Hey, considering the room environment's conditions such as a temperature of 19 degrees and humidity at 60%, aiming for 17 degrees Celsius might be prudent.
+Hey, given the room environment parameters like temperature at 16 degrees and humidity at 65%, I suggest targeting 14 degrees Celsius.
+Hey, examining the room environment metrics, the temperature stands at 14 degrees with humidity at 58%. It might be ideal to target 12 degrees Celsius.
+Hey, looking at the room environment's variables, the temperature is 23 degrees and humidity is 68%. It could be beneficial to adjust to 21 degrees Celsius.
+Hey, analyzing the room environment parameters, the temperature is 20 degrees and humidity is 62%. It could be beneficial to adjust to 18 degrees Celsius.
+Hey, in this scenario, the room environment parameters indicate a temperature of 17 degrees and humidity at 58%. Adjusting to 15 degrees Celsius seems reasonable.
+Hey, examining the room environment's features, the temperature is 22 degrees with humidity at 60%. Adjusting to 20 degrees Celsius might be preferable.
+Hey, observing the room environment's characteristics, the temperature stands at 15 degrees with humidity at 48%. Adjusting to 13 degrees Celsius could be beneficial.
+Hey, based on the room environment parameters, with a temperature of 23 degrees and humidity at 66%, adjusting to 21 degrees Celsius might be more comfortable.
+Hey, considering the room environment's conditions such as a temperature of 18 degrees and humidity at 55%, aiming for 16 degrees Celsius might be prudent.
+Hey, given the room environment parameters like temperature at 15 degrees and humidity at 60%, I suggest targeting 13 degrees Celsius.
+Hey, examining the room environment metrics, the temperature stands at 13 degrees with humidity at 52%. It might be ideal to target 11 degrees Celsius.
+Hey, looking at the room environment's variables, the temperature is 22 degrees and humidity is 64%. It could be beneficial to adjust to 20 degrees Celsius.
+Hey, analyzing the room environment parameters, the temperature is 19 degrees and humidity is 58%. It could be beneficial to adjust to 17 degrees Celsius.
+Hey, in this scenario, the room environment parameters indicate a temperature of 16 degrees and humidity at 55%. Adjusting to 14 degrees Celsius seems reasonable.
+Hey, examining the room environment's features, the temperature is 21 degrees with humidity at 58%. Adjusting to 19 degrees Celsius might be preferable.
+Hey, observing the room environment's characteristics, the temperature stands at 14 degrees with humidity at 45%. Adjusting to 12 degrees Celsius could be beneficial.
+Hey, based on the room environment parameters, with a temperature of 22 degrees and humidity at 62%, adjusting to 20 degrees Celsius might be more comfortable.
+Hey, considering the room environment's conditions such as a temperature of 17 degrees and humidity at 50%, aiming for 15 degrees Celsius might be prudent.
+Hey, given the room environment parameters like temperature at 14 degrees and humidity at 55%, I suggest targeting 12 degrees Celsius.
+Hey, examining the room environment metrics, the temperature stands at 12 degrees with humidity at 48%. It might be ideal to target 10 degrees Celsius.
+Hey, looking at the room environment's variables, the temperature is 21 degrees and humidity is 60%. It could be beneficial to adjust to 19 degrees Celsius.
+Hey, analyzing the room environment parameters, the temperature is 18 degrees and humidity is 52%. It could be beneficial to adjust to 16 degrees Celsius.
+Hey, in this scenario, the room environment parameters indicate a temperature of 15 degrees and humidity at 48%. Adjusting to 13 degrees Celsius seems reasonable.
+Hey, examining the room environment's features, the temperature is 20 degrees with humidity at 52%. Adjusting to 18 degrees Celsius might be preferable.
+Hey, observing the room environment's characteristics, the temperature stands at 13 degrees with humidity at 40%. Adjusting to 11 degrees Celsius could be beneficial.
+Hey, based on the room environment parameters, with a temperature of 21 degrees and humidity at 58%, adjusting to 19 degrees Celsius might be more comfortable.
+Hey, considering the room environment's conditions such as a temperature of 16 degrees and humidity at 45%, aiming for 14 degrees Celsius might be prudent.
+Hey, given the room environment parameters like temperature at 13 degrees and humidity at 50%, I suggest targeting 11 degrees Celsius.
+Hey, examining the room environment metrics, the temperature stands at 11 degrees with humidity at 42%. It might be ideal to target 9 degrees Celsius.
+Hey, looking at the room environment's variables, the temperature is 20 degrees and humidity is 55%. It could be beneficial to adjust to 18 degrees Celsius.
+Hey, analyzing the room environment parameters, the temperature is 17 degrees and humidity is 48%. It could be beneficial to adjust to 15 degrees Celsius.
+Hey, in this scenario, the room environment parameters indicate a temperature of 14 degrees and humidity at 42%. Adjusting to 12 degrees Celsius seems reasonable.
+Hey, examining the room environment's features, the temperature is 19 degrees with humidity at 45%. Adjusting to 17 degrees Celsius might be preferable.
+Hey, observing the room environment's characteristics, the temperature stands at 12 degrees with humidity at 35%. Adjusting to 10 degrees Celsius could be beneficial.
+Hey, based on the room environment parameters, with a temperature of 20 degrees and humidity at 52%, adjusting to 18 degrees Celsius might be more comfortable.
+Hey, considering the room environment's conditions such as a temperature of 15 degrees and humidity at 40%, aiming for 13 degrees Celsius might be prudent.
+Hey, given the room environment parameters like temperature at 12 degrees and humidity at 45%, I suggest targeting 10 degrees Celsius.
+Hey, examining the room environment metrics, the temperature stands at 10 degrees with humidity at 38%. It might be ideal to target 8 degrees Celsius.
+Hey, looking at the room environment's variables, the temperature is 19 degrees and humidity is 48%. It could be beneficial to adjust to 17 degrees Celsius.
+Hey, analyzing the room environment parameters, the temperature is 16 degrees and humidity is 42%. It could be beneficial to adjust to 14 degrees Celsius.
+Hey, in this scenario, the room environment parameters indicate a temperature of 13 degrees and humidity at 38%. Adjusting to 11 degrees Celsius seems reasonable.
+Hey, examining the room environment's features, the temperature is 18 degrees with humidity at 40%. Adjusting to 16 degrees Celsius might be preferable.
+Hey, observing the room environment's characteristics, the temperature stands at 11 degrees with humidity at 30%. Adjusting to 9 degrees Celsius could be beneficial.
+Hey, based on the room environment parameters, with a temperature of 19 degrees and humidity at 48%, adjusting to 17 degrees Celsius might be more comfortable.
+Hey, considering the room environment's conditions such as a temperature of 14 degrees and humidity at 35%, aiming for 12 degrees Celsius might be prudent.
