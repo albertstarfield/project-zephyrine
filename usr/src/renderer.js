@@ -1033,7 +1033,6 @@ ipcRenderer.on("params", (_event, data) => {
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
 		params: {
-			//llmBackendMode: document.getElementById("LLMBackendMode").value || document.getElementById("LLMBackendMode").value.placeholder, // since the program now come with predefined tuned model this won't be required and if its implemented it will make the program runs in buggy state or chaos like the button won't be able clicked without error and etc, and selection are implemented on dictionary on index.js in Engine section of the Data
 			repeat_last_n: document.getElementById("repeat_last_n").value || document.getElementById("repeat_last_n").placeholder,
 			repeat_penalty: document.getElementById("repeat_penalty").value || document.getElementById("repeat_penalty").placeholder,
 			top_k: document.getElementById("top_k").value || document.getElementById("top_k").placeholder,
@@ -1044,7 +1043,6 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			qostimeoutllmchildsubcategory: document.getElementById("QoSTimeoutLLMChildSubCategory").value || document.getElementById("QoSTimeoutLLMChildSubCategory").placeholder,
 			qostimeoutllmchildbackbrainglobalqueuemax: document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").value || document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").placeholder,
 			qostimeoutswitch: document.getElementById("QoSTimeoutSwitch").checked,
-			sideloadExperienceUMA: document.getElementById("sideloadexperienceuma").checked,
 			backbrainqueue: document.getElementById("BackbrainQueue").checked,
 			webAccess: document.getElementById("web-access").checked,
 			openaiapiserverhost: document.getElementById("openaiapiserverhost").checked,
@@ -1062,7 +1060,8 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			profilePictureEmotion: document.getElementById("profilepictureemotion").checked,
 			websearch_amount: document.getElementById("websearch_amount").value || document.getElementById("websearch_amount").placeholder,
 			hardwareLayerOffloading: document.getElementById("hardwarelayeroffloading").value || document.getElementById("hardwarelayeroffloading").placeholder,
-			longChainThoughtNeverFeelenough: document.getElementById("longchainthought-neverfeelenough").checked
+			longChainThoughtNeverFeelenough: document.getElementById("longchainthought-neverfeelenough").checked,
+			sideloadExperienceUMA: document.getElementById("sideloadexperienceuma").checked
 		}
 	});
 	document.getElementById("settings-dialog-bg").classList.add("hidden");
@@ -1128,8 +1127,6 @@ document.getElementById("profilepictureemotion").addEventListener("change", () =
 document.getElementById("longchainthought-neverfeelenough").addEventListener("change", () => {
 	ipcRenderer.send("longChainThoughtNeverFeelenough", document.getElementById("longchainthought-neverfeelenough").checked);
 });
-
- // sideloadexperienceuma sideloadExperienceUMA
 
 document.getElementById("sideloadexperienceuma").addEventListener("change", () => {
 	ipcRenderer.send("sideloadExperienceUMA", document.getElementById("sideloadexperienceuma").checked);
