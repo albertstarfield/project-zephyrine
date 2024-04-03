@@ -996,7 +996,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	}
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Prompt`, prompt);
-	LLMChildParam = `-p \"Answer and continue this with Response: prefix after the __ \n ${startEndThoughtProcessor_Flag} ${prompt} ${startEndThoughtProcessor_Flag}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -c 0 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	LLMChildParam = `-p \"Answer and continue this: ${prompt} ${startEndThoughtProcessor_Flag} __ \" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -c 0 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
@@ -1104,12 +1104,8 @@ function interactionContextFetching(requestedPrompt, historyDistance){
 	log.info(consoleLogPrefix, `Retrieving Chat History with history Depth ${historyDistance}`);
 	let str = "";
 	// log.debug(consoleLogPrefix, "Retrieving bigger scope from UMA using MLCMCF ", historyDistance)
+
 	for (let i = historyDistance; i >= 1; i--){
-		if (i % 2 === 0) {
-			str += `${username}: `; // even number on this version of zephyrine means the User that makes the prompt or user input prompt 
-		  } else {
-			str += `${assistantName}: `; // odd number on this version of zephyrine means the AI or the assistant is the one that answers
-		  }
 		  str += `${interactionArrayStorage("retrieve", "", false, false, interactionStgOrder-i)} \n`
 		  
 		  //log.info(i + ": " + str);
@@ -1120,7 +1116,7 @@ function interactionContextFetching(requestedPrompt, historyDistance){
 		str = str;
 	}else{
 		const additionalContextLargeScope = interactionArrayStorage("retrieve_MLCMCF_Mode", requestedPrompt, false, false, historyDistance); // rather than -i or in for loop it can be directly called historyDistance as the depth request
-		str += `Addendum: ${additionalContextLargeScope.join('')}`;
+		str += `Addendum: ${additionalContextLargeScope.join('\n')}`;
 	}
 	return str;
 }
@@ -2742,7 +2738,7 @@ let UMAGBSize=0; //Global variable on how many gigs does the UMA takes on the ru
 let interactionStgJson;
 let interactionStgPersistentPath = `${path.resolve(__dirname, "storage", "presistentInteractionMem.json")}`;
 let experienceStgPersistentPath = `${path.resolve(__dirname, "storage", "UMA_State.json")}`;
-let experienceSideloadFolder = `${path.resolve(__dirname, "storage", "experiencessideload_dataset")}`;
+let experienceSideloadFolder = `${path.resolve(__dirname, "storage", "experiencesideload_dataset")}`;
 let experienceSideload_Loaded = false; // globally and only triggered once
 let interactionStgOrder = 0;
 let retrievedinteractionStg;
@@ -2760,24 +2756,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
     //restore old UnifiedMemoryArray if foreverEtchedMemory turned on or true (it is now integrated with the load call for this function)
 
 
-	//Split array if single index of the array is more than 256 Words or shall we say blocksize controller
-
-	/*
-	for (let i = 0; i < array.length; i++) {
-		let words = array[i].split(/\s+/); // Split the string into words using whitespace as delimiter
-		while (words.length > maxWordsPerArray) {
-			const splitIndex = maxWordsPerArray;
-			const remainingWords = words.splice(splitIndex); // Extract the remaining words
-	
-			array[i] = words.join(" "); // Join the remaining words into a string
-			array.splice(i + 1, 0, remainingWords.join(" ")); // Insert the remaining words as a new element in the array
-			i++; // Ensure the loop processes the newly added array
-		}
-	}
-	log.info(consoleLogPrefix,"Debug UnifiedMemoryArrayDebugSplit Chunk Controller Result", UnifiedMemoryArray);
-
-	// We're just going to leave as it be for now not cut it 256 which may interfere with dedupe operation
-	*/
+	// Deduplicate 
 
 	// Calculate GB UMA Usage
 	//UMAGBSize = calculateMemoryUsageInGB(UnifiedMemoryArray);
@@ -2788,7 +2767,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	//------------------------------------------------------------------------------------------------------
 
 	if (mode === "save"){
-        log.debug(consoleLogPrefix,"Save Invoked!");
+        //log.debug(consoleLogPrefix,"Save Invoked!");
 		if(AITurn && !UserTurn){
 			if(!amiwritingonAIMessageStreamMode){
 				interactionStgOrder = interactionStgOrder + 1;
@@ -2870,6 +2849,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			// dedupe content on UnifiedMemoryArray to save storage proactively
 		//log.info(consoleLogPrefix, "Debug Dedupe UnifiedMemoryArray Content");
 		// Iterate over each array in UnifiedMemoryArray
+		/*
 		UnifiedMemoryArray.forEach((array, index) => {
 			// Check if the current element is an array
 			if (Array.isArray(array)) {
@@ -2879,6 +2859,13 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				UnifiedMemoryArray[index] = [...uniqueSet];
 			}
 		});
+		*/
+		//log.debug(consoleLogPrefix, "Debug Dedupe UnifiedMemoryArray Content");
+		UnifiedMemoryArray = Array.from(new Set(UnifiedMemoryArray));
+		//	log.debug(consoleLogPrefix, "Debug Dedupe UnifiedMemoryArray Content");
+
+
+
 
 		// Checking storage whether it was a bad seed or not
 		// log.error("Im here and stuck");
@@ -2963,7 +2950,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			L1_focusedUMAArrayFullLength.push(UnifiedMemoryArray[idx]);
 		}
 
-		//log.debug(consoleLogPrefix, "MLCMCF L1 Full Length", L1_focusedUMAArrayFullLength)
+		log.debug(consoleLogPrefix, "MLCMCF L1 Full Length", L1_focusedUMAArrayFullLength)
 		
 	  
 		// 4. That variable array then divide and skip part where the array is under 256 characters but if the array is more than 256 characters then split it. Then all of this processing where there is the splitted and the unsplitted array store it into variable L1_focusedUMAArrayChunk (already defined)
@@ -2979,7 +2966,16 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
 		let L1_focusedUMAArrayChunk = [];
 		//log.debug('converting L1_focusedUMAArrayFullLength to L1_focusedUMAArrayFullLength', L1_focusedUMAArrayChunk, L1_focusedUMAArrayFullLength);
-		L1_focusedUMAArrayChunk = nlp(L1_focusedUMAArrayFullLength.join(' ').slice(0, limitCharacterOutput)).normalize().out('array'); //Tokenize it rather than cut it without context
+		
+		log.debug(consoleLogPrefix, "dedupe result L1");
+		L1_focusedUMAArrayChunk = nlp(L1_focusedUMAArrayFullLength.join(' ').slice(0, limitCharacterOutput)).normalize().out('array').map((phrase) => {
+		let words = phrase.split(' '); // Split the phrase into words
+		let uniqueWords = [...new Set(words)]; // Remove duplicate words
+		return uniqueWords.join(' '); // Join the unique words back into a phrase
+		});
+		log.debug(consoleLogPrefix, "dedupe result L1_ack", L1_focusedUMAArrayChunk);
+
+		//L1_focusedUMAArrayChunk = nlp(L1_focusedUMAArrayFullLength.join(' ').slice(0, limitCharacterOutput)).normalize().out('array'); //Tokenize it rather than cut it without context
 
 		// 5. That variable array then calculate and find with the "string" that been given earlier with the compromise module to find the string using NLP then select the array index that have the highest similarity score. After that fetch the selected index with from index to index-(delta number value) (Backwards) also index+(delta number value) forward into a variable array named L2_focusedUMAArrayChunkDelta (already defined).
 		let L2_focusedUMAArrayChunkDelta = [];
@@ -3025,10 +3021,10 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
 		if ( maxScore <= MLCMCF_Match_threshold ){
 			log.error(consoleLogPrefix, "UMA No Matching Content that have the minima quality", maxScore, "<", MLCMCF_Match_threshold);
-			L2_focusedUMAArrayChunkDelta=["none"];
+			L2_focusedUMAArrayChunkDelta=[""];
 		}
 		
-		// log.debug(consoleLogPrefix, "MLCMCF L2 Focused Retrieved Array", L2_focusedUMAArrayChunkDelta);
+		log.debug(consoleLogPrefix, "MLCMCF L2 Focused Retrieved Array", L2_focusedUMAArrayChunkDelta);
 		log.debug(consoleLogPrefix, "UMA Retrieval Peaked Score", maxScore);
 		return L2_focusedUMAArrayChunkDelta;
 
@@ -3040,7 +3036,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		//retrievedinteractionStg = interactionStg[arraySelection];
 		retrievedinteractionStg = interactionStg[interactionSessionMemoryArrayFocus].data[arraySelection].content
 		} else {
-			retrievedinteractionStg = "None.";
+			retrievedinteractionStg = "";
 		}
 
 		
@@ -3126,18 +3122,20 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			}
 
 			//sideload Experience into UMA
+			log.debug("checking sideload exp param [bugcheck this part]", store.get("params").sideloadExperienceUMA);
+
 			if (store.get("params").sideloadExperienceUMA) {
 				//
+				log.info(consoleLogPrefix, "Loading experience file into UMA"); // Lockup detected after this log info March 29, 2024, conclusion : BRUH the problem was caused by me mistyping of the directory from experiencesideload_dataset to mistyped experiencessideload_dataset 
 				//recursively scan Folder variable experienceSideloadFolder for .exp file and read it as plain text file and concatenate it into one long string
 				let concatenatedString = '';
-
 				function scanDirectory(dir) {
-					const files = fs.readdirSync(dir);
 
+					const files = fs.readdirSync(dir);
 					files.forEach(file => {
 						const filePath = path.join(dir, file);
 						const stat = fs.statSync(filePath);
-
+						log.debug(consoleLogPrefix, "Loading experience file into UMA entity", filePath);
 						if (stat.isDirectory()) {
 							scanDirectory(filePath);
 						} else {
@@ -3148,9 +3146,10 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 						}
 					});
 				}
-				scanDirectory(folderPath);
+				scanDirectory(experienceSideloadFolder);
+				log.info(consoleLogPrefix, "Done... Pushing to UMA!");
 				UnifiedMemoryArray.push(concatenatedString);
-				log.debug(consoleLogPrefix, "Loaded UMA With Sideloaded Experience: ", UnifiedMemoryArray);
+				log.debug(consoleLogPrefix, "Loaded UMA With Sideloaded Experience: ");
 			}
 
 			log.info(consoleLogPrefix, "Done!");
