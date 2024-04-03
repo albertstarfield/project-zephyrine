@@ -21,9 +21,10 @@
 - [x] Implemented UMA MLCMCF "Bigger" context window manager LLM Agnostic design.
 - [x] Implement and Replace Context Depth fetching to MLCMCF (Multi Level Condensed Memory Contextual Fetching).
 - [x] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents, Implemented using UMA MLCMCF NLP Based matching.
-- [x] New JSON interaction database that handles emotion, more data, side of interaction, and multiple SessionID
+- [x] New JSON interaction database that handles emotion sentiment analysis, more data, side of interaction, and multiple SessionID
 - [x] Multi-submission input lifelike input rather than flip-flop wait for response type of classic interaction.
 - [x] Interaction Experience UMA MLCMCF Sideloading Subsystem.
+- [ ] Less-Weeb Graphic mode as default due to request of the industry
 - [ ] Autoexec for generated command Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands and interacting with Hardware. (OS Adaptive (*nix Bash and Windows Powershell)).
 - [ ] Auto Idle Sleep Detection auto fine-tune self-training (Mimicking real-life brain retraining while sleep) augmented to LoRA 7B+
 - [ ] Auto Idle mainLLM Suspension to save memory and resources
