@@ -16,8 +16,8 @@ const availableImplementedLLMModelSpecificCategory = {
 		ParamSize: "7B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
-		systemPrompt: "system\n",
-		instructionPrompt: "user: \n",
+		systemPrompt: "system \n",
+		instructionPrompt: "user \n",
 		responsePrompt: "assistant \n",
 		memAllocCutRatio: 1, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
 		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
