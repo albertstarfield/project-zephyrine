@@ -570,6 +570,7 @@ ipcRenderer.on("manualAIAnswerGUIHijack", async (_event, { data }) => {
 	// Since the data now have the emotions we can use the emotion data to replace the profilePictureEmotions based on what is saved
 	profilePictureEmotions = data.emotion;
 	existing.innerHTML = response; // no submitting this thing will result in error "Uncaught (in promise) TypeError: Cannot set properties of null (setting 'innerHTML')"
+	gen++; //add into new rows
 	// Something is missing. Ah th emissing part is that on the let existing need to end with .innerHTML, Nope. Still erroring out.
 });
 
@@ -633,12 +634,15 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			// Why i put the Automata Triggering ipcRenderer in here? : because when the stream finished, it stopped in here
 			ipcRenderer.send("AutomataLLMMainResultReciever", { data: responses[id] });
 
+			// Reactive Save Response to storage
+			ipcRenderer.send("saveAdelaideEngineInteraction", { data: responses[id] });
 			ipcRenderer.send("CheckAsyncMessageQueue"); // Multiple-User submission support
 
 			console.log(prefixConsoleLogStreamCapture, "current ID of Output", id);
 
 			form.setAttribute("class", isRunningModel ? "running-model" : "");
 			existing.style.opacity = 1;
+			gen++; //add into new rows
 		}, 60); // previously 30 now adjust it to 60 just to make sure it doesn't cut the stream midway
 	} else {
 		document.body.classList.remove("llama");
