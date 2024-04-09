@@ -503,7 +503,8 @@ Hi there, you might find this initial prompt very intrusive and offensive, and i
 
 */
 
-let encodedInitStage1 = "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZnQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUuCgpcblxuICMjIyBJbnN0cnVjdGlvbjogXG4ge3Byb21wdH0gXG5cbiAjIyMgUmVzcG9uc2U6";
+// encodedInitStage only contains the system prompt, thus depends 
+let encodedInitStage1 = "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZnQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUu";
 let encodedInitStage2 = "SGkgJHthc3Npc3RhbnROYW1lfSwgSSdtICR7dXNlcm5hbWV9LCBTaGFsbCB3ZSBjb21tZW5jZSBvdXIgY29udmVyc2F0aW9uPw==";
 log.info(consoleLogPrefix, "Init Defined");
 let initStage1 = decodeBase64Init(encodedInitStage1);
@@ -530,6 +531,32 @@ let NeuralAcceleratorEngineBusyState=false;
 
 // Note : The developer need to find out how to load modelPath var before Legacy LoadPathSection being called which break the automation and return null for the modelPath and never able to proceed
 //var modelPath = store.get("modelPath"); // This is legacy code from the original program code, where the user need to manually input the modelPath at startup rather than automatically download
+const promptFile = "universalPrompt.txt";
+let promptFileDir=`${path.resolve(__dirname, "bin", "prompts", promptFile)}`
+function mainLLMWritePrompt(){
+	// for mainLLM thread
+	// Write the main prompt personality of Adelaide/Zephy from the initStage1 and combine it with the main model json
+	// Spill initStage1 into a buildPromptSpill
+	// then newline
+	// add
+	// 
+	const mainLLM_ModelCategoryName = "general_conversation"
+	const mainLLM_systemPromptInst = availableImplementedLLMModelSpecificCategory[mainLLM_ModelCategoryName].systemPrompt;
+	const mainLLM_startPromptInst = availableImplementedLLMModelSpecificCategory[mainLLM_ModelCategoryName].instructionPrompt;
+	const mainLLM_endRespondPrompt = availableImplementedLLMModelSpecificCategory[mainLLM_ModelCategoryName].responsePrompt;
+	log.debug(consoleLogPrefix, "Building promptSpill bucket");
+	log.debug(consoleLogPrefix, "Building promptSpill bucket adding component", initStage1);
+	log.debug(consoleLogPrefix, "Building promptSpill bucket adding component", mainLLM_systemPromptInst, mainLLM_startPromptInst, mainLLM_endRespondPrompt);
+	const buildPromptSpill = `${mainLLM_systemPromptInst} ${initStage1}\n ${mainLLM_startPromptInst}\n{prompt}\n${mainLLM_endRespondPrompt}\n`
+	log.debug(consoleLogPrefix, "Spilling the bucket to", promptFileDir);
+	fs.writeFile(promptFileDir, buildPromptSpill, (err) => {
+		if (err) {
+		log.info(consoleLogPrefix, 'Error writing file:', err);
+		}
+	});
+
+}
+
 
 function checkModelPath() {
 	log.info(consoleLogPrefix, "Checking Main General Model...")
@@ -868,13 +895,13 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	childLLMResultNotPassed = true;
 	let specializedModelReq="";
 	definedSeed_LLMchild = `${randSeed}`;
-	//log.debug(consoleLogPrefix, "🍀⚙️", "CallLLMChildThoughtProcessor invoked!", prompt);
+	log.debug(consoleLogPrefix, "🍀⚙️", "CallLLMChildThoughtProcessor invoked!", prompt);
 	while(childLLMResultNotPassed){
-		//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
+		log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
 		result = await callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild);
 		if (await hasAlphabet(result)){
 			childLLMResultNotPassed = false;
-			//log.debug(consoleLogPrefix, "LLMChild Result detected", result);
+			log.debug(consoleLogPrefix, "🍀⚙️", "LLMChild Result detected", result);
 			childLLMDebugResultMode = false;
 			llmChildfailureCountSum = 0; //reset failure count if exists, because different seed different result
 		} else {
@@ -919,7 +946,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 let currentUsedLLMChildModel=""
 async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild){
 	let allowedNPULayerFactorDivision = 0.25; // make this to be lighter on vram or ram or the NPU memory so that it doesn't locks up the whole computer when it launched
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called");
+	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called");
 	//lengthGen is the limit of how much it need to generate
 	//prompt is basically prompt :moai:
 	// flag is basically at what part that callLLMChildThoughtProcessor should return the value started from.
@@ -929,35 +956,42 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	// To combat this we need 2 layered function callLLMChildThoughtProcessor() the frontend which serve the whole program transparently and  callLLMChildThoughtProcessor_backend() which the main core that is being moved into
 	
 	//model = ``;
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called stripping Object Promise");
+	log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called stripping Object Promise");
 	prompt = prompt.replace("[object Promise]", "");
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Stripping ProgramBreakingCharacters");
+	log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Stripping ProgramBreakingCharacters");
 	function stripProgramBreakingCharacters_childLLM(str) {
 		// Replace consecutive \n\n with a single \n using a loop
 		while (str.includes('\n\n')) {
-			str = str.replace(/\n\n/g, '\\n');
+			str = str.replace(/\n\n/g, '\n');
 		}
 		while (str.includes('nnnn')) {
 			str = str.replace(/nnnn/g, '');
 		}
+		str = str.replace(/"/g, "\\\"");
+		str = str.replace(/\\/g, "\\\\");
+		str=str // pass
 		// make it one line with \n
-		str = str.replace(/\n/g, " "); // make sure it doesn't leave with n instead of \n
+		//str = str.replace(/\n/g, " "); // make sure it doesn't leave with n instead of \n
 		// Remove characters other than letters (\p{L}) and whitespace (\s)
-		return str.replace(/[^\p{L}\s]/gu, "");
+		//str = str.replace(/[^\p{L}\s]/gu, "");
+		return str
 	}
 	prompt = stripProgramBreakingCharacters_childLLM(prompt); // this fixes the strange issue that frozes the whole program after the 3rd interaction
 	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ParamInput");
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
 	
 	// check if requested Specific/Specialized Model are set by the thought Process in the variable specificSpecializedModelPathRequest_LLMChild if its not set it will be return blank which we can test it with isBlankOrWhitespaceTrue_CheckVariable function
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking PathRequest");
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking specializedModel", specificSpecializedModelPathRequest_LLMChild, validatedModelAlignedCategory)
+	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking PathRequest");
+	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking specializedModel", specificSpecializedModelPathRequest_LLMChild, validatedModelAlignedCategory)
 	let allowedAllocNPULayer;
 	let ctxCacheQuantizationLayer;
 	let allowedAllocNPUDraftLayer;
-	
+	let validatedModelAlignedCategorydefaultLLMCategory="general_conversation"
+	let llmchildsystemPromptInst;
+	let startPromptInst;
+	let endRespondPrompt;
 	// --n-gpu-layers need to be adapted based on round(${store.get("params").hardwareLayerOffloading}*memAllocCutRatio)
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split");
+	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split");
 	if(isBlankOrWhitespaceTrue_CheckVariable(specificSpecializedModelPathRequest_LLMChild) || LLMChildDecisionModelMode || defectiveLLMChildSpecificModel){
 		if(LLMChildDecisionModelMode){
 			log.debug(consoleLogPrefix, "LLMChild Model Decision Mode! Ignoring Specific Model Request!");
@@ -968,17 +1002,33 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 			log.error(consoleLogPrefix, "I'm not sure if this an issue of the model information augmentation performance, data corruption, language incompatibility! Fallback to the general_conversation");
 			defectiveLLMChildSpecificModel = false; //reset global flag
 		}
+		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "var");
+
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * allowedNPULayerFactorDivision); // by default LLMChild using default general conv will use 1/4 of the Main Layer Configuration ( The reason is that the launch of LLMChild on Apple M2 Pro causes lockup the whole computer, which mean the optimization is bad for the engine )
-		currentUsedLLMChildModel = specializedModelManagerRequestPath("general_conversation");// Preventing the issue of missing validatedModelAlignedCategory variable which ofc javascript won't tell any issue and just stuck forever in a point
-		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
-		//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
+		currentUsedLLMChildModel = specializedModelManagerRequestPath(validatedModelAlignedCategorydefaultLLMCategory);// Preventing the issue of missing validatedModelAlignedCategory variable which ofc javascript won't tell any issue and just stuck forever in a point
+		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].Quantization;
+		llmchildsystemPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].systemPrompt;
+		startPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].instructionPrompt;
+		endRespondPrompt = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].responsePrompt;
+		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "var done");
+
+		//Specific custom instructionPrompt and responsePrompt (since each model trained differently)
+		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
 	} else {
+		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "varcust");
+
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].memAllocCutRatio * allowedNPULayerFactorDivision);
 		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
 		currentUsedLLMChildModel=specificSpecializedModelPathRequest_LLMChild; // this will be decided by the main thought and processed and returned the path of specialized Model that is requested
-	}
+		llmchildsystemPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].systemPrompt;
+		startPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].instructionPrompt;
+		endRespondPrompt = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].responsePrompt;
+		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "varcust done");
 
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "NPU Split Decision");
+	}
+	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", currentUsedLLMChildModel, "custom startPromptInst endRespondPrompt", startPromptInst, endRespondPrompt, llmchildsystemPromptInst)
+
+	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "NPU Split Decision");
 	if (allowedAllocNPULayer <= 0){
 		allowedAllocNPULayer = 1;
 	}
@@ -994,24 +1044,28 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		allowedAllocNPULayer=0;
 		allowedAllocNPUDraftLayer=0;
 	}
-	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
-	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Prompt`, prompt);
-	LLMChildParam = `-p \"Answer and continue this: ${prompt} ${startEndThoughtProcessor_Flag} __ \" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -c 0 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
+	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Prompt`, prompt);
+	/*
+	how llm trained
+
+	*/
+
+
+	LLMChildParam = `-p \" ${startPromptInst} ${prompt} \n ${endRespondPrompt}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -c 0 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
 	try {
-	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Inference ${command}`);
+	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Inference ${command}`);
 	NeuralAcceleratorEngineBusyState=true;
 	outputLLMChild = await runShellCommand(command);
 	NeuralAcceleratorEngineBusyState=false;
 	if(childLLMDebugResultMode){
-		//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
+		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
 	}
-	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
-	//log.info(consoleLogPrefix, 'LLMChild Raw output:', outputLLMChild);
 	} catch (error) {
-	log.error('Error occoured spawning LLMChild!', flag, error.message);
+	log.error("______________callLLMChildThoughtProcessor_backend ",'Error occoured spawning LLMChild!', flag, error.message);
 	}	
 	// ---------------------------------------
 	/*
@@ -1023,7 +1077,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 
 	function stripThoughtHeader(str){
 		// Find the index of the last occurrence of "__" in the string
-		let lastIndex = str.lastIndexOf(`${startEndThoughtProcessor_Flag}`);
+		let lastIndex = str.lastIndexOf(`${endRespondPrompt}`);
 		// If "__" is not found, return the original string
 		if (lastIndex === -1) {
 		  return str;
@@ -1031,12 +1085,12 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		// Otherwise, return the substring after the last "__"
 		else {
 		  //return str.substring(lastIndex + 2); //replace +2 with automatic calculation on how much character on the _Flag
-		  return str.substring(lastIndex + startEndThoughtProcessor_Flag.length);
+		  return str.substring(lastIndex + endRespondPrompt.length);
 		}
 	}
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend raw Output", outputLLMChild);
 	filteredOutput = stripThoughtHeader(outputLLMChild);
-	filteredOutput = filteredOutput.replace(/\n/g, "\\n");
+	//filteredOutput = filteredOutput.replace(/\n/g, "\\n");
 	filteredOutput = filteredOutput.replace(/\r/g, "");
 	filteredOutput = filteredOutput.replace(/__/g, '');
 	filteredOutput = filteredOutput.replace(/"/g, '\\"');
@@ -1058,8 +1112,9 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 }
 
 
+// Default startEndThoughtProcessor_Flag but it will be overridden
+let startEndThoughtProcessor_Flag = "OutputResponse:"; // we can remove [ThoughtProcessor] word from the phrase to prevent any processing or breaking the chat context on the LLM and instead just use ___ three underscores
 
-const startEndThoughtProcessor_Flag = "OutputResponse:"; // we can remove [ThoughtProcessor] word from the phrase to prevent any processing or breaking the chat context on the LLM and instead just use ___ three underscores
 const startEndAdditionalContext_Flag = ""; //global variable so every function can see and exclude it from the chat view
 // we can savely blank out the startEndAdditionalContext flag because we are now based on the blockGUI forwarding concept rather than flag matching
 const DDG = require("duck-duck-scrape"); // might migrate later near the scraping subsystem
@@ -1495,15 +1550,19 @@ async function callInternalThoughtEngine(prompt){
 		BackbrainModeInternal=false;
 		BackbrainMode=false;
 	}
-
+	log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine CheckedBackbrain!");
 	internalThoughtEngineProgress=2;
 	// were going to utilize this findClosestMatch(decision..., decisionBinaryKey); // new algo implemented to see whether it is yes or no from the unpredictable LLM Output
 	if (store.get("params").llmdecisionMode){
 		// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
+		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine evaluating mem fetch");
 		promptInput = `${username}:${prompt}\n Based on your evaluation of the request submitted by ${username}, could you please ascertain the number of sequential steps, ranging from 1 to 50, necessary to acquire the relevant historical context to understand the present situation? Answer only in numbers:`;
+		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine evaluating mem fetch");
 		internalThoughtEngineTextProgress="Acquiring Interaction Context";
 		await zombieTPIDGuardian(localTPID, globalTPID);
+		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine invoke");
 		historyDistanceReq = await callLLMChildThoughtProcessor(promptInput, 32);
+		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine invoke");
 		historyDistanceReq = onlyAllowNumber(historyDistanceReq);
 		log.info(consoleLogPrefix, "Required History Distance as Context", historyDistanceReq);
 
@@ -1556,7 +1615,7 @@ async function callInternalThoughtEngine(prompt){
 		// using llmdecisionMode
 		if (store.get("params").llmdecisionMode){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
-			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I use more specific LLM Model for better Answer, Only answer Yes or No! Answer:`;
+			promptInput = `\`\`\` ${historyChatRetrieved}\n${username} : ${prompt}\n. \`\`\` With the previous Additional Context is \`\`\` ${passedOutput}\n \`\`\`. From this Interaction Should I use more specific LLM Model for better Answer,\n Only answer Yes or No!`;
 			internalThoughtEngineTextProgress="Checking Specific/Specialized/Experts Model Fetch Requirement!";
 			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			LLMChildDecisionModelMode = true;
@@ -1567,9 +1626,9 @@ async function callInternalThoughtEngine(prompt){
 		} else {
 			decisionSpecializationLLMChildRequirement = "yes"; // without LLM deep decision
 		}
-		if ((((decisionSpecializationLLMChildRequirement.includes("yes") || decisionSpecializationLLMChildRequirement.includes("yep") || decisionSpecializationLLMChildRequirement.includes("ok") || decisionSpecializationLLMChildRequirement.includes("valid") || decisionSpecializationLLMChildRequirement.includes("should") || decisionSpecializationLLMChildRequirement.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.SPECIALIZED_MODEL_DEBUG_MODE === "1")){
+		if ((((decisionSpecializationLLMChildRequirement.includes("yes") || decisionSpecializationLLMChildRequirement.includes("i need") || decisionSpecializationLLMChildRequirement.includes("yep") || decisionSpecializationLLMChildRequirement.includes("ok") || decisionSpecializationLLMChildRequirement.includes("valid") || decisionSpecializationLLMChildRequirement.includes("should") || decisionSpecializationLLMChildRequirement.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.SPECIALIZED_MODEL_DEBUG_MODE === "1")){
 			if (store.get("params").llmdecisionMode){
-				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this interaction what category from this category \" ${specializedModelKeyList.join(", ")}\n \". What category this chat categorized as? only answer the category! Answer:`;
+				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`${passedOutput}\n\`\`\`. From this interaction what category from this category \" ${specializedModelKeyList.join(", ")}\n \". What category this chat categorized as?\n only answer the category!`;
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				specificSpecializedModelCategoryRequest_LLMChild = await callLLMChildThoughtProcessor(promptInput, 512);
 				log.info(consoleLogPrefix, promptInput, "Requesting Model Specialization/Branch", specificSpecializedModelCategoryRequest_LLMChild);
@@ -1596,7 +1655,7 @@ async function callInternalThoughtEngine(prompt){
 		// This is for the Internet Search Data Fetching
 		if (store.get("params").llmdecisionMode && store.get("params").webAccess){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
-			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction Should I Search this on the Internet, Only answer Yes or No! Answer:`;
+			promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank) . From this Interaction Should I Search this on the Internet,\n Only answer Yes or No!`;
 			internalThoughtEngineTextProgress="Checking Internet Fetch Requirement!";
 			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			LLMChildDecisionModelMode = true;
@@ -1611,10 +1670,10 @@ async function callInternalThoughtEngine(prompt){
 		//log.info(consoleLogPrefix, ` LLMChild ${decisionSearch}`);
 		// explanation on the inputPromptCounterThreshold
 		// Isn't the decision made by LLM? Certainly, while LLM or the LLMChild contributes to the decision-making process, it lacks the depth of the main thread. This can potentially disrupt the coherence of the prompt context, underscoring the importance of implementing a safety measure like a word threshold before proceeding to the subsequent phase.
-		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.INTERNET_FETCH_DEBUG_MODE === "1") && store.get("params").webAccess){
+		if ((((decisionSearch.includes("yes") || decisionSearch.includes("i need") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.INTERNET_FETCH_DEBUG_MODE === "1") && store.get("params").webAccess){
 			if (store.get("params").llmdecisionMode){
 				log.debug(consoleLogPrefix, "LLM Decision Prompting...");
-				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. Do i have the knowledge to answer this then if i dont have the knowledge should i search it on the internet? Answer:`;
+				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank) \n. To answer this, what's to search`;
 				log.debug(consoleLogPrefix, "Waiting Search Prompt...", ":", promptInput);
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
@@ -1661,7 +1720,7 @@ async function callInternalThoughtEngine(prompt){
 		// This is for the Local Document Search Logic
 		if (store.get("params").llmdecisionMode && store.get("params").localAccess){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
-			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this? Should I Search this on the Local Documents, Only answer Yes or No! Answer:`;
+			promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`.With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank). From this Interaction do i have the knowledge to answer this? Should I Search this on the Local Documents, Only answer Yes or No!`;
 			log.info(consoleLogPrefix, "Checking Local File Fetch Requirement!");
 			LLMChildDecisionModelMode = true;
 			await zombieTPIDGuardian(localTPID, globalTPID);
@@ -1673,10 +1732,10 @@ async function callInternalThoughtEngine(prompt){
 		}
 
 		//localAccess variable must be taken into account
-		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold)) || process.env.LOCAL_FETCH_DEBUG_MODE === "1") && store.get("params").localAccess){
+		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("i need") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold)) || process.env.LOCAL_FETCH_DEBUG_MODE === "1") && store.get("params").localAccess){
 			if (store.get("params").llmdecisionMode){
 				log.info(consoleLogPrefix, "We need to search it on the available resources");
-				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. From this Interaction do i have the knowledge to answer this if not what should i search on the local file then:`;
+				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank) . To answer this, what's to search`;
 				log.info(consoleLogPrefix, `LLMChild Creating Search Prompt`);
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 64);
@@ -1713,7 +1772,7 @@ async function callInternalThoughtEngine(prompt){
 		log.info(consoleLogPrefix, "Checking Chain of Thoughts Depth requirement Requirement!");
 		if (store.get("params").llmdecisionMode){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this interaction ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
-			promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. With the previous Additional Context is ${passedOutput}\n. For the additional context this is what i summerize from Internet ${concludeInformation_Internet}. \n This is what i summerize from the Local Files ${concludeInformation_LocalFiles}. \n From this Interaction and additional context Should I Answer this in 5 steps Yes or No? Answer only in Numbers:`;
+			promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank) . For the additional context this is what i summerize from Internet ${concludeInformation_Internet}. \n This is what i summerize from the Local Files ${concludeInformation_LocalFiles}. \n From this Interaction and additional context Should I Answer this in 5 steps Yes or No? Answer only in Numbers:`;
 			LLMChildDecisionModelMode = true;
 			await zombieTPIDGuardian(localTPID, globalTPID);
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 32);
@@ -1722,13 +1781,13 @@ async function callInternalThoughtEngine(prompt){
 		} else {
 			decisionSearch = "yes"; // without LLM deep decision
 		}
-		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.CoTMultiSteps_FETCH_DEBUG_MODE === "1") && store.get("params").extensiveThought){
+		if ((((decisionSearch.includes("yes") || decisionSearch.includes("yep") || decisionSearch.includes("i need") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.CoTMultiSteps_FETCH_DEBUG_MODE === "1") && store.get("params").extensiveThought){
 			if (store.get("params").llmdecisionMode){
 				
 				// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 				// required_CoTSteps
 				
-				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n From this context from 1 to 27 how many steps that is required to answer. Answer:`;
+				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\` From this context from 1 to 27 how many steps that is required to answer. Answer:`;
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				required_CoTSteps = await callLLMChildThoughtProcessor(promptInput, 16);
 				required_CoTSteps = onlyAllowNumber(required_CoTSteps);
@@ -1741,7 +1800,7 @@ async function callInternalThoughtEngine(prompt){
 				}
 				log.info(consoleLogPrefix, "We need to create thougts instruction list for this prompt");
 				log.info(consoleLogPrefix, `Generating list for this prompt`);
-				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n From this chat List ${required_CoTSteps} steps on how to Answer it. Answer:`;
+				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\` From this chat List ${required_CoTSteps} steps on how to Answer it. Answer:`;
 				promptInput = stripProgramBreakingCharacters(promptInput);
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				todoList = await callLLMChildThoughtProcessor(promptInput, 512);
@@ -1761,7 +1820,7 @@ async function callInternalThoughtEngine(prompt){
 				concatenatedCoT = prompt;
 			}
 			if (store.get("params").llmdecisionMode){
-			promptInput = `Summerization from the internal Thoughts?  \\"${concatenatedCoT}\\" Summerization:"`;
+			promptInput = `Summerization from the internal Thoughts?  \`\`\`"${concatenatedCoT}\`\`\` `;
 			internalThoughtEngineTextProgress=`LLMChild Concluding Chain of Thoughts...`;
 			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 			promptInput = stripProgramBreakingCharacters(promptInput);
@@ -1784,7 +1843,7 @@ async function callInternalThoughtEngine(prompt){
 			
 			emotionlist = "Happy, Sad, Fear, Anger, Disgust";
 			if (store.get("params").emotionalLLMChildengine){
-				promptInput = `${historyChatRetrieved}\n${username} : ${prompt}\n. From this conversation which from the following emotions ${emotionlist} are the correct one? Answer:`;
+				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. \n From this conversation which from the following emotions ${emotionlist} are the correct one?`;
 				internalThoughtEngineTextProgress=`LLMChild Evaluating Interaction With Emotion Engine...`;
 				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
 				promptInput = stripProgramBreakingCharacters(promptInput);
@@ -1820,7 +1879,7 @@ async function callInternalThoughtEngine(prompt){
 		internalThoughtEngineProgress=89; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		if((concludeInformation_Internet === "Nothing" || concludeInformation_Internet === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_Internet) ) && (concludeInformation_LocalFiles === "Nothing" || concludeInformation_LocalFiles === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_LocalFiles)) && (concludeInformation_CoTMultiSteps === "Nothing" || concludeInformation_CoTMultiSteps === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_CoTMultiSteps)) && (concludeInformation_chatHistory === "Nothing" || concludeInformation_chatHistory === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_chatHistory))){
-			log.info(consoleLogPrefix, "Bypassing Additional Context");
+			log.debug(consoleLogPrefix, "Bypassing Additional Context");
 			passedOutput = prompt;
 		} else {
 			concludeInformation_Internet = concludeInformation_Internet === "Nothing" ? "" : concludeInformation_Internet;
@@ -1831,7 +1890,7 @@ async function callInternalThoughtEngine(prompt){
 			passedOutput = mergeText;
 			log.info(consoleLogPrefix, "Combined Context", mergeText);
 		}
-		log.info(consoleLogPrefix, "Passing Thoughts information");
+		log.debug(consoleLogPrefix, "🍀", "Passing Thoughts information");
 		}else{
 			passedOutput = prompt;
 		}
@@ -1847,8 +1906,9 @@ async function callInternalThoughtEngine(prompt){
 
 		internalThoughtEngineProgress=93; // Randomly represent progress (its not representing the real division so precision may be not present)
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
-			promptInput = `This is the previous conversation ${historyChatRetrieved}\n. \n This is the conversation ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No! Answer:`;
-			log.info(consoleLogPrefix, `LLMChild Evaluating Information PostProcess`);
+			log.debug(consoleLogPrefix, "🍀", "Evaluating Information Post Process Raw");
+			promptInput = `\`\`\`This is the previous conversation ${historyChatRetrieved}\n. \n This is the conversation ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}\`\`\`. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No!`;
+			log.debug(consoleLogPrefix, "🍀", "LLMChild Evaluating Information PostProcess");
 			LLMChildDecisionModelMode = true;
 			await zombieTPIDGuardian(localTPID, globalTPID);
 			reevaluateAdCtxDecisionAgent = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 128));
@@ -1868,6 +1928,18 @@ async function callInternalThoughtEngine(prompt){
 			reevaluateAdCtx = false;
 		}
 	}
+	// Prompt Optimization Reframe
+	if (store.get("params").llmdecisionMode){
+		promptInput = `Rephrase into Elegant scientific complex obscure language and focus into ${username} phrase you are not here to answer the question but rather just rephrase it \n This is the phrase to rephrase: \n \nThis is the previous conversation ${historyChatRetrieved}\n. \n This is the main user prompt ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps} \n`;
+		log.debug(consoleLogPrefix, "Reframing Prompt Injection", promptInput)
+		promptInput = await callLLMChildThoughtProcessor(promptInput, 2048)
+		log.debug(consoleLogPrefix, "Prompt Optimize Reframed into:", promptInput)
+		passedOutput = promptInput.replace(/\r/g, "\\n");
+	}
+	else{
+		passedOutput = promptInput
+	}
+
 	//reset to 0 to when it finished
 	internalThoughtEngineProgress=0; // Randomly represent progress (its not representing the real division so precision may be not present)
 	log.info(consoleLogPrefix, passedOutput);
@@ -1876,8 +1948,9 @@ async function callInternalThoughtEngine(prompt){
 		BackbrainModeInternal = false;
 		BackbrainMode = false;
 	}
-
+	log.debug(consoleLogPrefix, "DONE! removing loal TPID", localTPID);
 	removeFromGlobalTPID(localTPID);
+	log.debug(consoleLogPrefix, "DONE! Handing over prompt into the mainLLM engine!");
 	return passedOutput;
 
 }
@@ -2767,8 +2840,11 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	//------------------------------------------------------------------------------------------------------
 
 	if (mode === "save"){
-        //log.debug(consoleLogPrefix,"Save Invoked!");
+        log.debug(consoleLogPrefix,"[Storage Manager]", "Save Invoked!", "Order???", interactionStgOrder, "Content array stg mainLLM", interactionStg, "recievedData", prompt);
 		if(AITurn && !UserTurn){
+
+		//reform AITurn to be not partial but its going to recieve the whole chunk (in one time) now
+			/*
 			if(!amiwritingonAIMessageStreamMode){
 				interactionStgOrder = interactionStgOrder + 1;
 				 // add the order number counter when we detect we did write it on AI mode and need confirmation, when its done we should add the order number
@@ -2787,14 +2863,14 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				log.error("Scheme has been initialized", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
 			}
 
-			/*
+			
 			//interactionStgOrder = interactionStgOrder + 1; //we can't do this kind of stuff because the AI stream part by part and call the  in a continuous manner which auses the interactionStgOrder number to go up insanely high and mess up with the storage
 			// How to say that I'm done and stop appending to the same array and move to next Order?
-			interactionStg[interactionStgOrder] += prompt; //handling the partial stream by appending into the specific array
-			interactionStg[interactionStgOrder] = interactionStg[interactionStgOrder].replace("undefined", "");
+			//interactionStg[interactionStgOrder] += prompt; //handling the partial stream by appending into the specific array
+			//interactionStg[interactionStgOrder] = interactionStg[interactionStgOrder].replace("undefined", "");
 			
-			Since we are using the second revision on how to store messages on json, we got an educational training from AI engineer from a company on the standard training data, we could use that as a basis on how to do this, see at the initial function comment for details
-			*/
+			//Since we are using the second revision on how to store messages on json, we got an educational training from AI engineer from a company on the standard training data, we could use that as a basis on how to do this, see at the initial function comment for details
+			
 			
 			const resultAIPartialStream=prompt // this one is recieving AI result generation
 			// Slowly reconstruct on the .content property
@@ -2809,7 +2885,25 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				log.info(consoleLogPrefix,"AITurn...");
 				log.info(consoleLogPrefix, "reconstructing from pty stream: ", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
 			}
-			
+			*/
+			// Its as simple as this, don't need special handler for partial stream or smth
+			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration Dictionary data");
+			if (process.env.ptyinteractionStgDEBUG === "1"){
+				log.debug(consoleLogPrefix, "current pty stream capture interactionStg", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
+			}
+			if (process.env.ptyinteractionStgDEBUG === "1"){
+				log.debug(consoleLogPrefix, "Entering the interactionStg Order array json focus scheme, this is where i'm going to get stuck without error")
+			}
+			if (!interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]){
+				log.error("Prop doesn't exist yet!");
+				interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]={"content": ``, "role": "UNK", "emotion": "UNK"}
+				log.error("Scheme has been initialized", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
+			}
+			interactionStgOrder = interactionStgOrder + 1;
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].emotion = emotionalEvaluationResult;
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].role = assistantName;
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].content = prompt;
+
 		}
 
 		if(!AITurn && UserTurn){
@@ -2845,7 +2939,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		log.debug(consoleLogPrefix,"interactionStgOrder...", interactionStgOrder);
 		log.debug(consoleLogPrefix,"interactionStg Content", interactionStg);
 		}
-
+		log.debug(consoleLogPrefix,"interactionStg Content", interactionStg);
 			// dedupe content on UnifiedMemoryArray to save storage proactively
 		//log.info(consoleLogPrefix, "Debug Dedupe UnifiedMemoryArray Content");
 		// Iterate over each array in UnifiedMemoryArray
@@ -3346,8 +3440,9 @@ function initChat() {
 			}
 			NeuralAcceleratorEngineBusyState=true; // When it is intensely use, say globally that it is used and not be able to allocated by something else
 			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
-			interactionArrayStorage("save", res, true, false, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
-			interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
+			// Migrated to ipcMain.on("saveAdelaideEngineInteraction", (_event, resultData) => {} (To Compensate sudden multi-reply)
+			//interactionArrayStorage("save", res, true, false, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
+			//interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
 			//res = marked.parse(res);
 			win.webContents.send("result", {
 				data: res
@@ -3355,18 +3450,24 @@ function initChat() {
 
 		}
 	});
-
+	// mainLLM thread or mainLLM spawn thread
 	//const params = store.get("params");
 	//revPrompt = "### Instruction: \n {prompt}";
 	let revPrompt = "‌‌";
-	var promptFile = "universalPrompt.txt";
-	promptFileDir=`"${path.resolve(__dirname, "bin", "prompts", promptFile)}"`
-	const chatArgs = `-i -ins -r "${revPrompt}" -f "${path.resolve(__dirname, "bin", "prompts", promptFile)}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
+	
+	// before the doing the chatArgs we're going to write the prompt
+	// Since mainLLM uses general_conversation, we can just use 
+	
+	mainLLMWritePrompt(); //decode base64, fill in the variables, and add the specific "system user assistant" prompt write into promptFileDir variable
+
+	const chatArgs = `-i -ins -r "${revPrompt}" -f "${promptFileDir}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
 	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
 	const paramArgs = `-m "${modelPath}" -n -1 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --rope-scaling yarn --repeat-penalty 1.5 --mirostat 2 -sm row -c 0 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
 	log.info(consoleLogPrefix, chatArgs, paramArgs)
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
+	startPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].instructionPrompt;
+	endRespondPrompt = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].responsePrompt;
 }
 ipcMain.on("startChat", () => {
 	initChat();
@@ -3376,11 +3477,23 @@ ipcMain.on("startChat", () => {
 // This thing allow to run on parallel so this isn't the issue
 let queueSubmissionForm=[];
 let invokedMainChat=false;
+
+ipcMain.on("saveAdelaideEngineInteraction", (_event, resultData) => {
+	log.debug(consoleLogPrefix, "Adelaide engine generated interaction mainLLM finished, saving data!")
+	//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
+	interactionArrayStorage("save", resultData.data, true, false, 0);
+	interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0);
+});
+
+
 ipcMain.on("message", async (_event, { data }) => {
 	currentPrompt = data;
 	if (runningShell) {
 		//zephyrineHalfReady = false;
+		// this is where the user submitted their message
+		//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		interactionArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
+		interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0);
 		blockGUIForwarding = true;
 		//log.info(consoleLogPrefix, `Forwarding manipulated Input RAG to mainLLM processor ${data}`);
 		 // push to internal thought engine
@@ -3502,6 +3615,8 @@ ipcMain.on("AutomataLLMMainResultReciever", (_event, resultFeedloop) => {
 	//log.debug(consoleLogPrefix, automataConsolePrefix, automataLLMMainresultReciever);
 	AutomataProcessing();
 });
+
+
 
 // Automata Loop Processing 1000ms 
 

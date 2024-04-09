@@ -21,7 +21,7 @@ Project Zephyrine
   </a>
 </p>
 
-<p align="center"><i>Greetings, I am Adelaide Zephyrine Charlotte, delighted to make your acquaintance. Shall we embark on our intellectual voyage through this endeavor? </i></p>
+<p align="center"><i>Greetings, I am called Project Zephyrine or the entity name so-be called Adelaide Zephyrine Charlotte, delighted to make your acquaintance. Shall we embark on our intellectual voyage through this endeavor? </i></p>
 
 <hr>
 
