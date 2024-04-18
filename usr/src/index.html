@@ -544,6 +544,14 @@
 							<p style="margin: 0">Local File Access</p>
 						</div>
 						<h5>Activate the capability for the LLM to access and comprehend local documents (please note: your document data will remain within your computer's confines).</h5>
+						<div style="display: flex; align-items: center">
+							<label class="switch" style="height: 1.153512rem">
+								<input type="checkbox" id="ragprepromptprocesscontexting" />
+								<span class="slider round"></span>
+							</label>
+							<p style="margin: 0">RAG Pre-Prompt Contexting</p>
+						</div>
+						<h5>RAG Experimental Backend Pre-Prompt: instead of injecting/modifying prompt in one submission, there will be instead two submission into the mainLLM pre-prompting submission for the additional context before the main prompt of the user</h5>
 						<div class="item">
 							<p>NLP MLCMCF Match Content Percent Threshold</p>
 							<input type="number" step="1" min="1" max="100" id="keywordcontentfilematchpercentthreshold" value="27" placeholder="27" />
