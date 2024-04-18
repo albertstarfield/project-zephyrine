@@ -3357,13 +3357,13 @@ function restart() {
 	zephyrineHalfReady = false;
 	("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
 	interactionArrayStorage("reset", 0, 0, 0, 0); // fill it with 0 0 0 0 just to fill in nonsensical data since its only require reset command to execute the command
-	initChat();
+	initInteraction();
 }
 
 
 //const splashScreen = document.getElementById('splash-screen-overlay'); //blocking overlay which prevent person and shows peopleexactly that the bot is loading
-let blockGUIForwarding;
-let initChatContent;
+let blockGUIAPIForwarding;
+let initInteractionContent;
 let isitPassedtheFirstPromptYet;
 let params = store.get("params");
 let RAGPrepromptingFinished=true;
@@ -3371,11 +3371,11 @@ let mainLLMFinishedGeneration=false;
 let messageRecievedOrder = 0;
 
 log.info(consoleLogPrefix, "entering primed mode")
-function initChat() {
+function initInteraction() {
 	if (runningShell) {
 		win.webContents.send("ready");
 		log.info(consoleLogPrefix, "LLMMain Thread Ready");
-		blockGUIForwarding = false;
+		blockGUIAPIForwarding = false;
 		return;
 	}
 	const ptyProcess = pty.spawn(shell, [], config);
@@ -3384,7 +3384,7 @@ function initChat() {
 	ptyProcess.onData(async (res) => {
 		res = stripProgramBreakingCharacters(res);
 		log.debug("[CORE MainLLM DEBUG RAW FlipFlop I/O]:",res);
-		log.debug("[CORE MainLLM DEBUG RAW Switch]:", "zephyrineHalfReady",zephyrineHalfReady, "zephyrineReady",zephyrineReady, "blockGUIForwarding", blockGUIForwarding, "RAGPrepromptingFinished", RAGPrepromptingFinished);
+		log.debug("[CORE MainLLM DEBUG RAW Switch]:", "zephyrineHalfReady",zephyrineHalfReady, "zephyrineReady",zephyrineReady, "blockGUIAPIForwarding", blockGUIAPIForwarding, "RAGPrepromptingFinished", RAGPrepromptingFinished);
 		//res = stripAdditionalContext(res);
 		if (process.env.ptyStreamDEBUGMode === "1"){
 		log.info(consoleLogPrefix, "pty Stream",`//> ${res}`);
@@ -3402,9 +3402,9 @@ function initChat() {
 			if (store.get("params").throwInitResponse){
 				NeuralAcceleratorEngineBusyState=true;
 				log.info(consoleLogPrefix, "Blocking Initial Useless Prompt Response!");
-				blockGUIForwarding = true;
-				initChatContent = initStage2;
-				runningShell.write(initChatContent);
+				blockGUIAPIForwarding = true;
+				initInteractionContent = initStage2;
+				runningShell.write(initInteractionContent);
 				runningShell.write(`\r`);
 				NeuralAcceleratorEngineBusyState=false;
 			}
@@ -3431,20 +3431,17 @@ function initChat() {
 			supportsAVX2 = false;
 			checkAVX = false;
 			store.set("supportsAVX2", false);
-			initChat();
+			initInteraction();
 		} else if (((res.match(/PS [A-Z]:.*>/) && platform == "win32") || (res.match(/bash-[0-9]+\.?[0-9]*\$/) && platform == "darwin") || (res.match(/([a-zA-Z0-9]|_|-)+@([a-zA-Z0-9]|_|-)+:?~(\$|#)/) && platform == "linux")) && zephyrineReady) {
-			restart();
+			restart(); // If binary fails to startup and return to for instance powershell, Bash or shell then restart the mainLLM binary
 		} else if (res.includes("\n>") || res.includes("\n> ") || res.includes("> ") || res.includes(" \n> ") || res.includes("\n\n> ") || res.includes("\n>\n")){
 			// Checking the signature of llama.cpp interaction chat mode usually it ends with (" > ") thanks to itspi3141 now i know how to check it and not to forward GUI
 			log.info(consoleLogPrefix, "Done Generating and Primed to be Generating on anything that the mainLLM previously tasked!");
 			mainLLMFinishedGeneration=true;
-			if(!isitPassedtheFirstPromptYet){
-				blockGUIForwarding = false;
-			}
-		} else if ((res.includes("\n>") || res.includes("\n> ") || res.includes("> ") || res.includes(" \n> ") || res.includes("\n\n> ") || res.includes("\n>\n")) && zephyrineReady && !blockGUIForwarding) {
+		} else if ((res.includes("\n>") || res.includes("\n> ") || res.includes("> ") || res.includes(" \n> ") || res.includes("\n\n> ") || res.includes("\n>\n")) && zephyrineReady && !blockGUIAPIForwarding) {
 			if (store.get("params").throwInitResponse && !isitPassedtheFirstPromptYet){
 				log.info(consoleLogPrefix, "Passed the initial Uselesss response initialization state, unblocking GUI IO");
-				blockGUIForwarding = false;
+				blockGUIAPIForwarding = false;
 				isitPassedtheFirstPromptYet = true;
 			}
 			if(RAGPrepromptingFinished){
@@ -3454,6 +3451,7 @@ function initChat() {
 			mainLLMFinishedGeneration=true;
 			/// Save The Response
 			// ==================================
+			// Putting it on a constant stream is a bad idea! Only put it on a finished compiled stream
 			/*
 			log.debug(consoleLogPrefix, "Adelaide engine generated interaction mainLLM finished, saving data!");
 			log.debug(consoleLogPrefix, "The Content stream!", res);
@@ -3466,11 +3464,9 @@ function initChat() {
 			log.debug(consoleLogPrefix, "mainLLMFinishedGeneration!!!!!!");
 			log.debug("What have been trigger the Finish line!", res);
 			}
-		} else if (zephyrineReady && !blockGUIForwarding) { // Forwarding to pty Chat Stream GUI 
+		} else if (zephyrineReady && !blockGUIAPIForwarding) { // Forwarding to pty Chat Stream GUI 
 			if (platform == "darwin") res = res.replaceAll("^C", "");
-			if (process.env.ptyStreamDEBUGMode === "1"){
-			log.debug(consoleLogPrefix, "Forwarding to GUI/API...", res); // res will send in chunks so we need to have a logic that reconstruct the word with that chunks until the program stops generating
-			}
+			log.debug(consoleLogPrefix, "Forwarding to GUI/API...", res);
 			NeuralAcceleratorEngineBusyState=true; // When it is intensely use, say globally that it is used and not be able to allocated by something else
 			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			// Migrated to ipcMain.on("saveAdelaideEngineInteraction", (_event, resultData) => {} (To Compensate sudden multi-reply)
@@ -3503,7 +3499,7 @@ function initChat() {
 	endRespondPrompt = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].responsePrompt;
 }
 ipcMain.on("startChat", () => {
-	initChat();
+	initInteraction();
 });
 
 // Investigation Note : I was searching for why when i click submit or autocomplete button it can't be clicked again until response has been made, which this progrma don't want to be the same as other!
@@ -3521,7 +3517,7 @@ ipcMain.on("message", async (_event, { data }) => {
 		interactionArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 		log.debug(consoleLogPrefix, `Flushing User Prompt data`);
 		interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0);
-		blockGUIForwarding = true;
+		blockGUIAPIForwarding = true;
 		log.debug(consoleLogPrefix, `Recieved Input Data! ${data}`);
 		 // push to internal thought engine
 		 log.debug(consoleLogPrefix, `Forwarding into the Internal Thought Engine ${data}`);
@@ -3575,7 +3571,7 @@ ipcMain.on("message", async (_event, { data }) => {
 		}
 		}
 		await new Promise(resolve => setTimeout(resolve, 500)); //delay 500ms (To make sure the previous sent prompt doesn't leak to API or GUI)
-		blockGUIForwarding = false;
+		blockGUIAPIForwarding = false;
 		invokedMainChat = false;
 	}
 });
@@ -3588,7 +3584,7 @@ ipcMain.on("stopGeneration", () => {
 		currentPrompt = undefined;
 		zephyrineReady = false;
 		zephyrineHalfReady = false;
-		initChat();
+		initInteraction();
 		setTimeout(() => {
 			win.webContents.send("result", {
 				data: "\n\n<end>"
@@ -3662,13 +3658,13 @@ async function AutomataProcessing(){
 		win.webContents.send("manualAIAnswerGUIHijack", {
 			data: `[ 🤔 Internal Thought : ${AutomataReInjection} ] \n\n\n Answer: `
 		});
-		blockGUIForwarding = true;
+		blockGUIAPIForwarding = true;
 		interactionArrayStorage("save", `[🤔 ${assistantName} Internal Automata Thought : ${AutomataReInjection}] : `, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 		runningShell.write(RAGAutomataPostProcessing); //submit to the shell! LLMMain Threads
 		runningShell.write(`\r`);
 		//log.info(consoleLogPrefix, automataConsolePrefix, "Delay 3000ms");
 		//await delay(3000+timeDegradationSmoothingPause); // add delay for the pty to flush the prompt and going to the next line, so basically we able to prevent the Additional Context leak like on the Alpaca-electron original code
-		blockGUIForwarding = false; // make sure the prompt isn't visible on the GUI
+		blockGUIAPIForwarding = false; // make sure the prompt isn't visible on the GUI
 
 		//--------------------------------------------------------------------------------------------
 	}
