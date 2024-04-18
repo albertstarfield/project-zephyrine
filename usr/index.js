@@ -3369,6 +3369,7 @@ let params = store.get("params");
 let RAGPrepromptingFinished=true;
 let mainLLMFinishedGeneration=false;
 let messageRecievedOrder = 0;
+let streamCompilation = "";
 
 log.info(consoleLogPrefix, "entering primed mode")
 function initInteraction() {
@@ -3438,6 +3439,19 @@ function initInteraction() {
 			// Checking the signature of llama.cpp interaction chat mode usually it ends with (" > ") thanks to itspi3141 now i know how to check it and not to forward GUI
 			log.info(consoleLogPrefix, "Done Generating and Primed to be Generating on anything that the mainLLM previously tasked!");
 			mainLLMFinishedGeneration=true;
+			if(RAGPrepromptingFinished && isitPassedtheFirstPromptYet){
+				/// Save The Response
+			// ==================================
+			// Putting it on a constant stream is a bad idea! Only put it on a finished compiled stream
+			
+			log.debug(consoleLogPrefix, "Adelaide engine generated interaction mainLLM finished, saving data!");
+			log.debug(consoleLogPrefix, "The Content Compiled!", streamCompilation);
+			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
+			interactionArrayStorage("save", res, true, false, 0);
+			interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0);
+			streamCompilation = "";
+			// ==================================
+		}
 		} else if ((res.includes("\n>") || res.includes("\n> ") || res.includes("> ") || res.includes(" \n> ") || res.includes("\n\n> ") || res.includes("\n>\n")) && zephyrineReady && !blockGUIAPIForwarding) {
 			if (store.get("params").throwInitResponse && !isitPassedtheFirstPromptYet){
 				log.info(consoleLogPrefix, "Passed the initial Uselesss response initialization state, unblocking GUI IO");
@@ -3449,18 +3463,7 @@ function initInteraction() {
 				data: "\n\n<end>"
 			});
 			mainLLMFinishedGeneration=true;
-			/// Save The Response
-			// ==================================
-			// Putting it on a constant stream is a bad idea! Only put it on a finished compiled stream
-			/*
-			log.debug(consoleLogPrefix, "Adelaide engine generated interaction mainLLM finished, saving data!");
-			log.debug(consoleLogPrefix, "The Content stream!", res);
-			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
-			interactionArrayStorage("save", res, true, false, 0);
-			interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0);
-			*/
-			// ==================================
-
+			streamCompilation=streamCompilation+res;
 			log.debug(consoleLogPrefix, "mainLLMFinishedGeneration!!!!!!");
 			log.debug("What have been trigger the Finish line!", res);
 			}
