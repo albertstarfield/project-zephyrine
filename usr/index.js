@@ -2838,7 +2838,9 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
 	if (mode === "save"){
         log.debug(consoleLogPrefix,"[Storage Manager]", "Save Invoked!", "Order???", interactionStgOrder, "Content array stg mainLLM", interactionStg, "recievedData", prompt, "SaveSwitchInteraction", AITurn, UserTurn);
+		log.debug("Is the content gone yet because of this fucking javascript?", interactionStg);
 		if(AITurn && !UserTurn){
+		
 
 		//reform AITurn to be not partial but its going to recieve the whole chunk (in one time) now
 			/*
@@ -2884,6 +2886,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			}
 			*/
 			// Its as simple as this, don't need special handler for partial stream or smth
+			log.debug("Is the content gone yet because of this fucking javascript? AI Turn", interactionStg);
 			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration Dictionary data");
 			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration Dictionary data", "Array Session Focus", interactionSessionMemoryArrayFocus, "interactionStgOrder", interactionStgOrder);
 			if (!interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]){
@@ -2907,10 +2910,11 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		}
 
 		if(!AITurn && UserTurn){
+			log.debug("Is the content gone yet because of this fucking javascript? User	 Turn", interactionStg);
 			amiwritingonAIMessageStreamMode=false;
 			interactionStgOrder = interactionStgOrder + 1;
 			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration Dictionary data", "Array Session Focus", interactionSessionMemoryArrayFocus, "interactionStgOrder", interactionStgOrder);
-			log.debug(consoleLogPrefix, "Storage Session Data Currently Content", interactionStg[interactionSessionMemoryArrayFocus].data);
+			log.debug(consoleLogPrefix, "Storage Session Data Currently Content", interactionStg[interactionSessionMemoryArrayFocus]);
 			if (!interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]){
 				log.error("Prop doesn't exist yet!");
 				interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]={"content": ``, "role": "UNK", "emotion": "UNK"}
@@ -3155,6 +3159,8 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				//log.info(consoleLogPrefix, "Loaded dddx: ", interactionStg, interactionStgOrder);
 			} catch (err) {
 				log.error('Error reading JSON file:', err);
+				log.error("Reset interaction storage!");
+				interactionStg = [];
 				interactionStg.push(initInteractionStgContentTemplate);
 				log.error('Falling back to default Storage:', interactionStg);
 				log.error('Debug memory dump bugcheck Memory Array Focus:', interactionStg[interactionSessionMemoryArrayFocus]);
