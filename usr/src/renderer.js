@@ -636,7 +636,10 @@ ipcRenderer.on("result", async (_event, { data }) => {
 
 			// Reactive Save Response to storage
 			ipcRenderer.send("saveAdelaideEngineInteraction", { data: responses[id] });
+
 			ipcRenderer.send("CheckAsyncMessageQueue"); // Multiple-User submission support
+
+			
 
 			console.log(prefixConsoleLogStreamCapture, "current ID of Output", id);
 
@@ -689,10 +692,12 @@ document.querySelectorAll("#feed-placeholder-alpaca button.card").forEach((e) =>
 		input.value = text;
 	});
 });
+
 let username;
 let assistantName;
 ipcRenderer.send("username") //send request of that specific data from all process that is running
 ipcRenderer.send("assistantName") //send request
+
 ipcRenderer.on("username", (_event, { data }) => {
 	username = data;
 	console.log("The username is: ", username);
@@ -731,8 +736,6 @@ ipcRenderer.send("cpuCount");
 ipcRenderer.send("threadUtilized");
 ipcRenderer.send("totalmem");
 
-
-
 ipcRenderer.on("cpuCount", (_event, { data }) => {
 	cpuCount = data;
 });
@@ -742,8 +745,6 @@ ipcRenderer.on("threadUtilized", (_event, { data }) => {
 ipcRenderer.on("totalmem", (_event, { data }) => {
 	totalmem = Math.round(data / 102.4) / 10;
 });
-
-
 //Render Alloc buffet Graphics Processing Allocator Manager
 
 // This basically set and send the data into ipcRenderer cpuUsage which manipulate the "green bar", maybe we can learn from this to create a progress bar 
@@ -1033,6 +1034,7 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("longchainthought-neverfeelenough").checked = data.longChainThoughtNeverFeelenough;
 	document.getElementById("AutomateLoopback").checked = data.automateLoopback;
 	document.getElementById("openaiapiserverhost").checked = data.openAPIServer;
+	document.getElementById("ragprepromptprocesscontexting").checked = data.ragPrePromptProcessContexting;
 });
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
@@ -1048,6 +1050,7 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			qostimeoutllmchildbackbrainglobalqueuemax: document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").value || document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").placeholder,
 			qostimeoutswitch: document.getElementById("QoSTimeoutSwitch").checked,
 			backbrainqueue: document.getElementById("BackbrainQueue").checked,
+			ragPrePromptProcessContexting: document.getElementById("ragprepromptprocesscontexting").checked,
 			webAccess: document.getElementById("web-access").checked,
 			openaiapiserverhost: document.getElementById("openaiapiserverhost").checked,
 			automateLoopback: document.getElementById("AutomateLoopback").checked,
@@ -1094,6 +1097,10 @@ document.getElementById("QoSTimeoutSwitch").addEventListener("change", () => {
 
 document.getElementById("web-access").addEventListener("change", () => {
 	ipcRenderer.send("webAccess", document.getElementById("web-access").checked);
+});
+
+document.getElementById("ragprepromptprocesscontexting").addEventListener("change", () => {
+	ipcRenderer.send("webAccess", document.getElementById("ragprepromptprocesscontexting").checked);
 });
 
 document.getElementById("local-file-access").addEventListener("change", () => {
