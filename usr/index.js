@@ -3351,10 +3351,12 @@ function restart() {
 		data: "\n\n<end>"
 	});
 	if (runningShell) runningShell.kill();
+
 	runningShell = undefined;
 	currentPrompt = undefined;
 	zephyrineReady = false;
 	zephyrineHalfReady = false;
+	globalTPID = []; //Stop any remaining LLMChild threads
 	("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
 	interactionArrayStorage("reset", 0, 0, 0, 0); // fill it with 0 0 0 0 just to fill in nonsensical data since its only require reset command to execute the command
 	initInteraction();
