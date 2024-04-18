@@ -45,7 +45,7 @@ Just a heads up, some details aren't listed here or in the `readme.md` file. Ins
 ## 🎞 Demonstration Screenshot
 
 ![Demonstration](https://raw.githubusercontent.com/albertstarfield/alpaca-electron-zephyrine/main/documentation/demo-0.png)
-![Demonstration_video](https://raw.githubusercontent.com/albertstarfield/alpaca-electron-zephyrine/main/documentation/demo-1.gif)
+![Demonstration_video](https://raw.githubusercontent.com/albertstarfield/alpaca-electron-zephyrine/main/documentation/demo-1.mp4)
 
 ### Sidenote:
 > This footage was recorded on a arm64 device running macOS/darwin with an “Rhodes Chop” processor 10 Cores and G14S Architecture 16 Cores GPU. Some parts of the footage were sped up, The list of models that are being used can be seen in [here](https://raw.githubusercontent.com/albertstarfield/alpaca-electron-zephyrine/main/usr/engine_component/LLM_Model_Index.js).
