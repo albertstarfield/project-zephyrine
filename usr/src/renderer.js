@@ -633,10 +633,6 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			//responses[id] forward to Automata Mode if its Turned on then it will continue
 			// Why i put the Automata Triggering ipcRenderer in here? : because when the stream finished, it stopped in here
 			ipcRenderer.send("AutomataLLMMainResultReciever", { data: responses[id] });
-
-			// Reactive Save Response to storage
-			ipcRenderer.send("saveAdelaideEngineInteraction", { data: responses[id] });
-
 			ipcRenderer.send("CheckAsyncMessageQueue"); // Multiple-User submission support
 
 			
