@@ -16,9 +16,6 @@ Project Zephyrine
   <a href="https://www.electronjs.org/">
     <img src="https://img.shields.io/badge/Electron-191970?style=for-the-badge&logo=Electron&logoColor=white">
   </a>
-  <a href="https://github.com/antimatter15/alpaca.cpp/">
-    <img src="https://img.shields.io/badge/Alpaca.cpp-%2300599C.svg?style=for-the-badge&logo=c%2B%2B&logoColor=white">
-  </a>
 </p>
 
 <p align="center"><i>Greetings, I am called Project Zephyrine or the entity name so-be called Adelaide Zephyrine Charlotte, delighted to make your acquaintance. Shall we embark on our intellectual voyage through this endeavor? </i></p>
@@ -28,7 +25,22 @@ Project Zephyrine
 > **Important Note:**
 > A fundamental paradigmatic transition is underway in the evolution of this software. Acknowledging the eminent positions of LMStudio and OLlama GUI, which have garnered substantial attention and support at opportune junctures, contrasts starkly with my current solitary endeavor. Engaging in direct competition with them would inevitably lead to failure and obsolescence. Therefore, rather than embarking on a futile endeavor, this program is undergoing a metamorphosis towards a plug-and-play, readily deployable framework akin to Copilot, albeit mostly offline, with a concentrated focus on delineated entity that have MoE (Mix of Experts), thus eschewing the conventional model-based interface.
 
-## 📃 Features & to-do
+## Project Zephyrine: An Open-Source, Decentralized, Open-Source, AI Assistant for Your Desktop
+
+**Project Zephyrine** is a collaborative effort spearheaded by the Zephyrine Foundation, bringing together expertise from professional AI engineers within a leading corporation, researchers from RisTIE Brawijaya University's Electrical Engineering department, and independent developer Albert. 
+
+**Vision:** Our vision is to empower users with a truly personal AI assistant that leverages the full processing power of their local machines. We aim to move beyond cloud-based, web-centric assistants and liberate users from dependence on external infrastructure.
+
+**Open-Source and Freely Available:** Project Zephyrine is a fully open-source project, fostering community contribution and development, just like the popular 3D creation software Blender.
+
+**Key Features:**
+
+* **Decentralized Processing:** Zephyrine utilizes the user's local machine for AI processing, eliminating the need for external servers and fostering data privacy.
+* **Multimodal Interaction:** Zephyrine analyzes various user inputs, including ~~vision~~, ~~sound~~, text, and emotion, enabling a richer and more intuitive user experience.
+* **Advanced AI Architectures:** We leverage a combination of Large Language Models (LLMs) and Multimodal models, including cutting-edge options like LLaMa, Whisper, mpt, Falcon, and more (licensing subject to individual model terms).
+* **Asynchronous Processing:** Queries are processed asynchronously, allowing utilization of large models (100B+ parameters) even on local hardware, without the need for expensive data center setups (e.g., NVIDIA GPUs).
+
+## 📃 Main features
 
 - [x] Operates locally on your computer, requiring an internet connection solely for web access.
 - [x] Can function exclusively on CPU architectures, such as x86_64 and arm64/aarch64.
