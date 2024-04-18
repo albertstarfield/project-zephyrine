@@ -1926,7 +1926,6 @@ async function callInternalThoughtEngine(prompt){
 			reevaluateAdCtx = false;
 		}
 	}
-	passedOutput = promptInput;
 
 	//reset to 0 to when it finished
 	internalThoughtEngineProgress=0; // Randomly represent progress (its not representing the real division so precision may be not present)
@@ -2744,11 +2743,7 @@ const initInteractionStgContentTemplate = {
     "name": "Initial Interaction Storage",
     "data": [
         {"content": "PlaceHolder0", "role": username, "emotion": "happy"},
-        {"content": "PlaceHolder1", "role": assistantName, "emotion": "happy"},
-		{"content": "PlaceHolder2", "role": assistantName, "emotion": "happy"},
-		{"content": "PlaceHolder3", "role": assistantName, "emotion": "happy"},
-		{"content": "PlaceHolder4", "role": assistantName, "emotion": "happy"},
-		{"content": "PlaceHolder5", "role": assistantName, "emotion": "happy"}
+        {"content": "PlaceHolder1", "role": assistantName, "emotion": "happy"}
     ]
 };
 interactionStg.push(initInteractionStgContentTemplate); //Pushing the template
@@ -2838,7 +2833,6 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 
 	if (mode === "save"){
         log.debug(consoleLogPrefix,"[Storage Manager]", "Save Invoked!", "Order???", interactionStgOrder, "Content array stg mainLLM", interactionStg, "recievedData", prompt, "SaveSwitchInteraction", AITurn, UserTurn);
-		log.debug("Is the content gone yet because of this fucking javascript?", interactionStg);
 		if(AITurn && !UserTurn){
 		
 
@@ -2886,7 +2880,6 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			}
 			*/
 			// Its as simple as this, don't need special handler for partial stream or smth
-			log.debug("Is the content gone yet because of this fucking javascript? AI Turn", interactionStg);
 			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration Dictionary data");
 			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration Dictionary data", "Array Session Focus", interactionSessionMemoryArrayFocus, "interactionStgOrder", interactionStgOrder);
 			if (!interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]){
@@ -2895,7 +2888,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 				log.error("Scheme has been initialized", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
 			}
 			log.debug(consoleLogPrefix, "Storage Session Focus Length Interaction", "Prepraring");
-			log.debug(consoleLogPrefix, "Storage Session Focus Length Interaction", interactionStg[interactionSessionMemoryArrayFocus].data.length)
+			log.debug(consoleLogPrefix, "Storage Session Focus Data", interactionStg[interactionSessionMemoryArrayFocus].data)
 			log.debug(consoleLogPrefix, "current pty stream capture interactionStg", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
 			log.debug(consoleLogPrefix, "Entering the interactionStg Order array json focus scheme, this is where i'm going to get stuck without error")
 			
@@ -2910,7 +2903,6 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		}
 
 		if(!AITurn && UserTurn){
-			log.debug("Is the content gone yet because of this fucking javascript? User	 Turn", interactionStg);
 			amiwritingonAIMessageStreamMode=false;
 			interactionStgOrder = interactionStgOrder + 1;
 			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration Dictionary data", "Array Session Focus", interactionSessionMemoryArrayFocus, "interactionStgOrder", interactionStgOrder);
@@ -3442,8 +3434,14 @@ function initChat() {
 			initChat();
 		} else if (((res.match(/PS [A-Z]:.*>/) && platform == "win32") || (res.match(/bash-[0-9]+\.?[0-9]*\$/) && platform == "darwin") || (res.match(/([a-zA-Z0-9]|_|-)+@([a-zA-Z0-9]|_|-)+:?~(\$|#)/) && platform == "linux")) && zephyrineReady) {
 			restart();
+		} else if (res.includes("\n>") || res.includes("\n> ") || res.includes("> ") || res.includes(" \n> ") || res.includes("\n\n> ") || res.includes("\n>\n")){
+			// Checking the signature of llama.cpp interaction chat mode usually it ends with (" > ") thanks to itspi3141 now i know how to check it and not to forward GUI
+			log.info(consoleLogPrefix, "Done Generating and Primed to be Generating on anything that the mainLLM previously tasked!");
+			mainLLMFinishedGeneration=true;
+			if(!isitPassedtheFirstPromptYet){
+				blockGUIForwarding = false;
+			}
 		} else if ((res.includes("\n>") || res.includes("\n> ") || res.includes("> ") || res.includes(" \n> ") || res.includes("\n\n> ") || res.includes("\n>\n")) && zephyrineReady && !blockGUIForwarding) {
-			log.info(consoleLogPrefix, "Done Generating and Primed to be Generating");
 			if (store.get("params").throwInitResponse && !isitPassedtheFirstPromptYet){
 				log.info(consoleLogPrefix, "Passed the initial Uselesss response initialization state, unblocking GUI IO");
 				blockGUIForwarding = false;
@@ -3454,12 +3452,24 @@ function initChat() {
 				data: "\n\n<end>"
 			});
 			mainLLMFinishedGeneration=true;
-			log.debug(consoleLogPrefix, "mainLLMFinishedGeneration!!!!!!")
+			/// Save The Response
+			// ==================================
+			/*
+			log.debug(consoleLogPrefix, "Adelaide engine generated interaction mainLLM finished, saving data!");
+			log.debug(consoleLogPrefix, "The Content stream!", res);
+			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
+			interactionArrayStorage("save", res, true, false, 0);
+			interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0);
+			*/
+			// ==================================
+
+			log.debug(consoleLogPrefix, "mainLLMFinishedGeneration!!!!!!");
+			log.debug("What have been trigger the Finish line!", res);
 			}
 		} else if (zephyrineReady && !blockGUIForwarding) { // Forwarding to pty Chat Stream GUI 
 			if (platform == "darwin") res = res.replaceAll("^C", "");
 			if (process.env.ptyStreamDEBUGMode === "1"){
-			log.debug(consoleLogPrefix, "Forwarding to GUI...", res); // res will send in chunks so we need to have a logic that reconstruct the word with that chunks until the program stops generating
+			log.debug(consoleLogPrefix, "Forwarding to GUI/API...", res); // res will send in chunks so we need to have a logic that reconstruct the word with that chunks until the program stops generating
 			}
 			NeuralAcceleratorEngineBusyState=true; // When it is intensely use, say globally that it is used and not be able to allocated by something else
 			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
@@ -3500,14 +3510,6 @@ ipcMain.on("startChat", () => {
 // This thing allow to run on parallel so this isn't the issue
 let queueSubmissionForm=[];
 let invokedMainChat=false;
-
-ipcMain.on("saveAdelaideEngineInteraction", (_event, resultData) => {
-	log.debug(consoleLogPrefix, "Adelaide engine generated interaction mainLLM finished, saving data!", resultData.data)
-	//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
-	interactionArrayStorage("save", resultData.data, true, false, 0);
-	interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0);
-});
-
 let currentUserPrompt;
 ipcMain.on("message", async (_event, { data }) => {
 	currentPrompt = data;
@@ -3555,6 +3557,7 @@ ipcMain.on("message", async (_event, { data }) => {
 				while (!mainLLMFinishedGeneration) {
                     await new Promise(resolve => setTimeout(resolve, 100)); // Check every 100ms
                 }
+				await new Promise(resolve => setTimeout(resolve, 1000)); //delay 1000ms (API or GUI)
 				log.debug(consoleLogPrefix, "mainLLM Boring flipflop finished and bypassed!")
 				log.debug(consoleLogPrefix, "Submitting main Prompt");
 				// phase 1 main prompt
@@ -3571,7 +3574,7 @@ ipcMain.on("message", async (_event, { data }) => {
 				runningShell.write(`\r`);
 		}
 		}
-		await new Promise(resolve => setTimeout(resolve, 500)); //delay 500ms (I'm not sure what's this for)
+		await new Promise(resolve => setTimeout(resolve, 500)); //delay 500ms (To make sure the previous sent prompt doesn't leak to API or GUI)
 		blockGUIForwarding = false;
 		invokedMainChat = false;
 	}
