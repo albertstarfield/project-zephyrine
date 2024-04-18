@@ -1,6 +1,6 @@
 <h1 align="center">
 <sub>
-<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Project%20Zephyrine%20Logo.jpg?raw=true" height=144>
+<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/usr/icon/png/512x512.png?raw=true" height=144>
 </sub>
 
 <br>
