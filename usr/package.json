@@ -2,7 +2,7 @@
 	"name": "project-zephyrine",
 	"productName": "Project Zephyrine",
 	"description": "An amicable, ensorcelled, and refined modality for engaging the Large Language Model.",
-	"version": "0.2.1",
+	"version": "0.2.2",
 	"engines": {
 		"node": "v30.0.0-beta.2"
 	},
