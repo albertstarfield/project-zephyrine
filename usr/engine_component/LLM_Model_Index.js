@@ -25,6 +25,19 @@ const availableImplementedLLMModelSpecificCategory = {
 	// Since mixtral exists we don't need the other model, for now. However later on we'll going to accept willy model later on
 	// mixtral can't run properly on 16GB of vram
 	// going back to the old version of Zephy
+	general_conversation_llama_3 : {
+		downloadLink: "https://huggingface.co/MaziyarPanahi/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct.Q4_K_M.gguf?download=true", //change this later on
+		filename: "generalLM_llama3Base.bin",
+		CategoryDescription: "experimentalLlama3Support",
+		ParamSize: "8B",
+		Quantization: "q4_0",
+		Engine: "LLaMa2gguf",
+		systemPrompt: "",
+		instructionPrompt: "### Instruction: \n",
+		responsePrompt: "### Response: \n",
+		memAllocCutRatio: 1, // The ratio for offloading which determines the --ngl layer from the setting for instance {settings}*{memAllocCutRatio} (example 512*0.4= number of layers offloaded ngl for cache)
+		diskEnforceWheelspin: 0 //T****e the disk to oblivion and offload from ram (this is recommended on solid state PCIE6 10GB/s) and may leave you at the end of the day 100TB/day of read and may leave the storage controller operating at 100C constantly. This is part of my motivation if you don't force yourself, you'll be irrelevant. This will set -ngld or the offload draft layer to 9999 -ngl 1
+	},
 		programming : {
 		downloadLink: "https://huggingface.co/TheBloke/deepseek-coder-6.7B-instruct-GGUF/resolve/main/deepseek-coder-6.7b-instruct.Q4_K_M.gguf?download=true", //change this later on
 		filename: "specLM_DeepSeekProgrammingModel.bin",
