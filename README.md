@@ -3,13 +3,10 @@
 <sub>
 <img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/ProjectZephy023LogoRenewal.png?raw=true" height=144>
 </sub>
-
 <sub>
-<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/usr/icon/png/512x512.png?raw=true" height=144>
+<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/usr/icon/png/512x512.png?raw=true" height=128>
 </sub>
-
 <br>
-Project Zephyrine
 </h1>
 
 <h5 align="center"> </h5>
