@@ -61,12 +61,15 @@ const platform = os.platform();
 const arch = os.arch();
 const colorReset = "\x1b[0m";
 const colorBrightCyan = "\x1b[96m";
+const colorBrightRed = "\x1b[91m";
+const colorBrightGreen = "\x1b[92m";
 const assistantName = "Adelaide Zephyrine Charlotte";
 const natural = require('natural');
 const appName = `Project ${assistantName}`;
 const username = os.userInfo().username;
 const engineName = `Adelaide Paradigm Engine`
 const consoleLogPrefix = `[${colorBrightCyan}${engineName}_${platform}_${arch}${colorReset}]:`;
+const versionTheUnattendedEngineLogPrefix = `[${colorBrightCyan}${engineName}${colorBrightGreen} [Codename : "The Unattended"] ${colorReset}]:`;
 const { memoryUsage } = require('node:process');
 const log = require('electron-log');
 let logPathFile;
@@ -355,7 +358,7 @@ win.webContents.send("hardwareStressLoad", { data : currentSystemStressCalc });
 });
 
 ipcMain.on("internalThoughtProgressGUI", () => {
-		const v = internalThoughtEngineProgress;
+		const v = engineProcessingProgress;
 		win.webContents.send("internalTEProgress", {data: v});
 		//win.webContents.send("internalTEProgress", data); // You can't send IPC just using data you have to wrap it using {data : v}
 });
@@ -1136,7 +1139,7 @@ let specificSpecializedModelPathRequest_LLMChild=""; //Globally inform on what c
 let specificSpecializedModelCategoryRequest_LLMChild=""; //Globally inform on what currently needed for the specialized model branch 
 let LLMChildDecisionModelMode=false;
 let defectiveLLMChildSpecificModel=false; //Some LLM Model cause a havoc on the zero output text detection and stuck on infinite loop like for instance the LLMChild requesting Indonesian LLM which usually biased upon (I'm not sure why just yet), it will produces no output at all and stuck on loop forever (It maybe caused by corrupted model from the download Manager, further investigation required) 
-let internalThoughtEngineProgress=0; // 0-100% just like progress
+let engineProcessingProgress=0; // 0-100% just like progress
 let internalThoughtEngineTextProgress="";
 let globalTPID = [0, 1, 2, 3]; // if removed go back to 0
 log.debug(consoleLogPrefix, "globalTPID Debug", globalTPID);
@@ -1494,7 +1497,7 @@ async function zombieTPIDGuardian(localTPID, globalTPID){
 	log.debug(consoleLogPrefix, "Checking ZombieTPIDGuardian");
 	log.debug(consoleLogPrefix, "Checking ZombieTPIDGuardian", localTPID, globalTPID);
 	if (!globalTPID.includes(localTPID)) {
-		internalThoughtEngineProgress=0;
+		engineProcessingProgress=0;
 		internalThoughtEngineTextProgress="Zombie TPID Caught!";
         while (true) {
 			log.error(consoleLogPrefix, "Zombie internal Thought Thread detected and tamed!")
@@ -1549,7 +1552,7 @@ async function callInternalThoughtEngine(prompt){
 		BackbrainMode=false;
 	}
 	log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine CheckedBackbrain!");
-	internalThoughtEngineProgress=2;
+	engineProcessingProgress=2;
 	// were going to utilize this findClosestMatch(decision..., decisionBinaryKey); // new algo implemented to see whether it is yes or no from the unpredictable LLM Output
 	if (store.get("params").llmdecisionMode){
 		// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
@@ -1607,7 +1610,7 @@ async function callInternalThoughtEngine(prompt){
 		// Specialized Model Category that will be implemented will be for now : General_Conversation, Coding, Language_Specific_Indonesia, Language_Specific_Japanese, Language_Specific_English, Language_Specific_Russia, Language_Specific_Arabics, Chemistry, Biology, Physics, Legal_Bench, Medical_Specific_Science, Mathematics, Financial
 		// Category can be Fetched through the variable availableImplementedLLMModelSpecificCategory it will be a dictionary or array 
 		// Specialized Model Table on what to choose on develop with can be fetched from this table https://huggingface.co/spaces/HuggingFaceH4/open_llm_leaderboard
-		internalThoughtEngineProgress=28; // Randomly represent progress (its not representing the real division so precision may be not present)
+		engineProcessingProgress=28; // Randomly represent progress (its not representing the real division so precision may be not present)
 		log.info(consoleLogPrefix, "============================================================");
 		//decisionSpecializationLLMChildRequirement
 		// using llmdecisionMode
@@ -1644,7 +1647,7 @@ async function callInternalThoughtEngine(prompt){
 			specificSpecializedModelPathRequest_LLMChild="";
 		}
 		log.info(consoleLogPrefix, "============================================================");
-		internalThoughtEngineProgress=39; // Randomly represent progress (its not representing the real division so precision may be not present)
+		engineProcessingProgress=39; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		// External Data Part
 		//-------------------------------------------------------
@@ -1713,7 +1716,7 @@ async function callInternalThoughtEngine(prompt){
 
 		//-------------------------------------------------------
 		log.info(consoleLogPrefix, "============================================================");
-		internalThoughtEngineProgress=48; // Randomly represent progress (its not representing the real division so precision may be not present)
+		engineProcessingProgress=48; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		// This is for the Local Document Search Logic
 		if (store.get("params").llmdecisionMode && store.get("params").localAccess){
@@ -1763,7 +1766,7 @@ async function callInternalThoughtEngine(prompt){
 			log.info(consoleLogPrefix, concludeInformation_LocalFiles);
 		}
 		
-		internalThoughtEngineProgress=64; // Randomly represent progress (its not representing the real division so precision may be not present)
+		engineProcessingProgress=64; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		// ----------------------- CoT Steps Thoughts --------------------
 		log.info(consoleLogPrefix, "============================================================");
@@ -1834,7 +1837,7 @@ async function callInternalThoughtEngine(prompt){
 			concludeInformation_CoTMultiSteps = "Nothing";
 			log.info(consoleLogPrefix, concludeInformation_CoTMultiSteps);
 		}
-		internalThoughtEngineProgress=78; // Randomly represent progress (its not representing the real division so precision may be not present)
+		engineProcessingProgress=78; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		log.info(consoleLogPrefix, "============================================================");
 			log.info(consoleLogPrefix, "Executing LLMChild Emotion Engine!");
@@ -1874,7 +1877,7 @@ async function callInternalThoughtEngine(prompt){
 		//log.info(concludeInformation_Internet);
 		//log.info(concludeInformation_LocalFiles);
 		//log.info(concludeInformation_chatHistory);
-		internalThoughtEngineProgress=89; // Randomly represent progress (its not representing the real division so precision may be not present)
+		engineProcessingProgress=89; // Randomly represent progress (its not representing the real division so precision may be not present)
 
 		if((concludeInformation_Internet === "Nothing" || concludeInformation_Internet === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_Internet) ) && (concludeInformation_LocalFiles === "Nothing" || concludeInformation_LocalFiles === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_LocalFiles)) && (concludeInformation_CoTMultiSteps === "Nothing" || concludeInformation_CoTMultiSteps === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_CoTMultiSteps)) && (concludeInformation_chatHistory === "Nothing" || concludeInformation_chatHistory === "undefined" || isBlankOrWhitespaceTrue_CheckVariable(concludeInformation_chatHistory))){
 			log.debug(consoleLogPrefix, "Bypassing Additional Context");
@@ -1902,7 +1905,7 @@ async function callInternalThoughtEngine(prompt){
 			passedOutput = passedOutput + `Also I just finished thinking for this one ${BackBrainResultPop}`;
 		}
 
-		internalThoughtEngineProgress=93; // Randomly represent progress (its not representing the real division so precision may be not present)
+		engineProcessingProgress=93; // Randomly represent progress (its not representing the real division so precision may be not present)
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
 			log.debug(consoleLogPrefix, "🍀", "Evaluating Information Post Process Raw");
 			promptInput = `\`\`\`This is the previous conversation ${historyChatRetrieved}\n. \n This is the conversation ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}\`\`\`. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No!`;
@@ -1928,7 +1931,7 @@ async function callInternalThoughtEngine(prompt){
 	}
 
 	//reset to 0 to when it finished
-	internalThoughtEngineProgress=0; // Randomly represent progress (its not representing the real division so precision may be not present)
+	engineProcessingProgress=0; // Randomly represent progress (its not representing the real division so precision may be not present)
 	log.info(consoleLogPrefix, passedOutput);
 	if (BackbrainMode || BackbrainModeInternal){ // if Backbrainmode detected then push it into BackBrainResultQueue to 
 		BackBrainResultQueue.push(passedOutput); // This will push to the result queue when the user asks something again then this will be pushed too
@@ -1979,7 +1982,7 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 		// Wait until NeuralAccelerator isn't busy using while loop
 		// Then report on what ID of childLLM that is driven by the internalThought that occoured a QoS
 		// then if childLLM aware that it is running on the one that timed out, then the process will lockup and in here we will remove the ID of the internal Thought from the list 
-		internalThoughtEngineProgress=0;
+		engineProcessingProgress=0;
 		internalThoughtEngineTextProgress="QoS internal Thought Timeout!";
 		removeFromGlobalTPID(detectedNewestTPIDatLaunch);
 		while(NeuralAcceleratorEngineBusyState){
@@ -2079,7 +2082,7 @@ async function BackBrainQueueManager(){
 		BackBrainQueueManager_isRunning=true;
 		//Loop every 30 seconds check or every QoSTimeoutGlobal parameter
 		while(true){
-			if( BackBrainQueue.length > 0 && internalThoughtEngineProgress == 0 ){ // Only launch when its idle or after the timed out thread expired
+			if( BackBrainQueue.length > 0 && engineProcessingProgress == 0 ){ // Only launch when its idle or after the timed out thread expired
 				const latestIndex = BackBrainQueue.length - 1;
 				const queuePrompt = BackBrainQueue[latestIndex];
 				BackBrainQueue.pop();
@@ -3776,6 +3779,32 @@ setInterval(async () => {
 		//log.debug("[LLMBackend Log]: ", logContent);
 }, 6900);
 //---------------------------------
+
+// -----------------------------------
+let reintegrationWorkstationPath=`${path.resolve(__dirname, "engine_component", "generalReintegrationPyWorkstationEnv")}`;
+// We need UMA and persistentInteractionMemory Path general_conversation and system prompt L0
+setInterval(async () => {
+	// Opportunistic
+	log.debug(versionTheUnattendedEngineLogPrefix, "Opportunistic Re-integration Learning is activated... Polling on the Activity to find opportunity!");
+	while (!NeuralAcceleratorEngineBusyState) {
+		//log.debug(versionTheUnattendedEngineLogPrefix, "PathDebug_MainEngine: ", reintegrationWorkstationPath, "UMA Experience Stg: ", experienceStgPersistentPath, "Interaction History", interactionStgPersistentPath);
+		log.debug(versionTheUnattendedEngineLogPrefix, "Priming Engine For Reintegration!");// Remember Reintegration here means fine-tuning with UMA and interaction history
+		log.debug(versionTheUnattendedEngineLogPrefix, "Checking Virtual Environment!");// Remember Reintegration here means fine-tuning with UMA (Unsupervised) and interaction history (SFT)
+		// Insert python venv setup pytorch and etc command here to go to reintegrationWorkstationPath
+
+		// Prepare csv dataset format into the very boring standard LLM flipflop unsupervised format
+		// You can just 
+		
+		
+		// Prepare csv dataset format into the very boring standard LLM flipflop supervised format
+
+		// then execute at reintegrationWorkstationPath with venv reintegrationWorkstationPath python usr/engine_component/generalReintegrationPyWorkstationEnv/reintegration_general_model.py 
+		await new Promise(resolve => setTimeout(resolve, 5000)); // Check every 1000ms
+	}
+}, 10000);
+
+// ------------------------------------
+
 
 
 ipcMain.on("storeParams", (_event, { params }) => {
