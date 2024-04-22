@@ -1,10 +1,7 @@
 <h1 align="center">
 
 <sub>
-<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/ProjectZephy023LogoRenewal.png?raw=true" height=144>
-</sub>
-<sub>
-<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/usr/icon/png/512x512.png?raw=true" height=128>
+<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/ProjectZephy023LogoRenewal.png?raw=true" height=256>
 </sub>
 <br>
 </h1>
@@ -19,13 +16,17 @@
     <img src="https://img.shields.io/badge/Electron-191970?style=for-the-badge&logo=Electron&logoColor=white">
   </a>
 </p>
-
+<h5 align="center">
+<sub align="center">
+<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/usr/icon/png/512x512.png?raw=true" height=128>
+</sub>
+</h5>
 <p align="center"><i>Greetings, I am called Project Zephyrine or the entity name so-be called Adelaide Zephyrine Charlotte, delighted to make your acquaintance. Shall we embark on our intellectual voyage through this endeavor? </i></p>
 
 <hr>
 
 > **Important Note:**
-> A fundamental paradigmatic transition is underway in the evolution of this software. Acknowledging the eminent positions of LMStudio and OLlama GUI, which have garnered substantial attention and support at opportune junctures, contrasts starkly with my current solitary endeavor. Engaging in direct competition with them would inevitably lead to failure and obsolescence. Therefore, rather than embarking on a futile endeavor, this program is undergoing a metamorphosis towards a plug-and-play, readily deployable framework akin to Copilot, albeit mostly offline, with a concentrated focus on delineated entity that have MoE (Mix of Experts), thus eschewing the conventional model-based interface.
+> The software is undergoing a paradigm shift, focusing on a plug-and-play framework similar to Copilot, primarily offline. It aims to avoid direct competition with LMStudio and OLlama GUI that is more successful, focusing on delineated entities with a Mix of Experts (MoE) interface.
 
 ## Project Zephyrine: An Open-Source, Decentralized, Open-Source, AI Assistant for Your Desktop
 
