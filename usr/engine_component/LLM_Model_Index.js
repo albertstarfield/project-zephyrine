@@ -9,6 +9,7 @@ const availableImplementedLLMModelSpecificCategory = {
 
 	<|im_xxx|> is token we can just ignore it
 	*/
+	// General_conversation is a model that is universally acceptable, that know at least the generic general concept, then later on we can retrain it with LLM Base-model way of unsupervised training and supervised training from the interaction (we call the process Re-integration)
 	general_conversation : {
 		downloadLink: "https://huggingface.co/TheBloke/Mistral-7B-OpenOrca-GGUF/resolve/main/mistral-7b-openorca.Q4_0.gguf?download=true", //change this later on
 		filename: "generalLM_mist.bin",
