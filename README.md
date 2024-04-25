@@ -28,7 +28,7 @@
 > **Important Note:**
 > The software is undergoing a paradigm shift, focusing on a plug-and-play framework similar to Copilot, primarily offline. It aims to avoid direct competition with LMStudio and OLlama GUI that is more successful, focusing on delineated entities with a Mix of Experts (MoE) interface.
 
-## Project Zephyrine: An Open-Source, Decentralized, Open-Source, AI Assistant for Your Desktop
+## Project Zephyrine: An Open-Source, Decentralized, non-Nvidia exclusive, non-proprietary, AI Assistant for Your Desktop.
 
 **Project Zephyrine** is a collaborative effort spearheaded by the Zephyrine Foundation, bringing together expertise from professional AI engineers within a leading corporation, researchers from RisTIE Brawijaya University's Electrical Engineering department, and independent developer Albert. 
 
