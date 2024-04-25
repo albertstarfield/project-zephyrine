@@ -44,10 +44,10 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = /opt/homebrew/Cellar/cmake/3.29.0/bin/cmake
+CMAKE_COMMAND = /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake
 
 # The command to remove a file.
-RM = /opt/homebrew/Cellar/cmake/3.29.0/bin/cmake -E rm -f
+RM = /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
@@ -70,7 +70,7 @@ CMakeFiles/BUILD_INFO: /Users/user/adelaide-zephyrine-charlotte-assistant/usr/ve
 
 /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/llama.cpp/build-info.h: /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/llama.cpp/.git/index
 	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --blue --bold --progress-dir=/Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/llama.cpp/build/CMakeFiles --progress-num=$(CMAKE_PROGRESS_1) "Generating build details from Git"
-	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/llama.cpp && /opt/homebrew/Cellar/cmake/3.29.0/bin/cmake -P /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/llama.cpp/scripts/build-info.cmake
+	cd /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/llama.cpp && /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -P /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/llama.cpp/scripts/build-info.cmake
 
 BUILD_INFO: /Users/user/adelaide-zephyrine-charlotte-assistant/usr/vendor/llama.cpp/build-info.h
 BUILD_INFO: CMakeFiles/BUILD_INFO

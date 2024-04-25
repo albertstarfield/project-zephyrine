@@ -35,5 +35,7 @@ builder-tool/autoEasySetup/Adelaide Zephyrine Charlotte.app
 usr/storage/UMA_State.json
 usr/storage/
 usr/engine_component/generalReintegrationPyWorkstationEnv/LLMReintegrationExperiment/**
+usr/engine_component/ReintegrationModelEnv/referenceCode_NvidiaExclusive/**
+
 *.exp
 !example.exp
