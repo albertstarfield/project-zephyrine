@@ -2,7 +2,7 @@
 	"name": "project-zephyrine",
 	"productName": "Project Zephyrine",
 	"description": "An amicable, ensorcelled, and refined modality for engaging the Large Language Model.",
-	"version": "0.2.2",
+	"version": "0.2.3",
 	"engines": {
 		"node": "v30.0.0-beta.2"
 	},
@@ -54,11 +54,11 @@
 		"katex": "^0.16.9",
 		"mammoth": "^1.7.0",
 		"marked": "^9.1.2",
-		"n": "^9.2.1",
+		"n": "^9.2.3",
 		"natural": "^6.10.5",
 		"node-html-parser": "^6.1.12",
 		"node-pty": "1.0.0",
-		"npm": "^10.5.0",
+		"npm": "^10.5.2",
 		"os-utils": "^0.0.14",
 		"path": "^0.12.7",
 		"pdf-parse": "^1.1.1",
