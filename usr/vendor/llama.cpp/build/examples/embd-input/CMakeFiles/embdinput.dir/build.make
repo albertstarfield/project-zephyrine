@@ -44,10 +44,10 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = /opt/homebrew/Cellar/cmake/3.29.0/bin/cmake
+CMAKE_COMMAND = /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake
 
 # The command to remove a file.
-RM = /opt/homebrew/Cellar/cmake/3.29.0/bin/cmake -E rm -f
+RM = /opt/homebrew/Cellar/cmake/3.29.2/bin/cmake -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
