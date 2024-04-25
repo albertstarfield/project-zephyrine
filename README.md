@@ -41,7 +41,7 @@
 * **Decentralized Processing:** Zephyrine utilizes the user's local machine for AI processing, eliminating the need for external servers and fostering data privacy.
 * **Multimodel Async + Multimodal Interaction:** Zephyrine analyzes various user inputs, including ~~vision~~, ~~sound~~, text, and emotion, enabling a richer and more intuitive user experience.
 * **Advanced AI Architectures:** We leverage a combination of Large Language Models (LLMs) and Multimodal models, including cutting-edge options like LLaMa, Whisper, mpt, Falcon, and more (licensing subject to individual model terms).
-* **Asynchronous Processing:** Queries are processed asynchronously, allowing utilization of large models (100B+ parameters) even on local hardware, without the need for expensive data center setups (e.g., NVIDIA GPUs).
+* **Asynchronous Processing:** Queries are processed asynchronously, allowing utilization of large models (100B+ parameters) even on local hardware, without the need for expensive data center setups (e.g., NVIDIA Exclusive Datacenter GPUs).
 
 ## 📃 Main features
 
