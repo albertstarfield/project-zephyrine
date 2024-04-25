@@ -24,6 +24,7 @@
 - [x] New JSON interaction database that handles emotion sentiment analysis, more data, side of interaction, and multiple SessionID
 - [x] Multi-submission input lifelike input rather than flip-flop wait for response type of classic interaction.
 - [x] Interaction Experience UMA MLCMCF Sideloading Subsystem.
+- [ ] Base Models (Not-ReMorph by Zephyrine) into Blockchain type storage IPFS, Compensating the need to use HuggingFace due to random downtime of HF centralized model hub and to compensate post-apocalyptic scenario where internet mostly cut off.
 - [ ] Less-Weeb Graphic mode as default due to request of the industry
 - [ ] Autoexec for generated command Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands and interacting with Hardware. (OS Adaptive (*nix Bash and Windows Powershell)).
 - [ ] Auto Idle Sleep Detection auto fine-tune self-training (Mimicking real-life brain retraining while sleep) augmented to LoRA 7B+
