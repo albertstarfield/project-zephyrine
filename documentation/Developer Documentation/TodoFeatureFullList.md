@@ -25,22 +25,22 @@
 - [x] Multi-submission input lifelike input rather than flip-flop wait for response type of classic interaction.
 - [x] Interaction Experience UMA MLCMCF Sideloading Subsystem.
 - [ ] Base Models (Not-ReMorph by Zephyrine) into Blockchain type storage IPFS, Compensating the need to use HuggingFace due to random downtime of HF centralized model hub and to compensate post-apocalyptic scenario where internet mostly cut off.
-- [ ] Less-Weeb Graphic mode as default due to request of the industry
-- [ ] Autoexec for generated command Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands and interacting with Hardware. (OS Adaptive (*nix Bash and Windows Powershell)).
-- [ ] Auto Idle Sleep Detection auto fine-tune self-training (Mimicking real-life brain retraining while sleep) augmented to LoRA 7B+
+- [ ] Implementing Native Windows Support.
+- [ ] Auto Idle auto general Model Remorphing (Inserting new knowledge while discarding the old one).
 - [ ] Auto Idle mainLLM Suspension to save memory and resources
 - [ ] LLaVa-Next Implementation LLMChild Framebuffer Capture and Camera Capture
 - [ ] OpenAI API Implementation Bridge for Quality Testing standard of the engine model (Scientific Research Requirement using Standard Testing Method).
+- [ ] Autoexec for generated command Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands and interacting with Hardware. (OS Adaptive (*nix Bash and Windows Powershell)).
 - [ ] Implementing multi language support with Frontend Automatic Translation and Backend EN Processing.
-- [ ] Bing CoPilot AI and Pinokio AI toolbox inspired, invoked by Text LLM
-- [ ] dE_QARE QuestandAchievement (Stable-Diffusion) Engine integration with Adelaide Paradigm
 - [ ] AudioLM Integration with Adelaide Paradigm   
 - [ ] Self-updating, Self-maintaning, and Self-Adapting Code.
 - [ ] Static compilation Mobile (No AI Dynamics on Self-Modification or Special Specific Hardware Compilation), Very strict jailed version of Mobile version for iOS support.
 - [ ] Mobile HTML5 UI.
 - [ ] Categorize into Classes based on the subsystem drawio for cleaner Code and easier debugging
 - [ ] Multi-session Interactions Tab save and restore
-- [ ] Implementing Native Windows Support.
+- [ ] Bing CoPilot AI and Pinokio AI toolbox inspired, invoked by Text LLM
+- [ ] dE_QARE QuestandAchievement (Stable-Diffusion) Engine integration with Adelaide Paradigm
+- [ ] Less-Weeb Graphic mode as default due to request of the industry
 - [ ] Multi format communication Real-time communication and collaboration (Audio, Video, Actuator)
 - [ ] Incorporating the Convolutional Transformer (CvT) within the software framework to serve as the conduit for capturing contextual information from the screen.
 - [ ] Adding Docker Support
