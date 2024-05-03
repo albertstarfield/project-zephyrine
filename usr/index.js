@@ -1145,10 +1145,22 @@ function interactionContextFetching(requestedPrompt, historyDistance){
 // External Sensory Subsystem
 // stub function and a reference for later rewrite on using OOP object oriented but less insane than the Java
 class sensorySubsystem{
+	// use Electron Frontend and uses chromium permission to use camera microphone and location
 		// Graphic or Vision Neural Network
-	async graphicalSensorySubsystem(stub){ // requires a compatibility with LLMChild LLaVa Mode
+	async graphicalSensorySubsystem(stub){ 
+		/*
+		write me code index.js node.js scan for the cameras, then for each cameras that detected capture image from that camera and store it into variable then write those variable to cameras.jpg
+		and also write the code that capture the whole screen as screenshot and write it into screenshot.jpg
+
+		(We design the camera is not only 1 or 2 but can be more)
+
+		Make it support Darwin macOS, Linux Universally (amd64 and arm64), and Windows
+		*/
+		// requires a compatibility with LLMChild LLaVa Mode
 		// this is a stub function not yet to be implemented
 		// Create a framebuffer and Camera capture system
+
+		//childLLM invoke for LLaVa convert what it see to text
 	}
 	//Audio Neural Network subsystem
 	async audioSensorySubsystem(stub){
@@ -1157,12 +1169,11 @@ class sensorySubsystem{
 	// miscExtIOPlainText Neural Network Subsystem
 	async miscSensoryIOPlainTextsubsystem(stub){
 		// write something that represent cat /dev/... read in raw text string format
+		// scans every /dev and find if there's a readable ascii character, if detected then use it and store it into variable
 	}
-}
 
-class pythonVenvSubsystem{
-	async stubfunc(stub){
-
+	async GeoPosition(stub){
+		// Write an Geoposition location through any location API that is available through the environment darwin/macOS, Linux Gnome location, IP Geo Position, GPS, or anything 
 	}
 }
 
