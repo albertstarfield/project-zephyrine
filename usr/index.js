@@ -571,12 +571,6 @@ ipcMain.on("checkPath", (_event, { data }) => {
 });
 */
 
-
-
-
-
-
-
 // DUCKDUCKGO And Function SEARCH FUNCTION
 
 //const fs = require('fs');
