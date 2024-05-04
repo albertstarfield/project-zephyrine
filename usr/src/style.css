@@ -431,6 +431,23 @@ html.darwin #main { /* b r u h */
 	background-color: var(--background-mid);
 }
 
+.session-card {
+    background-color: var(--tertiary);
+    padding: 0.75rem;
+    letter-spacing: 0.1px;
+    font-size: 0.9rem;
+    border-radius: 0.694rem;
+    width: calc(98%);
+	margin: 0.4rem 0.4rem 0.4rem 0.4rem;
+    color: var(--primary-text-alt);
+    min-height: 0.9rem;
+}
+
+.session-card:hover {
+    background-color: var(--background-mid);
+}
+
+
 #messages {
 	list-style-type: none;
 	margin: 1.38rem;
