@@ -996,7 +996,11 @@ document.getElementById("aboutSection").addEventListener("click", () => {
 	ipcRenderer.send("getParams");
 });
 
-
+ipcRenderer.send("getParams");
+document.getElementById("interactionHistorySession").addEventListener("click", () => {
+	document.getElementById("interactionHistory-dialog-bg").classList.remove("hidden");
+	ipcRenderer.send("getParams");
+});
 
 
 ipcRenderer.on("params", (_event, data) => {
@@ -1078,65 +1082,120 @@ document.querySelector("#info-dialog-bg > div > div.dialog-button > button.secon
 	document.getElementById("info-dialog-bg").classList.add("hidden");
 });
 
+// We are adding an event listener to two buttons inside the interaction history dialog box.
+// The first button with class "secondary" and the second button with class "primary"
+// When either of these buttons is clicked, we want to hide the interaction history dialog box.
+
+document.querySelector("#interactionHistory-dialog-bg > div > div.dialog-button > button.secondary").addEventListener("click", () => {
+  document.getElementById("interactionHistory-dialog-bg").classList.add("hidden");
+});
+
+document.querySelector("#interactionHistory-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
+    document.getElementById("interactionHistory-dialog-bg").classList.add("hidden");
+});
+// This event listener listens for changes in the "BackbrainQueue" checkbox.
 document.getElementById("BackbrainQueue").addEventListener("change", () => {
-	ipcRenderer.send("backbrainqueue", document.getElementById("BackbrainQueue").checked);
+  // Sends a message to the main process indicating whether the "BackbrainQueue"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("backbrainqueue", document.getElementById("BackbrainQueue").checked);
 });
 
+// This event listener listens for changes in the "AutomateLoopback" checkbox.
 document.getElementById("AutomateLoopback").addEventListener("change", () => {
-	ipcRenderer.send("automateLoopback", document.getElementById("AutomateLoopback").checked);
+    // Sends a message to the main process indicating whether the "AutomateLoopback"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("automateLoopback", document.getElementById("AutomateLoopback").checked);
 });
 
+// This event listener listens for changes in the "QoSTimeoutSwitch" checkbox.
 document.getElementById("QoSTimeoutSwitch").addEventListener("change", () => {
-	ipcRenderer.send("qostimeoutswitch", document.getElementById("QoSTimeoutSwitch").checked);
+    // Sends a message to the main process indicating whether the "QoSTimeoutSwitch"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("qostimeoutswitch", document.getElementById("QoSTimeoutSwitch").checked);
 });
 
-
+// This event listener listens for changes in the "web-access" checkbox.
 document.getElementById("web-access").addEventListener("change", () => {
-	ipcRenderer.send("webAccess", document.getElementById("web-access").checked);
+    // Sends a message to the main process indicating whether the "web-access"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("webAccess", document.getElementById("web-access").checked);
 });
 
+// This event listener listens for changes in the "ragprepromptprocesscontexting" checkbox.
 document.getElementById("ragprepromptprocesscontexting").addEventListener("change", () => {
-	ipcRenderer.send("webAccess", document.getElementById("ragprepromptprocesscontexting").checked);
+    // Sends a message to the main process indicating whether the "ragprepromptprocesscontexting"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("webAccess", document.getElementById("ragprepromptprocesscontexting").checked);
 });
 
+// This event listener listens for changes in the "local-file-access" checkbox.
 document.getElementById("local-file-access").addEventListener("change", () => {
-	ipcRenderer.send("localAccess", document.getElementById("local-file-access").checked);
+    // Sends a message to the main process indicating whether the "local-file-access"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("localAccess", document.getElementById("local-file-access").checked);
 });
 
+// This event listener listens for changes in the "LLMChildDecision" checkbox.
 document.getElementById("LLMChildDecision").addEventListener("change", () => {
-	ipcRenderer.send("llmdecisionMode", document.getElementById("LLMChildDecision").checked);
+    // Sends a message to the main process indicating whether the "LLMChildDecision"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("llmdecisionMode", document.getElementById("LLMChildDecision").checked);
 });
 
+// This event listener listens for changes in the "longchainthought" checkbox.
 document.getElementById("longchainthought").addEventListener("change", () => {
-	ipcRenderer.send("extensiveThought", document.getElementById("longchainthought").checked);
+    // Sends a message to the main process indicating whether the "longchainthought"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("extensiveThought", document.getElementById("longchainthought").checked);
 });
 
+// This event listener listens for changes in the "saverestoreinteraction" checkbox.
 document.getElementById("saverestoreinteraction").addEventListener("change", () => {
-	ipcRenderer.send("SaveandRestoreInteraction", document.getElementById("saverestoreinteraction").checked);
+    // Sends a message to the main process indicating whether the "saverestoreinteraction"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("SaveandRestoreInteraction", document.getElementById("saverestoreinteraction").checked);
 });
 
+// This event listener listens for changes in the "historyChatCtx" checkbox.
 document.getElementById("historyChatCtx").addEventListener("change", () => {
-	ipcRenderer.send("hisChatCTX", document.getElementById("historyChatCtx").checked);
+    // Sends a message to the main process indicating whether the "historyChatCtx"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("hisChatCTX", document.getElementById("historyChatCtx").checked);
 });
 
+// This event listener listens for changes in the "attemptaccelerate" checkbox.
 document.getElementById("attemptaccelerate").addEventListener("change", () => {
-	ipcRenderer.send("AttemptAccelerate", document.getElementById("attemptaccelerate").checked);
+    // Sends a message to the main process indicating whether the "attemptaccelerate"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("AttemptAccelerate", document.getElementById("attemptaccelerate").checked);
 });
 
+// This event listener listens for changes in the "emotionalllmchildengine" checkbox.
 document.getElementById("emotionalllmchildengine").addEventListener("change", () => {
-	ipcRenderer.send("emotionalLLMChildengine", document.getElementById("emotionalllmchildengine").checked);
+    // Sends a message to the main process indicating whether the "emotionalllmchildengine"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("emotionalLLMChildengine", document.getElementById("emotionalllmchildengine").checked);
 });
 
+// This event listener listens for changes in the "profilepictureemotion" checkbox.
 document.getElementById("profilepictureemotion").addEventListener("change", () => {
-	ipcRenderer.send("profilePictureEmotion", document.getElementById("profilepictureemotion").checked);
+    // Sends a message to the main process indicating whether the "profilepictureemotion"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("profilePictureEmotion", document.getElementById("profilepictureemotion").checked);
 });
 
+// This event listener listens for changes in the "longchainthought-neverfeelenough" checkbox.
 document.getElementById("longchainthought-neverfeelenough").addEventListener("change", () => {
-	ipcRenderer.send("longChainThoughtNeverFeelenough", document.getElementById("longchainthought-neverfeelenough").checked);
+    // Sends a message to the main process indicating whether the "longchainthought-neverfeelenough"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("longChainThoughtNeverFeelenough", document.getElementById("longchainthought-neverfeelenough").checked);
 });
 
+// This event listener listens for changes in the "sideloadexperienceuma" checkbox.
 document.getElementById("sideloadexperienceuma").addEventListener("change", () => {
-	ipcRenderer.send("sideloadExperienceUMA", document.getElementById("sideloadexperienceuma").checked);
+    // Sends a message to the main process indicating whether the "sideloadexperienceuma"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("sideloadExperienceUMA", document.getElementById("sideloadexperienceuma").checked);
 });
 
 /*
