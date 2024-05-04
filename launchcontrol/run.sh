@@ -12,6 +12,7 @@ export N_PREFIX="${rootdir}/usr/nodeLocalRuntime" #custom PREFIX location for th
 # allow to prioritize N_PREFIX and CONDA_PREFIX binary over global
 export PATH="${N_PREFIX}/bin:${CONDA_PREFIX}/bin:${PATH}"
 echo $PATH
+sudo apt install gcc g++ make cmake python3-pip git wget zip unzip
 
 
 if [ -z "${ENFORCE_NOACCEL}" ]; then
@@ -250,7 +251,7 @@ build_llama() {
 
     # Build with multiple cores
     echo "This is the architecture $(uname -m) unless the cmake becoming asshole and detect arm64 as x86_64"
-    cmake --build . --config Release --parallel 128 || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
+    cmake --build . --config Release --parallel 2 || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -330,7 +331,7 @@ build_llama_gguf() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    cmake --build . --config Release --parallel 128 || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
+    cmake --build . --config Release --parallel 2 || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -411,7 +412,7 @@ build_ggml_base() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    make -j 128 ${1} || { echo "GGML based compilation failed. See logs for details."; exit 1; }
+    make -j 2 ${1} || { echo "GGML based compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -486,7 +487,7 @@ build_gemma_base() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    make -j 128 ${1} || { echo "Gemma compilation failed. See logs for details."; exit 1; }
+    make -j 2 ${1} || { echo "Gemma compilation failed. See logs for details."; exit 1; }
     pwd
     # Change directory back to rootdir
     cd "$rootdir" || exit 1
@@ -556,7 +557,7 @@ build_falcon() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    cmake --build . --config Release --parallel 128 || { echo "ggllm compilation failed. See logs for details."; exit 1; }
+    cmake --build . --config Release --parallel 2 || { echo "ggllm compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -859,10 +860,16 @@ install_dependencies_linux() {
     fi
 
     echo "Upgrading to the latest Node Version!"
-    npm install n
-    #n 20.11.1 #They removed it!
-    n latest #To prevent this problem we might grab LTS or latest instead
-    node -v
+    curl -o- https://raw.githubusercontent.com/nvm-sh/nvm/v0.39.7/install.sh | bash
+    export NVM_DIR="$([ -z "${XDG_CONFIG_HOME-}" ] && printf %s "${HOME}/.nvm" || printf %s "${XDG_CONFIG_HOME}/nvm")"
+    [ -s "$NVM_DIR/nvm.sh" ] && \. "$NVM_DIR/nvm.sh" # This loads nvm
+    nvm install 16 && nvm use 16
+    nvm use 16
+    if [ $? -ne 0 ]; then
+        echo "Error: Failed to upgrade to the latest Node.js version using nvm."
+        exit 1
+    fi
+    node -v 
 }
 
 
