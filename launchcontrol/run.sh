@@ -4,6 +4,13 @@ set -e
 # Initialize Variables and check the platform and architecture
 platform=$(uname -s)
 arch=$(uname -m)
+if [[ -n $(uname) && "$(uname)" == "Darwin" ]]; then
+  allocThreads=$(sysctl -n hw.logicalcpu 2> /dev/null | sed 's/.*: //')
+elif [[ -n $(uname) && "$(uname)" == "CYGWINNT" ]]; then  # Windows (in Bash)
+  allocThreads=$(wmic cpu get/Cores 2> /dev/null | sed 's/.*: //')
+else
+  allocThreads=$(($(nproc --all) / 1))
+fi
 # Save the current working directory to "rootdir" variable (compensate spaces)
 rootdir="$(pwd)"
 export CONDA_PREFIX="${rootdir}/conda_python_modules"
@@ -251,7 +258,7 @@ build_llama() {
 
     # Build with multiple cores
     echo "This is the architecture $(uname -m) unless the cmake becoming asshole and detect arm64 as x86_64"
-    cmake --build . --config Release --parallel 2 || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
+    cmake --build . --config Release --parallel ${allocThreads} || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -331,7 +338,8 @@ build_llama_gguf() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    cmake --build . --config Release --parallel 2 || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
+
+    cmake --build . --config Release --parallel ${allocThreads} || { echo "LLaMa compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -412,7 +420,7 @@ build_ggml_base() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    make -j 2 ${1} || { echo "GGML based compilation failed. See logs for details."; exit 1; }
+    make -j ${allocThreads} ${1} || { echo "GGML based compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
@@ -487,7 +495,7 @@ build_gemma_base() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    make -j 2 ${1} || { echo "Gemma compilation failed. See logs for details."; exit 1; }
+    make -j ${allocThreads} ${1} || { echo "Gemma compilation failed. See logs for details."; exit 1; }
     pwd
     # Change directory back to rootdir
     cd "$rootdir" || exit 1
@@ -557,7 +565,7 @@ build_falcon() {
     cmake .. $CMAKE_ARGS $CMAKE_CUDA_FLAGS
 
     # Build with multiple cores
-    cmake --build . --config Release --parallel 2 || { echo "ggllm compilation failed. See logs for details."; exit 1; }
+    cmake --build . --config Release --parallel ${allocThreads} || { echo "ggllm compilation failed. See logs for details."; exit 1; }
     pwd
     # Move the binary to ./usr/bin/ and rename it to "chat" or "chat.exe"
     if [[ "$platform" == "Linux" ]]; then
