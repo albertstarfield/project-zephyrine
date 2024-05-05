@@ -1003,6 +1003,12 @@ document.getElementById("interactionHistorySession").addEventListener("click", (
 });
 
 
+ipcRenderer.send("getParams");
+document.getElementById("autonomousHandlessInteraction").addEventListener("click", () => {
+	document.getElementById("AutonomousHandlessAssistantSwitch-dialog-bg").classList.remove("hidden");
+	ipcRenderer.send("getParams");
+});
+
 ipcRenderer.on("params", (_event, data) => {
 	// don't forget to scroll down to the bottom of index.js to update the value too
 	//document.getElementById("LLMBackendMode").value = data.llmBackendMode; // since the program now come with predefined tuned model this won't be required and if its implemented it will make the program runs in buggy state or chaos like the button won't be able clicked without error and etc, and selection are implemented on dictionary on index.js in Engine section of the Data
@@ -1093,6 +1099,16 @@ document.querySelector("#interactionHistory-dialog-bg > div > div.dialog-button 
 document.querySelector("#interactionHistory-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
     document.getElementById("interactionHistory-dialog-bg").classList.add("hidden");
 });
+
+
+document.querySelector("#AutonomousHandlessAssistantSwitch-dialog-bg > div > div.dialog-button > button.secondary").addEventListener("click", () => {
+	document.getElementById("AutonomousHandlessAssistantSwitch-dialog-bg").classList.add("hidden");
+  });
+  
+  document.querySelector("#AutonomousHandlessAssistantSwitch-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
+	  document.getElementById("AutonomousHandlessAssistantSwitch-dialog-bg").classList.add("hidden");
+  });
+
 // This event listener listens for changes in the "BackbrainQueue" checkbox.
 document.getElementById("BackbrainQueue").addEventListener("change", () => {
   // Sends a message to the main process indicating whether the "BackbrainQueue"
