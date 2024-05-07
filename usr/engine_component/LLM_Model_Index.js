@@ -13,6 +13,7 @@ const availableImplementedLLMModelSpecificCategory = {
 	general_conversation : {
 		downloadLink: "https://huggingface.co/TheBloke/Mistral-7B-OpenOrca-GGUF/resolve/main/mistral-7b-openorca.Q4_0.gguf?download=true", //change this later on
 		filename: "default_generalLM_mist.bin",
+		filename_selfRemorphedRetraining: "customized_generalLM_mist.bin",
 		CategoryDescription: "Standard General Conversation",
 		ParamSize: "7B",
 		Quantization: "q4_0",

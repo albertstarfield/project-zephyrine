@@ -85,7 +85,7 @@ install_dependencies_macos() {
     echo "Upgrading to the recommended node Version!"
     set -e
     node -v
-    npm install n
+    npm -g install n
     #n 20.11.1 #They removed it!
     n latest #To prevent this problem we might grab LTS or latest instead
     echo "did it work?"
@@ -866,7 +866,7 @@ install_dependencies_linux() {
     fi
 
     echo "Upgrading to the latest Node Version!"
-    npm install n
+    npm -g install n
     #n 20.11.1 #They removed it!
     n latest #To prevent this problem we might grab LTS or latest instead
     node -v
@@ -879,6 +879,8 @@ if [[ "$platform" == "Linux" ]]; then
     install_dependencies_linux
 elif [[ "$platform" == "Darwin" ]]; then
     install_dependencies_macos
+elif [[ "$platform" == "NT" ]]; then
+    install_dependencies_windows
 fi
 }
 
