@@ -12,8 +12,8 @@ const availableImplementedLLMModelSpecificCategory = {
 	// General_conversation is a model that is universally acceptable, that know at least the generic general concept, then later on we can retrain it with LLM Base-model way of unsupervised training and supervised training from the interaction (we call the process Re-integration)
 	general_conversation : {
 		downloadLink: "https://huggingface.co/TheBloke/Mistral-7B-OpenOrca-GGUF/resolve/main/mistral-7b-openorca.Q4_0.gguf?download=true", //change this later on
-		filename: "generalLM_mist.bin",
-		CategoryDescription: "Std General Conversation",
+		filename: "default_generalLM_mist.bin",
+		CategoryDescription: "Standard General Conversation",
 		ParamSize: "7B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
@@ -29,7 +29,7 @@ const availableImplementedLLMModelSpecificCategory = {
 	general_conversation_llama_3 : {
 		downloadLink: "https://huggingface.co/MaziyarPanahi/Meta-Llama-3-8B-Instruct-GGUF/resolve/main/Meta-Llama-3-8B-Instruct.Q4_K_M.gguf?download=true", //change this later on
 		filename: "generalLM_llama3Base.bin",
-		CategoryDescription: "experimentalLlama3Support",
+		CategoryDescription: "Big Context Window Support using Latest LLaMa3 Developed by meta for big interaction window",
 		ParamSize: "8B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
@@ -107,7 +107,7 @@ const availableImplementedLLMModelSpecificCategory = {
 	chemistry : {
 		downloadLink: "https://huggingface.co/TheBloke/Yi-34B-GiftedConvo-merged-GGUF/resolve/main/yi-34b-giftedconvo-merged.Q2_K.gguf?download=true", //change this later on
 		filename: "specLM_PhysicsandChemistry.bin",
-		CategoryDescription: "General Conversation",
+		CategoryDescription: "Focuses on Physics and Chemistry",
 		ParamSize: "34B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
@@ -120,7 +120,7 @@ const availableImplementedLLMModelSpecificCategory = {
 	biology : {
 		downloadLink: "https://huggingface.co/TheBloke/medicine-LLM-13B-GGUF/resolve/main/medicine-llm-13b.Q4_0.gguf?download=true", //change this later on
 		filename: "specLM_BioMedicineLLM.bin",
-		CategoryDescription: "BioMedicineLLM Conversation",
+		CategoryDescription: "Medicine or Medical Conversation but it's not to replace Doctors for initial diagnosis just for recommendation",
 		ParamSize: "13B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
@@ -133,7 +133,7 @@ const availableImplementedLLMModelSpecificCategory = {
 	physics : {
 		downloadLink: "https://huggingface.co/TheBloke/Yi-34B-GiftedConvo-merged-GGUF/resolve/main/yi-34b-giftedconvo-merged.Q2_K.gguf?download=true", //change this later on
 		filename: "specLM_PhysicsandChemistry.bin",
-		CategoryDescription: "General Conversation",
+		CategoryDescription: "Focuses on Physics and Chemistry",
 		ParamSize: "34B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
@@ -173,7 +173,7 @@ const availableImplementedLLMModelSpecificCategory = {
 	mathematics : {
 		downloadLink: "https://huggingface.co/TheBloke/llemma_7b-GGUF/resolve/main/llemma_7b.Q4_0.gguf?download=true", //change this later on
 		filename: "specLM_LLaMA_Math.bin",
-		CategoryDescription: "Math LLM Operation",
+		CategoryDescription: "Mathematics Might be with Latex LLM Operation",
 		ParamSize: "7B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
@@ -187,7 +187,7 @@ const availableImplementedLLMModelSpecificCategory = {
 	financial : {
 		downloadLink: "https://huggingface.co/TheBloke/finance-LLM-GGUF/resolve/main/finance-llm.Q4_0.gguf?download=true", //change this later on
 		filename: "specLM_FinanceAdaptLLM.bin",
-		CategoryDescription: "Financial Operation",
+		CategoryDescription: "Financial advise Interaction",
 		ParamSize: "7B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
@@ -228,7 +228,7 @@ const availableImplementedLLMModelSpecificCategory = {
 	VisionLLM : {
 		downloadLink: "https://huggingface.co/jartine/llava-v1.5-7B-GGUF/resolve/main/llava-v1.5-7b-Q4_K.gguf?download=true", //change this later on
 		filename: "specLM_Vision_LLaVa.bin",
-		CategoryDescription: "LLM That can describe with image",
+		CategoryDescription: "LLM That can describe with image or framebuffer",
 		ParamSize: "7B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
