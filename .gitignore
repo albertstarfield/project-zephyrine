@@ -37,5 +37,8 @@ usr/storage/
 usr/engine_component/generalReintegrationPyWorkstationEnv/LLMReintegrationExperiment/**
 usr/engine_component/ReintegrationModelEnv/referenceCode_NvidiaExclusive/**
 usr/bin/**/*.make
+usr/vendor/**
+**sync-conflict**
+usr/bin/**/*make*
 *.exp
 !example.exp
