@@ -58,7 +58,7 @@
 		"natural": "^6.10.5",
 		"node-html-parser": "^6.1.12",
 		"node-pty": "1.0.0",
-		"npm": "^10.5.2",
+		"npm": "^10.7.0",
 		"os-utils": "^0.0.14",
 		"path": "^0.12.7",
 		"pdf-parse": "^1.1.1",
