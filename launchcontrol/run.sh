@@ -1,4 +1,6 @@
-#!/bin/bash
+#!/bin/sh
+
+#For some reason if you code it #!/bin/bash and your are defaulting to /usr/bin/fish doing  that built using x86_64 and enforce zsh with arch -arm64 the installation will be mixed with x86_64 binary and cause havoc on the module installation 
 set -e
 
 # Initialize Variables and check the platform and architecture
@@ -73,8 +75,13 @@ install_dependencies_macos() {
     fi
     if ! command -v brew &> /dev/null; then
         echo "Homebrew command line tools not found. Please install Homebrew and try again."
+        
         exit 1
     else 
+
+    #https://stackoverflow.com/questions/64963370/error-cannot-install-in-homebrew-on-arm-processor-in-intel-default-prefix-usr
+    # Be aware apple slick may have conflict with x86_64 homebrew package and cause this to fail
+
     brew doctor
     #rm -rf "/opt/homebrew/Library/Taps/homebrew/homebrew-core"
     brew tap homebrew/core
@@ -180,13 +187,13 @@ cleanInstalledFolder(){
     set +e
     echo "Cleaning Installed Folder to lower the chance of interfering with the installation process"
     npm cache clean --force
-    
-    rm -rf ${rootdir}/usr/vendor/ggllm.cpp ${rootdir}/usr/vendor/ggml ${rootdir}/usr/vendor/llama-gguf.cpp ${rootdir}/usr/vendor/gemma.cpp ${rootdir}/usr/vendor/llama.cpp ${rootdir}/usr/vendor/whisper.cpp ${rootdir}/usr/node_modules ${CONDA_PREFIX} ${N_PREFIX}
+    rm -rfv ${rootdir}/usr/vendor ${rootdir}/usr/node_modules ${CONDA_PREFIX} ${N_PREFIX}
+    mkdir ${rootdir}/usr/vendor
     echo "Should be done"
     set -e
 }
 build_llama() {
-    # Clone submodule and update
+    # Clone submodule and   update
     
     # Change directory to llama.cpp
     cd usr/vendor/llama.cpp || exit 1
