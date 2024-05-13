@@ -3481,7 +3481,8 @@ function initInteraction() {
 
 	const chatArgs = `-i -ins -r "${revPrompt}" -f "${promptFileDir}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
 	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
-	const paramArgs = `-m "${modelPath}" -n -1 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --rope-scaling yarn --repeat-penalty 1.5 --mirostat 2 -sm row -c 0 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	// I did try to add -fa or flash attention to the mainLLM but it repeatedly answer img img img img and weird glitching UTF-8 Char
+	const paramArgs = `-m "${modelPath}" -n -1 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --rope-scaling yarn --repeat-penalty 1.5 --mirostat 2 -sm row --no-mmap -cb -c 0 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
 	log.info(consoleLogPrefix, chatArgs, paramArgs)
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
@@ -3764,48 +3765,24 @@ setInterval(async () => {
 //---------------------------------
 
 // -----------------------------------
-let reintegrationWorkstationPath=`${path.resolve(__dirname, "engine_component", "generalReintegrationPyWorkstationEnv")}`;
+let reintegrationWorkstationPath=`${path.resolve(__dirname, "engine_component", "ModelReintegration")}`;
 // We need UMA and persistentInteractionMemory Path general_conversation and system prompt L0
+let reintegrationWorkstationPath_datasetPool=`${path.resolve(__dirname, "engine_component", "ModelReintegration", "datasetPool")}`;
 setInterval(async () => {
 	// Opportunistic
 	log.debug(versionTheUnattendedEngineLogPrefix, "Opportunistic Re-integration Learning is activated... Polling on the Activity to find opportunity!");
 	await coexistenceHaltSafetyCheck();
+	// keep rechecking if there's an Empty slot or opportunity
 	while (!ProcessingCoexistenceHold) {
-		log.debug(versionTheUnattendedEngineLogPrefix, "PathDebug_MainEngine: ", reintegrationWorkstationPath, "UMA Experience Stg: ", experienceStgPersistentPath, "Interaction History", interactionStgPersistentPath);
-		log.debug(versionTheUnattendedEngineLogPrefix, "Priming Engine For Reintegration!");// Remember Reintegration here means fine-tuning with UMA and interaction history
-		log.debug(versionTheUnattendedEngineLogPrefix, "Checking Virtual Environment!");// Remember Reintegration here means fine-tuning with UMA (Unsupervised) and interaction history (SFT)
-		
-		/*
-		So here's what we going to do
-		Chapter I. Data Preprocessing and Environment 
-		1. Write the UMA into csv | no. | text | for unsupervised_LoRA_partition.csv and persistentInteractionMem into csv InteractionSFT.csv | no. | text | (Prepare csv dataset format into the very boring standard LLM flipflop unsupervised format)
-		2. Check on the toolkit of each platform Windows x64 (Nvidia+IntelGPU), Linux x64(AMD+Nvidia+Intel) aarch64 (AMDGPU), and then Apple arm64 (Metal)) (for detail of the output of the process will be described on the next documentation paragraph Chapter)
-		Chapter II. Prepare the VirtualEnvironment of the python3 on the ./engine_component/platformReintegrationToolkit/.venv then install the requirements.txt
-		3. Determine the OS/Platform
-		4. Prepare the VirtualEnvironment of the python3 on the ./engine_component/platformReintegrationToolkit/.venv then install the requirements.txt
-		Chapter III.
-		5. Enter the environment 
-		6. 
-		Chapter IV.
-		7. 
-		8. 
-		From the binary model convert it into pytorch? then convert back into quantization Q4 general_mist.bin GGUF format using LLaMA using the llama.cpp toolkit
-		*/
-		// Reintegration (will happens seperately Windows x64 (Nvidia+IntelGPU), Linux x64(AMD+Nvidia+Intel) aarch64 (AMDGPU), and then Apple arm64 (Metal)) so we need to check
+		log.debug(versionTheUnattendedEngineLogPrefix, "Allocating Coexistence Time Slot for Checking Eligibility of Retraining/Reintegration with the model");// Remember Reintegration here means fine-tuning with UMA and interaction history		
+		ProcessingCoexistenceHold=true; // Allocate time processing slot for Retraining or Reintegration
+		log.debug(versionTheUnattendedEngineLogPrefix, "PathDebug_MainEngine: ", reintegrationWorkstationPath, "UMA Experience (Non SFT) Stg: ", experienceStgPersistentPath, "Interaction History (SFT)", interactionStgPersistentPath);
+		//log.debug(versionTheUnattendedEngineLogPrefix, "PathDebug_MainEngine: ", reintegrationWorkstationPath, "UMA Experience (Non SFT) Stg: ", experienceStgPersistentPath, "Interaction History (SFT)", interactionStgPersistentPath);
+		// Don't need to make copy, just make sure we fetch from the main memory of UMA and persistentInteractionMem then reinterpreted it and rewrite it to become multiline txt
+				
 
-
-		// Apple Ref : https://github.com/ml-explore/mlx (Metal)
-		//
-
-		// Insert python venv setup pytorch and etc command here to go to reintegrationWorkstationPath
-		// 
-		// You can just uh..
-		
-		
-		// Prepare csv dataset format into the very boring standard LLM flipflop supervised format
-
-		// then execute at reintegrationWorkstationPath with venv reintegrationWorkstationPath python usr/engine_component/generalReintegrationPyWorkstationEnv/reintegration_general_model.py 
-		await new Promise(resolve => setTimeout(resolve, 5000)); // Check every 5000ms
+		ProcessingCoexistenceHold=false; // deAllocate time processing slot for Retraining or Reintegration for the program to run
+		await new Promise(resolve => setTimeout(resolve, 10000)); // Check every 10 seconds
 	}
 	// Kill the process instantly assuming it autosave frequently
 	
