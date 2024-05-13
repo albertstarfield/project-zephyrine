@@ -1,5 +1,11 @@
 #!/bin/sh
 
+# Check if we're running in an older "sh" environment
+if [ "${0##*/}" = "sh" ]; then
+# Relaunch the script using bash to get better functionality
+exec /bin/bash "$0" "$@"
+fi
+
 #For some reason if you code it #!/bin/bash and your are defaulting to /usr/bin/fish doing  that built using x86_64 and enforce zsh with arch -arm64 the installation will be mixed with x86_64 binary and cause havoc on the module installation 
 set -e
 
@@ -7,12 +13,19 @@ set -e
 platform=$(uname -s)
 arch=$(uname -m)
 if [[ -n $(uname) && "$(uname)" == "Darwin" ]]; then
-  allocThreads=$(sysctl -n hw.logicalcpu 2> /dev/null | sed 's/.*: //')
-elif [[ -n $(uname) && "$(uname)" == "CYGWINNT" ]]; then  # Windows (in Bash)
-  allocThreads=$(wmic cpu get/Cores 2> /dev/null | sed 's/.*: //')
+allocThreads=$(($(sysctl -n hw.logicalcpu 2> /dev/null | sed 's/.*: //') / 4))
+elif [[ -n $(uname) && "$(uname)" == "CYGWINNT" ]]; then   # Windows (in Bash)
+allocThreads=$(( $(wmic cpu get/Cores 2> /dev/null | sed 's/.*: //') / 4))
+elif [[ -n $(uname) && "$(uname)" == "MSYS2" ]]; then   # MSYS2 (Windows)
+allocThreads=$(($(wmic cpu get/Cores 2> /dev/null | sed 's/.*: //') / 4))
 else
-  allocThreads=$(($(nproc --all) / 1))
+allocThreads=$(($(nproc --all) / 4))
 fi
+#Correction if threads allocation gone wrong!
+if [ ${allocThreads} -lt 1 ]; then
+allocThreads=1
+fi
+
 # Save the current working directory to "rootdir" variable (compensate spaces)
 rootdir="$(pwd)"
 export CONDA_PREFIX="${rootdir}/conda_python_modules"
@@ -51,12 +64,21 @@ install_dependencies_linux() {
     elif command -v zypper &> /dev/null; then
         # Install required packages using zypper (openSUSE)
         sudo zypper install -y gcc-c++ cmake openblas-devel python lapack-devel
+    elif command -v pacman &> /dev/null; then
+        # Install required packages using pacman (Arch Linux, Manjaro, etc.)
+        sudo pacman -Syu --needed base-devel python cmake openblas lapack
     elif command -v swupd &> /dev/null; then
+        # Install required packages using swupd (SUSE)
         sudo swupd bundle-add c-basic
     else
-        echo "Unsupported package manager or unable to install dependencies. were going to ignore it for now."
-        #exit 1
+        echo "Unsupported package manager or unable to install dependencies. We're going to ignore it for now."
+        # exit 1
     fi
+}
+
+install_dependencies_windows() {
+    # Install required packages using pacman (MSYS2)
+    pacman  -Syyu --noconfirm mingw-w64-x86_64-gcc mingw-w64-x86_64-cmake mingw-w64-x86_64-python3 mingw-w64-x86_64-openblas mingw-w64-x86_64-lapack
 }
 
 # Function to check and install dependencies for macOS
@@ -100,6 +122,7 @@ install_dependencies_macos() {
     
 }
 
+
 detect_cuda() {
     if [ $ENFORCE_NOACCEL != "1" ]; then
     if command -v nvcc &> /dev/null ; then
@@ -113,8 +136,6 @@ detect_cuda() {
 }
 
 detect_opencl() {
-    # Detect platform
-    platform=$(uname -s)
 
     # Check if OpenCL is available
     if [ $ENFORCE_NOACCEL != "1" ]; then
@@ -187,7 +208,7 @@ cleanInstalledFolder(){
     set +e
     echo "Cleaning Installed Folder to lower the chance of interfering with the installation process"
     npm cache clean --force
-    rm -rfv ${rootdir}/usr/vendor ${rootdir}/usr/node_modules ${CONDA_PREFIX} ${N_PREFIX}
+    rm -rf ${rootdir}/usr/vendor ${rootdir}/usr/node_modules ${CONDA_PREFIX} ${N_PREFIX}
     mkdir ${rootdir}/usr/vendor
     echo "Should be done"
     set -e
@@ -459,6 +480,8 @@ build_gemma_base() {
         install_dependencies_linux
     elif [[ "$platform" == "Darwin" ]]; then
         install_dependencies_macos
+    elif [[ "$platform" == "MSYS2" ]]; then
+        install_dependencies_windows
     fi
 
     cuda=$(detect_cuda)
@@ -508,8 +531,6 @@ build_gemma_base() {
 
 
 build_falcon() {
-    
-    
     # Change directory to llama.cpp
     cd usr/vendor/ggllm.cpp || exit 1
 
@@ -585,177 +606,6 @@ build_falcon() {
 
 #----------------------------------------------------------------
 
-#select working mode
-if [ "${1}" == "llama" ]; then
-    # Check if LLaMa is already compiled
-    if [[ -f ./usr/vendor/llama.cpp/build/bin/main  || -f ./usr/vendor/llama.cpp/build/bin/main.exe ]]; then
-        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        if [ -f ./usr/vendor/llama.cpp/build/bin/${1} ]; then
-        cp ./usr/vendor/llama.cpp/build/bin/main ./usr/bin/chat
-        fi
-         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
-        cp ./usr/vendor/llama.cpp/build/bin/main.exe ./usr/bin/chat.exe
-        fi
-    else
-        # LLaMa not compiled, build it
-        echo "LLaMa binary not found. Building LLaMa..."
-        build_llama
-    fi
-fi
-
-if [ "${1}" == "mpt" ]; then
-    # Check if ggml Binary already compiled
-    echo "Requested Universal GGML Binary Mode"
-    echo "MPT ggml no longer exists and integrated with the LLaMa-2 engine!"
-fi
-
-if [ "${1}" == "dolly-v2" ]; then
-    # Check if ggml Binary already compiled
-    echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
-        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
-        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
-        fi
-         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
-        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
-        fi
-    else
-        # LLaMa not compiled, build it
-        echo "mpt binary not found. Building mpt..."
-        build_ggml_base "${1}"
-    fi
-fi
-
-
-if [ "${1}" == "gpt-2" ]; then
-    # Check if ggml Binary already compiled
-    echo "Requested Universal GGML Binary Mode"
-    echo "gpt-2 is no longer available!"
-fi
-
-if [ "${1}" == "gpt-j" ]; then
-    # Check if ggml Binary already compiled
-    echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
-        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
-        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
-        fi
-         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
-        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
-        fi
-    else
-        # LLaMa not compiled, build it
-        echo "mpt binary not found. Building mpt..."
-        build_ggml_base "${1}"
-    fi
-fi
-
-if [ "${1}" == "gpt-neox" ]; then
-    # Check if ggml Binary already compiled
-    echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
-        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
-        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
-        fi
-         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
-        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
-        fi
-    else
-        # LLaMa not compiled, build it
-        echo "gpt-neox binary not found. Building gpt-neox..."
-        build_ggml_base "${1}"
-    fi
-fi
-
-if [ "${1}" == "mnist" ]; then
-    # Check if ggml Binary already compiled
-    echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
-        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
-        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
-        fi
-         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
-        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
-        fi
-    else
-        # LLaMa not compiled, build it
-        echo "mnist binary not found. Building mnist..."
-        build_ggml_base "${1}"
-    fi
-fi
-
-if [ "${1}" == "replit" ]; then
-    # Check if ggml Binary already compiled
-    echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
-        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
-        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
-        fi
-         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
-        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
-        fi
-    else
-        # LLaMa not compiled, build it
-        echo "replit binary not found. Building replit..."
-        build_ggml_base "${1}"
-    fi
-fi
-
-if [ "${1}" == "starcoder" ]; then
-    # Check if ggml Binary already compiled
-    echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
-        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
-        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
-        fi
-         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
-        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
-        fi
-    else
-        # LLaMa not compiled, build it
-        echo "starcoder binary not found. Building starcoder..."
-        build_ggml_base "${1}"
-    fi
-fi
-
-if [ "${1}" == "whisper" ]; then
-    # Check if ggml Binary already compiled
-    echo "Requested Universal GGML Binary Mode"
-    if [[ -f ./usr/vendor/ggml/build/bin/${1}  || -f ./usr/vendor/ggml/build/bin/${1}.exe ]]; then
-        echo "${1} binary already compiled. Moving it to ./usr/bin/..."
-        if [ -f ./usr/vendor/ggml/build/bin/${1} ]; then
-        cp ./usr/vendor/ggml/build/bin/${1} ./usr/bin/chat
-        fi
-         if [ -f ./usr/vendor/ggml/build/bin/${1}.exe ]; then
-        cp ./usr/vendor/ggml/build/bin/${1}.exe ./usr/bin/chat.exe
-        fi
-    else
-        # LLaMa not compiled, build it
-        echo "whisper binary not found. Building whisper..."
-        build_ggml_base "${1}"
-    fi
-fi
-
-if [ "${1}" == "falcon" ]; then
-    # Check if Falcon ggllm.cpp compiled
-    if [[ -f ./vendor/llama.cpp/build/bin/main || -f ./vendor/llama.cpp/build/bin/main.exe ]]; then
-        echo "falcon binary already compiled. Moving it to ./usr/bin/..."
-        cp ./vendor/ggllm.cpp/build/bin/main ./usr/bin/chat
-        cp ./vendor/ggllm.cpp/build/bin/main.exe ./usr/bin/chat.exe
-    else
-        # LLaMa not compiled, build it
-        echo "Falcon Not found! Compiling"
-        build_falcon
-    fi
-fi
-
-
 buildLLMBackend(){
     #Compile all binaries with specific version and support
     
@@ -769,10 +619,11 @@ buildLLMBackend(){
         targetFolderArch="arm64"
     fi
 
-     if [ "${arch}" == "x86_64" ]; then
+    if [ "${arch}" == "x86_64" ]; then
         targetFolderArch="x64"
     fi
 
+    #add Kernel support 1_windows
 
     if [ "${platform}" == "Darwin" ]; then
         targetFolderPlatform="0_macOS"
@@ -816,7 +667,7 @@ buildLLMBackend(){
 
     mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/falcon
     cp ./usr/vendor/ggllm.cpp/build/bin/main ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/falcon/LLMBackend-falcon
-     echo "Copying any Acceleration and Debugging Dependencies for Falcon"
+    echo "Copying any Acceleration and Debugging Dependencies for Falcon"
     cp -r ./usr/vendor/ggllm.cpp/build/bin/* ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/falcon/
     
     cd ${rootdir}
@@ -845,6 +696,15 @@ buildLLMBackend(){
 
 
 #buildLLMBackend
+
+fix_permisssion_universal(){
+    set +e
+    echo "Fixing Universal issue"
+    sudo chmod -R 777 ${CONDA_PREFIX} ${N_PREFIX}
+    set -e
+}
+
+
 
 # Change directory to ./usr and install npm dependencies
 cd ./usr || exit 1
@@ -904,9 +764,10 @@ if [[ ! -f ${rootdir}/installed.flag || "${FORCE_REBUILD}" == "1" ]]; then
     npx --openssl_fips='' electron-rebuild
     importsubModuleManually
     buildLLMBackend
+    fix_permisssion_universal
     touch ${rootdir}/installed.flag
 fi
-cd ${rootdir}/usr
+cd "${rootdir}/usr"
 node -v
 npm -v
 npm start
