@@ -17,8 +17,6 @@ dist
 **.DS_Store**
 **presistentInteractionMem**
 **.temporaryChunkModel**
-**specLM**
-**generalLM**
 **universalPrompt.txt**
 **.log**
 *.log
@@ -38,8 +36,8 @@ usr/engine_component/generalReintegrationPyWorkstationEnv/LLMReintegrationExperi
 usr/engine_component/ReintegrationModelEnv/referenceCode_NvidiaExclusive/**
 usr/bin/**/*.make
 usr/vendor/**
-usr/bin/**_**
 **sync-conflict**
 usr/bin/**/*make*
 *.exp
 !example.exp
+usr/bin/**/*_*
