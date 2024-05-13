@@ -5,7 +5,16 @@ if [ "${0##*/}" = "sh" ]; then
 # Relaunch the script using bash to get better functionality
 exec /bin/bash "$0" "$@"
 fi
+#------
+# Do not let the user use root to run this, unless it chroot which in that case the user is advanced enough to know what they're up to
+if [ -z "${SU_BYPASS_CHECK+set}" ] || [ ${SU_BYPASS_CHECK} != 1 ]; then
+  if [ $EUID -eq 0 ]; then
+    echo "Do not run this script as superuser unless you know what you're doing!"
+    exit 1
+  fi
+fi
 
+#-------
 #For some reason if you code it #!/bin/bash and your are defaulting to /usr/bin/fish doing  that built using x86_64 and enforce zsh with arch -arm64 the installation will be mixed with x86_64 binary and cause havoc on the module installation 
 set -e
 
@@ -224,13 +233,6 @@ build_llama() {
     mkdir -p build
     cd build || exit 1
 
-    # Install dependencies based on the platform
-    if [[ "$platform" == "Linux" ]]; then
-        install_dependencies_linux
-    elif [[ "$platform" == "Darwin" ]]; then
-        install_dependencies_macos
-    fi
-
     cuda=$(detect_cuda)
     opencl=$(detect_opencl)
     metal=$(detect_metal)
@@ -308,13 +310,6 @@ build_llama_gguf() {
     mkdir -p build
     cd build || exit 1
 
-    # Install dependencies based on the platform
-    if [[ "$platform" == "Linux" ]]; then
-        install_dependencies_linux
-    elif [[ "$platform" == "Darwin" ]]; then
-        install_dependencies_macos
-    fi
-
     cuda=$(detect_cuda)
     opencl=$(detect_opencl)
     metal=$(detect_metal)
@@ -389,13 +384,6 @@ build_ggml_base() {
     # Create build directory and change directory to it
     mkdir -p build
     cd build || exit 1
-
-    # Install dependencies based on the platform
-    if [[ "$platform" == "Linux" ]]; then
-        install_dependencies_linux
-    elif [[ "$platform" == "Darwin" ]]; then
-        install_dependencies_macos
-    fi
 
     cuda=$(detect_cuda)
     opencl=$(detect_opencl)
@@ -474,16 +462,6 @@ build_gemma_base() {
     fi
 
     cd build || exit 1
-
-    # Install dependencies based on the platform
-    if [[ "$platform" == "Linux" ]]; then
-        install_dependencies_linux
-    elif [[ "$platform" == "Darwin" ]]; then
-        install_dependencies_macos
-    elif [[ "$platform" == "MSYS2" ]]; then
-        install_dependencies_windows
-    fi
-
     cuda=$(detect_cuda)
     opencl=$(detect_opencl)
     metal=$(detect_metal)
@@ -538,12 +516,6 @@ build_falcon() {
     mkdir -p build
     cd build || exit 1
 
-    # Install dependencies based on the platform
-    if [[ "$platform" == "Linux" ]]; then
-        install_dependencies_linux
-    elif [[ "$platform" == "Darwin" ]]; then
-        install_dependencies_macos
-    fi
     cuda=$(detect_cuda)
     opencl=$(detect_opencl)
     metal=$(detect_metal)
@@ -746,7 +718,7 @@ if [[ "$platform" == "Linux" ]]; then
     install_dependencies_linux
 elif [[ "$platform" == "Darwin" ]]; then
     install_dependencies_macos
-elif [[ "$platform" == "NT" ]]; then
+elif [[ "$platform" == "MSYS2" ]]; then
     install_dependencies_windows
 fi
 }
