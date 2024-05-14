@@ -616,6 +616,7 @@ buildLLMBackend(){
     echo "Cleaning binaries Replacing with new ones"
     rm -rf "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
     if [ ! -d "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}" ]; then
+        mkdir "${rootdir}/usr/bin"
         mkdir "${rootdir}/usr/bin/${targetFolderPlatform}"
         mkdir "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
         echo "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
