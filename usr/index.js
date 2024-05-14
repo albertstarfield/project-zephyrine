@@ -858,7 +858,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 	log.debug(consoleLogPrefix, "🍀⚙️", "CallLLMChildThoughtProcessor invoked!", prompt);
 	await coexistenceHaltSafetyCheck(); //await and check any coexistence processing before processing
 	while(childLLMResultNotPassed){
-		log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
+		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
 		result = await callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild);
 		if (await hasAlphabet(result)){
 			childLLMResultNotPassed = false;
@@ -1007,11 +1007,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	}
 	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
 	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Prompt`, prompt);
-	/*
-	how llm trained
-
-	*/
-	LLMChildParam = `-p \" ${startPromptInst} ${prompt} \n ${endRespondPrompt}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -c 0 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	LLMChildParam = `-p \" ${startPromptInst} ${prompt} \n ${endRespondPrompt}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} --no-mmap -cb -c 0 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
@@ -3779,7 +3775,7 @@ setInterval(async () => {
 		log.debug(versionTheUnattendedEngineLogPrefix, "PathDebug_MainEngine: ", reintegrationWorkstationPath, "UMA Experience (Non SFT) Stg: ", experienceStgPersistentPath, "Interaction History (SFT)", interactionStgPersistentPath);
 		//log.debug(versionTheUnattendedEngineLogPrefix, "PathDebug_MainEngine: ", reintegrationWorkstationPath, "UMA Experience (Non SFT) Stg: ", experienceStgPersistentPath, "Interaction History (SFT)", interactionStgPersistentPath);
 		// Don't need to make copy, just make sure we fetch from the main memory of UMA and persistentInteractionMem then reinterpreted it and rewrite it to become multiline txt
-				
+
 
 		ProcessingCoexistenceHold=false; // deAllocate time processing slot for Retraining or Reintegration for the program to run
 		await new Promise(resolve => setTimeout(resolve, 10000)); // Check every 10 seconds
