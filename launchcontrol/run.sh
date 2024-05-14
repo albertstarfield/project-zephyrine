@@ -581,6 +581,7 @@ build_falcon() {
 buildLLMBackend(){
     #Compile all binaries with specific version and support
     
+    
     echo "Platform: $platform, Architecture: $arch" 
     #platform darwin and Linux
     #arch arm64 (darwin) x86_64 aarch64 (linux)
@@ -605,22 +606,30 @@ buildLLMBackend(){
         targetFolderPlatform="2_Linux"
     fi
 
+
+
+
     # since the cuda binaries or the opencl binaries can be used as the nonaccel binaries to we can just copy the same binaries to the folder
     # This naming system was introduced due to the Windows different LLMBackend precompiled versions (check llama.cpp and ggllm.cpp release tabs and see the different version of version)
     # example directory ./usr/bin/0_macOS/arm64/LLMBackend-llama-noaccel
+
+    echo "Cleaning binaries Replacing with new ones"
+    rm -rf "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
+    if [ ! -d "${rootdir}/usr/bin" ]; then
+        mkdir "${rootdir}/usr/bin"
+        mkdir "${rootdir}/usr/bin/${targetFolderPlatform}"
+    fi
+    if [ ! -d "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}" ]; then
+        mkdir "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
+        echo "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
+    fi
+    
+
 
     #You know what lets abandon Windows enforced binary structuring and find another way on how to execute other way to have specific acceleration on Windows
     cd ${rootdir}
     build_llama
     cd ${rootdir}
-    echo "Cleaning binaries Replacing with new ones"
-    rm -rf "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
-    if [ ! -d "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}" ]; then
-        mkdir "${rootdir}/usr/bin"
-        mkdir "${rootdir}/usr/bin/${targetFolderPlatform}"
-        mkdir "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
-        echo "${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}"
-    fi
     
     mkdir ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/llama
     cp ./usr/vendor/llama.cpp/build/bin/main ${rootdir}/usr/bin/${targetFolderPlatform}/${targetFolderArch}/llama/LLMBackend-llama
