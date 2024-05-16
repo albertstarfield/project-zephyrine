@@ -1,3 +1,4 @@
+usr/bin/**/*_*
 node_modules
 package-lock.json
 yarn.lock
@@ -40,4 +41,3 @@ usr/vendor/**
 usr/bin/**/*make*
 *.exp
 !example.exp
-usr/bin/**/*_*
