@@ -201,7 +201,7 @@
 		<div id="path-dialog-bg" class="dialog-bg hidden">
 			<div class="dialog-box">
 				<div class="dialog-title">
-					<h2>Failed to Load Model</h2>
+					<h2>Initializing Model</h2>
 					
 					<!-- <button class="dialog-close">
 						<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" fill="currentColor" class="bi bi-x" viewBox="2 2 12 12">
@@ -581,10 +581,10 @@
 							<p style="margin: 0">Attempt to Use any Available Acceleration</p>
 						</div>
 						<div class="item">
-							<p>Layers Hardware Acceleration Offloading</p>
+							<p>Layers HW Accel Attempt</p>
 							<input type="number" step="1" min="1" max="69" id="hardwarelayeroffloading" value="3" placeholder="2" />
 						</div>
-						<h5>Specify the allocation of Neural Network Layers to the Dedicated Hardware Accelerator, aligning with your dedicated accelerator's memory budget.</h5>
+						<h5>Specify the allocation of Neural Network Layers to the Dedicated Hardware Accelerator, aligning with your dedicated accelerator's memory budget. This is just for the engine reference target, it won't be abided 1:1</h5>
 
 						<div style="height: 32px"></div>
 						<h2>Additional Context Settings</h2>
@@ -785,7 +785,7 @@
 				</div>
 				<div class="dialog-button">
 					<button class="secondary">Discard</button>
-					<button class="primary">Save and Restart</button>
+					<button class="primary">Save Configuration</button>
 				</div>
 			</div>
 		</div>
