@@ -408,8 +408,8 @@ const schema = {
 			qostimeoutllmchildglobal: '60000',
 			qostimeoutllmchildsubcategory: '30000',
 			qostimeoutllmchildbackbrainglobalqueuemax: '36000000',
-			qostimeoutswitch: false,
-			backbrainqueue: false,
+			qostimeoutswitch: true,
+			backbrainqueue: true,
 			webAccess: true,
 			automateLoopback: false,
 			localAccess: true,
@@ -428,7 +428,7 @@ const schema = {
 			maxLocalSearchChar: '1024',
 			maxLocalSearchPerFileChar: '512',
 			keywordContentFileMatchPercentageThreshold: '27',
-			hardwareLayerOffloading: '32',
+			hardwareLayerOffloading: '8',
 			longChainThoughtNeverFeelenough: true,
 			sideloadExperienceUMA: true
 		  }		  
@@ -497,8 +497,8 @@ let ProcessingCoexistenceHold=false;
 
 // Note : The developer need to find out how to load modelPath var before Legacy LoadPathSection being called which break the automation and return null for the modelPath and never able to proceed
 //var modelPath = store.get("modelPath"); // This is legacy code from the original program code, where the user need to manually input the modelPath at startup rather than automatically download
-const promptFile = "universalPrompt.txt";
-let promptFileDir=`${path.resolve(__dirname, "bin", "prompts", promptFile)}`
+const promptFile = "universalBinarySystemPrompt.txt";
+let promptFileDir=`${path.resolve(__dirname, "bin", promptFile)}`
 function mainLLMWritePrompt(){
 	// for mainLLM thread
 	// Write the main prompt personality of Adelaide/Zephy from the initStage1 and combine it with the main model json
@@ -1007,7 +1007,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	}
 	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
 	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Prompt`, prompt);
-	LLMChildParam = `-p \" ${startPromptInst} ${prompt} \n ${endRespondPrompt}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} --no-mmap -cb -c 0 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	LLMChildParam = `-p \" ${startPromptInst} ${prompt} \n ${endRespondPrompt}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -c 4096 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
 
 	command = `${basebin} ${LLMChildParam}`;
 	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
@@ -1904,7 +1904,7 @@ async function callInternalThoughtEngine(prompt){
 		BackbrainModeInternal = false;
 		BackbrainMode = false;
 	}
-	log.debug(consoleLogPrefix, "DONE! removing loal TPID", localTPID);
+	log.debug(consoleLogPrefix, "DONE! removing local TPID", localTPID);
 	removeFromGlobalTPID(localTPID);
 	log.debug(consoleLogPrefix, "DONE! Handing over prompt into the mainLLM engine!");
 	return passedOutput;
@@ -2035,7 +2035,7 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 
 // Processing Coexistence Manager // await for the process to coexistence
 async function coexistenceHaltSafetyCheck(){
-	const PrefixSection = "[Coexistence Resource Exhaustion Safety]"
+	const PrefixSection = "[Coexistence Resource Pressure Usage]"
 
 	log.info(consoleLogPrefix, PrefixSection, "Checking Coexistence!")
 	while(ProcessingCoexistenceHold){
@@ -2812,7 +2812,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 	//------------------------------------------------------------------------------------------------------
 
 	if (mode === "save"){
-        log.debug(consoleLogPrefix,"[Storage Manager]", "Save Invoked!", "Order???", interactionStgOrder, "Content array stg mainLLM", interactionStg, "recievedData", prompt, "SaveSwitchInteraction", AITurn, UserTurn);
+        log.debug(consoleLogPrefix,"[Storage Manager]", "Save Invoked!", "Order???", interactionStgOrder, "Content array stg mainLLM", interactionStg, "recievedData", prompt, "SaveSwitchInteraction", AITurn, UserTurn, "First Prompt Throw away", isitPassedtheFirstPromptYet);
 		if(AITurn && !UserTurn){
 		
 		//reform AITurn to be not partial but its going to recieve the whole chunk (in one time) now
@@ -3330,13 +3330,13 @@ function restart() {
 		data: "\n\n<end>"
 	});
 	if (runningShell) runningShell.kill();
-
+	coexistenceHaltSafetyCheck();
 	runningShell = undefined;
 	currentPrompt = undefined;
 	zephyrineReady = false;
 	zephyrineHalfReady = false;
 	globalTPID = []; //Stop any remaining LLMChild threads
-	("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
+	interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
 	interactionArrayStorage("reset", 0, 0, 0, 0); // fill it with 0 0 0 0 just to fill in nonsensical data since its only require reset command to execute the command
 	initInteraction();
 }
@@ -3478,7 +3478,7 @@ function initInteraction() {
 	const chatArgs = `-i -ins -r "${revPrompt}" -f "${promptFileDir}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
 	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
 	// I did try to add -fa or flash attention to the mainLLM but it repeatedly answer img img img img and weird glitching UTF-8 Char
-	const paramArgs = `-m "${modelPath}" -n -1 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --rope-scaling yarn --repeat-penalty 1.5 --mirostat 2 -sm row --no-mmap -cb -c 0 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -1 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --rope-scaling yarn --repeat-penalty 1.5 --mirostat 2 -sm row -c 0 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
 	log.info(consoleLogPrefix, chatArgs, paramArgs)
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
@@ -3530,6 +3530,7 @@ ipcMain.on("message", async (_event, { data }) => {
 				// phase 0 pre-prompt
 				log.info(consoleLogPrefix, "Experimental multi submission RAG");
 				log.debug(consoleLogPrefix, "Submitting Context");
+				engineProcessingProgress=98;
 				//inputFetch = `This is a knowledge that you need for answering the next input \`\`\`${inputFetch}\`\`\` You do not need to respond this part, Wait for the next prompt before answering!`;
 				mainLLMFinishedGeneration=false; // Waiting for this to change (assuming just submitted thus mainLLM still processing, if the generation finished, the value will be switch to true)
 				RAGPrepromptingFinished=false;
@@ -3548,7 +3549,7 @@ ipcMain.on("message", async (_event, { data }) => {
 				runningShell.write(data);
 				runningShell.write(`\r`);
 				RAGPrepromptingFinished=true; //allow the GUI+API forwarding of the engine
-
+				engineProcessingProgress=0;
 			}
 		else{
 				mainLLMFinishedGeneration=false; // Waiting for this to change
@@ -3702,7 +3703,7 @@ function measureResponseLatency() {
 		respCheckpoint1=performance.now();
 	}else{
 		respDegradationLatency = respCheckpoint1 - respCheckpoint0
-		log.debug(consoleLogPrefix, `Response ${respDegradationLatency} ms ${respCheckpoint1} ${respCheckpoint0}`)
+		//log.debug(consoleLogPrefix, `Response ${respDegradationLatency} ms ${respCheckpoint1} ${respCheckpoint0}`)
 		//reset respCheckpoint0 and respCheckpoint1 to 0
 		respCheckpoint0=0
 		respCheckpoint1=0
@@ -3716,13 +3717,13 @@ setInterval(async () => {
 	const msResponse = measureResponseLatency();
 	// Measure timing shift 1000 ms with the real timer on the 
 	if (msResponse != 0){
-		log.debug(consoleLogPrefix, "Adelaide Engine Response Alignment:", msResponse, "ms");
-		log.debug(consoleLogPrefix, "Adelaide Engine Response Degradation:", `${Math.abs(responseTimeSyncms-msResponse)} ms`)
+		//log.debug(consoleLogPrefix, "Adelaide Engine Response Alignment:", msResponse, "ms");
+		//log.debug(consoleLogPrefix, "Adelaide Engine Response Degradation:", `${Math.abs(responseTimeSyncms-msResponse)} ms`)
 		timeInnacDegradationms=Math.abs(responseTimeSyncms-msResponse)
 		degradedFactor=timeInnacDegradationms/targetDegradationMaxms
 		const viewableFactorPercent = degradedFactor.toFixed(3) * 100
-		log.debug(consoleLogPrefix, "Adelaide Engine Time Response Degradation Percent:", viewableFactorPercent, "%")
-		log.debug(consoleLogPrefix, "Adelaide Engine Time Degradation Smoothing:", timeDegradationSmoothingPause , "ms")
+		//log.debug(consoleLogPrefix, "Adelaide Engine Time Response Degradation Percent:", viewableFactorPercent, "%")
+		//log.debug(consoleLogPrefix, "Adelaide Engine Time Degradation Smoothing:", timeDegradationSmoothingPause , "ms")
 		timeDegradationPointCount = timeDegradationPointCount + 1;
 		if (timeDegradationPointCount >= timeDegradationSmoothingExpiry){
 			timeDegradationPointCount=0;
@@ -3778,11 +3779,11 @@ setInterval(async () => {
 
 
 		ProcessingCoexistenceHold=false; // deAllocate time processing slot for Retraining or Reintegration for the program to run
-		await new Promise(resolve => setTimeout(resolve, 10000)); // Check every 10 seconds
+		await delay(10000); // Check every 10 seconds
 	}
 	// Kill the process instantly assuming it autosave frequently
 	
-}, 10000);
+}, 300000); //Check every 5 minutes or 300 seconds
 
 // ------------------------------------
 
