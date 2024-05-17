@@ -788,9 +788,9 @@ setInterval(async () => {
 }, generateRandomNumber(60000,120000));
 
 
-let dynamicTipsProgressLLMChild="";
+let dynamiTipsProgress="";
 ipcRenderer.on("internalTEProgressText", (_event, { data }) => {
-	dynamicTipsProgressLLMChild=data;
+	dynamiTipsProgress=data;
 });
 
 
@@ -867,12 +867,12 @@ ipcRenderer.on("internalTEProgress", (_event, { data }) => {
 		dynamicTipsBar.style.width = `${data}%`;
 		LLMChildEngineIndicatorTextBar.style.width = `${data}%`;
 		setTimeout(() => {
-			if(dynamicTipsProgressLLMChild == ""){
-				dynamicTips.innerText = "Waiting LLMChild to Give Progress Report!"
-				LLMChildEngineIndicatorText.innerText = `🤔 LLMChild Invoked`
+			if(dynamiTipsProgress == ""){
+				dynamicTips.innerText = "Waiting Adelaide Engine to Give Progress Report!"
+				LLMChildEngineIndicatorText.innerText = `🤔 Adelaide Engine Invoked`
 			} else {
-				dynamicTips.innerText = dynamicTipsProgressLLMChild;
-				LLMChildEngineIndicatorText.innerText = `🤔 LLMChild Processing : ${dynamicTips.innerText}`
+				dynamicTips.innerText = dynamiTipsProgress;
+				LLMChildEngineIndicatorText.innerText = `🤔 Adelaide Engine Processing : ${dynamicTips.innerText}`
 			}
 			 // no We can't do this, we need to replace it with something more dynamic and more saying verbose what its doing
 			// Add fade-in effect to the new text
@@ -1034,14 +1034,17 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("classicmode").checked = data.classicMode;
 	document.getElementById("attemptaccelerate").checked = data.AttemptAccelerate;
 	document.getElementById("hardwarelayeroffloading").value = data.hardwareLayerOffloading;
-	document.getElementById("sideloadexperienceuma").value = data.sideloadExperienceUMA;
+	document.getElementById("sideloadexperienceuma").checked = data.sideloadExperienceUMA;
 	document.getElementById("emotionalllmchildengine").checked = data.emotionalLLMChildengine;
 	document.getElementById("profilepictureemotion").checked = data.profilePictureEmotion;
 	document.getElementById("longchainthought-neverfeelenough").checked = data.longChainThoughtNeverFeelenough;
 	document.getElementById("AutomateLoopback").checked = data.automateLoopback;
 	document.getElementById("openaiapiserverhost").checked = data.openAPIServer;
 	document.getElementById("ragprepromptprocesscontexting").checked = data.ragPrePromptProcessContexting;
+	document.getElementById("selfreintegrate").checked = data.selfReintegrate;
 });
+
+
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
 		params: {
@@ -1074,6 +1077,7 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			websearch_amount: document.getElementById("websearch_amount").value || document.getElementById("websearch_amount").placeholder,
 			hardwareLayerOffloading: document.getElementById("hardwarelayeroffloading").value || document.getElementById("hardwarelayeroffloading").placeholder,
 			longChainThoughtNeverFeelenough: document.getElementById("longchainthought-neverfeelenough").checked,
+			selfReintegrate: document.getElementById("selfreintegrate").checked,
 			sideloadExperienceUMA: document.getElementById("sideloadexperienceuma").checked
 		}
 	});
@@ -1213,6 +1217,14 @@ document.getElementById("sideloadexperienceuma").addEventListener("change", () =
     // checkbox is checked or not. This allows the main process to know how to proceed.
     ipcRenderer.send("sideloadExperienceUMA", document.getElementById("sideloadexperienceuma").checked);
 });
+
+
+document.getElementById("selfreintegrate").addEventListener("change", () => {
+    // Sends a message to the main process indicating whether the "selfreintegrate"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("selfReintegrate", document.getElementById("selfreintegrate").checked);
+});
+
 
 /*
 //default value
