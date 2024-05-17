@@ -84,7 +84,7 @@ const cheerio = require('cheerio');
 // for accessing the internet
 let internetUserAgent = 'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/107.0.0.0 Safari/537.36'
 
-let resumeFeatureReadyRelease = false; // Download resume feature after timeout is ready yet or no? (true or false)?
+let resumeFeatureReadyRelease = true; // Download resume feature after timeout is ready yet or no? (true or false)?
 
 // Spawning Section for the frontend (GUI and web)
 
@@ -327,9 +327,9 @@ ipcMain.on("internalThoughtProgressGUI", () => {
 });
 
 ipcMain.on("internalThoughtProgressTextGUI", () => {
-	const v = internalThoughtEngineTextProgress;
+	const v = engineTextFeedbackProgress;
 	win.webContents.send("internalTEProgressText", {data: v});
-	internalThoughtEngineTextProgress = ""; // Reset and empty out after read
+	engineTextFeedbackProgress = ""; // Reset and empty out after read
 	//win.webContents.send("internalTEProgress", data); // You can't send IPC just using data you have to wrap it using {data : v}
 });
 
@@ -479,7 +479,7 @@ let initStage2 = decodeBase64Init(encodedInitStage2);
 
 const store = new Store({ schema });
 const fs = require("fs");
-let modelPath = `${availableImplementedLLMModelSpecificCategory.general_conversation.filename}`
+let modelPath = `${availableImplementedLLMModelSpecificCategory.general_conversation.filename}` //Legacy Variable define, This won't affect mainLLM or LLMChild model selection amymore!
 
 
 //Neural Processing Accelerator Check
@@ -871,9 +871,9 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 			llmChildfailureCountSum = llmChildfailureCountSum + 1;
 			lengthGen = llmChildfailureCountSum + lengthGen;
 			childLLMDebugResultMode = true;
-			internalThoughtEngineTextProgress=`LLMChild Failed to execute no Output! Might be a bad model?`;
+			engineTextFeedbackProgress=`LLMChild Failed to execute no Output! Might be a bad model?`;
 			
-			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+			log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 			log.error(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "Adjusting LengthGen Request to: ", lengthGen);
 			log.error(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
 			if (result.includes("<dummy32000>")){
@@ -884,8 +884,8 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 			childLLMResultNotPassed = true;
 			if ( llmChildfailureCountSum >= 2 ){
 				defectiveLLMChildSpecificModel=true;
-				internalThoughtEngineTextProgress=`I yield! I gave up on using this specific Model! Reporting to LLMChild Engine!`;
-				log.error(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				engineTextFeedbackProgress=`I yield! I gave up on using this specific Model! Reporting to LLMChild Engine!`;
+				log.error(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 				seedBlacklist.push(definedSeed_LLMchild);
 			}
 			if ( llmChildfailureCountSum >= 4 ){ //3<dummy32000> issues on the mainLLM model
@@ -905,6 +905,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 // Have an idea but doesnt have the vocab library space on my head so use an supervised external extension instead
 // That's why Human are still required on AI operation
 let currentUsedLLMChildModel=""
+let precalculatedLLMChildslightlyFastJump=`${path.resolve(__dirname, "precalculatedLLMChildslightlyFastJump.state")}`;
 async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild){
 	let allowedNPULayerFactorDivision = 0.25; // make this to be lighter on vram or ram or the NPU memory so that it doesn't locks up the whole computer when it launched
 	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called");
@@ -928,7 +929,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		while (str.includes('nnnn')) {
 			str = str.replace(/nnnn/g, '');
 		}
-		str = str.replace(/"/g, "\\\"");
+		str = str.replace(/"/g, "");
 		str = str.replace(/\\/g, "\\\\");
 		str=str // pass
 		// make it one line with \n
@@ -1007,7 +1008,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	}
 	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
 	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Prompt`, prompt);
-	LLMChildParam = `-p \" ${startPromptInst} ${prompt} \n ${endRespondPrompt}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -c 4096 -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`;
+	LLMChildParam = `-p \" ${startPromptInst} ${prompt} \n ${endRespondPrompt}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -td ${threads} -tb ${threads} --prompt-cache-all --prompt-cache ${precalculatedLLMChildslightlyFastJump} -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // from -n ${lengthgen} we go -n -2
 
 	command = `${basebin} ${LLMChildParam}`;
 	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
@@ -1095,7 +1096,7 @@ let specificSpecializedModelCategoryRequest_LLMChild=""; //Globally inform on wh
 let LLMChildDecisionModelMode=false;
 let defectiveLLMChildSpecificModel=false; //Some LLM Model cause a havoc on the zero output text detection and stuck on infinite loop like for instance the LLMChild requesting Indonesian LLM which usually biased upon (I'm not sure why just yet), it will produces no output at all and stuck on loop forever (It maybe caused by corrupted model from the download Manager, further investigation required) 
 let engineProcessingProgress=0; // 0-100% just like progress
-let internalThoughtEngineTextProgress="";
+let engineTextFeedbackProgress="";
 let globalTPID = [0, 1, 2, 3]; // if removed go back to 0
 log.debug(consoleLogPrefix, "globalTPID Debug", globalTPID);
 
@@ -1199,7 +1200,7 @@ function downloadFile(link, targetFile) {
         return; // Exit if the file is already being downloaded
     }
 
-    const downloadID = generateRandomNumber("0", "999999999");
+    const downloadID = generateRandomNumber("0", "99999");
     const fileTempName = `${targetFile}.temporaryChunkModel`;
 	let startByte = 0; // Initialize startByte for resuming download
 	let inProgress = false;
@@ -1454,6 +1455,18 @@ function specializedModelManagerRequestPath(modelCategory){
 		filePathSelectionfromDictionary = `${DataDictionaryFetched.filename}`
 		log.info(consoleLogPrefix, "modelManager : Model Detected!", filePathSelectionfromDictionary);
 	}
+
+	// check if it's actually using general_conversation model where there will be check if there's availableImplementedLLMModelSpecificCategory["general_conversation"].filename_selfRemorphedRetraining
+	if ( filePathSelectionfromDictionary == `${availableImplementedLLMModelSpecificCategory["general_conversation"].filename}` ){
+		fs.access(availableImplementedLLMModelSpecificCategory["general_conversation"].filename_selfRemorphedRetraining, fs.constants.F_OK, (err) => {
+			if (err) {
+				log.error(consoleLogPrefix, `Original Flesh of Mistral`);
+			} else {
+				log.info(consoleLogPrefix, `Adelaide have evolved...`);
+			}
+		});
+	}
+
 	return filePathSelectionfromDictionary;
 }
 
@@ -1464,7 +1477,7 @@ async function zombieTPIDGuardian(localTPID, globalTPID){
 	log.debug(consoleLogPrefix, "Checking ZombieTPIDGuardian", localTPID, globalTPID);
 	if (!globalTPID.includes(localTPID)) {
 		engineProcessingProgress=0;
-		internalThoughtEngineTextProgress="Zombie TPID Caught!";
+		engineTextFeedbackProgress="Zombie TPID Caught!";
         while (true) {
 			log.error(consoleLogPrefix, "Zombie internal Thought Thread detected and tamed!")
             await new Promise(resolve => setTimeout(resolve, 999999999));
@@ -1504,7 +1517,7 @@ async function callInternalThoughtEngine(prompt){
 	// globalTPID is the variable to the Global on the internal Thought Process ID that is running
 	// localTPID is for the local variable just to its aware of its self ID
 	log.debug(globalTPID);
-	const localTPID=generateRandomNumber(1, 99999999);
+	const localTPID=generateRandomNumber(1, 99999);
 	globalTPID.push(localTPID);
 	log.debug(globalTPID);
 
@@ -1525,7 +1538,7 @@ async function callInternalThoughtEngine(prompt){
 		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine evaluating mem fetch");
 		promptInput = `${username}:${prompt}\n Based on your evaluation of the request submitted by ${username}, could you please ascertain the number of sequential steps, ranging from 1 to 50, necessary to acquire the relevant historical context to understand the present situation? Answer only in numbers:`;
 		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine evaluating mem fetch");
-		internalThoughtEngineTextProgress="Acquiring Interaction Context";
+		engineTextFeedbackProgress="Acquiring Interaction Context";
 		await zombieTPIDGuardian(localTPID, globalTPID);
 		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine invoke");
 		historyDistanceReq = await callLLMChildThoughtProcessor(promptInput, 32);
@@ -1542,7 +1555,7 @@ async function callInternalThoughtEngine(prompt){
 		log.info(consoleLogPrefix, "historyDistanceReq Mode");
 	}
 	log.info(consoleLogPrefix, "🍀", "Retrieving History!");
-	internalThoughtEngineTextProgress="Retrieving History!";
+	engineTextFeedbackProgress="Retrieving History!";
 	historyChatRetrieved=interactionContextFetching(prompt, historyDistanceReq);
 	concludeInformation_chatHistory=historyChatRetrieved;
 	
@@ -1583,8 +1596,8 @@ async function callInternalThoughtEngine(prompt){
 		if (store.get("params").llmdecisionMode){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `\`\`\` ${historyChatRetrieved}\n${username} : ${prompt}\n. \`\`\` With the previous Additional Context is \`\`\` ${passedOutput}\n \`\`\`. From this Interaction Should I use more specific LLM Model for better Answer,\n Only answer Yes or No!`;
-			internalThoughtEngineTextProgress="Checking Specific/Specialized/Experts Model Fetch Requirement!";
-			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+			engineTextFeedbackProgress="Checking Specific/Specialized/Experts Model Fetch Requirement!";
+			log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 			LLMChildDecisionModelMode = true;
 			await zombieTPIDGuardian(localTPID, globalTPID);
 			decisionSpecializationLLMChildRequirement = await callLLMChildThoughtProcessor(promptInput, 512);
@@ -1607,8 +1620,8 @@ async function callInternalThoughtEngine(prompt){
 				specificSpecializedModelPathRequest_LLMChild = specializedModelManagerRequestPath(specificSpecializedModelCategoryRequest_LLMChild);
 			}
 		}else{
-			internalThoughtEngineTextProgress="Doesnt seem to require specific Category Model, reverting to null or default model";
-			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+			engineTextFeedbackProgress="Doesnt seem to require specific Category Model, reverting to null or default model";
+			log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 			specificSpecializedModelCategoryRequest_LLMChild="";
 			specificSpecializedModelPathRequest_LLMChild="";
 		}
@@ -1623,8 +1636,8 @@ async function callInternalThoughtEngine(prompt){
 		if (store.get("params").llmdecisionMode && store.get("params").webAccess){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
 			promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank) . From this Interaction Should I Search this on the Internet,\n Only answer Yes or No!`;
-			internalThoughtEngineTextProgress="Checking Internet Fetch Requirement!";
-			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+			engineTextFeedbackProgress="Checking Internet Fetch Requirement!";
+			log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 			LLMChildDecisionModelMode = true;
 			await zombieTPIDGuardian(localTPID, globalTPID);
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 12);
@@ -1644,8 +1657,8 @@ async function callInternalThoughtEngine(prompt){
 				log.debug(consoleLogPrefix, "Waiting Search Prompt...", ":", promptInput);
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
-				internalThoughtEngineTextProgress="🍀🌐 Creating Search Prompt for Internet Search!";
-				log.debug(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				engineTextFeedbackProgress="🍀🌐 Creating Search Prompt for Internet Search!";
+				log.debug(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 				log.debug(consoleLogPrefix, `search prompt has been created`);
 			}else{
 				searchPrompt = `${historyChatRetrieved[2]}. ${historyChatRetrieved[1]}. ${prompt}`
@@ -1663,8 +1676,8 @@ async function callInternalThoughtEngine(prompt){
 			if (resultSearchScraping && inputPromptCounter[3] > inputPromptCounterThreshold){
 				resultSearchScraping = stripProgramBreakingCharacters(resultSearchScraping);
 				promptInput = `Summerize this info: ${resultSearchScraping} Summerization:`;
-				internalThoughtEngineTextProgress="Summarizing LLMChild";
-				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				engineTextFeedbackProgress="Summarizing LLMChild";
+				log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 				//let concludeInformation_Internet;
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				concludeInformation_Internet = await callLLMChildThoughtProcessor(stripProgramBreakingCharacters(stripProgramBreakingCharacters(promptInput)), 1024);
@@ -1758,8 +1771,8 @@ async function callInternalThoughtEngine(prompt){
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				required_CoTSteps = await callLLMChildThoughtProcessor(promptInput, 16);
 				required_CoTSteps = onlyAllowNumber(required_CoTSteps);
-				internalThoughtEngineTextProgress=`Required ${required_CoTSteps} CoT steps`;
-				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				engineTextFeedbackProgress=`Required ${required_CoTSteps} CoT steps`;
+				log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 
 				if (isVariableEmpty(required_CoTSteps)){
 					required_CoTSteps = 5;
@@ -1774,8 +1787,8 @@ async function callInternalThoughtEngine(prompt){
 
 				for(let iterate = 1; iterate <= required_CoTSteps; iterate++){
 					log.info(consoleLogPrefix, );
-					internalThoughtEngineTextProgress=`Processing Chain of Thoughts Step, ${iterate}`;
-					log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+					engineTextFeedbackProgress=`Processing Chain of Thoughts Step, ${iterate}`;
+					log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 					promptInput = ` What is the answer to the List number ${iterate} : ${todoList} Answer/NextStep:"`;
 					promptInput = stripProgramBreakingCharacters(promptInput);
 					await zombieTPIDGuardian(localTPID, globalTPID);
@@ -1788,8 +1801,8 @@ async function callInternalThoughtEngine(prompt){
 			}
 			if (store.get("params").llmdecisionMode){
 			promptInput = `Summerization from the internal Thoughts?  \`\`\`"${concatenatedCoT}\`\`\` `;
-			internalThoughtEngineTextProgress=`LLMChild Concluding Chain of Thoughts...`;
-			log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+			engineTextFeedbackProgress=`LLMChild Concluding Chain of Thoughts...`;
+			log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 			promptInput = stripProgramBreakingCharacters(promptInput);
 			await zombieTPIDGuardian(localTPID, globalTPID);
 			concludeInformation_CoTMultiSteps = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
@@ -1811,8 +1824,8 @@ async function callInternalThoughtEngine(prompt){
 			emotionlist = "Happy, Sad, Fear, Anger, Disgust";
 			if (store.get("params").emotionalLLMChildengine){
 				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. \n From this conversation which from the following emotions ${emotionlist} are the correct one?`;
-				internalThoughtEngineTextProgress=`LLMChild Evaluating Interaction With Emotion Engine...`;
-				log.info(consoleLogPrefix, "🍀", internalThoughtEngineTextProgress);
+				engineTextFeedbackProgress=`LLMChild Evaluating Interaction With Emotion Engine...`;
+				log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 				promptInput = stripProgramBreakingCharacters(promptInput);
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				evaluateEmotionInteraction = await callLLMChildThoughtProcessor(promptInput, 64);
@@ -1944,17 +1957,21 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 	let BackbrainRequest;
     // Check if the result is from the timeout
     if (result.timeout) {
-        log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'QoS Global Timeout occurred');//
+        log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'QoS Global Timeout occurred or in other word, I am too slow!');//
 		// Wait until NeuralAccelerator isn't busy using while loop
 		// Then report on what ID of childLLM that is driven by the internalThought that occoured a QoS
 		// then if childLLM aware that it is running on the one that timed out, then the process will lockup and in here we will remove the ID of the internal Thought from the list 
 		engineProcessingProgress=0;
-		internalThoughtEngineTextProgress="QoS internal Thought Timeout!";
+		engineTextFeedbackProgress="Im too slow Im useless!";
 		removeFromGlobalTPID(detectedNewestTPIDatLaunch);
-		await coexistenceHaltSafetyCheck();
+
+		//await coexistenceHaltSafetyCheck(); // Too slow? Why waiting?
+
+		log.error(consoleLogPrefix, consoleLogPrefixQoSDebug, "Im too slow, why bother waiting for my stuck mind?, OVERRIDING!")
+		ProcessingCoexistenceHold=false;
 		
 
-		result = `This is the user prompt: ${data}, Additional Context is not available!`
+		result = `${data}`
 		log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, result);
 		// Ask LLM if its require to do backbrain async operation?
 		if (store.get("params").llmdecisionMode){
@@ -2036,11 +2053,15 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 // Processing Coexistence Manager // await for the process to coexistence
 async function coexistenceHaltSafetyCheck(){
 	const PrefixSection = "[Coexistence Resource Pressure Usage]"
-
+	let countReport=0;
 	log.info(consoleLogPrefix, PrefixSection, "Checking Coexistence!")
 	while(ProcessingCoexistenceHold){
-		log.error(consoleLogPrefix, PrefixSection, "🛑 Awaiting on the time Free Async Process Queue...")
-		await delay(1000);
+		countReport += 1;
+		if (countReport % 1000 == 0){
+		log.error(consoleLogPrefix, PrefixSection, "🛑 Awaiting on the time Free Async Process Queue...");
+		countReport=0;
+		}
+		await delay(10); //10 ms delay between loop
 	}
 	if(!ProcessingCoexistenceHold){
 		log.info(consoleLogPrefix, PrefixSection, "No Processing Coexistence Halt/Hold Detected!, Executing Next Task");
@@ -2258,6 +2279,8 @@ async function externalLocalFileScraperBackgroundAgent(searchText) {
   }
 
 //const { exec } = require('child_process'); // Already defined, thus not required
+
+
 function runShellCommand(command) {
   return new Promise((resolve, reject) => {
     exec(command, (error, stdout, stderr) => {
@@ -2270,6 +2293,55 @@ function runShellCommand(command) {
   });
 }
 
+// Housekeeping runShellCommand usually used for periodic Opportunistic Maintanance doing of Adelaide Paradigm Aarchitecture
+
+function runShellCommand_controlablePromise(command) {
+    let process;
+  
+    const promise = new Promise((resolve, reject) => {
+        process = exec(command, (error, stdout, stderr) => {
+            if (error) {
+                reject(error);
+            } else {
+                resolve(stdout);
+            }
+        });
+  
+        // Listen for data events to capture stdout and stderr in real-time
+        process.stdout.on('data', (data) => {
+            console.log(`stdout: ${data}`);
+        });
+  
+        process.stderr.on('data', (data) => {
+            console.error(`stderr: ${data}`);
+        });
+    });
+  
+    return { promise, process };
+}
+
+async function executeCommandWithHousekeeping(command, immediateHaltFlag, logPrefix, completionMessage, reintegrationMessage, delayTime) {
+    const { promise, process } = runShellCommand_controlablePromise(command);
+    
+    const housekeepingMonitor = setInterval(() => {
+        if (immediateHaltFlag) {
+            log.error(logPrefix, 'Immediate halt requested. Killing the process...');
+            process.kill();
+            clearInterval(housekeepingMonitor);
+        }
+    }, 250);
+
+    try {
+        await promise;
+        clearInterval(housekeepingMonitor); // Clear the interval if the process completes normally
+        log.debug(logPrefix, completionMessage);
+    } catch (error) {
+        log.error(logPrefix, 'Command terminated with error:', error);
+    }
+
+    log.debug(logPrefix, reintegrationMessage);
+    await new Promise(resolve => setTimeout(resolve, delayTime));
+}
 
 
 async function externalLocalFileScraping(text){
@@ -2435,7 +2507,7 @@ function generateRandomNumber(min, max) {
 
 let randSeed
 let configSeed = store.get("params").seed;
-let maxRandSeedRange=9999999999999999;
+let maxRandSeedRange=25565;
 let minRandSeedRange=2;
 
 function generateRandSeed(){
@@ -2510,6 +2582,8 @@ let LLMBackendVariationSelected;
 let LLMBackendAttemptDedicatedHardwareAccel=false; //false by default but overidden if AttempAccelerate varible set to true!
 
 let basebin;
+let retrainerBinarymainLLM;
+let retrainerMergeLORABinarymainLLM;
 let basebinLLMBackendParamPassedDedicatedHardwareAccel=""; //global variable so it can be used on main LLM thread and LLMChild
 let basebinBinaryMoreSpecificPathResolve;
 function determineLLMBackend(){
@@ -2642,6 +2716,9 @@ function determineLLMBackend(){
 	log.info(`Detected LLMBackend: ${LLMBackendSelection}`);
 
 	LLMBackendVariationSelected = `LLMBackend-${LLMBackendVariationBinaryFileName}`;
+	//
+	//let retrainerBinarymainLLM;
+	//let retrainerMergeLORABinarymainLLM;
 
 	if (platform === 'win32'){
 		// Windows
@@ -2649,11 +2726,15 @@ function determineLLMBackend(){
 			log.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}.exe`;
 			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
+			retrainerBinarymainLLM = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", "finetune")}"`;
+			retrainerMergeLORABinarymainLLM = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", "export-lora")}"`;
 
 		}else if(arch === 'arm64'){
 			log.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}.exe`;
 			basebin = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "arm64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", basebinBinaryMoreSpecificPathResolve)}"`;
+			retrainerBinarymainLLM = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", "finetune")}"`;
+			retrainerMergeLORABinarymainLLM = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", "export-lora")}"`;
 
 		}else{
 			log.error(consoleLogPrefix, "Unsupported Architecture");
@@ -2663,10 +2744,14 @@ function determineLLMBackend(){
 		if(arch === "x64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
 			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "x64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
+			retrainerBinarymainLLM = `"${path.resolve(__dirname, "bin", "2_Linux", "x64", LLMBackendVariationFileSubFolder, "finetune")}"`;
+			retrainerMergeLORABinarymainLLM = `"${path.resolve(__dirname, "bin", "2_Linux", "x64", LLMBackendVariationFileSubFolder, "export-lora")}"`;
 		log.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 		}else if(arch === "arm64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
 			basebin = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
+			retrainerBinarymainLLM = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", LLMBackendVariationFileSubFolder, "finetune")}"`;
+			retrainerMergeLORABinarymainLLM = `"${path.resolve(__dirname, "bin", "2_Linux", "arm64", LLMBackendVariationFileSubFolder, "export-lora")}"`;
 		log.info(consoleLogPrefix,`LLMChild Basebinary Detection ${basebin}`);
 		}else{
 			log.error(consoleLogPrefix, "Unsupported Architecture");
@@ -2677,10 +2762,14 @@ function determineLLMBackend(){
 		if(arch === "x64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
 			basebin = `"${path.resolve(__dirname, "bin", "0_macOS", "x64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
+			retrainerBinarymainLLM = `"${path.resolve(__dirname, "bin", "0_macOS", "x64", LLMBackendVariationFileSubFolder, "finetune")}"`;
+			retrainerMergeLORABinarymainLLM = `"${path.resolve(__dirname, "bin", "0_macOS", "x64", LLMBackendVariationFileSubFolder, "export-lora")}"`;
 		log.info(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
 		}else if(arch === "arm64"){
 			basebinBinaryMoreSpecificPathResolve = `${LLMBackendVariationSelected}`;
 			basebin = `"${path.resolve(__dirname, "bin", "0_macOS", "arm64", LLMBackendVariationFileSubFolder, basebinBinaryMoreSpecificPathResolve)}"`;
+			retrainerBinarymainLLM = `"${path.resolve(__dirname, "bin", "0_macOS", "arm64", LLMBackendVariationFileSubFolder,"finetune")}"`;
+			retrainerMergeLORABinarymainLLM = `"${path.resolve(__dirname, "bin", "0_macOS", "arm64", LLMBackendVariationFileSubFolder, "export-lora")}"`;
 		log.info(consoleLogPrefix, `LLMChild Basebinary Detection ${basebin}`);
 		}else{
 			log.error(consoleLogPrefix, "Unsupported Architecture");
@@ -2702,6 +2791,7 @@ log.info(consoleLogPrefix, process.versions.modules);
 const pty = require("node-pty");
 const { Console } = require("console");
 const { isWhiteSpaceLike } = require("typescript");
+const { general_conversation } = require("./engine_component/LLM_Model_Index");
 var runningShell, currentPrompt;
 var zephyrineReady,
 	zephyrineHalfReady = false;
@@ -3324,13 +3414,14 @@ const stripAdditionalContext = (str) => {
 	return str.replace(regex, "")
 }
 
-function restart() {
+
+async function restart() { // make it async so it doesn't hold other when being hold in coexistence halt safety check
 	log.info(consoleLogPrefix, "Resetting Main LLM State and Storage!");
 	win.webContents.send("result", {
 		data: "\n\n<end>"
 	});
 	if (runningShell) runningShell.kill();
-	coexistenceHaltSafetyCheck();
+	await coexistenceHaltSafetyCheck();
 	runningShell = undefined;
 	currentPrompt = undefined;
 	zephyrineReady = false;
@@ -3341,7 +3432,6 @@ function restart() {
 	initInteraction();
 }
 
-
 //const splashScreen = document.getElementById('splash-screen-overlay'); //blocking overlay which prevent person and shows peopleexactly that the bot is loading
 let blockGUIAPIForwarding;
 let initInteractionContent;
@@ -3351,7 +3441,7 @@ let RAGPrepromptingFinished=true;
 let mainLLMFinishedGeneration=false;
 let messageRecievedOrder = 0;
 let streamCompilation = "";
-
+let slightlyFastJump=`${path.resolve(__dirname, "slightlyFastJump.state")}`;
 log.info(consoleLogPrefix, "entering primed mode")
 function initInteraction() {
 	if (runningShell) {
@@ -3365,10 +3455,10 @@ function initInteraction() {
 	interactionArrayStorage("restoreLoadPersistentMem", 0, 0, 0, 0); // Restore Array Chat context
 	ptyProcess.onData(async (res) => {
 		res = stripProgramBreakingCharacters(res);
-		log.debug("[CORE MainLLM DEBUG RAW FlipFlop I/O]:",res);
-		log.debug("[CORE MainLLM DEBUG RAW Switch]:", "zephyrineHalfReady",zephyrineHalfReady, "zephyrineReady",zephyrineReady, "blockGUIAPIForwarding", blockGUIAPIForwarding, "RAGPrepromptingFinished", RAGPrepromptingFinished);
 		//res = stripAdditionalContext(res);
 		if (process.env.ptyStreamDEBUGMode === "1"){
+		//log.debug("[CORE MainLLM DEBUG RAW FlipFlop I/O]:",res);
+		//log.debug("[CORE MainLLM DEBUG RAW Switch]:", "zephyrineHalfReady",zephyrineHalfReady, "zephyrineReady",zephyrineReady, "blockGUIAPIForwarding", blockGUIAPIForwarding, "RAGPrepromptingFinished", RAGPrepromptingFinished);
 		log.info(consoleLogPrefix, "pty Stream",`//> ${res}`);
 		log.info(consoleLogPrefix, "debug", zephyrineHalfReady, zephyrineReady);
 		}
@@ -3474,13 +3564,13 @@ function initInteraction() {
 	// Since mainLLM uses general_conversation, we can just use 
 	
 	mainLLMWritePrompt(); //decode base64, fill in the variables, and add the specific "system user assistant" prompt write into promptFileDir variable
-
+	let modelPath = specializedModelManagerRequestPath("general_conversation"); // It can automatically switch if selfMorphed model is available or only the default is available.
 	const chatArgs = `-i -ins -r "${revPrompt}" -f "${promptFileDir}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
 	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
 	// I did try to add -fa or flash attention to the mainLLM but it repeatedly answer img img img img and weird glitching UTF-8 Char
-	const paramArgs = `-m "${modelPath}" -n -1 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --rope-scaling yarn --repeat-penalty 1.5 --mirostat 2 -sm row -c 0 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -2 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --rope-scaling yarn --repeat-penalty 1.5 --prompt-cache ${slightlyFastJump} --mirostat 2 -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
-	log.info(consoleLogPrefix, chatArgs, paramArgs)
+	log.info(consoleLogPrefix, chatArgs, paramArgs, chatArgs)
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
 	startPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].instructionPrompt;
 	endRespondPrompt = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].responsePrompt;
@@ -3498,7 +3588,8 @@ ipcMain.on("message", async (_event, { data }) => {
 	currentPrompt = data;
 	if (runningShell) {
 		//zephyrineHalfReady = false;
-		// this is where the user submitted their message
+		// this is where the user Input submitted their message or Interaction
+		retrainer_Housekeeping_immediateHalt = true; // Halt any retraining!
 		//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 		log.debug(consoleLogPrefix, `Saving Data!`);
 		interactionArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
@@ -3522,7 +3613,6 @@ ipcMain.on("message", async (_event, { data }) => {
 		//BugFix multiple response and submission due to multiline submission
 		inputFetch = inputFetch.replace(/\n/g, '\\n');
 		log.debug(consoleLogPrefix, "Before Submission to mainLLM reformatting debug", inputFetch)
-
 		// also if RAG Pre-Prompt Contexting enabled we need to make sure the interface aware to not forward the response message when pre-prompting submitted 
 		if ( inputFetch != MultisubmissionSignature ){
 			if(store.get("params").ragPrePromptProcessContexting)
@@ -3666,8 +3756,6 @@ ipcMain.on("AutomataLLMMainResultReciever", (_event, resultFeedloop) => {
 	AutomataProcessing();
 });
 
-
-
 // Automata Loop Processing 1000ms 
 
 
@@ -3675,10 +3763,6 @@ ipcMain.on("AutomataLLMMainResultReciever", (_event, resultFeedloop) => {
 
 
 // -------------------------------------------------------------------------------------- Backbrain AI Multisubmission into 
-
-
-// --------------------------------------------------------------------------------------
-
 
 // Performance Latency Degradation Measure ----------------------------------------
 // Degradation factor will be from 0.0 to 1.0 (0.0 means no, degradation detected and 1.0 is complete crap unusable response javascript quality)
@@ -3694,7 +3778,6 @@ let timeDegradationSmoothingPause=0; //ms of pause on some process execution lik
 let timeDegradationPointCount=0;//1000 then reset
 let timeDegradationSmoothingExpiry=1000; // To count how long this will last you can do timeDegradationSmoothingExpiry*responseTimeSyncms = expiry on ms
 function measureResponseLatency() {
-    
 	if(respCheckpoint0 == 0 && respCheckpoint1 == 0){
 		respDegradationLatency = 0
 		respCheckpoint0=performance.now();
@@ -3713,7 +3796,6 @@ function measureResponseLatency() {
     return respDegradationLatency;
 }
 setInterval(async () => {
-	
 	const msResponse = measureResponseLatency();
 	// Measure timing shift 1000 ms with the real timer on the 
 	if (msResponse != 0){
@@ -3762,28 +3844,276 @@ setInterval(async () => {
 //---------------------------------
 
 // -----------------------------------
+
+/*
+"Project The-Unattended"
+This is the part of Retrainer or Reintegration or also known as Remorphing automatically from the thing that already learnt by the AI from RAG searching, and dumping it back and putting it into longterm memory or the mainLLM model 
+*/
+
+//retrainer_Housekeeping_immediateHalt
+let retrainer_Housekeeping_immediateHalt=false; //halt or kill any retraining or reintegration or remorphing going on with the model
+let retrainerCurrentlyRunning=false;
 let reintegrationWorkstationPath=`${path.resolve(__dirname, "engine_component", "ModelReintegration")}`;
 // We need UMA and persistentInteractionMemory Path general_conversation and system prompt L0
-let reintegrationWorkstationPath_datasetPool=`${path.resolve(__dirname, "engine_component", "ModelReintegration", "datasetPool")}`;
+let reintegrationWorkstationPath_datasetPool = `${path.resolve(reintegrationWorkstationPath, "datasetPool")}`;
+let reintegrationWorkstationPath_datasetProgress = `${path.resolve(reintegrationWorkstationPath_datasetPool, "Training_Progress.json")}`;
+//let retrainerBinarymainLLM = `${path.resolve(__dirname, "engine_component", "ModelReintegration")}`;
+let retrainerParameterBinary;
+let retrainerInteractionStgDump;
+let retrainerUMAStgDump;
+let retrainerNONSFT_UMA_DATASET = `${path.resolve(reintegrationWorkstationPath_datasetPool, "nonSFT_UMA_dataset.txt")}`
+let retrainerSFT_INTERACTION_DATASET = `${path.resolve(reintegrationWorkstationPath_datasetPool, "SFT_Interaction_Instruction_dataset.txt")}`
+let LORAQuickSave_nonSFT = `${path.resolve(reintegrationWorkstationPath, "quicksaveNonSFT")}`
+let LORAQuickSave_SFT = `${path.resolve(reintegrationWorkstationPath, "quicksaveSFT")}`
+let LORAParitionFragment_nonSFT = `${path.resolve(reintegrationWorkstationPath, "nonSFTModelFragmentPartition")}`
+let LORAParitionFragment_SFT = `${path.resolve(reintegrationWorkstationPath, "SFTModelFragmentPartition")}`
+let modelTobeRemorphed = specializedModelManagerRequestPath("general_conversation"); //So it can switch automatically if it's already evolved or remporhed it can retrain the morphed model to be better but it it doesn't exist can use the pure flesh of the mistral
+let modelRemorphedModel = availableImplementedLLMModelSpecificCategory["general_conversation"].filename_selfRemorphedRetraining
+let countingCoexistenceIdleQuota=600; // set to 300 to wait 300 if there's no coexistence Hold detected
 setInterval(async () => {
+	if (store.get("params").SaveandRestoreInteraction && !retrainerCurrentlyRunning){
 	// Opportunistic
-	log.debug(versionTheUnattendedEngineLogPrefix, "Opportunistic Re-integration Learning is activated... Polling on the Activity to find opportunity!");
+	
+	var command_retrainer;
+
+	if (!ProcessingCoexistenceHold){
+		countingCoexistenceIdleQuota=countingCoexistenceIdleQuota-1;
+	}else{
+		countingCoexistenceIdleQuota=600;
+	}
+	log.debug(versionTheUnattendedEngineLogPrefix, "Opportunistic Re-integration/Re-training Learning is activated... Polling on the Activity to find opportunity!", countingCoexistenceIdleQuota);
 	await coexistenceHaltSafetyCheck();
 	// keep rechecking if there's an Empty slot or opportunity
-	while (!ProcessingCoexistenceHold) {
-		log.debug(versionTheUnattendedEngineLogPrefix, "Allocating Coexistence Time Slot for Checking Eligibility of Retraining/Reintegration with the model");// Remember Reintegration here means fine-tuning with UMA and interaction history		
+	retrainerInteractionStgDump = ""; // Reset Content Flush before usage
+	retrainerUMAStgDump = ""; // reset content flush before usage
+	while (!ProcessingCoexistenceHold && countingCoexistenceIdleQuota <= 1) {
+		/*
+		engineProcessingProgress=0; // 0-100% just like progress
+		engineTextFeedbackProgress="";
+		*/
+		retrainerInteractionStgDump = ""; // Reset Content Flush before usage
+		retrainerUMAStgDump = ""; // reset content flush before usage
+		engineProcessingProgress=4; // 0-100% just like progress
+		engineTextFeedbackProgress="Allocating Coexistence Time Slot for Checking Eligibility of Retraining/Reintegration with the model";
+		log.debug(versionTheUnattendedEngineLogPrefix, engineTextFeedbackProgress);// Remember Reintegration here means fine-tuning with UMA and interaction history		
 		ProcessingCoexistenceHold=true; // Allocate time processing slot for Retraining or Reintegration
-		log.debug(versionTheUnattendedEngineLogPrefix, "PathDebug_MainEngine: ", reintegrationWorkstationPath, "UMA Experience (Non SFT) Stg: ", experienceStgPersistentPath, "Interaction History (SFT)", interactionStgPersistentPath);
+		retrainerCurrentlyRunning=true; //prevent from being relaunched by setInterval async cause havoc on the Fragment File I/O
+		//log.debug(versionTheUnattendedEngineLogPrefix, "PathDebug_MainEngine: ", reintegrationWorkstationPath, "UMA Experience (Non SFT) Stg: ", experienceStgPersistentPath, "Interaction History (SFT)", interactionStgPersistentPath);
+
+		// Data Auto Prep Handling
+		// Letter from Albert : I'm not an AI engineer and never able to catch up with the minimum bar of the industry, I'm soo small compare to other that's at least have IQ 100 which have better processing power than my brain, so instead of catching up. I'm just going to design with my imagination (non AI engineer) so the computer can become it's own engineer. Just like human become it's own biological engineer.
+
+		/*
+
+		UnifiedMemoryArray variable Variable -> array to \n join and dump to txt "nonSFT" (non-sft (Acts as Non-Supervised FineTuning) thing)
+
+		InteractionStg. Decouple the dictionary array interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].content 
+
+		Sidenote on data handling on the interactionStg (SFT (Supervised Finetuning))
+		make the formatting
+		//interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].role 
+		for every interactionMemoryArrayFocus read do
+		if (  interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].role == assistantName )
+			then
+		write interactionStgDumpTxt += `assistant: interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].content`
+
+		if ( interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].role == username )
+			then
+		write interactionStgDumpTxt += `user: interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].content`
+
+		For Unknown username and assistant name
+		else 
+			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].content 
+			interactionStgDumpTxt += `user: interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].content`
+
+
+		overview of the interactionStg architecture
+
+		interactionStg = [
+			{
+				"session-id": "1234567890",
+				"name": "Session Interaction Storage",
+				"data": [
+					{"content": "...[YOUR SYSTEM PROMPT]...", "role": "system", "emotion": "happy"},
+					{"content": "...[YOUR QUESTIONS]...", "role": "user", "emotion": "happy"},
+					{"content": "...[YOUR EXPECTED ANSWER]...", "role": "assistant", "emotion": "happy"}
+				]
+			}
+		]
+
+
+
+		--------------------------------------------------------------------------------------------------
+		After decoupling or reformatting done dump it to a text file
+
+		*/
+		// Extracting UMA nonSFT dataset into retrainerUMAStgDump
+		retrainerUMAStgDump = UnifiedMemoryArray.join('\n');
+		// Extracting interactionStg SFT Dataset into retrainerInteractionStgDump
+		// Loop through each session in interactionStg
+		for (let session of interactionStg) {
+			// Loop through each interaction in the session's data array
+			for (let interaction of session.data) {
+				// Read the content and role
+				let content = interaction.content;
+				let role = interaction.role;
+				
+				// Determine the format based on the role and append to retrainerInteractionStgDump
+				if (role === assistantName) {
+					retrainerInteractionStgDump += `assistant: ${content}\n`;
+				} else if (role === username) {
+					retrainerInteractionStgDump += `user: ${content}\n`;
+				} else {
+					retrainerInteractionStgDump += `user: ${content}\n`;
+				}
+			}
+		}
+		
+		//log.debug(versionTheUnattendedEngineLogPrefix, "Content Dumping Debug SFT interaction", retrainerInteractionStgDump);
+		//log.debug(versionTheUnattendedEngineLogPrefix, "Content Dumping Debug non-SFT UMA", retrainerUMAStgDump);
+		// Dump the retrained DUMP variable into the allocated location for the dataset (txt)!
+		// retrainerNONSFT_UMA_DATASET
+		//retrainerUMAStgDump
+
+		engineProcessingProgress=14; // 0-100% just like progress
+		engineTextFeedbackProgress="Refreshing Dataset...";
+		log.info(versionTheUnattendedEngineLogPrefix, engineTextFeedbackProgress)
+		fs.writeFile(retrainerNONSFT_UMA_DATASET, retrainerUMAStgDump, (err) => {
+			if (err) {
+			log.error(versionTheUnattendedEngineLogPrefix, 'Error writing file:', err);
+			}
+		});
+		// retrainerSFT_INTERACTION_DATASET
+		//retrainerInteractionStgDump
+		fs.writeFile(retrainerSFT_INTERACTION_DATASET, retrainerInteractionStgDump, (err) => {
+			if (err) {
+			log.error(versionTheUnattendedEngineLogPrefix, 'Error writing file:', err);
+			}
+		});
 		//log.debug(versionTheUnattendedEngineLogPrefix, "PathDebug_MainEngine: ", reintegrationWorkstationPath, "UMA Experience (Non SFT) Stg: ", experienceStgPersistentPath, "Interaction History (SFT)", interactionStgPersistentPath);
 		// Don't need to make copy, just make sure we fetch from the main memory of UMA and persistentInteractionMem then reinterpreted it and rewrite it to become multiline txt
 
+		engineProcessingProgress=28; // 0-100% just like progress
+		engineTextFeedbackProgress="Setting Hyperparameters for Remorphing...";
+		// Hyperparameters for SelfReintegration/Self fine-tuning/Self Training
+		log.debug(versionTheUnattendedEngineLogPrefix, "Setting up Hyperparameters for Remorphing!");
+		const epochsMax = 1; //Maximum number epochs on fineTuning/fineTraining. (default 1 because usually 1 is enough and land on loss ~4.0000)
+		const batchProc = 1; // Batch Processing of the calculation and training
+		const contextWindowTraining = 128; //Context window for capturing each phrase language chunks that can be crunched to be trained at a time. (def : 128)
+		const seedTrain = -1 ; // Random seed default ${randSeed}; but can be set as 69 or any number below 16-bit // don't use ${randSeed} since it is more than 2^16 on it's value and cause libc++abi: terminating due to uncaught exception of type std::out_of_range: stoi: out of range
+		const quicksaveRoutineCallback = 1; // def: 1 make a game-like quicksave every iteration to make sure every step is recorded and the process is ready to kill anytime to allocate the mainLLM inference purpose
+		const gradientAccumulation = 1; // Basically it's acts like a bucket that emulate bigger batch gradient on the finetraining
+		const maxBatchAdamIteration = 128; //Maximum number of Adam optimization iterations for each batch
+		const LORAAlphaScale = 4; // LORA alpha : resulting LORA scaling is alpha/r. (def 4)
+		const LORA_ranking_scale = 4; //LORA_ranking_scale: default rank. Also specifies resulting scaling together with lora-alpha. (def 4)
+		const ROPE_Freq_Base = 10000; //????? ROPE?? Roll over context?? (def optimize : 10000) Documentation needed, I'm confused -Albert
+		const AdamAlpha = 0.004; //What's Adam Alpha???
+		log.debug(versionTheUnattendedEngineLogPrefix, "Setting up Hyperparameters Remorphing done");
+		log.debug(versionTheUnattendedEngineLogPrefix, `${epochsMax} ${batchProc} ${contextWindowTraining} ${seedTrain} ${quicksaveRoutineCallback} ${gradientAccumulation} ${maxBatchAdamIteration} ${LORAAlphaScale} ${LORA_ranking_scale} ${ROPE_Freq_Base} ${AdamAlpha}`);
+		let allowedAllocNPULayer = store.get("params").hardwareLayerOffloading //Fix
+		log.debug(versionTheUnattendedEngineLogPrefix, `${retrainerNONSFT_UMA_DATASET} ${LORAParitionFragment_nonSFT} ${retrainerNONSFT_UMA_DATASET} ${allowedAllocNPULayer} ${LORAQuickSave_nonSFT} ${modelTobeRemorphed}`);
+		//retrainerBinarymainLLM should be located in the same 
+
+		//retrainerBinarymainLLM;
+		//let retrainerMergeLORABinarymainLLM;
+
+		restart(); // Kill mainLLM Process unplug from the main engine and withold for a bit because coexistence safety check are being occupied by this process
+
+		//const ptyProcess_retrainer = pty.spawn(shell, [], config);
+		//const runningShell_retrainer = ptyProcess;
+		//runningShell.write(`${retrainerBinarymainLLM} ${paramArgs} ${chatArgs}\r`); // I'm not sure what's the \"\" for but the \r is for enter in pty or terminal
+
+
+		//modelToBeRemorphed pointing to the quantized gguf model q4 to improve its knowledge and acknowledge it problem
+
+		// non-SFT Training
+
+		var housekeepingMonitor;
+		log.debug(versionTheUnattendedEngineLogPrefix, "Setting up nonSFT param!");
+		retrainerParameterBinary = `--lora-out ${LORAParitionFragment_nonSFT} --use-flash -s ${seedTrain} --separate-with-eos --separate-with-bos --epochs ${epochsMax} -c ${contextWindowTraining} -b ${batchProc} -t ${threads} --train-data ${retrainerNONSFT_UMA_DATASET} -ngl ${allowedAllocNPULayer} --save_every ${quicksaveRoutineCallback} --use-checkpointing --checkpoint-out ${LORAQuickSave_nonSFT} --checkpoint-in ${LORAQuickSave_nonSFT} --overlapping-samples --sample-start "\n" --escape --grad-acc ${gradientAccumulation} --adam-iter ${maxBatchAdamIteration} --adam-alpha ${AdamAlpha} --lora-r ${LORA_ranking_scale} --lora-alpha ${LORAAlphaScale} --rope-freq-base ${ROPE_Freq_Base} --use-flash --model_base ${modelTobeRemorphed}`;
+
+		log.debug(versionTheUnattendedEngineLogPrefix, "Compiling command...");
+		log.debug(versionTheUnattendedEngineLogPrefix, retrainerBinarymainLLM);
+		command_retrainer = `${retrainerBinarymainLLM} ${retrainerParameterBinary}`;
+		log.debug(versionTheUnattendedEngineLogPrefix, "exec subprocess Retraining Non-SFT");
+		log.debug(versionTheUnattendedEngineLogPrefix, `Retrainer or Reintegrator Exec Debug: ${command_retrainer}`);
+
+		engineProcessingProgress=28; // 0-100% just like progress
+		engineTextFeedbackProgress="Generating Non-SFT Model Fragment for Remorphing...";
+
+		await executeCommandWithHousekeeping(
+			command_retrainer,
+			retrainer_Housekeeping_immediateHalt,
+			versionTheUnattendedEngineLogPrefix,
+			'Command completed successfully.',
+			"Generating Non-SFT Partition Fragment",
+			1000
+		);
+
+		//Phase_0
+		//	Non-SFT Partition Fragment Merge into filename_selfRemorphedRetraining
+		//./usr/bin/0_macOS/arm64/llama-gguf/export-lora -m  -o RRRRRRR.bin -l ${LORAParitionFragment_nonSFT}
+		// retrainerMergeLORABinarymainLLM -m ${modelTobeRemorphed}_phaseNonSFT -o ${modelRemorphedModel} -l ${LORAParitionFragment_nonSFT}
+		retrainerParameterBinary = `-m ${modelTobeRemorphed} -o ${modelRemorphedModel} -l ${LORAParitionFragment_nonSFT} -t ${threads}`
+		command_retrainer = `${retrainerMergeLORABinarymainLLM.replace("\"\"", "")} ${retrainerParameterBinary}`;
+		log.debug(versionTheUnattendedEngineLogPrefix, "exec subprocess Lora Merging Non SFT into the main Runtime");
+		log.debug(versionTheUnattendedEngineLogPrefix, `Retrainer or Reintegrator Exec Debug: ${command_retrainer}`);
+		engineProcessingProgress=44; // 0-100% just like progress
+		engineTextFeedbackProgress="Saving State and Compiling fragment with MainLLM Model";
+
+		await executeCommandWithHousekeeping(
+			command_retrainer,
+			retrainer_Housekeeping_immediateHalt,
+			versionTheUnattendedEngineLogPrefix,
+			'Command completed successfully.',
+			"Compiling Non-SFT Fragment into the MainLLM Model",
+			1000
+		);
+
+		// SFT Training
+		retrainerParameterBinary = `--lora-out ${LORAParitionFragment_SFT} --use-flash -s ${seedTrain} --separate-with-eos --separate-with-bos --epochs ${epochsMax} -c ${contextWindowTraining} -b ${batchProc} -t ${threads} --train-data ${retrainerSFT_INTERACTION_DATASET} -ngl ${allowedAllocNPULayer} --save_every ${quicksaveRoutineCallback} --use-checkpointing --checkpoint-out ${LORAQuickSave_SFT} --checkpoint-in ${LORAQuickSave_SFT} --overlapping-samples --sample-start "\n" --escape --grad-acc ${gradientAccumulation} --adam-iter ${maxBatchAdamIteration} --adam-alpha ${AdamAlpha} --lora-r ${LORA_ranking_scale} --lora-alpha ${LORAAlphaScale} --rope-freq-base ${ROPE_Freq_Base} --use-flash --model_base ${modelTobeRemorphed}`;
+
+		command_retrainer = `${retrainerBinarymainLLM} ${retrainerParameterBinary}`;
+		log.debug(versionTheUnattendedEngineLogPrefix, "exec subprocess Retraining SFT");
+		log.debug(versionTheUnattendedEngineLogPrefix, `Retrainer or Reintegrator Exec Debug: ${command_retrainer}`);
+
+		engineProcessingProgress=69; // 0-100% just like progress
+		engineTextFeedbackProgress="Saving State and Compiling fragment with MainLLM Model";
+
+		await executeCommandWithHousekeeping(
+			command_retrainer,
+			retrainer_Housekeeping_immediateHalt,
+			versionTheUnattendedEngineLogPrefix,
+			'Command completed successfully.',
+			"Generating SFT Partition Fragment",
+			1000
+		);
+
+		//Phase_1
+		// SFT Partition Fragment Merge into filename_selfRemorphedRetraining
+		// retrainerMergeLORABinarymainLLM -m ${modelTobeRemorphed}_phaseNonSFT -o ${modelRemorphedModel} -l ${LORAParitionFragment_SFT}
+		retrainerParameterBinary = `-m ${modelTobeRemorphed} -o ${modelRemorphedModel} -l ${LORAParitionFragment_nonSFT} -t ${threads}`
+		command_retrainer = `${retrainerMergeLORABinarymainLLM.replace("\"\"", "")} ${retrainerParameterBinary}`;
+		log.debug(versionTheUnattendedEngineLogPrefix, "exec subprocess Lora Merging SFT into the mainLLM Runtime");
+		log.debug(versionTheUnattendedEngineLogPrefix, `Retrainer or Reintegrator Exec Debug: ${command_retrainer}`);
+		await executeCommandWithHousekeeping(
+			command_retrainer,
+			retrainer_Housekeeping_immediateHalt,
+			versionTheUnattendedEngineLogPrefix,
+			'Command completed successfully.',
+			"Compiling SFT Fragment into the MainLLM Model",
+			1000
+		);
+
 
 		ProcessingCoexistenceHold=false; // deAllocate time processing slot for Retraining or Reintegration for the program to run
+		retrainerCurrentlyRunning=false;
+		countingCoexistenceIdleQuota=600;
 		await delay(10000); // Check every 10 seconds
 	}
-	// Kill the process instantly assuming it autosave frequently
-	
-}, 300000); //Check every 5 minutes or 300 seconds
+	retrainer_Housekeeping_immediateHalt=false; //reset the immediate halt flag
+}
+}, 1000); //Check every 1 minutes or 60 seconds
 
 // ------------------------------------
 
@@ -3880,6 +4210,14 @@ ipcMain.on("saverestoreinteraction", (_event, value) => {
 		saverestoreinteraction: value
 	});
 });
+
+ipcMain.on("selfReintegrate", (_event, value) => {
+	store.set("params", {
+		...store.get("params"),
+		selfReintegrate: value
+	});
+});
+
 
 ipcMain.on("throwInitResponse", (_event, value) => {
 	store.set("params", {
