@@ -1,4 +1,3 @@
-usr/bin/**/*_*
 node_modules
 package-lock.json
 yarn.lock
@@ -41,3 +40,6 @@ usr/vendor/**
 usr/bin/**/*make*
 *.exp
 !example.exp
+usr/bin/**/*_*
+usr/engine_component/ModelReintegration/datasetPool/nonSFT_UMA_dataset.txt
+usr/engine_component/ModelReintegration/datasetPool/SFT_Interaction_Instruction_dataset.txt
