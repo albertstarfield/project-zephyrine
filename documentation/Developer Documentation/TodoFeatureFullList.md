@@ -24,12 +24,18 @@
 - [x] New JSON interaction database that handles emotion sentiment analysis, more data, side of interaction, and multiple SessionID
 - [x] Multi-submission input lifelike input rather than flip-flop wait for response type of classic interaction.
 - [x] Interaction Experience UMA MLCMCF Sideloading Subsystem.
+- [x] Auto Idle auto general Model Remorphing (Inserting new knowledge nonSFT and SFT Fragment Variant), specLM or specialized Language Model will NOT recieve this treatment!.
+#### High Prioirity
+- [ ] LLaVa-Next Implementation LLMChild Framebuffer Capture and Camera Capture
+- [ ] Expressive Audio Input and Output Interactive Whisper cpp 
+- [ ] Auto Idle mainLLM Suspension to save memory and resources
+- [ ] OpenAI API Implementation Bridge for Quality Testing standard of the engine model (Scientific Research Requirement using Standard Testing Method).
+
+#### Low Priority
 - [ ] Base Models (Not-ReMorph by Zephyrine) into Blockchain type storage IPFS, Compensating the need to use HuggingFace due to random downtime of HF centralized model hub and to compensate post-apocalyptic scenario where internet mostly cut off.
 - [ ] Implementing Native Windows Support.
-- [ ] Auto Idle auto general Model Remorphing (Inserting new knowledge while discarding the old one).
-- [ ] Auto Idle mainLLM Suspension to save memory and resources
-- [ ] LLaVa-Next Implementation LLMChild Framebuffer Capture and Camera Capture
-- [ ] OpenAI API Implementation Bridge for Quality Testing standard of the engine model (Scientific Research Requirement using Standard Testing Method).
+
+
 - [ ] Autoexec for generated command Integrating an Environment/Computer Interaction Pipeline, facilitating the execution of AI-generated commands and interacting with Hardware. (OS Adaptive (*nix Bash and Windows Powershell)).
 - [ ] Implementing multi language support with Frontend Automatic Translation and Backend EN Processing.
 - [ ] AudioLM Integration with Adelaide Paradigm   
