@@ -2152,6 +2152,7 @@ class ExternalLocalFileScraperBackgroundAgent {
 
     async processDocument(filePath) {
         try {
+			await coexistenceHaltSafetyCheck(); // Just to make sure no locking up while interacting
             const extension = path.extname(filePath).toLowerCase();
             if (['.pdf', '.docx', '.doc', '.odt', '.ppt', '.pptx'].includes(extension)) {
 				// for formatted document
@@ -3914,7 +3915,9 @@ setInterval(async () => {
 	}else{
 		countingCoexistenceIdleQuota=600;
 	}
+	if(countingCoexistenceIdleQuota % 100 == 0){
 	log.debug(versionTheUnattendedEngineLogPrefix, "Opportunistic Reintegration Counting down:", countingCoexistenceIdleQuota, "s");
+	}
 	retrainerInteractionStgDump = ""; // Reset Content Flush before usage
 	retrainerUMAStgDump = ""; // reset content flush before usage
 	if (countingCoexistenceIdleQuota <= 300){// Invoke the file scouring and data set scouring mechanism on Adelaide Paradigm on the externalLocalFileScraping
