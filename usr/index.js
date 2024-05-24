@@ -505,7 +505,7 @@ let mainLLM_ModelCategoryName;
 let mainLLM_systemPromptInst;
 let mainLLM_startPromptInst;
 let mainLLM_endRespondPrompt;
-let promptFileDir=`${path.resolve(__dirname, "bin", promptFile)}`
+let promptFileDir=`${path.resolve(__dirname, "bin", promptFile)}`;
 function mainLLMWritePrompt(){
 	// for mainLLM thread
 	// Write the main prompt personality of Adelaide/Zephy from the initStage1 and combine it with the main model json
@@ -839,8 +839,9 @@ let outputLLMChild;
 let filteredOutput;
 let definedSeed_LLMchild=0;
 let childLLMResultNotPassed=true;
-let childLLMDebugResultMode=false;
+let childLLMDebugResultMode=true;
 let llmChildfailureCountSum=0;
+let LLMChildPromptSpillDir=`${path.resolve(__dirname, "bin", "llmchildDynamicPromptSpill.tmp")}`;
 async function hasAlphabet(str) { 
 	//log.info(consoleLogPrefix, "hasAlphabetCheck called", str);
 	// Loop through each character of the string
@@ -991,7 +992,6 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		startPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].instructionPrompt;
 		endRespondPrompt = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].responsePrompt;
 		//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "varcust done");
-
 	}
 	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", currentUsedLLMChildModel, "custom startPromptInst endRespondPrompt", startPromptInst, endRespondPrompt, llmchildsystemPromptInst)
 
@@ -1009,14 +1009,40 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		allowedAllocNPULayer=0;
 		allowedAllocNPUDraftLayer=0;
 	}
-	LLMChildParam = `-p \" ${startPromptInst} ${prompt} \n ${endRespondPrompt}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -td ${threads} -tb ${threads} --prompt-cache-all --prompt-cache ${precalculatedLLMChildslightlyFastJump} -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // from -n ${lengthgen} we go -n -2
 
+	// Spill Prompt into a file so it doesn't mess up with pty parameter
+	const promptSpillAccumulated = `${startPromptInst}\n ${prompt} \n ${endRespondPrompt}`
+	log.debug(consoleLogPrefix, "Spilling LLMChild Prompting to File", LLMChildPromptSpillDir);
+	fs.writeFile(LLMChildPromptSpillDir, promptSpillAccumulated, (err) => {
+		if (err) {
+		log.info(consoleLogPrefix, 'Error writing file:', err);
+		}
+	});
+
+	function countTokens(str){
+		// Regular expression to match words and punctuation
+		const regex = /\b\w+('[\w]+)?\b|[.,!?;:()]/g;
+		
+		// Match the tokens
+		const tokens = str.match(regex);
+	
+		// Return the number of tokens
+		return tokens ? tokens.length : 0;
+	}
+	 // putting context with lengthGen*16 avoid issue with eval failures due to context exhaustion
+	const contextMultiplierFactor=10;  //adjust it as needed to prevent context exhaustion, But remember the more you increase this factor the less efficient the model will be on the memory usage! You need to think about the context that it will generate or the overhead context (I did try x4 factor and the context is exhausted)
+	const requiredContextFrame=(countTokens(promptSpillAccumulated) + lengthGen) * contextMultiplierFactor;
+	LLMChildParam = `-f ${LLMChildPromptSpillDir} -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} -c ${requiredContextFrame} --threads ${threads} -td ${threads} -tb ${threads} --prompt-cache-all --prompt-cache ${precalculatedLLMChildslightlyFastJump} -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // from -n ${lengthgen} we go -n -2
+	
+	//LLMChildParam = `-p \" ${startPromptInst} ${prompt} \n ${endRespondPrompt}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -td ${threads} -tb ${threads} --prompt-cache-all --prompt-cache ${precalculatedLLMChildslightlyFastJump} -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // from -n ${lengthgen} we go -n -2
 	command = `${basebin} ${LLMChildParam}`;
+	log.debug(consoleLogPrefix, "LLMChild pty Invocation...", command);
 	try {
 	await coexistenceHaltSafetyCheck();
 	ProcessingCoexistenceHold=true;
 	outputLLMChild = await runShellCommand(command);
 	ProcessingCoexistenceHold=false;
+	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
 	if(childLLMDebugResultMode){
 		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ", 'LLMChild Raw output:', outputLLMChild);
 	}
@@ -2054,7 +2080,7 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 async function coexistenceHaltSafetyCheck(){
 	const PrefixSection = "[Coexistence Resource Pressure Usage]"
 	let countReport=0;
-	log.info(consoleLogPrefix, PrefixSection, "Checking Coexistence!")
+	//log.debug(consoleLogPrefix, PrefixSection, "Checking Coexistence!")
 	while(ProcessingCoexistenceHold){
 		countReport += 1;
 		if (countReport % 1000 == 0){
@@ -2067,7 +2093,7 @@ async function coexistenceHaltSafetyCheck(){
 		}
 	}
 	if(!ProcessingCoexistenceHold){
-		log.info(consoleLogPrefix, PrefixSection, "No Processing Coexistence Halt/Hold Detected!, Executing Next Task");
+		//log.debug(consoleLogPrefix, PrefixSection, "No Processing Coexistence Halt/Hold Detected!, Executing Next Task");
 	}
 }
 
@@ -2166,7 +2192,7 @@ class ExternalLocalFileScraperBackgroundAgent {
                 UnifiedMemoryArray.push(content);
 				//log.info(consoleLogPrefix, "📖 Debug",UnifiedMemoryArray);
                 this.documentsLearned++;
-                //log.info(consoleLogPrefix,`📖 Debug Learning raw text document: ${filePath}`);
+                log.info(consoleLogPrefix,`📖 Learning raw text document: ${filePath}`);
             } else {
 				//log.info(consoleLogPrefix,`📖 Debug ⛔ Skipping this Documents: ${filePath}, not yet supported!`);
 			}
@@ -3420,6 +3446,148 @@ const stripAdditionalContext = (str) => {
 }
 
 
+class FeatherFeetOptimizer {
+    constructor() {
+        this.bestX = null; // Gotta catch 'em all! Or at least the best X.
+        this.bestY = null; // Best Y? Why not!
+        this.bestZ = Infinity; // Infinity and beyond! No, we want below 200.
+        this.samples = []; // Collecting samples like a Pokemon trainer.
+    }
+
+    // Function to simulate the evaluation of Z based on X and Y
+    evaluate(X, Y) {
+        return new Promise((resolve) => {
+            setTimeout(() => {
+                // Simulated Z value, replace with actual evaluation logic
+                const Z = 200 - (0.001 * (X - 4096) ** 2 + 0.05 * (Y - 16) ** 2);
+                resolve(Z); // Time to resolve the Z mystery.
+            }, 5000); // 5-second timeout. Enough time for a coffee break ☕
+        });
+    }
+
+    // Function to collect initial samples
+    async collectSamples() {
+        const initialSamples = [
+            { X: 2048, Y: 0 }, // The starting lineup!
+            { X: 4096, Y: 16 }, // The dream team!
+            { X: 12000, Y: 64 }, // Go big or go home.
+            { X: 8192, Y: 32 } // Middle ground, because why not?
+        ];
+
+        for (const sample of initialSamples) {
+            const Z = await this.evaluate(sample.X, sample.Y); // Evaluate like a pro.
+            this.samples.push({ ...sample, Z }); // Push it real good.
+            if (Z < this.bestZ) { // Found a new champion!
+                this.bestX = sample.X;
+                this.bestY = sample.Y;
+                this.bestZ = Z;
+            }
+        }
+    }
+
+    // Function to fit a quadratic model
+    fitModel() {
+        const Xs = this.samples.map(s => s.X); // Extracting X like a surgeon.
+        const Ys = this.samples.map(s => s.Y); // Extracting Y, careful now.
+        const Zs = this.samples.map(s => s.Z); // Z is the prize!
+
+        // Fit a quadratic model Z = a + bX + cY + dX^2 + eXY + fY^2
+        // Here, we use the normal equations method to find the coefficients
+        const X = Xs.map((x, i) => [1, x, Ys[i], x ** 2, x * Ys[i], Ys[i] ** 2]);
+        const Xt = this.transpose(X); // Flip it like a pancake.
+        const XtX = this.multiplyMatrices(Xt, X); // Matrix multiplication, nerd level 9000.
+        const XtZ = this.multiplyMatrices(Xt, Zs.map(z => [z])); // More matrix magic.
+        const coefficients = this.solveLinearSystem(XtX, XtZ); // Solve it like Sherlock.
+
+        return coefficients.flat(); // Flattening like a pancake. Yum.
+    }
+
+    // Function to find the optimal X and Y based on the model
+    findOptimal(coefficients) {
+        const [a, b, c, d, e, f] = coefficients; // The A-Team, but coefficients.
+
+        // Solve the partial derivatives to find the minimum
+        // ∂Z/∂X = b + 2dX + eY = 0
+        // ∂Z/∂Y = c + eX + 2fY = 0
+
+        const X_opt = (2 * f * b - e * c) / (e ** 2 - 4 * d * f); // Solving like a boss.
+        const Y_opt = (2 * d * c - e * b) / (e ** 2 - 4 * d * f); // More solving, more winning.
+
+        return { X: X_opt, Y: Y_opt }; // Behold the optimal duo!
+    }
+
+    // Matrix operations
+    transpose(matrix) {
+        return matrix[0].map((_, colIndex) => matrix.map(row => row[colIndex])); // Flip it!
+    }
+
+    multiplyMatrices(A, B) {
+        const result = Array.from({ length: A.length }, () => Array(B[0].length).fill(0)); // Matrix init, engage!
+        for (let i = 0; i < A.length; i++) {
+            for (let j = 0; j < B[0].length; j++) {
+                for (let k = 0; k < B.length; k++) {
+                    result[i][j] += A[i][k] * B[k][j]; // Math explosion! 💥
+                }
+            }
+        }
+        return result; // Matrix multiplication complete. High five!
+    }
+
+    solveLinearSystem(A, B) {
+        // Using Gaussian Elimination for simplicity
+        const n = A.length; // Size matters.
+        for (let i = 0; i < n; i++) {
+            let maxRow = i;
+            for (let k = i + 1; k < n; k++) {
+                if (Math.abs(A[k][i]) > Math.abs(A[maxRow][i])) {
+                    maxRow = k; // Swapping like a swap meet.
+                }
+            }
+            [A[i], A[maxRow]] = [A[maxRow], A[i]];
+            [B[i], B[maxRow]] = [B[maxRow], B[i]]; // Swapped!
+
+            for (let k = i + 1; k < n; k++) {
+                const c = -A[k][i] / A[i][i]; // The elimination game.
+                for (let j = i; j < n; j++) {
+                    if (i === j) {
+                        A[k][j] = 0; // Zeroing out, like a ninja.
+                    } else {
+                        A[k][j] += c * A[i][j]; // Math magic continues.
+                    }
+                }
+                B[k][0] += c * B[i][0]; // Adjusting B like a pro.
+            }
+        }
+
+        const x = Array(n).fill(0); // The solution array.
+        for (let i = n - 1; i >= 0; i--) {
+            x[i] = B[i][0] / A[i][i]; // Back-solving, because we can.
+            for (let k = i - 1; k >= 0; k--) {
+                B[k][0] -= A[k][i] * x[i]; // Adjusting like a Jedi.
+            }
+        }
+        return x; // Solved, because we're awesome.
+    }
+
+    async optimize() {
+        await this.collectSamples(); // Gotta catch 'em all! Samples, that is.
+
+        const coefficients = this.fitModel(); // Fitting the model like a glove.
+        const { X: optimalX, Y: optimalY } = this.findOptimal(coefficients); // Optimal values, here we come.
+
+        if (optimalX >= 2048 && optimalX <= 12000 && optimalY >= 0 && optimalY <= 64) {
+            console.log(`Optimal values found: X = ${optimalX.toFixed(2)}, Y = ${optimalY.toFixed(2)}`); // We did it!
+        } else {
+            console.log('Optimal values are out of the specified range.'); // Oops, not in range.
+        }
+    }
+}
+
+/*
+const optimizer = new FeatherFeetOptimizer();
+optimizer.optimize();
+*/
+
 async function restart() { // make it async so it doesn't hold other when being hold in coexistence halt safety check
 	log.info(consoleLogPrefix, "Resetting Main LLM State and Storage!");
 	framebufferBridgeUI.webContents.send("result", {
@@ -3436,6 +3604,8 @@ async function restart() { // make it async so it doesn't hold other when being 
 	interactionArrayStorage("reset", 0, 0, 0, 0); // fill it with 0 0 0 0 just to fill in nonsensical data since its only require reset command to execute the command
 	initInteraction();
 }
+
+
 
 //const splashScreen = document.getElementById('splash-screen-overlay'); //blocking overlay which prevent person and shows peopleexactly that the bot is loading
 let blockGUIAPIForwarding;
@@ -3462,10 +3632,8 @@ function initInteraction() {
 		res = stripProgramBreakingCharacters(res);
 		//res = stripAdditionalContext(res);
 		if (process.env.ptyStreamDEBUGMode === "1"){
-		//log.debug("[CORE MainLLM DEBUG RAW FlipFlop I/O]:",res);
-		//log.debug("[CORE MainLLM DEBUG RAW Switch]:", "zephyrineHalfReady",zephyrineHalfReady, "zephyrineReady",zephyrineReady, "blockGUIAPIForwarding", blockGUIAPIForwarding, "RAGPrepromptingFinished", RAGPrepromptingFinished);
-		log.info(consoleLogPrefix, "pty Stream",`//> ${res}`);
-		log.info(consoleLogPrefix, "debug", zephyrineHalfReady, zephyrineReady);
+		log.debug("[CORE MainLLM DEBUG RAW FlipFlop I/O] >",res);
+		log.debug("[CORE MainLLM DEBUG RAW Switch]:", "zephyrineHalfReady",zephyrineHalfReady, "zephyrineReady",zephyrineReady, "blockGUIAPIForwarding", blockGUIAPIForwarding, "RAGPrepromptingFinished", RAGPrepromptingFinished);
 		}
 		if ((res.includes("invalid model file") || res.includes("failed to open") || (res.includes("failed to load model")) && res.includes("main: error: failed to load model")) || res.includes("command buffer 0 failed with status 5") /* Metal ggml ran out of memory vram */ || res.includes ("invalid magic number") || res.includes ("out of memory")) {
 			if (runningShell) runningShell.kill();
@@ -3835,7 +4003,7 @@ setInterval(async () => {
 		degradedFactor=timeInnacDegradationms/targetDegradationMaxms
 		const viewableFactorPercent = degradedFactor.toFixed(3) * 100
 		responsecheckLatencyLoopCheck+=1;
-		if(responsecheckLatencyLoopCheck % 1 == 0){
+		if(responsecheckLatencyLoopCheck % 10 == 0){
 		log.debug(consoleLogPrefix, "Adelaide Engine Time Response Degradation Percent:", viewableFactorPercent, "%");
 		log.debug(consoleLogPrefix, "Adelaide Engine Time Degradation Smoothing:", timeDegradationSmoothingPause , "ms");
 		responsecheckLatencyLoopCheck=0;
@@ -3915,7 +4083,7 @@ setInterval(async () => {
 	}else{
 		countingCoexistenceIdleQuota=600;
 	}
-	if(countingCoexistenceIdleQuota % 100 == 0){
+	if((countingCoexistenceIdleQuota % 100 == 0) && !ProcessingCoexistenceHold){
 	log.debug(versionTheUnattendedEngineLogPrefix, "Opportunistic Reintegration Counting down:", countingCoexistenceIdleQuota, "s");
 	}
 	retrainerInteractionStgDump = ""; // Reset Content Flush before usage
