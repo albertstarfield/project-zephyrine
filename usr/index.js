@@ -92,7 +92,7 @@ let win;
 // Hosting internal server
 
 function createWindow() {
-	win = new BrowserWindow({
+	framebufferBridgeUI = new BrowserWindow({
 		width: 1200,
 		height: 810,
 		minWidth: 780,
@@ -107,10 +107,10 @@ function createWindow() {
 		titleBarStyle: "hidden",
 		icon: platform == "darwin" ? path.join(__dirname, "icon", "mac", "icon.icns") : path.join(__dirname, "icon", "png", "128x128.png")
 	});
-	require("@electron/remote/main").enable(win.webContents);
+	require("@electron/remote/main").enable(framebufferBridgeUI.webContents);
 
 	// Load your GUI's URL
-	win.loadFile(path.resolve(__dirname, "src", "index.html"));
+	framebufferBridgeUI.loadFile(path.resolve(__dirname, "src", "index.html"));
 	
 	// after main window and main process initialize the electron core send the global.username and global.assistantName to the global bot
 	win.setMenu(null);
