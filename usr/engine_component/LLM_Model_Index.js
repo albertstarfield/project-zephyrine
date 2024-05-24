@@ -27,7 +27,7 @@ const availableImplementedLLMModelSpecificCategory = {
 	// Since mixtral exists we don't need the other model, for now. However later on we'll going to accept willy model later on
     // Vision LLM Model Processed
 	VisionLLM : {
-		downloadLink: "https://huggingface.co/jartine/llava-v1.5-7B-GGUF/resolve/main/llava-v1.5-7b-Q2_K.gguf?download=true", //change this later on
+		downloadLink: "https://huggingface.co/Mozilla/llava-v1.5-7b-llamafile/resolve/main/llava-v1.5-7b-Q4_K.gguf?download=true", //change this later on
 		filename: "specLM_Vision_LLaVa.bin",
 		CategoryDescription: "LLM That can describe image or framebuffer",
 		ParamSize: "7B",
