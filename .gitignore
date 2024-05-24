@@ -53,3 +53,6 @@ usr/engine_component/ModelReintegration/*quicksave*
 usr/precalculatedLLMChildslightlyFastJump.state
 usr/raw_smallLanguageModel.bin
 usr/slightlyFastJump.state
+usr/evolved_smallLanguageModel.bin
+usr/Penalties
+usr/mirostat
