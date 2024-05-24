@@ -113,15 +113,15 @@ function createWindow() {
 	framebufferBridgeUI.loadFile(path.resolve(__dirname, "src", "index.html"));
 	
 	// after main window and main process initialize the electron core send the global.username and global.assistantName to the global bot
-	win.setMenu(null);
-	// win.webContents.openDevTools();
+	framebufferBridgeUI.setMenu(null);
+	// framebufferBridgeUI.webContents.openDevTools();
 	//Monitor User Interaction, and if its idle then throttle back to 1 fps after 2 seconds inactivity
 	// Set the initial frame rate to full FPS
     let isIdle = false;
 
     // Function to set frame rate
     const setFrameRate = (fps) => {
-        win.webContents.executeJavaScript(`document.body.style.setProperty('--fps', '${fps}')`);
+        framebufferBridgeUI.webContents.executeJavaScript(`document.body.style.setProperty('--fps', '${fps}')`);
     };
 }
 
@@ -164,8 +164,8 @@ function delay(ms) {
 
 app.on("second-instance", () => {
 	if (win) {
-		if (win.isMinimized()) win.restore();
-		win.focus();
+		if (framebufferBridgeUI.isMinimized()) framebufferBridgeUI.restore();
+		framebufferBridgeUI.focus();
 	}
 });
 
@@ -198,45 +198,45 @@ if (sysThreads == 4) {
 
 // username
 ipcMain.on("username", () => {
-	win.webContents.send("username", {
+	framebufferBridgeUI.webContents.send("username", {
 		data: username
 	});
 });
 // Assistant name is one of the operating system part
 ipcMain.on("assistantName", () => {
-	win.webContents.send("assistantName", {
+	framebufferBridgeUI.webContents.send("assistantName", {
 		data: assistantName
 	});
 });
 
 ipcMain.on("cpuUsage", () => {
 	osUtil.cpuUsage(function (v) {
-		win.webContents.send("cpuUsage", { data: v });
+		framebufferBridgeUI.webContents.send("cpuUsage", { data: v });
 	});
 });
 
 ipcMain.on("timingDegradationCheckFactor", () => {
-	win.webContents.send("timingDegradationFactorReciever_renderer", { data: degradedFactor });
+	framebufferBridgeUI.webContents.send("timingDegradationFactorReciever_renderer", { data: degradedFactor });
 });
 
 
 ipcMain.on("timingDegradationCheck", () => {
-	win.webContents.send("timingDegradationReciever_renderer", { data: timeInnacDegradationms });
+	framebufferBridgeUI.webContents.send("timingDegradationReciever_renderer", { data: timeInnacDegradationms });
 });
 
 
 ipcMain.on("UMACheckUsage", () => {
-	win.webContents.send("UMAAllocSizeStatisticsGB", { data: UMAGBSize });
+	framebufferBridgeUI.webContents.send("UMAAllocSizeStatisticsGB", { data: UMAGBSize });
 });
 
 ipcMain.on("BackBrainQueueCheck", () => {
 	const BackBrainQueueLength = BackBrainQueue.length;
-	win.webContents.send("BackBrainQueueCheck_render", { data: BackBrainQueueLength });
+	framebufferBridgeUI.webContents.send("BackBrainQueueCheck_render", { data: BackBrainQueueLength });
 });
 
 ipcMain.on("BackBrainQueueResultCheck", () => {
 	const BackBrainResultQueueLength = BackBrainResultQueue.length;
-	win.webContents.send("BackBrainQueueResultCheck_render", { data: BackBrainResultQueueLength });
+	framebufferBridgeUI.webContents.send("BackBrainQueueResultCheck_render", { data: BackBrainResultQueueLength });
 });
 
 // Function to gather system information
@@ -274,7 +274,7 @@ function getSystemInfo() {
 
 ipcMain.on("SystemBackplateHotplugCheck", () => {
 	const recievedDataIndexJSGetSystemInfo = getSystemInfo();
-	win.webContents.send("systemBackPlateInfoView", { data: recievedDataIndexJSGetSystemInfo });
+	framebufferBridgeUI.webContents.send("systemBackPlateInfoView", { data: recievedDataIndexJSGetSystemInfo });
 });
 
 ipcMain.on("emotioncurrentDebugInterfaceFetch", () => {
@@ -284,7 +284,7 @@ ipcMain.on("emotioncurrentDebugInterfaceFetch", () => {
 	} else {
 		DebugInterfaceCaughtInfo = emotionalEvaluationResult;
 	}
-	win.webContents.send("emotionDebugInterfaceStatistics", { data: DebugInterfaceCaughtInfo }); //invoke emotionDebugInterfaceStatistics ipcRenderer on renderer.js
+	framebufferBridgeUI.webContents.send("emotionDebugInterfaceStatistics", { data: DebugInterfaceCaughtInfo }); //invoke emotionDebugInterfaceStatistics ipcRenderer on renderer.js
 });
 
 let loadAvg=[0.0001, 0.0001, 0.0001]; // for the ipcMain call hardwarestressload will return the percentage from (loadAvg/totalthread)*100
@@ -317,51 +317,54 @@ function getCurrentSystemLoad() {
 
 const requestLoadAvg = getCurrentSystemLoad();
 const currentSystemStressCalc = Math.round((loadAvg[0] / totalAvailableThreads) * 100);
-win.webContents.send("hardwareStressLoad", { data : currentSystemStressCalc });
+framebufferBridgeUI.webContents.send("hardwareStressLoad", { data : currentSystemStressCalc });
 });
+
+
+
 
 ipcMain.on("internalThoughtProgressGUI", () => {
 		const v = engineProcessingProgress;
-		win.webContents.send("internalTEProgress", {data: v});
-		//win.webContents.send("internalTEProgress", data); // You can't send IPC just using data you have to wrap it using {data : v}
+		framebufferBridgeUI.webContents.send("internalTEProgress", {data: v});
+		//framebufferBridgeUI.webContents.send("internalTEProgress", data); // You can't send IPC just using data you have to wrap it using {data : v}
 });
 
 ipcMain.on("internalThoughtProgressTextGUI", () => {
 	const v = engineTextFeedbackProgress;
-	win.webContents.send("internalTEProgressText", {data: v});
+	framebufferBridgeUI.webContents.send("internalTEProgressText", {data: v});
 	engineTextFeedbackProgress = ""; // Reset and empty out after read
-	//win.webContents.send("internalTEProgress", data); // You can't send IPC just using data you have to wrap it using {data : v}
+	//framebufferBridgeUI.webContents.send("internalTEProgress", data); // You can't send IPC just using data you have to wrap it using {data : v}
 });
 
 ipcMain.on("cpuFree", () => {
 	osUtil.cpuFree(function (v) {
-		win.webContents.send("cpuFree", { data: v });
+		framebufferBridgeUI.webContents.send("cpuFree", { data: v });
 	});
 });
 
 ipcMain.on("cpuCount", () => {
 	totalAvailableThreads = osUtil.cpuCount()
-	win.webContents.send("cpuCount", {
+	framebufferBridgeUI.webContents.send("cpuCount", {
 		data: totalAvailableThreads
 	});
 });
 ipcMain.on("threadUtilized", () => {
-	win.webContents.send("threadUtilized", {
+	framebufferBridgeUI.webContents.send("threadUtilized", {
 		data: threads
 	});
 });
 ipcMain.on("freemem", () => {
-	win.webContents.send("freemem", {
+	framebufferBridgeUI.webContents.send("freemem", {
 		data: Math.round(osUtil.freemem() / 102.4) / 10
 	});
 });
 ipcMain.on("totalmem", () => {
-	win.webContents.send("totalmem", {
+	framebufferBridgeUI.webContents.send("totalmem", {
 		data: osUtil.totalmem()
 	});
 });
 ipcMain.on("os", () => {
-	win.webContents.send("os", {
+	framebufferBridgeUI.webContents.send("os", {
 		data: platform
 	});
 });
@@ -498,6 +501,10 @@ let ProcessingCoexistenceHold=false;
 // Note : The developer need to find out how to load modelPath var before Legacy LoadPathSection being called which break the automation and return null for the modelPath and never able to proceed
 //var modelPath = store.get("modelPath"); // This is legacy code from the original program code, where the user need to manually input the modelPath at startup rather than automatically download
 const promptFile = "universalBinarySystemPrompt.txt";
+let mainLLM_ModelCategoryName;
+let mainLLM_systemPromptInst;
+let mainLLM_startPromptInst;
+let mainLLM_endRespondPrompt;
 let promptFileDir=`${path.resolve(__dirname, "bin", promptFile)}`
 function mainLLMWritePrompt(){
 	// for mainLLM thread
@@ -506,10 +513,10 @@ function mainLLMWritePrompt(){
 	// then newline
 	// add
 	// 
-	const mainLLM_ModelCategoryName = "general_conversation"
-	const mainLLM_systemPromptInst = availableImplementedLLMModelSpecificCategory[mainLLM_ModelCategoryName].systemPrompt;
-	const mainLLM_startPromptInst = availableImplementedLLMModelSpecificCategory[mainLLM_ModelCategoryName].instructionPrompt;
-	const mainLLM_endRespondPrompt = availableImplementedLLMModelSpecificCategory[mainLLM_ModelCategoryName].responsePrompt;
+	mainLLM_ModelCategoryName = "general_conversation"
+	mainLLM_systemPromptInst = availableImplementedLLMModelSpecificCategory[mainLLM_ModelCategoryName].systemPrompt;
+	mainLLM_startPromptInst = availableImplementedLLMModelSpecificCategory[mainLLM_ModelCategoryName].instructionPrompt;
+	mainLLM_endRespondPrompt = availableImplementedLLMModelSpecificCategory[mainLLM_ModelCategoryName].responsePrompt;
 	log.debug(consoleLogPrefix, "Building promptSpill bucket");
 	log.debug(consoleLogPrefix, "Building promptSpill bucket adding component", initStage1);
 	log.debug(consoleLogPrefix, "Building promptSpill bucket adding component", mainLLM_systemPromptInst, mainLLM_startPromptInst, mainLLM_endRespondPrompt);
@@ -527,11 +534,11 @@ function mainLLMWritePrompt(){
 function checkModelPath() {
 	log.info(consoleLogPrefix, "Checking Main General Model...")
 	if (fs.existsSync(path.resolve(modelPath))) {
-		win.webContents.send("modelPathValid", { data: true });
+		framebufferBridgeUI.webContents.send("modelPathValid", { data: true });
 		log.info(`${consoleLogPrefix} General Conversation Model Detected`);
 	} else {
 		log.info(`${consoleLogPrefix} model check was called from legacy modelPath checker`);
-		win.webContents.send("modelPathValid", { data: false });
+		framebufferBridgeUI.webContents.send("modelPathValid", { data: false });
 		prepareDownloadModel();
 	}
 
@@ -539,7 +546,7 @@ function checkModelPath() {
 	//modelPath = store.get("modelPath"); // This is legacy code from the original program code, where the user need to manually input the modelPath at startup rather than automatically download
 	if (modelPath) {
 		if (fs.existsSync(path.resolve(modelPath))) {
-			win.webContents.send("modelPathValid", { data: true });
+			framebufferBridgeUI.webContents.send("modelPathValid", { data: true });
 		} else {
 			log.info(`${consoleLogPrefix} model check was called from legacy modelPath checker`);
 			prepareDownloadModel();
@@ -561,12 +568,12 @@ ipcMain.on("checkPath", (_event, { data }) => {
 		if (fs.existsSync(path.resolve(data))) {
 			store.set("modelPath", data);
 			//modelPath = store.get("modelPath");
-			win.webContents.send("pathIsValid", { data: true });
+			framebufferBridgeUI.webContents.send("pathIsValid", { data: true });
 		} else {
-			win.webContents.send("pathIsValid", { data: false });
+			framebufferBridgeUI.webContents.send("pathIsValid", { data: false });
 		}
 	} else {
-		win.webContents.send("pathIsValid", { data: false });
+		framebufferBridgeUI.webContents.send("pathIsValid", { data: false });
 	}
 });
 */
@@ -851,11 +858,10 @@ async function hasAlphabet(str) {
 }
 
 async function callLLMChildThoughtProcessor(prompt, lengthGen){
-	
 	childLLMResultNotPassed = true;
 	let specializedModelReq="";
 	definedSeed_LLMchild = `${randSeed}`;
-	log.debug(consoleLogPrefix, "🍀⚙️", "CallLLMChildThoughtProcessor invoked!", prompt);
+	//log.debug(consoleLogPrefix, "🍀⚙️", "CallLLMChildThoughtProcessor invoked!", prompt);
 	await coexistenceHaltSafetyCheck(); //await and check any coexistence processing before processing
 	while(childLLMResultNotPassed){
 		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor Called", prompt);
@@ -877,7 +883,7 @@ async function callLLMChildThoughtProcessor(prompt, lengthGen){
 			log.error(consoleLogPrefix, "No output detected, might be a bad model, retrying with new Seed!", definedSeed_LLMchild, "Previous Result",result, "Adjusting LengthGen Request to: ", lengthGen);
 			log.error(consoleLogPrefix, "Failure LLMChild Request Counted: ", llmChildfailureCountSum);
 			if (result.includes("<dummy32000>")){
-				log.error(consoleLogPrefix, "Irrecoverable Dummy 32000 Error Detected! Will not attempt to process!")
+				log.error(consoleLogPrefix, "Irrecoverable Dummy 32000 Error Detected! Will not attempt to process!");
 				llmChildfailureCountSum = 99999999; //Irrecoverable error
 				result = "";
 			}
@@ -908,7 +914,7 @@ let currentUsedLLMChildModel=""
 let precalculatedLLMChildslightlyFastJump=`${path.resolve(__dirname, "precalculatedLLMChildslightlyFastJump.state")}`;
 async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSeed_LLMchild){
 	let allowedNPULayerFactorDivision = 0.25; // make this to be lighter on vram or ram or the NPU memory so that it doesn't locks up the whole computer when it launched
-	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called");
+	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called");
 	//lengthGen is the limit of how much it need to generate
 	//prompt is basically prompt :moai:
 	// flag is basically at what part that callLLMChildThoughtProcessor should return the value started from.
@@ -918,9 +924,9 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	// To combat this we need 2 layered function callLLMChildThoughtProcessor() the frontend which serve the whole program transparently and  callLLMChildThoughtProcessor_backend() which the main core that is being moved into
 	
 	//model = ``;
-	log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called stripping Object Promise");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Called stripping Object Promise");
 	prompt = prompt.replace("[object Promise]", "");
-	log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Stripping ProgramBreakingCharacters");
+	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Stripping ProgramBreakingCharacters");
 	function stripProgramBreakingCharacters_childLLM(str) {
 		// Replace consecutive \n\n with a single \n using a loop
 		while (str.includes('\n\n')) {
@@ -941,10 +947,9 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	prompt = stripProgramBreakingCharacters_childLLM(prompt); // this fixes the strange issue that frozes the whole program after the 3rd interaction
 	//log.info(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend ParamInput");
 	// example 	thoughtsInstanceParamArgs = "\"___[Thoughts Processor] Only answer in Yes or No. Should I Search this on Local files and Internet for more context on this chat \"{prompt}\"___[Thoughts Processor] \" -m ~/Downloads/hermeslimarp-l2-7b.ggmlv3.q2_K.bin -r \"[User]\" -n 2"
-	
 	// check if requested Specific/Specialized Model are set by the thought Process in the variable specificSpecializedModelPathRequest_LLMChild if its not set it will be return blank which we can test it with isBlankOrWhitespaceTrue_CheckVariable function
-	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking PathRequest");
-	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking specializedModel", specificSpecializedModelPathRequest_LLMChild, validatedModelAlignedCategory)
+	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking PathRequest");
+	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend Checking specializedModel", specificSpecializedModelPathRequest_LLMChild, validatedModelAlignedCategory)
 	let allowedAllocNPULayer;
 	let ctxCacheQuantizationLayer;
 	let allowedAllocNPUDraftLayer;
@@ -953,7 +958,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	let startPromptInst;
 	let endRespondPrompt;
 	// --n-gpu-layers need to be adapted based on round(${store.get("params").hardwareLayerOffloading}*memAllocCutRatio)
-	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split");
+	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split");
 	if(isBlankOrWhitespaceTrue_CheckVariable(specificSpecializedModelPathRequest_LLMChild) || LLMChildDecisionModelMode || defectiveLLMChildSpecificModel){
 		if(LLMChildDecisionModelMode){
 			log.debug(consoleLogPrefix, "LLMChild Model Decision Mode! Ignoring Specific Model Request!");
@@ -964,7 +969,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 			log.error(consoleLogPrefix, "I'm not sure if this an issue of the model information augmentation performance, data corruption, language incompatibility! Fallback to the general_conversation");
 			defectiveLLMChildSpecificModel = false; //reset global flag
 		}
-		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "var");
+		//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "var");
 
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * allowedNPULayerFactorDivision); // by default LLMChild using default general conv will use 1/4 of the Main Layer Configuration ( The reason is that the launch of LLMChild on Apple M2 Pro causes lockup the whole computer, which mean the optimization is bad for the engine )
 		currentUsedLLMChildModel = specializedModelManagerRequestPath(validatedModelAlignedCategorydefaultLLMCategory);// Preventing the issue of missing validatedModelAlignedCategory variable which ofc javascript won't tell any issue and just stuck forever in a point
@@ -972,12 +977,12 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		llmchildsystemPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].systemPrompt;
 		startPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].instructionPrompt;
 		endRespondPrompt = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].responsePrompt;
-		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "var done");
+		//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "var done");
 
 		//Specific custom instructionPrompt and responsePrompt (since each model trained differently)
-		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
+		//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend",currentUsedLLMChildModel);
 	} else {
-		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "varcust");
+		//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "varcust");
 
 		allowedAllocNPULayer = Math.round(store.get("params").hardwareLayerOffloading * availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].memAllocCutRatio * allowedNPULayerFactorDivision);
 		ctxCacheQuantizationLayer = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].Quantization;
@@ -985,12 +990,12 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 		llmchildsystemPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].systemPrompt;
 		startPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].instructionPrompt;
 		endRespondPrompt = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategory].responsePrompt;
-		log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "varcust done");
+		//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", " Entering LLM Child Model Split", "varcust done");
 
 	}
-	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", currentUsedLLMChildModel, "custom startPromptInst endRespondPrompt", startPromptInst, endRespondPrompt, llmchildsystemPromptInst)
+	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", currentUsedLLMChildModel, "custom startPromptInst endRespondPrompt", startPromptInst, endRespondPrompt, llmchildsystemPromptInst)
 
-	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "NPU Split Decision");
+	//log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "NPU Split Decision");
 	if (allowedAllocNPULayer <= 0){
 		allowedAllocNPULayer = 1;
 	}
@@ -1000,20 +1005,14 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	} else {
 		allowedAllocNPUDraftLayer = allowedAllocNPULayer;
 	}
-
-	// Do not allow the LLMChild to allocate to GPU or Neural Accelerator if its Busy being generated by other thread
 	if(ProcessingCoexistenceHold){
 		allowedAllocNPULayer=0;
 		allowedAllocNPUDraftLayer=0;
 	}
-	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", " ", "Setting Param");
-	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Prompt`, prompt);
 	LLMChildParam = `-p \" ${startPromptInst} ${prompt} \n ${endRespondPrompt}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -td ${threads} -tb ${threads} --prompt-cache-all --prompt-cache ${precalculatedLLMChildslightlyFastJump} -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // from -n ${lengthgen} we go -n -2
 
 	command = `${basebin} ${LLMChildParam}`;
-	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend exec subprocess");
 	try {
-	log.debug(consoleLogPrefix, "______________callLLMChildThoughtProcessor_backend", `LLMChild Inference ${command}`);
 	await coexistenceHaltSafetyCheck();
 	ProcessingCoexistenceHold=true;
 	outputLLMChild = await runShellCommand(command);
@@ -1344,11 +1343,11 @@ function downloadFile(link, targetFile) {
 }
 
 function prepareDownloadModel(){
-	win.webContents.send("modelPathValid", { data: false }); //Hack to make sure the file selection Default window doesnt open
+	framebufferBridgeUI.webContents.send("modelPathValid", { data: false }); //Hack to make sure the file selection Default window doesnt open
 	log.info(consoleLogPrefix, "Please wait while we Prepare your Model..");
 	log.info(consoleLogPrefix, "Invoking first use mode!", availableImplementedLLMModelSpecificCategory);
 	const prepModel = specializedModelManagerRequestPath("general_conversation");
-	//win.webContents.send("modelPathValid", { data: true });
+	//framebufferBridgeUI.webContents.send("modelPathValid", { data: true });
 }
 
 // This is required since the model sometimes doesn't return exact 1:1 with the name category which caused a lockup since the key doesn't exists
@@ -1462,7 +1461,7 @@ function specializedModelManagerRequestPath(modelCategory){
 			if (err) {
 				log.error(consoleLogPrefix, `Original Flesh of Mistral`);
 			} else {
-				log.info(consoleLogPrefix, `Adelaide have evolved...`);
+				log.info(consoleLogPrefix, versionTheUnattendedEngineLogPrefix, `Adelaide have evolved...`);
 			}
 		});
 	}
@@ -1845,10 +1844,10 @@ async function callInternalThoughtEngine(prompt){
 					emotionalEvaluationResult = "happy"; // return "happy" if the LLM model refuse to work
 				}
 				log.info(consoleLogPrefix, `LLMChild Emotion Returned ${emotionalEvaluationResult}`);
-				win.webContents.send('emotionalEvaluationResult', emotionalEvaluationResult);
+				framebufferBridgeUI.webContents.send('emotionalEvaluationResult', emotionalEvaluationResult);
 			}else{
 				emotionalEvaluationResult = "happy"; // return "happy" if the engine is disabled
-				win.webContents.send('emotionalEvaluationResult', emotionalEvaluationResult);
+				framebufferBridgeUI.webContents.send('emotionalEvaluationResult', emotionalEvaluationResult);
 			}
 
 		//concludeInformation_chatHistory
@@ -1977,7 +1976,7 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 		if (store.get("params").llmdecisionMode){
 			// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Prompting Decision LLM for Backbrain...');
-			promptInput = `${username}:${data}\n Based on your evaluation of the request submitted by ${username}, Should you continue to think deeper even if you did timed out before and is it worth it to continue? Answer only in Yes or No:`;
+			promptInput = `${username}:${data}\n Based on your evaluation of the request submitted by ${username}, Should you continue to think deeper in parallel even if you did timed out before and is it worth it to continue? Answer only in Yes or No:`;
 			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Request LLM');
 			BackbrainRequest = await callLLMChildThoughtProcessor(promptInput, 32);
 			if (isVariableEmpty(BackbrainRequest)){
@@ -1990,6 +1989,7 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 		}
 
 		// So what's the answer?
+		BackbrainRequest = BackbrainRequest.toLowerCase();
 		if (((((BackbrainRequest.includes("yes") || BackbrainRequest.includes("yep") || BackbrainRequest.includes("ok") || BackbrainRequest.includes("valid") || BackbrainRequest.includes("should") || BackbrainRequest.includes("true"))) || process.env.BACKBRAIN_FORCE_DEBUG_MODE === "1")) && store.get("params").backbrainqueue ){
 			//passthrough with queueing
 			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Exec');
@@ -2058,10 +2058,13 @@ async function coexistenceHaltSafetyCheck(){
 	while(ProcessingCoexistenceHold){
 		countReport += 1;
 		if (countReport % 1000 == 0){
-		log.error(consoleLogPrefix, PrefixSection, "🛑 Awaiting on the time Free Async Process Queue...");
-		countReport=0;
+		log.error(consoleLogPrefix, PrefixSection, "🛑 Awaiting on the time Free Async Process Queue...", countReport);
 		}
 		await delay(10); //10 ms delay between loop
+		if(countReport >= 2000){
+			log.error(consoleLogPrefix, PrefixSection, "🛑 Might be a 👻 Phantom Coexistence Issue, Overriding!");
+			ProcessingCoexistenceHold=false;
+		}
 	}
 	if(!ProcessingCoexistenceHold){
 		log.info(consoleLogPrefix, PrefixSection, "No Processing Coexistence Halt/Hold Detected!, Executing Next Task");
@@ -2152,7 +2155,7 @@ class ExternalLocalFileScraperBackgroundAgent {
             const extension = path.extname(filePath).toLowerCase();
             if (['.pdf', '.docx', '.doc', '.odt', '.ppt', '.pptx'].includes(extension)) {
 				// for formatted document
-				//log.info(consoleLogPrefix,`📖 Debug Learning text document: ${filePath}`);
+				log.info(consoleLogPrefix,`📖 Reading document: ${filePath}`);
                 await this.extractTextFromDocument(filePath);
 			
             } else if ([ '.md', '.rtf', '.html', '.xml', '.json', '.tex', '.csv', '.yaml', '.textile', '.adoc', '.tex', '.postscript', '.sgml', '.tr', '.fountain', '.csv', '.xml', '.html','.c', '.cpp', '.java', '.py', '.js', '.css', '.rb', '.swift', '.go', '.php', '.sh', '.bat', '.sql', '.json', '.xml', '.md', '.yaml', '.asm', '.tex', '.r', '.m', '.rs', '.dart', '.scala', '.kt'].includes(extension)){
@@ -2309,11 +2312,11 @@ function runShellCommand_controlablePromise(command) {
   
         // Listen for data events to capture stdout and stderr in real-time
         process.stdout.on('data', (data) => {
-            console.log(`stdout: ${data}`);
+            log.info(consoleLogPrefix, `stdout: ${data}`);
         });
   
         process.stderr.on('data', (data) => {
-            console.error(`stderr: ${data}`);
+            log.error(consoleLogPrefix,`stderr: ${data}`);
         });
     });
   
@@ -2949,11 +2952,12 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			}
 			*/
 			// Its as simple as this, don't need special handler for partial stream or smth
+			interactionStgOrder = interactionStgOrder + 1;
 			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration Dictionary data");
 			log.debug(consoleLogPrefix, "Pushing Prompt to new restoration Dictionary data", "Array Session Focus", interactionSessionMemoryArrayFocus, "interactionStgOrder", interactionStgOrder);
 			if (!interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]){
 				log.error("Prop doesn't exist yet!");
-				interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]={"content": ``, "role": "UNK", "emotion": "UNK"}
+				interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]={"content": ``, "role": "UNK", "emotion": "UNK"};
 				log.error("Scheme has been initialized", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
 			}
 			log.debug(consoleLogPrefix, "Storage Session Focus Length Interaction", "Prepraring");
@@ -2961,7 +2965,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			log.debug(consoleLogPrefix, "current pty stream capture interactionStg", interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder]);
 			log.debug(consoleLogPrefix, "Entering the interactionStg Order array json focus scheme, this is where i'm going to get stuck without error")
 			
-			interactionStgOrder = interactionStgOrder + 1;
+			
 			log.debug(consoleLogPrefix, "emotionalEvalResult save");
 			interactionStg[interactionSessionMemoryArrayFocus].data[interactionStgOrder].emotion = emotionalEvaluationResult;
 			log.debug(consoleLogPrefix, "assistantName save");
@@ -3255,7 +3259,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 					log.debug("User input message:", interactionStg[i]);
 					const dataTextInteractionForwarding=interactionStg[interactionSessionMemoryArrayFocus].data[i].content;
 					const dataTextInteractionEmotion=interactionStg[interactionSessionMemoryArrayFocus].data[i].emotion;
-					win.webContents.send("manualUserPromptGUIHijack", {
+					framebufferBridgeUI.webContents.send("manualUserPromptGUIHijack", {
 						data: {"interactionTextData": dataTextInteractionForwarding, "emotion": dataTextInteractionEmotion}
 					});
 				} else if (interactionStg[interactionSessionMemoryArrayFocus].data[i].role == assistantName){ // Even index (servant input message)
@@ -3263,7 +3267,7 @@ function interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 					log.debug("Servant input message:", interactionStg[i]);
 					const dataTextInteractionForwarding=interactionStg[interactionSessionMemoryArrayFocus].data[i].content;
 					const dataTextInteractionEmotion=interactionStg[interactionSessionMemoryArrayFocus].data[i].emotion;
-					win.webContents.send("manualAIAnswerGUIHijack", {
+					framebufferBridgeUI.webContents.send("manualAIAnswerGUIHijack", {
 						data: {"interactionTextData": dataTextInteractionForwarding, "emotion": dataTextInteractionEmotion}
 					});
 				}
@@ -3417,7 +3421,7 @@ const stripAdditionalContext = (str) => {
 
 async function restart() { // make it async so it doesn't hold other when being hold in coexistence halt safety check
 	log.info(consoleLogPrefix, "Resetting Main LLM State and Storage!");
-	win.webContents.send("result", {
+	framebufferBridgeUI.webContents.send("result", {
 		data: "\n\n<end>"
 	});
 	if (runningShell) runningShell.kill();
@@ -3445,7 +3449,7 @@ let slightlyFastJump=`${path.resolve(__dirname, "slightlyFastJump.state")}`;
 log.info(consoleLogPrefix, "entering primed mode")
 function initInteraction() {
 	if (runningShell) {
-		win.webContents.send("ready");
+		framebufferBridgeUI.webContents.send("ready");
 		log.info(consoleLogPrefix, "LLMMain Thread Ready");
 		blockGUIAPIForwarding = false;
 		return;
@@ -3466,7 +3470,7 @@ function initInteraction() {
 			if (runningShell) runningShell.kill();
 			//log.info(consoleLogPrefix, res);
 			await prepareDownloadModel()
-			//win.webContents.send("modelPathValid", { data: false });
+			//framebufferBridgeUI.webContents.send("modelPathValid", { data: false });
 		} else if (res.includes("\n>") && !zephyrineReady) {
 			zephyrineHalfReady = true;
 			log.info(consoleLogPrefix, "LLM Main Thread is ready after initialization!");
@@ -3480,6 +3484,8 @@ function initInteraction() {
 				runningShell.write(initInteractionContent);
 				runningShell.write(`\r`);
 				//ProcessingCoexistenceHold=false;
+			}else{
+				blockGUIAPIForwarding = false;
 			}
 		//	splashScreen.style.display = 'flex';
 		} else if (zephyrineHalfReady && !zephyrineReady) {
@@ -3488,7 +3494,7 @@ function initInteraction() {
 			//splashScreen.style.display = 'none';
 			zephyrineReady = true;
 			checkAVX = false;
-			win.webContents.send("ready");
+			framebufferBridgeUI.webContents.send("ready");
 			log.info(consoleLogPrefix, "Time to generate some Text!");
 			ProcessingCoexistenceHold=false;
 		} else if (((res.startsWith("llama_model_load:") && res.includes("sampling parameters: ")) || (res.startsWith("main: interactive mode") && res.includes("sampling parameters: "))) && !checkAVX) {
@@ -3508,31 +3514,32 @@ function initInteraction() {
 		} else if (((res.match(/PS [A-Z]:.*>/) && platform == "win32") || (res.match(/bash-[0-9]+\.?[0-9]*\$/) && platform == "darwin") || (res.match(/([a-zA-Z0-9]|_|-)+@([a-zA-Z0-9]|_|-)+:?~(\$|#)/) && platform == "linux")) && zephyrineReady) {
 			restart(); // If binary fails to startup and return to for instance powershell, Bash or shell then restart the mainLLM binary
 		} else if (res.includes("\n>") || res.includes("\n> ") || res.includes("> ") || res.includes(" \n> ") || res.includes("\n\n> ") || res.includes("\n>\n")){
-			// Checking the signature of llama.cpp interaction chat mode usually it ends with (" > ") thanks to itspi3141 now i know how to check it and not to forward GUI
-			log.info(consoleLogPrefix, "Done Generating and Primed to be Generating on anything that the mainLLM previously tasked!");
-			ProcessingCoexistenceHold=false;
-			mainLLMFinishedGeneration=true;
-			if(RAGPrepromptingFinished && isitPassedtheFirstPromptYet){
-				/// Save The Response
-			// ==================================
-			// Putting it on a constant stream is a bad idea! Only put it on a finished compiled stream
-			
-			log.debug(consoleLogPrefix, "Adelaide engine generated interaction mainLLM finished, saving data!");
-			log.debug(consoleLogPrefix, "The Content Compiled!", streamCompilation);
-			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
-			interactionArrayStorage("save", res, true, false, 0);
-			interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0);
-			streamCompilation = "";
-			// ==================================
-		}
-		} else if ((res.includes("\n>") || res.includes("\n> ") || res.includes("> ") || res.includes(" \n> ") || res.includes("\n\n> ") || res.includes("\n>\n")) && zephyrineReady && !blockGUIAPIForwarding) {
 			if (store.get("params").throwInitResponse && !isitPassedtheFirstPromptYet){
 				log.info(consoleLogPrefix, "Passed the initial Uselesss response initialization state, unblocking GUI IO");
 				blockGUIAPIForwarding = false;
 				isitPassedtheFirstPromptYet = true;
 			}
+			if (!store.get("params").throwInitResponse){
+				isitPassedtheFirstPromptYet = true;
+			}
+			// Checking the signature of llama.cpp interaction chat mode usually it ends with (" > ") thanks to itspi3141 now i know how to check it and not to forward GUI
+			log.info(consoleLogPrefix, "Done Generating and Primed to be Generating on anything that the mainLLM previously tasked!");
+			log.debug(consoleLogPrefix, "0_xd", RAGPrepromptingFinished, isitPassedtheFirstPromptYet)
+			ProcessingCoexistenceHold=false;
+			mainLLMFinishedGeneration=true;
+			log.debug(consoleLogPrefix, "1_xd", RAGPrepromptingFinished, isitPassedtheFirstPromptYet);
+			//framebufferBridgeUI.webContents.send(MainLLMDoneGeneratingStream, true);
+			// THIS IS THE PART WHERE ADELAIDE PARADIGM ARCHITECTURE DETECT mainLLM Finishes Generating
+			log.debug(consoleLogPrefix, "2_xd", RAGPrepromptingFinished, isitPassedtheFirstPromptYet);
+			if(RAGPrepromptingFinished && isitPassedtheFirstPromptYet){
+				framebufferBridgeUI.webContents.send("result", {
+					data: "\n\n<end>"
+				});
+				/// Save The Response
+			}
+		} else if ((res.includes("\n>") || res.includes("\n> ") || res.includes("> ") || res.includes(" \n> ") || res.includes("\n\n> ") || res.includes("\n>\n")) && zephyrineReady && !blockGUIAPIForwarding) {
 			if(RAGPrepromptingFinished){
-			win.webContents.send("result", {
+			framebufferBridgeUI.webContents.send("result", {
 				data: "\n\n<end>"
 			});
 			mainLLMFinishedGeneration=true;
@@ -3542,14 +3549,14 @@ function initInteraction() {
 			}
 		} else if (zephyrineReady && !blockGUIAPIForwarding) { // Forwarding to pty Chat Stream GUI 
 			if (platform == "darwin") res = res.replaceAll("^C", "");
-			log.debug(consoleLogPrefix, "Forwarding to GUI/API...", res);
+			//log.debug(consoleLogPrefix, "Forwarding to GUI/API...", res);
 			ProcessingCoexistenceHold=true; // When it is intensely use, say globally that it is used and not be able to allocated by something else
 			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
 			// Migrated to ipcMain.on("saveAdelaideEngineInteraction", (_event, resultData) => {} (To Compensate sudden multi-reply)
 			//interactionArrayStorage("save", res, true, false, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
 			//interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0); // Flush function/method test
 			//res = marked.parse(res);
-			win.webContents.send("result", {
+			framebufferBridgeUI.webContents.send("result", {
 				data: res
 			});
 
@@ -3575,7 +3582,7 @@ function initInteraction() {
 	startPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].instructionPrompt;
 	endRespondPrompt = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].responsePrompt;
 }
-ipcMain.on("startChat", () => {
+ipcMain.on("startInteraction", () => {
 	initInteraction();
 });
 
@@ -3584,75 +3591,96 @@ ipcMain.on("startChat", () => {
 let queueSubmissionForm=[];
 let invokedMainChat=false;
 let currentUserPrompt;
-ipcMain.on("message", async (_event, { data }) => {
-	currentPrompt = data;
-	if (runningShell) {
-		//zephyrineHalfReady = false;
-		// this is where the user Input submitted their message or Interaction
-		retrainer_Housekeeping_immediateHalt = true; // Halt any retraining!
-		//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
-		log.debug(consoleLogPrefix, `Saving Data!`);
-		interactionArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
-		log.debug(consoleLogPrefix, `Flushing User Prompt data`);
-		interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0);
-		blockGUIAPIForwarding = true;
-		log.debug(consoleLogPrefix, `Recieved Input Data! ${data}`);
-		 // push to internal thought engine
-		log.debug(consoleLogPrefix, `Forwarding into the Internal Thought Engine ${data}`);
-		await coexistenceHaltSafetyCheck(); //await and check any coexistence processing before processing
-		if(store.get("params").qostimeoutswitch || invokedMainChat){
-			inputFetch = await callInternalThoughtEngineWithTimeoutandBackbrain(data);
-		} else {
-			inputFetch = await callInternalThoughtEngine(data);
-		}
-		invokedMainChat=true;
-		const MultisubmissionSignature = `THIS IS MULTISUBMISSION POWERED BY BACKBRAIN, IGNORE AND DO NOT SUBMIT TO MAINLLM`
-		//submitting into the mainLLM thread tty
-		// skip if Signature detected
-		
-		//BugFix multiple response and submission due to multiline submission
-		inputFetch = inputFetch.replace(/\n/g, '\\n');
-		log.debug(consoleLogPrefix, "Before Submission to mainLLM reformatting debug", inputFetch)
-		// also if RAG Pre-Prompt Contexting enabled we need to make sure the interface aware to not forward the response message when pre-prompting submitted 
-		if ( inputFetch != MultisubmissionSignature ){
-			if(store.get("params").ragPrePromptProcessContexting)
-			{
-				// phase 0 pre-prompt
-				log.info(consoleLogPrefix, "Experimental multi submission RAG");
-				log.debug(consoleLogPrefix, "Submitting Context");
-				engineProcessingProgress=98;
-				//inputFetch = `This is a knowledge that you need for answering the next input \`\`\`${inputFetch}\`\`\` You do not need to respond this part, Wait for the next prompt before answering!`;
-				mainLLMFinishedGeneration=false; // Waiting for this to change (assuming just submitted thus mainLLM still processing, if the generation finished, the value will be switch to true)
-				RAGPrepromptingFinished=false;
-				runningShell.write(inputFetch);
-				runningShell.write(`\r`);
-				// How to hold until the generation complete?
-				// Wait for mainLLMFinishedGeneration (loop until mainLLMFinishedGeneration variable turn to true) 
-				log.debug(consoleLogPrefix, "Awaiting for mainLLM finished the flipflop boring too normal response!")
-				while (!mainLLMFinishedGeneration) {
-                    await new Promise(resolve => setTimeout(resolve, 100)); // Check every 100ms
-                }
-				await new Promise(resolve => setTimeout(resolve, 1000)); //delay 1000ms (API or GUI)
-				log.debug(consoleLogPrefix, "mainLLM Boring flipflop finished and bypassed!")
-				log.debug(consoleLogPrefix, "Submitting main Prompt");
-				// phase 1 main prompt
-				runningShell.write(data);
-				runningShell.write(`\r`);
-				RAGPrepromptingFinished=true; //allow the GUI+API forwarding of the engine
-				engineProcessingProgress=0;
-			}
-		else{
-				mainLLMFinishedGeneration=false; // Waiting for this to change
-				RAGPrepromptingFinished=true; //Bypass Preprompting Check
-				inputFetch = `${inputFetch}`;
-				runningShell.write(inputFetch);
-				runningShell.write(`\r`);
-		}
-		}
-		await new Promise(resolve => setTimeout(resolve, 500)); //delay 500ms (To make sure the previous sent prompt doesn't leak to API or GUI)
-		blockGUIAPIForwarding = false;
-		invokedMainChat = false;
+
+
+function checkmainLLMCrash(){
+	if (!runningShell){
+		log.error(consoleLogPrefix, "mainLLM Empty Runtime!, either crashed or something else! Restarting!")
+		restart();
 	}
+}
+
+ipcMain.on("message", async (_event, { data }) => { //can be called using same index.js call "message" with "data" transport
+	// Input message for GUI and API (later on)
+	currentPrompt = data;
+	checkmainLLMCrash(); // check if mainLLM already out of conext or crash, on original alpaca-electron it's irrecoverable but in here, we don't do say "impossible"
+	//zephyrineHalfReady = false;
+	// this is where the user Input submitted their message or Interaction
+	retrainer_Housekeeping_immediateHalt = true; // Halt any retraining!
+	//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
+	log.debug(consoleLogPrefix, `Saving Data!`);
+	interactionArrayStorage("save", data, false, true, 0);	// for saving you could just enter 0 on the last parameter, because its not really matter anyway when on save data mode
+	log.debug(consoleLogPrefix, `Flushing User data`);
+	interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0);
+	log.debug(consoleLogPrefix, `Recieved Input Data! ${data}`);
+		// push to internal thought engine
+	log.debug(consoleLogPrefix, `Forwarding into the Internal Thought Engine ${data}`);
+	await coexistenceHaltSafetyCheck(); //await and check any coexistence processing before processing
+	if(store.get("params").qostimeoutswitch || invokedMainChat){
+		inputFetch = await callInternalThoughtEngineWithTimeoutandBackbrain(data);
+	} else {
+		inputFetch = await callInternalThoughtEngine(data);
+	}
+	invokedMainChat=true;
+	const MultisubmissionSignature = `THIS IS MULTISUBMISSION POWERED BY BACKBRAIN, IGNORE AND DO NOT SUBMIT TO MAINLLM`
+	//submitting into the mainLLM thread tty
+	// skip if Signature detected
+	blockGUIAPIForwarding = true; //Bugfix to make sure it doesn't leak the input into the Zephy side of 
+	//BugFix multiple response and submission due to multiline submission
+	inputFetch = inputFetch.replace(/\n/g, '\\n');
+	log.debug(consoleLogPrefix, "Before Submission to mainLLM reformatting debug", inputFetch)
+	// also if RAG Pre-Prompt Contexting enabled we need to make sure the interface aware to not forward the response message when pre-prompting submitted 
+	if ( inputFetch != MultisubmissionSignature ){
+		if(store.get("params").ragPrePromptProcessContexting)
+		{
+			// phase 0 pre-prompt
+			engineProcessingProgress=96; // 0-100% just like progress
+			engineTextFeedbackProgress="Injecting Context on empty LLM FlipFlop";
+			log.info(consoleLogPrefix, "Experimental multi submission RAG");
+			log.debug(consoleLogPrefix, "Submitting Context");
+			//inputFetch = `This is a knowledge that you need for answering the next input \`\`\`${inputFetch}\`\`\` You do not need to respond this part, Wait for the next prompt before answering!`;
+			mainLLMFinishedGeneration=false; // Waiting for this to change (assuming just submitted thus mainLLM still processing, if the generation finished, the value will be switch to true)
+			RAGPrepromptingFinished=false;
+			runningShell.write(inputFetch);
+			runningShell.write(`\r`);
+			// How to hold until the generation complete?
+			// Wait for mainLLMFinishedGeneration (loop until mainLLMFinishedGeneration variable turn to true) 
+			log.debug(consoleLogPrefix, "Awaiting for mainLLM finished the flipflop boring too normal response!")
+			while (!mainLLMFinishedGeneration) {
+				await new Promise(resolve => setTimeout(resolve, 100)); // Check every 100ms
+			}
+			log.debug(consoleLogPrefix, "mainLLM Boring flipflop finished and bypassed!")
+			log.debug(consoleLogPrefix, "Submitting main Prompt");
+			// phase 1 main prompt
+			runningShell.write(data);
+			runningShell.write(`\r`);
+			RAGPrepromptingFinished=true; //allow the GUI+API forwarding of the engine
+			engineProcessingProgress=0;
+		}
+	else{
+			mainLLMFinishedGeneration=false; // Waiting for this to change
+			RAGPrepromptingFinished=true; //Bypass Preprompting Check
+			inputFetch = `${inputFetch}`;
+			runningShell.write(inputFetch);
+			runningShell.write(`\r`);
+	}
+	}
+	await new Promise(resolve => setTimeout(resolve, 500)); //delay 500ms (To make sure the previous sent prompt doesn't leak to API or GUI)
+	blockGUIAPIForwarding = false;
+	invokedMainChat = false;
+});
+// saving generated Message
+ipcMain.on("saveAdelaideMessage", (_event, dataBridge) => {
+// ==================================
+			// Putting it on a constant stream is a bad idea! Only put it on a finished compiled stream
+			const streamAdelaideCompilation = dataBridge.data
+			log.debug(consoleLogPrefix, "Adelaide engine generated interaction mainLLM finished, saving data!");
+			log.debug(consoleLogPrefix, "The Content Compiled!", streamAdelaideCompilation);
+			//interactionArrayStorage(mode, prompt, AITurn, UserTurn, arraySelection)
+			interactionArrayStorage("save", streamAdelaideCompilation, true, false, 0);
+			interactionArrayStorage("flushPersistentMem", 0, 0, 0, 0);
+			streamCompilation = "";
+			// ==================================
 });
 
 
@@ -3665,14 +3693,14 @@ ipcMain.on("stopGeneration", () => {
 		zephyrineHalfReady = false;
 		initInteraction();
 		setTimeout(() => {
-			win.webContents.send("result", {
+			framebufferBridgeUI.webContents.send("result", {
 				data: "\n\n<end>"
 			});
 		}, 200);
 	}
 });
 ipcMain.on("getCurrentModel", () => {
-	win.webContents.send("currentModel", {
+	framebufferBridgeUI.webContents.send("currentModel", {
 		data: store.get("modelPath")
 	});
 });
@@ -3691,7 +3719,7 @@ ipcMain.on("pickFile", () => {
 		})
 		.then((obj) => {
 			if (!obj.canceled) {
-				win.webContents.send("pickedFile", {
+				framebufferBridgeUI.webContents.send("pickedFile", {
 					data: obj.filePaths[0]
 				});
 			}
@@ -3731,10 +3759,10 @@ async function AutomataProcessing(){
 			RAGAutomataPostProcessing = await callInternalThoughtEngine(AutomataReInjection);
 		}
 		log.info(consoleLogPrefix, automataConsolePrefix, "Re-inject to LLMMain", RAGAutomataPostProcessing);
-		win.webContents.send("manualUserPromptGUIHijack", {
+		framebufferBridgeUI.webContents.send("manualUserPromptGUIHijack", {
 			data: ""
 		});
-		win.webContents.send("manualAIAnswerGUIHijack", {
+		framebufferBridgeUI.webContents.send("manualAIAnswerGUIHijack", {
 			data: `[ 🤔 Internal Thought : ${AutomataReInjection} ] \n\n\n Answer: `
 		});
 		blockGUIAPIForwarding = true;
@@ -3776,7 +3804,7 @@ let degradedFactor=0;
 let timeInnacDegradationms=0;
 let timeDegradationSmoothingPause=0; //ms of pause on some process execution like the Local Document to prevent GUI Forwarding Time miss cause havoc on the system and lockup
 let timeDegradationPointCount=0;//1000 then reset
-let timeDegradationSmoothingExpiry=1000; // To count how long this will last you can do timeDegradationSmoothingExpiry*responseTimeSyncms = expiry on ms
+let timeDegradationSmoothingExpiry=30; // To count how long this will last you can do timeDegradationSmoothingExpiry*responseTimeSyncms = expiry on ms
 function measureResponseLatency() {
 	if(respCheckpoint0 == 0 && respCheckpoint1 == 0){
 		respDegradationLatency = 0
@@ -3795,6 +3823,7 @@ function measureResponseLatency() {
     
     return respDegradationLatency;
 }
+let responsecheckLatencyLoopCheck=0;
 setInterval(async () => {
 	const msResponse = measureResponseLatency();
 	// Measure timing shift 1000 ms with the real timer on the 
@@ -3804,8 +3833,12 @@ setInterval(async () => {
 		timeInnacDegradationms=Math.abs(responseTimeSyncms-msResponse)
 		degradedFactor=timeInnacDegradationms/targetDegradationMaxms
 		const viewableFactorPercent = degradedFactor.toFixed(3) * 100
-		//log.debug(consoleLogPrefix, "Adelaide Engine Time Response Degradation Percent:", viewableFactorPercent, "%")
-		//log.debug(consoleLogPrefix, "Adelaide Engine Time Degradation Smoothing:", timeDegradationSmoothingPause , "ms")
+		responsecheckLatencyLoopCheck+=1;
+		if(responsecheckLatencyLoopCheck % 1 == 0){
+		log.debug(consoleLogPrefix, "Adelaide Engine Time Response Degradation Percent:", viewableFactorPercent, "%");
+		log.debug(consoleLogPrefix, "Adelaide Engine Time Degradation Smoothing:", timeDegradationSmoothingPause , "ms");
+		responsecheckLatencyLoopCheck=0;
+	}
 		timeDegradationPointCount = timeDegradationPointCount + 1;
 		if (timeDegradationPointCount >= timeDegradationSmoothingExpiry){
 			timeDegradationPointCount=0;
@@ -3881,11 +3914,12 @@ setInterval(async () => {
 	}else{
 		countingCoexistenceIdleQuota=600;
 	}
-	log.debug(versionTheUnattendedEngineLogPrefix, "Opportunistic Re-integration/Re-training Learning is activated... Polling on the Activity to find opportunity!", countingCoexistenceIdleQuota);
-	await coexistenceHaltSafetyCheck();
-	// keep rechecking if there's an Empty slot or opportunity
+	log.debug(versionTheUnattendedEngineLogPrefix, "Opportunistic Reintegration Counting down:", countingCoexistenceIdleQuota, "s");
 	retrainerInteractionStgDump = ""; // Reset Content Flush before usage
 	retrainerUMAStgDump = ""; // reset content flush before usage
+	if (countingCoexistenceIdleQuota <= 300){// Invoke the file scouring and data set scouring mechanism on Adelaide Paradigm on the externalLocalFileScraping
+		externalLocalFileScraperBackgroundAgent();
+	}
 	while (!ProcessingCoexistenceHold && countingCoexistenceIdleQuota <= 1) {
 		/*
 		engineProcessingProgress=0; // 0-100% just like progress
@@ -4028,17 +4062,54 @@ setInterval(async () => {
 
 		// non-SFT Training
 
-		var housekeepingMonitor;
 		log.debug(versionTheUnattendedEngineLogPrefix, "Setting up nonSFT param!");
-		retrainerParameterBinary = `--lora-out ${LORAParitionFragment_nonSFT} --use-flash -s ${seedTrain} --separate-with-eos --separate-with-bos --epochs ${epochsMax} -c ${contextWindowTraining} -b ${batchProc} -t ${threads} --train-data ${retrainerNONSFT_UMA_DATASET} -ngl ${allowedAllocNPULayer} --save_every ${quicksaveRoutineCallback} --use-checkpointing --checkpoint-out ${LORAQuickSave_nonSFT} --checkpoint-in ${LORAQuickSave_nonSFT} --overlapping-samples --sample-start "\n" --escape --grad-acc ${gradientAccumulation} --adam-iter ${maxBatchAdamIteration} --adam-alpha ${AdamAlpha} --lora-r ${LORA_ranking_scale} --lora-alpha ${LORAAlphaScale} --rope-freq-base ${ROPE_Freq_Base} --use-flash --model_base ${modelTobeRemorphed}`;
 
-		log.debug(versionTheUnattendedEngineLogPrefix, "Compiling command...");
-		log.debug(versionTheUnattendedEngineLogPrefix, retrainerBinarymainLLM);
+		//log.debug(versionTheUnattendedEngineLogPrefix, retrainerBinarymainLLM);
+		// SFT Training
+		retrainerParameterBinary = `--lora-out ${LORAParitionFragment_SFT} --use-flash -s ${seedTrain} --separate-with-eos --separate-with-bos --epochs ${epochsMax} -c ${contextWindowTraining} -b ${batchProc} -t ${threads} --train-data ${retrainerSFT_INTERACTION_DATASET} -ngl ${allowedAllocNPULayer} --save_every ${quicksaveRoutineCallback} --use-checkpointing --checkpoint-out ${LORAQuickSave_SFT} --checkpoint-in ${LORAQuickSave_SFT} --overlapping-samples --sample-start "\n" --escape --grad-acc ${gradientAccumulation} --adam-iter ${maxBatchAdamIteration} --adam-alpha ${AdamAlpha} --lora-r ${LORA_ranking_scale} --lora-alpha ${LORAAlphaScale} --rope-freq-base ${ROPE_Freq_Base} --use-flash --model_base ${modelTobeRemorphed}`;
+
+		command_retrainer = `${retrainerBinarymainLLM} ${retrainerParameterBinary}`;
+		log.debug(versionTheUnattendedEngineLogPrefix, "exec subprocess Retraining SFT");
+		log.debug(versionTheUnattendedEngineLogPrefix, `Retrainer or Reintegrator Exec Debug: ${command_retrainer}`);
+
+		engineProcessingProgress=22; // 0-100% just like progress
+		engineTextFeedbackProgress="Generating SFT Model Fragment";
+
+		await executeCommandWithHousekeeping(
+			command_retrainer,
+			retrainer_Housekeeping_immediateHalt,
+			versionTheUnattendedEngineLogPrefix,
+			'Command completed successfully.',
+			"Generating SFT Partition Fragment",
+			1000
+		);
+
+		//Phase_0
+		// SFT Partition Fragment Merge into filename_selfRemorphedRetraining
+		// retrainerMergeLORABinarymainLLM -m ${modelTobeRemorphed}_phaseNonSFT -o ${modelRemorphedModel} -l ${LORAParitionFragment_SFT}
+		retrainerParameterBinary = `-m ${modelTobeRemorphed} -o ${modelRemorphedModel} -l ${LORAParitionFragment_nonSFT} -t ${threads}`
+		command_retrainer = `${retrainerMergeLORABinarymainLLM.replace("\"\"", "")} ${retrainerParameterBinary}`;
+		log.debug(versionTheUnattendedEngineLogPrefix, "exec subprocess Lora Merging SFT into the mainLLM Runtime");
+		log.debug(versionTheUnattendedEngineLogPrefix, `Retrainer or Reintegrator Exec Debug: ${command_retrainer}`);
+
+		engineProcessingProgress=45; // 0-100% just like progress
+		engineTextFeedbackProgress="Saving State and Compiling to SFT Model Fragment";
+
+		await executeCommandWithHousekeeping(
+			command_retrainer,
+			false, // Don't interrupt, bypass it Prevent corruption on the model
+			versionTheUnattendedEngineLogPrefix,
+			'Command completed successfully.',
+			"Compiling SFT Fragment into the MainLLM Model",
+			1000
+		);
+
+		retrainerParameterBinary = `--lora-out ${LORAParitionFragment_nonSFT} --use-flash -s ${seedTrain} --separate-with-eos --separate-with-bos --epochs ${epochsMax} -c ${contextWindowTraining} -b ${batchProc} -t ${threads} --train-data ${retrainerNONSFT_UMA_DATASET} -ngl ${allowedAllocNPULayer} --save_every ${quicksaveRoutineCallback} --use-checkpointing --checkpoint-out ${LORAQuickSave_nonSFT} --checkpoint-in ${LORAQuickSave_nonSFT} --overlapping-samples --sample-start "\n" --escape --grad-acc ${gradientAccumulation} --adam-iter ${maxBatchAdamIteration} --adam-alpha ${AdamAlpha} --lora-r ${LORA_ranking_scale} --lora-alpha ${LORAAlphaScale} --rope-freq-base ${ROPE_Freq_Base} --use-flash --model_base ${modelTobeRemorphed}`;
 		command_retrainer = `${retrainerBinarymainLLM} ${retrainerParameterBinary}`;
 		log.debug(versionTheUnattendedEngineLogPrefix, "exec subprocess Retraining Non-SFT");
 		log.debug(versionTheUnattendedEngineLogPrefix, `Retrainer or Reintegrator Exec Debug: ${command_retrainer}`);
 
-		engineProcessingProgress=28; // 0-100% just like progress
+		engineProcessingProgress=68; // 0-100% just like progress
 		engineTextFeedbackProgress="Generating Non-SFT Model Fragment for Remorphing...";
 
 		await executeCommandWithHousekeeping(
@@ -4050,7 +4121,7 @@ setInterval(async () => {
 			1000
 		);
 
-		//Phase_0
+		//Phase_1
 		//	Non-SFT Partition Fragment Merge into filename_selfRemorphedRetraining
 		//./usr/bin/0_macOS/arm64/llama-gguf/export-lora -m  -o RRRRRRR.bin -l ${LORAParitionFragment_nonSFT}
 		// retrainerMergeLORABinarymainLLM -m ${modelTobeRemorphed}_phaseNonSFT -o ${modelRemorphedModel} -l ${LORAParitionFragment_nonSFT}
@@ -4058,50 +4129,15 @@ setInterval(async () => {
 		command_retrainer = `${retrainerMergeLORABinarymainLLM.replace("\"\"", "")} ${retrainerParameterBinary}`;
 		log.debug(versionTheUnattendedEngineLogPrefix, "exec subprocess Lora Merging Non SFT into the main Runtime");
 		log.debug(versionTheUnattendedEngineLogPrefix, `Retrainer or Reintegrator Exec Debug: ${command_retrainer}`);
-		engineProcessingProgress=44; // 0-100% just like progress
+		engineProcessingProgress=98; // 0-100% just like progress
 		engineTextFeedbackProgress="Saving State and Compiling fragment with MainLLM Model";
 
 		await executeCommandWithHousekeeping(
 			command_retrainer,
-			retrainer_Housekeeping_immediateHalt,
+			false, // Don't interrupt, bypass it Prevent corruption on the model
 			versionTheUnattendedEngineLogPrefix,
 			'Command completed successfully.',
 			"Compiling Non-SFT Fragment into the MainLLM Model",
-			1000
-		);
-
-		// SFT Training
-		retrainerParameterBinary = `--lora-out ${LORAParitionFragment_SFT} --use-flash -s ${seedTrain} --separate-with-eos --separate-with-bos --epochs ${epochsMax} -c ${contextWindowTraining} -b ${batchProc} -t ${threads} --train-data ${retrainerSFT_INTERACTION_DATASET} -ngl ${allowedAllocNPULayer} --save_every ${quicksaveRoutineCallback} --use-checkpointing --checkpoint-out ${LORAQuickSave_SFT} --checkpoint-in ${LORAQuickSave_SFT} --overlapping-samples --sample-start "\n" --escape --grad-acc ${gradientAccumulation} --adam-iter ${maxBatchAdamIteration} --adam-alpha ${AdamAlpha} --lora-r ${LORA_ranking_scale} --lora-alpha ${LORAAlphaScale} --rope-freq-base ${ROPE_Freq_Base} --use-flash --model_base ${modelTobeRemorphed}`;
-
-		command_retrainer = `${retrainerBinarymainLLM} ${retrainerParameterBinary}`;
-		log.debug(versionTheUnattendedEngineLogPrefix, "exec subprocess Retraining SFT");
-		log.debug(versionTheUnattendedEngineLogPrefix, `Retrainer or Reintegrator Exec Debug: ${command_retrainer}`);
-
-		engineProcessingProgress=69; // 0-100% just like progress
-		engineTextFeedbackProgress="Saving State and Compiling fragment with MainLLM Model";
-
-		await executeCommandWithHousekeeping(
-			command_retrainer,
-			retrainer_Housekeeping_immediateHalt,
-			versionTheUnattendedEngineLogPrefix,
-			'Command completed successfully.',
-			"Generating SFT Partition Fragment",
-			1000
-		);
-
-		//Phase_1
-		// SFT Partition Fragment Merge into filename_selfRemorphedRetraining
-		// retrainerMergeLORABinarymainLLM -m ${modelTobeRemorphed}_phaseNonSFT -o ${modelRemorphedModel} -l ${LORAParitionFragment_SFT}
-		retrainerParameterBinary = `-m ${modelTobeRemorphed} -o ${modelRemorphedModel} -l ${LORAParitionFragment_nonSFT} -t ${threads}`
-		command_retrainer = `${retrainerMergeLORABinarymainLLM.replace("\"\"", "")} ${retrainerParameterBinary}`;
-		log.debug(versionTheUnattendedEngineLogPrefix, "exec subprocess Lora Merging SFT into the mainLLM Runtime");
-		log.debug(versionTheUnattendedEngineLogPrefix, `Retrainer or Reintegrator Exec Debug: ${command_retrainer}`);
-		await executeCommandWithHousekeeping(
-			command_retrainer,
-			retrainer_Housekeeping_immediateHalt,
-			versionTheUnattendedEngineLogPrefix,
-			'Command completed successfully.',
-			"Compiling SFT Fragment into the MainLLM Model",
 			1000
 		);
 
@@ -4125,7 +4161,7 @@ ipcMain.on("storeParams", (_event, { params }) => {
 	restart();
 });
 ipcMain.on("getParams", () => {
-	win.webContents.send("params", store.get("params"));
+	framebufferBridgeUI.webContents.send("params", store.get("params"));
 });
 
 // different configuration
@@ -4292,7 +4328,7 @@ function erasePersistentMemoryiPCMain(){
 }
 
 ipcMain.on("restart", restart);
-ipcMain.on("resetChatHistoryCTX", erasePersistentMemoryiPCMain);
+ipcMain.on("resetInteractionHistoryCTX", erasePersistentMemoryiPCMain);
 
 process.on("unhandledRejection", () => {});
 process.on("uncaughtException", () => {});
