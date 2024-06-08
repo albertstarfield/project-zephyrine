@@ -100,10 +100,12 @@ install_dependencies_macos() {
         echo "Kindly be aware of the necessity to install the compatible Xcode version corresponding to the specific macOS iteration. For instance, macOS Sonoma mandates the utilization of Xcode 15 Beta, along with its corresponding Xcode Command Line Tools version 15."
         exit 1
     else
-        
         xcode-select --install
         sudo xcodebuild -license accept
     fi
+    #if [ ! -d /Applications/Xcode.app ]; then
+    #    echo "XCode.app main app isn't install, Please install and try again"
+    #fi
     if ! command -v brew &> /dev/null; then
         echo "Homebrew command line tools not found. Please install Homebrew and try again."
         
@@ -113,12 +115,20 @@ install_dependencies_macos() {
     #https://stackoverflow.com/questions/64963370/error-cannot-install-in-homebrew-on-arm-processor-in-intel-default-prefix-usr
     # Be aware apple slick may have conflict with x86_64 homebrew package and cause this to fail
 
+    sudo chown -R "$USER":admin /opt/homebrew/ #arm64 darwin
+    #/usr/local/homebrew/
+    sudo chown -R "$USER":admin /usr/local/homebrew/ #x86_64 darwin
     brew doctor
     #rm -rf "/opt/homebrew/Library/Taps/homebrew/homebrew-core"
     brew tap homebrew/core
     brew tap apple/apple http://github.com/apple/homebrew-apple
-    brew upgrade
-    brew install python node cmake
+    brew upgrade --greed
+    brew install python node cmake mas
+    echo "Installing XCode..."
+    mas search XCode
+    mas install 497799835 #XCode appid from mas search XCode
+    
+
     fi
     echo "Upgrading to the recommended node Version!"
     set -e
