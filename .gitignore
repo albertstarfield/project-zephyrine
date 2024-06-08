@@ -43,3 +43,16 @@ usr/bin/*_*/**
 usr/bin/**/*make*
 *.exp
 !example.exp
+usr/bin/universalBinarySystemPrompt.txt
+**syncthing**
+usr/engine_component/ModelReintegration/datasetPool/nonSFT_UMA_dataset.txt
+usr/engine_component/ModelReintegration/datasetPool/SFT_Interaction_Instruction_dataset.txt
+usr/*.gguf
+usr/engine_component/ModelReintegration/*Fragment* 
+usr/engine_component/ModelReintegration/*quicksave*
+usr/precalculatedLLMChildslightlyFastJump.state
+usr/raw_smallLanguageModel.bin
+usr/slightlyFastJump.state
+usr/evolved_smallLanguageModel.bin
+usr/Penalties
+usr/mirostat

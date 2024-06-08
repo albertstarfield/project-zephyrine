@@ -199,7 +199,7 @@ ipcRenderer.on("os", (_error, { data }) => {
 
 ipcRenderer.on("modelPathValid", (_event, { data }) => {
 	if (data) {
-		ipcRenderer.send("startChat");
+		ipcRenderer.send("startInteraction");
 	} else {
 		ipcRenderer.send("getCurrentModel");
 		document.getElementById("path-dialog-bg").classList.remove("hidden");
@@ -574,20 +574,31 @@ ipcRenderer.on("manualAIAnswerGUIHijack", async (_event, { data }) => {
 	// Something is missing. Ah th emissing part is that on the let existing need to end with .innerHTML, Nope. Still erroring out.
 });
 
+
+
 ipcRenderer.on("result", async (_event, { data }) => {
 	var response = data;
 	const id = gen;
 	let existing = document.querySelector(`[data-id='${id}']`);
 	let totalStreamResultData;
 	//loading(false);
+	//console.debug(prefixConsoleLogStreamCapture, "DataStream", data);
+	/*
+	can be invoked through main index.js or the adelaide paradigm engine by using this
+	clear
+	framebufferBridgeUI.webContents.send("result", {
+					data: "\n\n<end>"
+				});
+	*/
 	if (data == "\n\n<end>") {
 		setTimeout(() => { // this timeout is for the final render, if somehow after the 
 			isRunningModel = false;
+			doneGenerating = false;
 			//existing.style.opacity = 0;
 			//existing.style.transition = 'opacity 1s ease-in-out';
-			console.log(prefixConsoleLogStreamCapture, "Stream Ended!");
-			console.log(prefixConsoleLogStreamCapture, "Assuming LLM Main Backend Done Typing!");
-			console.log(prefixConsoleLogStreamCapture, "Sending Stream to GUI");
+			//console.log(prefixConsoleLogStreamCapture, "Stream Ended!");
+			//console.log(prefixConsoleLogStreamCapture, "Assuming LLM Main Backend Done Typing!");
+			//console.log(prefixConsoleLogStreamCapture, "Sending Stream to GUI");
 			//totalStreamResultData = responses[id];
 			console.log("Response Raw DEBUG",responses[id]);
 			// So i have found the issue where it finishes responding but the text disappears its because the marked.parse throw some error and the text failed to go through. so instead of complete failure, we can just use try and catch the error and forcefully do the thing
@@ -602,26 +613,6 @@ ipcRenderer.on("result", async (_event, { data }) => {
 				totalStreamResultData="🛑 An Unexpected Error has been occoured and Adelaide Engine lost context capture from mainLLM Thread. Please restart the program and try again!🛑 "
 			}
 			/*
-			totalStreamResultData = marked.parse(responses[id], {
-				renderer: new marked.Renderer(),
-				gfm: true,
-				breaks: true,
-				smartLists: true,
-				smartypants: true,
-				// Add a callback to render LaTeX expressions
-				sanitize: false,
-				// Callback to render LaTeX expressions using KaTeX
-				// Replace 'katex.renderToString' with 'MathJax.tex2svg' if using MathJax
-				// Note: You need to include the KaTeX or MathJax library in your project
-				// and configure it properly for rendering LaTeX expressions.
-				// Check the documentation of KaTeX or MathJax for more details.
-				renderer: {
-					text: function(text) {
-						return katex.renderToString(text, { displayMode: true });
-						// return MathJax.tex2svg(text, { display: true }).outerHTML;
-					}
-				}
-			});
 			*/
 			totalStreamResultData = firstLineParagraphCleaner(totalStreamResultData);
 			console.log("responsesStreamCaptureTrace_markedConverted:", totalStreamResultData);
@@ -633,16 +624,14 @@ ipcRenderer.on("result", async (_event, { data }) => {
 			//responses[id] forward to Automata Mode if its Turned on then it will continue
 			// Why i put the Automata Triggering ipcRenderer in here? : because when the stream finished, it stopped in here
 			ipcRenderer.send("AutomataLLMMainResultReciever", { data: responses[id] });
+			ipcRenderer.send("saveAdelaideMessage", { data: responses[id] }); // Save Adelaide Paradigm Engine Message into the database by calling the IPC Call Function
 			ipcRenderer.send("CheckAsyncMessageQueue"); // Multiple-User submission support
-
-			
-
 			console.log(prefixConsoleLogStreamCapture, "current ID of Output", id);
 
 			form.setAttribute("class", isRunningModel ? "running-model" : "");
 			existing.style.opacity = 1;
 			gen++; //add into new rows
-		}, 60); // previously 30 now adjust it to 60 just to make sure it doesn't cut the stream midway
+		}, 150); // previously 30 now adjust it to 60 just to make sure it doesn't cut the stream midway
 	} else {
 		document.body.classList.remove("llama");
 		document.body.classList.remove("alpaca");
@@ -678,13 +667,13 @@ ipcRenderer.on("result", async (_event, { data }) => {
 
 document.querySelectorAll("#feed-placeholder-llama button.card").forEach((e) => {
 	e.addEventListener("click", () => {
-		let text = e.innerText.replace('"', "").replace('" →', "");
+		let text = e.innerText.replace('\"', "").replace('" →', "");
 		input.value = text;
 	});
 });
 document.querySelectorAll("#feed-placeholder-alpaca button.card").forEach((e) => {
 	e.addEventListener("click", () => {
-		let text = e.innerText.replace('"', "").replace('" →', "");
+		let text = e.innerText.replace('\"', "").replace('" →', "");
 		input.value = text;
 	});
 });
@@ -778,19 +767,19 @@ requestInternalThoughtStat();
 setInterval(async () => {
 	requestInternalThoughtStat();
 	//console.log("fetching progress!"); // this is my first time programming polling ipc so yeah i know its cringy to have a verbose message in here too though, but i guess everyone has its own starting point :/
-}, generateRandomNumber(10000,20000));
+}, generateRandomNumber(1000,5000));
 
 
 
 ipcRenderer.send("SystemBackplateHotplugCheck");
 setInterval(async () => {
 	ipcRenderer.send("SystemBackplateHotplugCheck");
-}, generateRandomNumber(60000,120000));
+}, generateRandomNumber(6000,10000));
 
 
-let dynamicTipsProgressLLMChild="";
+let dynamiTipsProgress="";
 ipcRenderer.on("internalTEProgressText", (_event, { data }) => {
-	dynamicTipsProgressLLMChild=data;
+	dynamiTipsProgress=data;
 });
 
 
@@ -827,7 +816,7 @@ ipcRenderer.on("emotionDebugInterfaceStatistics", (_event, {data}) => {
 ipcRenderer.on("BackBrainQueueCheck_render", (_event, {data}) => {
 	BackBrainQueueText.style.opacity = 0;
 	BackBrainQueueText.style.transition = 'opacity 0.5s ease-in-out';
-	BackBrainQueueBar.style.transition = 'transform 2s ease-in-out';
+	BackBrainQueueBar.style.transition = 'transform 0.5s ease-in-out';
 	BackBrainQueueBar.style.transform = `scaleX(${data/maxBackBrainQueue_Fallback})`; //since it uses 0.0 to 1.0
 	if (BackBrainQueueBar.style.transform > 1){BackBrainQueueBar.style.transform=1}
 	// later on the bar is going to be color spectrum representing the emotion
@@ -840,7 +829,7 @@ ipcRenderer.on("BackBrainQueueCheck_render", (_event, {data}) => {
 ipcRenderer.on("BackBrainQueueResultCheck_render", (_event, {data}) => {
 	BackBrainResultQueueText.style.opacity = 0;
 	BackBrainResultQueueText.style.transition = 'opacity 0.5s ease-in-out';
-	BackBrainResultQueueBar.style.transition = 'transform 2s ease-in-out';
+	BackBrainResultQueueBar.style.transition = 'transform 0.5s ease-in-out';
 	BackBrainResultQueueBar.style.transform = `scaleX(${data/maxBackBrainQueue_Fallback})`; //since it uses 0.0 to 1.0
 	if (BackBrainResultQueueBar.style.transform > 1){BackBrainResultQueueBar.style.transform=1}
 	// later on the bar is going to be color spectrum representing the emotion
@@ -867,12 +856,12 @@ ipcRenderer.on("internalTEProgress", (_event, { data }) => {
 		dynamicTipsBar.style.width = `${data}%`;
 		LLMChildEngineIndicatorTextBar.style.width = `${data}%`;
 		setTimeout(() => {
-			if(dynamicTipsProgressLLMChild == ""){
-				dynamicTips.innerText = "Waiting LLMChild to Give Progress Report!"
-				LLMChildEngineIndicatorText.innerText = `🤔 LLMChild Invoked`
+			if(dynamiTipsProgress == ""){
+				dynamicTips.innerText = "Waiting Adelaide Engine to Give Progress Report!"
+				LLMChildEngineIndicatorText.innerText = `🤔 Adelaide Engine Invoked`
 			} else {
-				dynamicTips.innerText = dynamicTipsProgressLLMChild;
-				LLMChildEngineIndicatorText.innerText = `🤔 LLMChild Processing : ${dynamicTips.innerText}`
+				dynamicTips.innerText = dynamiTipsProgress;
+				LLMChildEngineIndicatorText.innerText = `🤔 Adelaide Engine Processing : ${dynamicTips.innerText}`
 			}
 			 // no We can't do this, we need to replace it with something more dynamic and more saying verbose what its doing
 			// Add fade-in effect to the new text
@@ -891,7 +880,7 @@ ipcRenderer.on("cpuUsage", (_event, { data }) => {
 	cpuText.style.opacity = 0;
 	//cpuText.innerText = `🧠 ${cpuPercent}%, ${threadUtilized}/${cpuCount} threads`;
 	cpuText.style.transition = 'opacity 1.5s ease-in-out';
-	cpuBar.style.transition = 'transform 2s ease-in-out';
+	cpuBar.style.transition = 'transform 0.5s ease-in-out';
 	cpuBar.style.transform = `scaleX(${cpuPercent / 100})`;
 	setTimeout(() => {
 		cpuText.innerText = `🧠 CPU Usage ${cpuPercent}%`;
@@ -904,7 +893,7 @@ ipcRenderer.on("freemem", (_event, { data }) => {
 	freemem = data;
 	ramText.style.opacity = 0;
 	ramText.style.transition = 'opacity 1.5s ease-in-out';
-	ramBar.style.transition = 'transform 2s ease-in-out';
+	ramBar.style.transition = 'transform 0.5s ease-in-out';
 	ramBar.style.transform = `scaleX(${(totalmem - freemem) / totalmem})`;
 	setTimeout(() => {
 		//ramText.innerText = `💾 ${Math.round((totalmem - freemem) * 10) / 10}GB/${totalmem}GB`;
@@ -919,7 +908,7 @@ ipcRenderer.on("UMAAllocSizeStatisticsGB", (_event, { data }) => {
 	const UMAallocGB = data;
 	UMALoadText.style.opacity = 0;
 	UMALoadText.style.transition = 'opacity 1.5s ease-in-out';
-	UMALoadBar.style.transition = 'transform 2s ease-in-out';
+	UMALoadBar.style.transition = 'transform 0.5s ease-in-out';
 	UMALoadBar.style.transform = `scaleX(${ UMAallocGB / maxDefaultUMAJavascriptAlloc })`;
 	setTimeout(() => {
 		UMALoadText.innerText = `UMA MLCMCF Alloc ${UMAallocGB}/${maxDefaultUMAJavascriptAlloc} GB`;
@@ -933,7 +922,7 @@ ipcRenderer.on("hardwareStressLoad", (_event, { data }) => {
 	stressPercent = data;
 	HardwareStressLoadText.style.opacity = 0;
 	HardwareStressLoadText.style.transition = 'opacity 1.5s ease-in-out';
-	HardwareStressLoadBar.style.transition = 'transform 2s ease-in-out';
+	HardwareStressLoadBar.style.transition = 'transform 0.5s ease-in-out';
 	HardwareStressLoadBar.style.transform = `scaleX(${stressPercent/100})`; //since it uses 0.0 to 1.0
 	setTimeout(() => {
 		//ramText.innerText = `💾 ${Math.round((totalmem - freemem) * 10) / 10}GB/${totalmem}GB`;
@@ -953,11 +942,11 @@ document.getElementById("clear").addEventListener("click", () => {
 	});
 });
 
-document.getElementById("chat-reset").addEventListener("click", () => {
+document.getElementById("interaction-session-reset").addEventListener("click", () => {
 	stopButton.click();
 	stopButton.removeAttribute("disabled");
 	ipcRenderer.send("restart");
-	ipcRenderer.send("resetChatHistoryCTX");
+	ipcRenderer.send("resetInteractionHistoryCTX");
 	document.querySelectorAll("#messages li").forEach((element) => {
 		element.style.opacity = 1;
 		element.style.transition = 'opacity 1s ease-in-out';
@@ -1034,14 +1023,17 @@ ipcRenderer.on("params", (_event, data) => {
 	document.getElementById("classicmode").checked = data.classicMode;
 	document.getElementById("attemptaccelerate").checked = data.AttemptAccelerate;
 	document.getElementById("hardwarelayeroffloading").value = data.hardwareLayerOffloading;
-	document.getElementById("sideloadexperienceuma").value = data.sideloadExperienceUMA;
+	document.getElementById("sideloadexperienceuma").checked = data.sideloadExperienceUMA;
 	document.getElementById("emotionalllmchildengine").checked = data.emotionalLLMChildengine;
 	document.getElementById("profilepictureemotion").checked = data.profilePictureEmotion;
 	document.getElementById("longchainthought-neverfeelenough").checked = data.longChainThoughtNeverFeelenough;
 	document.getElementById("AutomateLoopback").checked = data.automateLoopback;
 	document.getElementById("openaiapiserverhost").checked = data.openAPIServer;
 	document.getElementById("ragprepromptprocesscontexting").checked = data.ragPrePromptProcessContexting;
+	document.getElementById("selfreintegrate").checked = data.selfReintegrate;
 });
+
+
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	ipcRenderer.send("storeParams", {
 		params: {
@@ -1074,6 +1066,7 @@ document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.p
 			websearch_amount: document.getElementById("websearch_amount").value || document.getElementById("websearch_amount").placeholder,
 			hardwareLayerOffloading: document.getElementById("hardwarelayeroffloading").value || document.getElementById("hardwarelayeroffloading").placeholder,
 			longChainThoughtNeverFeelenough: document.getElementById("longchainthought-neverfeelenough").checked,
+			selfReintegrate: document.getElementById("selfreintegrate").checked,
 			sideloadExperienceUMA: document.getElementById("sideloadexperienceuma").checked
 		}
 	});
@@ -1213,6 +1206,14 @@ document.getElementById("sideloadexperienceuma").addEventListener("change", () =
     // checkbox is checked or not. This allows the main process to know how to proceed.
     ipcRenderer.send("sideloadExperienceUMA", document.getElementById("sideloadexperienceuma").checked);
 });
+
+
+document.getElementById("selfreintegrate").addEventListener("change", () => {
+    // Sends a message to the main process indicating whether the "selfreintegrate"
+    // checkbox is checked or not. This allows the main process to know how to proceed.
+    ipcRenderer.send("selfReintegrate", document.getElementById("selfreintegrate").checked);
+});
+
 
 /*
 //default value
