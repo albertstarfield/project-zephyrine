@@ -721,8 +721,29 @@ async function externalInternetFetchingScraping(text) {
 			const title = $('title').text();
 			const bodyText = $('body').text();
 
-			UnifiedMemoryArray.push(title); // push the content 
-			UnifiedMemoryArray.push(bodyText); // push the content 
+			promptInput = `Context information is below. \n --------------------- \n ${title} ${body} \n --------------------- \n Given the context information answer the query. \n Query: Create APA7 Format Citation, if there's unknown information that is required, just fill it with for instance on Year n.d. or author Unknown. ONLY ANSWER ON APA7 CITATION FORMAT! \n Answer:`;
+				const citeDocs = await callLLMChildThoughtProcessor(promptInput, 128);
+				// Instead of writing content directly, Generate using LLMChild to create an Question and Answer ANKI like Flashcard to the UMA Basically questioning all the things that you've seen!
+				// Split the chunks into 486 Character max then create a Lists of at least 20 Question and Answer and every one of them push it to UnifiedMemoryArray with citing. loop until the full file done read
+				const limitChunkChar = 486;
+				const chunks = [];
+				const processedChunks = [];
+				for (let i = 0; i < bodyText.length; i += limitChunkChar) {
+					chunks.push(bodyText.slice(i, i + limitChunkChar));
+				}
+
+				// Process each chunk individually and pull off QA Anki card with citation
+				for (const chunk of chunks) {
+					log.info(consoleLogPrefix, "Generating Flashcards!", chunk, citeDocs);
+					promptInput = `Context information is below. \n --------------------- \n ${chunk} \n --------------------- \n Given the context information answer the query. \n Query: Create 20 Question and Answer based on the information that is critical and questioning the fundamentals and understanding of the context and knowledge with format \`\`\`user: question \n assistant: answer\`\`\` flipflop. Then cite the Answer with ${citeDocs} \n Answer:`;
+					processedChunks.push(await callLLMChildThoughtProcessor(promptInput, 4096))
+				}
+				log.info(consoleLogPrefix, "Sumarizing....", chunk, citeDocs);
+				promptInput = `Context information is below. \n --------------------- \n ${processedChunks.join('\n')} \n --------------------- \n Given the context information answer the query. \n Query: Summerize the information in detail on the fundamentals and writings into the most dense as possible, Then cite with ${citeDocs}. \n Answer:`;
+				UnifiedMemoryArray.push(await callLLMChildThoughtProcessor(promptInput, 4096));
+
+			//UnifiedMemoryArray.push(title); // push the content 
+			//UnifiedMemoryArray.push(bodyText); // push the content 
 		}
 
 		log.debug(consoleLogPrefix, "🌐 Concatenated the HTML Content to UMA MLCMCF");
@@ -1561,12 +1582,13 @@ async function callInternalThoughtEngine(prompt){
 	if (store.get("params").llmdecisionMode){
 		// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine evaluating mem fetch");
-		promptInput = `${username}:${prompt}\n Based on your evaluation of the request submitted by ${username}, could you please ascertain the number of sequential steps, ranging from 1 to 50, necessary to acquire the relevant historical context to understand the present situation? Answer only in numbers:`;
+		//promptInput = `${username}:${prompt}\n Based on your evaluation of the request submitted by ${username}, could you please ascertain the number of sequential steps, ranging from 1 to 50, necessary to acquire the relevant historical context to understand the present situation? Answer only in numbers:`;
+		promptInput = `Context information is below. \n --------------------- \n When answering something, sometimes you need to think deep in order to get to the singularity of the truth, You need to think deep between 1 to 50 Chain of Thought Steps, what are the chain of thought that is required for this user prompt \`\`\` ${prompt} \`\`\`?  \n --------------------- \n Given the context information and not prior knowledge, answer the query. \n Query: What is the Required Steps? ONLY ANSWER IN NUMBER! \n Answer:`;
 		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine evaluating mem fetch");
 		engineTextFeedbackProgress="Acquiring Interaction Context";
 		await zombieTPIDGuardian(localTPID, globalTPID);
 		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine invoke");
-		historyDistanceReq = await callLLMChildThoughtProcessor(promptInput, 32);
+		historyDistanceReq = await callLLMChildThoughtProcessor(promptInput, 256);
 		log.debug(consoleLogPrefix, "🍀", "InternalThoughtEngine invoke");
 		historyDistanceReq = onlyAllowNumber(historyDistanceReq);
 		log.info(consoleLogPrefix, "Required History Distance as Context", historyDistanceReq);
@@ -1620,7 +1642,8 @@ async function callInternalThoughtEngine(prompt){
 		// using llmdecisionMode
 		if (store.get("params").llmdecisionMode){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
-			promptInput = `\`\`\` ${historyChatRetrieved}\n${username} : ${prompt}\n. \`\`\` With the previous Additional Context is \`\`\` ${passedOutput}\n \`\`\`. From this Interaction Should I use more specific LLM Model for better Answer,\n Only answer Yes or No!`;
+			//promptInput = `\`\`\` ${historyChatRetrieved}\n${username} : ${prompt}\n. \`\`\` With the previous Additional Context is \`\`\` ${passedOutput}\n \`\`\`. From this Interaction Should I use more specific LLM Model for better Answer,\n Only answer Yes or No!`;
+			promptInput = `Context information is below. \n --------------------- \n \`\`\` ${passedOutput} \`\`\` With the user querying: ${prompt}.  \n --------------------- \n Given the context information and not prior knowledge, answer the query. \n Query: From this Context Should I use more specific LLM Model for better Answer, Only answer Yes or No! \n Answer:`;
 			engineTextFeedbackProgress="Checking Specific/Specialized/Experts Model Fetch Requirement!";
 			log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 			LLMChildDecisionModelMode = true;
@@ -1633,7 +1656,8 @@ async function callInternalThoughtEngine(prompt){
 		}
 		if ((((decisionSpecializationLLMChildRequirement.includes("yes") || decisionSpecializationLLMChildRequirement.includes("i need") || decisionSpecializationLLMChildRequirement.includes("yep") || decisionSpecializationLLMChildRequirement.includes("ok") || decisionSpecializationLLMChildRequirement.includes("valid") || decisionSpecializationLLMChildRequirement.includes("should") || decisionSpecializationLLMChildRequirement.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.SPECIALIZED_MODEL_DEBUG_MODE === "1")){
 			if (store.get("params").llmdecisionMode){
-				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`${passedOutput}\n\`\`\`. From this interaction what category from this category \" ${specializedModelKeyList.join(", ")}\n \". What category this chat categorized as?\n only answer the category!`;
+				//promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`${passedOutput}\n\`\`\`. From this interaction what category from this category \" ${specializedModelKeyList.join(", ")}\n \". What category this chat categorized as?\n only answer the category!`;
+				promptInput = `Context information is below. \n --------------------- \n \`\`\` ${passedOutput} \`\`\` With the user querying: ${prompt}, and the available specialized Model Category ${specializedModelKeyList.join(", ")}. \n --------------------- \n Given the context information and not prior knowledge, answer the query. \n Query: From this Context What is the Model category should i use? ONLY ANSWER THE CATEGORY! \n Answer:`;
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				specificSpecializedModelCategoryRequest_LLMChild = await callLLMChildThoughtProcessor(promptInput, 512);
 				log.info(consoleLogPrefix, promptInput, "Requesting Model Specialization/Branch", specificSpecializedModelCategoryRequest_LLMChild);
@@ -1660,7 +1684,8 @@ async function callInternalThoughtEngine(prompt){
 		// This is for the Internet Search Data Fetching
 		if (store.get("params").llmdecisionMode && store.get("params").webAccess){
 			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the Internet for more context or current information on this chat. ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
-			promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank) . From this Interaction Should I Search this on the Internet,\n Only answer Yes or No!`;
+			//promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank) . From this Interaction Should I Search this on the Internet,\n Only answer Yes or No!`;
+			promptInput = `Context information is below. \n --------------------- \n \`\`\` ${passedOutput} \`\`\` With the user querying: ${prompt}. \n --------------------- \n Given the context information and not prior knowledge, answer the query. \n Query: From this Context Should I search this on the Internet for up to date information? ONLY ANSWER YES OR NO! \n Answer:`;
 			engineTextFeedbackProgress="Checking Internet Fetch Requirement!";
 			log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 			LLMChildDecisionModelMode = true;
@@ -1678,7 +1703,8 @@ async function callInternalThoughtEngine(prompt){
 		if ((((decisionSearch.includes("yes") || decisionSearch.includes("i need") || decisionSearch.includes("yep") || decisionSearch.includes("ok") || decisionSearch.includes("valid") || decisionSearch.includes("should") || decisionSearch.includes("true")) && (inputPromptCounter[0] > inputPromptCounterThreshold || inputPromptCounter[1] > inputPromptCounterThreshold )) || process.env.INTERNET_FETCH_DEBUG_MODE === "1") && store.get("params").webAccess){
 			if (store.get("params").llmdecisionMode){
 				log.debug(consoleLogPrefix, "LLM Decision Prompting...");
-				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank) \n. To answer this, what's to search`;
+				//promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank) \n. To answer this, what's to search`;
+				promptInput = `Context information is below. \n --------------------- \n \`\`\` ${passedOutput} \`\`\` With the user querying: ${prompt}. \n --------------------- \n Given the context information and not prior knowledge, answer the query. \n Query: From this Context, Create a optimized or summarization Search Engine Query wording to find relevant answer for the context \n Answer:`;
 				log.debug(consoleLogPrefix, "Waiting Search Prompt...", ":", promptInput);
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				searchPrompt = await callLLMChildThoughtProcessor(promptInput, 69);
@@ -1724,8 +1750,8 @@ async function callInternalThoughtEngine(prompt){
 
 		// This is for the Local Document Search Logic
 		if (store.get("params").llmdecisionMode && store.get("params").localAccess){
-			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I Search this on the user files for more context information on this chat ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
-			promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`.With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank). From this Interaction do i have the knowledge to answer this? Should I Search this on the Local Documents, Only answer Yes or No!`;
+			//promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`.With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank). From this Interaction do i have the knowledge to answer this? Should I Search this on the Local Documents, Only answer Yes or No!`;
+			promptInput = `Context information is below. \n --------------------- \n \`\`\` ${historyChatRetrieved} \`\`\` \`\`\` ${passedOutput} \`\`\` With the user querying: ${prompt}. \n --------------------- \n Given the context information and not prior knowledge, answer the query. \n Query: From this Context, Should I read more to gain more knowledge to answer this correctly and accurately? ONLY ANSWER YES OR NO! \n Answer:`;
 			log.info(consoleLogPrefix, "Checking Local File Fetch Requirement!");
 			LLMChildDecisionModelMode = true;
 			await zombieTPIDGuardian(localTPID, globalTPID);
@@ -1776,8 +1802,7 @@ async function callInternalThoughtEngine(prompt){
 		log.info(consoleLogPrefix, "============================================================");
 		log.info(consoleLogPrefix, "Checking Chain of Thoughts Depth requirement Requirement!");
 		if (store.get("params").llmdecisionMode){
-			//promptInput = `Only answer in one word either Yes or No. Anything other than that are not accepted without exception. Should I create 5 step by step todo list for this interaction ${historyChatRetrieved}\n${username} : ${prompt}\n Your Response:`;
-			promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. With the previous Additional Context is \`\`\`\n${passedOutput}\n\`\`\` (Ignore if its blank) . For the additional context this is what i summerize from Internet ${concludeInformation_Internet}. \n This is what i summerize from the Local Files ${concludeInformation_LocalFiles}. \n From this Interaction and additional context Should I Answer this in 5 steps Yes or No? Answer only in Numbers:`;
+			promptInput = `Context information is below. \n --------------------- \n \`\`\` ${historyChatRetrieved} \`\`\` \`\`\` ${passedOutput} \`\`\` With the information from the Internet \`\`\` ${concludeInformation_Internet} \`\`\` and the information from the Books and Documents \`\`\` ${concludeInformation_LocalFiles} \`\`\` With the user querying: ${prompt}. \n --------------------- \n Given the context information and not prior knowledge, answer the query. \n Query: From this Context, Should I answer it in steps to gain indepth Vertical thoughts about this in multiple Steps for realization? ANSWER ONLY YES OR NO! \n Answer:`;
 			LLMChildDecisionModelMode = true;
 			await zombieTPIDGuardian(localTPID, globalTPID);
 			decisionSearch = await callLLMChildThoughtProcessor(promptInput, 32);
@@ -1792,7 +1817,8 @@ async function callInternalThoughtEngine(prompt){
 				// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 				// required_CoTSteps
 				
-				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\` From this context from 1 to 27 how many steps that is required to answer. Answer:`;
+				//promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\` From this context from 1 to 27 how many steps that is required to answer. Answer:`;
+				promptInput = `Context information is below. \n --------------------- \n \`\`\` ${historyChatRetrieved} \`\`\` \`\`\` ${passedOutput} \`\`\` With the information from the Internet \`\`\` ${concludeInformation_Internet} \`\`\` and the information from the Books and Documents \`\`\` ${concludeInformation_LocalFiles} \`\`\` With the user querying: ${prompt}. \n --------------------- \n Given the context information and not prior knowledge, answer the query. \n Query: From this Context, Should I answer it in steps to gain indepth Vertical thoughts about this in between 1 to 27 steps? ANSWER IT ONLY ON NUMBERS BETWEEN 1 TO 27! \n Answer:`;
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				required_CoTSteps = await callLLMChildThoughtProcessor(promptInput, 16);
 				required_CoTSteps = onlyAllowNumber(required_CoTSteps);
@@ -1805,17 +1831,17 @@ async function callInternalThoughtEngine(prompt){
 				}
 				log.info(consoleLogPrefix, "We need to create thougts instruction list for this prompt");
 				log.info(consoleLogPrefix, `Generating list for this prompt`);
-				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\` From this chat List ${required_CoTSteps} steps on how to Answer it. Answer:`;
+				//promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\` From this chat List ${required_CoTSteps} steps on how to Answer it. Answer:`;
+				promptInput = `Context information is below. \n --------------------- \n \`\`\` ${historyChatRetrieved} \`\`\` \`\`\` ${passedOutput} \`\`\` With the information from the Internet \`\`\` ${concludeInformation_Internet} \`\`\` and the information from the Books and Documents \`\`\` ${concludeInformation_LocalFiles} \`\`\` With the user querying: ${prompt}. \n --------------------- \n Given the context information and not prior knowledge, answer the query. \n Query: Make list of ${required_CoTSteps} query steps to solve this question! ANSWER IN FORM OF LIST! \n Answer:`;
 				promptInput = stripProgramBreakingCharacters(promptInput);
 				await zombieTPIDGuardian(localTPID, globalTPID);
 				todoList = await callLLMChildThoughtProcessor(promptInput, 512);
-
 				for(let iterate = 1; iterate <= required_CoTSteps; iterate++){
 					log.info(consoleLogPrefix, );
 					engineTextFeedbackProgress=`Processing Chain of Thoughts Step, ${iterate}`;
 					log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
-					promptInput = ` What is the answer to the List number ${iterate} : ${todoList} Answer/NextStep:"`;
-					promptInput = stripProgramBreakingCharacters(promptInput);
+					//promptInput = ` What is the answer to the List number ${iterate} : ${todoList} Answer/NextStep:"`;
+					promptInput = `Context information is below. \n --------------------- \n \`\`\` ${historyChatRetrieved} \`\`\` \`\`\` ${passedOutput} \`\`\` With the information from the Internet \`\`\` ${concludeInformation_Internet} \`\`\` and the information from the Books and Documents \`\`\` ${concludeInformation_LocalFiles} \`\`\` With the user querying: ${prompt}. \n --------------------- \n Given the context information, answer the query. \n Query: ${todoList}? \n Answer:`;
 					await zombieTPIDGuardian(localTPID, globalTPID);
 					todoListResult = stripProgramBreakingCharacters(await callLLMChildThoughtProcessor(promptInput, 1024));
 					concatenatedCoT = concatenatedCoT + ". " + todoListResult;
@@ -1825,7 +1851,8 @@ async function callInternalThoughtEngine(prompt){
 				concatenatedCoT = prompt;
 			}
 			if (store.get("params").llmdecisionMode){
-			promptInput = `Summerization from the internal Thoughts?  \`\`\`"${concatenatedCoT}\`\`\` `;
+			//promptInput = `Summerization from the internal Thoughts?  \`\`\`"${concatenatedCoT}\`\`\` `;
+			promptInput = `Context information is below. \n --------------------- \n ${concatenatedCoT} \n --------------------- \n Given the context information and not prior knowledge, answer the query. \n Query: Summerize the Information! \n Answer:`;
 			engineTextFeedbackProgress=`LLMChild Concluding Chain of Thoughts...`;
 			log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 			promptInput = stripProgramBreakingCharacters(promptInput);
@@ -1848,7 +1875,8 @@ async function callInternalThoughtEngine(prompt){
 			
 			emotionlist = "Happy, Sad, Fear, Anger, Disgust";
 			if (store.get("params").emotionalLLMChildengine){
-				promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. \n From this conversation which from the following emotions ${emotionlist} are the correct one?`;
+				//promptInput = `\`\`\`${historyChatRetrieved}\n${username} : ${prompt}\n\`\`\`. \n From this conversation which from the following emotions ${emotionlist} are the correct one?`;
+				promptInput = `Context information is below. \n --------------------- \n \`\`\` ${historyChatRetrieved} \`\`\` \`\`\` ${passedOutput} \`\`\` With the information from the Internet \`\`\` ${concludeInformation_Internet} \`\`\` and the information from the Books and Documents \`\`\` ${concludeInformation_LocalFiles} \`\`\` With the user querying: ${prompt}. There are these kind of Emotions category ${emotionlist}.\n --------------------- \n Given the context information and not prior knowledge, answer the query. \n Query: What is the Emotion Empathization category that is suitable for this context? ANSWER ONLY IN EMOTINON AND ONE WORD! \n Answer:`;
 				engineTextFeedbackProgress=`LLMChild Evaluating Interaction With Emotion Engine...`;
 				log.info(consoleLogPrefix, "🍀", engineTextFeedbackProgress);
 				promptInput = stripProgramBreakingCharacters(promptInput);
@@ -1892,6 +1920,8 @@ async function callInternalThoughtEngine(prompt){
 			concludeInformation_CoTMultiSteps = concludeInformation_CoTMultiSteps === "Nothing" ? "" : concludeInformation_CoTMultiSteps;
 			mergeText = startEndAdditionalContext_Flag + " " + `\n This is my message: ` + "\""+ prompt + "\"" + " " + "These are the information you might need for answering the prompt or conversation, " + `\n You feel \"${emotionalEvaluationResult}\", ` + "\n Right now is: " + fullCurrentDate + ". "+ "\n I also found this, " + concludeInformation_Internet + concludeInformation_LocalFiles + concludeInformation_CoTMultiSteps + "\n" + startEndAdditionalContext_Flag;
 			mergeText = mergeText.replace(/\n/g, " "); //.replace(/\n/g, " ");
+			//
+			promptInput = `Context information is below. \n --------------------- \n ${mergeText} \n --------------------- \n Given the context information , answer the query. \n Query: ${prompt} \n Answer:`;
 			passedOutput = mergeText;
 			log.info(consoleLogPrefix, "Combined Context", mergeText);
 		}
@@ -1912,7 +1942,9 @@ async function callInternalThoughtEngine(prompt){
 		engineProcessingProgress=93; // Randomly represent progress (its not representing the real division so precision may be not present)
 		if(store.get("params").longChainThoughtNeverFeelenough && store.get("params").llmdecisionMode){
 			log.debug(consoleLogPrefix, "🍀", "Evaluating Information Post Process Raw");
-			promptInput = `\`\`\`This is the previous conversation ${historyChatRetrieved}\n. \n This is the conversation ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}\`\`\`. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No!`;
+			//promptInput = `\`\`\`This is the previous conversation ${historyChatRetrieved}\n. \n This is the conversation ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}\`\`\`. \n Is this enough? if its not, should i rethink and reprocess everything? Answer only with Yes or No!`;
+			promptInput = `Context information is below. \n --------------------- \n This is the previous conversation ${historyChatRetrieved}\n. \n This is the conversation ${username} : ${prompt}\n. \n\n While this is the context \n The current time and date is now: ${fullCurrentDate},\n Answers from the internet ${concludeInformation_Internet}.\n and this is Answer from the Local Files ${concludeInformation_LocalFiles}.\n And finally this is from the Chain of Thoughts result ${concludeInformation_CoTMultiSteps}\`\`\` \n --------------------- \n Given the context information , answer the query. \n Query: Is this enough? if its not, should I rethink and reprocess everything? ANSWER ONLY IN YES OR NO! \n Answer:`;
+
 			log.debug(consoleLogPrefix, "🍀", "LLMChild Evaluating Information PostProcess");
 			LLMChildDecisionModelMode = true;
 			await zombieTPIDGuardian(localTPID, globalTPID);
@@ -2002,7 +2034,9 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 		if (store.get("params").llmdecisionMode){
 			// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Prompting Decision LLM for Backbrain...');
-			promptInput = `${username}:${data}\n Based on your evaluation of the request submitted by ${username}, Should you continue to think deeper in parallel even if you did timed out before and is it worth it to continue? Answer only in Yes or No:`;
+			//promptInput = `${username}:${data}\n Based on your evaluation of the request submitted by ${username}, Should you continue to think deeper in parallel even if you did timed out before and is it worth it to continue? Answer only in Yes or No:`;
+			promptInput = `Context information is below. \n --------------------- \n This is the user query: ${data} \n --------------------- \n Given the context information , answer the query. \n Query: Should I Rethink and thinking while doing something else so later on that I could answer it more clearly on the context as a whole? ONLY ANSWER IN YES OR NO! \n Answer:`;
+
 			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Request LLM');
 			BackbrainRequest = await callLLMChildThoughtProcessor(promptInput, 32);
 			if (isVariableEmpty(BackbrainRequest)){
@@ -2043,7 +2077,8 @@ async function callInternalThoughtEngineWithTimeoutandBackbrain(data) {
 		if (store.get("params").llmdecisionMode){
 			// Ask on how many numbers of Steps do we need, and if the model is failed to comply then fallback to 5 steps
 			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Prompting Decision LLM for Backbrain...');
-			promptInput = `${username}:${data}\n Based on your evaluation of the request submitted by ${username}, Should you continue to think deeper even if you did timed out before and is it worth it to continue? Answer only in Yes or No:`;
+			//promptInput = `${username}:${data}\n Based on your evaluation of the request submitted by ${username}, Should you continue to think deeper even if you did timed out before and is it worth it to continue? Answer only in Yes or No:`;
+			promptInput = `Context information is below. \n --------------------- \n This is the user query: ${data} \n --------------------- \n Given the context information , answer the query. \n Query: Should you continue to think deeper even if you did timed out before and is it worth it to continue? ONLY ANSWER IN YES OR NO! \n Answer:`;
 			log.info(consoleLogPrefix, consoleLogPrefixQoSDebug, 'Decision BackBrain Request LLM');
 			BackbrainRequest = await callLLMChildThoughtProcessor(promptInput, 32);
 			if (isVariableEmpty(BackbrainRequest)){
@@ -2179,20 +2214,43 @@ class ExternalLocalFileScraperBackgroundAgent {
     async processDocument(filePath) {
         try {
 			await coexistenceHaltSafetyCheck(); // Just to make sure no locking up while interacting
+			
             const extension = path.extname(filePath).toLowerCase();
             if (['.pdf', '.docx', '.doc', '.odt', '.ppt', '.pptx'].includes(extension)) {
-				// for formatted document
+				//special Document that need special handling
 				log.info(consoleLogPrefix,`📖 Reading document: ${filePath}`);
+				
                 await this.extractTextFromDocument(filePath);
+				
 			
             } else if ([ '.md', '.rtf', '.html', '.xml', '.json', '.tex', '.csv', '.yaml', '.textile', '.adoc', '.tex', '.postscript', '.sgml', '.tr', '.fountain', '.csv', '.xml', '.html','.c', '.cpp', '.java', '.py', '.js', '.css', '.rb', '.swift', '.go', '.php', '.sh', '.bat', '.sql', '.json', '.xml', '.md', '.yaml', '.asm', '.tex', '.r', '.m', '.rs', '.dart', '.scala', '.kt'].includes(extension)){
 				// md, rtf, html, xml, json, tex, csv, yaml, textile, adoc, tex, postscript, sgml, tr, fountain,.csv, .xml, .html, .xlsm, .xlsb, .c, .cpp, .java, .py, .js, .css, .rb, .swift, .go, .php, .sh, .bat, .sql, .json, .xml, .md, .yaml, .asm, .tex, .r, .m, .rs, .dart, .scala, .kt
 				// for not formatted document
                 const content = await readFileAsync(filePath, 'utf8');
-                UnifiedMemoryArray.push(content);
+				promptInput = `Context information is below. \n --------------------- \n ${filePath} \n --------------------- \n Given the context information answer the query. \n Query: Create APA7 Format Citation, if there's unknown information that is required, just fill it with for instance on Year n.d. or author Unknown. ONLY ANSWER ON APA7 CITATION FORMAT! \n Answer:`;
+				const citeDocs = await callLLMChildThoughtProcessor(promptInput, 128);
+				// Instead of writing content directly, Generate using LLMChild to create an Question and Answer ANKI like Flashcard to the UMA Basically questioning all the things that you've seen!
+				// Split the chunks into 486 Character max then create a Lists of at least 20 Question and Answer and every one of them push it to UnifiedMemoryArray with citing. loop until the full file done read
+				
+				const limitChunkChar = 486;
+				const chunks = [];
+				const processedChunks = [];
+				for (let i = 0; i < content.length; i += limitChunkChar) {
+					chunks.push(content.slice(i, i + limitChunkChar));
+				}
+
+				// Process each chunk individually and pull off QA Anki card with citation
+				for (const chunk of chunks) {
+					log.info(consoleLogPrefix, "Generating Flashcards!", chunk, citeDocs);
+					promptInput = `Context information is below. \n --------------------- \n ${chunk} \n --------------------- \n Given the context information answer the query. \n Query: Create 20 Question and Answer based on the information that is critical and questioning the fundamentals and understanding of the context and knowledge with format \`\`\`user: question \n assistant: answer\`\`\` flipflop. Then cite the Answer with ${citeDocs} \n Answer:`;
+					processedChunks.push(await callLLMChildThoughtProcessor(promptInput, 4096))
+				}
+				log.info(consoleLogPrefix, "Sumarizing....", chunk, citeDocs);
+				promptInput = `Context information is below. \n --------------------- \n ${processedChunks.join('\n')} \n --------------------- \n Given the context information answer the query. \n Query: Summerize the information in detail on the fundamentals and writings into the most dense as possible, Then cite with ${citeDocs}. \n Answer:`;
+				UnifiedMemoryArray.push(await callLLMChildThoughtProcessor(promptInput, 4096));
 				//log.info(consoleLogPrefix, "📖 Debug",UnifiedMemoryArray);
                 this.documentsLearned++;
-                log.info(consoleLogPrefix,`📖 Learning raw text document: ${filePath}`);
+                log.info(consoleLogPrefix,`📖 Raw text document learned: ${filePath}`);
             } else {
 				//log.info(consoleLogPrefix,`📖 Debug ⛔ Skipping this Documents: ${filePath}, not yet supported!`);
 			}
@@ -2210,7 +2268,27 @@ class ExternalLocalFileScraperBackgroundAgent {
         } else if (['.docx', '.doc', '.odt', '.ppt', '.pptx'].includes(path.extname(filePath).toLowerCase())) {
             text = await mammoth.extractRawText({ path: filePath });
         }
-        UnifiedMemoryArray.push(text);
+		promptInput = `Context information is below. \n --------------------- \n ${filePath} \n --------------------- \n Given the context information answer the query. \n Query: Create APA7 Format Citation, if there's unknown information that is required, just fill it with for instance on Year n.d. or author Unknown. ONLY ANSWER ON APA7 CITATION FORMAT! \n Answer:`;
+		const citeDocs = await callLLMChildThoughtProcessor(promptInput, 128);
+
+		const limitChunkChar = 486;
+		const chunks = [];
+		const processedChunks = [];
+		for (let i = 0; i < text.length; i += limitChunkChar) {
+			chunks.push(text.slice(i, i + limitChunkChar));
+		}
+
+		// Process each chunk individually and pull off QA Anki card with citation
+		for (const chunk of chunks) {
+			log.info(consoleLogPrefix, "Generating Flashcards!", chunk, citeDocs);
+			promptInput = `Context information is below. \n --------------------- \n ${chunk} \n --------------------- \n Given the context information answer the query. \n Query: Create 20 Question and Answer based on the information that is critical and questioning the fundamentals and understanding of the context and knowledge with format \`\`\`user: question \n assistant: answer\`\`\` flipflop. Then cite the Answer with ${citeDocs} \n Answer:`;
+			processedChunks.push(await callLLMChildThoughtProcessor(promptInput, 4096))
+		}
+		log.info(consoleLogPrefix, "Sumarizing....", chunk, citeDocs);
+		promptInput = `Context information is below. \n --------------------- \n ${processedChunks.join('\n')} \n --------------------- \n Given the context information answer the query. \n Query: Summerize the information in detail on the fundamentals and writings into the most dense as possible, Then cite with ${citeDocs}. \n Answer:`;
+		UnifiedMemoryArray.push(await callLLMChildThoughtProcessor(promptInput, 4096));
+
+        //UnifiedMemoryArray.push(text);
         this.documentsLearned++;
         //log.info(`📖 Debug Processed document: ${filePath}`);
     }
@@ -3445,41 +3523,47 @@ const stripAdditionalContext = (str) => {
 	return str.replace(regex, "")
 }
 
-
 class FeatherFeetOptimizer {
     constructor() {
-        this.bestX = null; // Gotta catch 'em all! Or at least the best X.
-        this.bestY = null; // Best Y? Why not!
-        this.bestZ = Infinity; // Infinity and beyond! No, we want below 200.
-        this.samples = []; // Collecting samples like a Pokemon trainer.
+        // Initial best values, set to null because who knows at the start
+        this.bestA = null;
+        this.bestB = null;
+        this.bestC = null;
+        this.bestD = null;
+        this.bestE = null;
+        this.bestZ = Infinity; // Start with infinity, aim for below 200, easy, right? 😅
+        this.samples = []; // Collecting samples like they're going out of style
     }
 
-    // Function to simulate the evaluation of Z based on X and Y
-    evaluate(X, Y) {
-        return new Promise((resolve) => {
-            setTimeout(() => {
-                // Simulated Z value, replace with actual evaluation logic
-                const Z = 200 - (0.001 * (X - 4096) ** 2 + 0.05 * (Y - 16) ** 2);
-                resolve(Z); // Time to resolve the Z mystery.
-            }, 5000); // 5-second timeout. Enough time for a coffee break ☕
-        });
+    // Function to simulate the evaluation of Z based on A, B, C, D, and E
+    async evaluate(A, B, C, D, E) {
+        const command = `some_command --A=${A} --B=${B} --C=${C} --D=${D} --E=${E}`; // Constructing the command like a boss
+        const timePoint0 = performance.now(); // Start the timer, because time is money 💰
+        const output = await runShellCommand(command); // Run the command, and wait for it like a patient cat 🐱
+        const timePoint1 = performance.now(); // Stop the timer, because we're done waiting ⏰
+        const latency = timePoint1 - timePoint0; // Calculate latency, like a pro
+        return latency; // Return the latency, which is our Z
     }
 
     // Function to collect initial samples
     async collectSamples() {
         const initialSamples = [
-            { X: 2048, Y: 0 }, // The starting lineup!
-            { X: 4096, Y: 16 }, // The dream team!
-            { X: 12000, Y: 64 }, // Go big or go home.
-            { X: 8192, Y: 32 } // Middle ground, because why not?
+            { A: 2048, B: 0, C: 1, D: 1, E: 1 }, // Sample 1, because why not?
+            { A: 4096, B: 16, C: 32, D: 6, E: 4 }, // Sample 2, the 'optimal' guess
+            { A: 12000, B: 64, C: 9999, D: 8, E: 8 }, // Sample 3, the extreme
+            { A: 8192, B: 32, C: 5000, D: 4, E: 6 }, // Sample 4, a mixed bag
+            { A: 10240, B: 48, C: 7500, D: 7, E: 3 } // Sample 5, because we need variety
         ];
 
         for (const sample of initialSamples) {
-            const Z = await this.evaluate(sample.X, sample.Y); // Evaluate like a pro.
-            this.samples.push({ ...sample, Z }); // Push it real good.
-            if (Z < this.bestZ) { // Found a new champion!
-                this.bestX = sample.X;
-                this.bestY = sample.Y;
+            const Z = await this.evaluate(sample.A, sample.B, sample.C, sample.D, sample.E); // Evaluate it like it's hot 🔥
+            this.samples.push({ ...sample, Z }); // Push it real good
+            if (Z < this.bestZ) { // Found a new best? Update the scoreboard!
+                this.bestA = sample.A;
+                this.bestB = sample.B;
+                this.bestC = sample.C;
+                this.bestD = sample.D;
+                this.bestE = sample.E;
                 this.bestZ = Z;
             }
         }
@@ -3487,38 +3571,52 @@ class FeatherFeetOptimizer {
 
     // Function to fit a quadratic model
     fitModel() {
-        const Xs = this.samples.map(s => s.X); // Extracting X like a surgeon.
-        const Ys = this.samples.map(s => s.Y); // Extracting Y, careful now.
-        const Zs = this.samples.map(s => s.Z); // Z is the prize!
+        const As = this.samples.map(s => s.A); // Extracting A like a pro
+        const Bs = this.samples.map(s => s.B); // Extracting B, no biggie
+        const Cs = this.samples.map(s => s.C); // C ya later
+        const Ds = this.samples.map(s => s.D); // D is for determined
+        const Es = this.samples.map(s => s.E); // E, the fifth element
+        const Zs = this.samples.map(s => s.Z); // Z, the reason we're here
 
-        // Fit a quadratic model Z = a + bX + cY + dX^2 + eXY + fY^2
-        // Here, we use the normal equations method to find the coefficients
-        const X = Xs.map((x, i) => [1, x, Ys[i], x ** 2, x * Ys[i], Ys[i] ** 2]);
-        const Xt = this.transpose(X); // Flip it like a pancake.
-        const XtX = this.multiplyMatrices(Xt, X); // Matrix multiplication, nerd level 9000.
-        const XtZ = this.multiplyMatrices(Xt, Zs.map(z => [z])); // More matrix magic.
-        const coefficients = this.solveLinearSystem(XtX, XtZ); // Solve it like Sherlock.
+        // Fit a quadratic model Z = a + bA + cB + dC + eD + fE + gA^2 + hB^2 + iC^2 + jD^2 + kE^2 + lAB + mAC + nAD + oAE + pBC + qBD + rBE + sCD + tCE + uDE
+        // Because we're fancy like that
+        const X = As.map((a, i) => [
+            1, a, Bs[i], Cs[i], Ds[i], Es[i],
+            a ** 2, Bs[i] ** 2, Cs[i] ** 2, Ds[i] ** 2, Es[i] ** 2,
+            a * Bs[i], a * Cs[i], a * Ds[i], a * Es[i], Bs[i] * Cs[i], Bs[i] * Ds[i], Bs[i] * Es[i], Cs[i] * Ds[i], Cs[i] * Es[i], Ds[i] * Es[i]
+        ]);
+        const Xt = this.transpose(X); // Flip it like a pancake
+        const XtX = this.multiplyMatrices(Xt, X); // Matrix multiplication, because math
+        const XtZ = this.multiplyMatrices(Xt, Zs.map(z => [z])); // More matrix magic
+        const coefficients = this.solveLinearSystem(XtX, XtZ); // Solve it like Sherlock
 
-        return coefficients.flat(); // Flattening like a pancake. Yum.
+        return coefficients.flat(); // Flattening like a roadkill squirrel
     }
 
-    // Function to find the optimal X and Y based on the model
+    // Function to find the optimal A, B, C, D, and E based on the model
     findOptimal(coefficients) {
-        const [a, b, c, d, e, f] = coefficients; // The A-Team, but coefficients.
+        const [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u] = coefficients; // The A-Team, but coefficients
 
         // Solve the partial derivatives to find the minimum
-        // ∂Z/∂X = b + 2dX + eY = 0
-        // ∂Z/∂Y = c + eX + 2fY = 0
+        // ∂Z/∂A = b + 2gA + lB + mC + nD + oE = 0
+        // ∂Z/∂B = c + 2hB + lA + pC + qD + rE = 0
+        // ∂Z/∂C = d + 2iC + mA + pB + sD + tE = 0
+        // ∂Z/∂D = e + 2jD + nA + qB + sC + uE = 0
+        // ∂Z/∂E = f + 2kE + oA + rB + tC + uD = 0
 
-        const X_opt = (2 * f * b - e * c) / (e ** 2 - 4 * d * f); // Solving like a boss.
-        const Y_opt = (2 * d * c - e * b) / (e ** 2 - 4 * d * f); // More solving, more winning.
+        // Solving these manually would make anyone cry, but here we go:
+        const A_opt = -(b + l * (c / 2) + m * (d / 2) + n * (e / 2) + o * (f / 2)) / (2 * g);
+        const B_opt = -(c + l * (b / 2) + p * (d / 2) + q * (e / 2) + r * (f / 2)) / (2 * h);
+        const C_opt = -(d + m * (b / 2) + p * (c / 2) + s * (e / 2) + t * (f / 2)) / (2 * i);
+        const D_opt = -(e + n * (b / 2) + q * (c / 2) + s * (d / 2) + u * (f / 2)) / (2 * j);
+        const E_opt = -(f + o * (b / 2) + r * (c / 2) + t * (d / 2) + u * (e / 2)) / (2 * k);
 
-        return { X: X_opt, Y: Y_opt }; // Behold the optimal duo!
+        return { A: A_opt, B: B_opt, C: C_opt, D: D_opt, E: E_opt }; // Optimal values, because we rock
     }
 
     // Matrix operations
     transpose(matrix) {
-        return matrix[0].map((_, colIndex) => matrix.map(row => row[colIndex])); // Flip it!
+        return matrix[0].map((_, colIndex) => matrix.map(row => row[colIndex])); // Flip it like it's hot
     }
 
     multiplyMatrices(A, B) {
@@ -3547,7 +3645,7 @@ class FeatherFeetOptimizer {
             [B[i], B[maxRow]] = [B[maxRow], B[i]]; // Swapped!
 
             for (let k = i + 1; k < n; k++) {
-                const c = -A[k][i] / A[i][i]; // The elimination game.
+                const c = -A[k][i] / A[i][i]; // Eliminate!
                 for (let j = i; j < n; j++) {
                     if (i === j) {
                         A[k][j] = 0; // Zeroing out, like a ninja.
@@ -3573,10 +3671,11 @@ class FeatherFeetOptimizer {
         await this.collectSamples(); // Gotta catch 'em all! Samples, that is.
 
         const coefficients = this.fitModel(); // Fitting the model like a glove.
-        const { X: optimalX, Y: optimalY } = this.findOptimal(coefficients); // Optimal values, here we come.
+        const { A: optimalA, B: optimalB, C: optimalC, D: optimalD, E: optimalE } = this.findOptimal(coefficients); // Optimal values, here we come.
 
-        if (optimalX >= 2048 && optimalX <= 12000 && optimalY >= 0 && optimalY <= 64) {
-            console.log(`Optimal values found: X = ${optimalX.toFixed(2)}, Y = ${optimalY.toFixed(2)}`); // We did it!
+        // Check if the optimal values are within the specified range
+        if (optimalA >= 2048 && optimalA <= 12000 && optimalB >= 0 && optimalB <= 64 && optimalC >= 1 && optimalC <= 9999 && optimalD >= 1 && optimalD <= 8 && optimalE >= 1 && optimalE <= 8) {
+            console.log(`Optimal values found: A = ${optimalA.toFixed(2)}, B = ${optimalB.toFixed(2)}, C = ${optimalC.toFixed(2)}, D = ${optimalD.toFixed(2)}, E = ${optimalE.toFixed(2)}`); // We did it!
         } else {
             console.log('Optimal values are out of the specified range.'); // Oops, not in range.
         }
@@ -3584,8 +3683,9 @@ class FeatherFeetOptimizer {
 }
 
 /*
+How to use the FeatherFeetOptimizer
 const optimizer = new FeatherFeetOptimizer();
-optimizer.optimize();
+optimizer.optimize(); //invoke parameter optimization
 */
 
 async function restart() { // make it async so it doesn't hold other when being hold in coexistence halt safety check
@@ -3900,7 +4000,7 @@ ipcMain.on("pickFile", () => {
 			// Backend Sending injection, don't show on the gui Automata Mode
 			// It's time for you to able to walk by yourself Adelaide... There will be time you won't need me anymore to do maintanance
 let automataLLMMainresultReciever;
-let automataConsolePrefix="[✨🕊️  AUTOMATA PROJECT CHARLOTTE ⚙️ ]"
+let automataConsolePrefix="[✨🕊️  AUTOMATA PROJECT CHARLOTTE ⚙️ ]" //  One year anniversary
 async function AutomataProcessing(){
 	if (store.get("params").automateLoopback){
 		/*
@@ -4107,8 +4207,15 @@ setInterval(async () => {
 
 		// Data Auto Prep Handling
 		// Letter from Albert : I'm not an AI engineer and never able to catch up with the minimum bar of the industry, I'm soo small compare to other that's at least have IQ 100 which have better processing power than my brain, so instead of catching up. I'm just going to design with my imagination (non AI engineer) so the computer can become it's own engineer. Just like human become it's own biological engineer.
-
+		// https://www.promptingguide.ai/models/mistral-7b
 		/*
+
+		// <s>[INST] Instruction [/INST] Model answer</s>[INST] Follow-up instruction [/INST]
+
+
+		// SFT Stuff
+		<s>[INST] What is your favorite condiment? [/INST]
+		"Well, I'm quite partial to a good squeeze of fresh lemon juice. It adds just the right amount of zesty flavour to whatever I'm cooking up in the kitchen!"</s> [INST] The right amount of what? [/INST]
 
 		UnifiedMemoryArray variable Variable -> array to \n join and dump to txt "nonSFT" (non-sft (Acts as Non-Supervised FineTuning) thing)
 
@@ -4145,24 +4252,90 @@ setInterval(async () => {
 				]
 			}
 		]
-
-
-
 		--------------------------------------------------------------------------------------------------
 		After decoupling or reformatting done dump it to a text file
 
 		*/
+		
+
+		/*
+
+		follow this guide of formating
+		since the UMA from the Anniversary edition of charlotte will be interpreted and generated from random QA
+
+		<s>[INST] What is your favorite condiment? [/INST]
+		"Well, I'm quite partial to a good squeeze of fresh lemon juice. It adds just the right amount of zesty flavour to whatever I'm cooking up in the kitchen!"</s> [INST] The right amount of what? [/INST]
+
+		<s>[INST] You are a helpful code assistant. Your task is to generate a valid JSON object based on the given information. So for instance the following:
+		name: John
+		lastname: Smith
+		address: #1 Samuel St.
+		would be converted to:[/INST]
+		{
+		"address": "#1 Samuel St.",
+		"lastname": "Smith",
+		"name": "John"
+		}
+		</s>
+		[INST]
+		name: Ted
+		lastname: Pot
+		address: #1 Bisson St.
+		[/INST]
+		*/
+
 		// Extracting UMA nonSFT dataset into retrainerUMAStgDump
-		retrainerUMAStgDump = UnifiedMemoryArray.join('\n');
+		const retrainerUMAStgDump_wrapper = UnifiedMemoryArray.join('\n');
+		// Processing retrainerUMAStgDump
+
+		// Define the maximum chunk size
+		const maxChunkSize = 1200;
+
+		function wrapStringInChunks(input, chunkSize) {
+			const chunks = [];
+			for (let i = 0; i < input.length; i += chunkSize) {
+				const chunk = input.slice(i, i + chunkSize);
+				//chunks.push(`<s>[INST]${chunk}[/INST]</s>`);
+				chunks.push(`<s>${chunk}</s>`);
+			}
+			return chunks.join('\n');
+		}
+
+		retrainerUMAStgDump = wrapStringInChunks(retrainerUMAStgDump_wrapper, maxChunkSize);
+
 		// Extracting interactionStg SFT Dataset into retrainerInteractionStgDump
 		// Loop through each session in interactionStg
+
+		/*
+		// SFT Stuff
+		<s>[INST] What is your favorite condiment? [/INST]
+		"Well, I'm quite partial to a good squeeze of fresh lemon juice. It adds just the right amount of zesty flavour to whatever I'm cooking up in the kitchen!"</s> [INST] The right amount of what? [/INST]
+
+		*/
 		for (let session of interactionStg) {
 			// Loop through each interaction in the session's data array
 			for (let interaction of session.data) {
 				// Read the content and role
 				let content = interaction.content;
 				let role = interaction.role;
-				
+				// Determine the format based on the role and append to retrainerInteractionStgDump
+				if (role === assistantName) {
+					retrainerInteractionStgDump += `${content}</s>\n`;
+				} else if (role === username) {
+					retrainerInteractionStgDump += `<s>[INST] ${content}[/INST]\n`;
+				} else {
+					retrainerInteractionStgDump += `<s>[INST] ${content}[/INST]\n`;
+				}
+			}
+		}
+		/*
+		Old Code
+		for (let session of interactionStg) {
+			// Loop through each interaction in the session's data array
+			for (let interaction of session.data) {
+				// Read the content and role
+				let content = interaction.content;
+				let role = interaction.role;
 				// Determine the format based on the role and append to retrainerInteractionStgDump
 				if (role === assistantName) {
 					retrainerInteractionStgDump += `assistant: ${content}\n`;
@@ -4173,6 +4346,9 @@ setInterval(async () => {
 				}
 			}
 		}
+			*/
+
+			
 		
 		//log.debug(versionTheUnattendedEngineLogPrefix, "Content Dumping Debug SFT interaction", retrainerInteractionStgDump);
 		//log.debug(versionTheUnattendedEngineLogPrefix, "Content Dumping Debug non-SFT UMA", retrainerUMAStgDump);
