@@ -5,6 +5,7 @@ import subprocess
 import sys
 import multiprocessing
 import shutil
+import time
 
 # Define global variables
 rootdir = os.getcwd()
@@ -17,6 +18,23 @@ os.environ['CONDA_PREFIX'] = CONDA_PREFIX
 os.environ['LC_CTYPE'] = LC_CTYPE
 os.environ['N_PREFIX'] = N_PREFIX
 os.environ['PATH'] = os.pathsep.join([os.path.join(N_PREFIX, 'bin'), os.path.join(CONDA_PREFIX, 'bin'), os.environ['PATH']])
+global login   
+login = "UNK" 
+def superuserPreventionWorkaround_FalseUserWoraround(): 
+    #https://forum.sublimetext.com/t/os-getlogin-root-wrong/49442
+    #https://github.com/kovidgoyal/kitty/issues/6511
+    global login  #forward modified variable
+    login = os.getlogin()
+    if login == "root":
+        login = os.getenv("USER") #Grab $USER or USER var from the shell instead of the broken python os.getlogin() detetion
+    print(login)
+
+
+superuserPreventionWorkaround_FalseUserWoraround() #setting login variable as the replacement of broken os.getlogin()
+print(login)
+targetuserFixPerm=login + ":" + "admin"
+print(targetuserFixPerm)
+time.sleep(1)
 
 def check_superuser():
     if os.name == 'nt':
@@ -27,6 +45,8 @@ def check_superuser():
             return False
     else:
         return os.geteuid() == 0
+
+
 
 def check_relaunch_as_bash():
     if sys.argv[0].endswith('sh'):
@@ -107,6 +127,7 @@ def install_dependencies_linux():
             'swupd': ['sudo', 'swupd', 'bundle-add', 'c-basic'],
         }
         subprocess.call(install_commands[package_manager])
+    subprocess.call(['npm', 'install', '-g', 'npm@latest'])
 
 def install_dependencies_macos():
     if subprocess.call(["which", "xcode-select"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
@@ -118,15 +139,18 @@ def install_dependencies_macos():
     
     subprocess.call(['xcode-select', '--install'])
     subprocess.call(['sudo', 'xcodebuild', '-license', 'accept'])
-    subprocess.call(['sudo', 'chown', '-R', os.getlogin(), '/opt/homebrew/'])
-    subprocess.call(['sudo', 'chown', '-R', os.getlogin(), '/usr/local/homebrew/'])
+    print(login)
+    targetuserFixPerm=login + ":" + "admin"
+    subprocess.call(['sudo', 'chown', '-R', targetuserFixPerm, '/opt/homebrew'])
+    subprocess.call(['sudo', 'chown', '-R', targetuserFixPerm, '/usr/local/homebrew'])
     subprocess.call(['brew', 'doctor'])
     subprocess.call(['brew', 'tap', 'homebrew/core'])
     subprocess.call(['brew', 'tap', 'apple/apple'])
     subprocess.call(['brew', 'upgrade', '--greed'])
-    subprocess.call(['brew', 'install', 'python', 'node', 'cmake', 'mas'])
+    subprocess.call(['brew', 'reinstall', 'python', 'node', 'cmake', 'mas'])
     subprocess.call(['mas', 'install', '497799835'])
     subprocess.call(['npm', 'install', '-g', 'n'])
+    subprocess.call(['npm', 'install', '-g', 'npm@latest'])
     subprocess.call(['n', 'latest'])
 
 def install_dependencies_windows():
@@ -183,7 +207,7 @@ def clean_installed_folder():
     print("Cleaning Installed Folder to lower the chance of interfering with the installation process")
     
     # Run npm cache clean
-    subprocess.run(['npm', 'cache', 'clean', '--force'], check=True)
+    #subprocess.run(['npm', 'cache', 'clean', '--force'], check=True)
     
     # Remove directories
     directories_to_remove = [
@@ -329,7 +353,7 @@ def build_llama_gguf():
 
     os.chdir(rootdir)
 
-def build_gemma_base(binary_name):
+def build_gemma_base():
     print("Requesting Google Gemma Binary")
 
     os.chdir(os.path.join(rootdir, 'usr', 'vendor', 'gemma.cpp'))
@@ -554,13 +578,14 @@ def buildLLMBackend():
     print("Copying any Acceleration and Debugging Dependencies for Falcon")
     shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'ggllm.cpp', 'build', 'bin'), falcon_dir, dirs_exist_ok=True)
 
-    build_ggml_base('gpt-j')
+    # It's broken so we'll exclude it
+    #build_ggml_base('gpt-j')
     
-    ggml_gptj_dir = os.path.join(bin_dir, 'ggml-gptj')
-    os.makedirs(ggml_gptj_dir, exist_ok=True)
-    print("Copying any Acceleration and Debugging Dependencies for gpt-j")
-    shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'ggml', 'build', 'bin'), ggml_gptj_dir, dirs_exist_ok=True)
-    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'ggml', 'build', 'bin', 'gpt-j'), os.path.join(ggml_gptj_dir, 'LLMBackend-gpt-j'))
+    #ggml_gptj_dir = os.path.join(bin_dir, 'ggml-gptj')
+    #os.makedirs(ggml_gptj_dir, exist_ok=True)
+    #print("Copying any Acceleration and Debugging Dependencies for gpt-j")
+    #shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'ggml', 'build', 'bin'), ggml_gptj_dir, dirs_exist_ok=True)
+    #shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'ggml', 'build', 'bin', 'gpt-j'), os.path.join(ggml_gptj_dir, 'LLMBackend-gpt-j'))
 
     build_gemma_base()
     
@@ -611,10 +636,11 @@ def main():
     force_rebuild = os.getenv("FORCE_REBUILD", "0")
     
     if not os.path.isfile(os.path.join(rootdir, "installed.flag")) or force_rebuild == "1":
-        clean_installed_folder(rootdir)
+        clean_installed_folder()
         print("Enforcing Check of Dependencies!")
         enforcing_dependencies()
         print("Enforcing latest npm")
+        os.chdir(os.path.join(rootdir, "usr"))
         subprocess.run(["npm", "install", "npm@latest"], check=True)
         
         print("Installing Modules")
@@ -623,8 +649,12 @@ def main():
         print("Running npm audit fix")
         subprocess.run(["npm", "audit", "fix"], check=True)
         
-        print("Rebuilding Electron with OpenSSL FIPS")
+        print("Rebuilding Electron Program For specific Computer COnfiguration with OpenSSL FIPS")
+        
+        print(os.getcwd())
+        subprocess.run(["env"], check=True)
         subprocess.run(["npx", "--openssl_fips=''", "electron-rebuild"], check=True)
+        #subprocess.run(["env", "&&", "npx", "--openssl_fips=''", "electron-rebuild"], check=True)
         print("Installing Modules")
         #install_modules()
         import_submodules_manually()
@@ -632,7 +662,6 @@ def main():
         fix_permission_universal()
         with open(os.path.join(rootdir, "installed.flag"), 'w') as f:
             f.write("")
-    
     os.chdir(os.path.join(rootdir, "usr"))
     subprocess.run(["node", "-v"], check=True)
     subprocess.run(["npm", "-v"], check=True)
