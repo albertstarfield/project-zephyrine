@@ -119,30 +119,48 @@ function Install-DependenciesWindows {
 
 #---------------------------------------------------------------------
 
-def detect_cuda():
-    if os.environ.get('ENFORCE_NOACCEL', '0') != "1":
-        try:
-            subprocess.run(["nvcc", "--version"], check=True, stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL)
-            return "cuda"
-        except subprocess.CalledProcessError:
-            return "no_cuda"
-    return "no_cuda"
+function Detect-CUDA {
+    if ($env:ENFORCE_NOACCEL -ne "1") {
+        $nvccPath = Get-Command -Name nvcc -ErrorAction SilentlyContinue
+        if ($nvccPath) {
+            Write-Output "cuda"
+        } else {
+            Write-Output "no_cuda"
+        }
+    } else {
+        Write-Output "no_cuda"
+    }
+}
 
-def detect_opencl():
-    if os.environ.get('ENFORCE_NOACCEL', '0') != "1":
-        if platform.system() == 'Windows':
-            if os.path.exists("C:\\Windows\\System32\\OpenCL.dll"):
-                return "opencl"
-            else:
-                return "no_opencl"
-        elif platform.system() == 'Linux':
-            if os.path.exists("/usr/include/CL/cl.h"):
-                return "opencl"
-            else:
-                return "no_opencl"
-        else:
-            return "unsupported"
-    return "no_opencl"
+function Detect-OpenCL {
+    # Detect platform
+    $platform = [System.Environment]::OSVersion.Platform
+
+    # Check if OpenCL is available
+    if ($env:ENFORCE_NOACCEL -ne "1") {
+        if ($platform -eq 'Win32NT') {
+            # Check if OpenCL is installed on Windows
+            $openclInstalled = Test-Path "C:\Windows\System32\OpenCL.dll"
+            if ($openclInstalled) {
+                Write-Output "opencl"
+            } else {
+                Write-Output "no_opencl"
+            }
+        } elseif ($platform -eq 'Unix') {
+            # Check if the OpenCL headers are installed on Unix-like systems
+            $openclHeadersInstalled = Test-Path "/usr/include/CL/cl.h"
+            if ($openclHeadersInstalled) {
+                Write-Output "opencl"
+            } else {
+                Write-Output "no_opencl"
+            }
+        } else {
+            Write-Output "unsupported"
+        }
+    } else {
+        Write-Output "no_opencl"
+    }
+}
 
 #-------------------------------------------------------------------------------------------
 
