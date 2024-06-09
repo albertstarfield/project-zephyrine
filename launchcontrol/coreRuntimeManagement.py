@@ -127,6 +127,7 @@ def install_dependencies_linux():
             'swupd': ['sudo', 'swupd', 'bundle-add', 'c-basic'],
         }
         subprocess.call(install_commands[package_manager])
+    subprocess.call(['npm', 'install', '-g', 'npm@latest'])
 
 def install_dependencies_macos():
     if subprocess.call(["which", "xcode-select"], stdout=subprocess.DEVNULL, stderr=subprocess.DEVNULL) != 0:
@@ -140,8 +141,8 @@ def install_dependencies_macos():
     subprocess.call(['sudo', 'xcodebuild', '-license', 'accept'])
     print(login)
     targetuserFixPerm=login + ":" + "admin"
-    subprocess.call(['sudo', 'chown', '-Rv', targetuserFixPerm, '/opt/homebrew'])
-    subprocess.call(['sudo', 'chown', '-Rv', targetuserFixPerm, '/usr/local/homebrew'])
+    subprocess.call(['sudo', 'chown', '-R', targetuserFixPerm, '/opt/homebrew'])
+    subprocess.call(['sudo', 'chown', '-R', targetuserFixPerm, '/usr/local/homebrew'])
     subprocess.call(['brew', 'doctor'])
     subprocess.call(['brew', 'tap', 'homebrew/core'])
     subprocess.call(['brew', 'tap', 'apple/apple'])
@@ -149,6 +150,7 @@ def install_dependencies_macos():
     subprocess.call(['brew', 'reinstall', 'python', 'node', 'cmake', 'mas'])
     subprocess.call(['mas', 'install', '497799835'])
     subprocess.call(['npm', 'install', '-g', 'n'])
+    subprocess.call(['npm', 'install', '-g', 'npm@latest'])
     subprocess.call(['n', 'latest'])
 
 def install_dependencies_windows():
@@ -351,7 +353,7 @@ def build_llama_gguf():
 
     os.chdir(rootdir)
 
-def build_gemma_base(binary_name):
+def build_gemma_base():
     print("Requesting Google Gemma Binary")
 
     os.chdir(os.path.join(rootdir, 'usr', 'vendor', 'gemma.cpp'))
@@ -576,13 +578,14 @@ def buildLLMBackend():
     print("Copying any Acceleration and Debugging Dependencies for Falcon")
     shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'ggllm.cpp', 'build', 'bin'), falcon_dir, dirs_exist_ok=True)
 
-    build_ggml_base('gpt-j')
+    # It's broken so we'll exclude it
+    #build_ggml_base('gpt-j')
     
-    ggml_gptj_dir = os.path.join(bin_dir, 'ggml-gptj')
-    os.makedirs(ggml_gptj_dir, exist_ok=True)
-    print("Copying any Acceleration and Debugging Dependencies for gpt-j")
-    shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'ggml', 'build', 'bin'), ggml_gptj_dir, dirs_exist_ok=True)
-    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'ggml', 'build', 'bin', 'gpt-j'), os.path.join(ggml_gptj_dir, 'LLMBackend-gpt-j'))
+    #ggml_gptj_dir = os.path.join(bin_dir, 'ggml-gptj')
+    #os.makedirs(ggml_gptj_dir, exist_ok=True)
+    #print("Copying any Acceleration and Debugging Dependencies for gpt-j")
+    #shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'ggml', 'build', 'bin'), ggml_gptj_dir, dirs_exist_ok=True)
+    #shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'ggml', 'build', 'bin', 'gpt-j'), os.path.join(ggml_gptj_dir, 'LLMBackend-gpt-j'))
 
     build_gemma_base()
     
@@ -637,6 +640,7 @@ def main():
         print("Enforcing Check of Dependencies!")
         enforcing_dependencies()
         print("Enforcing latest npm")
+        os.chdir(os.path.join(rootdir, "usr"))
         subprocess.run(["npm", "install", "npm@latest"], check=True)
         
         print("Installing Modules")
@@ -644,8 +648,6 @@ def main():
         
         print("Running npm audit fix")
         subprocess.run(["npm", "audit", "fix"], check=True)
-
-        os.chdir(os.path.join(rootdir, "usr"))
         
         print("Rebuilding Electron Program For specific Computer COnfiguration with OpenSSL FIPS")
         
