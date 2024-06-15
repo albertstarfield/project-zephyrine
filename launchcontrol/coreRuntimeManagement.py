@@ -348,9 +348,6 @@ def build_llama_gguf():
     subprocess.run(['cmake', '..'] + cmake_args, check=True)
     subprocess.run(['cmake', '--build', '.', '--config', 'Release', '--parallel', str(get_alloc_threads())], check=True)
 
-    if platform_system in ['Linux', 'Darwin']:
-        subprocess.run(['cp', 'bin/main', os.path.join(rootdir, 'usr', 'bin', 'chat')], check=True)
-
     os.chdir(rootdir)
 
 def build_gemma_base():
@@ -519,9 +516,6 @@ def build_falcon():
     subprocess.run(['cmake', '..'] + cmake_args, check=True)
     subprocess.run(['cmake', '--build', '.', '--config', 'Release', '--parallel', str(get_alloc_threads())], check=True)
 
-    if platform_system in ['Linux', 'Darwin']:
-        subprocess.run(['cp', 'bin/main', os.path.join(rootdir, 'usr', 'bin', 'chat')], check=True)
-
     os.chdir(rootdir)
 
 def buildLLMBackend():
@@ -566,7 +560,11 @@ def buildLLMBackend():
     
     llama_gguf_dir = os.path.join(bin_dir, 'llama-gguf')
     os.makedirs(llama_gguf_dir, exist_ok=True)
-    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'llama-gguf.cpp', 'build', 'bin', 'main'), os.path.join(llama_gguf_dir, 'LLMBackend-llama-gguf'))
+    #There are massive changes into the llama-cpp which causes it to not work anymore thus renaming it should be make it less chaotic 
+    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'llama-gguf.cpp', 'build', 'bin', 'llama-cli'), os.path.join(llama_gguf_dir, 'LLMBackend-llama-gguf'))
+    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'llama-gguf.cpp', 'build', 'bin', 'llama-finetune'), os.path.join(llama_gguf_dir, 'finetune'))
+    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'llama-gguf.cpp', 'build', 'bin', 'llama-export-lora'), os.path.join(llama_gguf_dir, 'export-lora'))
+
     print("Copying any Acceleration and Debugging Dependencies for LLaMa GGUF Neo Model")
     shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'llama-gguf.cpp', 'build', 'bin'), llama_gguf_dir, dirs_exist_ok=True)
 
