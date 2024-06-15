@@ -2848,7 +2848,7 @@ function determineLLMBackend(){
 			retrainerMergeLORABinarymainLLM = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", "export-lora")}"`;
 
 		}else{
-			log.error(consoleLogPrefix, "Unsupported Architecture");
+			log.error(consoleLogPrefix, "Unsupported Architecture for now");
             process.exit(1);
 		}
 	} else if (platform === 'linux'){
