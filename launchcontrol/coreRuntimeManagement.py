@@ -348,9 +348,6 @@ def build_llama_gguf():
     subprocess.run(['cmake', '..'] + cmake_args, check=True)
     subprocess.run(['cmake', '--build', '.', '--config', 'Release', '--parallel', str(get_alloc_threads())], check=True)
 
-    if platform_system in ['Linux', 'Darwin']:
-        subprocess.run(['cp', 'bin/main', os.path.join(rootdir, 'usr', 'bin', 'chat')], check=True)
-
     os.chdir(rootdir)
 
 def build_gemma_base():
@@ -518,9 +515,6 @@ def build_falcon():
     print(f"CMake arguments: {' '.join(cmake_args)}")
     subprocess.run(['cmake', '..'] + cmake_args, check=True)
     subprocess.run(['cmake', '--build', '.', '--config', 'Release', '--parallel', str(get_alloc_threads())], check=True)
-
-    if platform_system in ['Linux', 'Darwin']:
-        subprocess.run(['cp', 'bin/main', os.path.join(rootdir, 'usr', 'bin', 'chat')], check=True)
 
     os.chdir(rootdir)
 
