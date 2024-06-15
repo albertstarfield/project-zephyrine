@@ -54,6 +54,7 @@
 		"katex": "^0.16.9",
 		"mammoth": "^1.7.0",
 		"marked": "^9.1.2",
+		"ml-regression-multivariate-linear": "^2.0.4",
 		"n": "^9.2.3",
 		"natural": "^6.10.5",
 		"node-html-parser": "^6.1.12",
