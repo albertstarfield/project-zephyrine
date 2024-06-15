@@ -74,6 +74,8 @@ const username = os.userInfo().username;
 const engineName = `Adelaide Paradigm Engine`
 const consoleLogPrefix = `[${colorBrightCyan}${engineName}_${platform}_${arch}${colorReset}]:`;
 const versionTheUnattendedEngineLogPrefix = `[${colorBrightCyan}${engineName}${colorBrightGreen} [Codename : "The Unattended"] ${colorReset}]:`;
+const versionFeatherFeetLogPrefix = `[${colorBrightCyan}${engineName}${colorBrightRed}[Codename : "Featherfeet"]${colorReset}]:`;
+
 const { memoryUsage } = require('node:process');
 const log = require('electron-log');
 let logPathFile;
@@ -1053,7 +1055,8 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	 // putting context with lengthGen*16 avoid issue with eval failures due to context exhaustion
 	const contextMultiplierFactor=10;  //adjust it as needed to prevent context exhaustion, But remember the more you increase this factor the less efficient the model will be on the memory usage! You need to think about the context that it will generate or the overhead context (I did try x4 factor and the context is exhausted)
 	const requiredContextFrame=(countTokens(promptSpillAccumulated) + lengthGen) * contextMultiplierFactor;
-	LLMChildParam = `-f ${LLMChildPromptSpillDir} -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} -c ${requiredContextFrame} --threads ${threads} -td ${threads} -tb ${threads} --prompt-cache-all --prompt-cache ${precalculatedLLMChildslightlyFastJump} -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // from -n ${lengthgen} we go -n -2
+
+	LLMChildParam = `-f ${LLMChildPromptSpillDir} -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} -c ${requiredContextFrame} --threads ${threads} -td ${threads} -tb ${threads} -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // from -n ${lengthgen} we go -n -2
 	
 	//LLMChildParam = `-p \" ${startPromptInst} ${prompt} \n ${endRespondPrompt}\" -m ${currentUsedLLMChildModel} -ctk ${ctxCacheQuantizationLayer} -ngl ${allowedAllocNPULayer} -ngld ${allowedAllocNPUDraftLayer} --mirostat 2 -n ${lengthGen} --threads ${threads} -td ${threads} -tb ${threads} --prompt-cache-all --prompt-cache ${precalculatedLLMChildslightlyFastJump} -s ${definedSeed_LLMchild} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // from -n ${lengthgen} we go -n -2
 	command = `${basebin} ${LLMChildParam}`;
@@ -2845,7 +2848,7 @@ function determineLLMBackend(){
 			retrainerMergeLORABinarymainLLM = `[System.Console]::OutputEncoding=[System.Console]::InputEncoding=[System.Text.Encoding]::UTF8; ."${path.resolve(__dirname, "bin", "1_Windows", "x64", LLMBackendVariationFileSubFolder, supportsAVX2 ? "" : "no_avx2", "export-lora")}"`;
 
 		}else{
-			log.error(consoleLogPrefix, "Unsupported Architecture");
+			log.error(consoleLogPrefix, "Unsupported Architecture for now");
             process.exit(1);
 		}
 	} else if (platform === 'linux'){
@@ -3523,165 +3526,110 @@ const stripAdditionalContext = (str) => {
 	return str.replace(regex, "")
 }
 
+const MultivariateLinearRegression = require('ml-regression-multivariate-linear');
 class FeatherFeetOptimizer {
     constructor() {
-        // Initial best values, set to null because who knows at the start
         this.bestA = null;
         this.bestB = null;
         this.bestC = null;
         this.bestD = null;
         this.bestE = null;
-        this.bestZ = Infinity; // Start with infinity, aim for below 200, easy, right? 😅
-        this.samples = []; // Collecting samples like they're going out of style
+        this.bestZ = 20000;
+        this.samples = [];
     }
 
-    // Function to simulate the evaluation of Z based on A, B, C, D, and E
     async evaluate(A, B, C, D, E) {
-        const command = `some_command --A=${A} --B=${B} --C=${C} --D=${D} --E=${E}`; // Constructing the command like a boss
-        const timePoint0 = performance.now(); // Start the timer, because time is money 💰
-        const output = await runShellCommand(command); // Run the command, and wait for it like a patient cat 🐱
-        const timePoint1 = performance.now(); // Stop the timer, because we're done waiting ⏰
-        const latency = timePoint1 - timePoint0; // Calculate latency, like a pro
-        return latency; // Return the latency, which is our Z
+        log.info("Flagging first timestamp");
+        const timePoint0 = performance.now();
+
+        const LLMTest_Param = `-p "user: Hello I want a decision making, about a person can outcome the impossibility be success without committing to the preestablish companies, should she continue yes or no? \n assistant:" -m general_conversation -ngl ${B} -ngld ${C} --mirostat 2 -n 8 -c ${A} --threads ${D} -b ${E} -s randomSeed`;
+        const command = `basebin ${LLMTest_Param}`;
+        
+        log.info("Evaluating LLM Performance");
+        const output = await runShellCommand(command);
+        log.info("Execution Finished", output);
+
+        const timePoint1 = performance.now();
+        const latency = timePoint1 - timePoint0;
+        log.info("Timestamp flag finished Pass done..., Performance latency ", latency, "ms");
+
+        return latency;
     }
 
-    // Function to collect initial samples
     async collectSamples() {
         const initialSamples = [
-            { A: 2048, B: 0, C: 1, D: 1, E: 1 }, // Sample 1, because why not?
-            { A: 4096, B: 16, C: 32, D: 6, E: 4 }, // Sample 2, the 'optimal' guess
-            { A: 12000, B: 64, C: 9999, D: 8, E: 8 }, // Sample 3, the extreme
-            { A: 8192, B: 32, C: 5000, D: 4, E: 6 }, // Sample 4, a mixed bag
-            { A: 10240, B: 48, C: 7500, D: 7, E: 3 } // Sample 5, because we need variety
+            { A: 2048, B: 0, C: 1, D: 1, E: 1 },
+            { A: 4096, B: 16, C: 32, D: 6, E: 4 },
+            { A: 12000, B: 64, C: 9999, D: 8, E: 8 },
+            { A: 8192, B: 32, C: 5000, D: 4, E: 6 },
+            { A: 10240, B: 48, C: 7500, D: 7, E: 3 },
+            { A: 3072, B: 8, C: 16, D: 3, E: 2 },
+            { A: 6144, B: 24, C: 48, D: 5, E: 5 },
+            { A: 11264, B: 56, C: 8000, D: 7, E: 7 },
+            { A: 9216, B: 40, C: 6000, D: 6, E: 4 },
+            { A: 12288, B: 60, C: 9000, D: 8, E: 5 }
         ];
 
         for (const sample of initialSamples) {
-            const Z = await this.evaluate(sample.A, sample.B, sample.C, sample.D, sample.E); // Evaluate it like it's hot 🔥
-            this.samples.push({ ...sample, Z }); // Push it real good
-            if (Z < this.bestZ) { // Found a new best? Update the scoreboard!
+            const Z = await this.evaluate(sample.A, sample.B, sample.C, sample.D, sample.E);
+            log.debug("Z Initial Samples ms Total Mission", Z);
+            this.samples.push({ ...sample, Z });
+
+            if (Z < this.bestZ) {
                 this.bestA = sample.A;
                 this.bestB = sample.B;
                 this.bestC = sample.C;
                 this.bestD = sample.D;
                 this.bestE = sample.E;
                 this.bestZ = Z;
+                log.debug("Best Performance Detected Parameters!", sample.A, sample.B, sample.C, sample.D, sample.E, Z);
             }
         }
     }
 
-    // Function to fit a quadratic model
     fitModel() {
-        const As = this.samples.map(s => s.A); // Extracting A like a pro
-        const Bs = this.samples.map(s => s.B); // Extracting B, no biggie
-        const Cs = this.samples.map(s => s.C); // C ya later
-        const Ds = this.samples.map(s => s.D); // D is for determined
-        const Es = this.samples.map(s => s.E); // E, the fifth element
-        const Zs = this.samples.map(s => s.Z); // Z, the reason we're here
+        const X = this.samples.map(s => [s.A, s.B, s.C, s.D, s.E]);
+        const y = this.samples.map(s => [s.Z]);
 
-        // Fit a quadratic model Z = a + bA + cB + dC + eD + fE + gA^2 + hB^2 + iC^2 + jD^2 + kE^2 + lAB + mAC + nAD + oAE + pBC + qBD + rBE + sCD + tCE + uDE
-        // Because we're fancy like that
-        const X = As.map((a, i) => [
-            1, a, Bs[i], Cs[i], Ds[i], Es[i],
-            a ** 2, Bs[i] ** 2, Cs[i] ** 2, Ds[i] ** 2, Es[i] ** 2,
-            a * Bs[i], a * Cs[i], a * Ds[i], a * Es[i], Bs[i] * Cs[i], Bs[i] * Ds[i], Bs[i] * Es[i], Cs[i] * Ds[i], Cs[i] * Es[i], Ds[i] * Es[i]
-        ]);
-        const Xt = this.transpose(X); // Flip it like a pancake
-        const XtX = this.multiplyMatrices(Xt, X); // Matrix multiplication, because math
-        const XtZ = this.multiplyMatrices(Xt, Zs.map(z => [z])); // More matrix magic
-        const coefficients = this.solveLinearSystem(XtX, XtZ); // Solve it like Sherlock
+        const regression = new MultivariateLinearRegression(X, y);
 
-        return coefficients.flat(); // Flattening like a roadkill squirrel
+        const coefficients = regression.toJSON().coefficients;
+        coefficients.forEach((coeff, index) => {
+            log.debug(`Coefficient ${index}:`, coeff);
+        });
+
+        return coefficients.flat();
     }
 
-    // Function to find the optimal A, B, C, D, and E based on the model
     findOptimal(coefficients) {
-        const [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u] = coefficients; // The A-Team, but coefficients
+        const [a, b, c, d, e, f, g, h, i, j, k, l, m, n, o, p, q, r, s, t, u] = coefficients;
 
-        // Solve the partial derivatives to find the minimum
-        // ∂Z/∂A = b + 2gA + lB + mC + nD + oE = 0
-        // ∂Z/∂B = c + 2hB + lA + pC + qD + rE = 0
-        // ∂Z/∂C = d + 2iC + mA + pB + sD + tE = 0
-        // ∂Z/∂D = e + 2jD + nA + qB + sC + uE = 0
-        // ∂Z/∂E = f + 2kE + oA + rB + tC + uD = 0
-
-        // Solving these manually would make anyone cry, but here we go:
         const A_opt = -(b + l * (c / 2) + m * (d / 2) + n * (e / 2) + o * (f / 2)) / (2 * g);
         const B_opt = -(c + l * (b / 2) + p * (d / 2) + q * (e / 2) + r * (f / 2)) / (2 * h);
         const C_opt = -(d + m * (b / 2) + p * (c / 2) + s * (e / 2) + t * (f / 2)) / (2 * i);
         const D_opt = -(e + n * (b / 2) + q * (c / 2) + s * (d / 2) + u * (f / 2)) / (2 * j);
         const E_opt = -(f + o * (b / 2) + r * (c / 2) + t * (d / 2) + u * (e / 2)) / (2 * k);
 
-        return { A: A_opt, B: B_opt, C: C_opt, D: D_opt, E: E_opt }; // Optimal values, because we rock
-    }
-
-    // Matrix operations
-    transpose(matrix) {
-        return matrix[0].map((_, colIndex) => matrix.map(row => row[colIndex])); // Flip it like it's hot
-    }
-
-    multiplyMatrices(A, B) {
-        const result = Array.from({ length: A.length }, () => Array(B[0].length).fill(0)); // Matrix init, engage!
-        for (let i = 0; i < A.length; i++) {
-            for (let j = 0; j < B[0].length; j++) {
-                for (let k = 0; k < B.length; k++) {
-                    result[i][j] += A[i][k] * B[k][j]; // Math explosion! 💥
-                }
-            }
-        }
-        return result; // Matrix multiplication complete. High five!
-    }
-
-    solveLinearSystem(A, B) {
-        // Using Gaussian Elimination for simplicity
-        const n = A.length; // Size matters.
-        for (let i = 0; i < n; i++) {
-            let maxRow = i;
-            for (let k = i + 1; k < n; k++) {
-                if (Math.abs(A[k][i]) > Math.abs(A[maxRow][i])) {
-                    maxRow = k; // Swapping like a swap meet.
-                }
-            }
-            [A[i], A[maxRow]] = [A[maxRow], A[i]];
-            [B[i], B[maxRow]] = [B[maxRow], B[i]]; // Swapped!
-
-            for (let k = i + 1; k < n; k++) {
-                const c = -A[k][i] / A[i][i]; // Eliminate!
-                for (let j = i; j < n; j++) {
-                    if (i === j) {
-                        A[k][j] = 0; // Zeroing out, like a ninja.
-                    } else {
-                        A[k][j] += c * A[i][j]; // Math magic continues.
-                    }
-                }
-                B[k][0] += c * B[i][0]; // Adjusting B like a pro.
-            }
-        }
-
-        const x = Array(n).fill(0); // The solution array.
-        for (let i = n - 1; i >= 0; i--) {
-            x[i] = B[i][0] / A[i][i]; // Back-solving, because we can.
-            for (let k = i - 1; k >= 0; k--) {
-                B[k][0] -= A[k][i] * x[i]; // Adjusting like a Jedi.
-            }
-        }
-        return x; // Solved, because we're awesome.
+        return { A: A_opt, B: B_opt, C: C_opt, D: D_opt, E: E_opt };
     }
 
     async optimize() {
-        await this.collectSamples(); // Gotta catch 'em all! Samples, that is.
+        log.info("Collecting Performance Sample...");
+        await this.collectSamples();
+        log.info("Saving Sample to create an Optimization Response Model");
 
-        const coefficients = this.fitModel(); // Fitting the model like a glove.
-        const { A: optimalA, B: optimalB, C: optimalC, D: optimalD, E: optimalE } = this.findOptimal(coefficients); // Optimal values, here we come.
+        const coefficients = this.fitModel();
+        const { A: optimalA, B: optimalB, C: optimalC, D: optimalD, E: optimalE } = this.findOptimal(coefficients);
 
-        // Check if the optimal values are within the specified range
+        log.info("Result are in! This is the most optimum result", `${optimalA} Tokens, ${optimalB} NPU or GPU Layer offloading, ${optimalC} NPU or GPU Draft Layer Offloading, ${optimalD} Optimal CPU Threads!, ${optimalE} Optimal Token Batch Submission Size for LLM`);
+        
         if (optimalA >= 2048 && optimalA <= 12000 && optimalB >= 0 && optimalB <= 64 && optimalC >= 1 && optimalC <= 9999 && optimalD >= 1 && optimalD <= 8 && optimalE >= 1 && optimalE <= 8) {
-            console.log(`Optimal values found: A = ${optimalA.toFixed(2)}, B = ${optimalB.toFixed(2)}, C = ${optimalC.toFixed(2)}, D = ${optimalD.toFixed(2)}, E = ${optimalE.toFixed(2)}`); // We did it!
+            log.info(`Optimal values found: A = ${optimalA.toFixed(2)}, B = ${optimalB.toFixed(2)}, C = ${optimalC.toFixed(2)}, D = ${optimalD.toFixed(2)}, E = ${optimalE.toFixed(2)}`);
         } else {
-            console.log('Optimal values are out of the specified range.'); // Oops, not in range.
+            log.info('Optimal values are out of the specified range!', "You might have underpowered component or components on your COMPUTER!");
         }
     }
 }
-
 /*
 How to use the FeatherFeetOptimizer
 const optimizer = new FeatherFeetOptimizer();
@@ -3841,17 +3789,23 @@ function initInteraction() {
 	
 	mainLLMWritePrompt(); //decode base64, fill in the variables, and add the specific "system user assistant" prompt write into promptFileDir variable
 	let modelPath = specializedModelManagerRequestPath("general_conversation"); // It can automatically switch if selfMorphed model is available or only the default is available.
-	const chatArgs = `-i -ins -r "${revPrompt}" -f "${promptFileDir}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
+	const chatArgs = `-i -r "${revPrompt}" -f "${promptFileDir}"`; //change from relying on external file now its relying on internally and fully integrated within the system (just like how Apple design their system and stuff)
 	//const chatArgs = `-i -ins -r "${revPrompt}" -p '${initStage1}'`;
+	// --prompt-cache ${slightlyFastJump} don't use it since it's not automatically discarded if something is different
 	// I did try to add -fa or flash attention to the mainLLM but it repeatedly answer img img img img and weird glitching UTF-8 Char
-	const paramArgs = `-m "${modelPath}" -n -2 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --rope-scaling yarn --repeat-penalty 1.5 --prompt-cache ${slightlyFastJump} --mirostat 2 -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
+	const paramArgs = `-m "${modelPath}" -n -2 --top_k ${params.top_k} --top_p ${params.top_p} -td ${threads} -tb ${threads} --temp ${params.temp} --rope-scaling yarn --repeat-penalty 1.5 --mirostat 2 -c 2048 -s ${randSeed} ${basebinLLMBackendParamPassedDedicatedHardwareAccel}`; // This program require big context window set it to max common ctx window which is 4096 so additional context can be parsed stabily and not causes crashes
 	//runningShell.write(`set -x \r`);
-	log.info(consoleLogPrefix, chatArgs, paramArgs, chatArgs)
+	log.info(consoleLogPrefix, chatArgs, paramArgs, chatArgs);
 	runningShell.write(`${basebin.replace("\"\"", "")} ${paramArgs} ${chatArgs}\r`);
 	startPromptInst = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].instructionPrompt;
 	endRespondPrompt = availableImplementedLLMModelSpecificCategory[validatedModelAlignedCategorydefaultLLMCategory].responsePrompt;
 }
+
 ipcMain.on("startInteraction", () => {
+	// First interaction require optimization benchmark from FeatherFeetOptimizer
+	const optimizer = new FeatherFeetOptimizer();
+	optimizer.optimize(); //invoke parameter optimization
+	
 	initInteraction();
 });
 
