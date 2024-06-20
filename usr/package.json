@@ -8,7 +8,7 @@
 	},
 	"author": "Albert Starfield Wahyu Suryo Samudro",
 	"license": "MIT",
-	"main": "adelaide-engine.js",
+	"main": "adelaideEngineMain.js",
 	"icon": "icon/win/icon.ico",
 	"scripts": {
 		"test": "echo \"Error: no test specified\" && exit 1",
