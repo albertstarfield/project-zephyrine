@@ -112,7 +112,7 @@ function createWindow() {
 	require("@electron/remote/main").enable(framebufferBridgeUI.webContents);
 
 	// Load your GUI's URL
-	framebufferBridgeUI.loadFile(path.resolve(__dirname, "src", "Project-Zephyrine-UI.html"));
+	framebufferBridgeUI.loadFile(path.resolve(__dirname, "src", "projectZephyrineUI.html"));
 	
 	// after main window and main process initialize the electron core send the global.username and global.assistantName to the global bot
 	framebufferBridgeUI.setMenu(null);
