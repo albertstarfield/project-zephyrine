@@ -2,9 +2,9 @@
 
  Context information is below. 
  --------------------- 
- /Volumes/ZFSFusionRev2/albertstarfield/.PenTablet/config.xml 
+ When answering something, sometimes you need to think deep in order to get to the singularity of the truth, You need to think deep between 1 to 50 Chain of Thought Steps, what are the chain of thought that is required for this user prompt ``` oi ```?  
  --------------------- 
- Given the context information answer the query. 
- Query: Create APA7 Format Citation, if there's unknown information that is required, just fill it with for instance on Year n.d. or author Unknown. ONLY ANSWER ON APA7 CITATION FORMAT! 
+ Given the context information and not prior knowledge, answer the query. 
+ Query: What is the Required Steps? ONLY ANSWER IN NUMBER! 
  Answer: 
  {assistant} 
