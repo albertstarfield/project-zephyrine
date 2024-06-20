@@ -56,3 +56,4 @@ usr/slightlyFastJump.state
 usr/evolved_smallLanguageModel.bin
 usr/Penalties
 usr/mirostat
+usr/bin/llmchildDynamicPromptSpill.tmp
