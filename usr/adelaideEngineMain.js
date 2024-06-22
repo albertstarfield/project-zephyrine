@@ -1034,7 +1034,7 @@ async function callLLMChildThoughtProcessor_backend(prompt, lengthGen, definedSe
 	}
 
 	// Spill Prompt into a file so it doesn't mess up with pty parameter
-	const promptSpillAccumulated = `${startPromptInst}\n ${prompt} \n ${endRespondPrompt}`
+	const promptSpillAccumulated = `${startPromptInst}\n System: ${initStage1} ${prompt} \n ${endRespondPrompt}`
 	log.debug(consoleLogPrefix, "Spilling LLMChild Prompting to File", LLMChildPromptSpillDir);
 	fs.writeFile(LLMChildPromptSpillDir, promptSpillAccumulated, (err) => {
 		if (err) {
@@ -1509,9 +1509,9 @@ function specializedModelManagerRequestPath(modelCategory){
 	if ( filePathSelectionfromDictionary == `${availableImplementedLLMModelSpecificCategory["general_conversation"].filename}` ){
 		fs.access(availableImplementedLLMModelSpecificCategory["general_conversation"].filename_selfRemorphedRetraining, fs.constants.F_OK, (err) => {
 			if (err) {
-				log.error(consoleLogPrefix, `Original Flesh of Mistral`);
+				log.error(consoleLogPrefix, `Zephy on it's baby form, soo cute!`);
 			} else {
-				log.info(consoleLogPrefix, versionTheUnattendedEngineLogPrefix, `Adelaide have evolved...`);
+				log.info(consoleLogPrefix, versionTheUnattendedEngineLogPrefix, `Adelaide growth detected...`);
 			}
 		});
 	}
