@@ -1509,7 +1509,7 @@ function specializedModelManagerRequestPath(modelCategory){
 	if ( filePathSelectionfromDictionary == `${availableImplementedLLMModelSpecificCategory["general_conversation"].filename}` ){
 		fs.access(availableImplementedLLMModelSpecificCategory["general_conversation"].filename_selfRemorphedRetraining, fs.constants.F_OK, (err) => {
 			if (err) {
-				log.error(consoleLogPrefix, `Zephy on it's baby form, soo cute!`);
+				log.error(consoleLogPrefix, `Zephy on it's baby form, soo cute >_< !`);
 			} else {
 				log.info(consoleLogPrefix, versionTheUnattendedEngineLogPrefix, `Adelaide growth detected...`);
 			}
