@@ -27,8 +27,6 @@ def superuserPreventionWorkaround_FalseUserWoraround():
     global login  #forward modified variable
     #login = os.getlogin() #os.getlogin() doesn't work on some glibc https://bugs.python.org/issue40821
     login = getpass.getuser()
-    if login == "root":
-        login = os.getenv("USER") #Grab $USER or USER var from the shell instead of the broken python os.getlogin() detetion
     print(login)
 
 
