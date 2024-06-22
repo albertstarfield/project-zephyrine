@@ -6,6 +6,7 @@ import sys
 import multiprocessing
 import shutil
 import time
+import getpass
 
 # Define global variables
 rootdir = os.getcwd()
@@ -24,7 +25,8 @@ def superuserPreventionWorkaround_FalseUserWoraround():
     #https://forum.sublimetext.com/t/os-getlogin-root-wrong/49442
     #https://github.com/kovidgoyal/kitty/issues/6511
     global login  #forward modified variable
-    login = os.getlogin()
+    #login = os.getlogin() #os.getlogin() doesn't work on some glibc https://bugs.python.org/issue40821
+    login = getpass.getuser()
     if login == "root":
         login = os.getenv("USER") #Grab $USER or USER var from the shell instead of the broken python os.getlogin() detetion
     print(login)
