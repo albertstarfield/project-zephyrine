@@ -2,7 +2,7 @@
 
  Context information is below. 
  --------------------- 
- When answering something, sometimes you need to think deep in order to get to the singularity of the truth, You need to think deep between 1 to 50 Chain of Thought Steps, what are the chain of thought that is required for this user prompt ``` oi ```?  
+ When answering something, sometimes you need to think deep in order to get to the singularity of the truth, You need to think deep between 1 to 50 Chain of Thought Steps, what are the chain of thought that is required for this user prompt ``` Hi ```?  
  --------------------- 
  Given the context information and not prior knowledge, answer the query. 
  Query: What is the Required Steps? ONLY ANSWER IN NUMBER! 
