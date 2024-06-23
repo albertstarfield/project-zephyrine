@@ -175,7 +175,7 @@ def install_dependencies_windows():
     except subprocess.CalledProcessError:
         print("Installing build-essential bundle package but for Windows 10+...")
         print("Yes, it's possible to do it without seen or manual GUI on Windows")
-        print("Console may stay here for a while until 4-6 GB downloads some necessary dependencies!")
+        print("Console may stay here for a while until 4-6 GB downloads some necessary dependencies! Downloading and Auto Installing Visual Studio")
         subprocess.run(["powershell", "Invoke-WebRequest -Uri 'https://aka.ms/vs/16/release/vs_buildtools.exe' -OutFile vs_buildtools.exe"], check=True)
         subprocess.run(["powershell", "Start-Process -FilePath .\\vs_buildtools.exe -ArgumentList '-q --wait --norestart --nocache --installPath C:\\BuildTools --add Microsoft.VisualStudio.Component.VC.CoreIde --add Microsoft.VisualStudio.Component.VC.Tools.x86.x64 --add Microsoft.Component.MSBuild --add Microsoft.VisualStudio.Component.NuGet --add Microsoft.Component.MSBuild --add Microsoft.VisualStudio.ComponentGroup.NativeDesktop.Core --add Microsoft.VisualStudio.Component.VC.CoreIde --add Microsoft.VisualStudio.Component.Roslyn.Compiler' -Wait"], check=True)
         subprocess.run(["powershell", "Start-Sleep -Seconds 10"], check=True)
