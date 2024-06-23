@@ -11,11 +11,11 @@ const availableImplementedLLMModelSpecificCategory = {
 	*/
 	// General_conversation is a model that is universally acceptable, that know at least the generic general concept, then later on we can retrain it with LLM Base-model way of unsupervised training and supervised training from the interaction (we call the process Re-integration)
 	general_conversation : {
-		downloadLink: "https://huggingface.co/TheBloke/Mistral-7B-OpenOrca-GGUF/resolve/main/mistral-7b-openorca.Q2_K.gguf?download=true", //change this later on
+		downloadLink: "https://huggingface.co/TheBloke/phi-2-GGUF/blob/main/phi-2.Q2_K.gguf", //change this later on
 		filename: "raw_smallLanguageModel.bin",
 		filename_selfRemorphedRetraining: "evolved_smallLanguageModel.bin",
 		CategoryDescription: "Main General Conversation",
-		ParamSize: "7B",
+		ParamSize: "2B",
 		Quantization: "q4_0",
 		Engine: "LLaMa2gguf",
 		systemPrompt: "{system} \n",
