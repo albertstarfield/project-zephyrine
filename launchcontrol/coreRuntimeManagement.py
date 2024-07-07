@@ -12,7 +12,7 @@ import getpass
 rootdir = os.getcwd()
 CONDA_PREFIX = os.path.join(rootdir, 'conda_python_modules')
 LC_CTYPE = 'UTF-8'
-N_PREFIX = os.path.join(rootdir, 'usr', 'nodeLocalRuntime')
+N_PREFIX = os.path.join(rootdir, 'systemCore', 'nodeLocalRuntime')
 
 # Update environment variables
 os.environ['CONDA_PREFIX'] = CONDA_PREFIX
@@ -211,8 +211,8 @@ def clean_installed_folder():
     
     # Remove directories
     directories_to_remove = [
-        os.path.join(rootdir, 'usr', 'vendor'),
-        os.path.join(rootdir, 'usr', 'node_modules'),
+        os.path.join(rootdir, 'systemCore', 'vendor'),
+        os.path.join(rootdir, 'systemCore', 'node_modules'),
         CONDA_PREFIX,
         N_PREFIX
     ]
@@ -222,7 +222,7 @@ def clean_installed_folder():
             shutil.rmtree(directory)
     
     # Create the vendor directory
-    os.makedirs(os.path.join(rootdir, 'usr', 'vendor'))
+    os.makedirs(os.path.join(rootdir, 'systemCore', 'vendor'))
     
     print("Should be done")
 
@@ -233,17 +233,17 @@ def clone_submodule(path, url, commit):
     # subprocess.run(['git', 'clone', '--branch', commit, url, path], check=True)
 
 def import_submodules_manually():
-    clone_submodule(os.path.join(rootdir, 'usr', 'vendor', 'llama.cpp'), 'https://github.com/ggerganov/llama.cpp', 'master')
-    clone_submodule(os.path.join(rootdir, 'usr', 'vendor', 'ggllm.cpp'), 'https://github.com/cmp-nct/ggllm.cpp', 'master')
-    clone_submodule(os.path.join(rootdir, 'usr', 'vendor', 'ggml'), 'https://github.com/ggerganov/ggml', 'master')
-    clone_submodule(os.path.join(rootdir, 'usr', 'vendor', 'llama-gguf.cpp'), 'https://github.com/ggerganov/llama.cpp', 'master')
-    clone_submodule(os.path.join(rootdir, 'usr', 'vendor', 'whisper.cpp'), 'https://github.com/ggerganov/whisper.cpp', 'master')
-    clone_submodule(os.path.join(rootdir, 'usr', 'vendor', 'gemma.cpp'), 'https://github.com/google/gemma.cpp', 'main')
+    clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'llama.cpp'), 'https://github.com/ggerganov/llama.cpp', 'master')
+    clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'ggllm.cpp'), 'https://github.com/cmp-nct/ggllm.cpp', 'master')
+    clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'ggml'), 'https://github.com/ggerganov/ggml', 'master')
+    clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'llama-gguf.cpp'), 'https://github.com/ggerganov/llama.cpp', 'master')
+    clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'whisper.cpp'), 'https://github.com/ggerganov/whisper.cpp', 'master')
+    clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'gemma.cpp'), 'https://github.com/google/gemma.cpp', 'main')
 
 #----- Build 
 
 def build_llama():
-    os.chdir(os.path.join(rootdir, 'usr', 'vendor', 'llama.cpp'))
+    os.chdir(os.path.join(rootdir, 'systemCore', 'vendor', 'llama.cpp'))
     subprocess.run(['git', 'checkout', '93356bd'], check=True)  # return to ggml era not the dependencies breaking gguf model mode
 
     os.makedirs('build', exist_ok=True)
@@ -294,12 +294,12 @@ def build_llama():
     subprocess.run(['cmake', '--build', '.', '--config', 'Release', '--parallel', str(get_alloc_threads())], check=True)
 
     if platform_system in ['Linux', 'Darwin']:
-        subprocess.run(['cp', 'bin/main', os.path.join(rootdir, 'usr', 'bin', 'chat')], check=True)
+        subprocess.run(['cp', 'bin/main', os.path.join(rootdir, 'systemCore', 'bin', 'chat')], check=True)
 
     os.chdir(rootdir)
 
 def build_llama_gguf():
-    os.chdir(os.path.join(rootdir, 'usr', 'vendor', 'llama-gguf.cpp'))
+    os.chdir(os.path.join(rootdir, 'systemCore', 'vendor', 'llama-gguf.cpp'))
 
     os.makedirs('build', exist_ok=True)
     os.chdir('build')
@@ -353,7 +353,7 @@ def build_llama_gguf():
 def build_gemma_base():
     print("Requesting Google Gemma Binary")
 
-    os.chdir(os.path.join(rootdir, 'usr', 'vendor', 'gemma.cpp'))
+    os.chdir(os.path.join(rootdir, 'systemCore', 'vendor', 'gemma.cpp'))
 
     if not os.path.exists('build'):
         os.makedirs('build')
@@ -467,7 +467,7 @@ def build_ggml_base(binary_name):
         os.chdir(rootdir)
 
 def build_falcon():
-    os.chdir(os.path.join(rootdir, 'usr', 'vendor', 'ggllm.cpp'))
+    os.chdir(os.path.join(rootdir, 'systemCore', 'vendor', 'ggllm.cpp'))
 
     os.makedirs('build', exist_ok=True)
     os.chdir('build')
@@ -543,7 +543,7 @@ def buildLLMBackend():
         return
 
     print("Cleaning binaries and replacing with new ones")
-    bin_dir = os.path.join(rootdir, 'usr', 'bin', targetFolderPlatform, targetFolderArch)
+    bin_dir = os.path.join(rootdir, 'systemCore', 'bin', targetFolderPlatform, targetFolderArch)
     if os.path.exists(bin_dir):
         shutil.rmtree(bin_dir)
     os.makedirs(bin_dir, exist_ok=True)
@@ -552,29 +552,29 @@ def buildLLMBackend():
     
     llama_dir = os.path.join(bin_dir, 'llama')
     os.makedirs(llama_dir, exist_ok=True)
-    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'llama.cpp', 'build', 'bin', 'main'), os.path.join(llama_dir, 'LLMBackend-llama'))
+    shutil.copy(os.path.join(rootdir, 'systemCore', 'vendor', 'llama.cpp', 'build', 'bin', 'main'), os.path.join(llama_dir, 'LLMBackend-llama'))
     print("Copying any Acceleration and Debugging Dependencies for LLaMa GGML v2 v3 Legacy")
-    shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'llama.cpp', 'build', 'bin'), llama_dir, dirs_exist_ok=True)
+    shutil.copytree(os.path.join(rootdir, 'systemCore', 'vendor', 'llama.cpp', 'build', 'bin'), llama_dir, dirs_exist_ok=True)
 
     build_llama_gguf()
     
     llama_gguf_dir = os.path.join(bin_dir, 'llama-gguf')
     os.makedirs(llama_gguf_dir, exist_ok=True)
     #There are massive changes into the llama-cpp which causes it to not work anymore thus renaming it should be make it less chaotic 
-    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'llama-gguf.cpp', 'build', 'bin', 'llama-cli'), os.path.join(llama_gguf_dir, 'LLMBackend-llama-gguf'))
-    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'llama-gguf.cpp', 'build', 'bin', 'llama-finetune'), os.path.join(llama_gguf_dir, 'finetune'))
-    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'llama-gguf.cpp', 'build', 'bin', 'llama-export-lora'), os.path.join(llama_gguf_dir, 'export-lora'))
+    shutil.copy(os.path.join(rootdir, 'systemCore', 'vendor', 'llama-gguf.cpp', 'build', 'bin', 'llama-cli'), os.path.join(llama_gguf_dir, 'LLMBackend-llama-gguf'))
+    shutil.copy(os.path.join(rootdir, 'systemCore', 'vendor', 'llama-gguf.cpp', 'build', 'bin', 'llama-finetune'), os.path.join(llama_gguf_dir, 'finetune'))
+    shutil.copy(os.path.join(rootdir, 'systemCore', 'vendor', 'llama-gguf.cpp', 'build', 'bin', 'llama-export-lora'), os.path.join(llama_gguf_dir, 'export-lora'))
 
     print("Copying any Acceleration and Debugging Dependencies for LLaMa GGUF Neo Model")
-    shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'llama-gguf.cpp', 'build', 'bin'), llama_gguf_dir, dirs_exist_ok=True)
+    shutil.copytree(os.path.join(rootdir, 'systemCore', 'vendor', 'llama-gguf.cpp', 'build', 'bin'), llama_gguf_dir, dirs_exist_ok=True)
 
     build_falcon()
     
     falcon_dir = os.path.join(bin_dir, 'falcon')
     os.makedirs(falcon_dir, exist_ok=True)
-    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'ggllm.cpp', 'build', 'bin', 'main'), os.path.join(falcon_dir, 'LLMBackend-falcon'))
+    shutil.copy(os.path.join(rootdir, 'systemCore', 'vendor', 'ggllm.cpp', 'build', 'bin', 'main'), os.path.join(falcon_dir, 'LLMBackend-falcon'))
     print("Copying any Acceleration and Debugging Dependencies for Falcon")
-    shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'ggllm.cpp', 'build', 'bin'), falcon_dir, dirs_exist_ok=True)
+    shutil.copytree(os.path.join(rootdir, 'systemCore', 'vendor', 'ggllm.cpp', 'build', 'bin'), falcon_dir, dirs_exist_ok=True)
 
     # It's broken so we'll exclude it
     #build_ggml_base('gpt-j')
@@ -582,16 +582,16 @@ def buildLLMBackend():
     #ggml_gptj_dir = os.path.join(bin_dir, 'ggml-gptj')
     #os.makedirs(ggml_gptj_dir, exist_ok=True)
     #print("Copying any Acceleration and Debugging Dependencies for gpt-j")
-    #shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'ggml', 'build', 'bin'), ggml_gptj_dir, dirs_exist_ok=True)
-    #shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'ggml', 'build', 'bin', 'gpt-j'), os.path.join(ggml_gptj_dir, 'LLMBackend-gpt-j'))
+    #shutil.copytree(os.path.join(rootdir, 'systemCore', 'vendor', 'ggml', 'build', 'bin'), ggml_gptj_dir, dirs_exist_ok=True)
+    #shutil.copy(os.path.join(rootdir, 'systemCore', 'vendor', 'ggml', 'build', 'bin', 'gpt-j'), os.path.join(ggml_gptj_dir, 'LLMBackend-gpt-j'))
 
     build_gemma_base()
     
     google_gemma_dir = os.path.join(bin_dir, 'googleGemma')
     os.makedirs(google_gemma_dir, exist_ok=True)
     print("Copying any Acceleration and Debugging Dependencies for googleGemma")
-    shutil.copytree(os.path.join(rootdir, 'usr', 'vendor', 'gemma.cpp', 'build'), google_gemma_dir, dirs_exist_ok=True)
-    shutil.copy(os.path.join(rootdir, 'usr', 'vendor', 'gemma.cpp', 'build', 'gemma'), os.path.join(google_gemma_dir, 'LLMBackend-gemma'))
+    shutil.copytree(os.path.join(rootdir, 'systemCore', 'vendor', 'gemma.cpp', 'build'), google_gemma_dir, dirs_exist_ok=True)
+    shutil.copy(os.path.join(rootdir, 'systemCore', 'vendor', 'gemma.cpp', 'build', 'gemma'), os.path.join(google_gemma_dir, 'LLMBackend-gemma'))
 
 
 def fix_permission_universal():

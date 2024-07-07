@@ -63,6 +63,9 @@ const osUtils = require('os-utils');
 const gpuInfo = require('gpu-info');
 const platform = os.platform();
 const arch = os.arch();
+const username = os.userInfo().username;
+
+
 const colorReset = "\x1b[0m";
 const colorBrightCyan = "\x1b[96m";
 const colorBrightRed = "\x1b[91m";
@@ -70,7 +73,6 @@ const colorBrightGreen = "\x1b[92m";
 const assistantName = "Adelaide Zephyrine Charlotte";
 const natural = require('natural');
 const appName = `Project ${assistantName}`;
-const username = os.userInfo().username;
 const engineName = `Adelaide Paradigm Engine`
 const consoleLogPrefix = `[${colorBrightCyan}${engineName}_${platform}_${arch}${colorReset}]:`;
 const versionTheUnattendedEngineLogPrefix = `[${colorBrightCyan}${engineName}${colorBrightGreen} [Codename : "The Unattended"] ${colorReset}]:`;
