@@ -335,6 +335,19 @@ def build_llama_gguf():
             cmake_args.append('-DLLAMA_CLBLAST=on')
         else:
             cmake_args.extend(['-DLLAMA_BLAS=ON', '-DLLAMA_BLAS_VENDOR=OpenBLAS'])
+    elif platform_system == 'Windows':
+        if cuda == "cuda":
+            cmake_args.append('-DLLAMA_CUBLAS=on')
+        elif arch == "x86_64" and metal == "metal":
+            cmake_args.append('-DLLAMA_METAL=on')
+        elif arch in ["arm64", "aarch64"] and metal == "metal":
+            cmake_args.append('-DLLAMA_METAL=on')
+        elif arch == "x86_64" and opencl == "opencl":
+            cmake_args.append('-DLLAMA_CLBLAST=on')
+        elif arch in ["arm64", "aarch64"] and opencl == "opencl":
+            cmake_args.append('-DLLAMA_CLBLAST=on')
+        else:
+            cmake_args.extend(['-DLLAMA_BLAS=ON', '-DLLAMA_BLAS_VENDOR=OpenBLAS'])
     elif platform_system == 'Darwin':
         if cuda == "cuda":
             cmake_args.append('-DLLAMA_CUBLAS=on')
@@ -381,6 +394,8 @@ def build_gemma_base():
         if cuda == "cuda":
             print("Gemma is CPU SIMD only!")
         # No additional CMAKE_ARGS needed for Linux in this context
+    elif platform_system == 'Windows':
+        print("Gemma is CPU SIMD only!")
     elif platform_system == 'Darwin':
         if cuda == "cuda":
             print("Gemma is CPU SIMD only!")
@@ -445,6 +460,23 @@ def build_ggml_base(binary_name):
             cmake_args.append("-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS")
         else:
             print("No special Acceleration, Ignoring")
+    elif platform_system == 'Windows':
+        if cuda == "cuda":
+            cmake_args.append("-DGGML_CUBLAS=on")
+        elif arch == "x86_64" and metal == "metal":
+            cmake_args.append("-DGGML_METAL=on")
+        elif arch in ["arm64", "aarch64"] and metal == "metal":
+            cmake_args.append("-DGGML_METAL=on")
+        elif arch == "x86_64" and opencl == "opencl":
+            cmake_args.append("-DGGML_CLBLAST=on")
+        elif arch in ["arm64", "aarch64"] and opencl == "opencl":
+            cmake_args.append("-DGGML_CLBLAST=on")
+        elif arch == "x86_64" and opencl == "no_opencl":
+            cmake_args.append("-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS")
+        elif arch in ["arm64", "aarch64"] and opencl == "no_opencl":
+            cmake_args.append("-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS")
+        else:
+            print("No special Acceleration, Ignoring")
     elif platform_system == 'Darwin':
         if cuda == "cuda":
             cmake_args.append("-DGGML_CUBLAS=on")
@@ -491,6 +523,19 @@ def build_falcon():
     arch = platform.machine()
 
     if platform_system == 'Linux':
+        if cuda == "cuda":
+            cmake_args.append('-DLLAMA_CUBLAS=on')
+        elif arch == "x86_64" and metal == "metal":
+            cmake_args.append('-DLLAMA_METAL=on')
+        elif arch in ["arm64", "aarch64"] and metal == "metal":
+            cmake_args.append('-DLLAMA_METAL=on')
+        elif arch == "x86_64" and opencl == "opencl":
+            cmake_args.append('-DLLAMA_CLBLAST=on')
+        elif arch in ["arm64", "aarch64"] and opencl == "opencl":
+            cmake_args.append('-DLLAMA_CLBLAST=on')
+        else:
+            cmake_args.extend(['-DLLAMA_BLAS=ON', '-DLLAMA_BLAS_VENDOR=OpenBLAS'])
+    elif platform_system == 'Windows':
         if cuda == "cuda":
             cmake_args.append('-DLLAMA_CUBLAS=on')
         elif arch == "x86_64" and metal == "metal":
