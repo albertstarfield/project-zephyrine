@@ -232,6 +232,12 @@ def clone_submodule(path, url, commit):
     # If you want to use the simple branch checkout, uncomment the following line
     # subprocess.run(['git', 'clone', '--branch', commit, url, path], check=True)
 
+def clone_submodule_light(path, url, commit): #lighter than clone_submodule espescially if you need to import Ada compiler that rarely have premade binaries for almost all computers
+    print(f"Cloning submodule: {path} from {url}")
+    subprocess.run(['git', 'clone', '--depth=1', commit, url, path], check=True)
+    # If you want to use the simple branch checkout, uncomment the following line
+    # subprocess.run(['git', 'clone', '--branch', commit, url, path], check=True)
+
 def import_submodules_manually():
     clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'llama.cpp'), 'https://github.com/ggerganov/llama.cpp', 'master')
     clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'ggllm.cpp'), 'https://github.com/cmp-nct/ggllm.cpp', 'master')
@@ -239,6 +245,10 @@ def import_submodules_manually():
     clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'llama-gguf.cpp'), 'https://github.com/ggerganov/llama.cpp', 'master')
     clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'whisper.cpp'), 'https://github.com/ggerganov/whisper.cpp', 'master')
     clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'gemma.cpp'), 'https://github.com/google/gemma.cpp', 'main')
+    #------
+    clone_submodule_light(os.path.join(rootdir, 'systemCore', 'vendor', 'adaAOTCompiler'), 'https://github.com/AdaCore/gnat-llvm.git', 'main')
+    clone_submodule_light(os.path.join(rootdir, 'systemCore', 'vendor', 'gnat-llvm', 'llvm-interface'), 'git://gcc.gnu.org/git/gcc.git', 'main')
+
 
 #----- Build 
 
@@ -518,6 +528,40 @@ def build_falcon():
 
     os.chdir(rootdir)
 
+def build_adaAOTcompiler():
+    #https://github.com/AdaCore/gnat-llvm
+    os.chdir(os.path.join(rootdir, 'systemCore', 'vendor', 'adaAOTcompiler'))
+
+    #after git cloning there is specific thing need to be done first (for *nix and NT platforoms)
+    #https://github.com/AdaCore/gnat-llvm
+
+    platform_system = platform.system()
+    print(f"Linking LLVM and Ada Compiler into the folder")
+    #for *nix system or *nix fs (Darwin and Linux)
+    # ln -s gcc/gcc/ada llvm-interface/gnat_src
+    #for NT or Windows (Powershell)
+    # mv llvm-interface/gcc/gcc/ada llvm-interface/gnat_src
+    if platform_system == 'Darwin':
+        subprocess.run(['ln','-s','gcc/gcc/ada','llvm-interface/gnat_src'],check=True)
+    if platform_system == 'Linux':
+        subprocess.run(['ln','-s','gcc/gcc/ada','llvm-interface/gnat_src'],check=True)
+    elif platform_system == 'Windows':
+        subprocess.run(['mv','llvm-interface/gcc','llvm-interface/gnat_src'],check=True)
+    
+
+
+    print(f"Ada AOT Compiler Compiling...")
+    #Making sure we use specific llvm version compiler for adaAOTcompiler thus we don't use the system one
+    subprocess.run(['make', '-j', str(get_alloc_threads()), 'llvm'], check=True)
+    # Then we compile the GNAT compiler for Ada
+    subprocess.run(['make', '-j', str(get_alloc_threads())], check=True)
+    
+    
+    os.chdir(rootdir)
+
+    print("ada AOT compile break! remove this when development of Ada AOT breakpoint, What's after this isn't implemented yet -Albert")
+    exit()
+
 def buildLLMBackend():
     platform_system = platform.system()
     arch = platform.machine()
@@ -533,6 +577,8 @@ def buildLLMBackend():
 
     if platform_system == "Darwin":
         targetFolderPlatform = "0_macOS"
+    elif platform_system == "Windows":
+        targetFolderPlatform = "1_Windows"
     elif platform_system == "Linux":
         targetFolderPlatform = "2_Linux"
     else:
@@ -593,6 +639,13 @@ def buildLLMBackend():
     shutil.copytree(os.path.join(rootdir, 'systemCore', 'vendor', 'gemma.cpp', 'build'), google_gemma_dir, dirs_exist_ok=True)
     shutil.copy(os.path.join(rootdir, 'systemCore', 'vendor', 'gemma.cpp', 'build', 'gemma'), os.path.join(google_gemma_dir, 'LLMBackend-gemma'))
 
+    #Build Adelaide Paradigm Engine from Ada code to the binary
+    # Yes now Adelaide Paradigm Engine is categorized as LLM Backend because it's managing the LLM
+    # build ada compiler from ada llvm source code
+    build_adaAOTcompiler()
+    # Locate the adaAOT compiled compiler
+    # compile the ./systemCore/adelaideEngineMain/adaelaideEngineMain.ada to ./systemCore/adelaideEngineMain binary
+
 
 def fix_permission_universal():
     try:
@@ -618,6 +671,7 @@ def fix_permission_universal():
     except subprocess.CalledProcessError as e:
         print(f"Error fixing permissions: {e}")
 
+
 def enforcing_dependencies():
     current_platform = platform.system()
     if current_platform == "Linux":
@@ -628,6 +682,7 @@ def enforcing_dependencies():
         install_dependencies_windows()
     else:
         print(f"Unsupported platform: {current_platform}")
+
 
 def main():
     rootdir = os.getcwd()
@@ -647,7 +702,7 @@ def main():
         print("Running npm audit fix")
         subprocess.run(["npm", "audit", "fix"], check=True)
         
-        print("Rebuilding Electron Program For specific Computer COnfiguration with OpenSSL FIPS")
+        print("Rebuilding Electron Program For specific Computer Configuration with OpenSSL FIPS")
         
         print(os.getcwd())
         subprocess.run(["env"], check=True)
