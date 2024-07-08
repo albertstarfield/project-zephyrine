@@ -738,7 +738,7 @@ def main():
         print("Enforcing Check of Dependencies!")
         enforcing_dependencies()
         print("Enforcing latest npm")
-        os.chdir(os.path.join(rootdir, "usr"))
+        os.chdir(os.path.join(rootdir, "systemCore"))
         subprocess.run(["npm", "install", "npm@latest"], check=True)
         
         print("Installing Modules")
@@ -760,7 +760,7 @@ def main():
         fix_permission_universal()
         with open(os.path.join(rootdir, "installed.flag"), 'w') as f:
             f.write("")
-    os.chdir(os.path.join(rootdir, "usr"))
+    os.chdir(os.path.join(rootdir, "systemCore"))
     subprocess.run(["node", "-v"], check=True)
     subprocess.run(["npm", "-v"], check=True)
     subprocess.run(["npm", "start"], check=True)
