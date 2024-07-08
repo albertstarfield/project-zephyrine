@@ -22,14 +22,14 @@
 </sub>
 </h5>
 <p align="center"><i>Greetings, I am called Project Zephyrine or the entity name so-be called Adelaide Zephyrine Charlotte, delighted to make your acquaintance. Shall we embark on our intellectual voyage through this endeavor? </i></p>
-
+<p align="center"><h5>In Self-learning and Self-Improvement We Trust</h5></p>
 <hr>
 
 > **Important Note:**
 > The software is undergoing a paradigm shift, focusing on a plug-and-play framework similar to Copilot, primarily offline. It aims to avoid direct competition with LMStudio and OLlama GUI that is more successful, focusing on delineated entities with a Mix of Experts (MoE) interface. And other important note is that we're moving away from Javascript and Focus on Ada and C++ to preserve my sanity on debugging
 
 
-## Project Zephyrine: An Open-Source, Decentralized, non-Nvidia exclusive, non-proprietary, AI Assistant for Your Desktop and Embedded Device*g.
+## Project Zephyrine: An Open-Source, Decentralized, non-Nvidia exclusive, non-proprietary, AI Assistant for Your Desktop and Embedded Device*.
 
 **Project Zephyrine** is a collaborative effort spearheaded by the Zephyrine Foundation, bringing together expertise from professional AI engineers within a leading corporation, researchers from RisTIE Brawijaya University's Electrical Engineering department, and independent developer Albert. 
 

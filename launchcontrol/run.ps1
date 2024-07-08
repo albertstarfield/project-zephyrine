@@ -15,7 +15,7 @@ Write-Host "Current working directory: $cwd"
 
 # Check if Python3 is installed (on Windows, you can use `where` cmdlet)
 if (!(Get-Command -Name python3 -ErrorAction SilentlyContinue)) {
-    Write-Error "Error: Python3 is not installed"
+    Write-Error "Error: Python3 is not installed, Please install this component first for Windows, we will NOT auto install this one for you"
     exit 1
 }
 
