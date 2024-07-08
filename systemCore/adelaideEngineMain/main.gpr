@@ -1,0 +1,9 @@
+project Main is
+   for Source_Dirs use (".");
+   for Object_Dir use "obj";
+   for Main use ("main.adb");
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-gnat2012");
+   end Compiler;
+end Main;
