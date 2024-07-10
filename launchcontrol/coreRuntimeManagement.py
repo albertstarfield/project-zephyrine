@@ -3,7 +3,6 @@ import os
 import platform
 import subprocess
 import sys
-import multiprocessing
 import shutil
 import time
 import getpass
@@ -14,15 +13,7 @@ def install_module(module_name):
 # Install required dependencies
 required_packages = [
     'requests',
-    'bs4',
-    're',
-    'subprocess',
-    'os',
-    'platform',
-    'multiprocessing',
-    'shutil',
-    'time',
-    'getpass'
+    'bs4'
 ]
 
 # Install all required packages
@@ -850,7 +841,7 @@ def build_adaAOTcompiler():
     else:
         raise Exception(f"Unsupported platform: {platform_system}")
     subprocess.run(['gprbuild', '-j0', '-p', '-P', 'alr_env'], check=True, env=env)
-    
+
     print("ada AOT compile break! remove this when development of Ada AOT breakpoint, What's after this isn't implemented yet -Albert")
     exit()
 
