@@ -8,6 +8,32 @@ import shutil
 import time
 import getpass
 
+def install_module(module_name):
+    subprocess.check_call([sys.executable, "-m", "pip", "install", module_name])
+
+# Install required dependencies
+required_packages = [
+    'requests',
+    'bs4',
+    're',
+    'subprocess',
+    'os',
+    'platform',
+    'multiprocessing',
+    'shutil',
+    'time',
+    'getpass'
+]
+
+# Install all required packages
+for package in required_packages:
+    install_module(package)
+
+#THIS NEED TO BE RUN on A VENV, one case that it's not running well is with homebrew and python3 conflicting and refusing to install 
+#---------------------------------------------- [VENV Install module complete] -------------------------------------------
+
+
+
 # Define global variables
 rootdir = os.getcwd()
 CONDA_PREFIX = os.path.join(rootdir, 'conda_python_modules')
@@ -119,11 +145,11 @@ def install_dependencies_linux():
 
     if package_manager:
         install_commands = {
-            'apt-get': ['sudo', 'apt-get', 'update', '&&', 'sudo', 'apt-get', 'install', '-y', 'build-essential', 'python3', 'cmake', 'libopenblas-dev', 'liblapack-dev'],
-            'dnf': ['sudo', 'dnf', 'install', '-y', 'gcc-c++', 'cmake', 'openblas-devel', 'python', 'lapack-devel'],
-            'yum': ['sudo', 'yum', 'install', '-y', 'gcc-c++', 'cmake', 'openblas-devel', 'python', 'lapack-devel'],
-            'zypper': ['sudo', 'zypper', 'install', '-y', 'gcc-c++', 'cmake', 'openblas-devel', 'python', 'lapack-devel'],
-            'pacman': ['sudo', 'pacman', '-Syu', '--needed', 'base-devel', 'python', 'cmake', 'openblas', 'lapack'],
+            'apt-get': ['sudo', 'apt-get', 'update', '&&', 'sudo', 'apt-get', 'install', '-y', 'build-essential', 'python3', 'cmake', 'libopenblas-dev', 'liblapack-dev', 'git'],
+            'dnf': ['sudo', 'dnf', 'install', '-y', 'gcc-c++', 'cmake', 'openblas-devel', 'python', 'lapack-devel', 'git'],
+            'yum': ['sudo', 'yum', 'install', '-y', 'gcc-c++', 'cmake', 'openblas-devel', 'python', 'lapack-devel', 'git'],
+            'zypper': ['sudo', 'zypper', 'install', '-y', 'gcc-c++', 'cmake', 'openblas-devel', 'python', 'lapack-devel', 'git'],
+            'pacman': ['sudo', 'pacman', '-Syu', '--needed', 'base-devel', 'python', 'cmake', 'openblas', 'lapack', 'git'],
             'swupd': ['sudo', 'swupd', 'bundle-add', 'c-basic'],
         }
         subprocess.call(install_commands[package_manager])
@@ -149,6 +175,19 @@ def install_dependencies_macos():
     subprocess.call(['brew', 'upgrade', '--greed'])
     subprocess.call(['brew', 'reinstall', 'python', 'node', 'cmake', 'mas'])
     subprocess.call(['mas', 'install', '497799835'])
+    # switch to xcode (detect if there's xcode-beta use one)
+    # Switch to Xcode or Xcode-beta if available
+    if os.path.exists('/Applications/Xcode-beta.app'):
+        subprocess.call(['sudo', 'xcode-select', '-switch', '/Applications/Xcode-beta.app/Contents/Developer'])
+    elif os.path.exists('/Applications/Xcode.app'):
+        subprocess.call(['sudo', 'xcode-select', '-switch', '/Applications/Xcode.app/Contents/Developer'])
+    else:
+        print("Neither Xcode nor Xcode-beta found. Please install Xcode and try again.")
+        sys.exit(1)
+    # sudo xcodebuild -license accept
+    subprocess.call(['sudo','xcodebuild', '-license', 'accept'])
+
+
     subprocess.call(['npm', 'install', '-g', 'n'])
     subprocess.call(['npm', 'install', '-g', 'npm@latest'])
     subprocess.call(['n', 'latest'])
@@ -246,8 +285,20 @@ def import_submodules_manually():
     clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'whisper.cpp'), 'https://github.com/ggerganov/whisper.cpp', 'master')
     clone_submodule(os.path.join(rootdir, 'systemCore', 'vendor', 'gemma.cpp'), 'https://github.com/google/gemma.cpp', 'main')
     #------
-    clone_submodule_light(os.path.join(rootdir, 'systemCore', 'vendor', 'adaAOTCompiler'), 'https://github.com/AdaCore/gnat-llvm.git', 'main')
-    clone_submodule_light(os.path.join(rootdir, 'systemCore', 'vendor', 'gnat-llvm', 'llvm-interface'), 'git://gcc.gnu.org/git/gcc.git', 'main')
+    #we going to clone it manually download it manually on build adaAOTCompiler through tarball and mainrepo
+    global adaAOTcompilerDir
+    adaAOTcompilerDir=os.path.join(rootdir, 'systemCore', 'vendor', 'adaAOTcompiler')
+    global LLVMAdaAOT
+    global LLVMinterfaceAdaAOT
+    global AdaAlirePkg
+    LLVMAdaAOT=os.path.join(adaAOTcompilerDir, "gnat-llvm")
+    LLVMinterfaceAdaAOT=os.path.join(adaAOTcompilerDir, 'gnat-llvm', 'llvm-interface')
+    AdaAlirePkg=os.path.join(adaAOTcompilerDir, "adaAOTAlirePKGManager")
+
+    os.makedirs(adaAOTcompilerDir, exist_ok=True)
+    clone_submodule_light(LLVMAdaAOT, 'https://github.com/AdaCore/gnat-llvm.git', 'main')
+    clone_submodule_light(LLVMinterfaceAdaAOT, 'git://gcc.gnu.org/git/gcc.git', 'main')
+    clone_submodule(AdaAlirePkg, 'https://github.com/alire-project/alire.git', 'master') #for alire you need to recurse submodule see the repo for more detail https://github.com/alire-project/alire
 
 
 #----- Build 
@@ -575,12 +626,187 @@ def build_falcon():
 
 def build_adaAOTcompiler():
     #https://github.com/AdaCore/gnat-llvm
-    os.chdir(os.path.join(rootdir, 'systemCore', 'vendor', 'adaAOTcompiler'))
+    # we did global adaAOTcompilerDir on clone dir so we can just use that
+    os.chdir(adaAOTcompilerDir)
 
     #after git cloning there is specific thing need to be done first (for *nix and NT platforoms)
     #https://github.com/AdaCore/gnat-llvm
 
+    #This have the vibe of "Install Gentoo" but instead making it from scratch
+    #-------------------------------[making gnatmake gcc]-----------------------------------
     platform_system = platform.system()
+    #GCC compiler repo
+    print(f"Downloading prerequisite of Ada GCC GNU Compiler Downloader")
+    import requests
+    from bs4 import BeautifulSoup
+    import re
+    import subprocess
+    def get_latest_gcc_version():
+        url = "https://ftp.gnu.org/gnu/gcc/"
+        response = requests.get(url)
+        response.raise_for_status()  # Ensure we notice bad responses
+
+        soup = BeautifulSoup(response.text, 'html.parser')
+        version_pattern = re.compile(r'gcc-(\d+\.\d+\.\d+)/')
+        versions = []
+
+        for link in soup.find_all('a', href=True):
+            match = version_pattern.match(link['href'])
+            if match:
+                versions.append(match.group(1))
+        
+        if not versions:
+            raise Exception("No GCC versions found on the server")
+        latest_version = sorted(versions, key=lambda s: list(map(int, s.split('.'))))[-1]
+        return latest_version
+    
+    #"https://ftp.gnu.org/gnu/gcc/gcc-14.1.0/gcc-14.1.0.tar.xz"
+    # structure filenaming download "https://ftp.gnu.org/gnu/gcc/gcc-(LatestVersion)/gcc-(LatestVersion).tar.xz"
+
+    latest_version = get_latest_gcc_version()
+    gcc_url = f"https://ftp.gnu.org/gnu/gcc/gcc-{latest_version}/gcc-{latest_version}.tar.xz"
+    print(f"Downloading GCC version {latest_version} from {gcc_url}")
+
+    response = requests.get(gcc_url)
+    response.raise_for_status()
+
+    with open(f"gcc-{latest_version}.tar.xz", 'wb') as f:
+        f.write(response.content)
+    
+    print(f"GCC version {latest_version} downloaded successfully")
+
+    # Add logic to extract and build the compiler as needed
+    # Example of extracting the tarball:
+    print(f"Extracting GCC {latest_version}")
+    
+    target_directory="gcc-Ada"
+
+
+    subprocess.call(['tar', '-xvf', f"gcc-{latest_version}.tar.xz", '-C', target_directory, '--strip-components=1'])
+    
+    print(f"Extracted GCC version {latest_version} into {target_directory}")
+    print(f"Downloading prerequisite of Should be extracted")
+
+
+    print(f"Downloading prerequisite of Ada GCC GNU compiler")
+    def get_latest_version(base_url, component):
+        response = requests.get(base_url)
+        response.raise_for_status()
+        
+        soup = BeautifulSoup(response.text, 'html.parser')
+        version_pattern = re.compile(rf'{component}-(\d+\.\d+\.\d+)\.tar\.(gz|bz2)')
+        versions = []
+
+        for link in soup.find_all('a', href=True):
+            match = version_pattern.match(link['href'])
+            if match:
+                versions.append(match.group(1))
+        
+        if not versions:
+            raise Exception(f"No versions of {component} found on the server")
+
+        latest_version = sorted(versions, key=lambda s: list(map(int, s.split('.'))))[-1]
+        return latest_version, f"{component}-{latest_version}.tar.gz" if any("gz" in s for s in version_pattern.findall(f"{component}-{latest_version}.tar.gz")) else f"{component}-{latest_version}.tar.bz2"
+    
+    def download_and_extract_component(base_url, component):
+        latest_version, filename = get_latest_version(base_url, component)
+        url = f"{base_url}/{filename}"
+        print(f"Downloading {component} version {latest_version} from {url}")
+
+        response = requests.get(url)
+        response.raise_for_status()
+
+        with open(filename, 'wb') as f:
+            f.write(response.content)
+        
+        print(f"{component} version {latest_version} downloaded successfully")
+
+        # Create target directory
+        target_directory = component
+        if not os.path.exists(target_directory):
+            os.makedirs(target_directory)
+
+        # Extract the tarball into the target directory
+        if filename.endswith("tar.gz"):
+            subprocess.call(['tar', '-xvf', filename, '-C', target_directory, '--strip-components=1'])
+        elif filename.endswith("tar.bz2"):
+            subprocess.call(['tar', '-xvjf', filename, '-C', target_directory, '--strip-components=1'])
+
+    
+    #https://gcc.gnu.org/pub/gcc/infrastructure/.  See also
+    #http://gcc.gnu.org/install/prerequisites.html 
+    # It requires configure: error: Building GCC requires GMP 4.2+, MPFR 3.1.0+ and MPC 0.8.0+.
+    # Files dependencies are hosted on https://gcc.gnu.org/pub/gcc/infrastructure/ but we need logic to know automatically what to get what is the latest version of the library
+    # 938  wget "https://gcc.gnu.org/pub/gcc/infrastructure/gmp-6.2.1.tar.bz2"
+    #1014  wget "https://gcc.gnu.org/pub/gcc/infrastructure/mpfr-4.1.0.tar.bz2"
+    #1015  wget "https://gcc.gnu.org/pub/gcc/infrastructure/mpc-1.2.1.tar.gz"
+    # subprocess.call(['./configure', '--some-options'])
+    # subprocess.call(['make'])
+    # subprocess.call(['sudo', 'make', 'install'])
+    
+    infra_base_url = "https://gcc.gnu.org/pub/gcc/infrastructure/"
+    for component in ["gmp", "mpfr", "mpc"]:
+            download_and_extract_component(infra_base_url, component)
+
+    # ---- after downloading it's time to compile and install
+    # Make sure to flag and remember the folder of adaAOTcompilerDir, since we're going to do a lot of directory hopping
+    # compile sequence gmp -> mpfr -> mpc -> gccAdagnatMake -> gnat-llvm
+    #List of directory 
+    gmpToolCompile=os.path.join(adaAOTcompilerDir, "gmp")
+    mpfrToolCompile=os.path.join(adaAOTcompilerDir, "mpfr")
+    mpcToolCompile=os.path.join(adaAOTcompilerDir, "mpc")
+    gccToolCompile=os.path.join(adaAOTcompilerDir, "gcc-Ada")
+
+    # --- gmp compile
+    print("Compiling GMP 1/3 GNAT GCC Prerequisite")
+    os.chdir(gmpToolCompile)
+    subprocess.call(['./configure'])
+    subprocess.call(['make'])
+    subprocess.call(['sudo', 'make', 'install'])
+
+    # --- mpfr compile
+    print("Compiling mpfr 2/3 GNAT GCC Prerequisite")
+    os.chdir(mpfrToolCompile)
+    subprocess.call(['./configure'])
+    subprocess.call(['make'])
+    subprocess.call(['sudo', 'make', 'install'])
+
+    # --- mpc compile
+    print("Compiling mpc 3/3 GNAT GCC Prerequisite")
+    os.chdir(mpcToolCompile)
+    subprocess.call(['./configure'])
+    subprocess.call(['make'])
+    subprocess.call(['sudo', 'make', 'install'])
+    
+    # --- gnatmake gcc Ada compile
+    print("Compiling GNAT GCC gnatmake")
+    os.chdir(gccToolCompile)
+    subprocess.call(['./configure'])
+    subprocess.call(['make'])
+    subprocess.call(['sudo', 'make', 'install'])
+    
+
+    print("Checking gnatmake...")
+    def check_gnatmake():
+        try:
+            result = subprocess.run(['gnatmake', '--version'], stdout=subprocess.PIPE, stderr=subprocess.PIPE)
+            if result.returncode != 0:
+                raise Exception("gnatmake command not found or not functioning properly.")
+        except FileNotFoundError:
+            raise Exception("gnatmake command not found. Please install GNAT.")
+
+    try:
+        check_gnatmake()
+        print("gnatmake command is available. Assuming compilation successful!")
+    except Exception as e:
+        print(e)
+        sys.exit(1)
+
+    print("going into compiling LLVM Adacore Compiler")
+    #-------------------------------[making more optimized llvm Adacore compiler]-----------------------------------
+    print("Switching to LLVMAdacoreAOT Directory")
+    os.chdir(LLVMAdaAOT)
+
     print(f"Linking LLVM and Ada Compiler into the folder")
     #for *nix system or *nix fs (Darwin and Linux)
     # ln -s gcc/gcc/ada llvm-interface/gnat_src
@@ -597,13 +823,34 @@ def build_adaAOTcompiler():
 
     print(f"Ada AOT Compiler Compiling...")
     #Making sure we use specific llvm version compiler for adaAOTcompiler thus we don't use the system one
+    print(f"Compiling specific LLVM for Ada")
     subprocess.run(['make', '-j', str(get_alloc_threads()), 'llvm'], check=True)
+    # WARNING : For beta distro or operating system user that have mismatched library with the main SDK of the OS please reinstall all your sdk or delete your sdk to prevent LZMA error or unexpected library mismatch error
+
+
     # Then we compile the GNAT compiler for Ada
+    print(f"Compiling GNAT for Adacore using precompiled gnatmake")
     subprocess.run(['make', '-j', str(get_alloc_threads())], check=True)
     
-    
-    os.chdir(rootdir)
+    # Installing Ada Compiler
+    print(f"Installing compiler")
+    subprocess.run(['sudo', 'make', 'install'], check=True)
 
+    print(f"Ada Alire Package Manager Compiling") # We need library too bruh
+    os.chdir(AdaAlirePkg)
+
+    env = os.environ.copy()
+    #ALIRE_OS=<one of: freebsd, openbsd, linux, macos, windows> gprbuild -j0 -p -P alr_env
+    if platform_system == 'Darwin':
+        env['ALIRE_OS'] = 'macos'
+    elif platform_system == 'Linux':
+        env['ALIRE_OS'] = 'linux'
+    elif platform_system == 'Windows':
+        env['ALIRE_OS'] = 'windows'
+    else:
+        raise Exception(f"Unsupported platform: {platform_system}")
+    subprocess.run(['gprbuild', '-j0', '-p', '-P', 'alr_env'], check=True, env=env)
+    
     print("ada AOT compile break! remove this when development of Ada AOT breakpoint, What's after this isn't implemented yet -Albert")
     exit()
 
@@ -686,10 +933,14 @@ def buildLLMBackend():
 
     #Build Adelaide Paradigm Engine from Ada code to the binary
     # Yes now Adelaide Paradigm Engine is categorized as LLM Backend because it's managing the LLM
-    # build ada compiler from ada llvm source code
-    build_adaAOTcompiler()
+    # build ada compiler from ada GNU GCC source code
+    build_adaAOTcompiler() #compile ada GNAT also Alire Ada package manager
     # Locate the adaAOT compiled compiler
     # compile the ./systemCore/adelaideEngineMain/adaelaideEngineMain.ada to ./systemCore/adelaideEngineMain binary
+
+
+    # Build AdelaideEngineMain Ada Program for C++ LLM Management
+
 
 
 def fix_permission_universal():
