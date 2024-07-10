@@ -8,6 +8,7 @@ dist
 .DS_Store
 /release-builds/
 *systemCore/src/release-builds*
+**_venv*
 **release-build*
 **tmp-reposync*
 **repoworkspace*
