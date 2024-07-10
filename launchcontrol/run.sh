@@ -1,7 +1,7 @@
 #!/bin/bash
 
 # Define the required directories
-required_dirs=(systemCore launchcontrol launcher-builder-control documentation)
+required_dirs=(systemCore launchcontrol launcher-builder-tool documentation)
 
 # Check if all required directories exist
 for dir in "${required_dirs[@]}"; do
