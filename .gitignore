@@ -22,6 +22,7 @@ dist
 **generalLM**
 **universalPrompt.txt**
 **.log**
+**.lock**
 *.log
 systemCore/main.log
 systemCore/error.log
@@ -59,3 +60,4 @@ systemCore/Penalties
 systemCore/mirostat
 systemCore/bin/llmchildDynamicPromptSpill.tmp
 systemCore/bin/llmchildDynamicPromptSpill.tmp
+systemCore/raw_smallLanguageModel.gguf.bin
