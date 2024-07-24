@@ -165,7 +165,12 @@ def install_dependencies_macos():
     subprocess.call(['brew', 'tap', 'apple/apple'])
     subprocess.call(['brew', 'upgrade', '--greed'])
     subprocess.call(['brew', 'reinstall', 'python', 'node', 'cmake', 'mas'])
-    subprocess.call(['mas', 'install', '497799835'])
+    if os.path.exists('/Applications/Xcode-beta.app') or os.path.exists('/Applications/Xcode.app'):
+        pass
+    else:
+        print("Xcode SDK not detected, Installing from AppStore...")
+        subprocess.call(['mas', 'install', '497799835'])
+    
     # switch to xcode (detect if there's xcode-beta use one)
     # Switch to Xcode or Xcode-beta if available
     if os.path.exists('/Applications/Xcode-beta.app'):
@@ -1002,6 +1007,10 @@ def main():
         fix_permission_universal()
         with open(os.path.join(rootdir, "installed.flag"), 'w') as f:
             f.write("")
+    # Should be change into Launching Ada Adelaide Paradigm Engine 
+    exit()
+
+    # Then Launch Zephy Neo UI with launching the openWebUI Modification 
     os.chdir(os.path.join(rootdir, "systemCore"))
     subprocess.run(["node", "-v"], check=True)
     subprocess.run(["npm", "-v"], check=True)
