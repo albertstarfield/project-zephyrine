@@ -1,0 +1,3 @@
+/home/adri/Documents/DummyZephy/CMakeFiles/my_crow_app.dir
+/home/adri/Documents/DummyZephy/CMakeFiles/edit_cache.dir
+/home/adri/Documents/DummyZephy/CMakeFiles/rebuild_cache.dir
