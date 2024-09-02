@@ -2785,6 +2785,8 @@ function determineLLMBackend(){
 									<option value="starcoder">Starcoder</option>
 									<option value="gptj">gpt-j</option>
 	*/
+
+	/*
 	if (!LLMBackendSelection){
 		log.info(consoleLogPrefix, "LLM Backend Selection Failed, falling back to Original LLaMa backend")
 		LLMBackendSelection = "LLaMa2";
@@ -2823,6 +2825,7 @@ function determineLLMBackend(){
 		log.info(consoleLogPrefix, "Unsupported Backend", LLMBackendSelection);
         process.exit(1);
 	}
+	*/
 
 	log.info(`Detected Platform: ${platform}`);
 	log.info(`Detected Architecture: ${arch}`);
