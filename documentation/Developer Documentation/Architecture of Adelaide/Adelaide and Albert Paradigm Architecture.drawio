@@ -1,6 +1,6 @@
-<mxfile host="Electron" modified="2024-07-18T07:29:29.029Z" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/24.6.4 Chrome/124.0.6367.207 Electron/30.0.6 Safari/537.36" etag="pLAVQqtSdbDQciDSUWWS" version="24.6.4" type="device" pages="4">
+<mxfile host="Electron" agent="Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) draw.io/24.7.5 Chrome/126.0.6478.183 Electron/31.3.0 Safari/537.36" version="24.7.5" pages="4">
   <diagram name="Adelaide &amp; Albert Paradigm Architecture" id="Bp1xNnpBrb4pfa7D8T4j">
-    <mxGraphModel dx="2778" dy="1552" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
+    <mxGraphModel dx="2177" dy="1113" grid="0" gridSize="10" guides="1" tooltips="1" connect="1" arrows="1" fold="1" page="0" pageScale="1" pageWidth="827" pageHeight="1169" math="0" shadow="0">
       <root>
         <mxCell id="kIJ-Gs7cKDdG-07fWRgX-0" />
         <mxCell id="kIJ-Gs7cKDdG-07fWRgX-1" parent="kIJ-Gs7cKDdG-07fWRgX-0" />
@@ -218,9 +218,6 @@
         <mxCell id="SzOAAjom6OkY4_fce2xp-75" value="Load Calculated Optimal Response Surface Inference Profile" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
           <mxGeometry x="1054" y="91" width="120" height="60" as="geometry" />
         </mxCell>
-        <mxCell id="SzOAAjom6OkY4_fce2xp-83" value="JMP-InfT2" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
-          <mxGeometry x="1276" y="193" width="80" height="80" as="geometry" />
-        </mxCell>
         <mxCell id="SzOAAjom6OkY4_fce2xp-89" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="SzOAAjom6OkY4_fce2xp-37" source="SzOAAjom6OkY4_fce2xp-84" target="SzOAAjom6OkY4_fce2xp-86" edge="1">
           <mxGeometry relative="1" as="geometry" />
         </mxCell>
@@ -274,7 +271,7 @@
         <mxCell id="SzOAAjom6OkY4_fce2xp-101" value="False" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
           <mxGeometry x="2120" y="150" width="60" height="30" as="geometry" />
         </mxCell>
-        <mxCell id="SzOAAjom6OkY4_fce2xp-105" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;about global engine state&lt;/h1&gt;&lt;p&gt;&quot;global engine state&quot; as i called it, is a state which only threads InfT0, InfT1, InfT2, fT0, fT1, fT2 controls. the variable is global and named &quot;gES&quot;&lt;/p&gt;&lt;p&gt;gES data will include these state and based on the (&lt;span style=&quot;background-color: initial;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;InfT0, InfT1, InfT2, 00fT0, 00fT1, 00fT2, 0IDLE ) for all state except for &quot;0IDLE&quot; will be monitored and timed out within 600 seconds for global responsiveness.&lt;br&gt;&lt;br&gt;However if one of the threads wanna don&#39;t wait longer they can takeover they can overwrite on the gES and all the threads need clean itself if they are running but isn&#39;t their gES state.&lt;/span&gt;&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
+        <mxCell id="SzOAAjom6OkY4_fce2xp-105" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;about global engine state (gES)&lt;/h1&gt;&lt;p&gt;&quot;global engine state&quot; or (&lt;b&gt;gES&lt;/b&gt;) is an inter thread communication state as we called it, is a state which only threads InfT0, InfT1, InfT2, fT0, fT1, fT2 controls. the variable is global and named &quot;&lt;b&gt;gES&lt;/b&gt;&quot;&lt;/p&gt;&lt;p&gt;gES data will include these state and based on the (&lt;span style=&quot;background-color: initial;&quot;&gt;&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;&lt;i&gt;InfT0&lt;/i&gt;, &lt;i&gt;InfT1&lt;/i&gt;, &lt;i&gt;InfT2&lt;/i&gt;, &lt;i&gt;00fT0&lt;/i&gt;, &lt;i&gt;00fT1&lt;/i&gt;, &lt;i&gt;00fT2&lt;/i&gt;, &lt;i&gt;0IDLE&lt;/i&gt; ) for all state except for &quot;&lt;i&gt;0IDLE&lt;/i&gt;&quot; will be monitored and timed out within 600 seconds for global responsiveness.&lt;br&gt;&lt;br&gt;However if one of the threads wanna don&#39;t wait longer they can takeover they can overwrite on the &lt;b&gt;gES&lt;/b&gt; and all the threads need clean itself if they are running but isn&#39;t their &lt;b&gt;gES&lt;/b&gt; state.&lt;/span&gt;&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
           <mxGeometry x="2062" y="214" width="396" height="239" as="geometry" />
         </mxCell>
         <mxCell id="V-iHSDjZ5s8Kd_SEyaPq-5" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="SzOAAjom6OkY4_fce2xp-37" source="SzOAAjom6OkY4_fce2xp-106" target="V-iHSDjZ5s8Kd_SEyaPq-4" edge="1">
@@ -282,15 +279,6 @@
         </mxCell>
         <mxCell id="SzOAAjom6OkY4_fce2xp-106" value="Load Calculated Optimal Response Surface Inference Profile" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
           <mxGeometry x="211" y="438" width="120" height="60" as="geometry" />
-        </mxCell>
-        <mxCell id="V-iHSDjZ5s8Kd_SEyaPq-0" value="JMP-InfT0" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
-          <mxGeometry x="90.5" y="1637" width="80" height="80" as="geometry" />
-        </mxCell>
-        <mxCell id="V-iHSDjZ5s8Kd_SEyaPq-1" value="JMP-InfT1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
-          <mxGeometry x="90.5" y="1765" width="80" height="80" as="geometry" />
-        </mxCell>
-        <mxCell id="V-iHSDjZ5s8Kd_SEyaPq-2" value="JMP-InfT2" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
-          <mxGeometry x="90.5" y="1893" width="80" height="80" as="geometry" />
         </mxCell>
         <mxCell id="V-iHSDjZ5s8Kd_SEyaPq-7" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;" parent="SzOAAjom6OkY4_fce2xp-37" source="V-iHSDjZ5s8Kd_SEyaPq-4" target="V-iHSDjZ5s8Kd_SEyaPq-6" edge="1">
           <mxGeometry relative="1" as="geometry" />
@@ -311,7 +299,7 @@
           <mxGeometry x="882" y="428" width="80" height="80" as="geometry" />
         </mxCell>
         <mxCell id="V-iHSDjZ5s8Kd_SEyaPq-11" value="Init 0 LLMChild (Before InfTX)" style="swimlane;whiteSpace=wrap;html=1;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
-          <mxGeometry x="94.5" y="899" width="1129.5" height="486" as="geometry" />
+          <mxGeometry x="94.5" y="899" width="1129.5" height="350" as="geometry" />
         </mxCell>
         <mxCell id="V-iHSDjZ5s8Kd_SEyaPq-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="V-iHSDjZ5s8Kd_SEyaPq-11" source="V-iHSDjZ5s8Kd_SEyaPq-10" target="V-iHSDjZ5s8Kd_SEyaPq-18" edge="1">
           <mxGeometry relative="1" as="geometry" />
@@ -399,6 +387,201 @@
         <mxCell id="9-VGQ252K3RG-02OIlee-3" value="Let X1=A, X2=B X3=C X4=D X5=E" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
           <mxGeometry x="817.0700000000002" y="700" width="426" height="27" as="geometry" />
         </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-0" value="&lt;h1 style=&quot;margin-top: 0px;&quot;&gt;3 Inference Threads&lt;/h1&gt;&lt;p&gt;Theres &lt;b&gt;InfT0&lt;/b&gt;, &lt;b&gt;InfT1&lt;/b&gt;, and &lt;b&gt;InfT2&lt;/b&gt;. Let me elaborate what those are and their contribution&lt;/p&gt;&lt;p&gt;&lt;b&gt;InfT0&lt;/b&gt; is the &lt;i&gt;mainLLM&lt;/i&gt; (Text only Processing (mistral based Zygote model/Evolved Model)) for the main Input and Output&lt;b&gt;&lt;br&gt;&lt;/b&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;InfT1&lt;/b&gt; is the childLLM (Text and Visual Processing) (switches between LLaVa (Zygote Model/Evolved Model) (Consisting Visual Image/Framebuffer/Graphic) and (mistral based Zygote model/Evolved Model)(for standard processing))&lt;/p&gt;&lt;p&gt;&lt;b style=&quot;background-color: initial;&quot;&gt;InfT2 &lt;/b&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;is the &lt;i&gt;StableDiffusion&lt;/i&gt; (Imagination Thread) (Mainly uses Stable Diffusion-1 architecture Based (Zygote Model/Evolved Model)&amp;nbsp;&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;These threads will run &lt;b&gt;asynchronously&lt;/b&gt; and will obey and wait and report to the &lt;b&gt;gES &lt;/b&gt;inter thread communication and receive (data Input) it&#39;s data or inference input data on &lt;b&gt;inputBufferInfT0 (&lt;/b&gt;for Thread &lt;b&gt;InfT0)&amp;nbsp;&lt;/b&gt;&lt;/span&gt;&lt;b style=&quot;background-color: initial;&quot;&gt;inputBufferInfT1 (&lt;/b&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;for Thread &lt;/span&gt;&lt;b style=&quot;background-color: initial;&quot;&gt;InfT1) inputBufferInfT1_frameBuffer0 (&lt;/b&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;for thread &lt;/span&gt;&lt;b style=&quot;background-color: initial;&quot;&gt;InfT1)&amp;nbsp;&lt;/b&gt;&lt;b style=&quot;background-color: initial;&quot;&gt;inputBufferInfT2 (&lt;/b&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;for Thread &lt;b&gt;InfT2&lt;/b&gt;)&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;inputBufferInfT0&lt;/b&gt;&amp;nbsp;data type is strings (Input inference on Text)&lt;br&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;inputBufferInfT1&amp;nbsp;&lt;/b&gt;data type is strings (Input inference on Text)&lt;br&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;inputBufferInfT1_frameBuffer0&amp;nbsp;&lt;/b&gt;data type is&amp;nbsp;&lt;span style=&quot;border-width: 0px; border-style: solid; border-color: hsl(var(--border)); border-image: initial; box-sizing: border-box; scrollbar-color: auto; scrollbar-width: auto; --tw-border-spacing-x: 0; --tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x: ; --tw-pan-y: ; --tw-pinch-zoom: ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position: ; --tw-gradient-via-position: ; --tw-gradient-to-position: ; --tw-ordinal: ; --tw-slashed-zero: ; --tw-numeric-figure: ; --tw-numeric-spacing: ; --tw-numeric-fraction: ; --tw-ring-inset: ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgba(59,130,246,.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur: ; --tw-brightness: ; --tw-contrast: ; --tw-grayscale: ; --tw-hue-rotate: ; --tw-invert: ; --tw-saturate: ; --tw-sepia: ; --tw-drop-shadow: ; --tw-backdrop-blur: ; --tw-backdrop-brightness: ; --tw-backdrop-contrast: ; --tw-backdrop-grayscale: ; --tw-backdrop-hue-rotate: ; --tw-backdrop-invert: ; --tw-backdrop-opacity: ; --tw-backdrop-saturate: ; --tw-backdrop-sepia: ; --tw-contain-size: ; --tw-contain-layout: ; --tw-contain-paint: ; --tw-contain-style: ; cursor: text; user-select: text; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &amp;quot;Liberation Mono&amp;quot;, &amp;quot;Courier New&amp;quot;, monospace; font-size: 16px; white-space: pre; background-color: rgb(18, 18, 18); color: rgb(128, 166, 101); --shiki-light: #59873A;&quot;&gt;std&lt;/span&gt;&lt;span style=&quot;border-width: 0px; border-style: solid; border-color: hsl(var(--border)); border-image: initial; box-sizing: border-box; scrollbar-color: auto; scrollbar-width: auto; --tw-border-spacing-x: 0; --tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x: ; --tw-pan-y: ; --tw-pinch-zoom: ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position: ; --tw-gradient-via-position: ; --tw-gradient-to-position: ; --tw-ordinal: ; --tw-slashed-zero: ; --tw-numeric-figure: ; --tw-numeric-spacing: ; --tw-numeric-fraction: ; --tw-ring-inset: ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgba(59,130,246,.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur: ; --tw-brightness: ; --tw-contrast: ; --tw-grayscale: ; --tw-hue-rotate: ; --tw-invert: ; --tw-saturate: ; --tw-sepia: ; --tw-drop-shadow: ; --tw-backdrop-blur: ; --tw-backdrop-brightness: ; --tw-backdrop-contrast: ; --tw-backdrop-grayscale: ; --tw-backdrop-hue-rotate: ; --tw-backdrop-invert: ; --tw-backdrop-opacity: ; --tw-backdrop-saturate: ; --tw-backdrop-sepia: ; --tw-contain-size: ; --tw-contain-layout: ; --tw-contain-paint: ; --tw-contain-style: ; cursor: text; user-select: text; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &amp;quot;Liberation Mono&amp;quot;, &amp;quot;Courier New&amp;quot;, monospace; font-size: 16px; white-space: pre; background-color: rgb(18, 18, 18); color: rgb(102, 102, 102); --shiki-light: #999999;&quot;&gt;::&lt;/span&gt;&lt;span style=&quot;border-width: 0px; border-style: solid; border-color: hsl(var(--border)); border-image: initial; box-sizing: border-box; scrollbar-color: auto; scrollbar-width: auto; --tw-border-spacing-x: 0; --tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x: ; --tw-pan-y: ; --tw-pinch-zoom: ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position: ; --tw-gradient-via-position: ; --tw-gradient-to-position: ; --tw-ordinal: ; --tw-slashed-zero: ; --tw-numeric-figure: ; --tw-numeric-spacing: ; --tw-numeric-fraction: ; --tw-ring-inset: ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgba(59,130,246,.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur: ; --tw-brightness: ; --tw-contrast: ; --tw-grayscale: ; --tw-hue-rotate: ; --tw-invert: ; --tw-saturate: ; --tw-sepia: ; --tw-drop-shadow: ; --tw-backdrop-blur: ; --tw-backdrop-brightness: ; --tw-backdrop-contrast: ; --tw-backdrop-grayscale: ; --tw-backdrop-hue-rotate: ; --tw-backdrop-invert: ; --tw-backdrop-opacity: ; --tw-backdrop-saturate: ; --tw-backdrop-sepia: ; --tw-contain-size: ; --tw-contain-layout: ; --tw-contain-paint: ; --tw-contain-style: ; cursor: text; user-select: text; color: rgba(219, 215, 202, 0.933); font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &amp;quot;Liberation Mono&amp;quot;, &amp;quot;Courier New&amp;quot;, monospace; font-size: 16px; white-space: pre; background-color: rgb(18, 18, 18); --shiki-light: #393A34;&quot;&gt;byte&lt;/span&gt;&lt;span style=&quot;border-width: 0px; border-style: solid; border-color: hsl(var(--border)); border-image: initial; box-sizing: border-box; scrollbar-color: auto; scrollbar-width: auto; --tw-border-spacing-x: 0; --tw-border-spacing-y: 0; --tw-translate-x: 0; --tw-translate-y: 0; --tw-rotate: 0; --tw-skew-x: 0; --tw-skew-y: 0; --tw-scale-x: 1; --tw-scale-y: 1; --tw-pan-x: ; --tw-pan-y: ; --tw-pinch-zoom: ; --tw-scroll-snap-strictness: proximity; --tw-gradient-from-position: ; --tw-gradient-via-position: ; --tw-gradient-to-position: ; --tw-ordinal: ; --tw-slashed-zero: ; --tw-numeric-figure: ; --tw-numeric-spacing: ; --tw-numeric-fraction: ; --tw-ring-inset: ; --tw-ring-offset-width: 0px; --tw-ring-offset-color: #fff; --tw-ring-color: rgba(59,130,246,.5); --tw-ring-offset-shadow: 0 0 #0000; --tw-ring-shadow: 0 0 #0000; --tw-shadow: 0 0 #0000; --tw-shadow-colored: 0 0 #0000; --tw-blur: ; --tw-brightness: ; --tw-contrast: ; --tw-grayscale: ; --tw-hue-rotate: ; --tw-invert: ; --tw-saturate: ; --tw-sepia: ; --tw-drop-shadow: ; --tw-backdrop-blur: ; --tw-backdrop-brightness: ; --tw-backdrop-contrast: ; --tw-backdrop-grayscale: ; --tw-backdrop-hue-rotate: ; --tw-backdrop-invert: ; --tw-backdrop-opacity: ; --tw-backdrop-saturate: ; --tw-backdrop-sepia: ; --tw-contain-size: ; --tw-contain-layout: ; --tw-contain-paint: ; --tw-contain-style: ; cursor: text; user-select: text; font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, &amp;quot;Liberation Mono&amp;quot;, &amp;quot;Courier New&amp;quot;, monospace; font-size: 16px; white-space: pre; background-color: rgb(18, 18, 18); color: rgb(203, 118, 118); --shiki-light: #AB5959;&quot;&gt;*&lt;/span&gt;&amp;nbsp;(It can be blanked out if the LLMChild inference doesn&#39;t require visual input on the certain areas) (if something requesting for Visual connection with LLM)&lt;br&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;inputBufferInfT2&amp;nbsp;&lt;/b&gt;data type is Strings (Recieving Prompt in Text)&lt;br&gt;&lt;/p&gt;&lt;p&gt;These threads will produce result (ofc, unlike &lt;b&gt;javascript&lt;/b&gt; that hung without telling the issue), but before it output into variable, to save memory it need to flush the &quot;Input Buffer&quot; into the &lt;b&gt;Unified Memory Array (UMA) &lt;/b&gt;and&amp;nbsp;&lt;span style=&quot;text-align: center; background-color: initial;&quot;&gt;&lt;b&gt;Session Interaction Specific Array (SISA), (SISA) &lt;/b&gt;is specifically only for &lt;b&gt;mainLLM&amp;nbsp;or InfT0 &lt;/b&gt;(Intentionally to emulate the &lt;b&gt;&lt;i&gt;industry standard&lt;/i&gt;&lt;/b&gt; LLM &lt;b&gt;boring&lt;/b&gt; Input and Output context session). The variable that&#39;s going to be the output of the &lt;b&gt;InfTx&lt;/b&gt; Threads are &lt;b&gt;outputBufferInfT0&lt;/b&gt;,&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;text-align: center; background-color: initial;&quot;&gt;&lt;b&gt;outputBufferInfT1&lt;/b&gt;, and&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;text-align: center; background-color: initial;&quot;&gt;&lt;b&gt;outputBufferInfT2. &lt;/b&gt;The datatypes for each output variable as follows&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;b&gt;outputBufferInfT0 &lt;/b&gt;datatype is string&lt;/p&gt;&lt;p&gt;&lt;b style=&quot;background-color: initial;&quot;&gt;outputBufferInfT1 &lt;/b&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;datatype &lt;/span&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;is string&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;b style=&quot;background-color: initial;&quot;&gt;outputBufferInfT2&lt;/b&gt;&lt;b&gt;&amp;nbsp;&lt;/b&gt;datatype is std::byte* (Stores generated Image)&lt;/p&gt;&lt;p&gt;then after outputBuffer produced it will be written on both&amp;nbsp;&lt;b style=&quot;background-color: initial;&quot;&gt;Unified Memory Array (UMA)&amp;nbsp;&lt;/b&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;and&amp;nbsp;&lt;/span&gt;&lt;span style=&quot;background-color: initial; text-align: center;&quot;&gt;&lt;b&gt;Session Interaction Specific Array (SISA), (SISA)&amp;nbsp;&lt;/b&gt;is specifically only for&amp;nbsp;&lt;b&gt;mainLLM&amp;nbsp;or InfT0.&lt;/b&gt;&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot;text-align: center; background-color: initial;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;br&gt;&lt;/p&gt;&lt;p&gt;&lt;br&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/p&gt;&lt;p&gt;&lt;span style=&quot;background-color: initial;&quot;&gt;&lt;br&gt;&lt;/span&gt;&lt;/p&gt;" style="text;html=1;whiteSpace=wrap;overflow=hidden;rounded=0;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
+          <mxGeometry x="102" y="1303" width="754" height="562" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-50" value="infT0 (mainLLM) Class" style="swimlane;whiteSpace=wrap;html=1;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
+          <mxGeometry x="105" y="1914" width="1804" height="302" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-9" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="eqQPItco8xtnvjn5tHt0-50" source="V-iHSDjZ5s8Kd_SEyaPq-0" target="eqQPItco8xtnvjn5tHt0-6" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-13" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#9AC7BF;" parent="eqQPItco8xtnvjn5tHt0-50" source="eqQPItco8xtnvjn5tHt0-6" target="eqQPItco8xtnvjn5tHt0-12" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-24" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#F19C99;" parent="eqQPItco8xtnvjn5tHt0-50" source="eqQPItco8xtnvjn5tHt0-6" target="eqQPItco8xtnvjn5tHt0-23" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="270" y="124" />
+              <mxPoint x="176" y="124" />
+              <mxPoint x="176" y="83" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-20" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#F19C99;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" parent="eqQPItco8xtnvjn5tHt0-50" source="eqQPItco8xtnvjn5tHt0-12" target="eqQPItco8xtnvjn5tHt0-6" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="479" y="240" />
+              <mxPoint x="270" y="240" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-30" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;strokeColor=#9AC7BF;" parent="eqQPItco8xtnvjn5tHt0-50" source="eqQPItco8xtnvjn5tHt0-23" target="eqQPItco8xtnvjn5tHt0-6" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="336" y="83" />
+              <mxPoint x="336" y="121" />
+              <mxPoint x="270" y="121" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="V-iHSDjZ5s8Kd_SEyaPq-0" value="JMP-InfT0" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" parent="eqQPItco8xtnvjn5tHt0-50" vertex="1">
+          <mxGeometry x="59" y="127" width="80" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-6" value="&lt;b&gt;gES&lt;/b&gt; &lt;i&gt;&lt;b&gt;0IDLE&lt;/b&gt;&lt;/i&gt;?" style="rhombus;whiteSpace=wrap;html=1;" parent="eqQPItco8xtnvjn5tHt0-50" vertex="1">
+          <mxGeometry x="230" y="127" width="80" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="U3HFLF9_SJ7YOKs7cqP3-3" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="eqQPItco8xtnvjn5tHt0-50" source="eqQPItco8xtnvjn5tHt0-12" target="U3HFLF9_SJ7YOKs7cqP3-2" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-12" value="&lt;b&gt;inputBufferT0 data exists?&lt;/b&gt;" style="rhombus;whiteSpace=wrap;html=1;" parent="eqQPItco8xtnvjn5tHt0-50" vertex="1">
+          <mxGeometry x="384" y="114" width="190" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-23" value="Thread Sleep Check 500 (ms)" style="rounded=0;whiteSpace=wrap;html=1;" parent="eqQPItco8xtnvjn5tHt0-50" vertex="1">
+          <mxGeometry x="196" y="53" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-39" value="False" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="eqQPItco8xtnvjn5tHt0-50" vertex="1">
+          <mxGeometry x="200" y="120" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-40" value="True" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="eqQPItco8xtnvjn5tHt0-50" vertex="1">
+          <mxGeometry x="290" y="142" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-44" value="False" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="eqQPItco8xtnvjn5tHt0-50" vertex="1">
+          <mxGeometry x="489" y="210" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="U3HFLF9_SJ7YOKs7cqP3-0" value="True" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="eqQPItco8xtnvjn5tHt0-50" vertex="1">
+          <mxGeometry x="540.0000000000001" y="127" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="U3HFLF9_SJ7YOKs7cqP3-1" value="JMP-tRP0" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" parent="eqQPItco8xtnvjn5tHt0-50" vertex="1">
+          <mxGeometry x="778" y="127" width="80" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="U3HFLF9_SJ7YOKs7cqP3-4" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="eqQPItco8xtnvjn5tHt0-50" source="U3HFLF9_SJ7YOKs7cqP3-2" target="U3HFLF9_SJ7YOKs7cqP3-1" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="U3HFLF9_SJ7YOKs7cqP3-2" value="Recieve inputBufferT0" style="shape=parallelogram;perimeter=parallelogramPerimeter;whiteSpace=wrap;html=1;fixedSize=1;" parent="eqQPItco8xtnvjn5tHt0-50" vertex="1">
+          <mxGeometry x="622" y="137" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="U3HFLF9_SJ7YOKs7cqP3-6" value="Private method pybind-11 Bridge with llama-cpp-python" style="swimlane;whiteSpace=wrap;html=1;glass=0;" parent="eqQPItco8xtnvjn5tHt0-50" vertex="1">
+          <mxGeometry x="920" y="67" width="807" height="200" as="geometry" />
+        </mxCell>
+        <mxCell id="mWPk2onuDE6ql1SooNbh-0" value="infT1 (childLLM)" style="swimlane;whiteSpace=wrap;html=1;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
+          <mxGeometry x="105" y="2259" width="1807" height="346" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-10" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="mWPk2onuDE6ql1SooNbh-0" source="V-iHSDjZ5s8Kd_SEyaPq-1" target="eqQPItco8xtnvjn5tHt0-7" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="V-iHSDjZ5s8Kd_SEyaPq-1" value="JMP-InfT1" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" parent="mWPk2onuDE6ql1SooNbh-0" vertex="1">
+          <mxGeometry x="56" y="153.5" width="80" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-19" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;strokeColor=#9AC7BF;" parent="mWPk2onuDE6ql1SooNbh-0" source="eqQPItco8xtnvjn5tHt0-7" target="eqQPItco8xtnvjn5tHt0-14" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-33" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#F19C99;" parent="mWPk2onuDE6ql1SooNbh-0" source="eqQPItco8xtnvjn5tHt0-7" target="eqQPItco8xtnvjn5tHt0-31" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="155" y="155.5" />
+              <mxPoint x="155" y="105.5" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-7" value="&lt;b&gt;gES&lt;/b&gt;&amp;nbsp;&lt;i&gt;&lt;b&gt;0IDLE&lt;/b&gt;&lt;/i&gt;?" style="rhombus;whiteSpace=wrap;html=1;" parent="mWPk2onuDE6ql1SooNbh-0" vertex="1">
+          <mxGeometry x="227" y="153.5" width="80" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-22" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#F19C99;exitX=0.5;exitY=1;exitDx=0;exitDy=0;" parent="mWPk2onuDE6ql1SooNbh-0" source="eqQPItco8xtnvjn5tHt0-14" target="eqQPItco8xtnvjn5tHt0-7" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="461" y="267" />
+              <mxPoint x="267" y="267" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-32" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;strokeColor=#9AC7BF;" parent="mWPk2onuDE6ql1SooNbh-0" source="eqQPItco8xtnvjn5tHt0-31" target="eqQPItco8xtnvjn5tHt0-7" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="319" y="105.5" />
+              <mxPoint x="319" y="146.5" />
+              <mxPoint x="267" y="146.5" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-31" value="Thread Sleep Check 500 (ms)" style="rounded=0;whiteSpace=wrap;html=1;" parent="mWPk2onuDE6ql1SooNbh-0" vertex="1">
+          <mxGeometry x="175" y="75.5" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-41" value="False" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="mWPk2onuDE6ql1SooNbh-0" vertex="1">
+          <mxGeometry x="197" y="149.5" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-42" value="True" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="mWPk2onuDE6ql1SooNbh-0" vertex="1">
+          <mxGeometry x="287" y="170.5" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-45" value="False" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="mWPk2onuDE6ql1SooNbh-0" vertex="1">
+          <mxGeometry x="455" y="241" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-14" value="&lt;b&gt;inputBufferT1 data exists?&lt;/b&gt;" style="rhombus;whiteSpace=wrap;html=1;" parent="mWPk2onuDE6ql1SooNbh-0" vertex="1">
+          <mxGeometry x="366" y="140.5" width="190" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-43" value="True" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="mWPk2onuDE6ql1SooNbh-0" vertex="1">
+          <mxGeometry x="519.0000000000001" y="149.5" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="mWPk2onuDE6ql1SooNbh-1" value="infT2 (stableDiffusion)" style="swimlane;whiteSpace=wrap;html=1;" parent="SzOAAjom6OkY4_fce2xp-37" vertex="1">
+          <mxGeometry x="102" y="2653" width="1814" height="338" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-11" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;" parent="mWPk2onuDE6ql1SooNbh-1" source="V-iHSDjZ5s8Kd_SEyaPq-2" target="eqQPItco8xtnvjn5tHt0-8" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="V-iHSDjZ5s8Kd_SEyaPq-2" value="JMP-InfT2" style="ellipse;whiteSpace=wrap;html=1;aspect=fixed;" parent="mWPk2onuDE6ql1SooNbh-1" vertex="1">
+          <mxGeometry x="74" y="156.46" width="80" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-18" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#9AC7BF;" parent="mWPk2onuDE6ql1SooNbh-1" source="eqQPItco8xtnvjn5tHt0-8" target="eqQPItco8xtnvjn5tHt0-15" edge="1">
+          <mxGeometry relative="1" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-38" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0;entryY=0.5;entryDx=0;entryDy=0;strokeColor=#F19C99;" parent="mWPk2onuDE6ql1SooNbh-1" source="eqQPItco8xtnvjn5tHt0-8" target="eqQPItco8xtnvjn5tHt0-34" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="285" y="148.46" />
+              <mxPoint x="179" y="148.46" />
+              <mxPoint x="179" y="98.46000000000001" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-8" value="&lt;b&gt;gES&lt;/b&gt;&amp;nbsp;&lt;i&gt;&lt;b&gt;0IDLE&lt;/b&gt;&lt;/i&gt;?" style="rhombus;whiteSpace=wrap;html=1;" parent="mWPk2onuDE6ql1SooNbh-1" vertex="1">
+          <mxGeometry x="245" y="156.46" width="80" height="80" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-21" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=1;entryDx=0;entryDy=0;strokeColor=#F19C99;" parent="mWPk2onuDE6ql1SooNbh-1" target="eqQPItco8xtnvjn5tHt0-8" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="468" y="270" />
+              <mxPoint x="285" y="270" />
+            </Array>
+            <mxPoint x="468" y="250" as="sourcePoint" />
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-15" value="&lt;b&gt;inputBufferT2 data exists?&lt;/b&gt;" style="rhombus;whiteSpace=wrap;html=1;" parent="mWPk2onuDE6ql1SooNbh-1" vertex="1">
+          <mxGeometry x="375" y="143.46" width="190" height="106" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-36" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;exitX=1;exitY=0.5;exitDx=0;exitDy=0;strokeColor=#9AC7BF;" parent="mWPk2onuDE6ql1SooNbh-1" source="eqQPItco8xtnvjn5tHt0-34" target="eqQPItco8xtnvjn5tHt0-8" edge="1">
+          <mxGeometry relative="1" as="geometry">
+            <Array as="points">
+              <mxPoint x="339" y="98.46000000000001" />
+              <mxPoint x="339" y="140.46" />
+              <mxPoint x="285" y="140.46" />
+            </Array>
+          </mxGeometry>
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-34" value="Thread Sleep Check 500 (ms)" style="rounded=0;whiteSpace=wrap;html=1;" parent="mWPk2onuDE6ql1SooNbh-1" vertex="1">
+          <mxGeometry x="199" y="68.46000000000001" width="120" height="60" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-46" value="False" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="mWPk2onuDE6ql1SooNbh-1" vertex="1">
+          <mxGeometry x="478" y="238.46" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-47" value="True" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="mWPk2onuDE6ql1SooNbh-1" vertex="1">
+          <mxGeometry x="541" y="159" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-48" value="True" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="mWPk2onuDE6ql1SooNbh-1" vertex="1">
+          <mxGeometry x="307" y="173.46" width="60" height="30" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-49" value="False" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="mWPk2onuDE6ql1SooNbh-1" vertex="1">
+          <mxGeometry x="219" y="148.46" width="60" height="30" as="geometry" />
+        </mxCell>
         <mxCell id="SzOAAjom6OkY4_fce2xp-58" value="Storage Domain" style="swimlane;whiteSpace=wrap;html=1;" parent="kIJ-Gs7cKDdG-07fWRgX-1" vertex="1">
           <mxGeometry x="-815.75" y="1366" width="891.5" height="895" as="geometry" />
         </mxCell>
@@ -420,6 +603,12 @@
             <mxPoint x="572.5" y="134" as="targetPoint" />
           </mxGeometry>
         </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-1" value="Unified Memory Array (UMA)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" parent="SzOAAjom6OkY4_fce2xp-58" vertex="1">
+          <mxGeometry x="43" y="233" width="191" height="114" as="geometry" />
+        </mxCell>
+        <mxCell id="eqQPItco8xtnvjn5tHt0-2" value="Session Interaction Specific Array (String Only)" style="shape=cylinder3;whiteSpace=wrap;html=1;boundedLbl=1;backgroundOutline=1;size=15;" parent="SzOAAjom6OkY4_fce2xp-58" vertex="1">
+          <mxGeometry x="43" y="390.5" width="191" height="114" as="geometry" />
+        </mxCell>
         <mxCell id="SzOAAjom6OkY4_fce2xp-98" style="edgeStyle=orthogonalEdgeStyle;rounded=0;orthogonalLoop=1;jettySize=auto;html=1;entryX=0.5;entryY=0;entryDx=0;entryDy=0;" parent="kIJ-Gs7cKDdG-07fWRgX-1" source="SzOAAjom6OkY4_fce2xp-95" target="SzOAAjom6OkY4_fce2xp-23" edge="1">
           <mxGeometry relative="1" as="geometry">
             <Array as="points">
@@ -428,7 +617,7 @@
             </Array>
           </mxGeometry>
         </mxCell>
-        <mxCell id="c5sOBuuzeF3PtDV1vZZ1-0" value="Yes, that name also inspired by Pratt and Whitney Engine" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" vertex="1" parent="kIJ-Gs7cKDdG-07fWRgX-1">
+        <mxCell id="c5sOBuuzeF3PtDV1vZZ1-0" value="Yes, that name also inspired by Pratt and Whitney Engine" style="text;html=1;align=center;verticalAlign=middle;whiteSpace=wrap;rounded=0;" parent="kIJ-Gs7cKDdG-07fWRgX-1" vertex="1">
           <mxGeometry x="-534" y="-82" width="182" height="30" as="geometry" />
         </mxCell>
       </root>

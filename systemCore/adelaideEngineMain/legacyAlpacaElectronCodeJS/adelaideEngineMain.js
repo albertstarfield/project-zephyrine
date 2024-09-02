@@ -53,11 +53,12 @@ const { BrowserWindow, app, ipcMain, dialog } = require("electron");
 const { spawn } = require('child_process');
 const ipcRenderer = require("electron").ipcRenderer;
 const contextBridge = require('electron').contextBridge;
-const path = require("path");
+
 //const { download } = require('electron-dl');
 const https = require('https');
 const http = require('http');
 require("@electron/remote/main").initialize();
+const path = require("path");
 const os = require("os");
 const osUtils = require('os-utils');
 const gpuInfo = require('gpu-info');
