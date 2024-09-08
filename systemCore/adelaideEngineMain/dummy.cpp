@@ -21,11 +21,13 @@ private:
 struct PromptTag {};
 struct ResponseTextTag {};
 struct HTTPMethodTag {};
+struct ModelTag {};
 
 // Define specific strong types using the base template
 using Prompt = StrongType<PromptTag, std::string>;
 using ResponseText = StrongType<ResponseTextTag, crow::json::wvalue>;
 using HTTPMethodType = StrongType<HTTPMethodTag, crow::HTTPMethod>;
+using Model = StrongType<ModelTag, std::string>;
 
 // Function to generate a random character for setfill
 char generate_random_fill_char() {
@@ -53,7 +55,7 @@ std::string generate_random_sha256() {
 }
 
 // Placeholder text generation function with random SHA-256, returning JSON
-ResponseText generate_text(const Prompt& prompt) {
+ResponseText generate_text(const Model& model, const Prompt& prompt) {
     crow::json::wvalue response_json;
 
     response_json["status_1"] = "reading model metadata";
@@ -71,6 +73,10 @@ ResponseText generate_text(const Prompt& prompt) {
     return ResponseText{std::move(response_json)};
 }
 
+bool is_string(const crow::json::rvalue& value) {
+    return value.t() == crow::json::type::String;
+}
+
 int main() {
     crow::SimpleApp app;
 
@@ -84,16 +90,26 @@ int main() {
             return crow::response(400, "Invalid JSON request");
         }
 
-        // Get the prompt from the JSON
+        // Use the is_string function to check if the fields are strings
+        if (!json.has("model") || !is_string(json["model"]) ||
+            !json.has("prompt") || !is_string(json["prompt"])) {
+            return crow::response(400, "Missing or invalid 'model' or 'prompt' field");
+        }
+        
+        // Get the model and prompt from the JSON
+        Model model{json["model"].s()};
         Prompt prompt{json["prompt"].s()};
 
         // Generate text using the placeholder function 
-        ResponseText generated_text = generate_text(prompt);
+        ResponseText generated_text = generate_text(model, prompt);
+
+
 
         // Create the JSON response
         crow::json::wvalue response;
-        response["model"] = "placeholder_model"; // Replace with your model name
-        response["response"] = std::move(generated_text.get()); // Move the generated JSON object
+        
+        response["model"] = model.get(); // Include the model in the response
+        response["response"] = crow::json::wvalue(std::move(generated_text.get())); // Move the generated JSON object
         response["done"] = true;
 
         // Return the JSON response directly
