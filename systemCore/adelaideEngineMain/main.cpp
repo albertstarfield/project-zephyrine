@@ -4,7 +4,7 @@
 #include <sstream>
 #include <random>
 #include <iomanip>
-#include "crow.h"
+#include "./Library/crow.h"
 
 // Base template class for strong typing
 template <typename Tag, typename T>
@@ -102,8 +102,6 @@ int main() {
 
         // Generate text using the placeholder function 
         ResponseText generated_text = generate_text(model, prompt);
-
-
 
         // Create the JSON response
         crow::json::wvalue response;
