@@ -1,0 +1,157 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>pool_executor_params</title>
+<link rel="stylesheet" href="../../../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../index.html" title="Chapter 1. Boost.MySQL">
+<link rel="up" href="../../pt01.html" title="Part Two: Reference. ">
+<link rel="prev" href="boost__mysql__pipeline_request/clear.html" title="pipeline_request::clear">
+<link rel="next" href="boost__mysql__pool_executor_params/pool_executor.html" title="pool_executor_params::pool_executor">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="boost__mysql__pipeline_request/clear.html"><img src="../../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../../pt01.html"><img src="../../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../index.html"><img src="../../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="boost__mysql__pool_executor_params/pool_executor.html"><img src="../../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h4 class="title">
+<a name="mysql.ref.boost__mysql__pool_executor_params"></a><a class="link" href="boost__mysql__pool_executor_params.html" title="pool_executor_params">pool_executor_params</a>
+</h4></div></div></div>
+<p>
+        (EXPERIMENTAL) Executor configuration for connection pools.
+      </p>
+<h5>
+<a name="mysql.ref.boost__mysql__pool_executor_params.h0"></a>
+        <span class="phrase"><a name="mysql.ref.boost__mysql__pool_executor_params.synopsis"></a></span><a class="link" href="boost__mysql__pool_executor_params.html#mysql.ref.boost__mysql__pool_executor_params.synopsis">Synopsis</a>
+      </h5>
+<p>
+        Defined in header <code class="literal">&lt;<a href="https://github.com/boostorg/mysql/blob/master/include/boost/mysql/pool_params.hpp" target="_top">boost/mysql/pool_params.hpp</a>&gt;</code>
+      </p>
+<pre class="programlisting"><span class="keyword">struct</span> <span class="identifier">pool_executor_params</span>
+</pre>
+<h5>
+<a name="mysql.ref.boost__mysql__pool_executor_params.h1"></a>
+        <span class="phrase"><a name="mysql.ref.boost__mysql__pool_executor_params.static_member_functions"></a></span><a class="link" href="boost__mysql__pool_executor_params.html#mysql.ref.boost__mysql__pool_executor_params.static_member_functions">Static
+        Member Functions</a>
+      </h5>
+<div class="informaltable"><table class="table">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                <p>
+                  Name
+                </p>
+              </th>
+<th>
+                <p>
+                  Description
+                </p>
+              </th>
+</tr></thead>
+<tbody><tr>
+<td>
+                <p>
+                  <span class="bold"><strong><a class="link" href="boost__mysql__pool_executor_params/thread_safe.html" title="pool_executor_params::thread_safe">thread_safe</a></strong></span>
+                </p>
+              </td>
+<td>
+                <p>
+                  Creates a pool_executor_params object that makes pools thread-safe.
+                </p>
+              </td>
+</tr></tbody>
+</table></div>
+<h5>
+<a name="mysql.ref.boost__mysql__pool_executor_params.h2"></a>
+        <span class="phrase"><a name="mysql.ref.boost__mysql__pool_executor_params.data_members"></a></span><a class="link" href="boost__mysql__pool_executor_params.html#mysql.ref.boost__mysql__pool_executor_params.data_members">Data
+        Members</a>
+      </h5>
+<div class="informaltable"><table class="table">
+<colgroup>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+                <p>
+                  Name
+                </p>
+              </th>
+<th>
+                <p>
+                  Description
+                </p>
+              </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+                <p>
+                  <span class="bold"><strong><a class="link" href="boost__mysql__pool_executor_params/connection_executor.html" title="pool_executor_params::connection_executor">connection_executor</a></strong></span>
+                </p>
+              </td>
+<td>
+                <p>
+                  The executor to be used by connections created by the pool.
+                </p>
+              </td>
+</tr>
+<tr>
+<td>
+                <p>
+                  <span class="bold"><strong><a class="link" href="boost__mysql__pool_executor_params/pool_executor.html" title="pool_executor_params::pool_executor">pool_executor</a></strong></span>
+                </p>
+              </td>
+<td>
+                <p>
+                  The executor to be used by the pool's internal objects.
+                </p>
+              </td>
+</tr>
+</tbody>
+</table></div>
+<h5>
+<a name="mysql.ref.boost__mysql__pool_executor_params.h3"></a>
+        <span class="phrase"><a name="mysql.ref.boost__mysql__pool_executor_params.description"></a></span><a class="link" href="boost__mysql__pool_executor_params.html#mysql.ref.boost__mysql__pool_executor_params.description">Description</a>
+      </h5>
+<p>
+        Contains two executors: one for the pool's internal objects, and another
+        for the connections created by the pool.
+      </p>
+<p>
+        You may use <a class="link" href="boost__mysql__pool_executor_params/thread_safe.html" title="pool_executor_params::thread_safe"><code class="computeroutput"><span class="identifier">thread_safe</span></code></a> to create an instance
+        of this class that makes pools thread-safe.
+      </p>
+<h5>
+<a name="mysql.ref.boost__mysql__pool_executor_params.h4"></a>
+        <span class="phrase"><a name="mysql.ref.boost__mysql__pool_executor_params.experimental"></a></span><a class="link" href="boost__mysql__pool_executor_params.html#mysql.ref.boost__mysql__pool_executor_params.experimental">Experimental</a>
+      </h5>
+<p>
+        This part of the API is experimental, and may change in successive releases
+        without previous notice.
+      </p>
+</div>
+<div class="copyright-footer">Copyright © 2019-2023 Ruben Perez<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="boost__mysql__pipeline_request/clear.html"><img src="../../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../../pt01.html"><img src="../../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../index.html"><img src="../../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="boost__mysql__pool_executor_params/pool_executor.html"><img src="../../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

@@ -1,0 +1,243 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>(Experimental) Generic batch inserts with Boost.Describe: extending format_sql</title>
+<link rel="stylesheet" href="../../../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../index.html" title="Chapter 1. Boost.MySQL">
+<link rel="up" href="../examples.html" title="Examples">
+<link rel="prev" href="batch_inserts.html" title="(Experimental) Batch inserts using client-side query formatting">
+<link rel="next" href="dynamic_filters.html" title="(Experimental) Dynamic filters using client-side query formatting">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="batch_inserts.html"><img src="../../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../examples.html"><img src="../../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../index.html"><img src="../../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="dynamic_filters.html"><img src="../../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="mysql.examples.batch_inserts_generic"></a><a class="link" href="batch_inserts_generic.html" title="(Experimental) Generic batch inserts with Boost.Describe: extending format_sql">(Experimental)
+      Generic batch inserts with Boost.Describe: extending format_sql</a>
+</h3></div></div></div>
+<p>
+        This example demonstrates how to extend <a class="link" href="../ref/boost__mysql__format_sql.html" title="format_sql"><code class="literal">format_sql</code></a>
+        using <a class="link" href="../ref/boost__mysql__formatter.html" title="formatter"><code class="literal">formatter</code></a>
+        to implement batch inserts for any struct that contains Boost.Describe metadata.
+      </p>
+<p>
+        The example employs sync functions with exceptions.
+      </p>
+<p>
+        This example assumes you have gone through the <a class="link" href="../examples.html#mysql.examples.setup">setup</a>.
+      </p>
+<pre class="programlisting"><span class="comment">// Uses client-side SQL formatting to implement batch inserts</span>
+<span class="comment">// for any type T with Boost.Describe metadata.</span>
+<span class="comment">//</span>
+<span class="comment">// The program reads a JSON file containing a list of employees</span>
+<span class="comment">// and inserts it into the employee table.</span>
+<span class="comment">//</span>
+<span class="comment">// This example requires C++14 to work.</span>
+<span class="comment">//</span>
+<span class="comment">// Note: client-side SQL formatting is an experimental feature.</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">any_connection</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">error_code</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">error_with_diagnostics</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">format_sql</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">results</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">string_view</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">asio</span><span class="special">/</span><span class="identifier">io_context</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">core</span><span class="special">/</span><span class="identifier">span</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">describe</span><span class="special">/</span><span class="keyword">class</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">describe</span><span class="special">/</span><span class="identifier">members</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">describe</span><span class="special">/</span><span class="identifier">modifiers</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">json</span><span class="special">/</span><span class="identifier">parse</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">json</span><span class="special">/</span><span class="identifier">value_to</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">fstream</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">iostream</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">string</span><span class="special">&gt;</span>
+
+<span class="keyword">using</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">error_code</span><span class="special">;</span>
+<span class="keyword">using</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">string_view</span><span class="special">;</span>
+<span class="keyword">namespace</span> <span class="identifier">describe</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">describe</span><span class="special">;</span>
+<span class="keyword">namespace</span> <span class="identifier">mp11</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mp11</span><span class="special">;</span>
+
+<span class="comment">/**
+ * An example Boost.Describe struct. Our code will work with any struct like this,
+ * as long as it has metadata as provided by BOOST_DESCRIBE_STRUCT.
+ * We will use this type as an example.
+ */</span>
+<span class="keyword">struct</span> <span class="identifier">employee</span>
+<span class="special">{</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">first_name</span><span class="special">;</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">last_name</span><span class="special">;</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">company_id</span><span class="special">;</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">int64_t</span> <span class="identifier">salary</span><span class="special">;</span>  <span class="comment">// in dollars per year</span>
+<span class="special">};</span>
+<span class="identifier">BOOST_DESCRIBE_STRUCT</span><span class="special">(</span><span class="identifier">employee</span><span class="special">,</span> <span class="special">(),</span> <span class="special">(</span><span class="identifier">first_name</span><span class="special">,</span> <span class="identifier">last_name</span><span class="special">,</span> <span class="identifier">company_id</span><span class="special">,</span> <span class="identifier">salary</span><span class="special">))</span>
+
+<span class="comment">// Retrieves all public data members from a Boost.Describe struct, including inherited ones.</span>
+<span class="comment">// This is a Boost.Mp11 compatible type list.</span>
+<span class="keyword">template</span> <span class="special">&lt;</span><span class="keyword">class</span> <span class="identifier">T</span><span class="special">&gt;</span>
+<span class="keyword">using</span> <span class="identifier">public_members</span> <span class="special">=</span> <span class="identifier">describe</span><span class="special">::</span><span class="identifier">describe_members</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">,</span> <span class="identifier">describe</span><span class="special">::</span><span class="identifier">mod_public</span> <span class="special">|</span> <span class="identifier">describe</span><span class="special">::</span><span class="identifier">mod_inherited</span><span class="special">&gt;;</span>
+
+<span class="comment">// The number of public members of a Boost.Describe struct</span>
+<span class="keyword">template</span> <span class="special">&lt;</span><span class="keyword">class</span> <span class="identifier">T</span><span class="special">&gt;</span>
+<span class="keyword">constexpr</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">size_t</span> <span class="identifier">num_public_members</span> <span class="special">=</span> <span class="identifier">mp11</span><span class="special">::</span><span class="identifier">mp_size</span><span class="special">&lt;</span><span class="identifier">public_members</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;&gt;::</span><span class="identifier">value</span><span class="special">;</span>
+
+<span class="comment">// Gets the member names of a struct, as an array of strings.</span>
+<span class="comment">// For employee, generates</span>
+<span class="comment">// {"first_name", "last_name", "company_id", "salary"}</span>
+<span class="keyword">template</span> <span class="special">&lt;</span><span class="keyword">class</span> <span class="identifier">T</span><span class="special">&gt;</span>
+<span class="keyword">constexpr</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="identifier">string_view</span><span class="special">,</span> <span class="identifier">num_public_members</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;&gt;</span> <span class="identifier">get_field_names</span><span class="special">()</span>
+<span class="special">{</span>
+    <span class="keyword">return</span> <span class="identifier">mp11</span><span class="special">::</span><span class="identifier">tuple_apply</span><span class="special">(</span>
+        <span class="special">[](</span><span class="keyword">auto</span><span class="special">...</span> <span class="identifier">descriptors</span><span class="special">)</span> <span class="special">{</span>
+            <span class="keyword">return</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="identifier">string_view</span><span class="special">,</span> <span class="identifier">num_public_members</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;&gt;{{</span><span class="identifier">descriptors</span><span class="special">.</span><span class="identifier">name</span><span class="special">...}};</span>
+        <span class="special">},</span>
+        <span class="identifier">mp11</span><span class="special">::</span><span class="identifier">mp_rename</span><span class="special">&lt;</span><span class="identifier">public_members</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">tuple</span><span class="special">&gt;()</span>
+    <span class="special">);</span>
+<span class="special">}</span>
+
+<span class="comment">// A formatting function that generates an insert field list for any struct T with</span>
+<span class="comment">// Boost.Describe metadata.</span>
+<span class="comment">// For example, employee{"John", "Doe", "HGS", 20000} generates the string</span>
+<span class="comment">// "('John', 'Doe', 'HGS', 20000)"</span>
+<span class="keyword">struct</span> <span class="identifier">insert_struct_format_fn</span>
+<span class="special">{</span>
+    <span class="keyword">template</span> <span class="special">&lt;</span><span class="keyword">class</span> <span class="identifier">T</span><span class="special">&gt;</span>
+    <span class="keyword">void</span> <span class="keyword">operator</span><span class="special">()(</span><span class="keyword">const</span> <span class="identifier">T</span><span class="special">&amp;</span> <span class="identifier">value</span><span class="special">,</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_context_base</span><span class="special">&amp;</span> <span class="identifier">ctx</span><span class="special">)</span> <span class="keyword">const</span>
+    <span class="special">{</span>
+        <span class="comment">// Convert the struct into a std::array of formattable_ref</span>
+        <span class="comment">// formattable_ref is a view type that can hold any type that can be formatted</span>
+        <span class="keyword">auto</span> <span class="identifier">args</span> <span class="special">=</span> <span class="identifier">mp11</span><span class="special">::</span><span class="identifier">tuple_apply</span><span class="special">(</span>
+            <span class="special">[&amp;</span><span class="identifier">value</span><span class="special">](</span><span class="keyword">auto</span><span class="special">...</span> <span class="identifier">descriptors</span><span class="special">)</span> <span class="special">{</span>
+                <span class="keyword">return</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">formattable_ref</span><span class="special">,</span> <span class="identifier">num_public_members</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;&gt;{</span>
+                    <span class="special">{</span><span class="identifier">value</span><span class="special">.*</span><span class="identifier">descriptors</span><span class="special">.</span><span class="identifier">pointer</span><span class="special">...}</span>
+                <span class="special">};</span>
+            <span class="special">},</span>
+            <span class="identifier">mp11</span><span class="special">::</span><span class="identifier">mp_rename</span><span class="special">&lt;</span><span class="identifier">public_members</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">tuple</span><span class="special">&gt;()</span>
+        <span class="special">);</span>
+
+        <span class="comment">// Format them as a comma-separated sequence</span>
+        <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql_to</span><span class="special">(</span><span class="identifier">ctx</span><span class="special">,</span> <span class="string">"({})"</span><span class="special">,</span> <span class="identifier">args</span><span class="special">);</span>
+    <span class="special">}</span>
+<span class="special">};</span>
+
+<span class="comment">// Reads a file into memory</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">read_file</span><span class="special">(</span><span class="keyword">const</span> <span class="keyword">char</span><span class="special">*</span> <span class="identifier">file_name</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">ifstream</span> <span class="identifier">ifs</span><span class="special">(</span><span class="identifier">file_name</span><span class="special">);</span>
+    <span class="keyword">if</span> <span class="special">(!</span><span class="identifier">ifs</span><span class="special">)</span>
+        <span class="keyword">throw</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">runtime_error</span><span class="special">(</span><span class="string">"Cannot open file: "</span> <span class="special">+</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span><span class="special">(</span><span class="identifier">file_name</span><span class="special">));</span>
+    <span class="keyword">return</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span><span class="special">(</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">istreambuf_iterator</span><span class="special">&lt;</span><span class="keyword">char</span><span class="special">&gt;(</span><span class="identifier">ifs</span><span class="special">),</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">istreambuf_iterator</span><span class="special">&lt;</span><span class="keyword">char</span><span class="special">&gt;());</span>
+<span class="special">}</span>
+
+<span class="keyword">void</span> <span class="identifier">main_impl</span><span class="special">(</span><span class="keyword">int</span> <span class="identifier">argc</span><span class="special">,</span> <span class="keyword">char</span><span class="special">**</span> <span class="identifier">argv</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="keyword">if</span> <span class="special">(</span><span class="identifier">argc</span> <span class="special">!=</span> <span class="number">5</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">cerr</span> <span class="special">&lt;&lt;</span> <span class="string">"Usage: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">argv</span><span class="special">[</span><span class="number">0</span><span class="special">]</span> <span class="special">&lt;&lt;</span> <span class="string">" &lt;username&gt; &lt;password&gt; &lt;server-hostname&gt; &lt;input-file&gt;\n"</span><span class="special">;</span>
+        <span class="identifier">exit</span><span class="special">(</span><span class="number">1</span><span class="special">);</span>
+    <span class="special">}</span>
+
+    <span class="comment">// Read our JSON file into memory</span>
+    <span class="keyword">auto</span> <span class="identifier">contents</span> <span class="special">=</span> <span class="identifier">read_file</span><span class="special">(</span><span class="identifier">argv</span><span class="special">[</span><span class="number">4</span><span class="special">]);</span>
+
+    <span class="comment">// Parse the JSON. json::parse parses the string into a DOM,</span>
+    <span class="comment">// and json::value_to validates the JSON schema, parsing values into employee structures</span>
+    <span class="keyword">auto</span> <span class="identifier">values</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">json</span><span class="special">::</span><span class="identifier">value_to</span><span class="special">&lt;</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="identifier">employee</span><span class="special">&gt;&gt;(</span><span class="identifier">boost</span><span class="special">::</span><span class="identifier">json</span><span class="special">::</span><span class="identifier">parse</span><span class="special">(</span><span class="identifier">contents</span><span class="special">));</span>
+
+    <span class="comment">// Create an I/O context, required by all I/O objects</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">asio</span><span class="special">::</span><span class="identifier">io_context</span> <span class="identifier">ctx</span><span class="special">;</span>
+
+    <span class="comment">// Create a connection. Note that client-side SQL formatting</span>
+    <span class="comment">// requires us to use the newer any_connection.</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">any_connection</span> <span class="identifier">conn</span><span class="special">(</span><span class="identifier">ctx</span><span class="special">);</span>
+
+    <span class="comment">// Connection configuration. By default, connections use the utf8mb4 character set</span>
+    <span class="comment">// (MySQL's name for regular UTF-8).</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">connect_params</span> <span class="identifier">params</span><span class="special">;</span>
+    <span class="identifier">params</span><span class="special">.</span><span class="identifier">server_address</span><span class="special">.</span><span class="identifier">emplace_host_and_port</span><span class="special">(</span><span class="identifier">argv</span><span class="special">[</span><span class="number">3</span><span class="special">]);</span>
+    <span class="identifier">params</span><span class="special">.</span><span class="identifier">username</span> <span class="special">=</span> <span class="identifier">argv</span><span class="special">[</span><span class="number">1</span><span class="special">];</span>
+    <span class="identifier">params</span><span class="special">.</span><span class="identifier">password</span> <span class="special">=</span> <span class="identifier">argv</span><span class="special">[</span><span class="number">2</span><span class="special">];</span>
+    <span class="identifier">params</span><span class="special">.</span><span class="identifier">database</span> <span class="special">=</span> <span class="string">"boost_mysql_examples"</span><span class="special">;</span>
+
+    <span class="comment">// Connect to the server</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">connect</span><span class="special">(</span><span class="identifier">params</span><span class="special">);</span>
+
+    <span class="comment">// We need one value to insert, at least</span>
+    <span class="keyword">if</span> <span class="special">(</span><span class="identifier">values</span><span class="special">.</span><span class="identifier">empty</span><span class="special">())</span>
+    <span class="special">{</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">cerr</span> <span class="special">&lt;&lt;</span> <span class="identifier">argv</span><span class="special">[</span><span class="number">0</span><span class="special">]</span> <span class="special">&lt;&lt;</span> <span class="string">": the JSON file should contain at least one employee"</span> <span class="special">&lt;&lt;</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">endl</span><span class="special">;</span>
+        <span class="identifier">exit</span><span class="special">(</span><span class="number">1</span><span class="special">);</span>
+    <span class="special">}</span>
+
+    <span class="comment">// Compose the query. We use sequence() to format C++ ranges as</span>
+    <span class="comment">// comma-separated sequences.</span>
+    <span class="comment">// Recall that format_opts() returns a system::result&lt;format_options&gt;,</span>
+    <span class="comment">// which can contain an error if the connection doesn't know which character set is using.</span>
+    <span class="comment">// Use set_character_set if this happens.</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql</span><span class="special">(</span>
+        <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+        <span class="string">"INSERT INTO employee ({::i}) VALUES {}"</span><span class="special">,</span>
+        <span class="identifier">get_field_names</span><span class="special">&lt;</span><span class="identifier">employee</span><span class="special">&gt;(),</span>
+        <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">sequence</span><span class="special">(</span><span class="identifier">values</span><span class="special">,</span> <span class="identifier">insert_struct_format_fn</span><span class="special">())</span>
+    <span class="special">);</span>
+
+    <span class="comment">// Execute the query as usual.</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">results</span> <span class="identifier">result</span><span class="special">;</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">execute</span><span class="special">(</span><span class="identifier">query</span><span class="special">,</span> <span class="identifier">result</span><span class="special">);</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">cout</span> <span class="special">&lt;&lt;</span> <span class="string">"Done\n"</span><span class="special">;</span>
+
+    <span class="comment">// Notify the MySQL server we want to quit, then close the underlying connection.</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">close</span><span class="special">();</span>
+<span class="special">}</span>
+
+<span class="keyword">int</span> <span class="identifier">main</span><span class="special">(</span><span class="keyword">int</span> <span class="identifier">argc</span><span class="special">,</span> <span class="keyword">char</span><span class="special">**</span> <span class="identifier">argv</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="keyword">try</span>
+    <span class="special">{</span>
+        <span class="identifier">main_impl</span><span class="special">(</span><span class="identifier">argc</span><span class="special">,</span> <span class="identifier">argv</span><span class="special">);</span>
+    <span class="special">}</span>
+    <span class="keyword">catch</span> <span class="special">(</span><span class="keyword">const</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">error_with_diagnostics</span><span class="special">&amp;</span> <span class="identifier">err</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="comment">// You will only get this type of exceptions if you use throw_on_error.</span>
+        <span class="comment">// Some errors include additional diagnostics, like server-provided error messages.</span>
+        <span class="comment">// Security note: diagnostics::server_message may contain user-supplied values (e.g. the</span>
+        <span class="comment">// field value that caused the error) and is encoded using to the connection's character set</span>
+        <span class="comment">// (UTF-8 by default). Treat is as untrusted input.</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">cerr</span> <span class="special">&lt;&lt;</span> <span class="string">"Error: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">err</span><span class="special">.</span><span class="identifier">what</span><span class="special">()</span> <span class="special">&lt;&lt;</span> <span class="char">'\n'</span>
+                  <span class="special">&lt;&lt;</span> <span class="string">"Server diagnostics: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">err</span><span class="special">.</span><span class="identifier">get_diagnostics</span><span class="special">().</span><span class="identifier">server_message</span><span class="special">()</span> <span class="special">&lt;&lt;</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">endl</span><span class="special">;</span>
+        <span class="keyword">return</span> <span class="number">1</span><span class="special">;</span>
+    <span class="special">}</span>
+    <span class="keyword">catch</span> <span class="special">(</span><span class="keyword">const</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">exception</span><span class="special">&amp;</span> <span class="identifier">err</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">cerr</span> <span class="special">&lt;&lt;</span> <span class="string">"Error: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">err</span><span class="special">.</span><span class="identifier">what</span><span class="special">()</span> <span class="special">&lt;&lt;</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">endl</span><span class="special">;</span>
+        <span class="keyword">return</span> <span class="number">1</span><span class="special">;</span>
+    <span class="special">}</span>
+<span class="special">}</span>
+</pre>
+</div>
+<div class="copyright-footer">Copyright © 2019-2023 Ruben Perez<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="batch_inserts.html"><img src="../../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../examples.html"><img src="../../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../index.html"><img src="../../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="dynamic_filters.html"><img src="../../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

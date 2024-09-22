@@ -1,0 +1,378 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>(Experimental) Dynamic filters using client-side query formatting</title>
+<link rel="stylesheet" href="../../../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../../index.html" title="Chapter 1. Boost.MySQL">
+<link rel="up" href="../examples.html" title="Examples">
+<link rel="prev" href="batch_inserts_generic.html" title="(Experimental) Generic batch inserts with Boost.Describe: extending format_sql">
+<link rel="next" href="patch_updates.html" title="(Experimental) PATCH-like updates using client-side query formatting">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="batch_inserts_generic.html"><img src="../../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../examples.html"><img src="../../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../index.html"><img src="../../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="patch_updates.html"><img src="../../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h3 class="title">
+<a name="mysql.examples.dynamic_filters"></a><a class="link" href="dynamic_filters.html" title="(Experimental) Dynamic filters using client-side query formatting">(Experimental) Dynamic
+      filters using client-side query formatting</a>
+</h3></div></div></div>
+<p>
+        This example demonstrates how to use <a class="link" href="../ref/boost__mysql__format_sql_to.html" title="format_sql_to"><code class="literal">format_sql_to</code></a>
+        to implement filters that can be enabled dynamically.
+      </p>
+<p>
+        The example employs async functions with stackful coroutines.
+      </p>
+<p>
+        This example assumes you have gone through the <a class="link" href="../examples.html#mysql.examples.setup">setup</a>.
+      </p>
+<pre class="programlisting"><span class="comment">// Uses client-side SQL formatting to implement a dynamic filter.</span>
+<span class="comment">// If you're implementing a filter with many options that can be</span>
+<span class="comment">// conditionally enabled, this pattern may be useful for you.</span>
+<span class="comment">//</span>
+<span class="comment">// Client-side SQL formatting is an experimental feature.</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">any_connection</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">character_set</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">constant_string_view</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">diagnostics</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">error_code</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">error_with_diagnostics</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">field_view</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">format_sql</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">results</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">row_view</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">string_view</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">mysql</span><span class="special">/</span><span class="identifier">throw_on_error</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">asio</span><span class="special">/</span><span class="identifier">error</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">asio</span><span class="special">/</span><span class="identifier">io_context</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">asio</span><span class="special">/</span><span class="identifier">spawn</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">core</span><span class="special">/</span><span class="identifier">span</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">boost</span><span class="special">/</span><span class="identifier">optional</span><span class="special">/</span><span class="identifier">optional</span><span class="special">.</span><span class="identifier">hpp</span><span class="special">&gt;</span>
+
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">cassert</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">iomanip</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">iostream</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">string</span><span class="special">&gt;</span>
+<span class="preprocessor">#include</span> <span class="special">&lt;</span><span class="identifier">vector</span><span class="special">&gt;</span>
+
+<span class="keyword">using</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">error_code</span><span class="special">;</span>
+<span class="keyword">using</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">field_view</span><span class="special">;</span>
+<span class="keyword">using</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">string_view</span><span class="special">;</span>
+
+<span class="comment">// Prints an employee row to stdout</span>
+<span class="keyword">void</span> <span class="identifier">print_employee</span><span class="special">(</span><span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">row_view</span> <span class="identifier">employee</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">cout</span> <span class="special">&lt;&lt;</span> <span class="string">"id: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">employee</span><span class="special">.</span><span class="identifier">at</span><span class="special">(</span><span class="number">0</span><span class="special">)</span>                             <span class="comment">// field 0: id</span>
+              <span class="special">&lt;&lt;</span> <span class="string">", first_name: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">setw</span><span class="special">(</span><span class="number">16</span><span class="special">)</span> <span class="special">&lt;&lt;</span> <span class="identifier">employee</span><span class="special">.</span><span class="identifier">at</span><span class="special">(</span><span class="number">1</span><span class="special">)</span>  <span class="comment">// field 1: first_name</span>
+              <span class="special">&lt;&lt;</span> <span class="string">", last_name: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">setw</span><span class="special">(</span><span class="number">16</span><span class="special">)</span> <span class="special">&lt;&lt;</span> <span class="identifier">employee</span><span class="special">.</span><span class="identifier">at</span><span class="special">(</span><span class="number">2</span><span class="special">)</span>   <span class="comment">// field 2: last_name</span>
+              <span class="special">&lt;&lt;</span> <span class="string">", company_id: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">employee</span><span class="special">.</span><span class="identifier">at</span><span class="special">(</span><span class="number">3</span><span class="special">)</span>                   <span class="comment">// field 3: company_id</span>
+              <span class="special">&lt;&lt;</span> <span class="string">", salary: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">employee</span><span class="special">.</span><span class="identifier">at</span><span class="special">(</span><span class="number">4</span><span class="special">)</span> <span class="special">&lt;&lt;</span> <span class="char">'\n'</span><span class="special">;</span>              <span class="comment">// field 4: salary</span>
+<span class="special">}</span>
+
+<span class="comment">// An operator to use in a filter</span>
+<span class="keyword">enum</span> <span class="keyword">class</span> <span class="identifier">op_type</span>
+<span class="special">{</span>
+    <span class="identifier">lt</span><span class="special">,</span>   <span class="comment">// &lt;</span>
+    <span class="identifier">lte</span><span class="special">,</span>  <span class="comment">// &lt;=</span>
+    <span class="identifier">eq</span><span class="special">,</span>   <span class="comment">// =</span>
+    <span class="identifier">gt</span><span class="special">,</span>   <span class="comment">// &gt;</span>
+    <span class="identifier">gte</span><span class="special">,</span>  <span class="comment">// &gt;=</span>
+<span class="special">};</span>
+
+<span class="comment">// Returns the SQL operator for the given op_type</span>
+<span class="identifier">string_view</span> <span class="identifier">op_type_to_sql</span><span class="special">(</span><span class="identifier">op_type</span> <span class="identifier">value</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="keyword">switch</span> <span class="special">(</span><span class="identifier">value</span><span class="special">)</span>
+    <span class="special">{</span>
+    <span class="keyword">case</span> <span class="identifier">op_type</span><span class="special">::</span><span class="identifier">lt</span><span class="special">:</span> <span class="keyword">return</span> <span class="string">"&lt;"</span><span class="special">;</span>
+    <span class="keyword">case</span> <span class="identifier">op_type</span><span class="special">::</span><span class="identifier">lte</span><span class="special">:</span> <span class="keyword">return</span> <span class="string">"&lt;="</span><span class="special">;</span>
+    <span class="keyword">case</span> <span class="identifier">op_type</span><span class="special">::</span><span class="identifier">eq</span><span class="special">:</span> <span class="keyword">return</span> <span class="string">"="</span><span class="special">;</span>
+    <span class="keyword">case</span> <span class="identifier">op_type</span><span class="special">::</span><span class="identifier">gte</span><span class="special">:</span> <span class="keyword">return</span> <span class="string">"&gt;="</span><span class="special">;</span>
+    <span class="keyword">case</span> <span class="identifier">op_type</span><span class="special">::</span><span class="identifier">gt</span><span class="special">:</span> <span class="keyword">return</span> <span class="string">"&gt;"</span><span class="special">;</span>
+    <span class="keyword">default</span><span class="special">:</span> <span class="identifier">assert</span><span class="special">(</span><span class="keyword">false</span><span class="special">);</span> <span class="keyword">return</span> <span class="string">"="</span><span class="special">;</span>
+    <span class="special">}</span>
+<span class="special">}</span>
+
+<span class="comment">// An individual filter to apply.</span>
+<span class="comment">// For example, filter{"salary", op_type::gt, field_view(20000)} should generate a</span>
+<span class="comment">// `salary` &gt; 20000 condition</span>
+<span class="keyword">struct</span> <span class="identifier">filter</span>
+<span class="special">{</span>
+    <span class="identifier">string_view</span> <span class="identifier">field_name</span><span class="special">;</span>  <span class="comment">// The database column name</span>
+    <span class="identifier">op_type</span> <span class="identifier">op</span><span class="special">;</span>              <span class="comment">// The operator to apply</span>
+    <span class="identifier">field_view</span> <span class="identifier">field_value</span><span class="special">;</span>  <span class="comment">// The value to check. field_view can hold any MySQL type</span>
+<span class="special">};</span>
+
+<span class="comment">// Command line arguments</span>
+<span class="keyword">struct</span> <span class="identifier">cmdline_args</span>
+<span class="special">{</span>
+    <span class="comment">// MySQL username to use during authentication.</span>
+    <span class="identifier">string_view</span> <span class="identifier">username</span><span class="special">;</span>
+
+    <span class="comment">// MySQL password to use during authentication.</span>
+    <span class="identifier">string_view</span> <span class="identifier">password</span><span class="special">;</span>
+
+    <span class="comment">// Hostname where the MySQL server is listening.</span>
+    <span class="identifier">string_view</span> <span class="identifier">server_hostname</span><span class="special">;</span>
+
+    <span class="comment">// The filters to apply</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="identifier">filter</span><span class="special">&gt;</span> <span class="identifier">filts</span><span class="special">;</span>
+
+    <span class="comment">// If order_by.has_value(), order employees using the given field</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">optional</span><span class="special">&lt;</span><span class="identifier">string_view</span><span class="special">&gt;</span> <span class="identifier">order_by</span><span class="special">;</span>
+<span class="special">};</span>
+
+<span class="comment">// Parses the command line</span>
+<span class="keyword">static</span> <span class="identifier">cmdline_args</span> <span class="identifier">parse_cmdline_args</span><span class="special">(</span><span class="keyword">int</span> <span class="identifier">argc</span><span class="special">,</span> <span class="keyword">char</span><span class="special">**</span> <span class="identifier">argv</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="comment">// Available options</span>
+    <span class="keyword">const</span> <span class="identifier">string_view</span> <span class="identifier">company_id_prefix</span> <span class="special">=</span> <span class="string">"--company-id="</span><span class="special">;</span>
+    <span class="keyword">const</span> <span class="identifier">string_view</span> <span class="identifier">first_name_prefix</span> <span class="special">=</span> <span class="string">"--first-name="</span><span class="special">;</span>
+    <span class="keyword">const</span> <span class="identifier">string_view</span> <span class="identifier">last_name_prefix</span> <span class="special">=</span> <span class="string">"--last-name="</span><span class="special">;</span>
+    <span class="keyword">const</span> <span class="identifier">string_view</span> <span class="identifier">min_salary_prefix</span> <span class="special">=</span> <span class="string">"--min-salary="</span><span class="special">;</span>
+    <span class="keyword">const</span> <span class="identifier">string_view</span> <span class="identifier">order_by_prefix</span> <span class="special">=</span> <span class="string">"--order-by="</span><span class="special">;</span>
+
+    <span class="comment">// Helper function to print the usage message and exit</span>
+    <span class="keyword">auto</span> <span class="identifier">print_usage_and_exit</span> <span class="special">=</span> <span class="special">[</span><span class="identifier">argv</span><span class="special">]()</span> <span class="special">{</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">cerr</span> <span class="special">&lt;&lt;</span> <span class="string">"Usage: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">argv</span><span class="special">[</span><span class="number">0</span><span class="special">]</span> <span class="special">&lt;&lt;</span> <span class="string">" &lt;username&gt; &lt;password&gt; &lt;server-hostname&gt; [filters]\n"</span><span class="special">;</span>
+        <span class="identifier">exit</span><span class="special">(</span><span class="number">1</span><span class="special">);</span>
+    <span class="special">};</span>
+
+    <span class="comment">// Check number of arguments</span>
+    <span class="keyword">if</span> <span class="special">(</span><span class="identifier">argc</span> <span class="special">&lt;=</span> <span class="number">4</span><span class="special">)</span>
+        <span class="identifier">print_usage_and_exit</span><span class="special">();</span>
+
+    <span class="comment">// Parse the required arguments</span>
+    <span class="identifier">cmdline_args</span> <span class="identifier">res</span><span class="special">;</span>
+    <span class="identifier">res</span><span class="special">.</span><span class="identifier">username</span> <span class="special">=</span> <span class="identifier">argv</span><span class="special">[</span><span class="number">1</span><span class="special">];</span>
+    <span class="identifier">res</span><span class="special">.</span><span class="identifier">password</span> <span class="special">=</span> <span class="identifier">argv</span><span class="special">[</span><span class="number">2</span><span class="special">];</span>
+    <span class="identifier">res</span><span class="special">.</span><span class="identifier">server_hostname</span> <span class="special">=</span> <span class="identifier">argv</span><span class="special">[</span><span class="number">3</span><span class="special">];</span>
+
+    <span class="comment">// Parse the filters</span>
+    <span class="keyword">for</span> <span class="special">(</span><span class="keyword">int</span> <span class="identifier">i</span> <span class="special">=</span> <span class="number">4</span><span class="special">;</span> <span class="identifier">i</span> <span class="special">&lt;</span> <span class="identifier">argc</span><span class="special">;</span> <span class="special">++</span><span class="identifier">i</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="identifier">string_view</span> <span class="identifier">arg</span> <span class="special">=</span> <span class="identifier">argv</span><span class="special">[</span><span class="identifier">i</span><span class="special">];</span>
+
+        <span class="comment">// Attempt to match the argument against each prefix</span>
+        <span class="keyword">if</span> <span class="special">(</span><span class="identifier">arg</span><span class="special">.</span><span class="identifier">starts_with</span><span class="special">(</span><span class="identifier">company_id_prefix</span><span class="special">))</span>
+        <span class="special">{</span>
+            <span class="keyword">auto</span> <span class="identifier">value</span> <span class="special">=</span> <span class="identifier">arg</span><span class="special">.</span><span class="identifier">substr</span><span class="special">(</span><span class="identifier">company_id_prefix</span><span class="special">.</span><span class="identifier">size</span><span class="special">());</span>
+            <span class="identifier">res</span><span class="special">.</span><span class="identifier">filts</span><span class="special">.</span><span class="identifier">push_back</span><span class="special">({</span><span class="string">"company_id"</span><span class="special">,</span> <span class="identifier">op_type</span><span class="special">::</span><span class="identifier">eq</span><span class="special">,</span> <span class="identifier">field_view</span><span class="special">(</span><span class="identifier">value</span><span class="special">)});</span>
+        <span class="special">}</span>
+        <span class="keyword">else</span> <span class="keyword">if</span> <span class="special">(</span><span class="identifier">arg</span><span class="special">.</span><span class="identifier">starts_with</span><span class="special">(</span><span class="identifier">first_name_prefix</span><span class="special">))</span>
+        <span class="special">{</span>
+            <span class="keyword">auto</span> <span class="identifier">value</span> <span class="special">=</span> <span class="identifier">arg</span><span class="special">.</span><span class="identifier">substr</span><span class="special">(</span><span class="identifier">first_name_prefix</span><span class="special">.</span><span class="identifier">size</span><span class="special">());</span>
+            <span class="identifier">res</span><span class="special">.</span><span class="identifier">filts</span><span class="special">.</span><span class="identifier">push_back</span><span class="special">({</span><span class="string">"first_name"</span><span class="special">,</span> <span class="identifier">op_type</span><span class="special">::</span><span class="identifier">eq</span><span class="special">,</span> <span class="identifier">field_view</span><span class="special">(</span><span class="identifier">value</span><span class="special">)});</span>
+        <span class="special">}</span>
+        <span class="keyword">else</span> <span class="keyword">if</span> <span class="special">(</span><span class="identifier">arg</span><span class="special">.</span><span class="identifier">starts_with</span><span class="special">(</span><span class="identifier">last_name_prefix</span><span class="special">))</span>
+        <span class="special">{</span>
+            <span class="keyword">auto</span> <span class="identifier">value</span> <span class="special">=</span> <span class="identifier">arg</span><span class="special">.</span><span class="identifier">substr</span><span class="special">(</span><span class="identifier">last_name_prefix</span><span class="special">.</span><span class="identifier">size</span><span class="special">());</span>
+            <span class="identifier">res</span><span class="special">.</span><span class="identifier">filts</span><span class="special">.</span><span class="identifier">push_back</span><span class="special">({</span><span class="string">"last_name"</span><span class="special">,</span> <span class="identifier">op_type</span><span class="special">::</span><span class="identifier">eq</span><span class="special">,</span> <span class="identifier">field_view</span><span class="special">(</span><span class="identifier">value</span><span class="special">)});</span>
+        <span class="special">}</span>
+        <span class="keyword">else</span> <span class="keyword">if</span> <span class="special">(</span><span class="identifier">arg</span><span class="special">.</span><span class="identifier">starts_with</span><span class="special">(</span><span class="identifier">min_salary_prefix</span><span class="special">))</span>
+        <span class="special">{</span>
+            <span class="keyword">auto</span> <span class="identifier">value</span> <span class="special">=</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">stod</span><span class="special">(</span><span class="identifier">arg</span><span class="special">.</span><span class="identifier">substr</span><span class="special">(</span><span class="identifier">min_salary_prefix</span><span class="special">.</span><span class="identifier">size</span><span class="special">()));</span>
+            <span class="identifier">res</span><span class="special">.</span><span class="identifier">filts</span><span class="special">.</span><span class="identifier">push_back</span><span class="special">({</span><span class="string">"salary"</span><span class="special">,</span> <span class="identifier">op_type</span><span class="special">::</span><span class="identifier">gte</span><span class="special">,</span> <span class="identifier">field_view</span><span class="special">(</span><span class="identifier">value</span><span class="special">)});</span>
+        <span class="special">}</span>
+        <span class="keyword">else</span> <span class="keyword">if</span> <span class="special">(</span><span class="identifier">arg</span><span class="special">.</span><span class="identifier">starts_with</span><span class="special">(</span><span class="identifier">order_by_prefix</span><span class="special">))</span>
+        <span class="special">{</span>
+            <span class="keyword">auto</span> <span class="identifier">field_name</span> <span class="special">=</span> <span class="identifier">arg</span><span class="special">.</span><span class="identifier">substr</span><span class="special">(</span><span class="identifier">order_by_prefix</span><span class="special">.</span><span class="identifier">size</span><span class="special">());</span>
+
+            <span class="comment">// For security, validate the passed field against a set of whitelisted fields</span>
+            <span class="keyword">if</span> <span class="special">(</span><span class="identifier">field_name</span> <span class="special">!=</span> <span class="string">"id"</span> <span class="special">&amp;&amp;</span> <span class="identifier">field_name</span> <span class="special">!=</span> <span class="string">"first_name"</span> <span class="special">&amp;&amp;</span> <span class="identifier">field_name</span> <span class="special">!=</span> <span class="string">"last_name"</span> <span class="special">&amp;&amp;</span>
+                <span class="identifier">field_name</span> <span class="special">!=</span> <span class="string">"salary"</span><span class="special">)</span>
+            <span class="special">{</span>
+                <span class="identifier">std</span><span class="special">::</span><span class="identifier">cerr</span> <span class="special">&lt;&lt;</span> <span class="string">"Order-by: invalid field "</span> <span class="special">&lt;&lt;</span> <span class="identifier">field_name</span> <span class="special">&lt;&lt;</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">endl</span><span class="special">;</span>
+                <span class="identifier">print_usage_and_exit</span><span class="special">();</span>
+            <span class="special">}</span>
+            <span class="identifier">res</span><span class="special">.</span><span class="identifier">order_by</span> <span class="special">=</span> <span class="identifier">field_name</span><span class="special">;</span>
+        <span class="special">}</span>
+        <span class="keyword">else</span>
+        <span class="special">{</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">cerr</span> <span class="special">&lt;&lt;</span> <span class="string">"Unrecognized option: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">arg</span> <span class="special">&lt;&lt;</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">endl</span><span class="special">;</span>
+            <span class="identifier">print_usage_and_exit</span><span class="special">();</span>
+        <span class="special">}</span>
+    <span class="special">}</span>
+
+    <span class="comment">// We should have at least one filter</span>
+    <span class="keyword">if</span> <span class="special">(</span><span class="identifier">res</span><span class="special">.</span><span class="identifier">filts</span><span class="special">.</span><span class="identifier">empty</span><span class="special">())</span>
+    <span class="special">{</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">cerr</span> <span class="special">&lt;&lt;</span> <span class="string">"At least one filter should be specified"</span> <span class="special">&lt;&lt;</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">endl</span><span class="special">;</span>
+        <span class="identifier">print_usage_and_exit</span><span class="special">();</span>
+    <span class="special">}</span>
+
+    <span class="keyword">return</span> <span class="identifier">res</span><span class="special">;</span>
+<span class="special">}</span>
+
+<span class="comment">// Composes a SELECT query to retrieve employees according to the passed filters.</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">compose_get_employees_query</span><span class="special">(</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_options</span> <span class="identifier">opts</span><span class="special">,</span>
+    <span class="keyword">const</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="identifier">filter</span><span class="special">&gt;&amp;</span> <span class="identifier">filts</span><span class="special">,</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">optional</span><span class="special">&lt;</span><span class="identifier">string_view</span><span class="special">&gt;</span> <span class="identifier">order_by</span>
+<span class="special">)</span>
+<span class="special">{</span>
+    <span class="comment">// A format context allows composing queries incrementally.</span>
+    <span class="comment">// This is required because we need to add the ORDER BY clause conditionally</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_context</span> <span class="identifier">ctx</span><span class="special">(</span><span class="identifier">opts</span><span class="special">);</span>
+
+    <span class="comment">// Adds an individual filter to the context. Used by sequence()</span>
+    <span class="keyword">auto</span> <span class="identifier">filter_format_fn</span> <span class="special">=</span> <span class="special">[](</span><span class="identifier">filter</span> <span class="identifier">item</span><span class="special">,</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_context_base</span><span class="special">&amp;</span> <span class="identifier">elm_ctx</span><span class="special">)</span> <span class="special">{</span>
+        <span class="comment">// {:i} formats a string as a SQL identifier. {:r} outputs raw SQL.</span>
+        <span class="comment">// filter{"key", op_type::eq, field_view(42)} would get formatted as "`key` = 42"</span>
+        <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql_to</span><span class="special">(</span>
+            <span class="identifier">elm_ctx</span><span class="special">,</span>
+            <span class="string">"{:i} {:r} {}"</span><span class="special">,</span>
+            <span class="identifier">item</span><span class="special">.</span><span class="identifier">field_name</span><span class="special">,</span>
+            <span class="identifier">op_type_to_sql</span><span class="special">(</span><span class="identifier">item</span><span class="special">.</span><span class="identifier">op</span><span class="special">),</span>
+            <span class="identifier">item</span><span class="special">.</span><span class="identifier">field_value</span>
+        <span class="special">);</span>
+    <span class="special">};</span>
+
+    <span class="comment">// Add the query with the filters to ctx.</span>
+    <span class="comment">// sequence() will invoke filter_format_fn for each element in filts,</span>
+    <span class="comment">// using the string " AND " as glue, to separate filters</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql_to</span><span class="special">(</span>
+        <span class="identifier">ctx</span><span class="special">,</span>
+        <span class="string">"SELECT id, first_name, last_name, company_id, salary FROM employee WHERE {}"</span><span class="special">,</span>
+        <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">sequence</span><span class="special">(</span><span class="identifier">filts</span><span class="special">,</span> <span class="identifier">filter_format_fn</span><span class="special">,</span> <span class="string">" AND "</span><span class="special">)</span>
+    <span class="special">);</span>
+
+    <span class="comment">// Add the order by</span>
+    <span class="keyword">if</span> <span class="special">(</span><span class="identifier">order_by</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="comment">// identifier formats a string as a SQL identifier, instead of a string literal.</span>
+        <span class="comment">// For instance, this may generate "ORDER BY `first_name`"</span>
+        <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql_to</span><span class="special">(</span><span class="identifier">ctx</span><span class="special">,</span> <span class="string">" ORDER BY {:i}"</span><span class="special">,</span> <span class="special">*</span><span class="identifier">order_by</span><span class="special">);</span>
+    <span class="special">}</span>
+
+    <span class="comment">// Get our generated query</span>
+    <span class="keyword">return</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(</span><span class="identifier">ctx</span><span class="special">).</span><span class="identifier">get</span><span class="special">().</span><span class="identifier">value</span><span class="special">();</span>
+<span class="special">}</span>
+
+<span class="keyword">void</span> <span class="identifier">main_impl</span><span class="special">(</span><span class="keyword">int</span> <span class="identifier">argc</span><span class="special">,</span> <span class="keyword">char</span><span class="special">**</span> <span class="identifier">argv</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="comment">// Parse the command line</span>
+    <span class="identifier">cmdline_args</span> <span class="identifier">args</span> <span class="special">=</span> <span class="identifier">parse_cmdline_args</span><span class="special">(</span><span class="identifier">argc</span><span class="special">,</span> <span class="identifier">argv</span><span class="special">);</span>
+
+    <span class="comment">// Create an I/O context, required by all I/O objects</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">asio</span><span class="special">::</span><span class="identifier">io_context</span> <span class="identifier">ctx</span><span class="special">;</span>
+
+    <span class="comment">/**
+     * Spawn a stackful coroutine using boost::asio::spawn.
+     * The coroutine suspends every time we call an asynchronous function, and
+     * will resume when it completes.
+     * Note that client-side SQL formatting can be used with both sync and async functions.
+     */</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">asio</span><span class="special">::</span><span class="identifier">spawn</span><span class="special">(</span>
+        <span class="identifier">ctx</span><span class="special">.</span><span class="identifier">get_executor</span><span class="special">(),</span>
+        <span class="special">[</span><span class="identifier">args</span><span class="special">](</span><span class="identifier">boost</span><span class="special">::</span><span class="identifier">asio</span><span class="special">::</span><span class="identifier">yield_context</span> <span class="identifier">yield</span><span class="special">)</span> <span class="special">{</span>
+            <span class="comment">// Create a connection. Note that client-side SQL formatting</span>
+            <span class="comment">// requires us to use the newer any_connection.</span>
+            <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">any_connection</span> <span class="identifier">conn</span><span class="special">(</span><span class="identifier">yield</span><span class="special">.</span><span class="identifier">get_executor</span><span class="special">());</span>
+
+            <span class="comment">// Connection configuration. By default, connections use the utf8mb4 character set</span>
+            <span class="comment">// (MySQL's name for regular UTF-8).</span>
+            <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">connect_params</span> <span class="identifier">params</span><span class="special">;</span>
+            <span class="identifier">params</span><span class="special">.</span><span class="identifier">server_address</span><span class="special">.</span><span class="identifier">emplace_host_and_port</span><span class="special">(</span><span class="identifier">args</span><span class="special">.</span><span class="identifier">server_hostname</span><span class="special">);</span>
+            <span class="identifier">params</span><span class="special">.</span><span class="identifier">username</span> <span class="special">=</span> <span class="identifier">args</span><span class="special">.</span><span class="identifier">username</span><span class="special">;</span>
+            <span class="identifier">params</span><span class="special">.</span><span class="identifier">password</span> <span class="special">=</span> <span class="identifier">args</span><span class="special">.</span><span class="identifier">password</span><span class="special">;</span>
+            <span class="identifier">params</span><span class="special">.</span><span class="identifier">database</span> <span class="special">=</span> <span class="string">"boost_mysql_examples"</span><span class="special">;</span>
+
+            <span class="comment">// This error_code and diagnostics will be filled if an</span>
+            <span class="comment">// operation fails. We will check them for every operation we perform.</span>
+            <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">error_code</span> <span class="identifier">ec</span><span class="special">;</span>
+            <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">diagnostics</span> <span class="identifier">diag</span><span class="special">;</span>
+
+            <span class="comment">// Connect to the server</span>
+            <span class="identifier">conn</span><span class="special">.</span><span class="identifier">async_connect</span><span class="special">(</span><span class="identifier">params</span><span class="special">,</span> <span class="identifier">diag</span><span class="special">,</span> <span class="identifier">yield</span><span class="special">[</span><span class="identifier">ec</span><span class="special">]);</span>
+            <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">throw_on_error</span><span class="special">(</span><span class="identifier">ec</span><span class="special">,</span> <span class="identifier">diag</span><span class="special">);</span>
+
+            <span class="comment">// Compose the query. format_opts() returns a system::result&lt;format_options&gt;,</span>
+            <span class="comment">// containing the options required by format_context. format_opts() may return</span>
+            <span class="comment">// an error if the connection doesn't know which character set is using -</span>
+            <span class="comment">// use async_set_character_set if this happens.</span>
+            <span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">compose_get_employees_query</span><span class="special">(</span>
+                <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+                <span class="identifier">args</span><span class="special">.</span><span class="identifier">filts</span><span class="special">,</span>
+                <span class="identifier">args</span><span class="special">.</span><span class="identifier">order_by</span>
+            <span class="special">);</span>
+
+            <span class="comment">// Execute the query as usual. Note that, unlike with prepared statements,</span>
+            <span class="comment">// formatting happened in the client, and not in the server.</span>
+            <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">results</span> <span class="identifier">result</span><span class="special">;</span>
+            <span class="identifier">conn</span><span class="special">.</span><span class="identifier">async_execute</span><span class="special">(</span><span class="identifier">query</span><span class="special">,</span> <span class="identifier">result</span><span class="special">,</span> <span class="identifier">diag</span><span class="special">,</span> <span class="identifier">yield</span><span class="special">[</span><span class="identifier">ec</span><span class="special">]);</span>
+            <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">throw_on_error</span><span class="special">(</span><span class="identifier">ec</span><span class="special">,</span> <span class="identifier">diag</span><span class="special">);</span>
+
+            <span class="comment">// Print the employees</span>
+            <span class="keyword">for</span> <span class="special">(</span><span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">row_view</span> <span class="identifier">employee</span> <span class="special">:</span> <span class="identifier">result</span><span class="special">.</span><span class="identifier">rows</span><span class="special">())</span>
+            <span class="special">{</span>
+                <span class="identifier">print_employee</span><span class="special">(</span><span class="identifier">employee</span><span class="special">);</span>
+            <span class="special">}</span>
+
+            <span class="comment">// Notify the MySQL server we want to quit, then close the underlying connection.</span>
+            <span class="identifier">conn</span><span class="special">.</span><span class="identifier">async_close</span><span class="special">(</span><span class="identifier">diag</span><span class="special">,</span> <span class="identifier">yield</span><span class="special">[</span><span class="identifier">ec</span><span class="special">]);</span>
+            <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">throw_on_error</span><span class="special">(</span><span class="identifier">ec</span><span class="special">,</span> <span class="identifier">diag</span><span class="special">);</span>
+        <span class="special">},</span>
+        <span class="comment">// If any exception is thrown in the coroutine body, rethrow it.</span>
+        <span class="special">[](</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">exception_ptr</span> <span class="identifier">ptr</span><span class="special">)</span> <span class="special">{</span>
+            <span class="keyword">if</span> <span class="special">(</span><span class="identifier">ptr</span><span class="special">)</span>
+            <span class="special">{</span>
+                <span class="identifier">std</span><span class="special">::</span><span class="identifier">rethrow_exception</span><span class="special">(</span><span class="identifier">ptr</span><span class="special">);</span>
+            <span class="special">}</span>
+        <span class="special">}</span>
+    <span class="special">);</span>
+
+    <span class="comment">// Don't forget to call run()! Otherwise, your program will do nothing.</span>
+    <span class="identifier">ctx</span><span class="special">.</span><span class="identifier">run</span><span class="special">();</span>
+<span class="special">}</span>
+
+<span class="keyword">int</span> <span class="identifier">main</span><span class="special">(</span><span class="keyword">int</span> <span class="identifier">argc</span><span class="special">,</span> <span class="keyword">char</span><span class="special">**</span> <span class="identifier">argv</span><span class="special">)</span>
+<span class="special">{</span>
+    <span class="keyword">try</span>
+    <span class="special">{</span>
+        <span class="identifier">main_impl</span><span class="special">(</span><span class="identifier">argc</span><span class="special">,</span> <span class="identifier">argv</span><span class="special">);</span>
+    <span class="special">}</span>
+    <span class="keyword">catch</span> <span class="special">(</span><span class="keyword">const</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">error_with_diagnostics</span><span class="special">&amp;</span> <span class="identifier">err</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="comment">// You will only get this type of exceptions if you use throw_on_error.</span>
+        <span class="comment">// Some errors include additional diagnostics, like server-provided error messages.</span>
+        <span class="comment">// Security note: diagnostics::server_message may contain user-supplied values (e.g. the</span>
+        <span class="comment">// field value that caused the error) and is encoded using to the connection's encoding</span>
+        <span class="comment">// (UTF-8 by default). Treat is as untrusted input.</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">cerr</span> <span class="special">&lt;&lt;</span> <span class="string">"Error: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">err</span><span class="special">.</span><span class="identifier">what</span><span class="special">()</span> <span class="special">&lt;&lt;</span> <span class="char">'\n'</span>
+                  <span class="special">&lt;&lt;</span> <span class="string">"Server diagnostics: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">err</span><span class="special">.</span><span class="identifier">get_diagnostics</span><span class="special">().</span><span class="identifier">server_message</span><span class="special">()</span> <span class="special">&lt;&lt;</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">endl</span><span class="special">;</span>
+        <span class="keyword">return</span> <span class="number">1</span><span class="special">;</span>
+    <span class="special">}</span>
+    <span class="keyword">catch</span> <span class="special">(</span><span class="keyword">const</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">exception</span><span class="special">&amp;</span> <span class="identifier">err</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">cerr</span> <span class="special">&lt;&lt;</span> <span class="string">"Error: "</span> <span class="special">&lt;&lt;</span> <span class="identifier">err</span><span class="special">.</span><span class="identifier">what</span><span class="special">()</span> <span class="special">&lt;&lt;</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">endl</span><span class="special">;</span>
+        <span class="keyword">return</span> <span class="number">1</span><span class="special">;</span>
+    <span class="special">}</span>
+<span class="special">}</span>
+</pre>
+</div>
+<div class="copyright-footer">Copyright © 2019-2023 Ruben Perez<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="batch_inserts_generic.html"><img src="../../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../examples.html"><img src="../../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../../index.html"><img src="../../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="patch_updates.html"><img src="../../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>

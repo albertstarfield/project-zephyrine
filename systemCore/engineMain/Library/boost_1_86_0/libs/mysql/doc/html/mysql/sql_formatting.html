@@ -1,0 +1,926 @@
+<html>
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+<title>(Experimental) Client-side SQL query formatting</title>
+<link rel="stylesheet" href="../../../../../doc/src/boostbook.css" type="text/css">
+<meta name="generator" content="DocBook XSL Stylesheets V1.79.1">
+<link rel="home" href="../index.html" title="Chapter 1. Boost.MySQL">
+<link rel="up" href="../index.html" title="Chapter 1. Boost.MySQL">
+<link rel="prev" href="connection_pool.html" title="(Experimental) Connection pools">
+<link rel="next" href="sql_formatting_advanced.html" title="(Experimental) Advanced client-side SQL query formatting">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+</head>
+<body bgcolor="white" text="black" link="#0000FF" vlink="#840084" alink="#0000FF">
+<table cellpadding="2" width="100%"><tr>
+<td valign="top"><img alt="Boost C++ Libraries" width="277" height="86" src="../../../../../boost.png"></td>
+<td align="center"><a href="../../../../../index.html">Home</a></td>
+<td align="center"><a href="../../../../../libs/libraries.htm">Libraries</a></td>
+<td align="center"><a href="http://www.boost.org/users/people.html">People</a></td>
+<td align="center"><a href="http://www.boost.org/users/faq.html">FAQ</a></td>
+<td align="center"><a href="../../../../../more/index.htm">More</a></td>
+</tr></table>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="connection_pool.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../index.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="sql_formatting_advanced.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+<div class="section">
+<div class="titlepage"><div><div><h2 class="title" style="clear: both">
+<a name="mysql.sql_formatting"></a><a class="link" href="sql_formatting.html" title="(Experimental) Client-side SQL query formatting">(Experimental) Client-side SQL query
+    formatting</a>
+</h2></div></div></div>
+<p>
+      When issuing queries that contain untrusted input, prepared statement are usually
+      the way to go. However, some use cases like dynamic filters or batch inserts
+      are not attainable using them.
+    </p>
+<p>
+      The functions described in this section can be used to compose SQL query strings
+      dynamically client-side while keeping your application secure.
+    </p>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        This feature is experimental. Its API may change in subsequent releases.
+      </p></td></tr>
+</table></div>
+<h4>
+<a name="mysql.sql_formatting.h0"></a>
+      <span class="phrase"><a name="mysql.sql_formatting.common_use_cases"></a></span><a class="link" href="sql_formatting.html#mysql.sql_formatting.common_use_cases">Common
+      use cases</a>
+    </h4>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+          Queries involving several <span class="bold"><strong>dynamic filters</strong></span>.
+          See <a class="link" href="examples/dynamic_filters.html" title="(Experimental) Dynamic filters using client-side query formatting">this example</a>.
+        </li>
+<li class="listitem">
+          <span class="bold"><strong>Batch inserts</strong></span>. Inserting rows one by one
+          can lead to poor efficiency. You can use client-side query formatting to
+          compose a single <code class="computeroutput"><span class="identifier">INSERT</span></code>
+          that performs several insertions at once. See <a class="link" href="examples/batch_inserts.html" title="(Experimental) Batch inserts using client-side query formatting">this
+          example</a> for simple batch inserts and <a class="link" href="examples/batch_inserts_generic.html" title="(Experimental) Generic batch inserts with Boost.Describe: extending format_sql">this
+          other</a> for a generic utility to implement this case.
+        </li>
+<li class="listitem">
+          <span class="bold"><strong>PATCH-like updates</strong></span>. If your query must
+          update fields dynamically, based on some input, prepared statements may
+          not be suitable. See <a class="link" href="examples/patch_updates.html" title="(Experimental) PATCH-like updates using client-side query formatting">this
+          example</a>.
+        </li>
+<li class="listitem">
+          Queries involving <span class="bold"><strong>dynamic identifiers</strong></span>,
+          like table and field names.
+        </li>
+<li class="listitem">
+          Performing <span class="bold"><strong>conditional sorting</strong></span>.
+        </li>
+<li class="listitem">
+          Any other use case that involves SQL that can change dynamically.
+        </li>
+</ul></div>
+<p>
+      This feature can also be used to improve efficiency, as text queries perform
+      less round-trips to the server. See <a class="link" href="sql_formatting.html#mysql.sql_formatting.efficiency">this
+      section</a> for more info.
+    </p>
+<h4>
+<a name="mysql.sql_formatting.h1"></a>
+      <span class="phrase"><a name="mysql.sql_formatting.security_considerations"></a></span><a class="link" href="sql_formatting.html#mysql.sql_formatting.security_considerations">Security
+      considerations</a>
+    </h4>
+<p>
+      Client-side SQL formatting <span class="bold"><strong>does protect against SQL injection</strong></span>
+      by appropriately quoting and escaping string values. However, this feature
+      <span class="bold"><strong>does not understand your queries</strong></span>. You need
+      to make sure that your formatting operations result in valid SQL. If you try
+      to build very complex queries and make mistakes, attackers may exploit logic
+      errors in your formatting logic to overtake your system.
+    </p>
+<h4>
+<a name="mysql.sql_formatting.h2"></a>
+      <span class="phrase"><a name="mysql.sql_formatting.formatting_simple_queries"></a></span><a class="link" href="sql_formatting.html#mysql.sql_formatting.formatting_simple_queries">Formatting
+      simple queries</a>
+    </h4>
+<p>
+      You can use <a class="link" href="ref/boost__mysql__format_sql.html" title="format_sql"><code class="literal">format_sql</code></a>
+      to generate a SQL query from a format string and a set of parameters, using
+      a notation similar to <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">format</span></code>:
+    </p>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">employee_name</span> <span class="special">=</span> <span class="identifier">get_name</span><span class="special">();</span>  <span class="comment">// employee_name is an untrusted string</span>
+
+<span class="comment">// Compose the SQL query in the client</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+    <span class="string">"SELECT id, salary FROM employee WHERE last_name = {}"</span><span class="special">,</span>
+    <span class="identifier">employee_name</span>
+<span class="special">);</span>
+
+<span class="comment">// If employee_name is "John", query now contains:</span>
+<span class="comment">// "SELECT id, salary FROM employee WHERE last_name = 'John'"</span>
+<span class="comment">// If employee_name contains quotes, they will be escaped as required</span>
+
+<span class="comment">// Execute the generated query as usual</span>
+<span class="identifier">results</span> <span class="identifier">result</span><span class="special">;</span>
+<span class="identifier">conn</span><span class="special">.</span><span class="identifier">execute</span><span class="special">(</span><span class="identifier">query</span><span class="special">,</span> <span class="identifier">result</span><span class="special">);</span>
+</pre>
+<p>
+      <a class="link" href="ref/boost__mysql__format_sql.html" title="format_sql"><code class="literal">format_sql</code></a>
+      doesn't involve communication with the server. In order to work, it requires
+      a <a class="link" href="ref/boost__mysql__format_options.html" title="format_options"><code class="literal">format_options</code></a>
+      instance describing connection configuration, like the character set currently
+      in use. <a class="link" href="ref/boost__mysql__any_connection/format_opts.html" title="any_connection::format_opts"><code class="literal">any_connection::format_opts</code></a>
+      provides an easy way to retrieve these.
+    </p>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        Getting an <code class="computeroutput"><span class="identifier">unknown_character_set</span></code>
+        error? Have a look at <a class="link" href="sql_formatting.html#mysql.sql_formatting.unknown_character_set">this
+        section</a>.
+      </p></td></tr>
+</table></div>
+<p>
+      All fundamental types can be used with query formatting. This includes integers,
+      floating point types, strings, blobs, dates and times:
+    </p>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+    <span class="string">"SELECT id FROM employee WHERE salary &gt; {}"</span><span class="special">,</span>
+    <span class="number">42000</span>
+<span class="special">);</span>
+
+<span class="identifier">BOOST_TEST</span><span class="special">(</span><span class="identifier">query</span> <span class="special">==</span> <span class="string">"SELECT id FROM employee WHERE salary &gt; 42000"</span><span class="special">);</span>
+</pre>
+<p>
+      <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">optional</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;</span></code> and
+      <code class="computeroutput"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">optional</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;</span></code> can
+      also be used:
+    </p>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">optional</span><span class="special">&lt;</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">int64_t</span><span class="special">&gt;</span> <span class="identifier">salary</span><span class="special">;</span>  <span class="comment">// get salary from a possibly untrusted source</span>
+
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+    <span class="string">"UPDATE employee SET salary = {} WHERE id = {}"</span><span class="special">,</span>
+    <span class="identifier">salary</span><span class="special">,</span>
+    <span class="number">1</span>
+<span class="special">);</span>
+
+<span class="comment">// Depending on whether salary has a value or not, generates:</span>
+<span class="comment">// UPDATE employee SET salary = 42000 WHERE id = 1</span>
+<span class="comment">// UPDATE employee SET salary = NULL WHERE id = 1</span>
+</pre>
+<p>
+      Collections and ranges are supported, as long as its elements can be formatted:
+    </p>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">long</span><span class="special">&gt;</span> <span class="identifier">ids</span><span class="special">{</span><span class="number">1</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">20</span><span class="special">};</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+    <span class="string">"SELECT * FROM employee WHERE id IN ({})"</span><span class="special">,</span>
+    <span class="identifier">ids</span>
+<span class="special">);</span>
+<span class="identifier">BOOST_TEST</span><span class="special">(</span><span class="identifier">query</span> <span class="special">==</span> <span class="string">"SELECT * FROM employee WHERE id IN (1, 5, 20)"</span><span class="special">);</span>
+</pre>
+<p>
+      See <a class="link" href="sql_formatting.html#mysql.sql_formatting.ranges">this section</a> for more
+      on formatting ranges, and <a class="link" href="sql_formatting.html#mysql.sql_formatting.reference">this
+      table</a> for a reference of types that have built-in support for SQL formatting.
+    </p>
+<div class="note"><table border="0" summary="Note">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Note]" src="../../../../../doc/src/images/note.png"></td>
+<th align="left">Note</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        Like with <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">format</span></code>, the format string passed to <code class="computeroutput"><span class="identifier">format_sql</span></code> must be known at compile-time.
+        You can skip this check using the <a class="link" href="ref/boost__mysql__runtime.html" title="runtime"><code class="literal">runtime</code></a>
+        function.
+      </p></td></tr>
+</table></div>
+<p>
+      Like <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">format</span></code>, you can use arguments with explicit
+      indices:
+    </p>
+<pre class="programlisting"><span class="comment">// Recall that you need to set connect_params::multi_queries to true when connecting</span>
+<span class="comment">// before running semicolon-separated queries.</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+    <span class="string">"UPDATE employee SET first_name = {1} WHERE id = {0}; SELECT * FROM employee WHERE id = {0}"</span><span class="special">,</span>
+    <span class="number">42</span><span class="special">,</span>
+    <span class="string">"John"</span>
+<span class="special">);</span>
+
+<span class="identifier">BOOST_TEST</span><span class="special">(</span>
+    <span class="identifier">query</span> <span class="special">==</span>
+    <span class="string">"UPDATE employee SET first_name = 'John' WHERE id = 42; SELECT * FROM employee WHERE id = 42"</span>
+<span class="special">);</span>
+</pre>
+<p>
+      You can also use named arguments, using the initializer list overload:
+    </p>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+    <span class="string">"UPDATE employee SET first_name = {name} WHERE id = {id}; SELECT * FROM employee WHERE id = {id}"</span><span class="special">,</span>
+    <span class="special">{</span>
+        <span class="special">{</span><span class="string">"id"</span><span class="special">,</span>   <span class="number">42</span>    <span class="special">},</span>
+        <span class="special">{</span><span class="string">"name"</span><span class="special">,</span> <span class="string">"John"</span><span class="special">}</span>
+    <span class="special">}</span>
+<span class="special">);</span>
+
+<span class="identifier">BOOST_TEST</span><span class="special">(</span>
+    <span class="identifier">query</span> <span class="special">==</span>
+    <span class="string">"UPDATE employee SET first_name = 'John' WHERE id = 42; SELECT * FROM employee WHERE id = 42"</span>
+<span class="special">);</span>
+</pre>
+<p>
+      See <a class="link" href="sql_formatting_advanced.html#mysql.sql_formatting_advanced.format_string_syntax">this
+      section</a> for an in-depth explanation on format strings.
+    </p>
+<h4>
+<a name="mysql.sql_formatting.h3"></a>
+      <span class="phrase"><a name="mysql.sql_formatting.format_specifiers"></a></span><a class="link" href="sql_formatting.html#mysql.sql_formatting.format_specifiers">Format
+      specifiers</a>
+    </h4>
+<p>
+      Some types, like strings, can be formatted in multiple ways. As with <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">format</span></code>,
+      you can select how to format them using format specifiers.
+    </p>
+<p>
+      As we've seen, strings are formatted as single-quoted values by default. If
+      you use the <code class="computeroutput"><span class="special">{:</span><span class="identifier">i</span><span class="special">}</span></code> specifier, you can obtain dynamic SQL identifiers,
+      instead:
+    </p>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+    <span class="string">"SELECT id, last_name FROM employee ORDER BY {:i} DESC"</span><span class="special">,</span>
+    <span class="string">"company_id"</span>
+<span class="special">);</span>
+
+<span class="identifier">BOOST_TEST</span><span class="special">(</span><span class="identifier">query</span> <span class="special">==</span> <span class="string">"SELECT id, last_name FROM employee ORDER BY `company_id` DESC"</span><span class="special">);</span>
+</pre>
+<p>
+      Specifiers are compatible with explicit indices and named arguments, too. This
+      is equivalent to the previous snippet:
+    </p>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+    <span class="string">"SELECT id, last_name FROM employee ORDER BY {0:i} DESC"</span><span class="special">,</span>
+    <span class="string">"company_id"</span>
+<span class="special">);</span>
+</pre>
+<h4>
+<a name="mysql.sql_formatting.h4"></a>
+      <span class="phrase"><a name="mysql.sql_formatting.building_sql_strings_incremental"></a></span><a class="link" href="sql_formatting.html#mysql.sql_formatting.building_sql_strings_incremental">Building
+      SQL strings incrementally using format_sql_to</a>
+    </h4>
+<p>
+      Some use cases, usually involving conditionals, may not be expressible in terms
+      of a single format string. In such cases, you can use <a class="link" href="ref/boost__mysql__format_context.html" title="format_context"><code class="literal">format_context</code></a>
+      and <a class="link" href="ref/boost__mysql__format_sql_to.html" title="format_sql_to"><code class="literal">format_sql_to</code></a>
+      to build query strings incrementally:
+    </p>
+<pre class="programlisting"><span class="comment">// Compose a query that retrieves all employees in a company,</span>
+<span class="comment">// with an optional limit</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">compose_select_query</span><span class="special">(</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_options</span> <span class="identifier">opts</span><span class="special">,</span>
+    <span class="identifier">string_view</span> <span class="identifier">company_id</span><span class="special">,</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">optional</span><span class="special">&lt;</span><span class="keyword">long</span><span class="special">&gt;</span> <span class="identifier">limit</span>
+<span class="special">)</span>
+<span class="special">{</span>
+    <span class="comment">// format_context will accumulate the query as we compose it</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_context</span> <span class="identifier">ctx</span><span class="special">(</span><span class="identifier">opts</span><span class="special">);</span>
+
+    <span class="comment">// format_sql_to expands a format string and appends the result</span>
+    <span class="comment">// to a format context. This way, we can build our query in smaller pieces</span>
+    <span class="comment">// Add all the query except for the LIMIT clause</span>
+    <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql_to</span><span class="special">(</span><span class="identifier">ctx</span><span class="special">,</span> <span class="string">"SELECT * FROM employee WHERE company_id = {}"</span><span class="special">,</span> <span class="identifier">company_id</span><span class="special">);</span>
+
+    <span class="keyword">if</span> <span class="special">(</span><span class="identifier">limit</span><span class="special">)</span>
+    <span class="special">{</span>
+        <span class="comment">// Add the LIMIT clause</span>
+        <span class="identifier">boost</span><span class="special">::</span><span class="identifier">mysql</span><span class="special">::</span><span class="identifier">format_sql_to</span><span class="special">(</span><span class="identifier">ctx</span><span class="special">,</span> <span class="string">" LIMIT {}"</span><span class="special">,</span> <span class="special">*</span><span class="identifier">limit</span><span class="special">);</span>
+    <span class="special">}</span>
+
+    <span class="comment">// Retrieve the generated query string</span>
+    <span class="keyword">return</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">move</span><span class="special">(</span><span class="identifier">ctx</span><span class="special">).</span><span class="identifier">get</span><span class="special">().</span><span class="identifier">value</span><span class="special">();</span>
+<span class="special">}</span>
+</pre>
+<pre class="programlisting"><span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">compose_select_query</span><span class="special">(</span><span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span> <span class="string">"HGS"</span><span class="special">,</span> <span class="special">{});</span>
+<span class="identifier">BOOST_TEST</span><span class="special">(</span><span class="identifier">query</span> <span class="special">==</span> <span class="string">"SELECT * FROM employee WHERE company_id = 'HGS'"</span><span class="special">);</span>
+
+<span class="identifier">query</span> <span class="special">=</span> <span class="identifier">compose_select_query</span><span class="special">(</span><span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span> <span class="string">"HGS"</span><span class="special">,</span> <span class="number">50</span><span class="special">);</span>
+<span class="identifier">BOOST_TEST</span><span class="special">(</span><span class="identifier">query</span> <span class="special">==</span> <span class="string">"SELECT * FROM employee WHERE company_id = 'HGS' LIMIT 50"</span><span class="special">);</span>
+</pre>
+<h4>
+<a name="mysql.sql_formatting.h5"></a>
+      <span class="phrase"><a name="mysql.sql_formatting.ranges"></a></span><a class="link" href="sql_formatting.html#mysql.sql_formatting.ranges">Formatting
+      ranges with sequence</a>
+    </h4>
+<p>
+      The <a class="link" href="ref/boost__mysql__sequence.html" title="sequence"><code class="literal">sequence</code></a>
+      function can be used when the default range formatting isn't sufficient. If
+      the elements in your range are not formattable, you can pass a user-defined
+      function to <code class="computeroutput"><span class="identifier">sequence</span></code> describing
+      how to format each element:
+    </p>
+<pre class="programlisting"><span class="comment">// Employee is a plain struct, not formattable by default</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="identifier">employee</span><span class="special">&gt;</span> <span class="identifier">employees</span><span class="special">{</span>
+    <span class="special">{</span><span class="string">"John"</span><span class="special">,</span> <span class="string">"Doe"</span><span class="special">,</span>   <span class="string">"HGS"</span><span class="special">},</span>
+    <span class="special">{</span><span class="string">"Kate"</span><span class="special">,</span> <span class="string">"Smith"</span><span class="special">,</span> <span class="string">"AWC"</span><span class="special">},</span>
+<span class="special">};</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+    <span class="string">"INSERT INTO employee (first_name, last_name, company_id) VALUES {}"</span><span class="special">,</span>
+    <span class="identifier">sequence</span><span class="special">(</span>
+        <span class="identifier">employees</span><span class="special">,</span>
+        <span class="special">[](</span><span class="keyword">const</span> <span class="identifier">employee</span><span class="special">&amp;</span> <span class="identifier">e</span><span class="special">,</span> <span class="identifier">format_context_base</span><span class="special">&amp;</span> <span class="identifier">ctx</span><span class="special">)</span> <span class="special">{</span>
+            <span class="comment">// This function will be called for each element in employees,</span>
+            <span class="comment">// and should format a single element into the passed ctx.</span>
+            <span class="comment">// Commas will be inserted separating elements.</span>
+            <span class="identifier">format_sql_to</span><span class="special">(</span><span class="identifier">ctx</span><span class="special">,</span> <span class="string">"({}, {}, {})"</span><span class="special">,</span> <span class="identifier">e</span><span class="special">.</span><span class="identifier">first_name</span><span class="special">,</span> <span class="identifier">e</span><span class="special">.</span><span class="identifier">last_name</span><span class="special">,</span> <span class="identifier">e</span><span class="special">.</span><span class="identifier">company_id</span><span class="special">);</span>
+        <span class="special">}</span>
+    <span class="special">)</span>
+<span class="special">);</span>
+<span class="identifier">BOOST_TEST</span><span class="special">(</span>
+    <span class="identifier">query</span> <span class="special">==</span>
+    <span class="string">"INSERT INTO employee (first_name, last_name, company_id) VALUES "</span>
+    <span class="string">"('John', 'Doe', 'HGS'), ('Kate', 'Smith', 'AWC')"</span>
+<span class="special">);</span>
+</pre>
+<p>
+      By default, elements are separated by commas, but this is configurable:
+    </p>
+<pre class="programlisting"><span class="comment">// A collection of filters to apply to a query</span>
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="identifier">std</span><span class="special">::</span><span class="identifier">pair</span><span class="special">&lt;</span><span class="identifier">string_view</span><span class="special">,</span> <span class="identifier">string_view</span><span class="special">&gt;&gt;</span> <span class="identifier">filters</span><span class="special">{</span>
+    <span class="special">{</span><span class="string">"company_id"</span><span class="special">,</span> <span class="string">"HGS"</span> <span class="special">},</span>
+    <span class="special">{</span><span class="string">"first_name"</span><span class="special">,</span> <span class="string">"John"</span><span class="special">},</span>
+<span class="special">};</span>
+
+<span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span> <span class="identifier">query</span> <span class="special">=</span> <span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span>
+    <span class="string">"SELECT * FROM employee WHERE {}"</span><span class="special">,</span>
+    <span class="identifier">sequence</span><span class="special">(</span>
+        <span class="identifier">filters</span><span class="special">,</span>
+        <span class="special">[](</span><span class="keyword">const</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">pair</span><span class="special">&lt;</span><span class="identifier">string_view</span><span class="special">,</span> <span class="identifier">string_view</span><span class="special">&gt;&amp;</span> <span class="identifier">f</span><span class="special">,</span> <span class="identifier">format_context_base</span><span class="special">&amp;</span> <span class="identifier">ctx</span><span class="special">)</span> <span class="special">{</span>
+            <span class="comment">// Compose a single filter</span>
+            <span class="identifier">format_sql_to</span><span class="special">(</span><span class="identifier">ctx</span><span class="special">,</span> <span class="string">"{:i} = {}"</span><span class="special">,</span> <span class="identifier">f</span><span class="special">.</span><span class="identifier">first</span><span class="special">,</span> <span class="identifier">f</span><span class="special">.</span><span class="identifier">second</span><span class="special">);</span>
+        <span class="special">},</span>
+        <span class="string">" AND "</span>  <span class="comment">// glue string: separate each element with AND clauses</span>
+    <span class="special">)</span>
+<span class="special">);</span>
+
+<span class="identifier">BOOST_TEST</span><span class="special">(</span><span class="identifier">query</span> <span class="special">==</span> <span class="string">"SELECT * FROM employee WHERE `company_id` = 'HGS' AND `first_name` = 'John'"</span><span class="special">);</span>
+</pre>
+<h4>
+<a name="mysql.sql_formatting.h6"></a>
+      <span class="phrase"><a name="mysql.sql_formatting.unknown_character_set"></a></span><a class="link" href="sql_formatting.html#mysql.sql_formatting.unknown_character_set">Solving
+      the unknown_character_set error</a>
+    </h4>
+<p>
+      If you are getting a <code class="computeroutput"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">system</span><span class="special">::</span><span class="identifier">system_error</span></code>
+      with a <code class="computeroutput"><span class="identifier">client_errc</span><span class="special">::</span><span class="identifier">unknown_character_set</span></code> error code (or getting
+      this error code by other means), your connection is currently unaware of the
+      character set it's using, which is required by format operations. Try the following:
+    </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+          Make sure that you are performing connection establishment (<a class="link" href="ref/boost__mysql__any_connection/connect.html" title="any_connection::connect"><code class="literal">any_connection::connect</code></a>
+          or <a class="link" href="ref/boost__mysql__any_connection/async_connect.html" title="any_connection::async_connect"><code class="literal">async_connect</code></a>)
+          before calling <a class="link" href="ref/boost__mysql__any_connection/format_opts.html" title="any_connection::format_opts"><code class="literal">format_opts</code></a>.
+        </li>
+<li class="listitem">
+          Use <a class="link" href="ref/boost__mysql__any_connection/set_character_set.html" title="any_connection::set_character_set"><code class="literal">any_connection::set_character_set</code></a>
+          or <a class="link" href="ref/boost__mysql__any_connection/async_set_character_set.html" title="any_connection::async_set_character_set"><code class="literal">async_set_character_set</code></a>
+          to set your connection's character set instead of using raw SQL.
+        </li>
+<li class="listitem">
+          Some <a class="link" href="ref/boost__mysql__connect_params/connection_collation.html" title="connect_params::connection_collation"><code class="literal">connect_params::connection_collation</code></a>
+          values are not supported by all servers and often trigger fallback behavior.
+          If you are using a non-UTF8 character set, prefer setting it explicitly
+          using <a class="link" href="ref/boost__mysql__any_connection/set_character_set.html" title="any_connection::set_character_set"><code class="literal">set_character_set</code></a>
+          or <a class="link" href="ref/boost__mysql__any_connection/async_set_character_set.html" title="any_connection::async_set_character_set"><code class="literal">async_set_character_set</code></a>.
+          Don't rely on <a class="link" href="ref/boost__mysql__connect_params/connection_collation.html" title="connect_params::connection_collation"><code class="literal">connect_params::connection_collation</code></a>.
+        </li>
+<li class="listitem">
+          <a class="link" href="ref/boost__mysql__any_connection/reset_connection.html" title="any_connection::reset_connection"><code class="literal">any_connection::reset_connection</code></a>
+          and <a class="link" href="ref/boost__mysql__any_connection/async_reset_connection.html" title="any_connection::async_reset_connection"><code class="literal">async_reset_connection</code></a>
+          wipe character set information. Call <a class="link" href="ref/boost__mysql__any_connection/set_character_set.html" title="any_connection::set_character_set"><code class="literal">set_character_set</code></a>
+          or <a class="link" href="ref/boost__mysql__any_connection/async_set_character_set.html" title="any_connection::async_set_character_set"><code class="literal">async_set_character_set</code></a>
+          after resetting your connection.
+        </li>
+</ul></div>
+<div class="warning"><table border="0" summary="Warning">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Warning]" src="../../../../../doc/src/images/warning.png"></td>
+<th align="left">Warning</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        <span class="bold"><strong>Security considerations</strong></span>: don't craft <a class="link" href="ref/boost__mysql__format_options.html" title="format_options"><code class="literal">format_options</code></a>
+        values manually. Always use <a class="link" href="ref/boost__mysql__any_connection/format_opts.html" title="any_connection::format_opts"><code class="literal">any_connection::format_opts</code></a>.
+      </p></td></tr>
+</table></div>
+<p>
+      For an explanation on why <a class="link" href="ref/boost__mysql__format_options.html" title="format_options"><code class="literal">format_options</code></a>
+      is necessary and how character set tracking works, please read <a class="link" href="sql_formatting_advanced.html#mysql.sql_formatting_advanced.format_options">this
+      section</a>.
+    </p>
+<h4>
+<a name="mysql.sql_formatting.h7"></a>
+      <span class="phrase"><a name="mysql.sql_formatting.solving_the_invalid_encoding_err"></a></span><a class="link" href="sql_formatting.html#mysql.sql_formatting.solving_the_invalid_encoding_err">Solving
+      the invalid_encoding error</a>
+    </h4>
+<p>
+      SQL formatting can fail if you provide values that can't be securely formatted.
+      The most common cause is passing string values that are not valid according
+      to the passed character set. This triggers a <code class="computeroutput"><span class="identifier">client_errc</span><span class="special">::</span><span class="identifier">invalid_encoding</span></code>
+      error:
+    </p>
+<pre class="programlisting"><span class="comment">// If the connection is using UTF-8 (the default), this will throw an error,</span>
+<span class="comment">// because the string to be formatted contains invalid UTF8.</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">conn</span><span class="special">.</span><span class="identifier">format_opts</span><span class="special">().</span><span class="identifier">value</span><span class="special">(),</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="string">"bad\xff UTF-8"</span><span class="special">);</span>
+</pre>
+<p>
+      You can validate your strings beforehand or handle the error once it happened
+      and reject the input. Other types may also produce format errors.
+    </p>
+<div class="tip"><table border="0" summary="Tip">
+<tr>
+<td rowspan="2" align="center" valign="top" width="25"><img alt="[Tip]" src="../../../../../doc/src/images/tip.png"></td>
+<th align="left">Tip</th>
+</tr>
+<tr><td align="left" valign="top"><p>
+        If you prefer handling errors with error codes, instead of exceptions, use
+        <a class="link" href="ref/boost__mysql__format_sql_to.html" title="format_sql_to"><code class="literal">format_sql_to</code></a>.
+        Please read <a class="link" href="sql_formatting_advanced.html#mysql.sql_formatting_advanced.error_handling">this
+        section</a> for details.
+      </p></td></tr>
+</table></div>
+<h4>
+<a name="mysql.sql_formatting.h8"></a>
+      <span class="phrase"><a name="mysql.sql_formatting.efficiency"></a></span><a class="link" href="sql_formatting.html#mysql.sql_formatting.efficiency">Efficiency
+      considerations</a>
+    </h4>
+<p>
+      Both client-side SQL formatting and prepared statements have pros and cons
+      efficiency-wise:
+    </p>
+<div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+          Client-formatted SQL entails <span class="bold"><strong>less round-trips to
+          the server</strong></span>. For prepared statements, you usually need a call
+          to prepare the statement, another one to execute it, and possibly a final
+          one to close it. Client-formatted SQL only requires the execution round-trip.
+          This performance gain increases with network latency and if you are using
+          TLS.
+        </li>
+<li class="listitem">
+          Prepared statements always entail a <span class="bold"><strong>mutation of session
+          state</strong></span>, while client-formatted SQL may not. If you're using a
+          <a class="link" href="ref/boost__mysql__connection_pool.html" title="connection_pool"><code class="literal">connection_pool</code></a>
+          with prepared statements, you can't use <a class="link" href="ref/boost__mysql__pooled_connection/return_without_reset.html" title="pooled_connection::return_without_reset"><code class="literal">pooled_connection::return_without_reset</code></a>,
+          as this will leak the statement. With client-formatted queries, reset may
+          not be required if your SQL doesn't mutate session state.
+        </li>
+<li class="listitem">
+          Client-formatted SQL queries use a usually <span class="bold"><strong>less efficient
+          text-based protocol</strong></span>, while prepared statements use a more compact
+          binary protocol. This is relevant if you're retrieving lots of data that
+          is slow to convert to and from text (like doubles).
+        </li>
+<li class="listitem">
+          <span class="bold"><strong>Prepared statements can be re-used</strong></span>. If
+          you need to execute a query several times, prepared statements will only
+          be parsed once.
+        </li>
+<li class="listitem">
+          Client-formatted SQL allows <span class="bold"><strong>more efficient patterns</strong></span>
+          than prepared statements, like batch inserts.
+        </li>
+<li class="listitem">
+          You can use client-formatted SQL to generate several <span class="bold"><strong>semicolon-separated
+          queries</strong></span> to be run in batch.
+        </li>
+</ul></div>
+<h4>
+<a name="mysql.sql_formatting.h9"></a>
+      <span class="phrase"><a name="mysql.sql_formatting.reference"></a></span><a class="link" href="sql_formatting.html#mysql.sql_formatting.reference">Types
+      with built-in support for SQL formatting</a>
+    </h4>
+<div class="informaltable"><table class="table">
+<colgroup>
+<col>
+<col>
+<col>
+</colgroup>
+<thead><tr>
+<th>
+              <p>
+                C++ type
+              </p>
+            </th>
+<th>
+              <p>
+                Formatted as...
+              </p>
+            </th>
+<th>
+              <p>
+                Example
+              </p>
+            </th>
+</tr></thead>
+<tbody>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">signed</span> <span class="keyword">char</span></code>,
+                <code class="computeroutput"><span class="keyword">short</span></code>, <code class="computeroutput"><span class="keyword">int</span></code>, <code class="computeroutput"><span class="keyword">long</span></code>,
+                <code class="computeroutput"><span class="keyword">long</span> <span class="keyword">long</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Integral literal<br> No format specifiers allowed
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="number">42</span><span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT 42"</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="special">-</span><span class="number">1</span><span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT -1"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">unsigned</span> <span class="keyword">char</span></code>,
+                <code class="computeroutput"><span class="keyword">unsigned</span> <span class="keyword">short</span></code>,
+                <code class="computeroutput"><span class="keyword">unsigned</span> <span class="keyword">int</span></code>,
+                <code class="computeroutput"><span class="keyword">unsigned</span> <span class="keyword">long</span></code>,
+                <code class="computeroutput"><span class="keyword">unsigned</span> <span class="keyword">long</span>
+                <span class="keyword">long</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Integral literal<br> No format specifiers allowed
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="number">42u</span><span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT 42"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">bool</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Integral literal <code class="computeroutput"><span class="number">1</span></code> if
+                <code class="computeroutput"><span class="keyword">true</span></code>, <code class="computeroutput"><span class="number">0</span></code> if <code class="computeroutput"><span class="keyword">false</span></code><br>
+                No format specifiers allowed
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="keyword">false</span><span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT 0"</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="keyword">true</span><span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT 1"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                String types (convertible to <a class="link" href="ref/boost__mysql__string_view.html" title="string_view"><code class="literal">string_view</code></a>),
+                including:<br> <br> <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">string</span></code><br>
+                <br> <a class="link" href="ref/boost__mysql__string_view.html" title="string_view"><code class="literal">string_view</code></a><br>
+                <br> <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">string_view</span></code><br> <br> <code class="computeroutput"><span class="keyword">const</span> <span class="keyword">char</span><span class="special">*</span></code><br> <br>
+              </p>
+            </td>
+<td>
+              <p>
+                Without format specifiers: single-quoted escaped string literal.
+                Note that <code class="computeroutput"><span class="identifier">LIKE</span></code> special
+                characters (<code class="computeroutput"><span class="special">%</span></code> and <code class="computeroutput"><span class="identifier">_</span></code>) are not escaped.<br> <br>
+                <span class="bold"><strong><code class="computeroutput"><span class="identifier">i</span></code></strong></span>
+                format specifier: backtick-quoted, escaped SQL identifier.<br>
+                <br> <span class="bold"><strong><code class="computeroutput"><span class="identifier">r</span></code></strong></span>
+                format specifier: raw, unescaped SQL. <span class="bold"><strong>Warning</strong></span>:
+                use this specifier with caution.
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="comment">// Without format specifier: escaped, quoted string value</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="string">"Hello world"</span><span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT 'Hello world'"</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="string">"Hello 'world'"</span><span class="special">)</span> <span class="special">==</span> <span class="identifier">R</span><span class="string">"(SELECT 'Hello \'world\'')"</span>
+
+<span class="comment">// {:i}: escaped, quoted dynamic identifier</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {:i} FROM t"</span><span class="special">,</span> <span class="string">"salary"</span><span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT `salary` FROM t"</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {:i} FROM t"</span><span class="special">,</span> <span class="string">"sal`ary"</span><span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT `sal``ary` FROM t"</span>
+
+<span class="comment">// {:r}: raw, unescaped SQL. WARNING: incorrect use can cause vulnerabilities</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT * FROM t WHERE id = 42 {:r} salary &gt; 20000"</span><span class="special">,</span> <span class="string">"OR"</span><span class="special">)</span> <span class="special">==</span>
+    <span class="string">"SELECT * FROM t WHERE id = 42 OR salary &gt; 20000"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                Blob types (convertible to <code class="computeroutput"><span class="identifier">span</span><span class="special">&lt;</span><span class="keyword">const</span>
+                <span class="keyword">unsigned</span> <span class="keyword">char</span><span class="special">&gt;</span></code>), including:<br> <br> <a class="link" href="ref/boost__mysql__blob.html" title="blob"><code class="literal">blob</code></a>
+                (<code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">unsigned</span> <span class="keyword">char</span><span class="special">&gt;</span></code>)<br> <br> <a class="link" href="ref/boost__mysql__blob_view.html" title="blob_view"><code class="literal">blob_view</code></a>
+                (<code class="computeroutput"><span class="identifier">span</span><span class="special">&lt;</span><span class="keyword">const</span> <span class="keyword">unsigned</span>
+                <span class="keyword">char</span><span class="special">&gt;</span></code>)<br>
+                <br> <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">array</span><span class="special">&lt;</span><span class="keyword">unsigned</span> <span class="keyword">char</span><span class="special">,</span> <span class="identifier">N</span><span class="special">&gt;</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                Hex string literal<br> No format specifiers allowed
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">blob</span><span class="special">{</span><span class="number">0x00</span><span class="special">,</span> <span class="number">0x48</span><span class="special">,</span> <span class="number">0xff</span><span class="special">})</span> <span class="special">==</span> <span class="identifier">R</span><span class="string">"(SELECT x'0048ff')"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">float</span></code>, except NaN and
+                inf
+              </p>
+            </td>
+<td>
+              <p>
+                Floating-point literal, after casting to <code class="computeroutput"><span class="keyword">double</span><span class="special">.</span></code><br> MySQL does not support NaNs
+                and infinities. Attempting to format these cause a <code class="computeroutput"><span class="identifier">client_errc</span><span class="special">::</span><span class="identifier">unformattable_value</span></code> error.<br>
+                No format specifiers allowed.
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="comment">// Equivalent to format_sql(opts, "SELECT {}", static_cast&lt;double&gt;(4.2f))</span>
+<span class="comment">// Note that MySQL uses doubles for all floating point literals</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="number">4.2f</span><span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT 4.199999809265137e+00"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="keyword">double</span></code>, except NaN and
+                inf
+              </p>
+            </td>
+<td>
+              <p>
+                Floating-point literal.<br> MySQL does not support NaNs and infinities.
+                Attempting to format these cause a <code class="computeroutput"><span class="identifier">client_errc</span><span class="special">::</span><span class="identifier">unformattable_value</span></code>
+                error.<br> No format specifiers allowed.
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="number">4.2</span><span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT 4.2e+00"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a class="link" href="ref/boost__mysql__date.html" title="date"><code class="literal">date</code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                Single quoted, <code class="computeroutput"><span class="identifier">DATE</span></code>-compatible
+                string literal<br> No format specifiers allowed
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">date</span><span class="special">(</span><span class="number">2021</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">2</span><span class="special">))</span> <span class="special">==</span> <span class="string">"SELECT '2021-01-02'"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a class="link" href="ref/boost__mysql__datetime.html" title="datetime"><code class="literal">datetime</code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                Single quoted <code class="computeroutput"><span class="identifier">DATETIME</span></code>-compatible
+                string literal<br> No format specifiers allowed
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">datetime</span><span class="special">(</span><span class="number">2021</span><span class="special">,</span> <span class="number">1</span><span class="special">,</span> <span class="number">2</span><span class="special">,</span> <span class="number">23</span><span class="special">,</span> <span class="number">51</span><span class="special">,</span> <span class="number">14</span><span class="special">))</span> <span class="special">==</span> <span class="string">"SELECT '2021-01-02 23:51:14.000000'"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a class="link" href="ref/boost__mysql__time.html" title="time"><code class="literal">time</code></a>
+                and <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">chrono</span><span class="special">::</span><span class="identifier">duration</span></code> types convertible to
+                <a class="link" href="ref/boost__mysql__time.html" title="time"><code class="literal">time</code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                Single quoted <code class="computeroutput"><span class="identifier">TIME</span></code>-compatible
+                string literal<br> No format specifiers allowed
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">chrono</span><span class="special">::</span><span class="identifier">seconds</span><span class="special">(</span><span class="number">121</span><span class="special">))</span> <span class="special">==</span> <span class="string">"SELECT '00:02:01.000000'"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">nullptr_t</span></code>
+              </p>
+            </td>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">NULL</span></code><br> No format
+                specifiers allowed
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="keyword">nullptr</span><span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT NULL"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <code class="computeroutput"><span class="identifier">boost</span><span class="special">::</span><span class="identifier">optional</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;</span></code>
+                and <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">optional</span><span class="special">&lt;</span><span class="identifier">T</span><span class="special">&gt;</span></code>,
+                <code class="computeroutput"><span class="identifier">T</span></code> being one of the
+                fundamental types above.<br> Not applicable to custom types or
+                ranges.<br> No format specifiers allowed
+              </p>
+            </td>
+<td>
+              <p>
+                Formats the underlying value if there is any.<br> <code class="computeroutput"><span class="identifier">NULL</span></code> otherwise.<br>
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">optional</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;(</span><span class="number">42</span><span class="special">))</span> <span class="special">==</span> <span class="string">"SELECT 42"</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">optional</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;())</span> <span class="special">==</span> <span class="string">"SELECT NULL"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a class="link" href="ref/boost__mysql__field.html" title="field"><code class="literal">field</code></a>
+                and <a class="link" href="ref/boost__mysql__field_view.html" title="field_view"><code class="literal">field_view</code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                Formats the underlying value.<br> No format specifiers allowed
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">field</span><span class="special">(</span><span class="number">42</span><span class="special">))</span> <span class="special">==</span> <span class="string">"SELECT 42"</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">field</span><span class="special">(</span><span class="string">"abc"</span><span class="special">))</span> <span class="special">==</span> <span class="string">"SELECT 'abc'"</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">field</span><span class="special">())</span> <span class="special">==</span> <span class="string">"SELECT NULL"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                Range of formattable elements. Informally, such ranges support <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">begin</span><span class="special">()</span></code>
+                and <code class="computeroutput"><span class="identifier">std</span><span class="special">::</span><span class="identifier">end</span><span class="special">()</span></code>,
+                and its iterator <code class="computeroutput"><span class="keyword">operator</span><span class="special">*</span></code> must yield one of the following:
+              </p>
+              <div class="itemizedlist"><ul class="itemizedlist" style="list-style-type: disc; ">
+<li class="listitem">
+                    A <a class="link" href="ref/boost__mysql__WritableFieldTuple.html" title="WritableField and WritableFieldTuple concepts"><code class="literal">WritableField</code></a>
+                    (i.e. one of the fundamental types above).
+                  </li>
+<li class="listitem">
+                    A type with a custom formatter.
+                  </li>
+</ul></div>
+              <p>
+                Ranges of ranges are not supported. Note that <code class="computeroutput"><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">unsigned</span>
+                <span class="keyword">char</span><span class="special">&gt;</span></code>
+                and similar types are formatted as blobs, not as sequences.
+              </p>
+              <p>
+                See <a class="link" href="ref/boost__mysql__Formattable.html" title="Formattable concept"><code class="literal">the
+                Formattable concept reference</code></a> for a formal definition.
+              </p>
+            </td>
+<td>
+              <p>
+                Formats each element in the range, separating elements with commas.<br>
+                Specifiers can be applied to individual elements by prefixing them
+                with a colon (<code class="computeroutput"><span class="special">:</span></code>)
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="comment">// long is a WritableField</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">long</span><span class="special">&gt;{</span><span class="number">1</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">20</span><span class="special">})</span> <span class="special">==</span> <span class="string">"SELECT 1, 5, 20"</span>
+
+<span class="comment">// C++20 ranges and other custom ranges accepted</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">long</span><span class="special">&gt;{</span><span class="number">1</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">20</span><span class="special">}</span> <span class="special">|</span> <span class="identifier">std</span><span class="special">::</span><span class="identifier">ranges</span><span class="special">::</span><span class="identifier">views</span><span class="special">::</span><span class="identifier">take</span><span class="special">(</span><span class="number">2</span><span class="special">))</span> <span class="special">==</span>
+<span class="string">"SELECT 1, 5"</span>
+
+<span class="comment">// Apply the 'i' specifier to each element in the sequence</span>
+<span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">opts</span><span class="special">,</span>
+    <span class="string">"SELECT {::i} FROM employee"</span><span class="special">,</span>
+    <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="identifier">string_view</span><span class="special">&gt;{</span><span class="string">"first_name"</span><span class="special">,</span> <span class="string">"last_name"</span><span class="special">}</span>
+<span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT `first_name`, `last_name` FROM employee"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a class="link" href="ref/boost__mysql__format_sequence_view.html" title="format_sequence_view"><code class="literal">format_sequence_view</code></a>
+                (as returned by <a class="link" href="ref/boost__mysql__sequence.html" title="sequence"><code class="literal">sequence</code></a>)
+              </p>
+            </td>
+<td>
+              <p>
+                Formats each element in a range by calling a user-supplied function,
+                separating elements by a glue string (a comma by default).<br>
+                No format specifiers allowed
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span>
+    <span class="identifier">opts</span><span class="special">,</span>
+    <span class="string">"SELECT {}"</span><span class="special">,</span>
+    <span class="identifier">sequence</span><span class="special">(</span>
+        <span class="identifier">std</span><span class="special">::</span><span class="identifier">vector</span><span class="special">&lt;</span><span class="keyword">int</span><span class="special">&gt;{</span><span class="number">1</span><span class="special">,</span> <span class="number">5</span><span class="special">,</span> <span class="number">20</span><span class="special">},</span>
+        <span class="special">[](</span><span class="keyword">int</span> <span class="identifier">val</span><span class="special">,</span> <span class="identifier">format_context_base</span><span class="special">&amp;</span> <span class="identifier">ctx</span><span class="special">)</span> <span class="special">{</span> <span class="identifier">format_sql_to</span><span class="special">(</span><span class="identifier">ctx</span><span class="special">,</span> <span class="string">"{}+1"</span><span class="special">,</span> <span class="identifier">val</span><span class="special">);</span> <span class="special">}</span>
+    <span class="special">)</span>
+<span class="special">)</span> <span class="special">==</span> <span class="string">"SELECT 1+1, 5+1, 20+1"</span>
+</pre>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                Custom type that specializes <a class="link" href="ref/boost__mysql__formatter.html" title="formatter"><code class="literal">formatter</code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                Calls <code class="computeroutput"><span class="identifier">formatter</span><span class="special">::</span><span class="identifier">parse</span></code> and <code class="computeroutput"><span class="identifier">formatter</span><span class="special">::</span><span class="identifier">format</span></code><br>
+                May accept user-defined format specifiers.
+              </p>
+            </td>
+<td>
+            </td>
+</tr>
+<tr>
+<td>
+              <p>
+                <a class="link" href="ref/boost__mysql__formattable_ref.html" title="formattable_ref"><code class="literal">formattable_ref</code></a>
+              </p>
+            </td>
+<td>
+              <p>
+                Formats the underlying value. Can represent any of the types above.<br>
+                Accepts the same format specifiers as the underlying type.
+              </p>
+            </td>
+<td>
+<pre class="table-programlisting"><span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {}"</span><span class="special">,</span> <span class="identifier">formattable_ref</span><span class="special">(</span><span class="number">42</span><span class="special">))</span> <span class="special">==</span> <span class="string">"SELECT 42"</span>
+<span class="identifier">format_sql</span><span class="special">(</span><span class="identifier">opts</span><span class="special">,</span> <span class="string">"SELECT {:i} FROM t"</span><span class="special">,</span> <span class="identifier">formattable_ref</span><span class="special">(</span><span class="string">"salary"</span><span class="special">))</span> <span class="special">==</span> <span class="string">"SELECT `salary` FROM t"</span>
+</pre>
+            </td>
+</tr>
+</tbody>
+</table></div>
+</div>
+<div class="copyright-footer">Copyright © 2019-2023 Ruben Perez<p>
+        Distributed under the Boost Software License, Version 1.0. (See accompanying
+        file LICENSE_1_0.txt or copy at <a href="http://www.boost.org/LICENSE_1_0.txt" target="_top">http://www.boost.org/LICENSE_1_0.txt</a>)
+      </p>
+</div>
+<hr>
+<div class="spirit-nav">
+<a accesskey="p" href="connection_pool.html"><img src="../../../../../doc/src/images/prev.png" alt="Prev"></a><a accesskey="u" href="../index.html"><img src="../../../../../doc/src/images/up.png" alt="Up"></a><a accesskey="h" href="../index.html"><img src="../../../../../doc/src/images/home.png" alt="Home"></a><a accesskey="n" href="sql_formatting_advanced.html"><img src="../../../../../doc/src/images/next.png" alt="Next"></a>
+</div>
+</body>
+</html>
