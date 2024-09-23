@@ -1,1 +1,1 @@
-/usr/bin/c++ CMakeFiles/main.dir/main.cpp.o -o main
+/usr/bin/c++ CMakeFiles/main.dir/main.cpp.o -o main  /usr/lib/x86_64-linux-gnu/libpython3.10.so

@@ -6,6 +6,8 @@
 #include <iomanip>
 #include "./Library/crow.h"
 #include <pybind11/embed.h>
+// #include "./Library/curl.h"
+
 namespace py = pybind11;
 
 
@@ -99,7 +101,34 @@ bool is_string(const crow::json::rvalue& value) {
     return value.t() == crow::json::type::String;
 }
 
+
+
+
+int inference() {
+    py::scoped_interpreter guard{};  // Start the Python interpreter
+    try {
+        // Import the Python module (ensure the path is set correctly)
+        py::module llama_infer = py::module::import("llama_infer");
+        // Get the 'infer' function from the module
+        py::object infer = llama_infer.attr("infer");
+
+        // Sample input text
+        std::string input_text = "Your input text for the model.";
+
+        // Call the Python function and get the result
+        py::object result = infer(input_text);
+
+        // Output the result to the console
+        std::cout << "[Adelaide&Albert Paradigm Engine] : " << result.cast<std::string>() << std::endl;
+    } catch (const py::error_already_set& e) {
+        std::cerr << "[Error] : " << e.what() << std::endl;
+    }
+
+    return 0;
+}
+
 int main() {
+    inference(); // Call the inference function for testing
     crow::SimpleApp app;
 
     std::cout << CONSOLE_PREFIX << "🌐 Starting up the Adelaide&Albert Engine... Let's make some magic happen!\n";

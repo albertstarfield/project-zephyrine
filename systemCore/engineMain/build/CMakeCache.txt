@@ -390,18 +390,24 @@ CMAKE_UNAME:INTERNAL=/usr/bin/uname
 //ADVANCED property for variable: CMAKE_VERBOSE_MAKEFILE
 CMAKE_VERBOSE_MAKEFILE-ADVANCED:INTERNAL=1
 //Details about finding Python3
-FIND_PACKAGE_MESSAGE_DETAILS_Python3:INTERNAL=[/home/adri/project-zephyrine/systemCore/engineMain/myenv/bin/python3.10][cfound components: Interpreter ][v3.10.12()]
+FIND_PACKAGE_MESSAGE_DETAILS_Python3:INTERNAL=[/usr/bin/python3.10][/usr/include/python3.10][/usr/lib/x86_64-linux-gnu/libpython3.10.so][cfound components: Interpreter Development Development.Module Development.Embed ][v3.10.12()]
 //linker supports push/pop state
 _CMAKE_LINKER_PUSHPOP_STATE_SUPPORTED:INTERNAL=TRUE
 //Compiler reason failure
 _Python3_Compiler_REASON_FAILURE:INTERNAL=
+_Python3_DEVELOPMENT_EMBED_SIGNATURE:INTERNAL=625d9e0f7a1af1ddb80bfa11fbea90e0
+_Python3_DEVELOPMENT_MODULE_SIGNATURE:INTERNAL=4bc14a0ea6a21ea267e38aa660e9b54b
 //Development reason failure
 _Python3_Development_REASON_FAILURE:INTERNAL=
 //Path to a program.
-_Python3_EXECUTABLE:INTERNAL=/home/adri/project-zephyrine/systemCore/engineMain/myenv/bin/python3.10
+_Python3_EXECUTABLE:INTERNAL=/usr/bin/python3.10
+//Path to a file.
+_Python3_INCLUDE_DIR:INTERNAL=/usr/include/python3.10
 //Python3 Properties
-_Python3_INTERPRETER_PROPERTIES:INTERNAL=Python;3;10;12;64;32;<none>;cpython-310-x86_64-linux-gnu;abi3;/usr/lib/python3.10;/home/adri/project-zephyrine/systemCore/engineMain/myenv/lib/python3.10;/home/adri/project-zephyrine/systemCore/engineMain/myenv/lib/python3.10/site-packages;/home/adri/project-zephyrine/systemCore/engineMain/myenv/lib/python3.10/site-packages
-_Python3_INTERPRETER_SIGNATURE:INTERNAL=dd4ef021097d20383ea884aaa8677924
+_Python3_INTERPRETER_PROPERTIES:INTERNAL=Python;3;10;12;64;<none>;cpython-310-x86_64-linux-gnu;abi3;/usr/lib/python3.10;/usr/lib/python3.10;/usr/local/lib/python3.10/dist-packages;/usr/local/lib/python3.10/dist-packages
+_Python3_INTERPRETER_SIGNATURE:INTERNAL=b91b4035ecb3bb3f5760d35922531bcd
+//Path to a library.
+_Python3_LIBRARY_RELEASE:INTERNAL=/usr/lib/x86_64-linux-gnu/libpython3.10.so
 //NumPy reason failure
 _Python3_NumPy_REASON_FAILURE:INTERNAL=
 
