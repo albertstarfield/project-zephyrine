@@ -1,0 +1,3 @@
+/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles/main.dir
+/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles/edit_cache.dir
+/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles/rebuild_cache.dir
