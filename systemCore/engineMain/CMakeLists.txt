@@ -44,7 +44,7 @@ execute_process(
 # Upgrade pip and install pybind11, llamaindex, and llama-cpp-python inside the virtual environment
 execute_process(
     COMMAND ${PYTHON_VENV_PATH}/pip install --upgrade pip
-    COMMAND ${PYTHON_VENV_PATH}/pip install pybind11 llamaindex llama-cpp-python
+    COMMAND ${PYTHON_VENV_PATH}/pip install pybind11 llama-index llama-cpp-python
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     RESULT_VARIABLE result
 )
@@ -54,6 +54,9 @@ if(NOT ${result} EQUAL 0)
     message(FATAL_ERROR "Failed to install required Python packages in the virtual environment.")
 endif()
 
+# Correctly adding the include directory for pybind11
+include_directories(${CMAKE_BINARY_DIR}/pythonBridgeRuntime/lib/python3.10/site-packages/pybind11/include)
+
 # Add pybind11 and Python include directories
 include_directories(${PYTHON_SITE_PACKAGES}/pybind11/include)
 include_directories(${Python3_INCLUDE_DIRS})
@@ -62,10 +65,10 @@ include_directories(${Python3_INCLUDE_DIRS})
 add_definitions(-DPYTHON_SITE_PACKAGES="${PYTHON_SITE_PACKAGES}")
 
 # Add the executable target
-add_executable(MyExecutable main.cpp)
+add_executable(main main.cpp)
 
 # Link Python libraries
-target_link_libraries(MyExecutable PRIVATE Python3::Python)
+target_link_libraries(main PRIVATE Python3::Python)
 
 # Link Boost libraries if needed (example shown for Boost system library)
 # target_link_libraries(MyExecutable PRIVATE Boost::system)
