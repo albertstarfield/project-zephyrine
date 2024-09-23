@@ -104,7 +104,7 @@ bool is_string(const crow::json::rvalue& value) {
 
 
 
-int inference() {
+int inference() { // in here define the virtual environment?
     py::scoped_interpreter guard{};  // Start the Python interpreter
     try {
         // Import the Python module (ensure the path is set correctly)
