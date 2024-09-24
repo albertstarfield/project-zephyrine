@@ -9,6 +9,7 @@ dist
 /release-builds/
 *systemCore/src/release-builds*
 **_venv*
+**.vscode**
 **release-build*
 **tmp-reposync*
 **repoworkspace*
