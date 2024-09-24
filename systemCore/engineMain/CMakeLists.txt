@@ -2,11 +2,23 @@
 cmake_minimum_required(VERSION 3.10)
 
 # Project name and version
-project(MyProject VERSION 1.0)
+project(AdelaideandAlbertEngine VERSION 1.0)
 
 # Set the C++ standard
-set(CMAKE_CXX_STANDARD 17)
+set(CMAKE_CXX_STANDARD 20) #Newest Bleeding edge C++ standard!
 set(CMAKE_CXX_STANDARD_REQUIRED True)
+
+if(NOT CMAKE_BUILD_TYPE)
+  set(CMAKE_BUILD_TYPE Release)
+endif()
+
+message(STATUS "Setting main Zephyrine Compilation extra features for your specific Processor!")
+set(CMAKE_CXX_FLAGS "-Wall -Wextra") # -Wall (Warning all for unoptimized or wasteful coding)
+message(STATUS "I forgot what is -g flag means?")
+set(CMAKE_CXX_FLAGS_DEBUG "-g")
+message(STATUS "Allowing the code to be as close as the CPU architecture allow to run the most optimized, minimizing compatibility cross machine binary execution!")
+set(CMAKE_CXX_FLAGS_RELEASE "-O3")
+set(mainEngineCode "${CMAKE_SOURCE_DIR}/main.cpp")
 
 #--------- Definition of the Modules/Library (Mixed with Python + C++) 
 
@@ -15,8 +27,15 @@ set(CMAKE_CXX_STANDARD_REQUIRED True)
 message(STATUS "Setting main Zephyrine Library Module for C++ Management Engine LIBRARY ${LIBRARY}")
 set(LIBRARY "${CMAKE_SOURCE_DIR}/Library")
 
+message(STATUS "Setting main curl Zephyrine Library Module for C++ Management Engine")
+include_directories(${Library}/curl/include/curl/)
+# Add the path to the compiled libcurl library
+# Prevent issue Undefined symbols for architecture arm64:
+link_directories(${LIBRARY}/curl/lib)  # Ensure this path points to where libcurl.a or libcurl.so is located
+
+
 # Specify the path to your Boost Library 
-message(STATUS "Setting (1/3) Boost Universal Library Zephyrine Library Module for C++ Management Engine")
+message(STATUS "Setting (1/2) Boost Universal Library Zephyrine Library Module for C++ Management Engine")
 set(BOOST_ROOT "${CMAKE_SOURCE_DIR}/Library/boost_1_86_0")
 
 # Add the Boost root include directory
@@ -25,13 +44,8 @@ include_directories(${BOOST_ROOT})
 # Add the Boost include directory
 #/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/./Library/crow.h:227:10: fatal error: 'boost/algorithm/string/predicate.hpp' file not found
 #include <boost/algorithm/string/predicate.hpp>
-message(STATUS "Setting (2/3) main Zephyrine Library Module for C++ Management Engine")
+message(STATUS "Setting (2/2) main Zephyrine Library Module for C++ Management Engine")
 include_directories(${BOOST_ROOT}/boost)
-
-# Optionally specify Boost libraries if you need to link specific Boost components
-message(STATUS "Setting (3/3) main Zephyrine Library Module for C++ Management Engine")
-link_directories(${BOOST_ROOT}/stage/lib)  # Adjust this if Boost libraries are built in a different location
-
 
 #Python mixed c++ Library +_+_+_+_+_+_+_
 
@@ -50,7 +64,20 @@ execute_process(
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 message(STATUS "Setting SITE_PACKAGES...")
-set(PYTHON_VENV_BIN_PATH "${LIBRARY}/pythonBridgeRuntime/bin")
+
+# Check the platform and set the Python virtual environment path accordingly
+if(WIN32)
+    # For Windows, set the path to 'Scripts'
+    set(PYTHON_VENV_BIN_PATH "${LIBRARY}/pythonBridgeRuntime/Scripts")
+    message(STATUS "Detected Windows platform. Using PYTHON_VENV_BIN_PATH: ${PYTHON_VENV_BIN_PATH}")
+else()
+    # For Unix-like systems, set the path to 'bin'
+    set(PYTHON_VENV_BIN_PATH "${LIBRARY}/pythonBridgeRuntime/bin")
+    message(STATUS "Detected Unix-like platform. Using PYTHON_VENV_BIN_PATH: ${PYTHON_VENV_BIN_PATH}")
+endif()
+
+# Debugging message to ensure the correct path is being set
+message(STATUS "PYTHON_VENV_BIN_PATH is set to: ${PYTHON_VENV_BIN_PATH}")
 
 set(PYTHON_VENV_PYTHON3_BIN_PATH "${LIBRARY}/pythonBridgeRuntime/bin/python3")
 
@@ -79,16 +106,51 @@ include_directories(${Python3_INCLUDE_DIRS})
 message(STATUS "Downloading Zephyrine pre-requisite Library Status-Quo python-only Libraries Module")
 execute_process(
     COMMAND ${PYTHON_VENV_BIN_PATH}/pip install --upgrade pip
-    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pybind11 llama-index pandas numpy scikit-learn diffusers llama-cpp-python torch keras huggingface llama-cpp-python
+    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pybind11 llama-index pandas numpy scikit-learn diffusers llama-cpp-python torch keras huggingface
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     RESULT_VARIABLE result
 )
-
 # Check if the previous commands were successful
 if(NOT ${result} EQUAL 0)
     message(FATAL_ERROR "Failed to install required Python packages in the virtual environment.")
 endif()
 # Status
+message(STATUS "Enforcing python root dir to use locally not Globally...")
+set(Python_ROOT_DIR "${PYTHON_VENV_PATH}")
+
+# refer to pybind11 documentation
+#   https://pybind11.readthedocs.io/en/stable/compiling.html
+
+# https://github.com/pybind/pybind11/blob/master/tools/pybind11Config.cmake.in
+
+message(STATUS "Configuring pybind11...")
+message(STATUS "Adding discovery pybind11 using local python venv...")
+set(pybind11_DIR "${PYTHON_SITE_PACKAGES}/pybind11/share/cmake/pybind11/")
+message(STATUS "Registering pybind11 using Documented https://pybind11.readthedocs.io/en/stable/compiling.html classic find_package ${pybind11_DIR}")
+find_package(pybind11 CONFIG REQUIRED)
+message(STATUS "Adding library module via pybind11 to C++")
+
+
+# Commands are from this documentation https://github.com/pybind/pybind11/blob/master/tools/pybind11Config.cmake.in
+pybind11_add_module(llama-index ${mainEngineCode})
+target_link_libraries(llama-index PUBLIC pybind11::module)
+pybind11_add_module(pandas ${mainEngineCode})
+target_link_libraries(pandas PUBLIC pybind11::module)
+pybind11_add_module(numpy ${mainEngineCode})
+target_link_libraries(numpy PUBLIC pybind11::module)
+pybind11_add_module(scikit-learn ${mainEngineCode})
+target_link_libraries(scikit-learn PUBLIC pybind11::module)
+pybind11_add_module(diffusers ${mainEngineCode})
+target_link_libraries(diffusers PUBLIC pybind11::module)
+pybind11_add_module(llama-cpp-python ${mainEngineCode})
+target_link_libraries(llama-cpp-python PUBLIC pybind11::module)
+pybind11_add_module(torch ${mainEngineCode})
+target_link_libraries(torch PUBLIC pybind11::module)
+pybind11_add_module(keras ${mainEngineCode})
+target_link_libraries(keras PUBLIC pybind11::module)
+pybind11_add_module(huggingface ${mainEngineCode})
+target_link_libraries(huggingface PUBLIC pybind11::module)
+
 
 #Debug Variable
 message(STATUS "Make sure that you execute compile.sh or CMAKELISTS on the ./systemCore/engineMain directory!")
@@ -106,7 +168,13 @@ add_definitions(-DPYTHON_SITE_PACKAGES="${PYTHON_SITE_PACKAGES}")
 #Compilation
 
 # Add the executable target
-add_executable(main main.cpp)
+add_executable(main ${mainEngineCode})
+
+# Link the curl library
+target_link_libraries(main PRIVATE curl)  
+
+#embed python3 interpreter into the ./main engine using pybind11
+target_link_libraries(main PUBLIC pybind11::embed)
 
 # Link Python libraries
 target_link_libraries(main PRIVATE Python3::Python)

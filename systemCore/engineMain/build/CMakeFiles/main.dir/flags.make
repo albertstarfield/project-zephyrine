@@ -4,9 +4,9 @@
 # compile CXX with /Applications/XCode-beta.app/Contents/Developer/Toolchains/XcodeDefault.xctoolchain/usr/bin/c++
 CXX_DEFINES = -DPYTHON_SITE_PACKAGES=\"/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/pythonBridgeRuntime/lib/python3.12/site-packages\"
 
-CXX_INCLUDES = -I/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0 -I/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost -I/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/pythonBridgeRuntime/lib/python3.12/site-packages/pybind11/include -isystem /opt/homebrew/opt/python@3.12/Frameworks/Python.framework/Versions/3.12/include/python3.12
+CXX_INCLUDES = -I/curl/include/curl -I/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0 -I/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost -isystem /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/pythonBridgeRuntime/lib/python3.12/site-packages/pybind11/include -isystem /opt/homebrew/opt/python@3.12/Frameworks/Python.framework/Versions/3.12/include/python3.12
 
-CXX_FLAGSarm64 = -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk
+CXX_FLAGSarm64 = -Wall -Wextra -O3 -std=gnu++20 -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk
 
-CXX_FLAGS = -std=gnu++17 -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk
+CXX_FLAGS = -Wall -Wextra -O3 -std=gnu++20 -arch arm64 -isysroot /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk
 

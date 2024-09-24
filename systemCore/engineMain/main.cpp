@@ -4,10 +4,14 @@
 #include <sstream>
 #include <random>
 #include <iomanip>
+#include <filesystem>  // C++17 filesystem library for path management (add compatibility for Windows (yes Only windows) )
 #include "./Library/crow.h"
+#include <curl/curl.h> // Include libcurl header for downloading
 #include <pybind11/embed.h>
 // #include "./Library/curl.h"
 
+
+namespace fs = std::filesystem; // Universal or cross platform path reconstruction
 namespace py = pybind11;
 
 
@@ -22,10 +26,54 @@ const std::string colorBrightRed = "\x1b[91m";
 const std::string colorBrightGreen = "\x1b[92m";
 const std::string assistantName = "Adelaide Zephyrine Charlotte";
 const std::string appName = "Project " + assistantName;
-const std::string engineName = "Adelaide Paradigm Engine";
+const std::string engineName = "Adelaide & Albert Paradigm Engine";
+const std::string CONSOLE_PREFIX = "[" + engineName + "]"+" : ";
 
 
-const std::string CONSOLE_PREFIX = "[Adelaide&Albert Engine] : ";
+// Helper function to write data received from curl to a file
+size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
+    size_t totalSize = size * nmemb;
+    std::ofstream* file = static_cast<std::ofstream*>(userp);
+    file->write(static_cast<char*>(contents), totalSize);
+    return totalSize;
+}
+
+
+// Function to download the model file using libcurl
+bool download_model(const std::string& url, const std::string& output_path) {
+    CURL* curl;
+    CURLcode res;
+    std::ofstream file(output_path, std::ios::binary);
+
+    if (!file.is_open()) {
+        std::cerr << "[Error] : Unable to open file for Zygote Model writing: " << output_path << std::endl;
+        return false;
+    }
+
+    curl = curl_easy_init();
+    if (!curl) {
+        std::cerr << "[Error] :  Zygote Model Downloader Failed to initialize curl" << std::endl;
+        return false;
+    }
+
+    curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
+    curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
+    curl_easy_setopt(curl, CURLOPT_WRITEDATA, &file);
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); // Follow redirects if necessary
+
+    res = curl_easy_perform(curl);
+    if (res != CURLE_OK) {
+        std::cerr << "[Error] : curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
+        file.close();
+        curl_easy_cleanup(curl);
+        return false;
+    }
+
+    file.close();
+    curl_easy_cleanup(curl);
+    std::cout << "[Info] : Zygote Model downloaded successfully to " << output_path << std::endl;
+    return true;
+}
 
 
 // Base template class for strong typing
@@ -100,35 +148,84 @@ ResponseText generate_text(const Model& model, const Prompt& prompt) {
 bool is_string(const crow::json::rvalue& value) {
     return value.t() == crow::json::type::String;
 }
-
-
-
-
-int inference() { // in here define the virtual environment?
+// ------------------------------------ [Testing Function pybind11] ------------------------------------
+int inferenceTestingFunction() {
     py::scoped_interpreter guard{};  // Start the Python interpreter
+    fs::path venv_path = fs::path("./Library/pythonBridgeRuntime");
+
+#ifdef _WIN32
+    // On Windows, adjust for typical venv paths
+    fs::path venv_python_bin = venv_path / "Scripts";  // Windows uses 'Scripts'
+#else
+    // On Unix-like systems, the bin directory is used
+    fs::path venv_python_bin = venv_path / "bin";
+#endif
+
+    // Check if the model file exists, if not, download it
+    std::string model_path = "./tinyLLaMatestModel.gguf";
+    if (!fs::exists(model_path)) {
+        std::cout << "[Info] : Model file not found, downloading..." << std::endl;
+        std::string url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q2_K.gguf?download=true";
+        if (!download_model(url, model_path)) {
+            std::cerr << "[Error] : Failed to download the model file." << std::endl;
+            return 1;
+        }
+    }
+
     try {
-        // Import the Python module (ensure the path is set correctly)
-        py::module llama_infer = py::module::import("llama_infer");
-        // Get the 'infer' function from the module
-        py::object infer = llama_infer.attr("infer");
+        // Import necessary modules
+        py::module sys = py::module::import("sys");
+        py::module os = py::module::import("os");
+        py::module site = py::module::import("site");
+        py::module sysconfig = py::module::import("sysconfig");
 
-        // Sample input text
-        std::string input_text = "Your input text for the model.";
+        // Manually define the path to the virtual environment’s site-packages
+        fs::path venv_site_packages = venv_path / "lib" / "python3.12" / "site-packages"; // Adjust Python version as needed
 
-        // Call the Python function and get the result
-        py::object result = infer(input_text);
+        // Ensure that we are forcing Python to recognize the venv
+        sys.attr("prefix") = venv_path.string();
+        sys.attr("base_prefix") = venv_path.string();
+        os.attr("environ")["VIRTUAL_ENV"] = venv_path.string();
 
-        // Output the result to the console
-        std::cout << "[Adelaide&Albert Paradigm Engine] : " << result.cast<std::string>() << std::endl;
+        // Forcefully add venv's site-packages to sys.path at the highest priority
+        sys.attr("path").attr("insert")(0, venv_site_packages.string());
+        sys.attr("path").attr("insert")(0, venv_python_bin.string());
+
+        // Reload the site module to ensure the environment is set correctly
+        site.attr("main")();
+
+        // Debug log to verify paths
+        std::cout << "[Info] Using virtual environment at " << venv_path.string()
+                  << ", manually set site-packages at " << venv_site_packages.string() << std::endl;
+
+        // Import the Llama class from llama_cpp
+        py::module llama_cpp = py::module::import("llama_cpp");
+        py::object Llama = llama_cpp.attr("Llama");
+
+        // Initialize the Llama model with the desired parameters
+        py::object llm = Llama(py::arg("model_path") = model_path);
+
+        // Define the prompt and other arguments
+        std::string prompt = "Q: When can we touch the sky? You we're born fated to don't have place in the earth. You we're born to be with the stars! A: ";
+        py::object output = llm(py::arg("prompt") = prompt,
+                                py::arg("max_tokens") = 32,
+                                py::arg("stop") = py::make_tuple("Q:", "\n"),
+                                py::arg("echo") = true);
+
+        // Output the result
+        std::cout << "[Python Status Quo enforced inference test] : "
+                  << output.cast<std::string>() << std::endl;
+
     } catch (const py::error_already_set& e) {
         std::cerr << "[Error] : " << e.what() << std::endl;
     }
-
     return 0;
 }
 
+// ------------------------------------------------------------------------------------------------------------
+
 int main() {
-    inference(); // Call the inference function for testing
+    inferenceTestingFunction(); // Call the inference function for testing
     crow::SimpleApp app;
 
     std::cout << CONSOLE_PREFIX << "🌐 Starting up the Adelaide&Albert Engine... Let's make some magic happen!\n";
@@ -176,9 +273,7 @@ int main() {
     });
 
     // Start the server
-    app.port(8080).multithreaded().run();
-
     std::cout << CONSOLE_PREFIX << "🚀 The engine roars to life on port 8080. Ready to enlighten the world!\n";
-
+    app.port(8080).multithreaded().run();
     return 0;
 }

@@ -276,18 +276,6 @@ CMakeFiles/main.dir/main.cpp.o: \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__utility/swap.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__fwd/array.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__fwd/subrange.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__fwd/tuple.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__tuple/tuple_element.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__tuple/tuple_indices.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__utility/integer_sequence.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__tuple/tuple_types.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__utility/piecewise_construct.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__memory/uninitialized_algorithms.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__algorithm/copy.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__algorithm/copy_move_common.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__algorithm/iterator_operations.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__algorithm/iter_swap.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__algorithm/ranges_iterator_concept.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__iterator/concepts.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__concepts/arithmetic.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__type_traits/is_signed_integer.h \
@@ -304,6 +292,18 @@ CMakeFiles/main.dir/main.cpp.o: \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__iterator/iter_move.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__iterator/iterator_traits.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__iterator/readable_traits.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__fwd/tuple.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__tuple/tuple_element.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__tuple/tuple_indices.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__utility/integer_sequence.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__tuple/tuple_types.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__utility/piecewise_construct.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__memory/uninitialized_algorithms.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__algorithm/copy.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__algorithm/copy_move_common.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__algorithm/iterator_operations.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__algorithm/iter_swap.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__algorithm/ranges_iterator_concept.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__iterator/advance.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__utility/convert_to_integral.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__utility/unreachable.h \
@@ -1006,6 +1006,24 @@ CMakeFiles/main.dir/main.cpp.o: \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__random/student_t_distribution.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__random/weibull_distribution.h \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/iomanip \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/filesystem \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/copy_options.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/directory_entry.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/file_status.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/file_type.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/perms.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/file_time_type.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/file_clock.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/filesystem_error.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/path.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/operations.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/perm_options.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/space_info.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/directory_iterator.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/directory_options.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/path_iterator.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/recursive_directory_iterator.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/u8path.h \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/./Library/crow.h \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/algorithm/string/predicate.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/algorithm/string/config.hpp \
@@ -1031,7 +1049,16 @@ CMakeFiles/main.dir/main.cpp.o: \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/any \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/memory_resource \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/charconv \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/filesystem \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/barrier \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/source_location \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/latch \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/span \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/numbers \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/stop_token \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/ranges \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/syncstream \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/coroutine \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/semaphore \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/config/detail/cxx_composite.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/detail/workaround.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/config/workaround.hpp \
@@ -1128,6 +1155,11 @@ CMakeFiles/main.dir/main.cpp.o: \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/preprocessor/variadic/size.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/preprocessor/facilities/check_empty.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/preprocessor/variadic/has_opt.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/preprocessor/variadic/detail/has_opt.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/preprocessor/facilities/is_empty_variadic.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/preprocessor/punctuation/is_begin_parens.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/preprocessor/punctuation/detail/is_begin_parens.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/preprocessor/facilities/detail/is_empty.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/preprocessor/variadic/limits/size_64.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/preprocessor/tuple/rem.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/preprocessor/tuple/detail/is_single_return.hpp \
@@ -1579,23 +1611,6 @@ CMakeFiles/main.dir/main.cpp.o: \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/scoped_lock.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/impl/posix_mutex.ipp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/execution/context.hpp \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/chrono \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/calendar.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/convert_to_tm.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/concepts.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/hh_mm_ss.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/day.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/file_clock.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/month.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/month_weekday.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/weekday.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/monthday.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/year.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/year_month.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/year_month_day.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/year_month_weekday.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/literals.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/forward_list \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/execution/context_as.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/execution/mapping.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/execution/occupancy.hpp \
@@ -1708,22 +1723,50 @@ CMakeFiles/main.dir/main.cpp.o: \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/as_tuple.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/impl/as_tuple.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/awaitable.hpp \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__coroutine/coroutine_handle.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__coroutine/coroutine_traits.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__coroutine/noop_coroutine_handle.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__coroutine/trivial_awaitables.h \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/impl/awaitable.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/post.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/initiate_post.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/work_dispatcher.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/bind_handler.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/executor_work_guard.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/this_coro.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/basic_datagram_socket.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/basic_socket.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/io_object_impl.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/io_context.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/chrono.hpp \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/chrono \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/calendar.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/convert_to_tm.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/concepts.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/hh_mm_ss.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/day.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/month.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/month_weekday.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/weekday.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/monthday.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/year.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/year_month.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/year_month_day.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/year_month_weekday.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/literals.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/formatter.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/ostream.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__chrono/parser_std_format_spec.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/forward_list \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__charconv/from_chars_integral.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__charconv/from_chars_result.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__charconv/to_chars.h \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/wrapped_handler.hpp \
-  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/bind_handler.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/impl/io_context.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/completion_handler.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/handler_work.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/initiate_dispatch.hpp \
-  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/work_dispatcher.hpp \
-  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/executor_work_guard.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/impl/io_context.ipp \
-  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/post.hpp \
-  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/initiate_post.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/socket_base.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/io_control.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/socket_option.hpp \
@@ -1951,10 +1994,13 @@ CMakeFiles/main.dir/main.cpp.o: \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/cancel_at.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/impl/cancel_at.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/co_composed.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/composed_work.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/co_spawn.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/impl/co_spawn.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/use_awaitable.hpp \
+  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/impl/use_awaitable.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/compose.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/composed.hpp \
-  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/detail/composed_work.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/connect.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/impl/connect.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/connect_pipe.hpp \
@@ -2094,8 +2140,6 @@ CMakeFiles/main.dir/main.cpp.o: \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/stream_file.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/streambuf.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/system_timer.hpp \
-  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/this_coro.hpp \
-  /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/use_awaitable.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/use_future.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/impl/use_future.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/asio/version.hpp \
@@ -2114,22 +2158,6 @@ CMakeFiles/main.dir/main.cpp.o: \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/map \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__tree \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/fstream \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/copy_options.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/directory_entry.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/file_status.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/file_type.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/perms.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/file_time_type.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/filesystem_error.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/path.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/operations.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/perm_options.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/space_info.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/directory_iterator.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/directory_options.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/path_iterator.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/recursive_directory_iterator.h \
-  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__filesystem/u8path.h \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/algorithm/string/trim.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/algorithm/string/detail/trim.hpp \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/algorithm/string/classification.hpp \
@@ -2246,6 +2274,16 @@ CMakeFiles/main.dir/main.cpp.o: \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/boost_1_86_0/boost/date_time/posix_time/time_parsers.hpp \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/condition_variable \
   /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/c++/v1/__stop_token/stop_callback.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/curl/curl.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/curl/curlver.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/curl/system.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/curl/easy.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/curl/multi.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/curl/urlapi.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/curl/options.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/curl/header.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/curl/websockets.h \
+  /Applications/Xcode-beta.app/Contents/Developer/Platforms/MacOSX.platform/Developer/SDKs/MacOSX15.1.sdk/usr/include/curl/mprintf.h \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/pythonBridgeRuntime/lib/python3.12/site-packages/pybind11/include/pybind11/embed.h \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/pythonBridgeRuntime/lib/python3.12/site-packages/pybind11/include/pybind11/pybind11.h \
   /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/Library/pythonBridgeRuntime/lib/python3.12/site-packages/pybind11/include/pybind11/detail/class.h \
