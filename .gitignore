@@ -20,6 +20,7 @@ dist
 **.temporaryChunkModel**
 **specLM**
 **generalLM**
+**pythonBridgeRuntime**
 **universalPrompt.txt**
 **.log**
 **.lock**
