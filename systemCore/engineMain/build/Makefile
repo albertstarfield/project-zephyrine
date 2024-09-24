@@ -117,6 +117,123 @@ depend:
 .PHONY : depend
 
 #=============================================================================
+# Target rules for targets named llama-index
+
+# Build rule for target.
+llama-index: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 llama-index
+.PHONY : llama-index
+
+# fast build rule for target.
+llama-index/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-index.dir/build.make CMakeFiles/llama-index.dir/build
+.PHONY : llama-index/fast
+
+#=============================================================================
+# Target rules for targets named pandas
+
+# Build rule for target.
+pandas: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 pandas
+.PHONY : pandas
+
+# fast build rule for target.
+pandas/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/pandas.dir/build.make CMakeFiles/pandas.dir/build
+.PHONY : pandas/fast
+
+#=============================================================================
+# Target rules for targets named numpy
+
+# Build rule for target.
+numpy: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 numpy
+.PHONY : numpy
+
+# fast build rule for target.
+numpy/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/numpy.dir/build.make CMakeFiles/numpy.dir/build
+.PHONY : numpy/fast
+
+#=============================================================================
+# Target rules for targets named scikit-learn
+
+# Build rule for target.
+scikit-learn: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 scikit-learn
+.PHONY : scikit-learn
+
+# fast build rule for target.
+scikit-learn/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/scikit-learn.dir/build.make CMakeFiles/scikit-learn.dir/build
+.PHONY : scikit-learn/fast
+
+#=============================================================================
+# Target rules for targets named diffusers
+
+# Build rule for target.
+diffusers: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 diffusers
+.PHONY : diffusers
+
+# fast build rule for target.
+diffusers/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusers.dir/build.make CMakeFiles/diffusers.dir/build
+.PHONY : diffusers/fast
+
+#=============================================================================
+# Target rules for targets named llama-cpp-python
+
+# Build rule for target.
+llama-cpp-python: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 llama-cpp-python
+.PHONY : llama-cpp-python
+
+# fast build rule for target.
+llama-cpp-python/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-cpp-python.dir/build.make CMakeFiles/llama-cpp-python.dir/build
+.PHONY : llama-cpp-python/fast
+
+#=============================================================================
+# Target rules for targets named torch
+
+# Build rule for target.
+torch: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 torch
+.PHONY : torch
+
+# fast build rule for target.
+torch/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/torch.dir/build.make CMakeFiles/torch.dir/build
+.PHONY : torch/fast
+
+#=============================================================================
+# Target rules for targets named keras
+
+# Build rule for target.
+keras: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 keras
+.PHONY : keras
+
+# fast build rule for target.
+keras/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/keras.dir/build.make CMakeFiles/keras.dir/build
+.PHONY : keras/fast
+
+#=============================================================================
+# Target rules for targets named huggingface
+
+# Build rule for target.
+huggingface: cmake_check_build_system
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 huggingface
+.PHONY : huggingface
+
+# fast build rule for target.
+huggingface/fast:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/huggingface.dir/build.make CMakeFiles/huggingface.dir/build
+.PHONY : huggingface/fast
+
+#=============================================================================
 # Target rules for targets named main
 
 # Build rule for target.
@@ -134,6 +251,15 @@ main.o: main.cpp.o
 
 # target to build an object file
 main.cpp.o:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-index.dir/build.make CMakeFiles/llama-index.dir/main.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/pandas.dir/build.make CMakeFiles/pandas.dir/main.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/numpy.dir/build.make CMakeFiles/numpy.dir/main.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/scikit-learn.dir/build.make CMakeFiles/scikit-learn.dir/main.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusers.dir/build.make CMakeFiles/diffusers.dir/main.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-cpp-python.dir/build.make CMakeFiles/llama-cpp-python.dir/main.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/torch.dir/build.make CMakeFiles/torch.dir/main.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/keras.dir/build.make CMakeFiles/keras.dir/main.cpp.o
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/huggingface.dir/build.make CMakeFiles/huggingface.dir/main.cpp.o
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/main.cpp.o
 .PHONY : main.cpp.o
 
@@ -142,6 +268,15 @@ main.i: main.cpp.i
 
 # target to preprocess a source file
 main.cpp.i:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-index.dir/build.make CMakeFiles/llama-index.dir/main.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/pandas.dir/build.make CMakeFiles/pandas.dir/main.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/numpy.dir/build.make CMakeFiles/numpy.dir/main.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/scikit-learn.dir/build.make CMakeFiles/scikit-learn.dir/main.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusers.dir/build.make CMakeFiles/diffusers.dir/main.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-cpp-python.dir/build.make CMakeFiles/llama-cpp-python.dir/main.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/torch.dir/build.make CMakeFiles/torch.dir/main.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/keras.dir/build.make CMakeFiles/keras.dir/main.cpp.i
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/huggingface.dir/build.make CMakeFiles/huggingface.dir/main.cpp.i
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/main.cpp.i
 .PHONY : main.cpp.i
 
@@ -150,6 +285,15 @@ main.s: main.cpp.s
 
 # target to generate assembly for a file
 main.cpp.s:
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-index.dir/build.make CMakeFiles/llama-index.dir/main.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/pandas.dir/build.make CMakeFiles/pandas.dir/main.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/numpy.dir/build.make CMakeFiles/numpy.dir/main.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/scikit-learn.dir/build.make CMakeFiles/scikit-learn.dir/main.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusers.dir/build.make CMakeFiles/diffusers.dir/main.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-cpp-python.dir/build.make CMakeFiles/llama-cpp-python.dir/main.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/torch.dir/build.make CMakeFiles/torch.dir/main.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/keras.dir/build.make CMakeFiles/keras.dir/main.cpp.s
+	$(MAKE) $(MAKESILENT) -f CMakeFiles/huggingface.dir/build.make CMakeFiles/huggingface.dir/main.cpp.s
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/main.cpp.s
 .PHONY : main.cpp.s
 
@@ -161,7 +305,16 @@ help:
 	@echo "... depend"
 	@echo "... edit_cache"
 	@echo "... rebuild_cache"
+	@echo "... diffusers"
+	@echo "... huggingface"
+	@echo "... keras"
+	@echo "... llama-cpp-python"
+	@echo "... llama-index"
 	@echo "... main"
+	@echo "... numpy"
+	@echo "... pandas"
+	@echo "... scikit-learn"
+	@echo "... torch"
 	@echo "... main.o"
 	@echo "... main.i"
 	@echo "... main.s"

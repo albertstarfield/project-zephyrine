@@ -31,6 +31,9 @@ systemCore/error.log
 systemCore/storage/presistentInteractionMem.json
 **conda_python_modules**
 **nodeLocalRuntime**
+**enginemain/build**
+**.gguf**
+**build**
 systemCore/nodeLocalRuntime
 **/*Mem.json
 **/*.log
