@@ -209,15 +209,51 @@ int inferenceTestingFunction() {
         py::object llm = Llama(py::arg("model_path") = model_path);
 
         // Define the prompt and other arguments
-        std::string prompt = "Q: When can we touch the sky? You we're born fated to don't have place in the earth. You we're born to be with the stars! A: ";
+        std::string user_input = "When can we touch the sky? You we're born fated to don't have place in the earth. You we're born to be with the stars!";
+        std::string prompt = "User: " + user_input + "\nAssistant: ";
         py::object output = llm(py::arg("prompt") = prompt,
                                 py::arg("max_tokens") = 32,
-                                py::arg("stop") = py::make_tuple("Q:", "\n"),
+                                py::arg("stop") = py::make_tuple("User:", "\n"),
                                 py::arg("echo") = true);
 
-        // Output the result
-        std::cout << "[Python Status Quo enforced inference test] : "
-                  << output.cast<std::string>() << std::endl;
+        // Print the output as a pure string for debugging
+        std::cout << "[Debug] Raw output from Python: " << py::str(output).cast<std::string>() << std::endl;
+
+        // If output is a dict, extract the 'choices' and 'text' part
+        if (py::isinstance<py::dict>(output)) {
+            py::dict output_dict = output.cast<py::dict>();
+
+            // Access the 'choices' key, which is a list
+            if (output_dict.contains("choices")) {
+                py::list choices = output_dict["choices"].cast<py::list>();
+
+                if (choices.size() > 0) {
+                    py::dict first_choice = choices[0].cast<py::dict>();
+
+                    // Extract the 'text' from the first item in the 'choices' list
+                    if (first_choice.contains("text")) {
+                        std::string response = first_choice["text"].cast<std::string>();
+                        
+                        // Split the response into user and assistant parts for clarity
+                        size_t assistant_pos = response.find("Assistant:");
+                        if (assistant_pos != std::string::npos) {
+                            std::string assistant_response = response.substr(assistant_pos + 10);  // Skip "Assistant:" part
+                            std::cout << "[Assistant] : " << assistant_response << std::endl;
+                        } else {
+                            std::cout << "[Error] : Could not find 'Assistant:' in response" << std::endl;
+                        }
+                    } else {
+                        std::cerr << "[Error] : 'text' key not found in the first choice" << std::endl;
+                    }
+                } else {
+                    std::cerr << "[Error] : 'choices' list is empty" << std::endl;
+                }
+            } else {
+                std::cerr << "[Error] : 'choices' key not found in output" << std::endl;
+            }
+        } else {
+            std::cerr << "[Error] : Expected a dictionary from the model output" << std::endl;
+        }
 
     } catch (const py::error_already_set& e) {
         std::cerr << "[Error] : " << e.what() << std::endl;
