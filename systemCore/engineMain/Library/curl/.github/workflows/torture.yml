@@ -1,0 +1,91 @@
+# Copyright (C) Daniel Stenberg, <daniel@haxx.se>, et al.
+#
+# SPDX-License-Identifier: curl
+
+name: Linux torture
+
+'on':
+  push:
+    branches:
+      - master
+      - '*/ci'
+    paths-ignore:
+      - '**/*.md'
+      - '**/CMakeLists.txt'
+      - '.circleci/**'
+      - 'appveyor.*'
+      - 'CMake/**'
+      - 'packages/**'
+      - 'plan9/**'
+      - 'projects/**'
+      - 'winbuild/**'
+  pull_request:
+    branches:
+      - master
+    paths-ignore:
+      - '**/*.md'
+      - '**/CMakeLists.txt'
+      - '.circleci/**'
+      - 'appveyor.*'
+      - 'CMake/**'
+      - 'packages/**'
+      - 'plan9/**'
+      - 'projects/**'
+      - 'winbuild/**'
+
+concurrency:
+  # Hardcoded workflow filename as workflow name above is just Linux again
+  group: torture-${{ github.event.pull_request.number || github.sha }}
+  cancel-in-progress: true
+
+permissions: {}
+
+jobs:
+  cmake:
+    name: '${{ matrix.build.name }}'
+    runs-on: 'ubuntu-24.04'
+    timeout-minutes: 30
+    strategy:
+      fail-fast: false
+      matrix:
+        build:
+          - name: 'OpenSSL torture !FTP'
+            install: libpsl-dev libbrotli-dev libzstd-dev zlib1g-dev libnghttp2-dev libssh2-1-dev libc-ares-dev
+            generate: -DCURL_USE_OPENSSL=ON -DENABLE_DEBUG=ON -DENABLE_ARES=ON -DENABLE_WEBSOCKETS=ON
+            tflags: -t --shallow=25 !FTP
+          - name: 'OpenSSL torture FTP'
+            install: libpsl-dev libbrotli-dev libzstd-dev zlib1g-dev libnghttp2-dev libssh2-1-dev libc-ares-dev
+            generate: -DCURL_USE_OPENSSL=ON -DENABLE_DEBUG=ON -DENABLE_ARES=ON
+            tflags: -t --shallow=20 FTP
+
+    steps:
+      - run: |
+          sudo apt-get install cmake ninja-build pkgconf stunnel4 ${{ matrix.build.install }}
+          python3 -m venv $HOME/venv
+          source $HOME/venv/bin/activate
+          python3 -m pip install impacket
+        name: 'install prereqs'
+
+      - uses: actions/checkout@692973e3d937129bcbf40652eb9f2f61becf3332 # v4
+
+      - run: |
+          cmake -G Ninja -DCMAKE_UNITY_BUILD=ON -DCURL_TEST_BUNDLES=ON -DCURL_WERROR=ON \
+            -DCURL_BROTLI=ON -DCURL_ZSTD=ON \
+            ${{ matrix.build.generate }}
+        name: 'cmake configure'
+
+      - run: cmake --build . --verbose
+        name: 'cmake build'
+
+      - run: ./src/curl -V
+        name: 'check curl -V output'
+
+      - run: cmake --build . --verbose --target testdeps
+        name: 'build tests'
+
+      - run: |
+          source $HOME/venv/bin/activate
+          cmake --build . --verbose --target test-torture
+        name: 'run tests'
+        env:
+          TFLAGS: '-j10 ${{ matrix.build.tflags }}'
