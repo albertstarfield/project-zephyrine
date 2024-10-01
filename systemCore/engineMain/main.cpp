@@ -179,8 +179,11 @@ int inferenceTestingFunction() {
         py::module site = py::module::import("site");
         py::module sysconfig = py::module::import("sysconfig");
 
-        // Manually define the path to the virtual environment’s site-packages
-        fs::path venv_site_packages = venv_path / "lib" / "python3.12" / "site-packages"; // Adjust Python version as needed
+        // Get the Python version dynamically
+        std::string python_version = sysconfig.attr("get_python_version")().cast<std::string>();
+
+        // Manually define the path to the virtual environment’s site-packages based on Python version
+        fs::path venv_site_packages = venv_path / "lib" / ("python" + python_version) / "site-packages";
 
         // Ensure that we are forcing Python to recognize the venv
         sys.attr("prefix") = venv_path.string();
