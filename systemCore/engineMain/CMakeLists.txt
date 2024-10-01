@@ -63,6 +63,23 @@ execute_process(
     COMMAND python3 -m venv ${PYTHON_VENV_PATH}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
+
+# Upgrade pip inside the virtual environment
+execute_process(
+    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install --upgrade pip
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
+
+
+# Verify and print the site-packages path
+execute_process(
+    COMMAND ${PYTHON_VENV_PYTHON3_BIN_PATH} -c "import sysconfig; print(sysconfig.get_paths())"
+    OUTPUT_VARIABLE PYTHON_PATHS
+    OUTPUT_STRIP_TRAILING_WHITESPACE
+)
+message(STATUS "Python paths: ${PYTHON_PATHS}")
+
+
 message(STATUS "Setting SITE_PACKAGES...")
 
 # Check the platform and set the Python virtual environment path accordingly
@@ -80,6 +97,8 @@ endif()
 message(STATUS "PYTHON_VENV_BIN_PATH is set to: ${PYTHON_VENV_BIN_PATH}")
 
 set(PYTHON_VENV_PYTHON3_BIN_PATH "${LIBRARY}/pythonBridgeRuntime/bin/python3")
+
+
 
 execute_process(
     COMMAND ${PYTHON_VENV_PYTHON3_BIN_PATH} -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
@@ -106,7 +125,7 @@ include_directories(${Python3_INCLUDE_DIRS})
 message(STATUS "Downloading Zephyrine pre-requisite Library Status-Quo python-only Libraries Module")
 execute_process(
     COMMAND ${PYTHON_VENV_BIN_PATH}/pip install --upgrade pip
-    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pybind11 llama-index pandas numpy scikit-learn diffusers llama-cpp-python torch keras huggingface
+    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pep517 pybind11 llama-index pandas numpy scikit-learn diffusers llama-cpp-python torch keras huggingface
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     RESULT_VARIABLE result
 )

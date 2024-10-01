@@ -45,19 +45,19 @@ cmake_force:
 SHELL = /bin/sh
 
 # The CMake executable.
-CMAKE_COMMAND = /opt/homebrew/Cellar/cmake/3.30.3/bin/cmake
+CMAKE_COMMAND = /home/adri/.local/lib/python3.10/site-packages/cmake/data/bin/cmake
 
 # The command to remove a file.
-RM = /opt/homebrew/Cellar/cmake/3.30.3/bin/cmake -E rm -f
+RM = /home/adri/.local/lib/python3.10/site-packages/cmake/data/bin/cmake -E rm -f
 
 # Escaping for special characters.
 EQUALS = =
 
 # The top-level source directory on which CMake was run.
-CMAKE_SOURCE_DIR = /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain
+CMAKE_SOURCE_DIR = /home/adri/project-zephyrine/systemCore/engineMain
 
 # The top-level build directory on which CMake was run.
-CMAKE_BINARY_DIR = /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build
+CMAKE_BINARY_DIR = /home/adri/project-zephyrine/systemCore/engineMain/build
 
 #=============================================================================
 # Directory level rules for the build root directory
@@ -99,14 +99,14 @@ clean: CMakeFiles/main.dir/clean
 CMakeFiles/llama-index.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-index.dir/build.make CMakeFiles/llama-index.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-index.dir/build.make CMakeFiles/llama-index.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles --progress-num=9,10 "Built target llama-index"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles --progress-num=9,10 "Built target llama-index"
 .PHONY : CMakeFiles/llama-index.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/llama-index.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/llama-index.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 0
 .PHONY : CMakeFiles/llama-index.dir/rule
 
 # Convenience name for target.
@@ -125,14 +125,14 @@ CMakeFiles/llama-index.dir/clean:
 CMakeFiles/pandas.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/pandas.dir/build.make CMakeFiles/pandas.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/pandas.dir/build.make CMakeFiles/pandas.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles --progress-num=15,16 "Built target pandas"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles --progress-num=15,16 "Built target pandas"
 .PHONY : CMakeFiles/pandas.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/pandas.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/pandas.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 0
 .PHONY : CMakeFiles/pandas.dir/rule
 
 # Convenience name for target.
@@ -151,14 +151,14 @@ CMakeFiles/pandas.dir/clean:
 CMakeFiles/numpy.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/numpy.dir/build.make CMakeFiles/numpy.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/numpy.dir/build.make CMakeFiles/numpy.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles --progress-num=13,14 "Built target numpy"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles --progress-num=13,14 "Built target numpy"
 .PHONY : CMakeFiles/numpy.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/numpy.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/numpy.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 0
 .PHONY : CMakeFiles/numpy.dir/rule
 
 # Convenience name for target.
@@ -177,14 +177,14 @@ CMakeFiles/numpy.dir/clean:
 CMakeFiles/scikit-learn.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/scikit-learn.dir/build.make CMakeFiles/scikit-learn.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/scikit-learn.dir/build.make CMakeFiles/scikit-learn.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles --progress-num=17,18 "Built target scikit-learn"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles --progress-num=17,18 "Built target scikit-learn"
 .PHONY : CMakeFiles/scikit-learn.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/scikit-learn.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/scikit-learn.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 0
 .PHONY : CMakeFiles/scikit-learn.dir/rule
 
 # Convenience name for target.
@@ -203,14 +203,14 @@ CMakeFiles/scikit-learn.dir/clean:
 CMakeFiles/diffusers.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusers.dir/build.make CMakeFiles/diffusers.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/diffusers.dir/build.make CMakeFiles/diffusers.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles --progress-num=1,2 "Built target diffusers"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles --progress-num=1,2 "Built target diffusers"
 .PHONY : CMakeFiles/diffusers.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/diffusers.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/diffusers.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 0
 .PHONY : CMakeFiles/diffusers.dir/rule
 
 # Convenience name for target.
@@ -229,14 +229,14 @@ CMakeFiles/diffusers.dir/clean:
 CMakeFiles/llama-cpp-python.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-cpp-python.dir/build.make CMakeFiles/llama-cpp-python.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/llama-cpp-python.dir/build.make CMakeFiles/llama-cpp-python.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles --progress-num=7,8 "Built target llama-cpp-python"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles --progress-num=7,8 "Built target llama-cpp-python"
 .PHONY : CMakeFiles/llama-cpp-python.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/llama-cpp-python.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/llama-cpp-python.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 0
 .PHONY : CMakeFiles/llama-cpp-python.dir/rule
 
 # Convenience name for target.
@@ -255,14 +255,14 @@ CMakeFiles/llama-cpp-python.dir/clean:
 CMakeFiles/torch.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/torch.dir/build.make CMakeFiles/torch.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/torch.dir/build.make CMakeFiles/torch.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles --progress-num=19,20 "Built target torch"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles --progress-num=19,20 "Built target torch"
 .PHONY : CMakeFiles/torch.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/torch.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/torch.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 0
 .PHONY : CMakeFiles/torch.dir/rule
 
 # Convenience name for target.
@@ -281,14 +281,14 @@ CMakeFiles/torch.dir/clean:
 CMakeFiles/keras.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/keras.dir/build.make CMakeFiles/keras.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/keras.dir/build.make CMakeFiles/keras.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles --progress-num=5,6 "Built target keras"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles --progress-num=5,6 "Built target keras"
 .PHONY : CMakeFiles/keras.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/keras.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/keras.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 0
 .PHONY : CMakeFiles/keras.dir/rule
 
 # Convenience name for target.
@@ -307,14 +307,14 @@ CMakeFiles/keras.dir/clean:
 CMakeFiles/huggingface.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/huggingface.dir/build.make CMakeFiles/huggingface.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/huggingface.dir/build.make CMakeFiles/huggingface.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles --progress-num=3,4 "Built target huggingface"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles --progress-num=3,4 "Built target huggingface"
 .PHONY : CMakeFiles/huggingface.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/huggingface.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/huggingface.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 0
 .PHONY : CMakeFiles/huggingface.dir/rule
 
 # Convenience name for target.
@@ -333,14 +333,14 @@ CMakeFiles/huggingface.dir/clean:
 CMakeFiles/main.dir/all:
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/depend
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/main.dir/build.make CMakeFiles/main.dir/build
-	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles --progress-num=11,12 "Built target main"
+	@$(CMAKE_COMMAND) -E cmake_echo_color "--switch=$(COLOR)" --progress-dir=/home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles --progress-num=11,12 "Built target main"
 .PHONY : CMakeFiles/main.dir/all
 
 # Build rule for subdir invocation for target.
 CMakeFiles/main.dir/rule: cmake_check_build_system
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 2
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 2
 	$(MAKE) $(MAKESILENT) -f CMakeFiles/Makefile2 CMakeFiles/main.dir/all
-	$(CMAKE_COMMAND) -E cmake_progress_start /Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/build/CMakeFiles 0
+	$(CMAKE_COMMAND) -E cmake_progress_start /home/adri/project-zephyrine/systemCore/engineMain/build/CMakeFiles 0
 .PHONY : CMakeFiles/main.dir/rule
 
 # Convenience name for target.
