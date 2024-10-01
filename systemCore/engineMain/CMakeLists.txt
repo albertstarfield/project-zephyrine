@@ -106,7 +106,7 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 message(STATUS "set SITE_PACKAGES to ${PYTHON_SITE_PACKAGES}")
-#set(PYTHON_SITE_PACKAGES "${LIBRARY}/pythonBridgeRuntime/lib/python3.12/site-packages") #How to make sure its adaptive and not locked to python 3.12
+#set(PYTHON_SITE_PACKAGES ${LIBRARY}/pythonBridgeRuntime/lib/python3.12/site-packages") #How to make sure its adaptive and not locked to python 3.12
 
 ## Define python and c++ bridge Library
 #pybind11
