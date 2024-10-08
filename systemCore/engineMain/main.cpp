@@ -9,6 +9,11 @@
 #include <curl/curl.h> // Include libcurl header for downloading
 #include <pybind11/embed.h>
 // #include "./Library/curl.h"
+#include <signal.h>
+#include <execinfo.h>
+#include <unistd.h>
+#include <cstdlib>
+#include <fstream>
 
 
 namespace fs = std::filesystem; // Universal or cross platform path reconstruction
@@ -149,40 +154,29 @@ bool is_string(const crow::json::rvalue& value) {
     return value.t() == crow::json::type::String;
 }
 // ------------------------------------ [Testing Function pybind11] ------------------------------------
-int inferenceTestingFunction() {
-    py::scoped_interpreter guard{};  // Start the Python interpreter
-    fs::path venv_path = fs::path("./Library/pythonBridgeRuntime");
+// Base class for common functionality (e.g., setting up virtual environments)
+class ModelBase {
+protected:
+    fs::path venv_path;
+    fs::path venv_python_bin;
 
+    ModelBase() {
+        // Set up virtual environment paths
+        venv_path = fs::path("./Library/pythonBridgeRuntime");
 #ifdef _WIN32
-    // On Windows, adjust for typical venv paths
-    fs::path venv_python_bin = venv_path / "Scripts";  // Windows uses 'Scripts'
+        venv_python_bin = venv_path / "Scripts";
 #else
-    // On Unix-like systems, the bin directory is used
-    fs::path venv_python_bin = venv_path / "bin";
+        venv_python_bin = venv_path / "bin";
 #endif
-
-    // Check if the model file exists, if not, download it
-    std::string model_path = "./tinyLLaMatestModel.gguf";
-    if (!fs::exists(model_path)) {
-        std::cout << "[Info] : Model file not found, downloading..." << std::endl;
-        std::string url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q2_K.gguf?download=true";
-        if (!download_model(url, model_path)) {
-            std::cerr << "[Error] : Failed to download the model file." << std::endl;
-            return 1;
-        }
     }
 
-    try {
-        // Import necessary modules
+    void setupPythonEnv() {
         py::module sys = py::module::import("sys");
         py::module os = py::module::import("os");
         py::module site = py::module::import("site");
         py::module sysconfig = py::module::import("sysconfig");
 
-        // Get the Python version dynamically
         std::string python_version = sysconfig.attr("get_python_version")().cast<std::string>();
-
-        // Manually define the path to the virtual environment’s site-packages based on Python version
         fs::path venv_site_packages = venv_path / "lib" / ("python" + python_version) / "site-packages";
 
         // Ensure that we are forcing Python to recognize the venv
@@ -190,81 +184,194 @@ int inferenceTestingFunction() {
         sys.attr("base_prefix") = venv_path.string();
         os.attr("environ")["VIRTUAL_ENV"] = venv_path.string();
 
-        // Forcefully add venv's site-packages to sys.path at the highest priority
+        // Add venv's site-packages to sys.path
         sys.attr("path").attr("insert")(0, venv_site_packages.string());
         sys.attr("path").attr("insert")(0, venv_python_bin.string());
 
-        // Reload the site module to ensure the environment is set correctly
-        site.attr("main")();
+        site.attr("main")(); // Reload site module
+    }
+};
 
-        // Debug log to verify paths
-        std::cout << "[Info] Using virtual environment at " << venv_path.string()
-                  << ", manually set site-packages at " << venv_site_packages.string() << std::endl;
+// Class for LLM Inference
+class LLMInference : public ModelBase {
+public:
+    LLMInference() {
+        py::scoped_interpreter guard{};
+        setupPythonEnv();
+    }
 
-        // Import the Llama class from llama_cpp
-        py::module llama_cpp = py::module::import("llama_cpp");
-        py::object Llama = llama_cpp.attr("Llama");
-
-        // Initialize the Llama model with the desired parameters
-        py::object llm = Llama(py::arg("model_path") = model_path);
-
-        // Define the prompt and other arguments
-        std::string user_input = "When can we touch the sky? You we're born fated to don't have place in the earth. You we're born to be with the stars!";
-        std::string prompt = "User: " + user_input + "\nAssistant: ";
-        py::object output = llm(py::arg("prompt") = prompt,
-                                py::arg("max_tokens") = 32,
-                                py::arg("stop") = py::make_tuple("User:", "\n"),
-                                py::arg("echo") = true);
-
-        // Print the output as a pure string for debugging
-        std::cout << "[Debug] Raw output from Python: " << py::str(output).cast<std::string>() << std::endl;
-
-        // If output is a dict, extract the 'choices' and 'text' part
-        if (py::isinstance<py::dict>(output)) {
-            py::dict output_dict = output.cast<py::dict>();
-
-            // Access the 'choices' key, which is a list
-            if (output_dict.contains("choices")) {
-                py::list choices = output_dict["choices"].cast<py::list>();
-
-                if (choices.size() > 0) {
-                    py::dict first_choice = choices[0].cast<py::dict>();
-
-                    // Extract the 'text' from the first item in the 'choices' list
-                    if (first_choice.contains("text")) {
-                        std::string response = first_choice["text"].cast<std::string>();
-                        
-                        // Split the response into user and assistant parts for clarity
-                        size_t assistant_pos = response.find("Assistant:");
-                        if (assistant_pos != std::string::npos) {
-                            std::string assistant_response = response.substr(assistant_pos + 10);  // Skip "Assistant:" part
-                            std::cout << "[Assistant] : " << assistant_response << std::endl;
-                        } else {
-                            std::cout << "[Error] : Could not find 'Assistant:' in response" << std::endl;
-                        }
-                    } else {
-                        std::cerr << "[Error] : 'text' key not found in the first choice" << std::endl;
-                    }
-                } else {
-                    std::cerr << "[Error] : 'choices' list is empty" << std::endl;
-                }
-            } else {
-                std::cerr << "[Error] : 'choices' key not found in output" << std::endl;
+    void runInference() {
+        std::string model_path = "./tinyLLaMatestModel.gguf";
+        if (!fs::exists(model_path)) {
+            std::cout << "[Info] : Model file not found, downloading..." << std::endl;
+            std::string url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q2_K.gguf?download=true";
+            if (!download_model(url, model_path)) {
+                std::cerr << "[Error] : Failed to download the model file." << std::endl;
+                return;
             }
-        } else {
-            std::cerr << "[Error] : Expected a dictionary from the model output" << std::endl;
         }
 
-    } catch (const py::error_already_set& e) {
-        std::cerr << "[Error] : " << e.what() << std::endl;
+        try {
+            py::module llama_cpp = py::module::import("llama_cpp");
+            py::object Llama = llama_cpp.attr("Llama");
+            py::object llm = Llama(py::arg("model_path") = model_path);
+
+            std::string user_input = "When can we touch the sky? You we're born fated to don't have place in the earth. You we're born to be with the stars!";
+            std::string prompt = "User: " + user_input + "\nAssistant: ";
+            py::object output = llm(py::arg("prompt") = prompt,
+                                    py::arg("max_tokens") = 32,
+                                    py::arg("stop") = py::make_tuple("User:", "\n"),
+                                    py::arg("echo") = true);
+
+            std::cout << "[Debug] Raw output from Python: " << py::str(output).cast<std::string>() << std::endl;
+
+            if (py::isinstance<py::dict>(output)) {
+                processOutput(output);
+            } else {
+                std::cerr << "[Error] : Expected a dictionary from the model output" << std::endl;
+            }
+
+        } catch (const py::error_already_set &e) {
+            std::cerr << "[Error] : " << e.what() << std::endl;
+        }
     }
-    return 0;
+
+private:
+    void processOutput(const py::object& output) {
+        py::dict output_dict = output.cast<py::dict>();
+
+        if (output_dict.contains("choices")) {
+            py::list choices = output_dict["choices"].cast<py::list>();
+            if (choices.size() > 0) {
+                py::dict first_choice = choices[0].cast<py::dict>();
+                if (first_choice.contains("text")) {
+                    std::string response = first_choice["text"].cast<std::string>();
+                    size_t assistant_pos = response.find("Assistant:");
+                    if (assistant_pos != std::string::npos) {
+                        std::string assistant_response = response.substr(assistant_pos + 10);  // Skip "Assistant:"
+                        std::cout << "[Assistant] : " << assistant_response << std::endl;
+                    } else {
+                        std::cerr << "[Error] : Could not find 'Assistant:' in response" << std::endl;
+                    }
+                } else {
+                    std::cerr << "[Error] : 'text' key not found in the first choice" << std::endl;
+                }
+            } else {
+                std::cerr << "[Error] : 'choices' list is empty" << std::endl;
+            }
+        } else {
+            std::cerr << "[Error] : 'choices' key not found in output" << std::endl;
+        }
+    }
+
+    bool download_model(const std::string& url, const std::string& model_path) {
+        // Implement the actual download logic
+        std::cout << "[Downloading model from] : " << url << std::endl;
+        return true;
+    }
+};
+
+// Class for LLM Finetuning (Placeholder)
+class LLMFinetune : public ModelBase {
+public:
+    LLMFinetune() {
+        py::scoped_interpreter guard{};
+        setupPythonEnv();
+    }
+
+    void finetuneModel() {
+        // Implement finetuning logic here
+        std::cout << "[Finetuning Model]" << std::endl;
+    }
+};
+
+// Class for SD (Stable Diffusion) Inference (Placeholder)
+class SDInference : public ModelBase {
+public:
+    SDInference() {
+        py::scoped_interpreter guard{};
+        setupPythonEnv();
+    }
+
+    void runInference() {
+        // Implement Stable Diffusion inference logic here
+        std::cout << "[Running SD Inference]" << std::endl;
+    }
+};
+
+// Class for SD (Stable Diffusion) Finetuning (Placeholder)
+class SDFinetune : public ModelBase {
+public:
+    SDFinetune() {
+        py::scoped_interpreter guard{};
+        setupPythonEnv();
+    }
+
+    void finetuneModel() {
+        // Implement Stable Diffusion finetuning logic here
+        std::cout << "[Finetuning SD Model]" << std::endl;
+    }
+};
+
+// -----------------------------------------------Memory Dumping debugging-------------------------------------------------------------
+
+// Function to handle signals (e.g., SIGSEGV)
+void signalHandler(int signum) {
+    // Log the signal number
+    std::cerr << "Error: signal " << signum << std::endl;
+
+    // Generate the backtrace (stack trace)
+    void* array[10];
+    size_t size;
+    size = backtrace(array, 10);
+
+    // Print the backtrace to stderr
+    std::cerr << "Obtained " << size << " stack frames." << std::endl;
+    backtrace_symbols_fd(array, size, STDERR_FILENO);
+
+    // Optionally, write the backtrace to a file for later analysis
+    std::ofstream log_file("crash_dump.log", std::ios::app);
+    if (log_file.is_open()) {
+        log_file << "Error: signal " << signum << std::endl;
+        log_file << "Obtained " << size << " stack frames." << std::endl;
+
+        char** messages = backtrace_symbols(array, size);
+        for (size_t i = 0; i < size && messages != nullptr; ++i) {
+            log_file << "[bt]: (" << i << ") " << messages[i] << std::endl;
+        }
+        free(messages);
+    }
+    log_file.close();
+
+    // Terminate the program after logging the error
+    exit(signum);
 }
+
 
 // ------------------------------------------------------------------------------------------------------------
 
+
 int main() {
-    inferenceTestingFunction(); // Call the inference function for testing
+    // Register the signal handler for segmentation fault (SIGSEGV)
+    signal(SIGSEGV, signalHandler);
+    signal(SIGABRT, signalHandler);  // Catch abort signals (e.g., assertion failures)
+    signal(SIGFPE, signalHandler);   // Catch floating-point errors
+
+    // Example code that will cause a segmentation fault (for testing purposes)
+    //int* ptr = nullptr;
+    //*ptr = 42;  // This will cause a segmentation fault
+
+    LLMInference llm_inference;
+    llm_inference.runInference();
+
+    LLMFinetune llm_finetune;
+    llm_finetune.finetuneModel();
+
+    SDInference sd_inference;
+    sd_inference.runInference();
+
+    SDFinetune sd_finetune;
+    sd_finetune.finetuneModel();
     crow::SimpleApp app;
 
     std::cout << CONSOLE_PREFIX << "🌐 Starting up the Adelaide&Albert Engine... Let's make some magic happen!\n";
