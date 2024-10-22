@@ -200,14 +200,15 @@ public:
         setupPythonEnv();
     }
 
-    void runInference() {
+        // Method to load model and run inference
+    std::string LLMchild(const std::string &user_input) {
         std::string model_path = "./tinyLLaMatestModel.gguf";
         if (!fs::exists(model_path)) {
             std::cout << "[Info] : Model file not found, downloading..." << std::endl;
             std::string url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q2_K.gguf?download=true";
             if (!download_model(url, model_path)) {
                 std::cerr << "[Error] : Failed to download the model file." << std::endl;
-                return;
+                return "[Error] Model download failed";
             }
         }
 
@@ -216,7 +217,7 @@ public:
             py::object Llama = llama_cpp.attr("Llama");
             py::object llm = Llama(py::arg("model_path") = model_path);
 
-            std::string user_input = "When can we touch the sky? You we're born fated to don't have place in the earth. You we're born to be with the stars!";
+            // Construct prompt
             std::string prompt = "User: " + user_input + "\nAssistant: ";
             py::object output = llm(py::arg("prompt") = prompt,
                                     py::arg("max_tokens") = 32,
@@ -225,15 +226,23 @@ public:
 
             std::cout << "[Debug] Raw output from Python: " << py::str(output).cast<std::string>() << std::endl;
 
-            if (py::isinstance<py::dict>(output)) {
-                processOutput(output);
+            // Return output as a string
+            if (py::isinstance<py::str>(output)) {
+                return py::str(output).cast<std::string>();
             } else {
-                std::cerr << "[Error] : Expected a dictionary from the model output" << std::endl;
+                return "[Error] : Expected a string from the model output";
             }
 
         } catch (const py::error_already_set &e) {
-            std::cerr << "[Error] : " << e.what() << std::endl;
+            return "[Error] : " + std::string(e.what());
         }
+    }
+
+    // Main method to run the inference
+    void runInference() {
+        std::string user_input = "When can we touch the sky? You were born fated to not have a place on the earth. You were born to be with the stars!";
+        std::string response = LLMchild(user_input);
+        std::cout << "[Inference Result] : " << response << std::endl;
     }
 
 private:
