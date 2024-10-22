@@ -1,19 +1,22 @@
 #include <iostream>
+#include <memory>
+#include <csignal>
+#include <execinfo.h>
+#include <unistd.h>
+#include <chrono>
+#include <thread>
+#include <stdexcept>
+#include <atomic>
+#include <filesystem>
+#include <fstream>
+#include <iomanip>
+#include <random>
 #include <string>
 #include <vector>
 #include <sstream>
-#include <random>
-#include <iomanip>
-#include <filesystem>  // C++17 filesystem library for path management (add compatibility for Windows (yes Only windows) )
-#include "./Library/crow.h"
-#include <curl/curl.h> // Include libcurl header for downloading
+#include <curl/curl.h>
 #include <pybind11/embed.h>
-// #include "./Library/curl.h"
-#include <signal.h>
-#include <execinfo.h>
-#include <unistd.h>
-#include <cstdlib>
-#include <fstream>
+#include "./Library/crow.h"
 
 
 namespace fs = std::filesystem; // Universal or cross platform path reconstruction
@@ -43,6 +46,14 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     return totalSize;
 }
 
+
+// Function to generate a random character
+char generate_random_fill_char() {
+    std::random_device rd;
+    std::mt19937 generator(rd());
+    std::uniform_int_distribution<int> dist(33, 126); // Printable ASCII range
+    return static_cast<char>(dist(generator));
+}
 
 // Function to download the model file using libcurl
 bool download_model(const std::string& url, const std::string& output_path) {
