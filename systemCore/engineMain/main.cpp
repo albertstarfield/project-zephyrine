@@ -194,89 +194,80 @@ protected:
 
 // Class for LLM Inference
 class LLMInference : public ModelBase {
+private:
+    std::unique_ptr<py::scoped_interpreter> guard;
+    
 public:
     LLMInference() {
-        py::scoped_interpreter guard{};
+        // Initialize Python interpreter only once
+        guard = std::make_unique<py::scoped_interpreter>();
         setupPythonEnv();
     }
 
-        // Method to load model and run inference
     std::string LLMchild(const std::string &user_input) {
         std::string model_path = "./tinyLLaMatestModel.gguf";
         if (!fs::exists(model_path)) {
             std::cout << "[Info] : Model file not found, downloading..." << std::endl;
             std::string url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q2_K.gguf?download=true";
             if (!download_model(url, model_path)) {
-                std::cerr << "[Error] : Failed to download the model file." << std::endl;
                 return "[Error] Model download failed";
             }
         }
 
         try {
-            py::module llama_cpp = py::module::import("llama_cpp");
-            py::object Llama = llama_cpp.attr("Llama");
-            py::object llm = Llama(py::arg("model_path") = model_path);
+            // Create a local scope for Python objects
+            py::gil_scoped_acquire acquire;
+            
+            // Import with error checking
+            py::module llama_cpp;
+            try {
+                llama_cpp = py::module::import("llama_cpp");
+            } catch (const py::error_already_set& e) {
+                std::cerr << "[Error] Failed to import llama_cpp: " << e.what() << std::endl;
+                return "[Error] Failed to import required Python module";
+            }
 
-            // Construct prompt
+            // Create model instance with error checking
+            py::object llm;
+            try {
+                py::object Llama = llama_cpp.attr("Llama");
+                llm = Llama(model_path);
+            } catch (const py::error_already_set& e) {
+                std::cerr << "[Error] Failed to create model instance: " << e.what() << std::endl;
+                return "[Error] Failed to initialize model";
+            }
+
+            // Construct prompt and generate response
             std::string prompt = "User: " + user_input + "\nAssistant: ";
-            py::object output = llm(py::arg("prompt") = prompt,
-                                    py::arg("max_tokens") = 32,
-                                    py::arg("stop") = py::make_tuple("User:", "\n"),
-                                    py::arg("echo") = true);
+            py::object output = llm.attr("__call__")(
+                py::arg("prompt") = prompt,
+                py::arg("max_tokens") = 32,
+                py::arg("stop") = py::make_tuple("User:", "\n"),
+                py::arg("echo") = true
+            );
 
-            std::cout << "[Debug] Raw output from Python: " << py::str(output).cast<std::string>() << std::endl;
-
-            // Return output as a string
-            if (py::isinstance<py::str>(output)) {
+            // Convert output to string with error checking
+            try {
                 return py::str(output).cast<std::string>();
-            } else {
-                return "[Error] : Expected a string from the model output";
+            } catch (const py::cast_error& e) {
+                std::cerr << "[Error] Failed to convert model output to string: " << e.what() << std::endl;
+                return "[Error] Invalid model output format";
             }
 
-        } catch (const py::error_already_set &e) {
-            return "[Error] : " + std::string(e.what());
+        } catch (const std::exception& e) {
+            std::cerr << "[Error] Unexpected error: " << e.what() << std::endl;
+            return "[Error] An unexpected error occurred";
         }
     }
 
-    // Main method to run the inference
     void runInference() {
-        std::string user_input = "When can we touch the sky? You were born fated to not have a place on the earth. You were born to be with the stars!";
-        std::string response = LLMchild(user_input);
-        std::cout << "[Inference Result] : " << response << std::endl;
-    }
-
-private:
-    void processOutput(const py::object& output) {
-        py::dict output_dict = output.cast<py::dict>();
-
-        if (output_dict.contains("choices")) {
-            py::list choices = output_dict["choices"].cast<py::list>();
-            if (choices.size() > 0) {
-                py::dict first_choice = choices[0].cast<py::dict>();
-                if (first_choice.contains("text")) {
-                    std::string response = first_choice["text"].cast<std::string>();
-                    size_t assistant_pos = response.find("Assistant:");
-                    if (assistant_pos != std::string::npos) {
-                        std::string assistant_response = response.substr(assistant_pos + 10);  // Skip "Assistant:"
-                        std::cout << "[Assistant] : " << assistant_response << std::endl;
-                    } else {
-                        std::cerr << "[Error] : Could not find 'Assistant:' in response" << std::endl;
-                    }
-                } else {
-                    std::cerr << "[Error] : 'text' key not found in the first choice" << std::endl;
-                }
-            } else {
-                std::cerr << "[Error] : 'choices' list is empty" << std::endl;
-            }
-        } else {
-            std::cerr << "[Error] : 'choices' key not found in output" << std::endl;
+        try {
+            std::string user_input = "When can we touch the sky? You were born fated to not have a place on the earth. You were born to be with the stars!";
+            std::string response = LLMchild(user_input);
+            std::cout << "[Inference Result] : " << response << std::endl;
+        } catch (const std::exception& e) {
+            std::cerr << "[Error] Failed to run inference: " << e.what() << std::endl;
         }
-    }
-
-    bool download_model(const std::string& url, const std::string& model_path) {
-        // Implement the actual download logic
-        std::cout << "[Downloading model from] : " << url << std::endl;
-        return true;
     }
 };
 
