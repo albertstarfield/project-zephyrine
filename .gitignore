@@ -67,3 +67,5 @@ systemCore/mirostat
 systemCore/bin/llmchildDynamicPromptSpill.tmp
 systemCore/bin/llmchildDynamicPromptSpill.tmp
 systemCore/raw_smallLanguageModel.gguf.bin
+
+systemCore/engineMain/build/CMakeFiles/CMakeConfigureLog.yaml
