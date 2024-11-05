@@ -18,6 +18,27 @@
 #include <pybind11/embed.h>
 #include "./Library/crow.h"
 
+#ifdef _WIN32
+#include <windows.h>
+#include <cstring>
+#endif
+
+std::string getExecutablePath() {
+#ifdef __linux__ // Linux systems
+    char buf[1024];
+    ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
+    if (len != -1) {
+        buf[len] = '\0';
+        return std::string(buf);
+    }
+#elif defined(_WIN32) // Windows systems
+    char buf[MAX_PATH];
+    if (GetModuleFileName(NULL, buf, MAX_PATH)) {
+        return std::string(buf);
+    }
+#endif
+    return "";
+}
 
 namespace fs = std::filesystem; // Universal or cross platform path reconstruction
 namespace py = pybind11;
@@ -327,25 +348,22 @@ public:
 // -----------------------------------------------Memory Dumping debugging-------------------------------------------------------------
 
 // Function to handle signals (e.g., SIGSEGV)
+// Watchdog auto Restart and memory dumping debugging
 void signalHandler(int signum) {
-    // Log the signal number
+    // Log the signal number and stack trace, as in your original code.
     std::cerr << "Error: signal " << signum << std::endl;
 
     // Generate the backtrace (stack trace)
     void* array[10];
-    size_t size;
-    size = backtrace(array, 10);
-
-    // Print the backtrace to stderr
+    size_t size = backtrace(array, 10);
     std::cerr << "Obtained " << size << " stack frames." << std::endl;
     backtrace_symbols_fd(array, size, STDERR_FILENO);
 
-    // Optionally, write the backtrace to a file for later analysis
+    // Optionally write the backtrace to a file
     std::ofstream log_file("crash_dump.log", std::ios::app);
     if (log_file.is_open()) {
         log_file << "Error: signal " << signum << std::endl;
         log_file << "Obtained " << size << " stack frames." << std::endl;
-
         char** messages = backtrace_symbols(array, size);
         for (size_t i = 0; i < size && messages != nullptr; ++i) {
             log_file << "[bt]: (" << i << ") " << messages[i] << std::endl;
@@ -354,13 +372,45 @@ void signalHandler(int signum) {
     }
     log_file.close();
 
-    // Terminate the program after logging the error
+    // Attempt to restart the program
+    std::string exePath = getExecutablePath();
+    if (!exePath.empty()) {
+        pid_t pid = fork();
+        if (pid == 0) { // This is the child process
+            // Replace the current process with a new instance of the program
+            char* args[] = {const_cast<char*>(exePath.c_str()), nullptr};
+            execv(args[0], args);
+            // If execv returns, it must have failed.
+            std::cerr << "Failed to restart the program." << std::endl;
+            exit(EXIT_FAILURE);
+        } else if (pid > 0) { // This is the parent process
+            int status;
+            waitpid(pid, &status, 0); // Wait for the child process to finish
+        } else {
+            std::cerr << "Failed to fork process for restart." << std::endl;
+        }
+    } else {
+        std::cerr << "Unable to determine executable path." << std::endl;
+    }
+
+    // Terminate the original program
     exit(signum);
 }
 
+int main() {
+    // Register the signal handler
+    signal(SIGSEGV, signalHandler);
+    signal(SIGABRT, signalHandler);
+    signal(SIGFPE, signalHandler);
+
+    // Program logic goes here
+
+    return 0;
+}
+
+
 
 // ------------------------------------------------------------------------------------------------------------
-
 
 int main() {
     // Register the signal handler for segmentation fault (SIGSEGV)
