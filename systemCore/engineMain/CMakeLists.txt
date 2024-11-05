@@ -49,9 +49,14 @@ include_directories(${BOOST_ROOT}/boost)
 
 #Python mixed c++ Library +_+_+_+_+_+_+_
 
-# Detect Python
+# Detect Python with a version constraint between 3.10 and 3.12
 message(STATUS "Checking Python3 main Zephyrine Library Module for Python x C++ Mixed Session Management Engine")
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+if (Python3_VERSION VERSION_GREATER_EQUAL "3.10" AND Python3_VERSION VERSION_LESS "3.13")
+    message(STATUS "Found suitable Python3 version: ${Python3_VERSION}")
+else()
+    message(FATAL_ERROR "Python version must be between 3.10 and 3.12. Found: ${Python3_VERSION}")
+endif()
 
 # Determine the correct executable paths and site-packages based on the platform
 message(STATUS "Setting main Zephyrine Library Module for Python x C++ Mixed Session Management Engine")

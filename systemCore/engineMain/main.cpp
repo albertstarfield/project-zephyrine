@@ -17,6 +17,7 @@
 #include <curl/curl.h>
 #include <pybind11/embed.h>
 #include "./Library/crow.h"
+#include <sys/wait.h>  // For waitpid
 
 #ifdef _WIN32
 #include <windows.h>
@@ -67,14 +68,6 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     return totalSize;
 }
 
-
-// Function to generate a random character
-char generate_random_fill_char() {
-    std::random_device rd;
-    std::mt19937 generator(rd());
-    std::uniform_int_distribution<int> dist(33, 126); // Printable ASCII range
-    return static_cast<char>(dist(generator));
-}
 
 // Function to download the model file using libcurl
 bool download_model(const std::string& url, const std::string& output_path) {
@@ -396,18 +389,6 @@ void signalHandler(int signum) {
     // Terminate the original program
     exit(signum);
 }
-
-int main() {
-    // Register the signal handler
-    signal(SIGSEGV, signalHandler);
-    signal(SIGABRT, signalHandler);
-    signal(SIGFPE, signalHandler);
-
-    // Program logic goes here
-
-    return 0;
-}
-
 
 
 // ------------------------------------------------------------------------------------------------------------
