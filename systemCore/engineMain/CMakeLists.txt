@@ -52,46 +52,69 @@ include_directories(${BOOST_ROOT}/boost)
 # Detect Python with a version constraint between 3.10 and 3.12
 message(STATUS "Checking Python3 main Zephyrine Library Module for Python x C++ Mixed Session Management Engine")
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+<<<<<<< Updated upstream
 if (Python3_VERSION VERSION_GREATER_EQUAL "3.10" AND Python3_VERSION VERSION_LESS "3.13")
     message(STATUS "Found suitable Python3 version: ${Python3_VERSION}")
 else()
     message(FATAL_ERROR "Python version must be between 3.10 and 3.12. Found: ${Python3_VERSION}")
 endif()
+=======
+>>>>>>> Stashed changes
 
 # Determine the correct executable paths and site-packages based on the platform
 message(STATUS "Setting main Zephyrine Library Module for Python x C++ Mixed Session Management Engine")
 set(PYTHON_VENV_PATH "${LIBRARY}/pythonBridgeRuntime")
 
+
+# Define a list of preferred Python versions
+set(preferred_python_versions "python3.12" "python3.11" "python3.10" "python3")
+
+# Initialize an empty variable for the chosen Python interpreter
+set(chosen_python_interpreter "")
+
+
+# Iterate over preferred versions and find the available one
+foreach(version ${preferred_python_versions})
+    find_program(PYTHON_EXECUTABLE NAMES ${version})
+    if(PYTHON_EXECUTABLE)
+        set(chosen_python_interpreter ${PYTHON_EXECUTABLE})
+        break()
+    endif()
+endforeach()
+
+# Ensure a suitable Python interpreter was found
+if(NOT chosen_python_interpreter)
+    message(FATAL_ERROR "No suitable Python interpreter found for versions 3.10, 3.11, or 3.12.")
+endif()
+
+message(STATUS "Using Global Python interpreter: ${chosen_python_interpreter}")
+# Create a virtual environment using the chosen Python interpreter
 message(STATUS "Creating containerization for Python for Status-Quo ML python-only Libraries Module")
 # Create a virtual environment named pythonBridgeRuntime
 execute_process(
-    COMMAND python3 -m venv ${PYTHON_VENV_PATH}
-    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-)
-
-# Upgrade pip inside the virtual environment
-execute_process(
-    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install --upgrade pip
+    COMMAND ${chosen_python_interpreter} -m venv ${PYTHON_VENV_PATH}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
 
 
+
+<<<<<<< Updated upstream
 # Verify and print the site-packages path
 set(PYTHON_VENV_PYTHON3_BIN_PATH "${PYTHON_VENV_BIN_PATH}/python3") # Ensure this uses the detected version range
 
+=======
+# Verify and print the site-pacset(PYTHON_VENV_PYTHON3_BIN_PATH "${PYTHON_VENV_BIN_PATH}/python3") # Ensure this uses the detected version range
+>>>>>>> Stashed changes
 execute_process(
     COMMAND ${PYTHON_VENV_PYTHON3_BIN_PATH} -c "import sysconfig; print(sysconfig.get_paths())"
     OUTPUT_VARIABLE PYTHON_PATHS
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
+
+#Checking if the binary version is within 3.10 - 3.12 and if it's not then reject
+
+
 message(STATUS "Python paths: ${PYTHON_PATHS}")
-
-#Checking if the binary version is within 3.10 - 3.12
-
-
-
-
-
 
 # Library for Python Venv
 message(STATUS "Setting SITE_PACKAGES...")
@@ -112,7 +135,11 @@ message(STATUS "PYTHON_VENV_BIN_PATH is set to: ${PYTHON_VENV_BIN_PATH}")
 
 set(PYTHON_VENV_PYTHON3_BIN_PATH "${LIBRARY}/pythonBridgeRuntime/bin/python3") #Change this to enforce python 3.10-3.12
 
-
+# Upgrade pip inside the virtual environment
+execute_process(
+    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install --upgrade pip
+    WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+)
 
 execute_process(
     COMMAND ${PYTHON_VENV_PYTHON3_BIN_PATH} -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
