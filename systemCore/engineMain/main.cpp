@@ -343,7 +343,13 @@ public:
 // Function to handle signals (e.g., SIGSEGV)
 // Watchdog auto Restart and memory dumping debugging
 void signalHandler(int signum) {
-    // Log the signal number and stack trace, as in your original code.
+    if (signum == SIGINT) {
+        // Handle SIGINT (keyboard interrupt) by simply logging and exiting
+        std::cerr << "Received keyboard interrupt (SIGINT). Exiting program gracefully." << std::endl;
+        exit(0);
+    }
+
+    // Log the signal number and stack trace for other signals
     std::cerr << "Error: signal " << signum << std::endl;
 
     // Generate the backtrace (stack trace)
@@ -365,7 +371,7 @@ void signalHandler(int signum) {
     }
     log_file.close();
 
-    // Attempt to restart the program
+    // Attempt to restart the program for other signals
     std::string exePath = getExecutablePath();
     if (!exePath.empty()) {
         pid_t pid = fork();
@@ -386,7 +392,7 @@ void signalHandler(int signum) {
         std::cerr << "Unable to determine executable path." << std::endl;
     }
 
-    // Terminate the original program
+    // Terminate the original program for signals other than SIGINT
     exit(signum);
 }
 
@@ -398,6 +404,7 @@ int main() {
     signal(SIGSEGV, signalHandler);
     signal(SIGABRT, signalHandler);  // Catch abort signals (e.g., assertion failures)
     signal(SIGFPE, signalHandler);   // Catch floating-point errors
+    signal(SIGINT, signalHandler);   // Interrupt signal (Ctrl+C)
 
     // Example code that will cause a segmentation fault (for testing purposes)
     //int* ptr = nullptr;
