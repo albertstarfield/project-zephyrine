@@ -76,8 +76,9 @@ execute_process(
 )
 
 
-# Verify and print the site-pacset(PYTHON_VENV_PYTHON3_BIN_PATH "${PYTHON_VENV_BIN_PATH}/python3") # Ensure this uses the detected version range
-kages path
+# Verify and print the site-packages path
+set(PYTHON_VENV_PYTHON3_BIN_PATH "${PYTHON_VENV_BIN_PATH}/python3") # Ensure this uses the detected version range
+
 execute_process(
     COMMAND ${PYTHON_VENV_PYTHON3_BIN_PATH} -c "import sysconfig; print(sysconfig.get_paths())"
     OUTPUT_VARIABLE PYTHON_PATHS
@@ -138,7 +139,7 @@ include_directories(${Python3_INCLUDE_DIRS})
 message(STATUS "Downloading Zephyrine pre-requisite Library Status-Quo python-only Libraries Module")
 execute_process(
     COMMAND ${PYTHON_VENV_BIN_PATH}/pip install --upgrade pip
-    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pep517 pybind11 llama-index pandas numpy scikit-learn diffusers llama-cpp-python pytorch torch keras huggingface
+    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pep517 pybind11 llama-index pandas numpy scikit-learn diffusers llama-cpp-python torch keras huggingface
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     RESULT_VARIABLE result
 )
