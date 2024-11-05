@@ -52,11 +52,6 @@ include_directories(${BOOST_ROOT}/boost)
 # Detect Python with a version constraint between 3.10 and 3.12
 message(STATUS "Checking Python3 main Zephyrine Library Module for Python x C++ Mixed Session Management Engine")
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-if (Python3_VERSION VERSION_GREATER_EQUAL "3.10" AND Python3_VERSION VERSION_LESS "3.13")
-    message(STATUS "Found suitable Python3 version: ${Python3_VERSION}")
-else()
-    message(FATAL_ERROR "Python version must be between 3.10 and 3.12. Found: ${Python3_VERSION}")
-endif()
 
 # Determine the correct executable paths and site-packages based on the platform
 message(STATUS "Setting main Zephyrine Library Module for Python x C++ Mixed Session Management Engine")
@@ -76,7 +71,8 @@ execute_process(
 )
 
 
-# Verify and print the site-packages path
+# Verify and print the site-pacset(PYTHON_VENV_PYTHON3_BIN_PATH "${PYTHON_VENV_BIN_PATH}/python3") # Ensure this uses the detected version range
+kages path
 execute_process(
     COMMAND ${PYTHON_VENV_PYTHON3_BIN_PATH} -c "import sysconfig; print(sysconfig.get_paths())"
     OUTPUT_VARIABLE PYTHON_PATHS
@@ -84,7 +80,14 @@ execute_process(
 )
 message(STATUS "Python paths: ${PYTHON_PATHS}")
 
+#Checking if the binary version is within 3.10 - 3.12
 
+
+
+
+
+
+# Library for Python Venv
 message(STATUS "Setting SITE_PACKAGES...")
 
 # Check the platform and set the Python virtual environment path accordingly
@@ -101,7 +104,7 @@ endif()
 # Debugging message to ensure the correct path is being set
 message(STATUS "PYTHON_VENV_BIN_PATH is set to: ${PYTHON_VENV_BIN_PATH}")
 
-set(PYTHON_VENV_PYTHON3_BIN_PATH "${LIBRARY}/pythonBridgeRuntime/bin/python3")
+set(PYTHON_VENV_PYTHON3_BIN_PATH "${LIBRARY}/pythonBridgeRuntime/bin/python3") #Change this to enforce python 3.10-3.12
 
 
 
@@ -111,7 +114,7 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 message(STATUS "set SITE_PACKAGES to ${PYTHON_SITE_PACKAGES}")
-#set(PYTHON_SITE_PACKAGES ${LIBRARY}/pythonBridgeRuntime/lib/python3.12/site-packages") #How to make sure its adaptive and not locked to python 3.12
+#set(PYTHON_SITE_PACKAGES ${LIBRARY}/pythonBridgeRuntime/lib/python3.12/site-packages") #How to make sure its adaptive and not locked to python 3.12 #Change this to enforce python 3.10-3.12
 
 ## Define python and c++ bridge Library
 #pybind11
@@ -130,7 +133,7 @@ include_directories(${Python3_INCLUDE_DIRS})
 message(STATUS "Downloading Zephyrine pre-requisite Library Status-Quo python-only Libraries Module")
 execute_process(
     COMMAND ${PYTHON_VENV_BIN_PATH}/pip install --upgrade pip
-    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pep517 pybind11 llama-index pandas numpy scikit-learn diffusers llama-cpp-python torch keras huggingface
+    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pep517 pybind11 llama-index pandas numpy scikit-learn diffusers llama-cpp-python pytorch torch keras huggingface
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     RESULT_VARIABLE result
 )
