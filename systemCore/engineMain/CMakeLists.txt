@@ -52,14 +52,11 @@ include_directories(${BOOST_ROOT}/boost)
 # Detect Python with a version constraint between 3.10 and 3.12
 message(STATUS "Checking Python3 main Zephyrine Library Module for Python x C++ Mixed Session Management Engine")
 find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-<<<<<<< Updated upstream
 if (Python3_VERSION VERSION_GREATER_EQUAL "3.10" AND Python3_VERSION VERSION_LESS "3.13")
     message(STATUS "Found suitable Python3 version: ${Python3_VERSION}")
 else()
     message(FATAL_ERROR "Python version must be between 3.10 and 3.12. Found: ${Python3_VERSION}")
 endif()
-=======
->>>>>>> Stashed changes
 
 # Determine the correct executable paths and site-packages based on the platform
 message(STATUS "Setting main Zephyrine Library Module for Python x C++ Mixed Session Management Engine")
@@ -98,13 +95,10 @@ execute_process(
 
 
 
-<<<<<<< Updated upstream
 # Verify and print the site-packages path
 set(PYTHON_VENV_PYTHON3_BIN_PATH "${PYTHON_VENV_BIN_PATH}/python3") # Ensure this uses the detected version range
 
-=======
 # Verify and print the site-pacset(PYTHON_VENV_PYTHON3_BIN_PATH "${PYTHON_VENV_BIN_PATH}/python3") # Ensure this uses the detected version range
->>>>>>> Stashed changes
 execute_process(
     COMMAND ${PYTHON_VENV_PYTHON3_BIN_PATH} -c "import sysconfig; print(sysconfig.get_paths())"
     OUTPUT_VARIABLE PYTHON_PATHS

@@ -220,13 +220,17 @@ protected:
 // Class for LLM Inference
 class LLMInference : public ModelBase {
 private:
-    std::unique_ptr<py::scoped_interpreter> guard;
+    static std::unique_ptr<py::scoped_interpreter> guard;
+    // std::unique_ptr<py::scoped_interpreter> guard;
     
 public:
     LLMInference() {
-        // Initialize Python interpreter only once
-        guard = std::make_unique<py::scoped_interpreter>();
-        setupPythonEnv();
+        if (!guard){
+            // Initialize Python interpreter only once
+            guard = std::make_unique<py::scoped_interpreter>();
+            setupPythonEnv();
+        }
+
     }
 
     std::string LLMchild(const std::string &user_input) {
@@ -295,6 +299,37 @@ public:
         }
     }
 };
+
+// Define the static variable outside the class
+std::unique_ptr<py::scoped_interpreter> LLMInference::guard = nullptr;
+
+class cliInterface {
+private:
+    LLMInference llm_inference;
+
+public:
+    void startChat() {
+        std::cout << "Welcome to the LLM CLI chat interface!" << std::endl;
+        std::cout << "Type 'exit' or 'quit' to end the chat." << std::endl;
+
+        std::string user_input;
+        while (true) {
+            std::cout << "User: ";
+            std::getline(std::cin, user_input);
+
+            // Check for exit conditions
+            if (user_input == "exit" || user_input == "quit") {
+                std::cout << "Exiting chat..." << std::endl;
+                break;
+            }
+
+            // Get the LLM response
+            std::string response = llm_inference.LLMchild(user_input);
+            std::cout << "Assistant: " << response << std::endl;
+        }
+    }
+};
+
 
 // Class for LLM Finetuning (Placeholder)
 class LLMFinetune : public ModelBase {
@@ -401,10 +436,10 @@ void signalHandler(int signum) {
 
 int main() {
     // Register the signal handler for segmentation fault (SIGSEGV)
-    signal(SIGSEGV, signalHandler);
-    signal(SIGABRT, signalHandler);  // Catch abort signals (e.g., assertion failures)
-    signal(SIGFPE, signalHandler);   // Catch floating-point errors
-    signal(SIGINT, signalHandler);   // Interrupt signal (Ctrl+C)
+    // signal(SIGSEGV, signalHandler);
+    // signal(SIGABRT, signalHandler);  // Catch abort signals (e.g., assertion failures)
+    // signal(SIGFPE, signalHandler);   // Catch floating-point errors
+    // signal(SIGINT, signalHandler);   // Interrupt signal (Ctrl+C)
 
     // Example code that will cause a segmentation fault (for testing purposes)
     //int* ptr = nullptr;
@@ -424,6 +459,8 @@ int main() {
     crow::SimpleApp app;
 
     std::cout << CONSOLE_PREFIX << "🌐 Starting up the Adelaide&Albert Engine... Let's make some magic happen!\n";
+
+
 
     // /api/generate endpoint
     CROW_ROUTE(app, "/api/generate")
@@ -470,5 +507,8 @@ int main() {
     // Start the server
     std::cout << CONSOLE_PREFIX << "🚀 The engine roars to life on port 8080. Ready to enlighten the world!\n";
     app.port(8080).multithreaded().run();
+
+    cliInterface cli;
+    cli.startChat();
     return 0;
 }
