@@ -42,7 +42,7 @@ link_directories(${LIBRARY}/curl/lib)  # Ensure this path points to where libcur
 
 
 # Specify the path to your Boost Library 
-message(STATUS "Setting (1/2) Boost Universal Library Zephyrine Library Module for C++ Management Engine")
+message(STATUS "Setting (1/3) Boost Universal Library Zephyrine Library Module for C++ Management Engine")
 set(BOOST_ROOT "${CMAKE_SOURCE_DIR}/Library/boost_1_86_0")
 
 # Add the Boost root include directory
@@ -51,8 +51,12 @@ include_directories(${BOOST_ROOT})
 # Add the Boost include directory
 #/Users/albertstarfield/Documents/misc/AI/ProjectZephy/systemCore/engineMain/./Library/crow.h:227:10: fatal error: 'boost/algorithm/string/predicate.hpp' file not found
 #include <boost/algorithm/string/predicate.hpp>
-message(STATUS "Setting (2/2) main Zephyrine Library Module for C++ Management Engine")
+message(STATUS "Setting (2/3) main Zephyrine Library Module for C++ Management Engine")
 include_directories(${BOOST_ROOT}/boost)
+
+
+message(STATUS "Setting (3/3) main Zephyrine Library nlohmann json Module for C++ Management Engine")
+include_directories(${LIBRARY}/jsonLibNlohMann/include)
 
 #Python mixed c++ Library +_+_+_+_+_+_+_
 

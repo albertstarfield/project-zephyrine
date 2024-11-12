@@ -21,6 +21,7 @@
 #include <pybind11/embed.h>
 #include "./Library/crow.h"
 #include <sys/wait.h>  // For waitpid
+#include <nlohmann/json.hpp> //converting json llama_cpp openAI format into readable one return for the human interface
 
 #ifdef _WIN32
 #include <windows.h>
@@ -255,11 +256,8 @@ public:
     std::string LLMchild(const std::string &user_input) {
         std::string model_path = "./tinyLLaMatestModel.gguf";
         if (!fs::exists(model_path)) {
-            std::cout << "[Info] : Model file not found, downloading..." << std::endl;
-            std::string url = "https://huggingface.co/TheBloke/TinyLlama-1.1B-Chat-v1.0-GGUF/resolve/main/tinyllama-1.1b-chat-v1.0.Q2_K.gguf?download=true";
-            if (!download_model(url, model_path)) {
-                return "[Error] Model download failed";
-            }
+            std::cerr << "[Error] Model file not found. Downloading failed, aborting." << std::endl;
+            return "[Error] Model download failed";
         }
 
         try {
@@ -290,14 +288,18 @@ public:
             );
 
             try {
-                return py::str(output).cast<std::string>();
-            } catch (const py::cast_error& e) {
-                std::cerr << "[Error] Failed to convert model output to string: " << e.what() << std::endl;
-                return "[Error] Invalid model output format";
+                // Parse the JSON response
+                auto json_response = nlohmann::json::parse(py::str(output).cast<std::string>());
+                // Extract the text completion from the choices array
+                auto text_completion = json_response["choices"][0]["text"];
+                return text_completion.get<std::string>();
+            } catch (const nlohmann::json::exception& e) {
+                std::cerr << "[Error] Failed to parse or extract text from JSON: " << e.what() << std::endl;
+                return "[Error] Invalid JSON format";
             }
 
         } catch (const std::exception& e) {
-            std::cerr << "[Error] Unexpected error: " << e.what() << std::endl;
+            std::cerr << "[Error] An unexpected error occurred: " << e.what() << std::endl;
             return "[Error] An unexpected error occurred";
         }
     }
@@ -306,7 +308,9 @@ public:
         try {
             std::string user_input = "When can we touch the sky?";
             std::string response = LLMchild(user_input);
-            std::cout << "[Inference Result] : " << response << std::endl;
+            if (!response.starts_with("[Error]")) {
+                std::cout << response << std::endl;  // Print only the text completion
+            }
         } catch (const std::exception& e) {
             std::cerr << "[Error] Failed to run inference: " << e.what() << std::endl;
         }
@@ -317,18 +321,18 @@ public:
 // Whyyy do you need to initialize the python interpreter again?? aaaaaaa
 //std::unique_ptr<py::scoped_interpreter> LLMInference::guard = nullptr;
 
-class cliInterface {
+class cliInterfaceDirectLLMPrimitive {
 private:
     LLMInference llm_inference;
 
 public:
     void startChat() {
-        std::cout << "Welcome to the LLM CLI chat interface!" << std::endl;
+        std::cout << "Welcome to the Adelaide and Albert Engine Direct Scheduler CLI chat interface!" << std::endl;
         std::cout << "Type 'exit' or 'quit' to end the chat." << std::endl;
 
         std::string user_input;
         while (true) {
-            std::cout << "User: ";
+            std::cout << "[Primitive LLMChild Interface User Input]: ";
             std::getline(std::cin, user_input);
 
             // Check for exit conditions
@@ -339,7 +343,7 @@ public:
 
             // Get the LLM response
             std::string response = llm_inference.LLMchild(user_input);
-            std::cout << "Assistant: " << response << std::endl;
+            std::cout << "[Engine Response]: " << response << std::endl;
         }
     }
 };
@@ -489,55 +493,59 @@ int main() {
 
     std::cout << CONSOLE_PREFIX << "🌐 Starting up the Adelaide&Albert Engine... Let's make some magic happen!\n";
 
-
-
-    // /api/generate endpoint
+    // Define endpoint
     CROW_ROUTE(app, "/api/generate")
-    .methods(HTTPMethodType{crow::HTTPMethod::Post}.get()) // Use strong typing for the HTTP method
-    ([](const crow::request& req) -> crow::response { // Strongly typed lambda return type
-        std::cout << CONSOLE_PREFIX << "📥 A new request has arrived at /api/generate. Let’s see what treasures it holds!\n";
+        .methods(HTTPMethodType{crow::HTTPMethod::Post}.get()) // Use strong typing for the HTTP method
+        ([](const crow::request& req) -> crow::response { // Strongly typed lambda return type
+            std::cout << CONSOLE_PREFIX << "📥 A new request has arrived at /api/generate. Let’s see what treasures it holds!\n";
 
-        // Parse the JSON request body
-        crow::json::rvalue json = crow::json::load(req.body);
-        if (!json) {
-            std::cout << CONSOLE_PREFIX << "❌ Oops! That didn’t look like valid JSON. Check your scroll and try again.\n";
-            return crow::response(400, "🚫 Invalid JSON request");
-        }
+            // Parse the JSON request body
+            crow::json::rvalue json = crow::json::load(req.body);
+            if (!json) {
+                std::cout << CONSOLE_PREFIX << "❌ Oops! That didn’t look like valid JSON. Check your scroll and try again.\n";
+                return crow::response(400, "🚫 Invalid JSON request");
+            }
 
-        // Use the is_string function to check if the fields are strings
-        if (!json.has("model") || !is_string(json["model"]) ||
-            !json.has("prompt") || !is_string(json["prompt"])) {
-            std::cout << CONSOLE_PREFIX << "⚠️ Missing or muddled fields. I need 'model' and 'prompt' to conjure the magic!\n";
-            return crow::response(400, "🚫 Missing or invalid 'model' or 'prompt' field");
-        }
+            // Use the is_string function to check if the fields are strings
+            if (!json.has("model") || !is_string(json["model"]) ||
+                !json.has("prompt") || !is_string(json["prompt"])) {
+                std::cout << CONSOLE_PREFIX << "⚠️ Missing or muddled fields. I need 'model' and 'prompt' to conjure the magic!\n";
+                return crow::response(400, "🚫 Missing or invalid 'model' or 'prompt' field");
+            }
 
-        // Get the model and prompt from the JSON
-        Model model{json["model"].s()};
-        Prompt prompt{json["prompt"].s()};
+            // Get the model and prompt from the JSON
+            Model model{json["model"].s()};
+            Prompt prompt{json["prompt"].s()};
 
-        std::cout << CONSOLE_PREFIX << "🧠 Engaging with model: " << model.get() << ". Here comes some wisdom...\n";
+            std::cout << CONSOLE_PREFIX << "🧠 Engaging with model: " << model.get() << ". Here comes some wisdom...\n";
 
-        // Generate text using the placeholder function 
-        ResponseText generated_text = generate_text(model, prompt);
+            // Generate text using the placeholder function 
+            ResponseText generated_text = generate_text(model, prompt);
 
-        // Create the JSON response
-        crow::json::wvalue response;
+            // Create the JSON response
+            crow::json::wvalue response;
 
-        response["model"] = model.get(); // Include the model in the response
-        response["response"] = crow::json::wvalue(std::move(generated_text.get())); // Move the generated JSON object
-        response["done"] = true;
+            response["model"] = model.get(); // Include the model in the response
+            response["response"] = crow::json::wvalue(std::move(generated_text.get())); // Move the generated JSON object
+            response["done"] = true;
 
-        std::cout << CONSOLE_PREFIX << "🎉 Success! Your response is ready. Feel the wisdom flow.\n";
+            std::cout << CONSOLE_PREFIX << "🎉 Success! Your response is ready. Feel the wisdom flow.\n";
 
-        // Return the JSON response directly
-        return crow::response(response);
+            // Return the JSON response directly
+            return crow::response(response);
+        });
+
+    // Start the server in a separate thread
+    std::thread serverThread([&app]() {
+        std::cout << CONSOLE_PREFIX << "🚀 The engine roars to life on port 8080. Ready to enlighten the world!\n";
+        app.port(8080).multithreaded().run();
     });
 
-    // Start the server
-    std::cout << CONSOLE_PREFIX << "🚀 The engine roars to life on port 8080. Ready to enlighten the world!\n";
-    app.port(8080).multithreaded().run();
-
-    cliInterface cli;
+    // CLI chat interface can be started in the main thread
+    cliInterfaceDirectLLMPrimitive cli;
     cli.startChat();
-    return 0;
+
+    // Join the server thread before exiting main
+    serverThread.join();
+
 }
