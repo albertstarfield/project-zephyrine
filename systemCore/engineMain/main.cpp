@@ -17,13 +17,13 @@
 #include <curl/curl.h>
 #include <pybind11/embed.h>
 #include "./Library/crow.h"
-#include "InterpreterManager.h"
 #include <sys/wait.h>  // For waitpid
 
 #ifdef _WIN32
 #include <windows.h>
 #include <cstring>
 #endif
+
 
 std::string getExecutablePath() {
 #ifdef __linux__ // Linux systems
@@ -44,6 +44,10 @@ std::string getExecutablePath() {
 
 namespace fs = std::filesystem; // Universal or cross platform path reconstruction
 namespace py = pybind11;
+
+
+// Global variable for the pybind11 interpreter guard
+std::unique_ptr<py::scoped_interpreter> pyGuard;
 
 
 // Define additional global constants
@@ -220,18 +224,9 @@ protected:
 
 // Class for LLM Inference
 class LLMInference : public ModelBase {
-private:
-    static std::unique_ptr<py::scoped_interpreter> guard;
-    // std::unique_ptr<py::scoped_interpreter> guard;
-    
 public:
     LLMInference() {
-        if (!guard){
-            // Initialize Python interpreter only once
-            guard = std::make_unique<py::scoped_interpreter>();
-            setupPythonEnv();
-        }
-
+        setupPythonEnv();
     }
 
     std::string LLMchild(const std::string &user_input) {
@@ -245,10 +240,7 @@ public:
         }
 
         try {
-            // Create a local scope for Python objects
             py::gil_scoped_acquire acquire;
-            
-            // Import with error checking
             py::module llama_cpp;
             try {
                 llama_cpp = py::module::import("llama_cpp");
@@ -257,7 +249,6 @@ public:
                 return "[Error] Failed to import required Python module";
             }
 
-            // Create model instance with error checking
             py::object llm;
             try {
                 py::object Llama = llama_cpp.attr("Llama");
@@ -267,7 +258,6 @@ public:
                 return "[Error] Failed to initialize model";
             }
 
-            // Construct prompt and generate response
             std::string prompt = "User: " + user_input + "\nAssistant: ";
             py::object output = llm.attr("__call__")(
                 py::arg("prompt") = prompt,
@@ -276,7 +266,6 @@ public:
                 py::arg("echo") = true
             );
 
-            // Convert output to string with error checking
             try {
                 return py::str(output).cast<std::string>();
             } catch (const py::cast_error& e) {
@@ -292,7 +281,7 @@ public:
 
     void runInference() {
         try {
-            std::string user_input = "When can we touch the sky? You were born fated to not have a place on the earth. You were born to be with the stars!";
+            std::string user_input = "When can we touch the sky?";
             std::string response = LLMchild(user_input);
             std::cout << "[Inference Result] : " << response << std::endl;
         } catch (const std::exception& e) {
@@ -302,7 +291,8 @@ public:
 };
 
 // Define the static variable outside the class
-std::unique_ptr<py::scoped_interpreter> LLMInference::guard = nullptr;
+// Whyyy do you need to initialize the python interpreter again?? aaaaaaa
+//std::unique_ptr<py::scoped_interpreter> LLMInference::guard = nullptr;
 
 class cliInterface {
 private:
@@ -336,9 +326,7 @@ public:
 class LLMFinetune : public ModelBase {
 public:
     LLMFinetune() {
-        //Remove explicit interpreter initialization from LLMFinetune and other subclasses of ModelBase.
-        //The issue you're encountering is related to the pybind11 embedded interpreter. The error message "terminating due to uncaught exception of type std::runtime_error: The interpreter is already running" indicates that the Python interpreter is being initialized multiple times.
-        //py::scoped_interpreter guard{};
+        py::scoped_interpreter guard{};
         setupPythonEnv();
     }
 
@@ -434,18 +422,24 @@ void signalHandler(int signum) {
     exit(signum);
 }
 
+// Inference and Fine-Tuning Scheduler Implementation "Backbrain Scheduler"
+// All the Inference from CLI and HTML HAVE to go through this scheduler thus the scheduler will allocate or redirect the result and serve ther result either from cache result or  
+
 
 // ------------------------------------------------------------------------------------------------------------
 
 int main() {
-    InterpreterManager::init(); // Initialize Interpeter python pybind c++ for the main.cpp
 
+    if (!pyGuard) {
+        pyGuard = std::make_unique<py::scoped_interpreter>();
+    }
 
     // Register the signal handler for segmentation fault (SIGSEGV) (This is going to be very useful espescially running on a weak memory architecture, I'm looking at you Apple Silicon)
-    // signal(SIGSEGV, signalHandler);
-    // signal(SIGABRT, signalHandler);  // Catch abort signals (e.g., assertion failures)
-    // signal(SIGFPE, signalHandler);   // Catch floating-point errors
-    // signal(SIGINT, signalHandler);   // Interrupt signal (Ctrl+C)
+    // Register the signal handler for segmentation fault (SIGSEGV)
+    signal(SIGSEGV, signalHandler);
+    signal(SIGABRT, signalHandler);  // Catch abort signals (e.g., assertion failures)
+    signal(SIGFPE, signalHandler);   // Catch floating-point errors
+    signal(SIGINT, signalHandler);   // Interrupt signal (Ctrl+C)
 
     // Example code that will cause a segmentation fault (for testing purposes)
     //int* ptr = nullptr;
