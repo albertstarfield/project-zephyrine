@@ -18,6 +18,7 @@
 #include <curl/curl.h>
 #include <execinfo.h>
 #include <mutex>
+#include <regex>
 #include <pybind11/embed.h>
 #include "./Library/crow.h"
 #include <sys/wait.h>  // For waitpid
@@ -28,6 +29,23 @@
 #include <cstring>
 #endif
 
+
+//json cleaning from llama_cpp because that is the status quo
+std::string cleanAndFormatJson(const std::string& rawJson) {
+    // Replace single quotes with double quotes
+    std::string json = std::regex_replace(rawJson, std::regex("'"), "\"");
+
+    // Replace 'None' with 'null' for JSON validity
+    json = std::regex_replace(json, std::regex(R"(\bNone\b)"), "null");
+
+    // Replace \\n with \n for valid JSON within strings
+    json = std::regex_replace(json, std::regex(R"(\\n)"), "\\n");
+
+    // Ensure no invalid newlines by checking before and inside JSON list or object
+    // Note: The specific regex logic for newline management depends on understanding the expected occurrences.
+
+    return json;
+}
 
 // Circular Buffer for Debug Memory and C++ commands
 // Define a size for the command log
@@ -282,17 +300,18 @@ public:
             std::string prompt = "User: " + user_input + "\nAssistant: ";
             py::object output = llm.attr("__call__")(
                 py::arg("prompt") = prompt,
-                py::arg("max_tokens") = 32,
+                py::arg("max_tokens") = 32000,
                 py::arg("stop") = py::make_tuple("User:", "\n"),
                 py::arg("echo") = true
             );
 
             try {
-                // Parse the JSON response
-                auto json_response = nlohmann::json::parse(py::str(output).cast<std::string>());
-                // Extract the text completion from the choices array
-                auto text_completion = json_response["choices"][0]["text"];
-                return text_completion.get<std::string>();
+                // Convert output to a string which is valid JSON
+                std::string output_str = py::str(output).cast<std::string>();
+                std::string formattedJson = cleanAndFormatJson(output_str);
+                std::cout << formattedJson << std::endl; // debugging purposes only, please comment this out when json parsing has been fixed
+                auto json_response = nlohmann::json::parse(output_str);
+                return json_response["choices"][0]["text"].get<std::string>();
             } catch (const nlohmann::json::exception& e) {
                 std::cerr << "[Error] Failed to parse or extract text from JSON: " << e.what() << std::endl;
                 return "[Error] Invalid JSON format";
@@ -316,6 +335,7 @@ public:
         }
     }
 };
+
 
 // Define the static variable outside the class
 // Whyyy do you need to initialize the python interpreter again?? aaaaaaa
@@ -400,59 +420,55 @@ public:
 void signalHandler(int signum) {
     if (signum == SIGINT) {
         // Handle SIGINT (keyboard interrupt) by simply logging and exiting
-        std::cerr << "Received keyboard interrupt (SIGINT). Exiting program gracefully." << std::endl;
+        std::cerr << colorBrightRed << "Program Signal Detected SIGINT. Exiting program gracefully." << colorReset << std::endl;
         exit(0);
     }
+    
+    if (signum == SIGSEGV || signum == SIGABRT || signum == SIGFPE) {
+        // Log the signal number and stack trace for other signals
+        std::cerr << "Error: signal " << signum << std::endl;
 
-    // Log the signal number and stack trace for other signals
-    std::cerr << "Error: signal " << signum << std::endl;
+        // Generate the backtrace (stack trace)
+        void* array[10];
+        size_t size = backtrace(array, 10);
+        std::cerr << "Obtained " << size << " stack frames." << std::endl;
+        backtrace_symbols_fd(array, size, STDERR_FILENO);
 
-    void* array[10];
-    size_t size = backtrace(array, 10);
-    std::cerr << "Obtained " << size << " stack frames." << std::endl;
-    backtrace_symbols_fd(array, size, STDERR_FILENO);
-
-    // Save backtrace and command log to a file
-    std::ofstream log_file("crash_dump.log", std::ios::app);
-    if (log_file.is_open()) {
-        log_file << "Error: signal " << signum << std::endl;
-        log_file << "Obtained " << size << " stack frames." << std::endl;
-
-        char** messages = backtrace_symbols(array, size);
-        
-        for (size_t i = 0; i < size && messages != nullptr; ++i) {
-            log_file << "[bt]: (" << i << ") " << messages[i] << std::endl;
+        // Optionally write the backtrace to a file
+        std::ofstream log_file("crash_dump.log", std::ios::app);
+        if (log_file.is_open()) {
+            log_file << "Error: signal " << signum << std::endl;
+            log_file << "Obtained " << size << " stack frames." << std::endl;
+            char** messages = backtrace_symbols(array, size);
+            for (size_t i = 0; i < size && messages != nullptr; ++i) {
+                log_file << "[bt]: (" << i << ") " << messages[i] << std::endl;
+            }
+            free(messages);
         }
-        free(messages);
+        log_file.close();
 
-        log_file << "\nRecent command log:\n";
-        for (const auto& command : command_log) {
-            log_file << command << std::endl;
-        }
-    }
-    log_file.close();
-
-    // Attempt to restart the program for other signals
-    std::string exePath = getExecutablePath();
-    if (!exePath.empty()) {
-        pid_t pid = fork();
-        if (pid == 0) { // This is the child process
-            // Replace the current process with a new instance of the program
-            char* args[] = {const_cast<char*>(exePath.c_str()), nullptr};
-            execv(args[0], args);
-            // If execv returns, it must have failed.
-            std::cerr << "Failed to restart the program." << std::endl;
-            exit(EXIT_FAILURE);
-        } else if (pid > 0) { // This is the parent process
-            int status;
-            waitpid(pid, &status, 0); // Wait for the child process to finish
+        // Attempt to restart the program
+        std::string exePath = getExecutablePath();
+        if (!exePath.empty()) {
+            pid_t pid = fork();
+            if (pid == 0) { // This is the child process
+                // Replace the current process with a new instance of the program
+                char* args[] = {const_cast<char*>(exePath.c_str()), nullptr};
+                execv(args[0], args);
+                // If execv returns, it must have failed.
+                std::cerr << "Failed to restart the program." << std::endl;
+                exit(EXIT_FAILURE);
+            } else if (pid > 0) { // This is the parent process
+                int status;
+                waitpid(pid, &status, 0); // Wait for the child process to finish
+            } else {
+                std::cerr << "Failed to fork process for restart." << std::endl;
+            }
         } else {
-            std::cerr << "Failed to fork process for restart." << std::endl;
+            std::cerr << "Unable to determine executable path." << std::endl;
         }
-    } else {
-        std::cerr << "Unable to determine executable path." << std::endl;
     }
-
+    
     // Terminate the original program for signals other than SIGINT
     exit(signum);
 }
@@ -471,10 +487,11 @@ int main() {
 
     // Register the signal handler for segmentation fault (SIGSEGV) (This is going to be very useful espescially running on a weak memory architecture, I'm looking at you Apple Silicon)
     // Register the signal handler for segmentation fault (SIGSEGV)
+    signal(SIGINT, signalHandler);   // Interrupt signal (Ctrl+C) (Put it on the very top since it's the most visible and the most reachable on the User interface and the most possible ctrl+c interrupt on the terminal)
+    // Unintended Signal or Fault
     signal(SIGSEGV, signalHandler);
     signal(SIGABRT, signalHandler);  // Catch abort signals (e.g., assertion failures)
     signal(SIGFPE, signalHandler);   // Catch floating-point errors
-    signal(SIGINT, signalHandler);   // Interrupt signal (Ctrl+C)
 
     // Example code that will cause a segmentation fault (for testing purposes)
     //int* ptr = nullptr;
@@ -546,8 +563,11 @@ int main() {
     // CLI chat interface can be started in the main thread
     cliInterfaceDirectLLMPrimitive cli;
     cli.startChat();
+    // when the CLI quits just quit everything
+    exit(0); 
 
     // Join the server thread before exiting main
-    serverThread.join();
+    // There's no need to join into the serverThreads
+    //serverThread.join();
 
 }
