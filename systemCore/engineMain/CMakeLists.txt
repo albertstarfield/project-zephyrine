@@ -20,6 +20,13 @@ message(STATUS "Allowing the code to be as close as the CPU architecture allow t
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(mainEngineCode "${CMAKE_SOURCE_DIR}/main.cpp")
 
+
+# Add your source files
+set(SOURCES
+    main.cpp
+    # Add more source files here if needed
+)
+
 #--------- Definition of the Modules/Library (Mixed with Python + C++) 
 
 #Raw C++ Library +_+_+_+_+_+_+_
@@ -225,6 +232,9 @@ add_definitions(-DPYTHON_SITE_PACKAGES="${PYTHON_SITE_PACKAGES}")
 # Add the executable target
 add_executable(main ${mainEngineCode})
 
+
+
+
 # Link the curl library
 target_link_libraries(main PRIVATE curl)  
 
@@ -233,3 +243,7 @@ target_link_libraries(main PUBLIC pybind11::embed)
 
 # Link Python libraries
 target_link_libraries(main PRIVATE Python3::Python)
+
+# Include directories for your libraries
+target_include_directories(main PRIVATE ${Python3_INCLUDE_DIRS} ${PYBIND11_INCLUDE_DIRS} ${CURL_INCLUDE_DIRS})
+
