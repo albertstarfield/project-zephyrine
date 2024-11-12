@@ -327,8 +327,8 @@ private:
 
 public:
     void startChat() {
-        std::cout << "Welcome to the Adelaide and Albert Engine Direct Scheduler CLI chat interface!" << std::endl;
-        std::cout << "Type 'exit' or 'quit' to end the chat." << std::endl;
+        std::cout << "Welcome to the Adelaide and Albert Engine Direct non-Scheduler Primitive CLI chat interface!" << std::endl;
+        std::cout << "Type 'exit' or 'quit' to end the program and engine." << std::endl;
 
         std::string user_input;
         while (true) {
@@ -337,8 +337,10 @@ public:
 
             // Check for exit conditions
             if (user_input == "exit" || user_input == "quit") {
-                std::cout << "Exiting chat..." << std::endl;
+                std::cout << "Exiting Program..." << std::endl;
+                std::cout << "If the program doesn't seem to stop, just do ctrl+c" << std::endl;
                 break;
+                exit(0);
             }
 
             // Get the LLM response
@@ -359,7 +361,7 @@ public:
 
     void finetuneModel() {
         // Implement finetuning logic here
-        std::cout << "[Finetuning Model]" << std::endl;
+        std::cout << "[Finetuning Model]: Stub has been launched!" << std::endl;
     }
 };
 
@@ -373,7 +375,7 @@ public:
 
     void runInference() {
         // Implement Stable Diffusion inference logic here
-        std::cout << "[Running SD Inference]" << std::endl;
+        std::cout << "[Running SD Inference]: Stub has been launched!" << std::endl;
     }
 };
 
@@ -387,7 +389,7 @@ public:
 
     void finetuneModel() {
         // Implement Stable Diffusion finetuning logic here
-        std::cout << "[Finetuning SD Model]" << std::endl;
+        std::cout << "[Finetuning SD Model]: Stub has been launched!" << std::endl;
     }
 };
 

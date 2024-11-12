@@ -167,6 +167,43 @@ include_directories(${Python3_INCLUDE_DIRS})
 
 #--=-=-=- Downloading Python PyPIP standard procedure (all cloud stuff)
 
+#-=-=-=-= Detect Hardware capabilities
+# Detect Platform and Hardware Capabilities
+
+message(STATUS "Detecting platform and hardware capabilities for llama-cpp-python installation")
+
+set(CMAKE_ARGS_LIST "")
+
+# Base CMake arguments
+list(APPEND CMAKE_ARGS_LIST "-DGGML_BLAS=ON" "-DGGML_BLAS_VENDOR=OpenBLAS")
+
+# Handle platform specific options
+if(APPLE)
+    message(STATUS "Detected macOS platform")
+    list(APPEND CMAKE_ARGS_LIST "-DGGML_METAL=on")
+elseif(UNIX)
+    message(STATUS "Detected Linux platform")
+    if(EXISTS "/opt/intel/oneapi/setvars.sh")
+        message(STATUS "Intel oneAPI detected, adding SYCL and RPC support")
+        set(SYCL_ENV_SCRIPT "/opt/intel/oneapi/setvars.sh")
+        list(APPEND CMAKE_ARGS_LIST "-DGGML_SYCL=on" "-DCMAKE_C_COMPILER=icx" "-DCMAKE_CXX_COMPILER=icpx" "-DGGML_RPC=on")
+    endif()
+elseif(WIN32)
+    message(STATUS "Detected Windows platform")
+    list(APPEND CMAKE_ARGS_LIST "-DGGML_CUDA=on") # Assuming CUDA is available
+endif()
+
+# Add checks for additional hardware-specific capabilities
+# (You might need to customize this section based on the hardware checking tools you have)
+
+# Example: Check for CUDA availability on Linux
+if(UNIX AND EXISTS "/usr/local/cuda")
+    message(STATUS "CUDA found, enabling CUDA support")
+    list(APPEND CMAKE_ARGS_LIST "-DGGML_CUDA=on")
+endif()
+
+# Create a string from CMAKE_ARGS_LIST for pip installation
+string(JOIN " " CMAKE_ARGS ${CMAKE_ARGS_LIST})
 
 message(STATUS "Downloading Zephyrine pre-requisite Library Status-Quo python-only Libraries Module")
 execute_process(
