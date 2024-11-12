@@ -134,14 +134,14 @@ execute_process(
     COMMAND ${PYTHON_VENV_BIN_PATH}/pip install --upgrade pip
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
 )
-
+#set PYTHON_SITE_PACKAGES variable through venv python3 bin path 
 execute_process(
     COMMAND ${PYTHON_VENV_PYTHON3_BIN_PATH} -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
     OUTPUT_VARIABLE PYTHON_SITE_PACKAGES
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 message(STATUS "set SITE_PACKAGES to ${PYTHON_SITE_PACKAGES}")
-#set(PYTHON_SITE_PACKAGES ${LIBRARY}/pythonBridgeRuntime/lib/python3.12/site-packages") #How to make sure its adaptive and not locked to python 3.12 #Change this to enforce python 3.10-3.12
+message(STATUS "If somehow you are having some issue please delete or reset the Library/pythonBridgeRuntime")
 
 ## Define python and c++ bridge Library
 #pybind11
@@ -186,24 +186,25 @@ message(STATUS "Adding library module via pybind11 to C++")
 
 
 # Commands are from this documentation https://github.com/pybind/pybind11/blob/master/tools/pybind11Config.cmake.in
-pybind11_add_module(llama-index ${mainEngineCode})
-target_link_libraries(llama-index PUBLIC pybind11::module)
-pybind11_add_module(pandas ${mainEngineCode})
-target_link_libraries(pandas PUBLIC pybind11::module)
-pybind11_add_module(numpy ${mainEngineCode})
-target_link_libraries(numpy PUBLIC pybind11::module)
-pybind11_add_module(scikit-learn ${mainEngineCode})
-target_link_libraries(scikit-learn PUBLIC pybind11::module)
-pybind11_add_module(diffusers ${mainEngineCode})
-target_link_libraries(diffusers PUBLIC pybind11::module)
-pybind11_add_module(llama-cpp-python ${mainEngineCode})
-target_link_libraries(llama-cpp-python PUBLIC pybind11::module)
-pybind11_add_module(torch ${mainEngineCode})
-target_link_libraries(torch PUBLIC pybind11::module)
-pybind11_add_module(keras ${mainEngineCode})
-target_link_libraries(keras PUBLIC pybind11::module)
-pybind11_add_module(huggingface ${mainEngineCode})
-target_link_libraries(huggingface PUBLIC pybind11::module)
+
+#pybind11_add_module(llama-index ${mainEngineCode})
+#target_link_libraries(llama-index PUBLIC pybind11::module)
+#pybind11_add_module(pandas ${mainEngineCode})
+#target_link_libraries(pandas PUBLIC pybind11::module)
+#pybind11_add_module(numpy ${mainEngineCode})
+#target_link_libraries(numpy PUBLIC pybind11::module)
+#pybind11_add_module(scikit-learn ${mainEngineCode})
+#target_link_libraries(scikit-learn PUBLIC pybind11::module)
+#pybind11_add_module(diffusers ${mainEngineCode})
+#target_link_libraries(diffusers PUBLIC pybind11::module)
+#pybind11_add_module(llama-cpp-python ${mainEngineCode})
+#target_link_libraries(llama-cpp-python PUBLIC pybind11::module)
+#pybind11_add_module(torch ${mainEngineCode})
+#target_link_libraries(torch PUBLIC pybind11::module)
+#pybind11_add_module(keras ${mainEngineCode})
+#target_link_libraries(keras PUBLIC pybind11::module)
+#pybind11_add_module(huggingface ${mainEngineCode})
+#target_link_libraries(huggingface PUBLIC pybind11::module)
 
 
 #Debug Variable
