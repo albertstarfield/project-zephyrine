@@ -1,3 +1,4 @@
+#include <deque>
 #include <iostream>
 #include <memory>
 #include <csignal>
@@ -15,6 +16,8 @@
 #include <vector>
 #include <sstream>
 #include <curl/curl.h>
+#include <execinfo.h>
+#include <mutex>
 #include <pybind11/embed.h>
 #include "./Library/crow.h"
 #include <sys/wait.h>  // For waitpid
@@ -23,6 +26,26 @@
 #include <windows.h>
 #include <cstring>
 #endif
+
+
+// Circular Buffer for Debug Memory and C++ commands
+// Define a size for the command log
+const size_t MAX_LOG_SIZE = 50;
+// This function is going to help singalHandler() function
+// A thread-safe deque to store recent log entries
+std::deque<std::string> command_log;
+std::mutex log_mutex;
+
+// Utility function to add commands to the log for signalHandler crashes or quit
+void log_command(const std::string& command) {
+    std::lock_guard<std::mutex> lock(log_mutex);
+
+    if (command_log.size() >= MAX_LOG_SIZE) {
+        command_log.pop_front();
+    }
+    command_log.push_back(command);
+}
+
 
 
 std::string getExecutablePath() {
@@ -46,7 +69,7 @@ namespace fs = std::filesystem; // Universal or cross platform path reconstructi
 namespace py = pybind11;
 
 
-// Global variable for the pybind11 interpreter guard
+// Global variable for the pybind11 interpreter guard (This is an interpreter definition)
 std::unique_ptr<py::scoped_interpreter> pyGuard;
 
 
@@ -193,11 +216,11 @@ protected:
     ModelBase() {
         // Set up virtual environment paths
         venv_path = fs::path("./Library/pythonBridgeRuntime");
-#ifdef _WIN32
-        venv_python_bin = venv_path / "Scripts";
-#else
-        venv_python_bin = venv_path / "bin";
-#endif
+    #ifdef _WIN32
+            venv_python_bin = venv_path / "Scripts";
+    #else
+            venv_python_bin = venv_path / "bin";
+    #endif
     }
 
     void setupPythonEnv() {
@@ -326,7 +349,7 @@ public:
 class LLMFinetune : public ModelBase {
 public:
     LLMFinetune() {
-        py::scoped_interpreter guard{};
+        //py::scoped_interpreter guard{}; Do not reinitialize the interpreter again since it's already initialize on this domain main.cpp program
         setupPythonEnv();
     }
 
@@ -340,7 +363,7 @@ public:
 class SDInference : public ModelBase {
 public:
     SDInference() {
-        py::scoped_interpreter guard{};
+        //py::scoped_interpreter guard{}; Do not reinitialize the interpreter again since it's already initialize on this domain main.cpp program
         setupPythonEnv();
     }
 
@@ -354,7 +377,7 @@ public:
 class SDFinetune : public ModelBase {
 public:
     SDFinetune() {
-        py::scoped_interpreter guard{};
+        //py::scoped_interpreter guard{}; Do not reinitialize the interpreter again since it's already initialize on this domain main.cpp program
         setupPythonEnv();
     }
 
@@ -378,22 +401,28 @@ void signalHandler(int signum) {
     // Log the signal number and stack trace for other signals
     std::cerr << "Error: signal " << signum << std::endl;
 
-    // Generate the backtrace (stack trace)
     void* array[10];
     size_t size = backtrace(array, 10);
     std::cerr << "Obtained " << size << " stack frames." << std::endl;
     backtrace_symbols_fd(array, size, STDERR_FILENO);
 
-    // Optionally write the backtrace to a file
+    // Save backtrace and command log to a file
     std::ofstream log_file("crash_dump.log", std::ios::app);
     if (log_file.is_open()) {
         log_file << "Error: signal " << signum << std::endl;
         log_file << "Obtained " << size << " stack frames." << std::endl;
+
         char** messages = backtrace_symbols(array, size);
+        
         for (size_t i = 0; i < size && messages != nullptr; ++i) {
             log_file << "[bt]: (" << i << ") " << messages[i] << std::endl;
         }
         free(messages);
+
+        log_file << "\nRecent command log:\n";
+        for (const auto& command : command_log) {
+            log_file << command << std::endl;
+        }
     }
     log_file.close();
 
