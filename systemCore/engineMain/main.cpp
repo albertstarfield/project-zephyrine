@@ -17,6 +17,7 @@
 #include <curl/curl.h>
 #include <pybind11/embed.h>
 #include "./Library/crow.h"
+#include "InterpreterManager.h"
 #include <sys/wait.h>  // For waitpid
 
 #ifdef _WIN32
@@ -335,7 +336,9 @@ public:
 class LLMFinetune : public ModelBase {
 public:
     LLMFinetune() {
-        py::scoped_interpreter guard{};
+        //Remove explicit interpreter initialization from LLMFinetune and other subclasses of ModelBase.
+        //The issue you're encountering is related to the pybind11 embedded interpreter. The error message "terminating due to uncaught exception of type std::runtime_error: The interpreter is already running" indicates that the Python interpreter is being initialized multiple times.
+        //py::scoped_interpreter guard{};
         setupPythonEnv();
     }
 
@@ -435,7 +438,10 @@ void signalHandler(int signum) {
 // ------------------------------------------------------------------------------------------------------------
 
 int main() {
-    // Register the signal handler for segmentation fault (SIGSEGV)
+    InterpreterManager::init(); // Initialize Interpeter python pybind c++ for the main.cpp
+
+
+    // Register the signal handler for segmentation fault (SIGSEGV) (This is going to be very useful espescially running on a weak memory architecture, I'm looking at you Apple Silicon)
     // signal(SIGSEGV, signalHandler);
     // signal(SIGABRT, signalHandler);  // Catch abort signals (e.g., assertion failures)
     // signal(SIGFPE, signalHandler);   // Catch floating-point errors
