@@ -22,6 +22,9 @@
 #include "./Library/crow.h"
 #include <sys/wait.h>  // For waitpid
 #include <nlohmann/json.hpp> //converting json llama_cpp openAI format into readable one return for the human interface
+#include <unistd.h> // for dup2
+#include <fcntl.h>  // for open
+
 
 #ifdef _WIN32
 #include <windows.h>
@@ -253,6 +256,10 @@ public:
         setupPythonEnv();
     }
 
+    std::string mainLLM(const std::string &user_input){
+
+    }
+
     std::string LLMchild(const std::string &user_input) {
         std::string model_path = "./tinyLLaMatestModel.gguf";
         if (!fs::exists(model_path)) {
@@ -287,10 +294,20 @@ public:
                 py::arg("echo") = true
             );
 
+            // --- Python-side fix ---
+            py::module json = py::module::import("json");
+            std::string json_string = py::str(json.attr("dumps")(output)).cast<std::string>();
+            // --- End of Python-side fix ---
+
+            // std::string output_str = py::str(output).cast<std::string>();
+            // std::cout << "Raw output from llama_cpp: " << output_str << std::endl; 
+
+            // td::replace(output_str.begin(), output_str.end(), '\'', '"');
+
+
             try {
-                // Parse the JSON response
-                auto json_response = nlohmann::json::parse(py::str(output).cast<std::string>());
-                // Extract the text completion from the choices array
+                // Parse the JSON string (now correctly formatted)
+                auto json_response = nlohmann::json::parse(json_string); 
                 auto text_completion = json_response["choices"][0]["text"];
                 return text_completion.get<std::string>();
             } catch (const nlohmann::json::exception& e) {
@@ -307,9 +324,21 @@ public:
     void runInference() {
         try {
             std::string user_input = "When can we touch the sky?";
+
+            // Inform the user that processing has started
+            std::cout << "Model is processing..." << std::endl;
+
             std::string response = LLMchild(user_input);
             if (!response.starts_with("[Error]")) {
-                std::cout << response << std::endl;  // Print only the text completion
+
+                // Post-processing to truncate (if you still want to do this)
+                std::string completion = response; 
+                size_t pos = completion.find("savory");
+                if (pos != std::string::npos) {
+                    completion = completion.substr(0, pos + 7); // 7 to include "savory"
+                }
+
+                std::cout << completion << std::endl;  // Print the (possibly truncated) text completion
             }
         } catch (const std::exception& e) {
             std::cerr << "[Error] Failed to run inference: " << e.what() << std::endl;
@@ -495,6 +524,11 @@ int main() {
 
     std::cout << CONSOLE_PREFIX << "🌐 Starting up the Adelaide&Albert Engine... Let's make some magic happen!\n";
 
+    // Suppress stderr
+    int devnull = open("/dev/null", O_WRONLY); // Open null device
+    dup2(devnull, STDERR_FILENO); // Redirect stderr to null device
+    close(devnull);
+
     // Define endpoint
     CROW_ROUTE(app, "/api/generate")
         .methods(HTTPMethodType{crow::HTTPMethod::Post}.get()) // Use strong typing for the HTTP method
@@ -550,4 +584,5 @@ int main() {
     // Join the server thread before exiting main
     serverThread.join();
 
+    return 0;
 }
