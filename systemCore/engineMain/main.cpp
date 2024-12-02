@@ -18,12 +18,10 @@
 #include <curl/curl.h>
 #include <execinfo.h>
 #include <mutex>
-#include <regex>
 #include <pybind11/embed.h>
 #include "./Library/crow.h"
 #include <sys/wait.h>  // For waitpid
 #include <nlohmann/json.hpp> //converting json llama_cpp openAI format into readable one return for the human interface
-//#include <progressbar.h> // Include the progressbar library
 #include <unistd.h> // for dup2
 #include <fcntl.h>  // for open
 
@@ -33,23 +31,6 @@
 #include <cstring>
 #endif
 
-
-//json cleaning from llama_cpp because that is the status quo
-std::string cleanAndFormatJson(const std::string& rawJson) {
-    // Replace single quotes with double quotes
-    std::string json = std::regex_replace(rawJson, std::regex("'"), "\"");
-
-    // Replace 'None' with 'null' for JSON validity
-    json = std::regex_replace(json, std::regex(R"(\bNone\b)"), "null");
-
-    // Replace \\n with \n for valid JSON within strings
-    json = std::regex_replace(json, std::regex(R"(\\n)"), "\\n");
-
-    // Ensure no invalid newlines by checking before and inside JSON list or object
-    // Note: The specific regex logic for newline management depends on understanding the expected occurrences.
-
-    return json;
-}
 
 // Circular Buffer for Debug Memory and C++ commands
 // Define a size for the command log
@@ -119,20 +100,6 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     return totalSize;
 }
 
-// Function to determine the model path dynamically
-// If you want to change the model Path name, Program it only in here!
-std::string getModelPath() {
-    std::string zygoteModelPath = "./tinyLLaMatestModel.gguf";
-    std::string dynamicModelPath = "./evolvingModel.gguf";
-
-    if (fs::exists(dynamicModelPath)) {
-        return dynamicModelPath;
-    } else if (fs::exists(zygoteModelPath)) {
-        return zygoteModelPath;
-    } else {
-        return ""; //Neither model exists
-    }
-}
 
 // Function to download the model file using libcurl
 bool download_model(const std::string& url, const std::string& output_path) {
@@ -219,6 +186,21 @@ std::string generate_random_sha256() {
     return sha256.str();
 }
 
+
+// Function to determine the model path dynamically
+std::string getModelPath() {
+    std::string zygoteModelPath = "./zygoteBaseModel.gguf";
+    std::string dynamicModelPath = "./evolvingModel.gguf";
+
+    if (fs::exists(dynamicModelPath)) {
+        return dynamicModelPath;
+    } else if (fs::exists(zygoteModelPath)) {
+        return zygoteModelPath;
+    } else {
+        return ""; //Neither model exists
+    }
+}
+
 // Placeholder text generation function with random SHA-256, returning JSON
 ResponseText generate_text(const Model& model, const Prompt& prompt) {
     crow::json::wvalue response_json;
@@ -290,7 +272,7 @@ public:
         //Attempt to download model if neither exists
         std::string modelPath = getModelPath();
         if (modelPath.empty()) {
-            std::string zygoteModelName = "Phi-3-mini-4k-instruct";
+            std::string zygoteModelName = "zygoteBaseModel";
             std::string model_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf?download=true";
             std::string model_path = "./" + zygoteModelName + ".gguf";
             if (!download_model(model_url, model_path)) {
@@ -305,16 +287,17 @@ public:
     }
 
     std::string LLMchild(const std::string &user_input) {
-        std::string model_path = getModelPath(); //Use dynamic path determination
-        if (model_path.empty()) {
-            std::cerr << "[Error] No suitable model found. Download failed or models don't exist." << std::endl;
-            return "[Error] No suitable model found";
+        //Attempt to download model if neither exists
+        std::string modelPath = getModelPath();
+        if (modelPath.empty()) {
+            std::string zygoteModelName = "zygoteBaseModel";
+            std::string model_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf?download=true";
+            std::string model_path = "./" + zygoteModelName + ".gguf";
+            if (!download_model(model_url, model_path)) {
+                std::cerr << "[Error] : Failed to download model. Exiting." << std::endl;
+                exit(1);
+            }
         }
-        if (!fs::exists(model_path)) {
-            std::cerr << "[Error] Model file not found. Downloading failed, aborting." << std::endl;
-            return "[Error] Model download failed";
-        }
-
         try {
             py::gil_scoped_acquire acquire;
             py::module llama_cpp;
@@ -328,7 +311,7 @@ public:
             py::object llm;
             try {
                 py::object Llama = llama_cpp.attr("Llama");
-                llm = Llama(model_path);
+                llm = Llama(modelPath);
             } catch (const py::error_already_set& e) {
                 std::cerr << "[Error] Failed to create model instance: " << e.what() << std::endl;
                 return "[Error] Failed to initialize model";
@@ -337,7 +320,7 @@ public:
             std::string prompt = "User: " + user_input + "\nAssistant: ";
             py::object output = llm.attr("__call__")(
                 py::arg("prompt") = prompt,
-                py::arg("max_tokens") = 32000,
+                py::arg("max_tokens") = 32,
                 py::arg("stop") = py::make_tuple("User:", "\n"),
                 py::arg("echo") = true
             );
@@ -354,12 +337,6 @@ public:
 
 
             try {
-                // Convert output to a string which is valid JSON
-                std::string output_str = py::str(output).cast<std::string>();
-                std::string formattedJson = cleanAndFormatJson(output_str);
-                std::cout << formattedJson << std::endl; // debugging purposes only, please comment this out when json parsing has been fixed
-                auto json_response = nlohmann::json::parse(output_str);
-                return json_response["choices"][0]["text"].get<std::string>();
                 // Parse the JSON string (now correctly formatted)
                 auto json_response = nlohmann::json::parse(json_string); 
                 auto text_completion = json_response["choices"][0]["text"];
@@ -399,7 +376,6 @@ public:
         }
     }
 };
-
 
 // Define the static variable outside the class
 // Whyyy do you need to initialize the python interpreter again?? aaaaaaa
@@ -484,55 +460,59 @@ public:
 void signalHandler(int signum) {
     if (signum == SIGINT) {
         // Handle SIGINT (keyboard interrupt) by simply logging and exiting
-        std::cerr << colorBrightRed << "Program Signal Detected SIGINT. Exiting program gracefully." << colorReset << std::endl;
+        std::cerr << "Received keyboard interrupt (SIGINT). Exiting program gracefully." << std::endl;
         exit(0);
     }
-    
-    if (signum == SIGSEGV || signum == SIGABRT || signum == SIGFPE) {
-        // Log the signal number and stack trace for other signals
-        std::cerr << "Error: signal " << signum << std::endl;
 
-        // Generate the backtrace (stack trace)
-        void* array[10];
-        size_t size = backtrace(array, 10);
-        std::cerr << "Obtained " << size << " stack frames." << std::endl;
-        backtrace_symbols_fd(array, size, STDERR_FILENO);
+    // Log the signal number and stack trace for other signals
+    std::cerr << "Error: signal " << signum << std::endl;
 
-        // Optionally write the backtrace to a file
-        std::ofstream log_file("crash_dump.log", std::ios::app);
-        if (log_file.is_open()) {
-            log_file << "Error: signal " << signum << std::endl;
-            log_file << "Obtained " << size << " stack frames." << std::endl;
-            char** messages = backtrace_symbols(array, size);
-            for (size_t i = 0; i < size && messages != nullptr; ++i) {
-                log_file << "[bt]: (" << i << ") " << messages[i] << std::endl;
-            }
-            free(messages);
+    void* array[10];
+    size_t size = backtrace(array, 10);
+    std::cerr << "Obtained " << size << " stack frames." << std::endl;
+    backtrace_symbols_fd(array, size, STDERR_FILENO);
+
+    // Save backtrace and command log to a file
+    std::ofstream log_file("crash_dump.log", std::ios::app);
+    if (log_file.is_open()) {
+        log_file << "Error: signal " << signum << std::endl;
+        log_file << "Obtained " << size << " stack frames." << std::endl;
+
+        char** messages = backtrace_symbols(array, size);
+        
+        for (size_t i = 0; i < size && messages != nullptr; ++i) {
+            log_file << "[bt]: (" << i << ") " << messages[i] << std::endl;
         }
-        log_file.close();
+        free(messages);
 
-        // Attempt to restart the program
-        std::string exePath = getExecutablePath();
-        if (!exePath.empty()) {
-            pid_t pid = fork();
-            if (pid == 0) { // This is the child process
-                // Replace the current process with a new instance of the program
-                char* args[] = {const_cast<char*>(exePath.c_str()), nullptr};
-                execv(args[0], args);
-                // If execv returns, it must have failed.
-                std::cerr << "Failed to restart the program." << std::endl;
-                exit(EXIT_FAILURE);
-            } else if (pid > 0) { // This is the parent process
-                int status;
-                waitpid(pid, &status, 0); // Wait for the child process to finish
-            } else {
-                std::cerr << "Failed to fork process for restart." << std::endl;
-            }
-        } else {
-            std::cerr << "Unable to determine executable path." << std::endl;
+        log_file << "\nRecent command log:\n";
+        for (const auto& command : command_log) {
+            log_file << command << std::endl;
         }
     }
-    
+    log_file.close();
+
+    // Attempt to restart the program for other signals
+    std::string exePath = getExecutablePath();
+    if (!exePath.empty()) {
+        pid_t pid = fork();
+        if (pid == 0) { // This is the child process
+            // Replace the current process with a new instance of the program
+            char* args[] = {const_cast<char*>(exePath.c_str()), nullptr};
+            execv(args[0], args);
+            // If execv returns, it must have failed.
+            std::cerr << "Failed to restart the program." << std::endl;
+            exit(EXIT_FAILURE);
+        } else if (pid > 0) { // This is the parent process
+            int status;
+            waitpid(pid, &status, 0); // Wait for the child process to finish
+        } else {
+            std::cerr << "Failed to fork process for restart." << std::endl;
+        }
+    } else {
+        std::cerr << "Unable to determine executable path." << std::endl;
+    }
+
     // Terminate the original program for signals other than SIGINT
     exit(signum);
 }
@@ -551,11 +531,10 @@ int main() {
 
     // Register the signal handler for segmentation fault (SIGSEGV) (This is going to be very useful espescially running on a weak memory architecture, I'm looking at you Apple Silicon)
     // Register the signal handler for segmentation fault (SIGSEGV)
-    signal(SIGINT, signalHandler);   // Interrupt signal (Ctrl+C) (Put it on the very top since it's the most visible and the most reachable on the User interface and the most possible ctrl+c interrupt on the terminal)
-    // Unintended Signal or Fault
     signal(SIGSEGV, signalHandler);
     signal(SIGABRT, signalHandler);  // Catch abort signals (e.g., assertion failures)
     signal(SIGFPE, signalHandler);   // Catch floating-point errors
+    signal(SIGINT, signalHandler);   // Interrupt signal (Ctrl+C)
 
     // Example code that will cause a segmentation fault (for testing purposes)
     //int* ptr = nullptr;
@@ -632,12 +611,9 @@ int main() {
     // CLI chat interface can be started in the main thread
     cliInterfaceDirectLLMPrimitive cli;
     cli.startChat();
-    // when the CLI quits just quit everything
-    exit(0); 
 
     // Join the server thread before exiting main
-    // There's no need to join into the serverThreads
-    //serverThread.join();
+    serverThread.join();
 
     return 0;
 }
