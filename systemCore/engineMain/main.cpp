@@ -143,7 +143,7 @@ bool download_model(const std::string& url, const std::string& output_path) {
             
             if (timeElapsed > 0) {
                 double speed = bytesDownloaded / timeElapsed / 1024 / 1024; // MB/s
-                std::cout << "\r[Info] : Importing Pure Zygote Model: " 
+                std::cout << "\r[Info] : Importing Pure Zygote Model: "
                           << std::fixed << std::setprecision(1) << progress << "% "
                           << "[Speed: " << std::setprecision(2) << speed << " MB/s]"
                           << std::flush;
@@ -327,9 +327,100 @@ public:
         }
     }
 
-    std::string mainLLM(const std::string &user_input){
 
+std::string mainLLM(const std::string &user_input) {
+    static py::object llm = py::none(); // Use py::none() to initialize
+    static std::string modelPath = getModelPath();
+
+    // Initial model loading or reloading if needed
+    if (modelPath.empty()) {
+            std::string zygoteModelName = "zygoteBaseModel";
+            std::string model_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf?download=true";
+            std::string model_path = "./" + zygoteModelName + ".gguf";
+        if (!download_model(model_url, model_path)) {
+                std::cerr << "[Error] : Failed to download model. Exiting." << std::endl;
+                exit(1);
+            }
+            modelPath = getModelPath();
+        }
+
+    if (!llm) {
+        try {
+            py::gil_scoped_acquire acquire;
+            py::module llama_cpp = py::module::import("llama_cpp");
+            py::object Llama = llama_cpp.attr("Llama");
+
+            // Initialize model with interactive session parameters
+            llm = Llama(
+                modelPath,
+                py::arg("n_ctx") = 2048,        // Context window size
+                py::arg("n_threads") = 4,        // Number of CPU threads to use
+                py::arg("n_batch") = 512,        // Batch size for prompt processing
+                py::arg("verbose") = true        // Enable verbose output
+            );
+        } catch (const py::error_already_set& e) {
+            std::cerr << "[Error] Failed to initialize model: " << e.what() << std::endl;
+            return "[Error] Model initialization failed";
+        }
     }
+
+    try {
+        py::gil_scoped_acquire acquire;
+
+        // Format the prompt with conversation context
+        std::string prompt = "User: " + user_input + "\nAssistant: ";
+
+        // Generate response with interactive parameters
+        py::object output = llm.attr("__call__")(
+            py::arg("prompt") = prompt,
+            py::arg("max_tokens") = 256,         // Increased token limit for conversation
+            py::arg("temperature") = 0.7,        // Add temperature for response variety
+            py::arg("top_p") = 0.9,             // Add top_p for better response quality
+            py::arg("stop") = py::make_tuple("User:", "\n"),
+            py::arg("echo") = false,            // Don't echo the prompt
+            py::arg("stream") = false           // Don't stream the response
+        );
+
+        // Process the response
+        py::module json = py::module::import("json");
+        std::string json_string = py::str(json.attr("dumps")(output)).cast<std::string>();
+
+        try {
+            auto json_response = nlohmann::json::parse(json_string);
+            auto text_completion = json_response["choices"][0]["text"];
+            std::string response = text_completion.get<std::string>();
+
+            // Clean up the response using string algorithms
+            auto ltrim = [](std::string &s) {
+                s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
+                    return !std::isspace(ch);
+                }));
+            };
+
+            auto rtrim = [](std::string &s) {
+                s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
+                    return !std::isspace(ch);
+                }).base(), s.end());
+            };
+
+            // Trim both ends
+            ltrim(response);
+            rtrim(response);
+
+            return response;
+
+        } catch (const nlohmann::json::exception& e) {
+            std::cerr << "[Error] Failed to parse response: " << e.what() << std::endl;
+            return "[Error] Failed to parse model response";
+        }
+
+    } catch (const std::exception& e) {
+        std::cerr << "[Error] An unexpected error occurred: " << e.what() << std::endl;
+        return "[Error] An unexpected error occurred";
+    }
+    }
+
+
 
     std::string LLMchild(const std::string &user_input) {
         //Attempt to download model if neither exists
@@ -376,14 +467,14 @@ public:
             // --- End of Python-side fix ---
 
             // std::string output_str = py::str(output).cast<std::string>();
-            // std::cout << "Raw output from llama_cpp: " << output_str << std::endl; 
+            // std::cout << "Raw output from llama_cpp: " << output_str << std::endl;
 
             // td::replace(output_str.begin(), output_str.end(), '\'', '"');
 
 
             try {
                 // Parse the JSON string (now correctly formatted)
-                auto json_response = nlohmann::json::parse(json_string); 
+                auto json_response = nlohmann::json::parse(json_string);
                 auto text_completion = json_response["choices"][0]["text"];
                 return text_completion.get<std::string>();
             } catch (const nlohmann::json::exception& e) {
@@ -408,7 +499,7 @@ public:
             if (!response.starts_with("[Error]")) {
 
                 // Post-processing to truncate (if you still want to do this)
-                std::string completion = response; 
+                std::string completion = response;
                 size_t pos = completion.find("savory");
                 if (pos != std::string::npos) {
                     completion = completion.substr(0, pos + 7); // 7 to include "savory"
@@ -426,31 +517,74 @@ public:
 // Whyyy do you need to initialize the python interpreter again?? aaaaaaa
 //std::unique_ptr<py::scoped_interpreter> LLMInference::guard = nullptr;
 
-class cliInterfaceDirectLLMPrimitive {
+class SchedulerPipeline {
 private:
     LLMInference llm_inference;
 
 public:
-    void startChat() {
-        std::cout << "Welcome to the Adelaide and Albert Engine Direct non-Scheduler Primitive CLI chat interface!" << std::endl;
-        std::cout << "Type 'exit' or 'quit' to end the program and engine." << std::endl;
+    std::string processInput(const std::string& user_input) {
+        std::cout << "[SchedulerPipeline]: Received user input for processing: \"" << user_input << "\"" << std::endl;
 
-        std::string user_input;
+        // First, let LLMChild optimize/preprocess the prompt
+        std::cout << "[SchedulerPipeline]: Optimizing the prompt..." << std::endl;
+        std::string optimized_prompt = llm_inference.LLMchild(user_input);
+
+        std::cout << "[SchedulerPipeline]: Optimized prompt generated: \"" << optimized_prompt << "\"" << std::endl;
+
+        // Then, pass the optimized prompt to mainLLM
+        std::cout << "[SchedulerPipeline]: Passing the optimized prompt to the LLM for response generation..." << std::endl;
+        std::string llm_response = llm_inference.mainLLM(optimized_prompt);
+
+        std::cout << "[SchedulerPipeline]: Received the LLM response." << std::endl;
+        std::cout << "[SchedulerPipeline]: Final response: \"" << llm_response << "\"" << std::endl;
+
+        return llm_response;
+    }
+};
+
+class cliInterfaceMain {
+private:
+    SchedulerPipeline scheduler;
+    const std::string WELCOME_MESSAGE =
+        "Welcome to Adelaide and Albert Engine CLI Interface\n"
+        "All inputs are processed through the Scheduler Pipeline\n"
+        "Type 'exit' or 'quit' to end the session\n"
+        "----------------------------------------\n";
+
+public:
+    void startInterface() {
+        std::cout << WELCOME_MESSAGE;
+
         while (true) {
-            std::cout << "[Primitive LLMChild Interface User Input]: ";
-            std::getline(std::cin, user_input);
+            try {
+                // Get user input
+                std::cout << "\n[User]: ";
+                std::string user_input;
+                std::getline(std::cin, user_input);
 
-            // Check for exit conditions
-            if (user_input == "exit" || user_input == "quit") {
-                std::cout << "Exiting Program..." << std::endl;
-                std::cout << "If the program doesn't seem to stop, just do ctrl+c" << std::endl;
-                break;
-                exit(0);
+                // Check exit conditions
+                if (user_input == "exit" || user_input == "quit") {
+                    std::cout << "Shutting down the interface...\n";
+                    std::cout << "If the program doesn't stop, press Ctrl+C\n";
+                    break;
+                }
+
+                // Skip empty inputs
+                if (user_input.empty()) {
+                    continue;
+                }
+
+                // Process through scheduler pipeline
+                std::cout << "\n[SystemDebug_RemoveThisLater]: Processing through Scheduler Pipeline...\n";
+                std::string final_response = scheduler.processInput(user_input);
+
+                // Display the response
+                std::cout << "[Assistant]: " << final_response << std::endl;
+
+            } catch (const std::exception& e) {
+                std::cerr << "[Error]: An error occurred - " << e.what() << std::endl;
+                std::cout << "The interface will continue running...\n";
             }
-
-            // Get the LLM response
-            std::string response = llm_inference.LLMchild(user_input);
-            std::cout << "[Engine Response]: " << response << std::endl;
         }
     }
 };
@@ -524,7 +658,7 @@ void signalHandler(int signum) {
         log_file << "Obtained " << size << " stack frames." << std::endl;
 
         char** messages = backtrace_symbols(array, size);
-        
+
         for (size_t i = 0; i < size && messages != nullptr; ++i) {
             log_file << "[bt]: (" << i << ") " << messages[i] << std::endl;
         }
@@ -563,7 +697,7 @@ void signalHandler(int signum) {
 }
 
 // Inference and Fine-Tuning Scheduler Implementation "Backbrain Scheduler"
-// All the Inference from CLI and HTML HAVE to go through this scheduler thus the scheduler will allocate or redirect the result and serve ther result either from cache result or  
+// All the Inference from CLI and HTML HAVE to go through this scheduler thus the scheduler will allocate or redirect the result and serve ther result either from cache result or
 
 
 // ------------------------------------------------------------------------------------------------------------
@@ -631,7 +765,7 @@ int main() {
 
             std::cout << CONSOLE_PREFIX << "🧠 Engaging with model: " << model.get() << ". Here comes some wisdom...\n";
 
-            // Generate text using the placeholder function 
+            // Generate text using the placeholder function
             ResponseText generated_text = generate_text(model, prompt);
 
             // Create the JSON response
@@ -654,8 +788,8 @@ int main() {
     });
 
     // CLI chat interface can be started in the main thread
-    cliInterfaceDirectLLMPrimitive cli;
-    cli.startChat();
+    cliInterfaceMain cli;
+    cli.startInterface();
 
     // Join the server thread before exiting main
     serverThread.join();
