@@ -24,6 +24,7 @@
 #include <nlohmann/json.hpp> //converting json llama_cpp openAI format into readable one return for the human interface
 #include <unistd.h> // for dup2
 #include <fcntl.h>  // for open
+#include <sqlite3.h>
 
 
 #ifdef _WIN32
@@ -70,6 +71,7 @@ std::string getExecutablePath() {
 }
 
 namespace fs = std::filesystem; // Universal or cross platform path reconstruction
+namespace fs = std::filesystem;
 namespace py = pybind11;
 
 
@@ -133,7 +135,7 @@ bool download_model(const std::string& url, const std::string& output_path) {
         double currentTime = std::chrono::duration<double>(
             std::chrono::system_clock::now().time_since_epoch()
         ).count();
-        
+
         double progress = (dlnow / dltotal) * 100;
         
         // Update every 1% or at least 1 second has passed
@@ -328,101 +330,8 @@ public:
     }
 
 
-std::string mainLLM(const std::string &user_input) {
-    static py::object llm = py::none(); // Use py::none() to initialize
-    static std::string modelPath = getModelPath();
 
-    // Initial model loading or reloading if needed
-    if (modelPath.empty()) {
-            std::string zygoteModelName = "zygoteBaseModel";
-            std::string model_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf?download=true";
-            std::string model_path = "./" + zygoteModelName + ".gguf";
-        if (!download_model(model_url, model_path)) {
-                std::cerr << "[Error] : Failed to download model. Exiting." << std::endl;
-                exit(1);
-            }
-            modelPath = getModelPath();
-        }
-
-    if (!llm) {
-        try {
-            py::gil_scoped_acquire acquire;
-            py::module llama_cpp = py::module::import("llama_cpp");
-            py::object Llama = llama_cpp.attr("Llama");
-
-            // Initialize model with interactive session parameters
-            llm = Llama(
-                modelPath,
-                py::arg("n_ctx") = 2048,        // Context window size
-                py::arg("n_threads") = 4,        // Number of CPU threads to use
-                py::arg("n_batch") = 512,        // Batch size for prompt processing
-                py::arg("verbose") = true        // Enable verbose output
-            );
-        } catch (const py::error_already_set& e) {
-            std::cerr << "[Error] Failed to initialize model: " << e.what() << std::endl;
-            return "[Error] Model initialization failed";
-        }
-    }
-
-    try {
-        py::gil_scoped_acquire acquire;
-
-        // Format the prompt with conversation context
-        std::string prompt = "User: " + user_input + "\nAssistant: ";
-
-        // Generate response with interactive parameters
-        py::object output = llm.attr("__call__")(
-            py::arg("prompt") = prompt,
-            py::arg("max_tokens") = 256,         // Increased token limit for conversation
-            py::arg("temperature") = 0.7,        // Add temperature for response variety
-            py::arg("top_p") = 0.9,             // Add top_p for better response quality
-            py::arg("stop") = py::make_tuple("User:", "\n"),
-            py::arg("echo") = false,            // Don't echo the prompt
-            py::arg("stream") = false           // Don't stream the response
-        );
-
-        // Process the response
-        py::module json = py::module::import("json");
-        std::string json_string = py::str(json.attr("dumps")(output)).cast<std::string>();
-
-        try {
-            auto json_response = nlohmann::json::parse(json_string);
-            auto text_completion = json_response["choices"][0]["text"];
-            std::string response = text_completion.get<std::string>();
-
-            // Clean up the response using string algorithms
-            auto ltrim = [](std::string &s) {
-                s.erase(s.begin(), std::find_if(s.begin(), s.end(), [](unsigned char ch) {
-                    return !std::isspace(ch);
-                }));
-            };
-
-            auto rtrim = [](std::string &s) {
-                s.erase(std::find_if(s.rbegin(), s.rend(), [](unsigned char ch) {
-                    return !std::isspace(ch);
-                }).base(), s.end());
-            };
-
-            // Trim both ends
-            ltrim(response);
-            rtrim(response);
-
-            return response;
-
-        } catch (const nlohmann::json::exception& e) {
-            std::cerr << "[Error] Failed to parse response: " << e.what() << std::endl;
-            return "[Error] Failed to parse model response";
-        }
-
-    } catch (const std::exception& e) {
-        std::cerr << "[Error] An unexpected error occurred: " << e.what() << std::endl;
-        return "[Error] An unexpected error occurred";
-    }
-    }
-
-
-
-    std::string LLMchild(const std::string &user_input) {
+    std::string LLMMainInferencing(const std::string &user_input) {
         //Attempt to download model if neither exists
         std::string modelPath = getModelPath();
         if (modelPath.empty()) {
@@ -466,27 +375,29 @@ std::string mainLLM(const std::string &user_input) {
             std::string json_string = py::str(json.attr("dumps")(output)).cast<std::string>();
             // --- End of Python-side fix ---
 
-            // std::string output_str = py::str(output).cast<std::string>();
-            // std::cout << "Raw output from llama_cpp: " << output_str << std::endl;
-
-            // td::replace(output_str.begin(), output_str.end(), '\'', '"');
-
-
             try {
-                // Parse the JSON string (now correctly formatted)
+            // Parse the JSON string (now correctly formatted)
                 auto json_response = nlohmann::json::parse(json_string);
                 auto text_completion = json_response["choices"][0]["text"];
-                return text_completion.get<std::string>();
-            } catch (const nlohmann::json::exception& e) {
-                std::cerr << "[Error] Failed to parse or extract text from JSON: " << e.what() << std::endl;
-                return "[Error] Invalid JSON format";
+            std::string response = text_completion.get<std::string>();
+            
+            // Remove "Assistant: " prefix if present
+            const std::string prefix = "Assistant: ";
+            if (response.substr(0, prefix.length()) == prefix) {
+                response = response.substr(prefix.length());
             }
+            return response;
 
-        } catch (const std::exception& e) {
-            std::cerr << "[Error] An unexpected error occurred: " << e.what() << std::endl;
-            return "[Error] An unexpected error occurred";
+        } catch (const nlohmann::json::exception& e) {
+            std::cerr << "[Error] Failed to parse or extract text from JSON: " << e.what() << std::endl;
+            return "[Error] Invalid JSON format";
         }
+
+    } catch (const std::exception& e) {
+        std::cerr << "[Error] An unexpected error occurred: " << e.what() << std::endl;
+        return "[Error] An unexpected error occurred";
     }
+}
 
     void runInference() {
         try {
@@ -495,7 +406,7 @@ std::string mainLLM(const std::string &user_input) {
             // Inform the user that processing has started
             std::cout << "Model is processing..." << std::endl;
 
-            std::string response = LLMchild(user_input);
+            std::string response = LLMMainInferencing(user_input);
             if (!response.starts_with("[Error]")) {
 
                 // Post-processing to truncate (if you still want to do this)
@@ -514,29 +425,169 @@ std::string mainLLM(const std::string &user_input) {
 };
 
 // Define the static variable outside the class
-// Whyyy do you need to initialize the python interpreter again?? aaaaaaa
-//std::unique_ptr<py::scoped_interpreter> LLMInference::guard = nullptr;
 
+class PagerManager {
+private:
+    sqlite3* db;
+
+    struct DatabaseEntry {
+        std::string pipeline_input;
+        std::string visual_cues;
+        std::string additional_sensory_input;
+        std::string llm_response;
+        int64_t epoch_written;
+        int64_t epoch_accessed;
+    };
+
+    std::unordered_map<std::string, DatabaseEntry> l0_cache; // L0 buffer
+    const double SIMILARITY_THRESHOLD = 0.69;
+
+public:
+    PagerManager() {
+        int rc = sqlite3_open("./engineInteraction.db", &db);
+        if (rc) {
+            throw std::runtime_error("Cannot open database");
+        }
+
+        // Create table if not exists
+        const char* sql = "CREATE TABLE IF NOT EXISTS interactions ("
+                         "pipeline_input TEXT,"
+                         "visual_cues TEXT,"
+                         "additional_sensory_input TEXT,"
+                         "llm_response TEXT,"
+                         "epoch_written INTEGER,"
+                         "epoch_accessed INTEGER);";
+
+        char* errMsg = 0;
+        rc = sqlite3_exec(db, sql, 0, 0, &errMsg);
+        if (rc != SQLITE_OK) {
+            sqlite3_free(errMsg);
+            throw std::runtime_error("SQL error creating table");
+        }
+
+        prefetchToL0();
+    }
+
+    double calculateSimilarity(const std::string& str1, const std::string& str2) {
+    const size_t len1 = str1.length();
+    const size_t len2 = str2.length();
+
+    // Create matrix for Levenshtein distance calculation
+    std::vector<std::vector<int>> matrix(len1 + 1, std::vector<int>(len2 + 1));
+
+    // Initialize first row and column
+    for (size_t i = 0; i <= len1; i++) {
+        matrix[i][0] = i;
+    }
+    for (size_t j = 0; j <= len2; j++) {
+        matrix[0][j] = j;
+    }
+
+    // Fill in the rest of the matrix
+    for (size_t i = 1; i <= len1; i++) {
+        for (size_t j = 1; j <= len2; j++) {
+            if (str1[i-1] == str2[j-1]) {
+                matrix[i][j] = matrix[i-1][j-1];
+            } else {
+                matrix[i][j] = 1 + std::min({matrix[i-1][j],      // deletion
+                                           matrix[i][j-1],      // insertion
+                                           matrix[i-1][j-1]});  // substitution
+            }
+        }
+    }
+
+    // Calculate similarity score based on Levenshtein distance
+    double maxLength = std::max(len1, len2);
+    double distance = matrix[len1][len2];
+    return 1.0 - (distance / maxLength);
+}
+
+    void prefetchToL0() {
+        // Load most recently accessed entries into L0
+        const char* sql = "SELECT * FROM interactions ORDER BY epoch_accessed DESC LIMIT 1000;";
+        sqlite3_stmt* stmt;
+
+        if (sqlite3_prepare_v2(db, sql, -1, &stmt, 0) == SQLITE_OK) {
+            while (sqlite3_step(stmt) == SQLITE_ROW) {
+                DatabaseEntry entry;
+                entry.pipeline_input = std::string((const char*)sqlite3_column_text(stmt, 0));
+                entry.visual_cues = std::string((const char*)sqlite3_column_text(stmt, 1));
+                entry.additional_sensory_input = std::string((const char*)sqlite3_column_text(stmt, 2));
+                entry.llm_response = std::string((const char*)sqlite3_column_text(stmt, 3));
+                entry.epoch_written = sqlite3_column_int64(stmt, 4);
+                entry.epoch_accessed = sqlite3_column_int64(stmt, 5);
+
+                l0_cache[entry.pipeline_input] = entry;
+            }
+        }
+        sqlite3_finalize(stmt);
+    }
+
+    DatabaseEntry findSimilarEntry(const std::string& input) {
+        // Fuzzy search in L0 cache
+        for (const auto& entry : l0_cache) {
+            double similarity = calculateSimilarity(input, entry.first);
+            if (similarity >= SIMILARITY_THRESHOLD) {
+                // Update epoch_accessed
+                int64_t current_epoch = std::chrono::duration_cast<std::chrono::milliseconds>(
+                    std::chrono::system_clock::now().time_since_epoch()
+                ).count();
+
+                const char* sql = "UPDATE interactions SET epoch_accessed = ? WHERE pipeline_input = ?;";
+                sqlite3_stmt* stmt;
+                sqlite3_prepare_v2(db, sql, -1, &stmt, 0);
+                sqlite3_bind_int64(stmt, 1, current_epoch);
+                sqlite3_bind_text(stmt, 2, entry.first.c_str(), -1, SQLITE_STATIC);
+                sqlite3_step(stmt);
+                sqlite3_finalize(stmt);
+
+                return entry.second;
+            }
+        }
+        return DatabaseEntry(); // Return empty entry if no match found
+    }
+    sqlite3* getDB() { return db; }
+};
+
+// Class SchedulerPipeline is where you code the CoT chains and decision making here
 class SchedulerPipeline {
 private:
     LLMInference llm_inference;
+    PagerManager pager_manager;
 
 public:
     std::string processInput(const std::string& user_input) {
-        std::cout << "[SchedulerPipeline]: Received user input for processing: \"" << user_input << "\"" << std::endl;
+        // Check cache first
+        auto cached_entry = pager_manager.findSimilarEntry(user_input);
+        if (!cached_entry.llm_response.empty()) {
+            return cached_entry.llm_response;
+        }
 
-        // First, let LLMChild optimize/preprocess the prompt
-        std::cout << "[SchedulerPipeline]: Optimizing the prompt..." << std::endl;
-        std::string optimized_prompt = llm_inference.LLMchild(user_input);
-
-        std::cout << "[SchedulerPipeline]: Optimized prompt generated: \"" << optimized_prompt << "\"" << std::endl;
+        // First, let LLMMainInferencing optimize/preprocess the prompt
+        std::string optimized_prompt = "Please optimize and expand upon this input while maintaining its core meaning: " + user_input;
+        optimized_prompt = llm_inference.LLMMainInferencing(optimized_prompt);
 
         // Then, pass the optimized prompt to mainLLM
-        std::cout << "[SchedulerPipeline]: Passing the optimized prompt to the LLM for response generation..." << std::endl;
-        std::string llm_response = llm_inference.mainLLM(optimized_prompt);
+        std::string llm_response = llm_inference.LLMMainInferencing(optimized_prompt);
 
-        std::cout << "[SchedulerPipeline]: Received the LLM response." << std::endl;
-        std::cout << "[SchedulerPipeline]: Final response: \"" << llm_response << "\"" << std::endl;
+        // Store new interaction in database
+        const char* sql = "INSERT INTO interactions VALUES (?, ?, ?, ?, ?, ?);";
+        sqlite3_stmt* stmt;
+        sqlite3_prepare_v2(pager_manager.getDB(), sql, -1, &stmt, 0);
+
+        int64_t current_epoch = std::chrono::duration_cast<std::chrono::milliseconds>(
+            std::chrono::system_clock::now().time_since_epoch()
+        ).count();
+
+        sqlite3_bind_text(stmt, 1, user_input.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 2, "Not Available For this Time", -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 3, "Not Available For this Time", -1, SQLITE_STATIC);
+        sqlite3_bind_text(stmt, 4, llm_response.c_str(), -1, SQLITE_STATIC);
+        sqlite3_bind_int64(stmt, 5, current_epoch);
+        sqlite3_bind_int64(stmt, 6, current_epoch);
+
+        sqlite3_step(stmt);
+        sqlite3_finalize(stmt);
 
         return llm_response;
     }
@@ -575,7 +626,7 @@ public:
                 }
 
                 // Process through scheduler pipeline
-                std::cout << "\n[SystemDebug_RemoveThisLater]: Processing through Scheduler Pipeline...\n";
+                //std::cout << "\n[SystemDebug_RemoveThisLater]: Processing through Scheduler Pipeline...\n";
                 std::string final_response = scheduler.processInput(user_input);
 
                 // Display the response
@@ -796,3 +847,4 @@ int main() {
 
     return 0;
 }
+

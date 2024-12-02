@@ -282,6 +282,12 @@ add_executable(main ${mainEngineCode})
 # Link the curl library
 target_link_libraries(main PRIVATE curl)  
 
+# Find the SQLite3 library
+find_library(SQLITE3_LIBRARIES sqlite3 REQUIRED)
+
+# Link the SQLite3 library
+target_link_libraries(main PRIVATE sqlite3)
+
 #embed python3 interpreter into the ./main engine using pybind11
 target_link_libraries(main PUBLIC pybind11::embed)
 
