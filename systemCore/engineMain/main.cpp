@@ -23,6 +23,8 @@
 #include "./Library/crow.h"
 #include <sys/wait.h>  // For waitpid
 #include <nlohmann/json.hpp> //converting json llama_cpp openAI format into readable one return for the human interface
+#include <progressbar.h> // Include the progressbar library
+
 
 #ifdef _WIN32
 #include <windows.h>
@@ -115,6 +117,20 @@ size_t WriteCallback(void* contents, size_t size, size_t nmemb, void* userp) {
     return totalSize;
 }
 
+// Function to determine the model path dynamically
+// If you want to change the model Path name, Program it only in here!
+std::string getModelPath() {
+    std::string zygoteModelPath = "./tinyLLaMatestModel.gguf";
+    std::string dynamicModelPath = "./evolvingModel.gguf";
+
+    if (fs::exists(dynamicModelPath)) {
+        return dynamicModelPath;
+    } else if (fs::exists(zygoteModelPath)) {
+        return zygoteModelPath;
+    } else {
+        return ""; //Neither model exists
+    }
+}
 
 // Function to download the model file using libcurl
 bool download_model(const std::string& url, const std::string& output_path) {
@@ -269,10 +285,26 @@ class LLMInference : public ModelBase {
 public:
     LLMInference() {
         setupPythonEnv();
+        //Attempt to download model if neither exists
+        std::string modelPath = getModelPath();
+        if (modelPath.empty()) {
+            std::string zygoteModelName = "Phi-3-mini-4k-instruct";
+            std::string model_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf?download=true";
+            std::string model_path = "./" + zygoteModelName + ".gguf";
+            if (!download_model(model_url, model_path)) {
+                std::cerr << "[Error] : Failed to download model. Exiting." << std::endl;
+                exit(1);
+            }
+        }
     }
 
+
     std::string LLMchild(const std::string &user_input) {
-        std::string model_path = "./tinyLLaMatestModel.gguf";
+        std::string model_path = getModelPath(); //Use dynamic path determination
+        if (model_path.empty()) {
+            std::cerr << "[Error] No suitable model found. Download failed or models don't exist." << std::endl;
+            return "[Error] No suitable model found";
+        }
         if (!fs::exists(model_path)) {
             std::cerr << "[Error] Model file not found. Downloading failed, aborting." << std::endl;
             return "[Error] Model download failed";
