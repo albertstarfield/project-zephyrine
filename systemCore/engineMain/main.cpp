@@ -114,16 +114,61 @@ bool download_model(const std::string& url, const std::string& output_path) {
 
     curl = curl_easy_init();
     if (!curl) {
-        std::cerr << "[Error] :  Zygote Model Downloader Failed to initialize curl" << std::endl;
+        std::cerr << "[Error] : Zygote Model Downloader Failed to initialize curl" << std::endl;
         return false;
     }
+
+    // Variables for progress tracking
+    struct {
+        double lastProgress = 0.0;
+        double lastTime = 0.0;
+        double lastBytes = 0.0;
+    } progressInfo;
+
+    // Progress callback function
+    auto progressCallback = [](void* clientp, double dltotal, double dlnow, double ultotal, double ulnow) -> int {
+        if (dltotal <= 0) return 0;
+
+        auto* info = static_cast<decltype(progressInfo)*>(clientp);
+        double currentTime = std::chrono::duration<double>(
+            std::chrono::system_clock::now().time_since_epoch()
+        ).count();
+        
+        double progress = (dlnow / dltotal) * 100;
+        
+        // Update every 1% or at least 1 second has passed
+        if (progress - info->lastProgress >= 1.0 || currentTime - info->lastTime >= 1.0) {
+            double timeElapsed = currentTime - info->lastTime;
+            double bytesDownloaded = dlnow - info->lastBytes;
+            
+            if (timeElapsed > 0) {
+                double speed = bytesDownloaded / timeElapsed / 1024 / 1024; // MB/s
+                std::cout << "\r[Info] : Importing Pure Zygote Model: " 
+                          << std::fixed << std::setprecision(1) << progress << "% "
+                          << "[Speed: " << std::setprecision(2) << speed << " MB/s]"
+                          << std::flush;
+            }
+            
+            info->lastProgress = progress;
+            info->lastTime = currentTime;
+            info->lastBytes = dlnow;
+        }
+        return 0;
+    };
+
+    std::cout << "[Info] : We're importing publically available model that is pure and used as baseline..." << std::endl;
 
     curl_easy_setopt(curl, CURLOPT_URL, url.c_str());
     curl_easy_setopt(curl, CURLOPT_WRITEFUNCTION, WriteCallback);
     curl_easy_setopt(curl, CURLOPT_WRITEDATA, &file);
-    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L); // Follow redirects if necessary
+    curl_easy_setopt(curl, CURLOPT_FOLLOWLOCATION, 1L);
+    curl_easy_setopt(curl, CURLOPT_NOPROGRESS, 0L);
+    curl_easy_setopt(curl, CURLOPT_XFERINFOFUNCTION, progressCallback);
+    curl_easy_setopt(curl, CURLOPT_XFERINFODATA, &progressInfo);
 
     res = curl_easy_perform(curl);
+    std::cout << std::endl; // New line after progress bar
+
     if (res != CURLE_OK) {
         std::cerr << "[Error] : curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
         file.close();
@@ -133,7 +178,7 @@ bool download_model(const std::string& url, const std::string& output_path) {
 
     file.close();
     curl_easy_cleanup(curl);
-    std::cout << "[Info] : Zygote Model downloaded successfully to " << output_path << std::endl;
+    std::cout << "[Info] : Pure Zygote Model imported successfully to " << output_path << std::endl;
     return true;
 }
 
