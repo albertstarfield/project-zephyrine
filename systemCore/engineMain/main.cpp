@@ -23,7 +23,7 @@
 #include "./Library/crow.h"
 #include <sys/wait.h>  // For waitpid
 #include <nlohmann/json.hpp> //converting json llama_cpp openAI format into readable one return for the human interface
-#include <progressbar.h> // Include the progressbar library
+//#include <progressbar.h> // Include the progressbar library
 
 
 #ifdef _WIN32

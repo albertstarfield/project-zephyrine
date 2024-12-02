@@ -1,0 +1,6 @@
+*.o
+*.i
+*.s
+*.d
+*.exe
+jpeg2png

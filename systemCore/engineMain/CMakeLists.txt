@@ -40,6 +40,9 @@ include_directories(${Library}/curl/include/curl/)
 # Prevent issue Undefined symbols for architecture arm64:
 link_directories(${LIBRARY}/curl/lib)  # Ensure this path points to where libcurl.a or libcurl.so is located
 
+message(STATUS "Setting jpeg2png Libary Zephyrine Library Module for C++ Management Engine ProgressBar etc")
+include_directories(${Library}/jpeg2png/)
+
 
 # Specify the path to your Boost Library 
 message(STATUS "Setting (1/3) Boost Universal Library Zephyrine Library Module for C++ Management Engine")
