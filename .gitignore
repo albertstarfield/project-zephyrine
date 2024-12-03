@@ -38,6 +38,7 @@ systemCore/storage/presistentInteractionMem.json
 systemCore/nodeLocalRuntime
 **/*Mem.json
 **/*.log
+**/*engineInteraction.db**
 systemCore/storage/foreverEtchedFirstHandExperienced.json
 builder-tool/autoEasySetup/Adelaide Zephyrine Charlotte.app
 systemCore/storage/UMA_State.json
