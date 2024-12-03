@@ -73,7 +73,6 @@ std::string getExecutablePath() {
 }
 
 namespace fs = std::filesystem; // Universal or cross platform path reconstruction
-namespace fs = std::filesystem;
 namespace py = pybind11;
 
 
@@ -778,9 +777,9 @@ class AdelaideZephyrineCharlotte : public crow::SimpleApp {
 public:
     AdelaideZephyrineCharlotte() {
         // Define endpoint
-        CROW_ROUTE(*this, "/api/generate")
-            .methods(HTTPMethodType{crow::HTTPMethod::Post}.get()) // Use strong typing for the HTTP method
-            ([](const crow::request& req) -> crow::response { // Strongly typed lambda return type
+        CROW_ROUTE((*this), "/api/generate")
+        .methods("POST"_method)  // Correct syntax for specifying HTTP method
+        ([](const crow::request& req) -> crow::response {
                 std::cout << CONSOLE_PREFIX << "📥 A new request has arrived at /api/generate. Let's see what treasures it holds!\n";
 
                 // Parse the JSON request body
@@ -891,8 +890,8 @@ int main() {
     });
 
     // Join the server thread before exiting main
-    serverThread.join(); // as the thread stopper
-
+    serverThread.join(); // as the thread stopper from going to return 0 or exit
+    exit(0);
     return 0;
 }
 //================================================
