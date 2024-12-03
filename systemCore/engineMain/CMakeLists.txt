@@ -43,6 +43,9 @@ link_directories(${LIBRARY}/curl/lib)  # Ensure this path points to where libcur
 message(STATUS "Setting jpeg2png Libary Zephyrine Library Module for C++ Management Engine ProgressBar etc")
 include_directories(${Library}/jpeg2png/)
 
+message(STATUS "Setting jpeg2png Libary Zephyrine Library Module for SQLITE Database amalgamation 3470100 ")
+include_directories(${Library}/sqlite-amalgamation-3470100/)
+
 
 # Specify the path to your Boost Library 
 message(STATUS "Setting (1/3) Boost Universal Library Zephyrine Library Module for C++ Management Engine")
