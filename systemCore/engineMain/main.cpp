@@ -1,7 +1,10 @@
+
 #include <deque>
 #include <iostream>
 #include <memory>
 #include <csignal>
+#include <execinfo.h>
+#include <unistd.h>
 #include <chrono>
 #include <thread>
 #include <stdexcept>
@@ -14,21 +17,21 @@
 #include <vector>
 #include <sstream>
 #include <curl/curl.h>
+#include <execinfo.h>
 #include <mutex>
 #include <pybind11/embed.h>
 #include "./Library/crow.h"
-#include <nlohmann/json.hpp>
+#include <sys/wait.h>  // For waitpid
+#include <nlohmann/json.hpp> //converting json llama_cpp openAI format into readable one return for the human interface
+#include <unistd.h> // for dup2
+#include <fcntl.h>  // for open
+#include <sqlite3.h>
+
 
 #ifdef _WIN32
-    #include <windows.h>
-#else
-    #include <unistd.h>
-    #include <fcntl.h>
-    #include <sys/wait.h>
-    #include <execinfo.h>
-#endif
-
+#include <windows.h>
 #include <cstring>
+#endif
 
 
 // Circular Buffer for Debug Memory and C++ commands
@@ -53,14 +56,14 @@ void log_command(const std::string& command) {
 
 std::string getExecutablePath() {
 #ifdef __linux__ // Linux systems
-#ifdef __linux__
+    char buf[1024];
     ssize_t len = readlink("/proc/self/exe", buf, sizeof(buf) - 1);
     if (len != -1) {
         buf[len] = '\0';
         return std::string(buf);
     }
 #elif defined(_WIN32) // Windows systems
-#elif defined(_WIN32)
+    char buf[MAX_PATH];
     if (GetModuleFileName(NULL, buf, MAX_PATH)) {
         return std::string(buf);
     }
@@ -135,20 +138,20 @@ bool download_model(const std::string& url, const std::string& output_path) {
         ).count();
 
         double progress = (dlnow / dltotal) * 100;
-
+        
         // Update every 1% or at least 1 second has passed
         if (progress - info->lastProgress >= 1.0 || currentTime - info->lastTime >= 1.0) {
             double timeElapsed = currentTime - info->lastTime;
             double bytesDownloaded = dlnow - info->lastBytes;
-
+            
             if (timeElapsed > 0) {
                 double speed = bytesDownloaded / timeElapsed / 1024 / 1024; // MB/s
-                double speed = bytesDownloaded / timeElapsed / 1024 / 1024;
+                std::cout << "\r[Info] : Importing Pure Zygote Model: "
                           << std::fixed << std::setprecision(1) << progress << "% "
                           << "[Speed: " << std::setprecision(2) << speed << " MB/s]"
                           << std::flush;
             }
-
+            
             info->lastProgress = progress;
             info->lastTime = currentTime;
             info->lastBytes = dlnow;
@@ -169,8 +172,8 @@ bool download_model(const std::string& url, const std::string& output_path) {
     res = curl_easy_perform(curl);
     std::cout << std::endl; // New line after progress bar
 
-    std::cout << std::endl;
     if (res != CURLE_OK) {
+        std::cerr << "[Error] : curl_easy_perform() failed: " << curl_easy_strerror(res) << std::endl;
         file.close();
         curl_easy_cleanup(curl);
         return false;
@@ -212,8 +215,8 @@ char generate_random_fill_char() {
     std::mt19937 generator(rd());
     std::uniform_int_distribution<int> dist(33, 126); // Printable ASCII range
 
-    std::uniform_int_distribution<int> dist(33, 126);
     return static_cast<char>(dist(generator));
+}
 
 // Function to generate a random SHA-256 string
 std::string generate_random_sha256() {
@@ -224,8 +227,8 @@ std::string generate_random_sha256() {
     std::stringstream sha256;
     char fill_char = generate_random_fill_char(); // Get a random fill character
     sha256 << std::hex << std::setfill(fill_char); // Use the random fill character
-    char fill_char = generate_random_fill_char();
-    sha256 << std::hex << std::setfill(fill_char);
+    for (int i = 0; i < 64; ++i) {
+        sha256 << std::setw(1) << dist(generator);
     }
 
     return sha256.str();
@@ -243,7 +246,7 @@ std::string getModelPath() {
         return zygoteModelPath;
     } else {
         return ""; //Neither model exists
-        return "";
+    }
 }
 
 // Placeholder text generation function with random SHA-256, returning JSON
@@ -378,7 +381,7 @@ public:
                 auto json_response = nlohmann::json::parse(json_string);
                 auto text_completion = json_response["choices"][0]["text"];
             std::string response = text_completion.get<std::string>();
-
+            
             // Remove "Assistant: " prefix if present
             const std::string prefix = "Assistant: ";
             if (response.substr(0, prefix.length()) == prefix) {
@@ -397,12 +400,12 @@ public:
     }
 }
 
-    void runInferenceSelfTesting() {
+    void runInference() {
         try {
             std::string user_input = "When can we touch the sky?";
 
             // Inform the user that processing has started
-            std::cout << "Testi..." << std::endl;
+            std::cout << "Model is processing..." << std::endl;
 
             std::string response = LLMMainInferencing(user_input);
             if (!response.starts_with("[Error]")) {
@@ -548,44 +551,23 @@ public:
 };
 
 // Class SchedulerPipeline is where you code the CoT chains and decision making here
-// This is should be the first class that should be launch on int main, then the OpenAI API status quo html API
 class SchedulerPipeline {
 private:
     LLMInference llm_inference;
     PagerManager pager_manager;
 
 public:
-    std::string selfThoughts(const std::string& user_input) {
-        // Self Contemplating Thoughts (Context automatically loaded by the processInput method)
-        // Generate initial thoughts about the input
-        std::string thought_prompt = "What do I think about this: " + user_input;
-        std::string initial_thoughts = processInput(thought_prompt);
-
-        // Use those thoughts to generate a more refined response
-        return processInput(initial_thoughts);
-    }
-
     std::string processInput(const std::string& user_input) {
-        // Developer Note:
-        // Before all of this, check Cached Entry and do fuzzy logic with threshold input 0.69 if it mach, match the highest rating and use it as an output
-        // In here processInput have responsibility to fetch memory, context and vector context from the database L1 and L0 to be augmented into the llm response
-        // Not only that processInput also decide based on the current prompt and the context previously if CoT is required or indepth grokking required, if it does then 
-
         // Check cache first
         auto cached_entry = pager_manager.findSimilarEntry(user_input);
         if (!cached_entry.llm_response.empty()) {
             return cached_entry.llm_response;
         }
 
-
-
         // First, let LLMMainInferencing optimize/preprocess the prompt
         std::string optimized_prompt = "Please optimize and expand upon this input while maintaining its core meaning: " + user_input;
         optimized_prompt = llm_inference.LLMMainInferencing(optimized_prompt);
 
-
-
-        // This is the final response from the CoT processing (if it doesn't have cached entry)
         // Then, pass the optimized prompt to mainLLM
         std::string llm_response = llm_inference.LLMMainInferencing(optimized_prompt);
 
@@ -669,7 +651,7 @@ public:
     }
 
     void finetuneModel() {
-        // Implement finetuning logic here (Import from )
+        // Implement finetuning logic here
         std::cout << "[Finetuning Model]: Stub has been launched!" << std::endl;
     }
 };
@@ -682,9 +664,9 @@ public:
         setupPythonEnv();
     }
 
-    void runInferenceSelfTesting() {
+    void runInference() {
         // Implement Stable Diffusion inference logic here
-        std::cout << "[Running SD Inference Testing]: Stub has been launched!" << std::endl;
+        std::cout << "[Running SD Inference]: Stub has been launched!" << std::endl;
     }
 };
 
@@ -789,33 +771,26 @@ int main() {
     //int* ptr = nullptr;
     //*ptr = 42;  // This will cause a segmentation fault
 
-    LLMInference llm_inference; // we move this into scheduler later on (so it decided when or where it shall be invoked)
-    llm_inference.runInferenceSelfTesting(); // we move this into scheduler later on (so it decided when or where it shall be invoked)
+    LLMInference llm_inference;
+    llm_inference.runInference();
 
-    LLMFinetune llm_finetune; // we move this into scheduler later on (so it decided when or where it shall be invoked)
-    llm_finetune.finetuneModel(); // we move this into scheduler later on (so it decided when or where it shall be invoked)
+    LLMFinetune llm_finetune;
+    llm_finetune.finetuneModel();
 
-    SDInference sd_inference; // we move this into scheduler later on (so it decided when or where it shall be invoked)
-    sd_inference.runInferenceSelfTesting(); // we move this into scheduler later on (so it decided when or where it shall be invoked)
+    SDInference sd_inference;
+    sd_inference.runInference();
 
-    SDFinetune sd_finetune; // we move this into scheduler later on (so it decided when or where it shall be invoked)
-    sd_finetune.finetuneModel();// we move this into scheduler later on (so it decided when or where it shall be invoked)
+    SDFinetune sd_finetune;
+    sd_finetune.finetuneModel();
     crow::SimpleApp app;
 
     std::cout << CONSOLE_PREFIX << "🌐 Starting up the Adelaide&Albert Engine... Let's make some magic happen!\n";
 
-    #ifdef _WIN32
-        // Windows: Redirect stderr to NUL
-        freopen("NUL", "w", stderr);
-    #else
-        // Unix-like systems: Redirect stderr to /dev/null
-        int devnull = open("/dev/null", O_WRONLY);
-        if (devnull != -1) {
-            dup2(devnull, STDERR_FILENO);
-        close(devnull);
-        }
+    // Suppress stderr
+    int devnull = open("/dev/null", O_WRONLY); // Open null device
+    dup2(devnull, STDERR_FILENO); // Redirect stderr to null device
+    close(devnull);
 
-    #endif
     // Define endpoint
     CROW_ROUTE(app, "/api/generate")
         .methods(HTTPMethodType{crow::HTTPMethod::Post}.get()) // Use strong typing for the HTTP method
@@ -859,19 +834,18 @@ int main() {
         });
 
     // Start the server in a separate thread
-    std::thread serverOpenAIEmulationInferenceThread([&app]() {
+    std::thread serverThread([&app]() {
         std::cout << CONSOLE_PREFIX << "🚀 The engine roars to life on port 8080. Ready to enlighten the world!\n";
         app.port(8080).multithreaded().run();
     });
-
-    
 
     // CLI chat interface can be started in the main thread
     cliInterfaceMain cli;
     cli.startInterface();
 
     // Join the server thread before exiting main
-    serverOpenAIEmulationInferenceThread.join();
+    serverThread.join();
 
     return 0;
 }
+
