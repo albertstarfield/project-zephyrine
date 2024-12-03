@@ -1,10 +1,6 @@
-
 #include <deque>
 #include <iostream>
 #include <memory>
-#include <csignal>
-#include <execinfo.h>
-#include <unistd.h>
 #include <chrono>
 #include <thread>
 #include <stdexcept>
@@ -17,20 +13,25 @@
 #include <vector>
 #include <sstream>
 #include <curl/curl.h>
-#include <execinfo.h>
 #include <mutex>
 #include <pybind11/embed.h>
 #include "./Library/crow.h"
-#include <sys/wait.h>  // For waitpid
-#include <nlohmann/json.hpp> //converting json llama_cpp openAI format into readable one return for the human interface
-#include <unistd.h> // for dup2
-#include <fcntl.h>  // for open
+#include <nlohmann/json.hpp>
 #include <sqlite3.h>
 
-
 #ifdef _WIN32
-#include <windows.h>
-#include <cstring>
+    #include <windows.h>
+    #include <cstring>
+    // Windows-specific headers
+    #define SIGNAL_HANDLER_AVAILABLE 0
+#else
+    // Unix/Linux specific headers
+    #include <csignal>
+    #include <execinfo.h>
+    #include <unistd.h>
+    #include <sys/wait.h>
+    #include <fcntl.h>
+    #define SIGNAL_HANDLER_AVAILABLE 1
 #endif
 
 
@@ -848,4 +849,3 @@ int main() {
 
     return 0;
 }
-
