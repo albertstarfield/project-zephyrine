@@ -312,7 +312,7 @@ protected:
         site.attr("main")(); // Reload site module
     }
 };
-
+//================================================ [MODEL INFERENCING SECTION]
 // Class for LLM Inference
 class LLMInference : public ModelBase {
 public:
@@ -428,8 +428,57 @@ public:
     }
 };
 
-// Define the static variable outside the class
+//================================================
 
+//================================================ [LLM & STABLEDIFFUSION FEEDLOOPING CONSTANT LEARNING SECTION]
+// Class for LLM Finetuning (Placeholder)
+class LLMFinetune : public ModelBase {
+public:
+    LLMFinetune() {
+        //py::scoped_interpreter guard{}; Do not reinitialize the interpreter again since it's already initialize on this domain main.cpp program
+        setupPythonEnv();
+    }
+
+    void finetuneModel() {
+        // Implement finetuning logic here
+        std::cout << "[Finetuning Model]: Stub has been launched!" << std::endl;
+    }
+};
+
+// Class for SD (Stable Diffusion) Inference (Placeholder)
+class SDInference : public ModelBase {
+public:
+    SDInference() {
+        //py::scoped_interpreter guard{}; Do not reinitialize the interpreter again since it's already initialize on this domain main.cpp program
+        setupPythonEnv();
+    }
+
+    void runInferenceTest() {
+        // Implement Stable Diffusion inference logic here
+        std::cout << "[Running SD Inference]: Stub has been launched!" << std::endl;
+    }
+};
+
+// Class for SD (Stable Diffusion) Finetuning (Placeholder)
+class SDFinetune : public ModelBase {
+public:
+    SDFinetune() {
+        //py::scoped_interpreter guard{}; Do not reinitialize the interpreter again since it's already initialize on this domain main.cpp program
+        setupPythonEnv();
+    }
+
+    void finetuneModel() {
+        // Implement Stable Diffusion finetuning logic here
+        std::cout << "[Finetuning SD Model]: Stub has been launched!" << std::endl;
+    }
+};
+//================================================ 
+
+
+
+//================================================
+// Define the static variable outside the class
+//================================================ [PAGING MEMORY MANAGEMENT SECTION L1 & L0]
 class PagerManager {
 private:
     sqlite3* db;
@@ -552,16 +601,23 @@ public:
     }
     sqlite3* getDB() { return db; }
 };
+//================================================
 
+
+
+//================================================ [SCHEDULER SECTION]
+// Inference and Fine-Tuning Scheduler Implementation "Backbrain Scheduler"
+// All the Inference from CLI and HTML HAVE to go through this scheduler thus the scheduler will allocate or redirect the result and serve ther result either from cache result or
 // Class SchedulerPipeline is where you code the CoT chains and decision making here
 // This is Backbrain Scheduler Architecture
+
 class SchedulerPipeline {
 private:
     LLMInference llm_inference;
     PagerManager pager_manager;
 
 public:
-    std::string processInput(const std::string& user_input) {
+    std::string processInput(const std::string& user_input) { //processInput is where the scheduler recieve the queries
         // Check cache first, then fetch from pager_manager or PagerManager on the last 5 interactions then the rest will be  
         auto cached_entry = pager_manager.findSimilarEntry(user_input);
         if (!cached_entry.llm_response.empty()) {
@@ -597,12 +653,16 @@ public:
         return llm_response;
     }
 };
+//================================================
 
+//================================================
+
+//================================================ [BASIC CLI INTERFACE SECTION]
 class cliInterfaceMain {
 private:
     SchedulerPipeline scheduler;
     const std::string WELCOME_MESSAGE =
-        "Welcome to Adelaide and Albert Engine CLI Interface\n"
+        "Welcome to Adelaide & Albert Engine CLI Interface\n"
         "All inputs are processed through the Scheduler Pipeline\n"
         "Type 'exit' or 'quit' to end the session\n"
         "----------------------------------------\n";
@@ -645,51 +705,10 @@ public:
     }
 };
 
+//================================================
 
-// Class for LLM Finetuning (Placeholder)
-class LLMFinetune : public ModelBase {
-public:
-    LLMFinetune() {
-        //py::scoped_interpreter guard{}; Do not reinitialize the interpreter again since it's already initialize on this domain main.cpp program
-        setupPythonEnv();
-    }
 
-    void finetuneModel() {
-        // Implement finetuning logic here
-        std::cout << "[Finetuning Model]: Stub has been launched!" << std::endl;
-    }
-};
-
-// Class for SD (Stable Diffusion) Inference (Placeholder)
-class SDInference : public ModelBase {
-public:
-    SDInference() {
-        //py::scoped_interpreter guard{}; Do not reinitialize the interpreter again since it's already initialize on this domain main.cpp program
-        setupPythonEnv();
-    }
-
-    void runInferenceTest() {
-        // Implement Stable Diffusion inference logic here
-        std::cout << "[Running SD Inference]: Stub has been launched!" << std::endl;
-    }
-};
-
-// Class for SD (Stable Diffusion) Finetuning (Placeholder)
-class SDFinetune : public ModelBase {
-public:
-    SDFinetune() {
-        //py::scoped_interpreter guard{}; Do not reinitialize the interpreter again since it's already initialize on this domain main.cpp program
-        setupPythonEnv();
-    }
-
-    void finetuneModel() {
-        // Implement Stable Diffusion finetuning logic here
-        std::cout << "[Finetuning SD Model]: Stub has been launched!" << std::endl;
-    }
-};
-
-// -----------------------------------------------Memory Dumping debugging-------------------------------------------------------------
-
+//================================================[SIGNAL AND DEBUGGING DUMPING SECTION]
 // Function to handle signals (e.g., SIGSEGV)
 // Watchdog auto Restart and memory dumping debugging
 void signalHandler(int signum) {
@@ -752,11 +771,65 @@ void signalHandler(int signum) {
     exit(signum);
 }
 
-// Inference and Fine-Tuning Scheduler Implementation "Backbrain Scheduler"
-// All the Inference from CLI and HTML HAVE to go through this scheduler thus the scheduler will allocate or redirect the result and serve ther result either from cache result or
+//================================================
+
+//================================================[OPENAI API SERVER EMULATION]
+class AdelaideZephyrineCharlotte : public crow::SimpleApp {
+public:
+    AdelaideZephyrineCharlotte() {
+        // Define endpoint
+        CROW_ROUTE(*this, "/api/generate")
+            .methods(HTTPMethodType{crow::HTTPMethod::Post}.get()) // Use strong typing for the HTTP method
+            ([](const crow::request& req) -> crow::response { // Strongly typed lambda return type
+                std::cout << CONSOLE_PREFIX << "📥 A new request has arrived at /api/generate. Let's see what treasures it holds!\n";
+
+                // Parse the JSON request body
+                crow::json::rvalue json = crow::json::load(req.body);
+                if (!json) {
+                    std::cout << CONSOLE_PREFIX << "❌ Oops! That didn't look like valid JSON. Check your scroll and try again.\n";
+                    return crow::response(400, "🚫 Invalid JSON request");
+                }
+
+                // Use the is_string function to check if the fields are strings
+                if (!json.has("model") || !is_string(json["model"]) ||
+                    !json.has("prompt") || !is_string(json["prompt"])) {
+                    std::cout << CONSOLE_PREFIX << "⚠️ Missing or muddled fields. I need 'model' and 'prompt' to conjure the magic!\n";
+                    return crow::response(400, "🚫 Missing or invalid 'model' or 'prompt' field");
+                }
+
+                // Get the model and prompt from the JSON
+                Model model{json["model"].s()};
+                Prompt prompt{json["prompt"].s()};
+
+                std::cout << CONSOLE_PREFIX << "🧠 Engaging with model: " << model.get() << ". Here comes some wisdom...\n";
+
+                // Generate text using the placeholder function
+                ResponseText generated_text = generate_text(model, prompt);
+
+                // Create the JSON response
+                crow::json::wvalue response;
+
+                response["model"] = model.get(); // Include the model in the response
+                response["response"] = crow::json::wvalue(std::move(generated_text.get())); // Move the generated JSON object
+                response["done"] = true;
+
+                std::cout << CONSOLE_PREFIX << "🎉 Success! Your response is ready. Feel the wisdom flow.\n";
+
+                // Return the JSON response directly
+                return crow::response(response);
+            });
+    }
+
+    void start() {
+        std::cout << CONSOLE_PREFIX << "🚀 The engine roars to life on port 8080. Ready to enlighten the world!\n";
+        port(8080).multithreaded().run();
+    }
+};
+//================================================
 
 
 // ------------------------------------------------------------------------------------------------------------
+//================================================[MAIN ROUTINE PROGRAM]
 
 int main() {
 
@@ -771,12 +844,8 @@ int main() {
     signal(SIGFPE, signalHandler);   // Catch floating-point errors
     signal(SIGINT, signalHandler);   // Interrupt signal (Ctrl+C)
 
-    // Example code that will cause a segmentation fault (for testing purposes)
-    //int* ptr = nullptr;
-    //*ptr = 42;  // This will cause a segmentation fault
-
     //-=-=-=-=-=-=-=-
-    // Move this into Scheduler later on.. (So that the scheduler have a "expandable buffer" where it will have some kind of queue where the scheduler will have two mode on executing the inference either the foreground mode, or Backbrain mode/Background mode)
+    // Move this into Scheduler later on.. (So that the scheduler have a "expandable buffer" where it will have some kind of queue where the scheduler will have two mode on executing the inference either the foreground mode, or Backbrain mode/Background mode. The difference is that Foreground mode is Non-interruptable and Background/Backbrain mode is interruptable task queue)
      
     LLMInference llm_inference;
     llm_inference.runInferenceTest();
@@ -792,10 +861,14 @@ int main() {
     //-=-=-=-=-=-=-=-
 
 
-    crow::SimpleApp app;
+    //crow::SimpleApp app;
 
     std::cout << CONSOLE_PREFIX << "🌐 Starting up the Adelaide&Albert Engine... Let's make some magic happen!\n";
+    
 
+    
+
+    // Redirect all stderr to a specific target, rather than spamming the Terminal (Future Note Development: Try to redirecting it to Log file but limit the logfile size so it's act like a ring buffer)
     #ifdef _WIN32
         // Suppress stderr on Windows
         freopen("NUL", "w", stderr);
@@ -806,60 +879,20 @@ int main() {
         close(devnull);
     #endif
 
-    // Define endpoint
-    CROW_ROUTE(app, "/api/generate")
-        .methods(HTTPMethodType{crow::HTTPMethod::Post}.get()) // Use strong typing for the HTTP method
-        ([](const crow::request& req) -> crow::response { // Strongly typed lambda return type
-            std::cout << CONSOLE_PREFIX << "📥 A new request has arrived at /api/generate. Let’s see what treasures it holds!\n";
-
-            // Parse the JSON request body
-            crow::json::rvalue json = crow::json::load(req.body);
-            if (!json) {
-                std::cout << CONSOLE_PREFIX << "❌ Oops! That didn’t look like valid JSON. Check your scroll and try again.\n";
-                return crow::response(400, "🚫 Invalid JSON request");
-            }
-
-            // Use the is_string function to check if the fields are strings
-            if (!json.has("model") || !is_string(json["model"]) ||
-                !json.has("prompt") || !is_string(json["prompt"])) {
-                std::cout << CONSOLE_PREFIX << "⚠️ Missing or muddled fields. I need 'model' and 'prompt' to conjure the magic!\n";
-                return crow::response(400, "🚫 Missing or invalid 'model' or 'prompt' field");
-            }
-
-            // Get the model and prompt from the JSON
-            Model model{json["model"].s()};
-            Prompt prompt{json["prompt"].s()};
-
-            std::cout << CONSOLE_PREFIX << "🧠 Engaging with model: " << model.get() << ". Here comes some wisdom...\n";
-
-            // Generate text using the placeholder function
-            ResponseText generated_text = generate_text(model, prompt);
-
-            // Create the JSON response
-            crow::json::wvalue response;
-
-            response["model"] = model.get(); // Include the model in the response
-            response["response"] = crow::json::wvalue(std::move(generated_text.get())); // Move the generated JSON object
-            response["done"] = true;
-
-            std::cout << CONSOLE_PREFIX << "🎉 Success! Your response is ready. Feel the wisdom flow.\n";
-
-            // Return the JSON response directly
-            return crow::response(response);
-        });
-
-    // Start the server in a separate thread
-    std::thread serverThread([&app]() {
-        std::cout << CONSOLE_PREFIX << "🚀 The engine roars to life on port 8080. Ready to enlighten the world!\n";
-        app.port(8080).multithreaded().run();
-    });
 
     // CLI chat interface can be started in the main thread
     cliInterfaceMain cli;
     cli.startInterface();
 
+    // Start the server in a separate thread
+    AdelaideZephyrineCharlotte app;
+    std::thread serverThread([&app]() {
+        app.start();
+    });
+
     // Join the server thread before exiting main
-    serverThread.join();
+    serverThread.join(); // as the thread stopper
 
     return 0;
 }
+//================================================
