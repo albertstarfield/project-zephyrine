@@ -401,7 +401,7 @@ public:
     }
 }
 
-    void runInference() {
+    void runInferenceTest() {
         try {
             std::string user_input = "When can we touch the sky?";
 
@@ -552,6 +552,7 @@ public:
 };
 
 // Class SchedulerPipeline is where you code the CoT chains and decision making here
+// This is Backbrain Scheduler Architecture
 class SchedulerPipeline {
 private:
     LLMInference llm_inference;
@@ -559,7 +560,7 @@ private:
 
 public:
     std::string processInput(const std::string& user_input) {
-        // Check cache first
+        // Check cache first, then fetch from pager_manager or PagerManager on the last 5 interactions then the rest will be  
         auto cached_entry = pager_manager.findSimilarEntry(user_input);
         if (!cached_entry.llm_response.empty()) {
             return cached_entry.llm_response;
@@ -665,7 +666,7 @@ public:
         setupPythonEnv();
     }
 
-    void runInference() {
+    void runInferenceTest() {
         // Implement Stable Diffusion inference logic here
         std::cout << "[Running SD Inference]: Stub has been launched!" << std::endl;
     }
@@ -772,17 +773,23 @@ int main() {
     //int* ptr = nullptr;
     //*ptr = 42;  // This will cause a segmentation fault
 
+    //-=-=-=-=-=-=-=-
+    // Move this into Scheduler later on.. (So that the scheduler have a "expandable buffer" where it will have some kind of queue where the scheduler will have two mode on executing the inference either the foreground mode, or Backbrain mode/Background mode)
+     
     LLMInference llm_inference;
-    llm_inference.runInference();
+    llm_inference.runInferenceTest();
 
     LLMFinetune llm_finetune;
     llm_finetune.finetuneModel();
 
     SDInference sd_inference;
-    sd_inference.runInference();
+    sd_inference.runInferenceTest();
 
     SDFinetune sd_finetune;
     sd_finetune.finetuneModel();
+    //-=-=-=-=-=-=-=-
+
+
     crow::SimpleApp app;
 
     std::cout << CONSOLE_PREFIX << "🌐 Starting up the Adelaide&Albert Engine... Let's make some magic happen!\n";
