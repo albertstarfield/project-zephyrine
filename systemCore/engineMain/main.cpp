@@ -406,7 +406,7 @@ public:
             std::string user_input = "When can we touch the sky?";
 
             // Inform the user that processing has started
-            std::cout << "Model is processing..." << std::endl;
+            std::cout << "Running cold-start self-test for LLM Model... (This will determine if there's any issue with the model or not)" << std::endl;
 
             std::string response = LLMMainInferencing(user_input);
             if (!response.starts_with("[Error]")) {
@@ -419,6 +419,8 @@ public:
                 }
 
                 std::cout << completion << std::endl;  // Print the (possibly truncated) text completion
+                std::cout << "Completed the cold-start self-test for LLM Model... " << std::endl;
+
             }
         } catch (const std::exception& e) {
             std::cerr << "[Error] Failed to run inference: " << e.what() << std::endl;
@@ -794,10 +796,15 @@ int main() {
 
     std::cout << CONSOLE_PREFIX << "🌐 Starting up the Adelaide&Albert Engine... Let's make some magic happen!\n";
 
-    // Suppress stderr
-    int devnull = open("/dev/null", O_WRONLY); // Open null device
-    dup2(devnull, STDERR_FILENO); // Redirect stderr to null device
-    close(devnull);
+    #ifdef _WIN32
+        // Suppress stderr on Windows
+        freopen("NUL", "w", stderr);
+    #else
+        // Suppress stderr on *nix systems
+        int devnull = open("/dev/null", O_WRONLY); // Open null device
+        dup2(devnull, STDERR_FILENO); // Redirect stderr to null device
+        close(devnull);
+    #endif
 
     // Define endpoint
     CROW_ROUTE(app, "/api/generate")
