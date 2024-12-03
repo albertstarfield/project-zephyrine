@@ -43,8 +43,12 @@ link_directories(${LIBRARY}/curl/lib)  # Ensure this path points to where libcur
 message(STATUS "Setting jpeg2png Libary Zephyrine Library Module for C++ Management Engine ProgressBar etc")
 include_directories(${Library}/jpeg2png/)
 
-message(STATUS "Setting jpeg2png Libary Zephyrine Library Module for SQLITE Database amalgamation 3470100 ")
-include_directories(${Library}/sqlite-amalgamation-3470100/)
+message(STATUS "Setting SQLite Library Zephyrine Library Module for SQLITE Database amalgamation 3470100")
+set(SQLITE_DIR ${LIBRARY}/sqlite-amalgamation-3470100)
+add_library(sqlite3 STATIC
+    ${SQLITE_DIR}/sqlite3.c
+)
+target_include_directories(sqlite3 PUBLIC ${SQLITE_DIR})
 
 
 # Specify the path to your Boost Library 
@@ -286,7 +290,7 @@ add_executable(main ${mainEngineCode})
 target_link_libraries(main PRIVATE curl)  
 
 # Find the SQLite3 library
-find_library(SQLITE3_LIBRARIES sqlite3 REQUIRED)
+#find_library(SQLITE3_LIBRARIES sqlite3 REQUIRED) ( We don't need sqlite3 global system dependent library anymore because we have local and portable library already)
 
 # Link the SQLite3 library
 target_link_libraries(main PRIVATE sqlite3)
