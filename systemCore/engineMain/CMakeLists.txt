@@ -293,7 +293,7 @@ target_link_libraries(main PRIVATE curl)
 #find_library(SQLITE3_LIBRARIES sqlite3 REQUIRED) ( We don't need sqlite3 global system dependent library anymore because we have local and portable library already)
 
 # Link the SQLite3 library
-target_link_libraries(main PRIVATE sqlite3)
+target_link_libraries(main PRIVATE sqlite3) #imported from local
 
 #embed python3 interpreter into the ./main engine using pybind11
 target_link_libraries(main PUBLIC pybind11::embed)
