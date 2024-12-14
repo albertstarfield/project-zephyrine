@@ -10,6 +10,7 @@ dist
 /release-builds/
 *systemCore/src/release-builds*
 **_venv*
+**.venv**
 **.vscode**
 **release-build*
 **tmp-reposync*

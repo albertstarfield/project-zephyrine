@@ -330,8 +330,6 @@ public:
         }
     }
 
-
-
     std::string LLMMainInferencing(const std::string &user_input) {
         //Attempt to download model if neither exists
         std::string modelPath = getModelPath();
@@ -427,6 +425,24 @@ public:
     }
 };
 
+// Class for SD (Stable Diffusion) Inference (Placeholder)
+class SDInference : public ModelBase {
+public:
+    SDInference() {
+        //py::scoped_interpreter guard{}; Do not reinitialize the interpreter again since it's already initialize on this domain main.cpp program
+        setupPythonEnv();
+    }
+
+    std::string LLMMainInferencing(const std::string &user_input) {
+        return "stub";
+    }
+
+    void runInferenceTest() {
+        // Implement Stable Diffusion inference logic here
+        std::cout << "[Running SD Inference]: Stub has been launched!" << std::endl;
+    }
+};
+
 //================================================
 
 //================================================ [LLM & STABLEDIFFUSION FEEDLOOPING CONSTANT LEARNING SECTION]
@@ -441,20 +457,6 @@ public:
     void finetuneModel() {
         // Implement finetuning logic here
         std::cout << "[Finetuning Model]: Stub has been launched!" << std::endl;
-    }
-};
-
-// Class for SD (Stable Diffusion) Inference (Placeholder)
-class SDInference : public ModelBase {
-public:
-    SDInference() {
-        //py::scoped_interpreter guard{}; Do not reinitialize the interpreter again since it's already initialize on this domain main.cpp program
-        setupPythonEnv();
-    }
-
-    void runInferenceTest() {
-        // Implement Stable Diffusion inference logic here
-        std::cout << "[Running SD Inference]: Stub has been launched!" << std::endl;
     }
 };
 
