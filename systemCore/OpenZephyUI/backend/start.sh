@@ -20,10 +20,11 @@ if test "$WEBUI_SECRET_KEY $WEBUI_JWT_SECRET_KEY" = " "; then
   WEBUI_SECRET_KEY=$(cat "$KEY_FILE")
 fi
 
-if [[ "${USE_OLLAMA_DOCKER,,}" == "true" ]]; then
-    echo "USE_OLLAMA is set to true, starting ollama serve."
-    ollama serve &
-fi
+# we just use zephy UI
+# if [[ "${USE_OLLAMA_DOCKER,,}" == "true" ]]; then
+#     echo "USE_OLLAMA is set to true, starting ollama serve."
+#     ollama serve &
+# fi
 
 if [[ "${USE_CUDA_DOCKER,,}" == "true" ]]; then
   echo "CUDA is enabled, appending LD_LIBRARY_PATH to include torch/cudnn & cublas libraries."
