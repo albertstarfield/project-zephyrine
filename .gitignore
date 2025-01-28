@@ -1,4 +1,4 @@
-node_modules
+sudo docker rm db13893ad6545f1d6e63bc697f0f31165030480dfd1315346022016918b4b720node_modules
 package-lock.json
 yarn.lock
 models/*
@@ -71,3 +71,4 @@ systemCore/bin/llmchildDynamicPromptSpill.tmp
 systemCore/raw_smallLanguageModel.gguf.bin
 
 systemCore/engineMain/build/CMakeFiles/CMakeConfigureLog.yaml
+systemCore/OpenZephyUI/zephyvenv/lib/python3.12/site-packages/alembic/templates/generic/README
