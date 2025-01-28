@@ -71,3 +71,4 @@ systemCore/bin/llmchildDynamicPromptSpill.tmp
 systemCore/raw_smallLanguageModel.gguf.bin
 
 systemCore/engineMain/build/CMakeFiles/CMakeConfigureLog.yaml
+systemCore/OpenZephyUI/zephyvenv/lib/python3.12/site-packages/alembic/templates/generic/README
