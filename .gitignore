@@ -1,4 +1,4 @@
-node_modules
+sudo docker rm db13893ad6545f1d6e63bc697f0f31165030480dfd1315346022016918b4b720node_modules
 package-lock.json
 yarn.lock
 models/*
