@@ -99,16 +99,21 @@
 
 	const getModels = async () => {
 		models = await getImageGenerationModels(localStorage.token).catch((error) => {
-			toast.error(error);
+			toast.error(`${error}`);
 			return null;
 		});
 	};
 
 	const updateConfigHandler = async () => {
-		const res = await updateConfig(localStorage.token, config).catch((error) => {
-			toast.error(error);
-			return null;
-		});
+		const res = await updateConfig(localStorage.token, config)
+			.catch((error) => {
+				toast.error(`${error}`);
+				return null;
+			})
+			.catch((error) => {
+				toast.error(`${error}`);
+				return null;
+			});
 
 		if (res) {
 			config = res;
@@ -154,13 +159,13 @@
 		}
 
 		await updateConfig(localStorage.token, config).catch((error) => {
-			toast.error(error);
+			toast.error(`${error}`);
 			loading = false;
 			return null;
 		});
 
 		await updateImageGenerationConfig(localStorage.token, imageGenerationConfig).catch((error) => {
-			toast.error(error);
+			toast.error(`${error}`);
 			loading = false;
 			return null;
 		});
@@ -173,7 +178,7 @@
 	onMount(async () => {
 		if ($user.role === 'admin') {
 			const res = await getConfig(localStorage.token).catch((error) => {
-				toast.error(error);
+				toast.error(`${error}`);
 				return null;
 			});
 
@@ -206,7 +211,7 @@
 			});
 
 			const imageConfigRes = await getImageGenerationConfig(localStorage.token).catch((error) => {
-				toast.error(error);
+				toast.error(`${error}`);
 				return null;
 			});
 
@@ -229,7 +234,7 @@
 				<div class=" mb-1 text-sm font-medium">{$i18n.t('Image Settings')}</div>
 
 				<div>
-					<div class=" py-0.5 flex w-full justify-between">
+					<div class=" py-1 flex w-full justify-between">
 						<div class=" self-center text-xs font-medium">
 							{$i18n.t('Image Generation (Experimental)')}
 						</div>
@@ -266,11 +271,20 @@
 					</div>
 				</div>
 
-				<div class=" py-0.5 flex w-full justify-between">
+				{#if config.enabled}
+					<div class=" py-1 flex w-full justify-between">
+						<div class=" self-center text-xs font-medium">{$i18n.t('Image Prompt Generation')}</div>
+						<div class="px-1">
+							<Switch bind:state={config.prompt_generation} />
+						</div>
+					</div>
+				{/if}
+
+				<div class=" py-1 flex w-full justify-between">
 					<div class=" self-center text-xs font-medium">{$i18n.t('Image Generation Engine')}</div>
 					<div class="flex items-center relative">
 						<select
-							class="w-fit pr-8 rounded px-2 p-1 text-xs bg-transparent outline-none text-right"
+							class=" dark:bg-gray-900 w-fit pr-8 cursor-pointer rounded px-2 p-1 text-xs bg-transparent outline-none text-right"
 							bind:value={config.engine}
 							placeholder={$i18n.t('Select Engine')}
 							on:change={async () => {
@@ -304,7 +318,7 @@
 								on:click={async () => {
 									await updateConfigHandler();
 									const res = await verifyConfigUrl(localStorage.token).catch((error) => {
-										toast.error(error);
+										toast.error(`${error}`);
 										return null;
 									});
 
@@ -440,7 +454,7 @@
 								on:click={async () => {
 									await updateConfigHandler();
 									const res = await verifyConfigUrl(localStorage.token).catch((error) => {
-										toast.error(error);
+										toast.error(`${error}`);
 										return null;
 									});
 
@@ -462,6 +476,19 @@
 									/>
 								</svg>
 							</button>
+						</div>
+					</div>
+
+					<div class="">
+						<div class=" mb-2 text-sm font-medium">{$i18n.t('ComfyUI API Key')}</div>
+						<div class="flex w-full">
+							<div class="flex-1 mr-2">
+								<SensitiveInput
+									placeholder={$i18n.t('sk-1234')}
+									bind:value={config.comfyui.COMFYUI_API_KEY}
+									required={false}
+								/>
+							</div>
 						</div>
 					</div>
 

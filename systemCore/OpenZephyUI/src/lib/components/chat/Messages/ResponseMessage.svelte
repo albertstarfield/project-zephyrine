@@ -17,7 +17,8 @@
 		approximateToHumanReadable,
 		getMessageContentParts,
 		sanitizeResponseContent,
-		createMessagesList
+		createMessagesList,
+		formatDate
 	} from '$lib/utils';
 	import { WEBUI_BASE_URL } from '$lib/constants';
 
@@ -117,6 +118,8 @@
 	export let submitMessage: Function;
 	export let continueResponse: Function;
 	export let regenerateResponse: Function;
+
+	export let addMessages: Function;
 
 	export let isLastMessage = true;
 	export let readOnly = false;
@@ -227,7 +230,7 @@
 					sentence
 				).catch((error) => {
 					console.error(error);
-					toast.error(error);
+					toast.error(`${error}`);
 
 					speaking = false;
 					loadingSpeech = false;
@@ -319,7 +322,7 @@
 	const generateImage = async (message: MessageType) => {
 		generatingImage = true;
 		const res = await imageGenerations(localStorage.token, message.content).catch((error) => {
-			toast.error(error);
+			toast.error(`${error}`);
 		});
 		console.log(res);
 
@@ -354,7 +357,7 @@
 		};
 
 		const chat = await getChatById(localStorage.token, chatId).catch((error) => {
-			toast.error(error);
+			toast.error(`${error}`);
 		});
 		if (!chat) {
 			return;
@@ -409,11 +412,11 @@
 				message.feedbackId,
 				feedbackItem
 			).catch((error) => {
-				toast.error(error);
+				toast.error(`${error}`);
 			});
 		} else {
 			feedback = await createNewFeedback(localStorage.token, feedbackItem).catch((error) => {
-				toast.error(error);
+				toast.error(`${error}`);
 			});
 
 			if (feedback) {
@@ -449,7 +452,7 @@
 						updatedMessage.feedbackId,
 						feedbackItem
 					).catch((error) => {
-						toast.error(error);
+						toast.error(`${error}`);
 					});
 				}
 			}
@@ -487,14 +490,20 @@
 
 		<div class="flex-auto w-0 pl-1">
 			<Name>
-				{model?.name ?? message.model}
+				<Tooltip content={model?.name ?? message.model} placement="top-start">
+					<span class="line-clamp-1">
+						{model?.name ?? message.model}
+					</span>
+				</Tooltip>
 
 				{#if message.timestamp}
-					<span
-						class=" self-center invisible group-hover:visible text-gray-400 text-xs font-medium uppercase ml-0.5 -mt-0.5"
+					<div
+						class=" self-center text-xs invisible group-hover:visible text-gray-400 font-medium first-letter:capitalize ml-0.5 translate-y-[1px]"
 					>
-						{dayjs(message.timestamp * 1000).format($i18n.t('h:mm a'))}
-					</span>
+						<Tooltip content={dayjs(message.timestamp * 1000).format('dddd, DD MMMM YYYY HH:mm')}>
+							<span class="line-clamp-1">{formatDate(message.timestamp * 1000)}</span>
+						</Tooltip>
+					</div>
 				{/if}
 			</Name>
 
@@ -517,37 +526,76 @@
 							{@const status = (
 								message?.statusHistory ?? [...(message?.status ? [message?.status] : [])]
 							).at(-1)}
-							<div class="status-description flex items-center gap-2 py-0.5">
-								{#if status?.done === false}
-									<div class="">
-										<Spinner className="size-4" />
-									</div>
-								{/if}
+							{#if !status?.hidden}
+								<div class="status-description flex items-center gap-2 py-0.5">
+									{#if status?.done === false}
+										<div class="">
+											<Spinner className="size-4" />
+										</div>
+									{/if}
 
-								{#if status?.action === 'web_search' && status?.urls}
-									<WebSearchResults {status}>
+									{#if status?.action === 'web_search' && status?.urls}
+										<WebSearchResults {status}>
+											<div class="flex flex-col justify-center -space-y-0.5">
+												<div
+													class="{status?.done === false
+														? 'shimmer'
+														: ''} text-base line-clamp-1 text-wrap"
+												>
+													<!-- $i18n.t("Generating search query") -->
+													<!-- $i18n.t("No search query generated") -->
+
+													<!-- $i18n.t('Searched {{count}} sites') -->
+													{#if status?.description.includes('{{count}}')}
+														{$i18n.t(status?.description, {
+															count: status?.urls.length
+														})}
+													{:else if status?.description === 'No search query generated'}
+														{$i18n.t('No search query generated')}
+													{:else if status?.description === 'Generating search query'}
+														{$i18n.t('Generating search query')}
+													{:else}
+														{status?.description}
+													{/if}
+												</div>
+											</div>
+										</WebSearchResults>
+									{:else if status?.action === 'knowledge_search'}
 										<div class="flex flex-col justify-center -space-y-0.5">
 											<div
 												class="{status?.done === false
 													? 'shimmer'
-													: ''} text-base line-clamp-1 text-wrap"
+													: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
 											>
-												{status?.description}
+												{$i18n.t(`Searching Knowledge for "{{searchQuery}}"`, {
+													searchQuery: status.query
+												})}
 											</div>
 										</div>
-									</WebSearchResults>
-								{:else}
-									<div class="flex flex-col justify-center -space-y-0.5">
-										<div
-											class="{status?.done === false
-												? 'shimmer'
-												: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
-										>
-											{status?.description}
+									{:else}
+										<div class="flex flex-col justify-center -space-y-0.5">
+											<div
+												class="{status?.done === false
+													? 'shimmer'
+													: ''} text-gray-500 dark:text-gray-500 text-base line-clamp-1 text-wrap"
+											>
+												<!-- $i18n.t(`Searching "{{searchQuery}}"`) -->
+												{#if status?.description.includes('{{searchQuery}}')}
+													{$i18n.t(status?.description, {
+														searchQuery: status?.query
+													})}
+												{:else if status?.description === 'No search query generated'}
+													{$i18n.t('No search query generated')}
+												{:else if status?.description === 'Generating search query'}
+													{$i18n.t('Generating search query')}
+												{:else}
+													{status?.description}
+												{/if}
+											</div>
 										</div>
-									</div>
-								{/if}
-							</div>
+									{/if}
+								</div>
+							{/if}
 						{/if}
 
 						{#if edit === true}
@@ -620,6 +668,7 @@
 									<!-- unless message.error === true which is legacy error handling, where the error message is stored in message.content -->
 									<ContentRenderer
 										id={message.id}
+										{history}
 										content={message.content}
 										sources={message.sources}
 										floatingButtons={message?.done}
@@ -632,6 +681,9 @@
 											if (sourceButton) {
 												sourceButton.click();
 											}
+										}}
+										onAddMessages={({ modelId, parentId, messages }) => {
+											addMessages({ modelId, parentId, messages });
 										}}
 										on:update={(e) => {
 											const { raw, oldContent, newContent } = e.detail;
@@ -868,7 +920,7 @@
 									</button>
 								</Tooltip>
 
-								{#if $config?.features.enable_image_generation && !readOnly}
+								{#if $config?.features.enable_image_generation && ($user.role === 'admin' || $user?.permissions?.features?.image_generation) && !readOnly}
 									<Tooltip content={$i18n.t('Generate Image')} placement="bottom">
 										<button
 											class="{isLastMessage
@@ -932,82 +984,45 @@
 									</Tooltip>
 								{/if}
 
-								{#if message.info}
+								{#if message.usage}
 									<Tooltip
-										content={message.info.openai
-											? message.info.usage
-												? `<pre>${sanitizeResponseContent(
-														JSON.stringify(message.info.usage, null, 2)
-															.replace(/"([^(")"]+)":/g, '$1:')
-															.slice(1, -1)
-															.split('\n')
-															.map((line) => line.slice(2))
-															.map((line) => (line.endsWith(',') ? line.slice(0, -1) : line))
-															.join('\n')
-													)}</pre>`
-												: `prompt_tokens: ${message.info.prompt_tokens ?? 'N/A'}<br/>
-													completion_tokens: ${message.info.completion_tokens ?? 'N/A'}<br/>
-													total_tokens: ${message.info.total_tokens ?? 'N/A'}`
-											: `response_token/s: ${
-													`${
-														Math.round(
-															((message.info.eval_count ?? 0) /
-																((message.info.eval_duration ?? 0) / 1000000000)) *
-																100
-														) / 100
-													} tokens` ?? 'N/A'
-												}<br/>
-					prompt_token/s: ${
-						Math.round(
-							((message.info.prompt_eval_count ?? 0) /
-								((message.info.prompt_eval_duration ?? 0) / 1000000000)) *
-								100
-						) / 100 ?? 'N/A'
-					} tokens<br/>
-		            total_duration: ${
-									Math.round(((message.info.total_duration ?? 0) / 1000000) * 100) / 100 ?? 'N/A'
-								}ms<br/>
-		            load_duration: ${
-									Math.round(((message.info.load_duration ?? 0) / 1000000) * 100) / 100 ?? 'N/A'
-								}ms<br/>
-		            prompt_eval_count: ${message.info.prompt_eval_count ?? 'N/A'}<br/>
-		            prompt_eval_duration: ${
-									Math.round(((message.info.prompt_eval_duration ?? 0) / 1000000) * 100) / 100 ??
-									'N/A'
-								}ms<br/>
-		            eval_count: ${message.info.eval_count ?? 'N/A'}<br/>
-		            eval_duration: ${
-									Math.round(((message.info.eval_duration ?? 0) / 1000000) * 100) / 100 ?? 'N/A'
-								}ms<br/>
-		            approximate_total: ${approximateToHumanReadable(message.info.total_duration ?? 0)}`}
-										placement="top"
+										content={message.usage
+											? `<pre>${sanitizeResponseContent(
+													JSON.stringify(message.usage, null, 2)
+														.replace(/"([^(")"]+)":/g, '$1:')
+														.slice(1, -1)
+														.split('\n')
+														.map((line) => line.slice(2))
+														.map((line) => (line.endsWith(',') ? line.slice(0, -1) : line))
+														.join('\n')
+												)}</pre>`
+											: ''}
+										placement="bottom"
 									>
-										<Tooltip content={$i18n.t('Generation Info')} placement="bottom">
-											<button
-												class=" {isLastMessage
-													? 'visible'
-													: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition whitespace-pre-wrap"
-												on:click={() => {
-													console.log(message);
-												}}
-												id="info-{message.id}"
+										<button
+											class=" {isLastMessage
+												? 'visible'
+												: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition whitespace-pre-wrap"
+											on:click={() => {
+												console.log(message);
+											}}
+											id="info-{message.id}"
+										>
+											<svg
+												xmlns="http://www.w3.org/2000/svg"
+												fill="none"
+												viewBox="0 0 24 24"
+												stroke-width="2.3"
+												stroke="currentColor"
+												class="w-4 h-4"
 											>
-												<svg
-													xmlns="http://www.w3.org/2000/svg"
-													fill="none"
-													viewBox="0 0 24 24"
-													stroke-width="2.3"
-													stroke="currentColor"
-													class="w-4 h-4"
-												>
-													<path
-														stroke-linecap="round"
-														stroke-linejoin="round"
-														d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
-													/>
-												</svg>
-											</button>
-										</Tooltip>
+												<path
+													stroke-linecap="round"
+													stroke-linejoin="round"
+													d="M11.25 11.25l.041-.02a.75.75 0 011.063.852l-.708 2.836a.75.75 0 001.063.853l.041-.021M21 12a9 9 0 11-18 0 9 9 0 0118 0zm-9-3.75h.008v.008H12V8.25z"
+												/>
+											</svg>
+										</button>
 									</Tooltip>
 								{/if}
 
@@ -1168,20 +1183,22 @@
 													type="button"
 													class="{isLastMessage
 														? 'visible'
-														: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition regenerate-response-button"
+														: 'invisible group-hover:visible'} p-1.5 hover:bg-black/5 dark:hover:bg-white/5 rounded-lg dark:hover:text-white hover:text-black transition"
 													on:click={() => {
 														actionMessage(action.id, message);
 													}}
 												>
 													{#if action.icon_url}
-														<img
-															src={action.icon_url}
-															class="w-4 h-4 {action.icon_url.includes('svg')
-																? 'dark:invert-[80%]'
-																: ''}"
-															style="fill: currentColor;"
-															alt={action.name}
-														/>
+														<div class="size-4">
+															<img
+																src={action.icon_url}
+																class="w-4 h-4 {action.icon_url.includes('svg')
+																	? 'dark:invert-[80%]'
+																	: ''}"
+																style="fill: currentColor;"
+																alt={action.name}
+															/>
+														</div>
 													{:else}
 														<Sparkles strokeWidth="2.1" className="size-4" />
 													{/if}
@@ -1219,49 +1236,5 @@
 	.buttons {
 		-ms-overflow-style: none; /* IE and Edge */
 		scrollbar-width: none; /* Firefox */
-	}
-
-	@keyframes shimmer {
-		0% {
-			background-position: 200% 0;
-		}
-		100% {
-			background-position: -200% 0;
-		}
-	}
-
-	.shimmer {
-		background: linear-gradient(90deg, #9a9b9e 25%, #2a2929 50%, #9a9b9e 75%);
-		background-size: 200% 100%;
-		background-clip: text;
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		animation: shimmer 4s linear infinite;
-		color: #818286; /* Fallback color */
-	}
-
-	:global(.dark) .shimmer {
-		background: linear-gradient(90deg, #818286 25%, #eae5e5 50%, #818286 75%);
-		background-size: 200% 100%;
-		background-clip: text;
-		-webkit-background-clip: text;
-		-webkit-text-fill-color: transparent;
-		animation: shimmer 4s linear infinite;
-		color: #a1a3a7; /* Darker fallback color for dark mode */
-	}
-
-	@keyframes smoothFadeIn {
-		0% {
-			opacity: 0;
-			transform: translateY(-10px);
-		}
-		100% {
-			opacity: 1;
-			transform: translateY(0);
-		}
-	}
-
-	.status-description {
-		animation: smoothFadeIn 0.2s forwards;
 	}
 </style>

@@ -47,6 +47,7 @@ def apply_model_params_to_body_openai(params: dict, form_data: dict) -> dict:
         "top_p": float,
         "max_tokens": int,
         "frequency_penalty": float,
+        "reasoning_effort": str,
         "seed": lambda x: x,
         "stop": lambda x: [bytes(s, "utf-8").decode("unicode_escape") for s in x],
     }
@@ -154,8 +155,15 @@ def convert_payload_openai_to_ollama(openai_payload: dict) -> dict:
     )
     ollama_payload["stream"] = openai_payload.get("stream", False)
 
+    if "format" in openai_payload:
+        ollama_payload["format"] = openai_payload["format"]
+
     # If there are advanced parameters in the payload, format them in Ollama's options field
     ollama_options = {}
+
+    if openai_payload.get("options"):
+        ollama_payload["options"] = openai_payload["options"]
+        ollama_options = openai_payload["options"]
 
     # Handle parameters which map directly
     for param in ["temperature", "top_p", "seed"]:
