@@ -1,6 +1,7 @@
 <script lang="ts">
 	import { toast } from 'svelte-sonner';
 	import { v4 as uuidv4 } from 'uuid';
+	import { createPicker, getAuthToken } from '$lib/utils/google-drive-picker';
 
 	import { onMount, tick, getContext, createEventDispatcher, onDestroy } from 'svelte';
 	const dispatch = createEventDispatcher();
@@ -18,7 +19,7 @@
 		showControls
 	} from '$lib/stores';
 
-	import { blobToFile, createMessagesList, findWordIndices } from '$lib/utils';
+	import { blobToFile, compressImage, createMessagesList, findWordIndices } from '$lib/utils';
 	import { transcribeAudio } from '$lib/apis/audio';
 	import { uploadFile } from '$lib/apis/files';
 	import { getTools } from '$lib/apis/tools';
@@ -36,17 +37,20 @@
 	import RichTextInput from '../common/RichTextInput.svelte';
 	import { generateAutoCompletion } from '$lib/apis';
 	import { error, text } from '@sveltejs/kit';
+	import Image from '../common/Image.svelte';
+	import { deleteFileById } from '$lib/apis/files';
 
 	const i18n = getContext('i18n');
 
 	export let transparentBackground = false;
 
+	export let onChange: Function = () => {};
 	export let createMessagePair: Function;
 	export let stopResponse: Function;
 
 	export let autoScroll = false;
 
-	export let atSelectedModel: Model | undefined;
+	export let atSelectedModel: Model | undefined = undefined;
 	export let selectedModels: [''];
 
 	let selectedModelIds = [];
@@ -58,7 +62,17 @@
 	export let files = [];
 
 	export let selectedToolIds = [];
+
+	export let imageGenerationEnabled = false;
 	export let webSearchEnabled = false;
+
+	$: onChange({
+		prompt,
+		files,
+		selectedToolIds,
+		imageGenerationEnabled,
+		webSearchEnabled
+	});
 
 	let loaded = false;
 	let recording = false;
@@ -88,13 +102,48 @@
 		});
 	};
 
+	const screenCaptureHandler = async () => {
+		try {
+			// Request screen media
+			const mediaStream = await navigator.mediaDevices.getDisplayMedia({
+				video: { cursor: 'never' },
+				audio: false
+			});
+			// Once the user selects a screen, temporarily create a video element
+			const video = document.createElement('video');
+			video.srcObject = mediaStream;
+			// Ensure the video loads without affecting user experience or tab switching
+			await video.play();
+			// Set up the canvas to match the video dimensions
+			const canvas = document.createElement('canvas');
+			canvas.width = video.videoWidth;
+			canvas.height = video.videoHeight;
+			// Grab a single frame from the video stream using the canvas
+			const context = canvas.getContext('2d');
+			context.drawImage(video, 0, 0, canvas.width, canvas.height);
+			// Stop all video tracks (stop screen sharing) after capturing the image
+			mediaStream.getTracks().forEach((track) => track.stop());
+
+			// bring back focus to this current tab, so that the user can see the screen capture
+			window.focus();
+
+			// Convert the canvas to a Base64 image URL
+			const imageUrl = canvas.toDataURL('image/png');
+			// Add the captured image to the files array to render it
+			files = [...files, { type: 'image', url: imageUrl }];
+			// Clean memory: Clear video srcObject
+			video.srcObject = null;
+		} catch (error) {
+			// Handle any errors (e.g., user cancels screen sharing)
+			console.error('Error capturing screen:', error);
+		}
+	};
+
 	const uploadFileHandler = async (file, fullContext: boolean = false) => {
 		if ($_user?.role !== 'admin' && !($_user?.permissions?.chat?.file_upload ?? true)) {
 			toast.error($i18n.t('You do not have permission to upload files.'));
 			return null;
 		}
-
-		console.log(file);
 
 		const tempItemId = uuidv4();
 		const fileItem = {
@@ -120,7 +169,7 @@
 		// Check if the file is an audio file and transcribe/convert it to text file
 		if (['audio/mpeg', 'audio/wav', 'audio/ogg', 'audio/x-m4a'].includes(file['type'])) {
 			const res = await transcribeAudio(localStorage.token, file).catch((error) => {
-				toast.error(error);
+				toast.error(`${error}`);
 				return null;
 			});
 
@@ -139,14 +188,22 @@
 			const uploadedFile = await uploadFile(localStorage.token, file);
 
 			if (uploadedFile) {
+				console.log('File upload completed:', {
+					id: uploadedFile.id,
+					name: fileItem.name,
+					collection: uploadedFile?.meta?.collection_name
+				});
+
 				if (uploadedFile.error) {
+					console.warn('File upload warning:', uploadedFile.error);
 					toast.warning(uploadedFile.error);
 				}
 
 				fileItem.status = 'uploaded';
 				fileItem.file = uploadedFile;
 				fileItem.id = uploadedFile.id;
-				fileItem.collection_name = uploadedFile?.meta?.collection_name;
+				fileItem.collection_name =
+					uploadedFile?.meta?.collection_name || uploadedFile?.collection_name;
 				fileItem.url = `${WEBUI_API_BASE_URL}/files/${uploadedFile.id}`;
 
 				files = files;
@@ -160,13 +217,23 @@
 	};
 
 	const inputFilesHandler = async (inputFiles) => {
+		console.log('Input files handler called with:', inputFiles);
 		inputFiles.forEach((file) => {
-			console.log(file, file.name.split('.').at(-1));
+			console.log('Processing file:', {
+				name: file.name,
+				type: file.type,
+				size: file.size,
+				extension: file.name.split('.').at(-1)
+			});
 
 			if (
 				($config?.file?.max_size ?? null) !== null &&
 				file.size > ($config?.file?.max_size ?? 0) * 1024 * 1024
 			) {
+				console.log('File exceeds max size limit:', {
+					fileSize: file.size,
+					maxSize: ($config?.file?.max_size ?? 0) * 1024 * 1024
+				});
 				toast.error(
 					$i18n.t(`File size should not exceed {{maxSize}} MB.`, {
 						maxSize: $config?.file?.max_size
@@ -181,12 +248,23 @@
 					return;
 				}
 				let reader = new FileReader();
-				reader.onload = (event) => {
+				reader.onload = async (event) => {
+					let imageUrl = event.target.result;
+
+					if ($settings?.imageCompression ?? false) {
+						const width = $settings?.imageCompressionSize?.width ?? null;
+						const height = $settings?.imageCompressionSize?.height ?? null;
+
+						if (width || height) {
+							imageUrl = await compressImage(imageUrl, width, height);
+						}
+					}
+
 					files = [
 						...files,
 						{
 							type: 'image',
-							url: `${event.target.result}`
+							url: `${imageUrl}`
 						}
 					];
 				};
@@ -272,7 +350,11 @@
 {#if loaded}
 	<div class="w-full font-primary">
 		<div class=" mx-auto inset-x-0 bg-transparent flex justify-center">
-			<div class="flex flex-col px-3 max-w-6xl w-full">
+			<div
+				class="flex flex-col px-3 {($settings?.widescreenMode ?? null)
+					? 'max-w-full'
+					: 'max-w-6xl'} w-full"
+			>
 				<div class="relative">
 					{#if autoScroll === false && history?.currentId}
 						<div
@@ -303,7 +385,7 @@
 				</div>
 
 				<div class="w-full relative">
-					{#if atSelectedModel !== undefined || selectedToolIds.length > 0 || webSearchEnabled}
+					{#if atSelectedModel !== undefined || selectedToolIds.length > 0 || webSearchEnabled || imageGenerationEnabled}
 						<div
 							class="px-3 pb-0.5 pt-1.5 text-left w-full flex flex-col absolute bottom-0 left-0 right-0 bg-gradient-to-t from-white dark:from-gray-900 z-10"
 						>
@@ -318,7 +400,7 @@
 												<span class="relative inline-flex rounded-full size-2 bg-yellow-500" />
 											</span>
 										</div>
-										<div class=" translate-y-[0.5px] text-ellipsis line-clamp-1 flex">
+										<div class="  text-ellipsis line-clamp-1 flex">
 											{#each selectedToolIds.map((id) => {
 												return $tools ? $tools.find((t) => t.id === id) : { id: id, name: id };
 											}) as tool, toolIdx (toolIdx)}
@@ -339,6 +421,22 @@
 								</div>
 							{/if}
 
+							{#if imageGenerationEnabled}
+								<div class="flex items-center justify-between w-full">
+									<div class="flex items-center gap-2.5 text-sm dark:text-gray-500">
+										<div class="pl-1">
+											<span class="relative flex size-2">
+												<span
+													class="animate-ping absolute inline-flex h-full w-full rounded-full bg-green-400 opacity-75"
+												/>
+												<span class="relative inline-flex rounded-full size-2 bg-green-500" />
+											</span>
+										</div>
+										<div class=" ">{$i18n.t('Image generation')}</div>
+									</div>
+								</div>
+							{/if}
+
 							{#if webSearchEnabled}
 								<div class="flex items-center justify-between w-full">
 									<div class="flex items-center gap-2.5 text-sm dark:text-gray-500">
@@ -350,7 +448,7 @@
 												<span class="relative inline-flex rounded-full size-2 bg-green-500" />
 											</span>
 										</div>
-										<div class=" translate-y-[0.5px]">{$i18n.t('Search the web')}</div>
+										<div class=" ">{$i18n.t('Search the web')}</div>
 									</div>
 								</div>
 							{/if}
@@ -410,7 +508,11 @@
 		</div>
 
 		<div class="{transparentBackground ? 'bg-transparent' : 'bg-white dark:bg-gray-900'} ">
-			<div class="max-w-6xl px-2.5 mx-auto inset-x-0">
+			<div
+				class="{($settings?.widescreenMode ?? null)
+					? 'max-w-full'
+					: 'max-w-6xl'} px-2.5 mx-auto inset-x-0"
+			>
 				<div class="">
 					<input
 						bind:this={filesInputElement}
@@ -462,19 +564,19 @@
 							}}
 						>
 							<div
-								class="flex-1 flex flex-col relative w-full rounded-3xl px-1 bg-gray-50 dark:bg-gray-400/5 dark:text-gray-100"
+								class="flex-1 flex flex-col relative w-full rounded-3xl px-1 bg-gray-600/5 dark:bg-gray-400/5 dark:text-gray-100"
 								dir={$settings?.chatDirection ?? 'LTR'}
 							>
 								{#if files.length > 0}
-									<div class="mx-1 mt-2.5 mb-1 flex flex-wrap gap-2">
+									<div class="mx-1 mt-2.5 mb-1 flex items-center flex-wrap gap-2">
 										{#each files as file, fileIdx}
 											{#if file.type === 'image'}
 												<div class=" relative group">
-													<div class="relative">
-														<img
+													<div class="relative flex items-center">
+														<Image
 															src={file.url}
 															alt="input"
-															class=" h-16 w-16 rounded-xl object-cover"
+															imageClassName=" size-14 rounded-xl object-cover"
 														/>
 														{#if atSelectedModel ? visionCapableModels.length === 0 : selectedModels.length !== visionCapableModels.length}
 															<Tooltip
@@ -533,7 +635,15 @@
 													loading={file.status === 'uploading'}
 													dismissible={true}
 													edit={true}
-													on:dismiss={() => {
+													on:dismiss={async () => {
+														if (file.type !== 'collection' && !file?.collection) {
+															if (file.id) {
+																// This will handle both file deletion and Chroma cleanup
+																await deleteFileById(localStorage.token, file.id);
+															}
+														}
+
+														// Remove from UI state
 														files.splice(fileIdx, 1);
 														files = files;
 													}}
@@ -549,10 +659,32 @@
 								<div class=" flex">
 									<div class="ml-1 self-end mb-1.5 flex space-x-1">
 										<InputMenu
+											bind:imageGenerationEnabled
 											bind:webSearchEnabled
 											bind:selectedToolIds
+											{screenCaptureHandler}
 											uploadFilesHandler={() => {
 												filesInputElement.click();
+											}}
+											uploadGoogleDriveHandler={async () => {
+												try {
+													const fileData = await createPicker();
+													if (fileData) {
+														const file = new File([fileData.blob], fileData.name, {
+															type: fileData.blob.type
+														});
+														await uploadFileHandler(file);
+													} else {
+														console.log('No file was selected from Google Drive');
+													}
+												} catch (error) {
+													console.error('Google Drive Error:', error);
+													toast.error(
+														$i18n.t('Error accessing Google Drive: {{error}}', {
+															error: error.message
+														})
+													);
+												}
 											}}
 											onClose={async () => {
 												await tick();
@@ -626,6 +758,10 @@
 													const commandsContainerElement =
 														document.getElementById('commands-container');
 
+													if (e.key === 'Escape') {
+														stopResponse();
+													}
+
 													// Command/Ctrl + Shift + Enter to submit a message pair
 													if (isCtrlPressed && e.key === 'Enter' && e.shiftKey) {
 														e.preventDefault();
@@ -651,14 +787,14 @@
 															...document.getElementsByClassName('user-message')
 														]?.at(-1);
 
-														const editButton = [
-															...document.getElementsByClassName('edit-user-message-button')
-														]?.at(-1);
+														if (userMessageElement) {
+															userMessageElement.scrollIntoView({ block: 'center' });
+															const editButton = [
+																...document.getElementsByClassName('edit-user-message-button')
+															]?.at(-1);
 
-														console.log(userMessageElement);
-
-														userMessageElement.scrollIntoView({ block: 'center' });
-														editButton?.click();
+															editButton?.click();
+														}
 													}
 
 													if (commandsContainerElement) {
@@ -732,6 +868,7 @@
 														atSelectedModel = undefined;
 														selectedToolIds = [];
 														webSearchEnabled = false;
+														imageGenerationEnabled = false;
 													}
 												}}
 												on:paste={async (e) => {
@@ -781,7 +918,7 @@
 										<textarea
 											id="chat-input"
 											bind:this={chatInputElement}
-											class="scrollbar-hidden bg-gray-50 dark:bg-gray-850 dark:text-gray-100 outline-none w-full py-3 px-1 rounded-xl resize-none h-[48px]"
+											class="scrollbar-hidden bg-transparent dark:text-gray-100 outline-none w-full py-3 px-1 rounded-xl resize-none h-[48px]"
 											placeholder={placeholder ? placeholder : $i18n.t('Send a Message')}
 											bind:value={prompt}
 											on:keypress={(e) => {
@@ -809,6 +946,9 @@
 												const commandsContainerElement =
 													document.getElementById('commands-container');
 
+												if (e.key === 'Escape') {
+													stopResponse();
+												}
 												// Command/Ctrl + Shift + Enter to submit a message pair
 												if (isCtrlPressed && e.key === 'Enter' && e.shiftKey) {
 													e.preventDefault();
@@ -915,6 +1055,7 @@
 													atSelectedModel = undefined;
 													selectedToolIds = [];
 													webSearchEnabled = false;
+													imageGenerationEnabled = false;
 												}
 											}}
 											rows="1"

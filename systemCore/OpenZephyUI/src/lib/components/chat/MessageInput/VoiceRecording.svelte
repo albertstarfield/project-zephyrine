@@ -137,7 +137,7 @@
 		const file = blobToFile(audioBlob, 'recording.wav');
 
 		const res = await transcribeAudio(localStorage.token, file).catch((error) => {
-			toast.error(error);
+			toast.error(`${error}`);
 			return null;
 		});
 
@@ -161,7 +161,13 @@
 	const startRecording = async () => {
 		startDurationCounter();
 
-		stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+		stream = await navigator.mediaDevices.getUserMedia({
+			audio: {
+				echoCancellation: true,
+				noiseSuppression: true,
+				autoGainControl: true
+			}
+		});
 		mediaRecorder = new MediaRecorder(stream);
 		mediaRecorder.onstart = () => {
 			console.log('Recording started');

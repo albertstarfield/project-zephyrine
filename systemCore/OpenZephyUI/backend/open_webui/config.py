@@ -9,21 +9,22 @@ from urllib.parse import urlparse
 
 import chromadb
 import requests
-import yaml
-from open_webui.apps.webui.internal.db import Base, get_db
+from pydantic import BaseModel
+from sqlalchemy import JSON, Column, DateTime, Integer, func
+
 from open_webui.env import (
-    OPEN_WEBUI_DIR,
     DATA_DIR,
+    DATABASE_URL,
     ENV,
     FRONTEND_BUILD_DIR,
+    OFFLINE_MODE,
+    OPEN_WEBUI_DIR,
     WEBUI_AUTH,
     WEBUI_FAVICON_URL,
     WEBUI_NAME,
     log,
-    DATABASE_URL,
 )
-from pydantic import BaseModel
-from sqlalchemy import JSON, Column, DateTime, Integer, func
+from open_webui.internal.db import Base, get_db
 
 
 class EndpointFilter(logging.Filter):
@@ -271,6 +272,18 @@ ENABLE_API_KEY = PersistentConfig(
     os.environ.get("ENABLE_API_KEY", "True").lower() == "true",
 )
 
+ENABLE_API_KEY_ENDPOINT_RESTRICTIONS = PersistentConfig(
+    "ENABLE_API_KEY_ENDPOINT_RESTRICTIONS",
+    "auth.api_key.endpoint_restrictions",
+    os.environ.get("ENABLE_API_KEY_ENDPOINT_RESTRICTIONS", "False").lower() == "true",
+)
+
+API_KEY_ALLOWED_ENDPOINTS = PersistentConfig(
+    "API_KEY_ALLOWED_ENDPOINTS",
+    "auth.api_key.allowed_endpoints",
+    os.environ.get("API_KEY_ALLOWED_ENDPOINTS", ""),
+)
+
 
 JWT_EXPIRES_IN = PersistentConfig(
     "JWT_EXPIRES_IN", "auth.jwt_expiry", os.environ.get("JWT_EXPIRES_IN", "-1")
@@ -305,6 +318,7 @@ GOOGLE_CLIENT_SECRET = PersistentConfig(
     "oauth.google.client_secret",
     os.environ.get("GOOGLE_CLIENT_SECRET", ""),
 )
+
 
 GOOGLE_OAUTH_SCOPE = PersistentConfig(
     "GOOGLE_OAUTH_SCOPE",
@@ -346,6 +360,30 @@ MICROSOFT_REDIRECT_URI = PersistentConfig(
     "MICROSOFT_REDIRECT_URI",
     "oauth.microsoft.redirect_uri",
     os.environ.get("MICROSOFT_REDIRECT_URI", ""),
+)
+
+GITHUB_CLIENT_ID = PersistentConfig(
+    "GITHUB_CLIENT_ID",
+    "oauth.github.client_id",
+    os.environ.get("GITHUB_CLIENT_ID", ""),
+)
+
+GITHUB_CLIENT_SECRET = PersistentConfig(
+    "GITHUB_CLIENT_SECRET",
+    "oauth.github.client_secret",
+    os.environ.get("GITHUB_CLIENT_SECRET", ""),
+)
+
+GITHUB_CLIENT_SCOPE = PersistentConfig(
+    "GITHUB_CLIENT_SCOPE",
+    "oauth.github.scope",
+    os.environ.get("GITHUB_CLIENT_SCOPE", "user:email"),
+)
+
+GITHUB_CLIENT_REDIRECT_URI = PersistentConfig(
+    "GITHUB_CLIENT_REDIRECT_URI",
+    "oauth.github.redirect_uri",
+    os.environ.get("GITHUB_CLIENT_REDIRECT_URI", ""),
 )
 
 OAUTH_CLIENT_ID = PersistentConfig(
@@ -402,10 +440,22 @@ OAUTH_EMAIL_CLAIM = PersistentConfig(
     os.environ.get("OAUTH_EMAIL_CLAIM", "email"),
 )
 
+OAUTH_GROUPS_CLAIM = PersistentConfig(
+    "OAUTH_GROUPS_CLAIM",
+    "oauth.oidc.group_claim",
+    os.environ.get("OAUTH_GROUP_CLAIM", "groups"),
+)
+
 ENABLE_OAUTH_ROLE_MANAGEMENT = PersistentConfig(
     "ENABLE_OAUTH_ROLE_MANAGEMENT",
     "oauth.enable_role_mapping",
     os.environ.get("ENABLE_OAUTH_ROLE_MANAGEMENT", "False").lower() == "true",
+)
+
+ENABLE_OAUTH_GROUP_MANAGEMENT = PersistentConfig(
+    "ENABLE_OAUTH_GROUP_MANAGEMENT",
+    "oauth.enable_group_mapping",
+    os.environ.get("ENABLE_OAUTH_GROUP_MANAGEMENT", "False").lower() == "true",
 )
 
 OAUTH_ROLES_CLAIM = PersistentConfig(
@@ -429,16 +479,33 @@ OAUTH_ADMIN_ROLES = PersistentConfig(
     [role.strip() for role in os.environ.get("OAUTH_ADMIN_ROLES", "admin").split(",")],
 )
 
+OAUTH_ALLOWED_DOMAINS = PersistentConfig(
+    "OAUTH_ALLOWED_DOMAINS",
+    "oauth.allowed_domains",
+    [
+        domain.strip()
+        for domain in os.environ.get("OAUTH_ALLOWED_DOMAINS", "*").split(",")
+    ],
+)
+
 
 def load_oauth_providers():
     OAUTH_PROVIDERS.clear()
     if GOOGLE_CLIENT_ID.value and GOOGLE_CLIENT_SECRET.value:
+
+        def google_oauth_register(client):
+            client.register(
+                name="google",
+                client_id=GOOGLE_CLIENT_ID.value,
+                client_secret=GOOGLE_CLIENT_SECRET.value,
+                server_metadata_url="https://accounts.google.com/.well-known/openid-configuration",
+                client_kwargs={"scope": GOOGLE_OAUTH_SCOPE.value},
+                redirect_uri=GOOGLE_REDIRECT_URI.value,
+            )
+
         OAUTH_PROVIDERS["google"] = {
-            "client_id": GOOGLE_CLIENT_ID.value,
-            "client_secret": GOOGLE_CLIENT_SECRET.value,
-            "server_metadata_url": "https://accounts.google.com/.well-known/openid-configuration",
-            "scope": GOOGLE_OAUTH_SCOPE.value,
             "redirect_uri": GOOGLE_REDIRECT_URI.value,
+            "register": google_oauth_register,
         }
 
     if (
@@ -446,12 +513,44 @@ def load_oauth_providers():
         and MICROSOFT_CLIENT_SECRET.value
         and MICROSOFT_CLIENT_TENANT_ID.value
     ):
+
+        def microsoft_oauth_register(client):
+            client.register(
+                name="microsoft",
+                client_id=MICROSOFT_CLIENT_ID.value,
+                client_secret=MICROSOFT_CLIENT_SECRET.value,
+                server_metadata_url=f"https://login.microsoftonline.com/{MICROSOFT_CLIENT_TENANT_ID.value}/v2.0/.well-known/openid-configuration",
+                client_kwargs={
+                    "scope": MICROSOFT_OAUTH_SCOPE.value,
+                },
+                redirect_uri=MICROSOFT_REDIRECT_URI.value,
+            )
+
         OAUTH_PROVIDERS["microsoft"] = {
-            "client_id": MICROSOFT_CLIENT_ID.value,
-            "client_secret": MICROSOFT_CLIENT_SECRET.value,
-            "server_metadata_url": f"https://login.microsoftonline.com/{MICROSOFT_CLIENT_TENANT_ID.value}/v2.0/.well-known/openid-configuration",
-            "scope": MICROSOFT_OAUTH_SCOPE.value,
             "redirect_uri": MICROSOFT_REDIRECT_URI.value,
+            "picture_url": "https://graph.microsoft.com/v1.0/me/photo/$value",
+            "register": microsoft_oauth_register,
+        }
+
+    if GITHUB_CLIENT_ID.value and GITHUB_CLIENT_SECRET.value:
+
+        def github_oauth_register(client):
+            client.register(
+                name="github",
+                client_id=GITHUB_CLIENT_ID.value,
+                client_secret=GITHUB_CLIENT_SECRET.value,
+                access_token_url="https://github.com/login/oauth/access_token",
+                authorize_url="https://github.com/login/oauth/authorize",
+                api_base_url="https://api.github.com",
+                userinfo_endpoint="https://api.github.com/user",
+                client_kwargs={"scope": GITHUB_CLIENT_SCOPE.value},
+                redirect_uri=GITHUB_CLIENT_REDIRECT_URI.value,
+            )
+
+        OAUTH_PROVIDERS["github"] = {
+            "redirect_uri": GITHUB_CLIENT_REDIRECT_URI.value,
+            "register": github_oauth_register,
+            "sub_claim": "id",
         }
 
     if (
@@ -459,13 +558,23 @@ def load_oauth_providers():
         and OAUTH_CLIENT_SECRET.value
         and OPENID_PROVIDER_URL.value
     ):
+
+        def oidc_oauth_register(client):
+            client.register(
+                name="oidc",
+                client_id=OAUTH_CLIENT_ID.value,
+                client_secret=OAUTH_CLIENT_SECRET.value,
+                server_metadata_url=OPENID_PROVIDER_URL.value,
+                client_kwargs={
+                    "scope": OAUTH_SCOPES.value,
+                },
+                redirect_uri=OPENID_REDIRECT_URI.value,
+            )
+
         OAUTH_PROVIDERS["oidc"] = {
-            "client_id": OAUTH_CLIENT_ID.value,
-            "client_secret": OAUTH_CLIENT_SECRET.value,
-            "server_metadata_url": OPENID_PROVIDER_URL.value,
-            "scope": OAUTH_SCOPES.value,
             "name": OAUTH_PROVIDER_NAME.value,
             "redirect_uri": OPENID_REDIRECT_URI.value,
+            "register": oidc_oauth_register,
         }
 
 
@@ -545,13 +654,18 @@ if CUSTOM_NAME:
 # STORAGE PROVIDER
 ####################################
 
-STORAGE_PROVIDER = os.environ.get("STORAGE_PROVIDER", "")  # defaults to local, s3
+STORAGE_PROVIDER = os.environ.get("STORAGE_PROVIDER", "local")  # defaults to local, s3
 
 S3_ACCESS_KEY_ID = os.environ.get("S3_ACCESS_KEY_ID", None)
 S3_SECRET_ACCESS_KEY = os.environ.get("S3_SECRET_ACCESS_KEY", None)
 S3_REGION_NAME = os.environ.get("S3_REGION_NAME", None)
 S3_BUCKET_NAME = os.environ.get("S3_BUCKET_NAME", None)
 S3_ENDPOINT_URL = os.environ.get("S3_ENDPOINT_URL", None)
+
+GCS_BUCKET_NAME = os.environ.get("GCS_BUCKET_NAME", None)
+GOOGLE_APPLICATION_CREDENTIALS_JSON = os.environ.get(
+    "GOOGLE_APPLICATION_CREDENTIALS_JSON", None
+)
 
 ####################################
 # File Upload DIR
@@ -686,6 +800,12 @@ OPENAI_API_BASE_URL = "https://api.openai.com/v1"
 # WEBUI
 ####################################
 
+
+WEBUI_URL = PersistentConfig(
+    "WEBUI_URL", "webui.url", os.environ.get("WEBUI_URL", "http://localhost:3000")
+)
+
+
 ENABLE_SIGNUP = PersistentConfig(
     "ENABLE_SIGNUP",
     "ui.enable_signup",
@@ -778,6 +898,10 @@ USER_PERMISSIONS_WORKSPACE_TOOLS_ACCESS = (
     os.environ.get("USER_PERMISSIONS_WORKSPACE_TOOLS_ACCESS", "False").lower() == "true"
 )
 
+USER_PERMISSIONS_CHAT_CONTROLS = (
+    os.environ.get("USER_PERMISSIONS_CHAT_CONTROLS", "True").lower() == "true"
+)
+
 USER_PERMISSIONS_CHAT_FILE_UPLOAD = (
     os.environ.get("USER_PERMISSIONS_CHAT_FILE_UPLOAD", "True").lower() == "true"
 )
@@ -794,23 +918,45 @@ USER_PERMISSIONS_CHAT_TEMPORARY = (
     os.environ.get("USER_PERMISSIONS_CHAT_TEMPORARY", "True").lower() == "true"
 )
 
+USER_PERMISSIONS_FEATURES_WEB_SEARCH = (
+    os.environ.get("USER_PERMISSIONS_FEATURES_WEB_SEARCH", "True").lower() == "true"
+)
+
+USER_PERMISSIONS_FEATURES_IMAGE_GENERATION = (
+    os.environ.get("USER_PERMISSIONS_FEATURES_IMAGE_GENERATION", "True").lower()
+    == "true"
+)
+
+DEFAULT_USER_PERMISSIONS = {
+    "workspace": {
+        "models": USER_PERMISSIONS_WORKSPACE_MODELS_ACCESS,
+        "knowledge": USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ACCESS,
+        "prompts": USER_PERMISSIONS_WORKSPACE_PROMPTS_ACCESS,
+        "tools": USER_PERMISSIONS_WORKSPACE_TOOLS_ACCESS,
+    },
+    "chat": {
+        "controls": USER_PERMISSIONS_CHAT_CONTROLS,
+        "file_upload": USER_PERMISSIONS_CHAT_FILE_UPLOAD,
+        "delete": USER_PERMISSIONS_CHAT_DELETE,
+        "edit": USER_PERMISSIONS_CHAT_EDIT,
+        "temporary": USER_PERMISSIONS_CHAT_TEMPORARY,
+    },
+    "features": {
+        "web_search": USER_PERMISSIONS_FEATURES_WEB_SEARCH,
+        "image_generation": USER_PERMISSIONS_FEATURES_IMAGE_GENERATION,
+    },
+}
+
 USER_PERMISSIONS = PersistentConfig(
     "USER_PERMISSIONS",
     "user.permissions",
-    {
-        "workspace": {
-            "models": USER_PERMISSIONS_WORKSPACE_MODELS_ACCESS,
-            "knowledge": USER_PERMISSIONS_WORKSPACE_KNOWLEDGE_ACCESS,
-            "prompts": USER_PERMISSIONS_WORKSPACE_PROMPTS_ACCESS,
-            "tools": USER_PERMISSIONS_WORKSPACE_TOOLS_ACCESS,
-        },
-        "chat": {
-            "file_upload": USER_PERMISSIONS_CHAT_FILE_UPLOAD,
-            "delete": USER_PERMISSIONS_CHAT_DELETE,
-            "edit": USER_PERMISSIONS_CHAT_EDIT,
-            "temporary": USER_PERMISSIONS_CHAT_TEMPORARY,
-        },
-    },
+    DEFAULT_USER_PERMISSIONS,
+)
+
+ENABLE_CHANNELS = PersistentConfig(
+    "ENABLE_CHANNELS",
+    "channels.enable",
+    os.environ.get("ENABLE_CHANNELS", "False").lower() == "true",
 )
 
 
@@ -948,11 +1094,70 @@ TITLE_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
     os.environ.get("TITLE_GENERATION_PROMPT_TEMPLATE", ""),
 )
 
+DEFAULT_TITLE_GENERATION_PROMPT_TEMPLATE = """Create a concise, 3-5 word title with an emoji as a title for the chat history, in the given language. Suitable Emojis for the summary can be used to enhance understanding but avoid quotation marks or special formatting. RESPOND ONLY WITH THE TITLE TEXT.
+
+Examples of titles:
+📉 Stock Market Trends
+🍪 Perfect Chocolate Chip Recipe
+Evolution of Music Streaming
+Remote Work Productivity Tips
+Artificial Intelligence in Healthcare
+🎮 Video Game Development Insights
+
+<chat_history>
+{{MESSAGES:END:2}}
+</chat_history>"""
+
+
 TAGS_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
     "TAGS_GENERATION_PROMPT_TEMPLATE",
     "task.tags.prompt_template",
     os.environ.get("TAGS_GENERATION_PROMPT_TEMPLATE", ""),
 )
+
+DEFAULT_TAGS_GENERATION_PROMPT_TEMPLATE = """### Task:
+Generate 1-3 broad tags categorizing the main themes of the chat history, along with 1-3 more specific subtopic tags.
+
+### Guidelines:
+- Start with high-level domains (e.g. Science, Technology, Philosophy, Arts, Politics, Business, Health, Sports, Entertainment, Education)
+- Consider including relevant subfields/subdomains if they are strongly represented throughout the conversation
+- If content is too short (less than 3 messages) or too diverse, use only ["General"]
+- Use the chat's primary language; default to English if multilingual
+- Prioritize accuracy over specificity
+
+### Output:
+JSON format: { "tags": ["tag1", "tag2", "tag3"] }
+
+### Chat History:
+<chat_history>
+{{MESSAGES:END:6}}
+</chat_history>"""
+
+IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE = PersistentConfig(
+    "IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE",
+    "task.image.prompt_template",
+    os.environ.get("IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE", ""),
+)
+
+DEFAULT_IMAGE_PROMPT_GENERATION_PROMPT_TEMPLATE = """### Task:
+Generate a detailed prompt for am image generation task based on the given language and context. Describe the image as if you were explaining it to someone who cannot see it. Include relevant details, colors, shapes, and any other important elements.
+
+### Guidelines:
+- Be descriptive and detailed, focusing on the most important aspects of the image.
+- Avoid making assumptions or adding information not present in the image.
+- Use the chat's primary language; default to English if multilingual.
+- If the image is too complex, focus on the most prominent elements.
+
+### Output:
+Strictly return in JSON format:
+{
+    "prompt": "Your detailed description here."
+}
+
+### Chat History:
+<chat_history>
+{{MESSAGES:END:6}}
+</chat_history>"""
 
 ENABLE_TAGS_GENERATION = PersistentConfig(
     "ENABLE_TAGS_GENERATION",
@@ -1072,6 +1277,19 @@ TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE = PersistentConfig(
 )
 
 
+DEFAULT_TOOLS_FUNCTION_CALLING_PROMPT_TEMPLATE = """Available Tools: {{TOOLS}}\nReturn an empty string if no tools match the query. If a function tool matches, construct and return a JSON object in the format {\"name\": \"functionName\", \"parameters\": {\"requiredFunctionParamKey\": \"requiredFunctionParamValue\"}} using the appropriate tool and its parameters. Only return the object and limit the response to the JSON object without additional text."""
+
+
+DEFAULT_EMOJI_GENERATION_PROMPT_TEMPLATE = """Your task is to reflect the speaker's likely facial expression through a fitting emoji. Interpret emotions from the message and reflect their facial expression using fitting, diverse emojis (e.g., 😊, 😢, 😡, 😱).
+
+Message: ```{{prompt}}```"""
+
+DEFAULT_MOA_GENERATION_PROMPT_TEMPLATE = """You have been provided with a set of responses from various models to the latest user query: "{{prompt}}"
+
+Your task is to synthesize these responses into a single, high-quality response. It is crucial to critically evaluate the information provided in these responses, recognizing that some of it may be biased or incorrect. Your response should not simply replicate the given answers but should offer a refined, accurate, and comprehensive reply to the instruction. Ensure your response is well-structured, coherent, and adheres to the highest standards of accuracy and reliability.
+
+Responses from models: {{responses}}"""
+
 ####################################
 # Vector Database
 ####################################
@@ -1100,6 +1318,7 @@ CHROMA_HTTP_SSL = os.environ.get("CHROMA_HTTP_SSL", "false").lower() == "true"
 # Milvus
 
 MILVUS_URI = os.environ.get("MILVUS_URI", f"{DATA_DIR}/vector_db/milvus.db")
+MILVUS_DB = os.environ.get("MILVUS_DB", "default")
 
 # Qdrant
 QDRANT_URI = os.environ.get("QDRANT_URI", None)
@@ -1118,10 +1337,33 @@ if VECTOR_DB == "pgvector" and not PGVECTOR_DB_URL.startswith("postgres"):
     raise ValueError(
         "Pgvector requires setting PGVECTOR_DB_URL or using Postgres with vector extension as the primary database."
     )
+PGVECTOR_INITIALIZE_MAX_VECTOR_LENGTH = int(
+    os.environ.get("PGVECTOR_INITIALIZE_MAX_VECTOR_LENGTH", "1536")
+)
 
 ####################################
 # Information Retrieval (RAG)
 ####################################
+
+
+# If configured, Google Drive will be available as an upload option.
+ENABLE_GOOGLE_DRIVE_INTEGRATION = PersistentConfig(
+    "ENABLE_GOOGLE_DRIVE_INTEGRATION",
+    "google_drive.enable",
+    os.getenv("ENABLE_GOOGLE_DRIVE_INTEGRATION", "False").lower() == "true",
+)
+
+GOOGLE_DRIVE_CLIENT_ID = PersistentConfig(
+    "GOOGLE_DRIVE_CLIENT_ID",
+    "google_drive.client_id",
+    os.environ.get("GOOGLE_DRIVE_CLIENT_ID", ""),
+)
+
+GOOGLE_DRIVE_API_KEY = PersistentConfig(
+    "GOOGLE_DRIVE_API_KEY",
+    "google_drive.api_key",
+    os.environ.get("GOOGLE_DRIVE_API_KEY", ""),
+)
 
 # RAG Content Extraction
 CONTENT_EXTRACTION_ENGINE = PersistentConfig(
@@ -1197,7 +1439,8 @@ RAG_EMBEDDING_MODEL = PersistentConfig(
 log.info(f"Embedding model set: {RAG_EMBEDDING_MODEL.value}")
 
 RAG_EMBEDDING_MODEL_AUTO_UPDATE = (
-    os.environ.get("RAG_EMBEDDING_MODEL_AUTO_UPDATE", "True").lower() == "true"
+    not OFFLINE_MODE
+    and os.environ.get("RAG_EMBEDDING_MODEL_AUTO_UPDATE", "True").lower() == "true"
 )
 
 RAG_EMBEDDING_MODEL_TRUST_REMOTE_CODE = (
@@ -1222,7 +1465,8 @@ if RAG_RERANKING_MODEL.value != "":
     log.info(f"Reranking model set: {RAG_RERANKING_MODEL.value}")
 
 RAG_RERANKING_MODEL_AUTO_UPDATE = (
-    os.environ.get("RAG_RERANKING_MODEL_AUTO_UPDATE", "True").lower() == "true"
+    not OFFLINE_MODE
+    and os.environ.get("RAG_RERANKING_MODEL_AUTO_UPDATE", "True").lower() == "true"
 )
 
 RAG_RERANKING_MODEL_TRUST_REMOTE_CODE = (
@@ -1356,6 +1600,7 @@ RAG_WEB_SEARCH_DOMAIN_FILTER_LIST = PersistentConfig(
     ],
 )
 
+
 SEARXNG_QUERY_URL = PersistentConfig(
     "SEARXNG_QUERY_URL",
     "rag.web.search.searxng_query_url",
@@ -1378,6 +1623,12 @@ BRAVE_SEARCH_API_KEY = PersistentConfig(
     "BRAVE_SEARCH_API_KEY",
     "rag.web.search.brave_search_api_key",
     os.getenv("BRAVE_SEARCH_API_KEY", ""),
+)
+
+KAGI_SEARCH_API_KEY = PersistentConfig(
+    "KAGI_SEARCH_API_KEY",
+    "rag.web.search.kagi_search_api_key",
+    os.getenv("KAGI_SEARCH_API_KEY", ""),
 )
 
 MOJEEK_SEARCH_API_KEY = PersistentConfig(
@@ -1477,6 +1728,13 @@ ENABLE_IMAGE_GENERATION = PersistentConfig(
     "image_generation.enable",
     os.environ.get("ENABLE_IMAGE_GENERATION", "").lower() == "true",
 )
+
+ENABLE_IMAGE_PROMPT_GENERATION = PersistentConfig(
+    "ENABLE_IMAGE_PROMPT_GENERATION",
+    "image_generation.prompt.enable",
+    os.environ.get("ENABLE_IMAGE_PROMPT_GENERATION", "true").lower() == "true",
+)
+
 AUTOMATIC1111_BASE_URL = PersistentConfig(
     "AUTOMATIC1111_BASE_URL",
     "image_generation.automatic1111.base_url",
@@ -1523,6 +1781,12 @@ COMFYUI_BASE_URL = PersistentConfig(
     "COMFYUI_BASE_URL",
     "image_generation.comfyui.base_url",
     os.getenv("COMFYUI_BASE_URL", ""),
+)
+
+COMFYUI_API_KEY = PersistentConfig(
+    "COMFYUI_API_KEY",
+    "image_generation.comfyui.api_key",
+    os.getenv("COMFYUI_API_KEY", ""),
 )
 
 COMFYUI_DEFAULT_WORKFLOW = """
@@ -1686,7 +1950,8 @@ WHISPER_MODEL = PersistentConfig(
 
 WHISPER_MODEL_DIR = os.getenv("WHISPER_MODEL_DIR", f"{CACHE_DIR}/whisper/models")
 WHISPER_MODEL_AUTO_UPDATE = (
-    os.environ.get("WHISPER_MODEL_AUTO_UPDATE", "").lower() == "true"
+    not OFFLINE_MODE
+    and os.environ.get("WHISPER_MODEL_AUTO_UPDATE", "").lower() == "true"
 )
 
 
@@ -1797,6 +2062,12 @@ LDAP_SERVER_PORT = PersistentConfig(
     "LDAP_SERVER_PORT",
     "ldap.server.port",
     int(os.environ.get("LDAP_SERVER_PORT", "389")),
+)
+
+LDAP_ATTRIBUTE_FOR_MAIL = PersistentConfig(
+    "LDAP_ATTRIBUTE_FOR_MAIL",
+    "ldap.server.attribute_for_mail",
+    os.environ.get("LDAP_ATTRIBUTE_FOR_MAIL", "mail"),
 )
 
 LDAP_ATTRIBUTE_FOR_USERNAME = PersistentConfig(

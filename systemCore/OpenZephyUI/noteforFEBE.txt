@@ -1,7 +1,0 @@
-jadi ga docker, bisa jalan di termux
-adjust theme jadi project zephy, ilangin defaultnya jangan logo OI, pake maskot zephy
-About kasih tau kalau ini based on openwebui
-Themenya glass base, blurry, colorful, green white pastel, frost theme
-UI responsive for mobile
-scalingnya digedein, bubbly rounded font
-Survey feedback kepuasan
