@@ -25,8 +25,9 @@
 
 <hr>
 
-> **Important Note:**
-> The software is undergoing a paradigm shift, focusing on a plug-and-play framework similar to Copilot, primarily offline. It aims to avoid direct competition with LMStudio and OLlama GUI that is more successful, focusing on delineated entities with a Mix of Experts (MoE) interface.
+
+> > **Important Note:**
+> This software is being entirely rewritten and will no longer be based on the existing javascript codebase. The new architecture will be a plug-and-play, primarily offline framework, similar to Copilot, featuring a Mix of Experts (MoE) interface with delineated entities. This approach aims to avoid direct competition with more successful projects like LMStudio and OLlama GUI. The `adelaide-zephyrine-charlotte-assistant-dev-stream` branch contains the development progress.
 
 ## Project Zephyrine: An Open-Source, Decentralized, non-Nvidia exclusive, non-proprietary, AI Assistant for Your Desktop and Embedded Device*.
 
