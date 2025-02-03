@@ -81,7 +81,7 @@ std::unique_ptr<py::scoped_interpreter> pyGuard;
 
 
 // Define additional global constants
-const std::string encodedInitStage1 = "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZnQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUu";
+const std::string encodedInitStage1 = "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZjQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUu";
 const std::string encodedInitStage2 = "SGkgJHthc3Npc3RhbnROYW1lfSwgSSdtICR7dXNlcm5hbWV9LCBTaGFsbCB3ZSBjb21tZW5jZSBvdXIgY29udmVyc2F0aW9uPw==";
 
 // Additional global constants for console colors and names
@@ -111,13 +111,13 @@ bool download_model(const std::string& url, const std::string& output_path) {
     std::ofstream file(output_path, std::ios::binary);
 
     if (!file.is_open()) {
-        std::cerr << "[Error] : Unable to open file for Zygote Model writing: " << output_path << std::endl;
+        std::cerr << "[Error] : Unable to open file for preTrainedModel writing: " << output_path << std::endl;
         return false;
     }
 
     curl = curl_easy_init();
     if (!curl) {
-        std::cerr << "[Error] : Zygote Model Downloader Failed to initialize curl" << std::endl;
+        std::cerr << "[Error] : preTrainedModel Downloader Failed to initialize curl" << std::endl;
         return false;
     }
 
@@ -146,7 +146,7 @@ bool download_model(const std::string& url, const std::string& output_path) {
             
             if (timeElapsed > 0) {
                 double speed = bytesDownloaded / timeElapsed / 1024 / 1024; // MB/s
-                std::cout << "\r[Info] : Importing Pure Zygote Model: "
+                std::cout << "\r[Info] : Importing Pure preTrainedModel: "
                           << std::fixed << std::setprecision(1) << progress << "% "
                           << "[Speed: " << std::setprecision(2) << speed << " MB/s]"
                           << std::flush;
@@ -181,7 +181,7 @@ bool download_model(const std::string& url, const std::string& output_path) {
 
     file.close();
     curl_easy_cleanup(curl);
-    std::cout << "[Info] : Pure Zygote Model imported successfully to " << output_path << std::endl;
+    std::cout << "[Info] : Pure preTrainedModel imported successfully to " << output_path << std::endl;
     return true;
 }
 
@@ -237,13 +237,13 @@ std::string generate_random_sha256() {
 
 // Function to determine the model path dynamically
 std::string getModelPath() {
-    std::string zygoteModelPath = "./zygoteBaseModel.gguf";
+    std::string preTrainedModelPath = "./preTrainedModelBase.gguf";
     std::string dynamicModelPath = "./evolvingModel.gguf";
 
     if (fs::exists(dynamicModelPath)) {
         return dynamicModelPath;
-    } else if (fs::exists(zygoteModelPath)) {
-        return zygoteModelPath;
+    } else if (fs::exists(preTrainedModelPath)) {
+        return preTrainedModelPath;
     } else {
         return ""; //Neither model exists
     }
@@ -320,9 +320,9 @@ public:
         //Attempt to download model if neither exists
         std::string modelPath = getModelPath();
         if (modelPath.empty()) {
-            std::string zygoteModelName = "zygoteBaseModel";
+            std::string preTrainedModelName = "preTrainedModelBase";
             std::string model_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf?download=true";
-            std::string model_path = "./" + zygoteModelName + ".gguf";
+            std::string model_path = "./" + preTrainedModelName + ".gguf";
             if (!download_model(model_url, model_path)) {
                 std::cerr << "[Error] : Failed to download model. Exiting." << std::endl;
                 exit(1);
@@ -334,9 +334,9 @@ public:
         //Attempt to download model if neither exists
         std::string modelPath = getModelPath();
         if (modelPath.empty()) {
-            std::string zygoteModelName = "zygoteBaseModel";
+            std::string preTrainedModelName = "preTrainedModelBase";
             std::string model_url = "https://huggingface.co/microsoft/Phi-3-mini-4k-instruct-gguf/resolve/main/Phi-3-mini-4k-instruct-q4.gguf?download=true";
-            std::string model_path = "./" + zygoteModelName + ".gguf";
+            std::string model_path = "./" + preTrainedModelName + ".gguf";
             if (!download_model(model_url, model_path)) {
                 std::cerr << "[Error] : Failed to download model. Exiting." << std::endl;
                 exit(1);
@@ -454,9 +454,9 @@ public:
         setupPythonEnv();
     }
 
-    void finetuneModel() {
+    std::string finetuneModel() {
         // Implement finetuning logic here
-        std::cout << "[Finetuning Model]: Stub has been launched!" << std::endl;
+        return "Nvidia Only, it's not a feasible option to self improve portabily since they offer focused on datacenter and desktop high power usage consuption";
     }
 };
 
@@ -468,9 +468,9 @@ public:
         setupPythonEnv();
     }
 
-    void finetuneModel() {
+    std::string finetuneModel() {
         // Implement Stable Diffusion finetuning logic here
-        std::cout << "[Finetuning SD Model]: Stub has been launched!" << std::endl;
+        return "Nvidia Only, it's not a feasible option to self improve portabily since they offer focused on datacenter and desktop high power usage consuption";
     }
 };
 //================================================ 
@@ -648,7 +648,7 @@ public:
         sqlite3_bind_int64(stmt, 5, current_epoch);
         sqlite3_bind_int64(stmt, 6, current_epoch);
 
-        sqlite3_step(stmt);
+        sqlite3_step (stmt);
         sqlite3_finalize(stmt);
 
         return llm_response;
@@ -852,13 +852,13 @@ int main() {
     llm_inference.runInferenceTest();
 
     LLMFinetune llm_finetune;
-    llm_finetune.finetuneModel();
+    std::cout << "[Finetune Status]: " << llm_finetune.finetuneModel() << std::endl;
 
     SDInference sd_inference;
     sd_inference.runInferenceTest();
 
     SDFinetune sd_finetune;
-    sd_finetune.finetuneModel();
+    std::cout << "[Finetune SD Status]: " << sd_finetune.finetuneModel() << std::endl;
     //-=-=-=-=-=-=-=-
 
 
