@@ -20,7 +20,6 @@ message(STATUS "Allowing the code to be as close as the CPU architecture allow t
 set(CMAKE_CXX_FLAGS_RELEASE "-O3")
 set(mainEngineCode "${CMAKE_SOURCE_DIR}/main.cpp")
 
-
 # Add your source files
 set(SOURCES
     main.cpp
@@ -50,7 +49,6 @@ add_library(sqlite3 STATIC
 )
 target_include_directories(sqlite3 PUBLIC ${SQLITE_DIR})
 
-
 # Specify the path to your Boost Library 
 message(STATUS "Setting (1/3) Boost Universal Library Zephyrine Library Module for C++ Management Engine")
 set(BOOST_ROOT "${CMAKE_SOURCE_DIR}/Library/boost_1_86_0")
@@ -64,7 +62,6 @@ include_directories(${BOOST_ROOT})
 message(STATUS "Setting (2/3) main Zephyrine Library Module for C++ Management Engine")
 include_directories(${BOOST_ROOT}/boost)
 
-
 message(STATUS "Setting (3/3) main Zephyrine Library nlohmann json Module for C++ Management Engine")
 include_directories(${LIBRARY}/jsonLibNlohMann/include)
 
@@ -72,49 +69,75 @@ include_directories(${LIBRARY}/jsonLibNlohMann/include)
 
 # Detect Python with a version constraint between 3.10 and 3.12
 message(STATUS "Checking Python3 main Zephyrine Library Module for Python x C++ Mixed Session Management Engine")
-find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
-if (Python3_VERSION VERSION_GREATER_EQUAL "3.10" AND Python3_VERSION VERSION_LESS "3.13")
-    message(STATUS "Found suitable Python3 version: ${Python3_VERSION}")
-else()
-    message(FATAL_ERROR "Python version must be between 3.10 and 3.12. Found: ${Python3_VERSION}")
-endif()
 
-# Determine the correct executable paths and site-packages based on the platform
-message(STATUS "Setting main Zephyrine Library Module for Python x C++ Mixed Session Management Engine")
-set(PYTHON_VENV_PATH "${LIBRARY}/pythonBridgeRuntime")
+# Define a list of preferred Python versions in order of preference
+set(preferred_python_versions "3.12" "3.11" "3.10")
 
-
-# Define a list of preferred Python versions
-set(preferred_python_versions "python3.12" "python3.11" "python3.10" "python3")
-
-# Initialize an empty variable for the chosen Python interpreter
+# Initialize variables
 set(chosen_python_interpreter "")
+set(chosen_python_version "")
 
-
-# Iterate over preferred versions and find the available one
+# Iterate over preferred versions and find the available one with find_program
 foreach(version ${preferred_python_versions})
-    find_program(PYTHON_EXECUTABLE NAMES ${version})
+    find_program(PYTHON_EXECUTABLE NAMES python${version})
     if(PYTHON_EXECUTABLE)
-        set(chosen_python_interpreter ${PYTHON_EXECUTABLE})
-        break()
+        execute_process(
+            COMMAND ${PYTHON_EXECUTABLE} -c "import sys; print(sys.version[:4])"
+            OUTPUT_VARIABLE temp_version
+            OUTPUT_STRIP_TRAILING_WHITESPACE
+        )
+        
+        if(temp_version VERSION_GREATER_EQUAL "3.10" AND temp_version VERSION_LESS "3.13")
+            set(chosen_python_interpreter ${PYTHON_EXECUTABLE})
+            set(chosen_python_version ${temp_version})
+            break()
+        endif()
     endif()
 endforeach()
 
 # Ensure a suitable Python interpreter was found
 if(NOT chosen_python_interpreter)
     message(FATAL_ERROR "No suitable Python interpreter found for versions 3.10, 3.11, or 3.12.")
+else()
+    message(STATUS "Found suitable Python version: ${chosen_python_version} with interpreter: ${chosen_python_interpreter}")
 endif()
+
+# Set Python3_EXECUTABLE and other variables for find_package
+set(Python3_EXECUTABLE ${chosen_python_interpreter})
+find_package(Python3 COMPONENTS Interpreter Development REQUIRED)
+
+# Determine the correct executable paths and site-packages based on the platform
+message(STATUS "Setting main Zephyrine Library Module for Python x C++ Mixed Session Management Engine")
+set(PYTHON_VENV_PATH "${LIBRARY}/pythonBridgeRuntime")
 
 message(STATUS "Using Global Python interpreter: ${chosen_python_interpreter}")
 # Create a virtual environment using the chosen Python interpreter
 message(STATUS "Creating containerization for Python for Status-Quo ML python-only Libraries Module")
+
+# Function to delete the pythonBridgeRuntime directory if it exists
+function(delete_python_bridge_runtime)
+  if(EXISTS "${PYTHON_VENV_PATH}")
+    message(STATUS "Deleting existing pythonBridgeRuntime directory...")
+    file(REMOVE_RECURSE "${PYTHON_VENV_PATH}")
+  endif()
+endfunction()
+
 # Create a virtual environment named pythonBridgeRuntime
 execute_process(
     COMMAND ${chosen_python_interpreter} -m venv ${PYTHON_VENV_PATH}
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    RESULT_VARIABLE CREATE_VENV_RESULT
 )
 
-
+# Check if virtual environment creation was successful
+if(NOT ${CREATE_VENV_RESULT} EQUAL 0)
+  # If creation failed, delete the directory and try again
+  delete_python_bridge_runtime()
+  execute_process(
+      COMMAND ${chosen_python_interpreter} -m venv ${PYTHON_VENV_PATH}
+      WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+  )
+endif()
 
 # Verify and print the site-packages path
 set(PYTHON_VENV_PYTHON3_BIN_PATH "${PYTHON_VENV_BIN_PATH}/python3") # Ensure this uses the detected version range
@@ -127,7 +150,6 @@ execute_process(
 )
 
 #Checking if the binary version is within 3.10 - 3.12 and if it's not then reject
-
 
 message(STATUS "Python paths: ${PYTHON_PATHS}")
 
@@ -154,7 +176,16 @@ set(PYTHON_VENV_PYTHON3_BIN_PATH "${LIBRARY}/pythonBridgeRuntime/bin/python3") #
 execute_process(
     COMMAND ${PYTHON_VENV_BIN_PATH}/pip install --upgrade pip
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
+    RESULT_VARIABLE UPGRADE_PIP_RESULT
 )
+
+# Check if pip upgrade was successful
+if(NOT ${UPGRADE_PIP_RESULT} EQUAL 0)
+  # If upgrade failed, delete the directory and exit with an error
+  delete_python_bridge_runtime()
+  message(FATAL_ERROR "Failed to upgrade pip in the virtual environment. Deleted pythonBridgeRuntime.")
+endif()
+
 #set PYTHON_SITE_PACKAGES variable through venv python3 bin path 
 execute_process(
     COMMAND ${PYTHON_VENV_PYTHON3_BIN_PATH} -c "import sysconfig; print(sysconfig.get_paths()['purelib'])"
@@ -220,12 +251,16 @@ execute_process(
     COMMAND ${PYTHON_VENV_BIN_PATH}/pip install --upgrade pip
     COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pep517 pybind11 llama-index pandas numpy scikit-learn diffusers llama-cpp-python torch keras huggingface
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
-    RESULT_VARIABLE result
+    RESULT_VARIABLE INSTALL_PACKAGES_RESULT
 )
+
 # Check if the previous commands were successful
-if(NOT ${result} EQUAL 0)
-    message(FATAL_ERROR "Failed to install required Python packages in the virtual environment.")
+if(NOT ${INSTALL_PACKAGES_RESULT} EQUAL 0)
+  # If installation failed, delete the directory and exit with an error
+  delete_python_bridge_runtime()
+  message(FATAL_ERROR "Failed to install required Python packages in the virtual environment. Deleted pythonBridgeRuntime.")
 endif()
+
 # Status
 message(STATUS "Enforcing python root dir to use locally not Globally...")
 set(Python_ROOT_DIR "${PYTHON_VENV_PATH}")
@@ -241,7 +276,6 @@ set(pybind11_DIR "${PYTHON_SITE_PACKAGES}/pybind11/share/cmake/pybind11/")
 message(STATUS "Registering pybind11 using Documented https://pybind11.readthedocs.io/en/stable/compiling.html classic find_package ${pybind11_DIR}")
 find_package(pybind11 CONFIG REQUIRED)
 message(STATUS "Adding library module via pybind11 to C++")
-
 
 # Commands are from this documentation https://github.com/pybind/pybind11/blob/master/tools/pybind11Config.cmake.in
 
@@ -263,7 +297,6 @@ message(STATUS "Adding library module via pybind11 to C++")
 #target_link_libraries(keras PUBLIC pybind11::module)
 #pybind11_add_module(huggingface ${mainEngineCode})
 #target_link_libraries(huggingface PUBLIC pybind11::module)
-
 
 #Debug Variable
 message(STATUS "Make sure that you execute compile.sh or CMAKELISTS on the ./systemCore/engineMain directory!")
@@ -303,4 +336,3 @@ target_link_libraries(main PRIVATE Python3::Python)
 
 # Include directories for your libraries
 target_include_directories(main PRIVATE ${Python3_INCLUDE_DIRS} ${PYBIND11_INCLUDE_DIRS} ${CURL_INCLUDE_DIRS})
-
