@@ -50,6 +50,7 @@ systemCore/bin/**/*.make
 systemCore/vendor/**
 systemCore/bin/*_*/**
 **sync-conflict**
+**engine_interaction.db**
 systemCore/bin/**/*make*
 *.exp
 !example.exp
