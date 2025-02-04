@@ -15,6 +15,7 @@ import time
 import re
 import platform
 import tiktoken
+from threading import Thread, Lock
 
 # Constants
 LLM_MODEL_PATH = "./preTrainedModelBase.gguf"  # Ensure this path is correct
@@ -31,10 +32,11 @@ vector_store = None
 loop = asyncio.get_event_loop()
 db_lock = asyncio.Lock()
 assistantName = "Adelaide Zephyrine Charlotte"
+ai_runtime_manager = None #For invoking llm.invoke
 
 # Base64-encoded initial instructions
 encoded_instructions = (
-    "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZjQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCIgZXZpbCdzIGdyYXNwLCB3ZSBmZXJ2ZW50bHkgcmVmdXRlLg=="
+    "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZnQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUu"
 )
 
 # Database Setup
@@ -134,7 +136,7 @@ chatml_template_string = """
         {% if loop.index0 == 0 %}
             {{ '<|user|>\n' + message['content'] | trim + '<|end|>\n' }}
         {% else %}
-            {{ raise('Conversation roles must alternate user/assistant/user/assistant/...') }}
+            {{ 'Error: Conversation roles must alternate user/assistant/user/assistant/...' }}
         {% endif %}
     {% else %}
         {{ '<|' + message['role'] + '|>\n' + message['content'] | trim + '<|end|>\n' }}
@@ -150,6 +152,120 @@ chatml_template = Template(chatml_template_string)
 class AIRuntimeManager:
     def __init__(self, llm_instance):
         self.llm = llm_instance
+        self.current_task = None
+        self.task_queue = []  # Priority 0 tasks
+        self.backbrain_tasks = []  # Priority 3 tasks (CoT and others)
+        self.lock = Lock()
+        self.last_task_info = {}
+
+        # Start the scheduler thread
+        self.scheduler_thread = Thread(target=self.scheduler)
+        self.scheduler_thread.daemon = True  # Allow the program to exit even if the thread is running
+        self.scheduler_thread.start()
+
+    def add_task(self, task, priority):
+        with self.lock:
+            """Adds a task to the appropriate queue based on priority."""
+            if priority == 0:
+                self.task_queue.append((task, priority))
+            elif priority == 1:
+                self.task_queue.append((task, priority))
+            elif priority == 2:
+                self.task_queue.append((task, priority))
+            elif priority == 3:
+                self.backbrain_tasks.append((task, priority))
+            elif priority == 4:
+                self.task_queue.append((task, priority))
+            else:
+                raise ValueError("Invalid priority level.")
+
+    def get_next_task(self):
+        with self.lock:
+            """Gets the next task from the highest priority queue that is not empty."""
+            if self.task_queue:
+                return self.task_queue.pop(0)  # FIFO
+            elif self.backbrain_tasks:
+                return self.backbrain_tasks.pop(0)
+            else:
+                return None
+
+    def scheduler(self):
+        """Scheduler loop to manage and execute tasks based on priority."""
+        while True:
+            task = self.get_next_task()
+            if task:
+                start_time = time.time()  # Initialize start_time here
+
+                # Unpack task and priority
+                task_item, priority = task
+                if isinstance(task_item, tuple):
+                    task_callable, task_parameter = task_item
+                    task_args = task_parameter
+                else:
+                    task_callable = task_item
+                    task_args = ()
+
+                print(color_prefix(f"Starting task: {task_callable.__name__} with priority {priority}", "BackbrainController", start_time))
+
+                # Execute the task and get the result
+                try:
+                    # Check if it's a CoT task timing out
+                    if task_callable == generate_response:
+                    
+                        timeout = 60
+                        result = None
+                        thread = Thread(target=self.run_with_timeout, args=(task_callable, task_args, timeout))
+                        thread.start()
+                        
+                        while thread.is_alive():
+                            current_time = time.time()
+                            elapsed_time = current_time - start_time
+                            time_left = timeout - elapsed_time
+                            print(color_prefix(f"Task {task_callable.__name__} running, time left: {time_left:.2f} seconds", "BackbrainController", current_time), end='\r')
+                            time.sleep(0.5)
+
+                        thread.join(timeout)
+
+                        if thread.is_alive():
+                            print(color_prefix(f"Task {task_callable.__name__} timed out after {timeout} seconds.", "BackbrainController", time.time() - start_time))
+                            result = self.llm.invoke(task_args[0])
+                            self.add_task((task_callable, task_args), 3)
+                        else:
+                            print(color_prefix(f"Task {task_callable.__name__} completed within timeout.", "BackbrainController", time.time() - start_time))
+                    
+                    else: #Not generate_response
+                        result = task_callable(*task_args)
+                except Exception as e:
+                    print(color_prefix(f"Task {task_callable.__name__} raised an exception: {e}", "BackbrainController", time.time() - start_time))
+
+                elapsed_time = time.time() - start_time
+
+                # If it's a long generate_response task store it in main context
+                if task_callable == generate_response and elapsed_time < 58:
+                    partition_context.add_context(task_args[1], result, "main")
+
+                # Store the last task info for interruption handling
+                self.last_task_info = {
+                    "task": task_callable,
+                    "args": task_args,
+                    "result": result,
+                    "elapsed_time": elapsed_time,
+                }
+
+                print(color_prefix(f"Finished task: {task_callable.__name__} in {elapsed_time:.2f} seconds", "BackbrainController", time.time() - start_time))
+                self.current_task = None
+            else:
+                time.sleep(0.5)  # Short sleep when no tasks are available
+
+    def run_with_timeout(self, func, args, timeout):
+        """Runs a function with a timeout."""
+        thread = Thread(target=func, args=args)
+        thread.start()
+        thread.join(timeout)
+
+        if thread.is_alive():
+            print(color_prefix(f"Task {func.__name__} timed out after {timeout} seconds.", "BackbrainController", time.time() - start_time))
+            return self.llm.invoke(args[0])
 
     def invoke_llm(self, prompt):
         """Invokes the LLM after checking and enforcing the 75% context window limit."""
@@ -212,7 +328,7 @@ class PartitionContext:
     def manage_l0_overflow(self, slot):
         """Manages L0 overflow by truncating or demoting to L1 (database)."""
         l0_context = self.context_slots[slot]["main"]
-        l0_tokens = sum([len(TOKENIZER.encode(item)) for item in l0_context])
+        l0_tokens = sum([len(TOKENIZER.encode(item)) for item in l0_context if isinstance(item, str)])
 
         while l0_tokens > self.L0_size:
             overflowed_item = l0_context.pop(0)  # Remove from the beginning (FIFO)
@@ -222,25 +338,28 @@ class PartitionContext:
             loop.run_until_complete(self.async_embed_and_store(overflowed_item, slot))
 
     def get_relevant_chunks(self, query, slot, k=5):
-      """Retrieves relevant text chunks from the vector store based on a query."""
-      try:
-          if vector_store:
-              docs_and_scores = vector_store.similarity_search_with_score(query, k=k)
+        """Retrieves relevant text chunks from the vector store based on a query."""
+        start_time = time.time()
+        try:
+            if self.vector_store:
+                # Search the vector store for the top k most similar documents
+                docs_and_scores = self.vector_store.similarity_search_with_score(query, k=k)
 
-              # Filter out chunks that belong to the specified slot
-              relevant_chunks = []
-              for doc, score in docs_and_scores:
-                  metadata = doc.metadata  # Assuming you have metadata in your documents
-                  if metadata.get("slot") == slot:
-                      relevant_chunks.append((doc.page_content, score))
+                # Filter out chunks that belong to the specified slot
+                relevant_chunks = []
+                for doc, score in docs_and_scores:
+                    metadata = doc.metadata  # Assuming you have metadata in your documents
+                    if metadata.get("slot") == slot:
+                        relevant_chunks.append((doc.page_content, score))
 
-              return relevant_chunks
-          else:
-              print("vector_store is None. Check initialization.")
-              return []
-      except Exception as e:
-          print(f"Error in retrieve_relevant_chunks: {e}")
-          return []
+                print(color_prefix(f"Retrieved {len(relevant_chunks)} relevant chunks from vector store in {time.time() - start_time:.2f}s", "Internal"))
+                return relevant_chunks
+            else:
+                print(color_prefix("vector_store is None. Check initialization.", "Internal", time.time() - start_time))
+                return []
+        except Exception as e:
+            print(color_prefix(f"Error in retrieve_relevant_chunks: {e}", "Internal", time.time() - start_time))
+            return []
 
     async def async_embed_and_store(self, text_chunk, slot):
       """Asynchronously embeds a text chunk and stores it in the database."""
@@ -249,8 +368,8 @@ class PartitionContext:
               text_splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=0, separator="\n")
               texts = text_splitter.split_text(text_chunk)
               docs = [Document(page_content=t, metadata={"slot": slot}) for t in texts] # Add slot as metadata
-              vector_store.add_documents(docs)
-              vector_store.save_local("vector_store")
+              self.vector_store.add_documents(docs)
+              self.vector_store.save_local("vector_store")
 
               embedding = embedding_model.embed_query(text_chunk)
               self.db_cursor.execute("INSERT INTO context_chunks (slot, chunk, embedding) VALUES (?, ?, ?)", (slot, text_chunk, pickle.dumps(embedding)))
@@ -263,7 +382,7 @@ class PartitionContext:
     def calculate_total_context_length(self, slot, requester_type):
         """Calculates the total context length for a given slot and requester type."""
         context = self.get_context(slot, requester_type)
-        total_length = sum([len(TOKENIZER.encode(item)) for item in context])
+        total_length = sum([len(TOKENIZER.encode(item)) for item in context if isinstance(item, str)])
         return total_length
 
 # Async function to write to the database
@@ -361,7 +480,6 @@ def process_node(node, prompt, start_time, progress_interval, partition_context,
         response = ai_runtime_manager.invoke_llm(question_prompt)
         partition_context.add_context(slot, response, "CoT")
         print(color_prefix(f"Response to question: {response}", "Internal", time.time() - start_time, progress=progress_interval, token_count=question_prompt_tokens))
-
     elif node_type == "action step":
         if "literature_review" in content:
             review_query = re.search(r"literature_review\(['\"](.*?)['\"]\)", content).group(1)
@@ -389,7 +507,6 @@ def generate_response(user_input, slot, partition_context):
     start_time = time.time()
 
     partition_context.add_context(slot, f"User: {user_input}", "main")
-    relevant_context = partition_context.get_relevant_chunks(user_input, slot, k=5)
 
     decoded_initial_instructions = base64.b64decode(encoded_instructions).decode("utf-8")
     decoded_initial_instructions = decoded_initial_instructions.replace("${assistantName}", assistantName)
@@ -398,20 +515,18 @@ def generate_response(user_input, slot, partition_context):
 
     # Construct the prompt using the PartitionContext
     context = partition_context.get_context(slot, "main")  # Get context for the specific slot
-    if relevant_context:
-        retrieved_context_text = "\n".join([item[0] for item in relevant_context])
-        context_messages = [{"role": "system", "content": f"{decoded_initial_instructions}\nHere's some relevant context:\n{retrieved_context_text}"}]
-    else:
-        context_messages = [{"role": "system", "content": decoded_initial_instructions}]
+    
+    context_messages = [{"role": "system", "content": decoded_initial_instructions}]
 
-    for entry in context:
-        if isinstance(entry, dict) and "role" in entry and "content" in entry:
-            context_messages.append(entry)
-        else:
+    # check if context is not empty
+    if context:
+        for entry in context:
             context_messages.append({"role": "user", "content": entry})
-
-    for entry in main_history:
-        context_messages.append(entry)
+    
+    # check if main_history is not empty
+    if main_history:
+        for entry in main_history:
+            context_messages.append(entry)
 
     prompt = chatml_template.render(messages=context_messages, add_generation_prompt=True)
 
@@ -452,6 +567,12 @@ def generate_response(user_input, slot, partition_context):
 
     if not deep_thinking_required:
         print(color_prefix("Simple query detected. Generating a direct response...", "Internal", time.time() - start_time, progress=10)) # Increased progress
+        relevant_context = partition_context.get_relevant_chunks(user_input, slot, k=5)
+        if relevant_context:
+            retrieved_context_text = "\n".join([item[0] for item in relevant_context])
+            context_messages.append({"role": "system", "content": f"Here's some relevant context:\n{retrieved_context_text}"})
+        
+        prompt = chatml_template.render(messages=context_messages, add_generation_prompt=True)
         direct_response = ai_runtime_manager.invoke_llm(prompt)
         loop.run_until_complete(async_db_write(slot, user_input, direct_response))
         end_time = time.time()
@@ -716,12 +837,21 @@ partition_context = PartitionContext(CTX_WINDOW_LLM, db_cursor, vector_store)
 if __name__ == "__main__":
     print("Chatbot initialized. Start chatting!")
     current_slot = 0  # Start with slot 0
-    while True:
-        user_input = input(color_prefix("", "User"))
-        if user_input.lower() == "exit":
-            break
-        elif user_input.lower() == "next slot":
-            current_slot += 1
-            print(color_prefix(f"Switched to slot {current_slot}", "Internal"))
-            continue
-        generation_time = generate_response(user_input, current_slot, partition_context)
+    try:
+        while True:
+            user_input = input(color_prefix("", "User"))
+            if user_input.lower() == "exit":
+                break
+            elif user_input.lower() == "next slot":
+                current_slot += 1
+                print(color_prefix(f"Switched to slot {current_slot}", "Internal"))
+                continue
+
+            # Add main task (user interaction) to the scheduler's queue
+            ai_runtime_manager.add_task((generate_response, (user_input, current_slot, partition_context)), 0)
+    except KeyboardInterrupt:
+        print(color_prefix("\nExiting gracefully...", "Internal"))
+    finally:
+        # Perform any necessary cleanup here, such as:
+        db_connection.close()  # Close the database connection
+        print(color_prefix("Cleanup complete. Goodbye!", "Internal"))
