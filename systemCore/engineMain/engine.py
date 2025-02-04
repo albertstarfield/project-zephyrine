@@ -52,7 +52,7 @@ class DatabaseManager:
         """Creates necessary tables if they don't exist."""
         self.db_cursor.execute(
             """
-            CREATE TABLE IF NOT EXISTS chat_history (
+            CREATE TABLE IF NOT EXISTS interaction_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 slot INTEGER,
                 role TEXT,
@@ -109,7 +109,7 @@ class DatabaseManager:
         """Retrieves chat history for a specific slot."""
         try:
             self.db_cursor.execute(
-                "SELECT role, message FROM chat_history WHERE slot=? ORDER BY timestamp ASC",
+                "SELECT role, message FROM interaction_history WHERE slot=? ORDER BY timestamp ASC",
                 (slot,),
             )
             history = self.db_cursor.fetchall()
@@ -121,7 +121,7 @@ class DatabaseManager:
     def fetch_chat_history(self, slot):
         """Fetches chat history for a specific slot and formats it for the prompt."""
         self.db_cursor.execute(
-            "SELECT role, message FROM chat_history WHERE slot=? ORDER BY timestamp",
+            "SELECT role, message FROM interaction_history WHERE slot=? ORDER BY timestamp",
             (slot,),
         )
         rows = self.db_cursor.fetchall()
@@ -132,11 +132,11 @@ class DatabaseManager:
         """Asynchronously writes user queries and AI responses to the database."""
         try:
             self.db_writer.schedule_write(
-                "INSERT INTO chat_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO interaction_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
                 (slot, "User", query, response, "main"),
             )
             self.db_writer.schedule_write(
-                "INSERT INTO chat_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO interaction_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
                 (slot, "AI", response, "", "main"),
             )
         except Exception as e:
@@ -214,7 +214,7 @@ class OutputFormatter:
           
           # For demonstration, let's assume you have a way to get the slot like this:
           
-          context_length = partition_context.calculate_total_context_length(slot, "main") # Use
+          context_length = ai_runtime_manager.calculate_total_context_length(slot, "main") # Use
           if generation_time is not None and token_count is not None:
             return (
                 f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
@@ -265,9 +265,9 @@ class OutputFormatter:
                   f"{fg(153)}Βackbrain{reset} {fg(195)}∼{reset} {fg(159)}≡{reset} "
                   f"{fg(195)}⟩{reset} {text}"
               )
-      elif prefix_type == "Prefetch":  # Special prefix for prefetcher
+      elif prefix_type == "branch_predictor":  # Special prefix for branch_predictor
           return (
-              f"{fg(220)}Prefetch{reset} {fg(221)}∼{reset} {fg(222)}≡{reset} "
+              f"{fg(220)}branch_predictor{reset} {fg(221)}∼{reset} {fg(222)}≡{reset} "
               f"{fg(223)}⟩{reset} {text}"
           )
       elif prefix_type == "Watchdog":
@@ -321,8 +321,8 @@ class ChatMLFormatter:
 class Watchdog:
     def __init__(self, restart_script_path, ai_runtime_manager):
         self.restart_script_path = restart_script_path
-        self.loop = asyncio.get_event_loop()
         self.ai_runtime_manager = ai_runtime_manager
+        self.loop = None  # Do not initialize the loop here
 
     async def monitor(self):
         """Monitors the system and restarts on fatal errors."""
@@ -352,24 +352,10 @@ class Watchdog:
         python = sys.executable
         os.execl(python, python, self.restart_script_path)
 
-    def start(self):
-        """Starts the watchdog in a separate thread."""
-        thread = Thread(target=self.run_async_monitor)
-        thread.daemon = True
-        thread.start()
-
-    def run_async_monitor(self):
-        """Runs the async monitor in a separate thread."""
-        try:
-            self.loop.run_until_complete(self.monitor())
-        except Exception as e:
-            print(
-                OutputFormatter.color_prefix(
-                    f"{fg(196)}{attr('bold')}Fatal Error{attr('reset')}: Uncaught exception in watchdog: {e}",
-                    "Watchdog",
-                )
-            )
-            self.restart()
+    def start(self, loop):
+        """Starts the watchdog task on the provided event loop."""
+        self.loop = loop # Store the main loop
+        self.loop.create_task(self.monitor())
 
 class AIRuntimeManager:
     def __init__(self, llm_instance, database_manager):
@@ -383,16 +369,17 @@ class AIRuntimeManager:
         self.fuzzy_threshold = 0.69
         self.database_manager = database_manager
         self.chat_formatter = ChatMLFormatter()
+        self.partition_context = None # Initialize partition_context
 
         # Start the scheduler thread
         self.scheduler_thread = Thread(target=self.scheduler)
         self.scheduler_thread.daemon = True
         self.scheduler_thread.start()
 
-        # Start the prefetcher thread
-        self.prefetcher_thread = Thread(target=self.prefetcher)
-        self.prefetcher_thread.daemon = True
-        self.prefetcher_thread.start()
+        # Start the branch_predictor thread
+        self.branch_predictor_thread = Thread(target=self.branch_predictor)
+        self.branch_predictor_thread.daemon = True
+        self.branch_predictor_thread.start()
 
     def add_task(self, task, priority):
         with self.lock:
@@ -424,9 +411,9 @@ class AIRuntimeManager:
         """Checks if a similar prompt exists in the database using fuzzy matching."""
         db_cursor = self.database_manager.db_cursor
         db_cursor.execute("""
-            SELECT chat_history.response
-            FROM chat_history
-            WHERE chat_history.slot = ? AND chat_history.context_type = ?
+            SELECT interaction_history.response
+            FROM interaction_history
+            WHERE interaction_history.slot = ? AND interaction_history.context_type = ?
         """, (slot, context_type))
         cached_results = db_cursor.fetchall()
 
@@ -449,7 +436,7 @@ class AIRuntimeManager:
         """Adds a prompt-response pair to the chat_history table with context_type 'cached'."""
         try:
             self.database_manager.db_writer.schedule_write(
-                "INSERT INTO chat_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
+                "INSERT INTO interaction_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
                 (slot, "User", prompt, response, context_type)
             )
         except sqlite3.IntegrityError:
@@ -479,13 +466,13 @@ class AIRuntimeManager:
                 ))
 
                 if task_callable == self.generate_response and priority != 4:
-                    user_input, slot, partition_context = task_args
+                    user_input, slot = task_args
                     context_type = "CoT" if priority == 3 else "main"
 
                     cached_response = self.cached_inference(user_input, slot, context_type)
                     if cached_response:
                         print(OutputFormatter.color_prefix(f"Using cached response for slot {slot}", "BackbrainController"))
-                        partition_context.add_context(slot, cached_response, context_type)
+                        self.partition_context.add_context(slot, cached_response, context_type)
                         continue
 
                 try:
@@ -518,7 +505,7 @@ class AIRuntimeManager:
                                 time.time() - self.start_time
                             ))
                             result = self.llm.invoke(task_args[0])
-                            self.add_task((task_callable, task_args), 3)
+                            self.add_task((task_callable, task_args[:2]), 3) # Add only user_input and slot
                         else:
                             print(OutputFormatter.color_prefix(
                                 f"Task {task_callable.__name__} completed within timeout.",
@@ -539,14 +526,14 @@ class AIRuntimeManager:
 
                 if task_callable == self.generate_response:
                     if elapsed_time < 58:
-                        partition_context.add_context(task_args[1], result, "main")
+                        self.partition_context.add_context(task_args[1], result, "main")
                         asyncio.run_coroutine_threadsafe(
-                            partition_context.async_embed_and_store(result, task_args[1]),
+                            self.partition_context.async_embed_and_store(result, task_args[1]),
                             loop
                         )
 
                     if priority != 4:
-                        user_input, slot, partition_context = task_args
+                        user_input, slot = task_args
                         context_type = "CoT" if priority == 3 else "main"
                         self.add_to_cache(user_input, result, context_type, slot)
 
@@ -576,14 +563,14 @@ class AIRuntimeManager:
             print(OutputFormatter.color_prefix(f"Task {func.__name__} timed out after {timeout} seconds.", "BackbrainController", time.time() - self.start_time))
             return self.llm.invoke(args[0])
 
-    def prefetcher(self):
+    def branch_predictor(self):
         """
-        Analyzes chat history, predicts likely user inputs, and prefetches responses.
+        Analyzes chat history, predicts likely user inputs, and branch_predictores responses.
         """
         while True:
             try:
                 for slot in range(5):
-                    print(OutputFormatter.color_prefix(f"Prefetcher analyzing slot {slot}...", "BackbrainController"))
+                    print(OutputFormatter.color_prefix(f"branch_predictor analyzing slot {slot}...", "BackbrainController"))
                     chat_history = self.database_manager.get_chat_history(slot)
 
                     if not chat_history:
@@ -599,11 +586,11 @@ class AIRuntimeManager:
                     potential_inputs = self.extract_potential_inputs(decision_tree_json)
 
                     for user_input in potential_inputs:
-                        print(OutputFormatter.color_prefix(f"Prefetching response for: {user_input}", "Prefetch"))
-                        prefixed_input = f"Prefetch: {user_input}"
-                        self.add_task((self.generate_response, (prefixed_input, slot, partition_context)), 4)
+                        print(OutputFormatter.color_prefix(f"branch_predictoring response for: {user_input}", "branch_predictor"))
+                        prefixed_input = f"branch_predictor: {user_input}"
+                        self.add_task((self.generate_response, (prefixed_input, slot)), 4)
             except Exception as e:
-                print(OutputFormatter.color_prefix(f"Error in prefetcher: {e}", "BackbrainController"))
+                print(OutputFormatter.color_prefix(f"Error in branch_predictor: {e}", "BackbrainController"))
 
             time.sleep(5)
 
@@ -738,15 +725,15 @@ class AIRuntimeManager:
                     print(OutputFormatter.color_prefix("Max retries reached. Returning None.", "Internal"))
                     return None
 
-    def generate_response(self, user_input, slot, partition_context):
+    def generate_response(self, user_input, slot):
       """Generates a response to the user input, using CoT when appropriate."""
       global chatml_template, assistantName
 
       start_time = time.time()
 
-      partition_context.add_context(slot, f"User: {user_input}", "main")
+      self.partition_context.add_context(slot, f"User: {user_input}", "main")
       # Schedule the coroutine to embed and store the user input using run_coroutine_threadsafe
-      asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(f"User: {user_input}", slot), loop)
+      asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(f"User: {user_input}", slot), loop)
 
       decoded_initial_instructions = base64.b64decode(encoded_instructions.strip()).decode("utf-8")
       decoded_initial_instructions = decoded_initial_instructions.replace("${assistantName}", assistantName)
@@ -754,7 +741,7 @@ class AIRuntimeManager:
       main_history = self.database_manager.fetch_chat_history(slot)
 
       # Construct the prompt using the PartitionContext
-      context = partition_context.get_context(slot, "main")  # Get context for the specific slot
+      context = self.partition_context.get_context(slot, "main")  # Get context for the specific slot
 
       context_messages = [{"role": "system", "content": decoded_initial_instructions}]
 
@@ -807,7 +794,7 @@ class AIRuntimeManager:
 
       if not deep_thinking_required:
           print(OutputFormatter.color_prefix("Simple query detected. Generating a direct response...", "Internal", time.time() - start_time, progress=10, slot=slot)) # Corrected call
-          relevant_context = partition_context.get_relevant_chunks(user_input, slot, k=5)
+          relevant_context = self.partition_context.get_relevant_chunks(user_input, slot, k=5)
           if relevant_context:
               retrieved_context_text = "\n".join([item[0] for item in relevant_context])
               context_messages.append({"role": "system", "content": f"Here's some relevant context:\n{retrieved_context_text}"})
@@ -822,9 +809,9 @@ class AIRuntimeManager:
           return direct_response
 
       print(OutputFormatter.color_prefix("Engaging in deep thinking process...", "Internal", time.time() - start_time, progress=10, slot=slot)) # Corrected call
-      partition_context.add_context(slot, user_input, "CoT")
+      self.partition_context.add_context(slot, user_input, "CoT")
       # Schedule the coroutine to embed and store the user input using run_coroutine_threadsafe
-      asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(user_input, slot), loop)
+      asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(user_input, slot), loop)
 
       print(OutputFormatter.color_prefix("Generating initial direct answer...", "Internal", time.time() - start_time, progress=15, slot=slot)) # Corrected call
       initial_response_prompt = f"{prompt}\nProvide a concise initial response."
@@ -834,7 +821,7 @@ class AIRuntimeManager:
 
       initial_response = self.invoke_llm(initial_response_prompt)
       # Schedule the coroutine to embed and store the initial response using run_coroutine_threadsafe
-      asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(initial_response, slot), loop)
+      asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(initial_response, slot), loop)
       print(OutputFormatter.color_prefix(f"Initial response: {initial_response}", "Internal", time.time() - start_time, progress=20, slot=slot)) # Corrected call
 
       print(OutputFormatter.color_prefix("Creating a to-do list for in-depth analysis...", "Internal", time.time() - start_time, progress=25, slot=slot)) # Corrected call
@@ -849,7 +836,7 @@ class AIRuntimeManager:
 
       todo_response = self.invoke_llm(todo_prompt)
       # Schedule the coroutine to embed and store the todo response using run_coroutine_threadsafe
-      asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(todo_response, slot), loop)
+      asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(todo_response, slot), loop)
       print(OutputFormatter.color_prefix(f"To-do list: {todo_response}", "Internal", time.time() - start_time, progress=30, slot=slot)) # Corrected call
 
       search_queries = re.findall(r"literature_review\(['\"](.*?)['\"]\)", todo_response)
@@ -864,7 +851,7 @@ class AIRuntimeManager:
 
       decision_tree_text = self.invoke_llm(decision_tree_prompt)
       # Schedule the coroutine to embed and store the decision tree text using run_coroutine_threadsafe
-      asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(decision_tree_text, slot), loop)
+      asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_tree_text, slot), loop)
       print(OutputFormatter.color_prefix(f"Decision tree (text): {decision_tree_text}", "Internal", time.time() - start_time, progress=40, slot=slot)) # Corrected call
 
       print(OutputFormatter.color_prefix("Converting decision tree to JSON...", "Internal", time.time() - start_time, progress=45, slot=slot)) # Corrected call
@@ -926,7 +913,7 @@ class AIRuntimeManager:
               # Allocate most of the progress to decision tree processing
               for i, node in enumerate(nodes):
                   progress_interval = 55 + (i / num_nodes) * 35  # Range 55 to 90
-                  DecisionTreeProcessor.process_node(node, prompt, start_time, progress_interval, partition_context, slot)
+                  DecisionTreeProcessor.process_node(node, prompt, start_time, progress_interval, self.partition_context, slot)
 
               print(OutputFormatter.color_prefix("Formulating a conclusion based on processed decision tree...", "Internal", time.time() - start_time, progress=90, slot=slot)) # Corrected call
               conclusion_prompt = f"""
@@ -935,7 +922,7 @@ class AIRuntimeManager:
               Initial Response: {initial_response}\n
               To-do List: {todo_response}\n
               Decision Tree (text): {decision_tree_text}\n
-              Processed Decision Tree Nodes: {partition_context.get_context(slot, "CoT")}\n
+              Processed Decision Tree Nodes: {self.partition_context.get_context(slot, "CoT")}\n
 
               Provide a final conclusion based on the entire process.
               """
@@ -945,7 +932,7 @@ class AIRuntimeManager:
 
               conclusion_response = self.invoke_llm(conclusion_prompt)
               # Schedule the coroutine to embed and store the conclusion response using run_coroutine_threadsafe
-              asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(conclusion_response, slot), loop)
+              asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot), loop)
               print(OutputFormatter.color_prefix(f"Conclusion (after decision tree processing): {conclusion_response}", "Internal", time.time() - start_time, progress=92, slot=slot)) # Corrected call
 
           else:
@@ -988,10 +975,10 @@ class AIRuntimeManager:
           asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, conclusion_response), loop)
           end_time = time.time()
           generation_time = end_time - start_time
-          print(OutputFormatter.color_prefix(conclusion_response, "Adelaide", generation_time, slot=slot)) # Corrected call
-          partition_context.add_context(slot, conclusion_response, "main")
+          print(OutputFormatter.color_prefix(conclusion_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot)) # Corrected call
+          self.partition_context.add_context(slot, conclusion_response, "main")
           # Schedule the coroutine to embed and store the conclusion response using run_coroutine_threadsafe
-          asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(conclusion_response, slot), loop)
+          asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot), loop)
           return conclusion_response
 
       print(OutputFormatter.color_prefix("Handling a long response...", "Internal", time.time() - start_time, progress=98, slot=slot)) # Corrected call
@@ -1039,9 +1026,9 @@ class AIRuntimeManager:
       end_time = time.time()
       generation_time = end_time - start_time
       print(OutputFormatter.color_prefix(long_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot)) # Corrected call
-      partition_context.add_context(slot, long_response, "main")
+      self.partition_context.add_context(slot, long_response, "main")
       # Schedule the coroutine to embed and store the long response using run_coroutine_threadsafe
-      asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(long_response, slot), loop)
+      asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot), loop)
 
       # Find the last occurrence of "<|assistant|>"
       last_assistant_index = long_response.rfind("<|assistant|>")
@@ -1053,18 +1040,42 @@ class AIRuntimeManager:
 
       return final_response
 
+    def calculate_total_context_length(self, slot, requester_type):
+        """Calculates the total context length for a given slot and requester type."""
+        return self.partition_context.calculate_total_context_length(slot, requester_type)
+
 class PartitionContext:
     def __init__(self, ctx_window_llm, database_manager, vector_store):
         self.ctx_window_llm = ctx_window_llm
         self.db_cursor = database_manager.db_cursor
         self.vector_store = vector_store
-        self.L0_size = int(ctx_window_llm * 0.25)
-        self.L1_size = int(ctx_window_llm * 0.50)
-        self.S_size = int(ctx_window_llm * 0.25)
+        self.L0_size = int(ctx_window_llm * 0.75)  # 75% for L0 (Immediate)
+        self.L1_size = int(ctx_window_llm * 0.25)  # 25% for L1 (Semantic)
+        self.S_size = 0  # S (Safety Margin) is not used, always 0
         self.context_slots = {}
+        """
+        Partition Context Management:
+
+        - L0 (Immediate): 75% of the context window. This is the in-memory context that is immediately available to the model.
+        - L1 (Semantic): 25% of the context window. This is the context fetched from the database using context-aware embeddings (e.g., Snowflake Arctic).
+            - If the context is requested for the 'main' interaction, it is fetched from the 'interaction_history' table.
+            - If the context is requested for 'CoT' (Chain of Thought), it is fetched from both the 'interaction_history' and 'CoT_generateResponse_History' tables.
+        - S (Safety Margin): 0% of the context window. This is a safety margin and is intentionally left blank. It does not store any context.
+        
+        Context is managed per slot. Each slot has its own L0, L1, and S partitions.
+        """
 
     def get_context(self, slot, requester_type):
-        """Retrieves the context for a given slot and requester type."""
+        """
+        Retrieves the context for a given slot and requester type.
+
+        Args:
+            slot (int): The slot number.
+            requester_type (str): The type of requester ('main' or 'CoT').
+
+        Returns:
+            list: The context for the specified slot and requester type.
+        """
         if slot not in self.context_slots:
             self.context_slots[slot] = {"main": [], "CoT": []}
 
@@ -1076,7 +1087,14 @@ class PartitionContext:
             raise ValueError("Invalid requester type. Must be 'main' or 'CoT'.")
 
     def add_context(self, slot, text, requester_type):
-        """Adds context to the specified slot and requester type."""
+        """
+        Adds context to the specified slot and requester type.
+
+        Args:
+            slot (int): The slot number.
+            text (str): The context text to add.
+            requester_type (str): The type of requester ('main' or 'CoT').
+        """
         if slot not in self.context_slots:
             self.context_slots[slot] = {"main": [], "CoT": []}
 
@@ -1087,7 +1105,9 @@ class PartitionContext:
             self.manage_l0_overflow(slot)
 
     def manage_l0_overflow(self, slot):
-        """Manages L0 overflow by truncating or demoting to L1 (database)."""
+        """
+        Manages L0 overflow by truncating or demoting to L1 (database).
+        """
         l0_context = self.context_slots[slot]["main"]
         l0_tokens = sum([len(TOKENIZER.encode(item)) for item in l0_context if isinstance(item, str)])
 
@@ -1098,20 +1118,37 @@ class PartitionContext:
             asyncio.run_coroutine_threadsafe(self.async_store_CoT_generateResponse(overflowed_item, slot), loop)
 
     def get_relevant_chunks(self, query, slot, k=5):
-        """Retrieves relevant text chunks from the vector store based on a query."""
+        """
+        Retrieves relevant text chunks from the vector store based on a query, fetching from either 'interaction_history' or both 'interaction_history' and 'CoT_generateResponse_History' tables as needed.
+        """
         start_time = time.time()
         try:
             if self.vector_store:
-                docs_and_scores = self.vector_store.similarity_search_with_score(query, k=k)
+                # Fetch chunks from 'interaction_history'
+                interaction_history_docs_and_scores = self.vector_store.similarity_search_with_score(
+                    query,
+                    k=k,
+                    filter={"table": "interaction_history", "slot": slot}
+                )
+
+                # If the requester type is 'CoT', also fetch chunks from 'CoT_generateResponse_History'
+                cot_docs_and_scores = []
+                if requester_type == "CoT":
+                    cot_docs_and_scores = self.vector_store.similarity_search_with_score(
+                        query,
+                        k=k,
+                        filter={"table": "CoT_generateResponse_History", "slot": slot}
+                    )
+
+                # Combine the results, ensuring no duplication and maintaining order of relevance
+                combined_docs_and_scores = self.combine_results(interaction_history_docs_and_scores, cot_docs_and_scores, k)
 
                 relevant_chunks = []
-                for doc, score in docs_and_scores:
-                    metadata = doc.metadata
-                    if metadata.get("slot") == slot:
-                        if isinstance(doc.page_content, str):
-                            relevant_chunks.append((doc.page_content, score))
-                        else:
-                            print(OutputFormatter.color_prefix(f"Warning: Non-string content found in document: {type(doc.page_content)}", "Internal"))
+                for doc, score in combined_docs_and_scores:
+                    if isinstance(doc.page_content, str):
+                        relevant_chunks.append((doc.page_content, score))
+                    else:
+                        print(OutputFormatter.color_prefix(f"Warning: Non-string content found in document: {type(doc.page_content)}", "Internal"))
 
                 print(OutputFormatter.color_prefix(f"Retrieved {len(relevant_chunks)} relevant chunks from vector store in {time.time() - start_time:.2f}s", "Internal"))
                 return relevant_chunks
@@ -1122,8 +1159,20 @@ class PartitionContext:
             print(OutputFormatter.color_prefix(f"Error in retrieve_relevant_chunks: {e}", "Internal", time.time() - start_time))
             return []
 
+    def combine_results(self, list1, list2, k):
+        """
+        Combines two lists of (doc, score) tuples, removing duplicates and keeping only the top 'k' results based on score.
+        """
+        combined = {}
+        for doc, score in list1 + list2:
+            if doc.metadata['doc_id'] not in combined or combined[doc.metadata['doc_id']][1] > score:
+                combined[doc.metadata['doc_id']] = (doc, score)
+        return sorted(combined.values(), key=lambda x: x[1])[:k]
+
     async def async_embed_and_store(self, text_chunk, slot):
-        """Asynchronously embeds a text chunk and stores it in the database (vector store)."""
+        """
+        Asynchronously embeds a text chunk and stores it in the database (vector store).
+        """
         async with db_lock:
             try:
                 if text_chunk is None:
@@ -1136,13 +1185,19 @@ class PartitionContext:
                 for text in texts:
                     doc_id = str(time.time())
                     embedding = embedding_model.embed_query(text)
+
+                    # Store in the appropriate table based on the requester type
+                    if requester_type == "CoT":
+                        table_name = "CoT_generateResponse_History"
+                    else:  # Default to "main"
+                        table_name = "interaction_history"
                     
                     db_writer.schedule_write(
-                        "INSERT INTO vector_learning_context_embedding (slot, doc_id, chunk, embedding) VALUES (?, ?, ?, ?)",
+                        f"INSERT INTO {table_name} (slot, doc_id, chunk, embedding) VALUES (?, ?, ?, ?)",
                         (slot, doc_id, text, pickle.dumps(embedding))
                     )
 
-                    doc = Document(page_content=text, metadata={"slot": slot, "doc_id": doc_id})
+                    doc = Document(page_content=text, metadata={"slot": slot, "doc_id": doc_id, "table": table_name})
                     self.vector_store.add_documents([doc])
 
                 print(OutputFormatter.color_prefix(f"Scheduled context chunk for storage for slot {slot}: {text_chunk[:50]}...", "Internal"))
@@ -1251,18 +1306,30 @@ def load_vector_store_from_db(embedding_model, db_cursor):
     """Loads the vector store from the database."""
     print(OutputFormatter.color_prefix("Loading vector store from database...", "Internal"))
     try:
-        db_cursor.execute("SELECT chunk, slot, doc_id FROM vector_learning_context_embedding")
-        rows = db_cursor.fetchall()
+        # Fetch data from interaction_history
+        db_cursor.execute("SELECT chunk, slot, doc_id FROM interaction_history")
+        interaction_history_rows = db_cursor.fetchall()
 
-        if not rows:
+        # Fetch data from CoT_generateResponse_History
+        db_cursor.execute("SELECT chunk, slot, doc_id FROM CoT_generateResponse_History")
+        cot_rows = db_cursor.fetchall()
+
+        if not interaction_history_rows and not cot_rows:
             print(OutputFormatter.color_prefix("No existing vector store found in the database. Creating a new one.", "Internal"))
             return FAISS.from_texts(["This is a dummy text to initialize FAISS."], embedding_model)
 
         texts = []
         metadatas = []
-        for chunk, slot, doc_id in rows:
+
+        # Process interaction_history rows
+        for chunk, slot, doc_id in interaction_history_rows:
             texts.append(chunk)
-            metadatas.append({"slot": slot, "doc_id": doc_id})
+            metadatas.append({"slot": slot, "doc_id": doc_id, "table": "interaction_history"})
+
+        # Process CoT_generateResponse_History rows
+        for chunk, slot, doc_id in cot_rows:
+            texts.append(chunk)
+            metadatas.append({"slot": slot, "doc_id": doc_id, "table": "CoT_generateResponse_History"})
 
         vector_store = FAISS.from_texts(texts, embedding_model, metadatas=metadatas)
         print(OutputFormatter.color_prefix("Vector store loaded successfully from database.", "Internal"))
@@ -1284,8 +1351,9 @@ async def input_task(ai_runtime_manager, partition_context):
                 print(OutputFormatter.color_prefix(f"Switched to slot {current_slot}", "Internal"))
                 continue
 
+            # Correctly pass only user_input and current_slot
             asyncio.run_coroutine_threadsafe(
-                add_task_async(ai_runtime_manager, ai_runtime_manager.generate_response, (user_input, current_slot, partition_context), 0),
+                add_task_async(ai_runtime_manager, ai_runtime_manager.generate_response, (user_input, current_slot), 0),
                 loop
             )
 
@@ -1305,13 +1373,14 @@ async def main():
     database_manager = initialize_models()
 
     # Debugging: Print table contents
-    database_manager.print_table_contents("chat_history")
+    database_manager.print_table_contents("interaction_history")
     database_manager.print_table_contents("CoT_generateResponse_History")
     database_manager.print_table_contents("vector_learning_context_embedding")
     print(OutputFormatter.color_prefix("Adelaide & Albert Engine initialized. Interaction is ready!", "Internal"))
     
     
     partition_context = PartitionContext(CTX_WINDOW_LLM, database_manager, vector_store)
+    ai_runtime_manager.partition_context = partition_context # Set partition_context in AIRuntimeManager
 
     # Load vector store from the database after starting the writer task
     vector_store = load_vector_store_from_db(embedding_model, database_manager.db_cursor)
@@ -1319,7 +1388,7 @@ async def main():
 
     #Engine runtime watchdog
     watchdog = Watchdog(sys.argv[0], ai_runtime_manager)
-    watchdog.start()
+    watchdog.start(loop)  # Pass the main event loop to the Watchdog
 
     # Start the input task
     asyncio.create_task(input_task(ai_runtime_manager, partition_context))
@@ -1340,3 +1409,4 @@ if __name__ == "__main__":
           database_manager.close()
         loop.close()
         print(OutputFormatter.color_prefix("Cleanup complete. Goodbye!", "Internal"))
+        
