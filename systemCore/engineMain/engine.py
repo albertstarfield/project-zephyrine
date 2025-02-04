@@ -14,7 +14,9 @@ import asyncio
 import time
 import re
 import platform
+import sys
 import tiktoken
+import recoll
 from threading import Thread, Lock
 
 # Constants
@@ -23,7 +25,7 @@ EMBEDDING_MODEL_PATH = "./snowflake-arctic-embed.gguf"  # Ensure this path is co
 CTX_WINDOW_LLM = 4096
 DATABASE_FILE = "./engine_interaction.db"
 MAX_TOKENS_GENERATE = 8192
-TOKENIZER = tiktoken.get_encoding("cl100k_base")  # Initialize tokenizer globally
+TOKENIZER = tiktoken.get_encoding("cl100k_base")  # Initialize tokenizer globally this is used in LLaMa 
 
 # Global Variables
 llm = None
@@ -157,6 +159,7 @@ class AIRuntimeManager:
         self.backbrain_tasks = []  # Priority 3 tasks (CoT and others)
         self.lock = Lock()
         self.last_task_info = {}
+        self.start_time = None  # Initialize start_time as an instance variable
 
         # Start the scheduler thread
         self.scheduler_thread = Thread(target=self.scheduler)
@@ -194,7 +197,7 @@ class AIRuntimeManager:
         while True:
             task = self.get_next_task()
             if task:
-                start_time = time.time()  # Initialize start_time here
+                self.start_time = time.time()  # Set start_time at the beginning of the task
 
                 # Unpack task and priority
                 task_item, priority = task
@@ -205,42 +208,65 @@ class AIRuntimeManager:
                     task_callable = task_item
                     task_args = ()
 
-                print(color_prefix(f"Starting task: {task_callable.__name__} with priority {priority}", "BackbrainController", start_time))
+                print(color_prefix(
+                    f"Starting task: {task_callable.__name__} with priority {priority}",
+                    "BackbrainController",
+                    self.start_time
+                ))
 
                 # Execute the task and get the result
                 try:
-                    # Check if it's a CoT task timing out
+                    # Check if it's a generate_response task and handle timeout
                     if task_callable == generate_response:
-                    
                         timeout = 60
                         result = None
-                        thread = Thread(target=self.run_with_timeout, args=(task_callable, task_args, timeout))
+                        thread = Thread(
+                            target=self.run_with_timeout,
+                            args=(task_callable, task_args, timeout)
+                        )
                         thread.start()
-                        
+
                         while thread.is_alive():
                             current_time = time.time()
-                            elapsed_time = current_time - start_time
+                            elapsed_time = current_time - self.start_time
                             time_left = timeout - elapsed_time
-                            print(color_prefix(f"Task {task_callable.__name__} running, time left: {time_left:.2f} seconds", "BackbrainController", current_time), end='\r')
+                            print(color_prefix(
+                                f"Task {task_callable.__name__} running, time left: {time_left:.2f} seconds",
+                                "BackbrainController",
+                                current_time
+                            ), end='\r')
                             time.sleep(0.5)
 
                         thread.join(timeout)
 
                         if thread.is_alive():
-                            print(color_prefix(f"Task {task_callable.__name__} timed out after {timeout} seconds.", "BackbrainController", time.time() - start_time))
+                            print(color_prefix(
+                                f"Task {task_callable.__name__} timed out after {timeout} seconds.",
+                                "BackbrainController",
+                                time.time() - self.start_time
+                            ))
                             result = self.llm.invoke(task_args[0])
-                            self.add_task((task_callable, task_args), 3)
+                            self.add_task((task_callable, task_args), 3)  # Re-add task with lower priority
                         else:
-                            print(color_prefix(f"Task {task_callable.__name__} completed within timeout.", "BackbrainController", time.time() - start_time))
-                    
-                    else: #Not generate_response
+                            print(color_prefix(
+                                f"Task {task_callable.__name__} completed within timeout.",
+                                "BackbrainController",
+                                time.time() - self.start_time
+                            ))
+
+                    else:  # Not a generate_response task
                         result = task_callable(*task_args)
+
                 except Exception as e:
-                    print(color_prefix(f"Task {task_callable.__name__} raised an exception: {e}", "BackbrainController", time.time() - start_time))
+                    print(color_prefix(
+                        f"Task {task_callable.__name__} raised an exception: {e}",
+                        "BackbrainController",
+                        time.time() - self.start_time
+                    ))
 
-                elapsed_time = time.time() - start_time
+                elapsed_time = time.time() - self.start_time
 
-                # If it's a long generate_response task store it in main context
+                # If it's a long generate_response task, store it in the main context
                 if task_callable == generate_response and elapsed_time < 58:
                     partition_context.add_context(task_args[1], result, "main")
 
@@ -252,7 +278,11 @@ class AIRuntimeManager:
                     "elapsed_time": elapsed_time,
                 }
 
-                print(color_prefix(f"Finished task: {task_callable.__name__} in {elapsed_time:.2f} seconds", "BackbrainController", time.time() - start_time))
+                print(color_prefix(
+                    f"Finished task: {task_callable.__name__} in {elapsed_time:.2f} seconds",
+                    "BackbrainController",
+                    time.time() - self.start_time
+                ))
                 self.current_task = None
             else:
                 time.sleep(0.5)  # Short sleep when no tasks are available
@@ -264,7 +294,8 @@ class AIRuntimeManager:
         thread.join(timeout)
 
         if thread.is_alive():
-            print(color_prefix(f"Task {func.__name__} timed out after {timeout} seconds.", "BackbrainController", time.time() - start_time))
+            # Now you can access self.start_time here
+            print(color_prefix(f"Task {func.__name__} timed out after {timeout} seconds.", "BackbrainController", time.time() - self.start_time))
             return self.llm.invoke(args[0])
 
     def invoke_llm(self, prompt):
