@@ -12,6 +12,7 @@ import base64
 import json
 import asyncio
 import time
+import sys
 import re
 import platform
 import tiktoken
@@ -98,29 +99,39 @@ def color_prefix(text, prefix_type, generation_time=None, progress=None, token_c
         return f"{fg(202)}{username}{reset} {fg(172)}⚡{reset} {fg(196)}×{reset} {fg(166)}⟩{reset} {text}"
     elif prefix_type == "Adelaide":
         context_length = partition_context.calculate_total_context_length(current_slot, "main")
-        if token_count is not None:
+        if generation_time is not None and token_count is not None:
           return (
               f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
               f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
               f"{fg(250)}({generation_time:.2f}s){reset} {fg(250)}({token_count:.2f} tokens){reset} {text}"
           )
-        else:
+        elif generation_time is not None:
           return (
             f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
             f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
             f"{fg(250)}({generation_time:.2f}s){reset} {text}"
         )
+        else:
+            return (
+            f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
+            f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
+            f"{text}"
+        )
     elif prefix_type == "Internal":
-        if progress is not None:
-          if token_count is not None:
+        if progress is not None and generation_time is not None and token_count is not None:
             return (
                 f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
                 f"{fg(183)}⟩{reset} {fg(177)}[{progress:.1f}%]{reset} {fg(250)}({generation_time:.2f}s, {token_count} tokens){reset} {text}"
             )
-          else:
+        elif progress is not None and generation_time is not None:
             return (
                 f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
                 f"{fg(183)}⟩{reset} {fg(177)}[{progress:.1f}%]{reset} {fg(250)}({generation_time:.2f}s){reset} {text}"
+            )
+        elif progress is not None:
+            return (
+                f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
+                f"{fg(183)}⟩{reset} {fg(177)}[{progress:.1f}%]{reset} {text}"
             )
         else:
             return (
@@ -128,14 +139,25 @@ def color_prefix(text, prefix_type, generation_time=None, progress=None, token_c
                 f"{fg(183)}⟩{reset} {fg(177)} {text}{reset}"
             )
     elif prefix_type == "BackbrainController":
-        return (
-            f"{fg(153)}Βackbrain{reset} {fg(195)}∼{reset} {fg(159)}≡{reset} "
-            f"{fg(195)}⟩{reset} {fg(250)}({generation_time:.2f}s){reset} {text}"
-        )
+        if generation_time is not None:
+            return (
+                f"{fg(153)}Βackbrain{reset} {fg(195)}∼{reset} {fg(159)}≡{reset} "
+                f"{fg(195)}⟩{reset} {fg(250)}({generation_time:.2f}s){reset} {text}"
+            )
+        else:
+            return (
+                f"{fg(153)}Βackbrain{reset} {fg(195)}∼{reset} {fg(159)}≡{reset} "
+                f"{fg(195)}⟩{reset} {text}"
+            )
     elif prefix_type == "Prefetch":  # Special prefix for prefetcher
         return (
             f"{fg(220)}Prefetch{reset} {fg(221)}∼{reset} {fg(222)}≡{reset} "
             f"{fg(223)}⟩{reset} {text}"
+        )
+    elif prefix_type == "Watchdog":
+        return (
+            f"{fg(243)}Watchdog{reset} {fg(244)}⚯{reset} {fg(245)}⊜{reset} "
+            f"{fg(246)}⟩{reset} {text}"
         )
     else:
         return text
@@ -166,6 +188,51 @@ chatml_template_string = """
 """
 chatml_template = Template(chatml_template_string)
 
+class Watchdog:
+    def __init__(self, restart_script_path):
+        self.restart_script_path = restart_script_path
+        self.loop = asyncio.get_event_loop()
+
+    async def monitor(self):
+        """Monitors the system and restarts on fatal errors."""
+        while True:
+            try:
+                await asyncio.sleep(5)  # Check for errors every 5 seconds
+
+                # Check for specific error conditions
+                if ai_runtime_manager.last_task_info:
+                  task_name = ai_runtime_manager.last_task_info["task"].__name__
+                  elapsed_time = ai_runtime_manager.last_task_info["elapsed_time"]
+
+                  if task_name == "generate_response" and elapsed_time > 60:
+                    print(color_prefix("Watchdog detected potential fatal error: generate_response timeout", "Watchdog"))
+                    self.restart()
+
+                # Add more checks for other fatal error conditions here
+
+            except Exception as e:
+                print(color_prefix(f"Watchdog error: {e}", "Watchdog"))
+
+    def restart(self):
+        """Restarts the program."""
+        print(color_prefix("Restarting program...", "Watchdog", style="bold"))
+        python = sys.executable
+        os.execl(python, python, self.restart_script_path)
+
+    def start(self):
+      """Starts the watchdog in a separate thread."""
+      thread = Thread(target=self.run_async_monitor)
+      thread.daemon = True  # Allow the program to exit even if the thread is running
+      thread.start()
+
+    def run_async_monitor(self):
+      """Runs the async monitor in a separate thread."""
+      try:
+          self.loop.run_until_complete(self.monitor())
+      except Exception as e:
+          print(color_prefix(f"{fg(196)}{attr('bold')}Fatal Error{attr('reset')}: Uncaught exception in watchdog: {e}", "Watchdog"))
+          self.restart()
+
 class AIRuntimeManager:
     def __init__(self, llm_instance):
         self.llm = llm_instance
@@ -186,6 +253,9 @@ class AIRuntimeManager:
         self.prefetcher_thread = Thread(target=self.prefetcher)
         self.prefetcher_thread.daemon = True
         self.prefetcher_thread.start()
+        #Engine runtime watchdog
+        self.watchdog = Watchdog(sys.argv[0])  # Pass the script path to Watchdog
+        self.watchdog.start() # Start the watchdog thread
 
     def add_task(self, task, priority):
         with self.lock:
@@ -244,7 +314,7 @@ class AIRuntimeManager:
             print(color_prefix(f"Error adding to cache: {e}", "BackbrainController"))
 
     def scheduler(self):
-        """Scheduler loop to manage and execute tasks based on priority."""
+        #"""Scheduler loop to manage and execute tasks based on priority."""
         while True:
             task = self.get_next_task()
             if task:
@@ -331,8 +401,14 @@ class AIRuntimeManager:
                 if task_callable == generate_response:
                     if elapsed_time < 58:
                         partition_context.add_context(task_args[1], result, "main")
-                        loop.run_until_complete(partition_context.async_embed_and_store(result, task_args[1]))
-                    
+                        # Use asyncio.run_coroutine_threadsafe to schedule the coroutine
+                        future = asyncio.run_coroutine_threadsafe(
+                            partition_context.async_embed_and_store(result, task_args[1]),
+                            loop
+                        )
+                        # Optionally, you can handle the result of the future here
+                        # result = future.result()  # This will block until the coroutine is done
+
                     # Add to cache (for non-prefetch tasks)
                     if priority != 4:
                         user_input, slot, partition_context = task_args
@@ -558,7 +634,11 @@ class PartitionContext:
                 for doc, score in docs_and_scores:
                     metadata = doc.metadata  # Assuming you have metadata in your documents
                     if metadata.get("slot") == slot:
-                        relevant_chunks.append((doc.page_content, score))
+                        # Ensure doc.page_content is a string
+                        if isinstance(doc.page_content, str):
+                            relevant_chunks.append((doc.page_content, score))
+                        else:
+                            print(color_prefix(f"Warning: Non-string content found in document: {type(doc.page_content)}", "Internal"))
 
                 print(color_prefix(f"Retrieved {len(relevant_chunks)} relevant chunks from vector store in {time.time() - start_time:.2f}s", "Internal"))
                 return relevant_chunks
@@ -573,6 +653,10 @@ class PartitionContext:
         """Asynchronously embeds a text chunk and stores it in the database."""
         async with db_lock:
             try:
+                if text_chunk is None:
+                    print(color_prefix("Warning: Received None in async_embed_and_store. Skipping.", "Internal"))
+                    return
+
                 # Split the text chunk into smaller chunks if necessary
                 text_splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=0, separator="\n")
                 texts = text_splitter.split_text(text_chunk)
@@ -1011,7 +1095,16 @@ def generate_response(user_input, slot, partition_context):
     print(color_prefix(long_response, "Adelaide", generation_time, token_count=prompt_tokens))
     partition_context.add_context(slot, long_response, "main")
     loop.run_until_complete(partition_context.async_embed_and_store(long_response, slot))
-    return long_response
+    
+    # Find the last occurrence of "<|assistant|>"
+    last_assistant_index = long_response.rfind("<|assistant|>")
+    if last_assistant_index != -1:
+        # Extract the response after the last "<|assistant|>"
+        final_response = long_response[last_assistant_index + len("<|assistant|>"):].strip()
+    else:
+        final_response = long_response
+
+    return final_response
 
 # Extract JSON from LLM response
 def extract_json(llm_response):
@@ -1063,18 +1156,23 @@ partition_context = PartitionContext(CTX_WINDOW_LLM, db_cursor, vector_store)
 if __name__ == "__main__":
     print("Chatbot initialized. Start chatting!")
     current_slot = 0  # Start with slot 0
+    loop = asyncio.new_event_loop()
+    asyncio.set_event_loop(loop)
     try:
         while True:
-            user_input = input(color_prefix("", "User"))
-            if user_input.lower() == "exit":
-                break
-            elif user_input.lower() == "next slot":
-                current_slot += 1
-                print(color_prefix(f"Switched to slot {current_slot}", "Internal"))
-                continue
+            try:
+                user_input = input(color_prefix("", "User"))
+                if user_input.lower() == "exit":
+                    break
+                elif user_input.lower() == "next slot":
+                    current_slot += 1
+                    print(color_prefix(f"Switched to slot {current_slot}", "Internal"))
+                    continue
 
-            # Add main task (user interaction) to the scheduler's queue
-            ai_runtime_manager.add_task((generate_response, (user_input, current_slot, partition_context)), 0)
+                # Add main task (user interaction) to the scheduler's queue
+                ai_runtime_manager.add_task((generate_response, (user_input, current_slot, partition_context)), 0)
+            except EOFError:
+              print("EOF")
     except KeyboardInterrupt:
         print(color_prefix("\nExiting gracefully...", "Internal"))
     finally:
