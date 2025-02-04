@@ -14,6 +14,8 @@ import asyncio
 import time
 import re
 import platform
+import tiktoken
+from transformers import AutoTokenizer
 
 # Constants
 LLM_MODEL_PATH = "./preTrainedModelBase.gguf"  # Ensure this path is correct
@@ -32,10 +34,11 @@ embedding_model = None
 loop = asyncio.get_event_loop()
 db_lock = asyncio.Lock()
 assistantName = "Adelaide Zephyrine Charlotte"
+tokenizer = None  # Global variable for the tokenizer
 
 # Base64-encoded initial instructions
 encoded_instructions = (
-    "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZjQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUu"
+    "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZjQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCIgZXZpbCdzIGdyYXNwLCB3ZSBmZXJ2ZW50bHkgcmVmdXRlLg=="
 )
 
 # Database Setup
@@ -75,7 +78,7 @@ def get_username():
             return platform.node().split('.')[0]
 
 # Function to format with colors
-def color_prefix(text, prefix_type, generation_time=None, progress=None):
+def color_prefix(text, prefix_type, generation_time=None, progress=None, token_count=None):
     """Formats text with colors and additional information."""
     reset = attr('reset')
     if prefix_type == "User":
@@ -83,7 +86,14 @@ def color_prefix(text, prefix_type, generation_time=None, progress=None):
         return f"{fg(202)}{username}{reset} {fg(172)}⚡{reset} {fg(196)}×{reset} {fg(166)}⟩{reset} {text}"
     elif prefix_type == "Adelaide":
         context_length = calculate_total_context_length()
-        return (
+        if token_count is not None:
+          return (
+              f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
+              f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
+              f"{fg(250)}({generation_time:.2f}s){reset} {fg(250)}({token_count} tokens){reset} {text}"
+          )
+        else:
+          return (
             f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
             f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
             f"{fg(250)}({generation_time:.2f}s){reset} {text}"
@@ -170,7 +180,8 @@ async def async_embed_and_store(text_chunk):
 # Initialize LLM and embedding models
 def initialize_models():
     """Initializes the LLM, embedding model, and vector store."""
-    global llm, embedding_model, vector_store
+    global llm, embedding_model, vector_store, tokenizer
+
     n_batch = 512
     llm = LlamaCpp(
         model_path=LLM_MODEL_PATH,
@@ -189,10 +200,20 @@ def initialize_models():
     else:
         vector_store = FAISS.from_texts(["Hello world!"], embedding_model)
 
+    # Initialize tokenizer
+    try:
+        # Attempt to load a tokenizer locally (more accurate for the specific model)
+        tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_PATH)
+        print(color_prefix("Using local tokenizer.", "Internal"))
+    except Exception as e:
+        print(color_prefix(f"Local tokenizer not found, using tiktoken instead: {e}", "Internal"))
+        tokenizer = tiktoken.get_encoding("cl100k_base")
+        print(color_prefix("Using tiktoken tokenizer.", "Internal"))
+
     # LLM Warmup
     print("Warming up the LLM...")
     try:
-        llm("a")
+        llm.invoke("a")
     except Exception as e:
         print(f"Error during LLM warmup: {e}")
     print("LLM warmup complete.")
@@ -269,7 +290,7 @@ def process_node(node, prompt, start_time, progress_interval):
 
     if node_type == "question":
         question_prompt = f"{prompt}\nQuestion: {content}\nAnswer:"
-        response = llm(question_prompt)
+        response = llm.invoke(question_prompt)
         cot_history.append({"role": "assistant", "content": response})
         print(color_prefix(f"Response to question: {response}", "Internal", time.time() - start_time, progress=progress_interval))
 
@@ -284,7 +305,7 @@ def process_node(node, prompt, start_time, progress_interval):
 
     elif node_type == "conclusion" or node_type == "reflection":
         reflection_prompt = f"{prompt}\n{content}\nThought:"
-        reflection = llm(reflection_prompt)
+        reflection = llm.invoke(reflection_prompt)
         cot_history.append({"role": "assistant", "content": reflection})
         print(color_prefix(f"Reflection/Conclusion: {reflection}", "Internal", time.time() - start_time, progress=progress_interval))
 
@@ -294,7 +315,7 @@ def process_node(node, prompt, start_time, progress_interval):
 # Generate response to user input
 def generate_response(user_input):
     """Generates a response to the user input, using CoT when appropriate."""
-    global llm, chatml_template, assistantName, direct_history, cot_history
+    global llm, chatml_template, assistantName, direct_history, cot_history, tokenizer
 
     start_time = time.time()
 
@@ -331,6 +352,14 @@ def generate_response(user_input):
     else:
         prompt = chatml_template.render(messages=messages, add_generation_prompt=True)
 
+    # Calculate tokens in the prompt
+    if hasattr(tokenizer, 'encode_ordinary'):
+        prompt_tokens = len(tokenizer.encode_ordinary(prompt))
+    else:
+        prompt_tokens = len(tokenizer.encode(prompt))
+
+    print(color_prefix(f"Prompt token count: {prompt_tokens}", "Internal"))
+
     print(color_prefix("Deciding whether to engage in deep thinking...", "Internal", time.time() - start_time, progress=0))
     decision_prompt = f"""
     Analyze the input and decide if it requires in-depth processing or a simple response.
@@ -345,7 +374,13 @@ def generate_response(user_input):
     ```
     Respond with JSON, and only JSON, strictly adhering to the above format.
     """
-    decision_response = llm(decision_prompt)
+
+    if hasattr(tokenizer, 'encode_ordinary'):
+        decision_prompt_tokens = len(tokenizer.encode_ordinary(decision_prompt))
+    else:
+        decision_prompt_tokens = len(tokenizer.encode(decision_prompt))
+    print(color_prefix(f"Decision prompt token count: {decision_prompt_tokens}", "Internal"))
+    decision_response = llm.invoke(decision_prompt)
 
     try:
         decision_json_string = extract_json(decision_response)
@@ -361,11 +396,11 @@ def generate_response(user_input):
 
     if not deep_thinking_required:
         print(color_prefix("Simple query detected. Generating a direct response...", "Internal", time.time() - start_time, progress=10)) # Increased progress
-        direct_response = llm(prompt)
+        direct_response = llm.invoke(prompt)
         loop.run_until_complete(async_db_write(user_input, direct_response))
         end_time = time.time()
         generation_time = end_time - start_time
-        print(color_prefix(direct_response, "Adelaide", generation_time))
+        print(color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens))
         return direct_response
 
     print(color_prefix("Engaging in deep thinking process...", "Internal", time.time() - start_time, progress=10)) # Increased progress
@@ -373,7 +408,13 @@ def generate_response(user_input):
     
     print(color_prefix("Generating initial direct answer...", "Internal", time.time() - start_time, progress=15)) # Increased progress
     initial_response_prompt = f"{prompt}\nProvide a concise initial response."
-    initial_response = llm(initial_response_prompt)
+
+    if hasattr(tokenizer, 'encode_ordinary'):
+        initial_response_prompt_tokens = len(tokenizer.encode_ordinary(initial_response_prompt))
+    else:
+        initial_response_prompt_tokens = len(tokenizer.encode(initial_response_prompt))
+    print(color_prefix(f"Initial response prompt token count: {initial_response_prompt_tokens}", "Internal"))
+    initial_response = llm.invoke(initial_response_prompt)
     print(color_prefix(f"Initial response: {initial_response}", "Internal", time.time() - start_time, progress=20))
 
     print(color_prefix("Creating a to-do list for in-depth analysis...", "Internal", time.time() - start_time, progress=25))
@@ -382,7 +423,14 @@ def generate_response(user_input):
     Based on the query '{user_input}', list the steps for in-depth analysis.
     Include search queries for external resources, ending with self-reflection.
     """
-    todo_response = llm(todo_prompt)
+
+    if hasattr(tokenizer, 'encode_ordinary'):
+        todo_prompt_tokens = len(tokenizer.encode_ordinary(todo_prompt))
+    else:
+        todo_prompt_tokens = len(tokenizer.encode(todo_prompt))
+    print(color_prefix(f"To-do prompt token count: {todo_prompt_tokens}", "Internal"))
+
+    todo_response = llm.invoke(todo_prompt)
     print(color_prefix(f"To-do list: {todo_response}", "Internal", time.time() - start_time, progress=30))
     
     search_queries = re.findall(r"literature_review\(['\"](.*?)['\"]\)", todo_response)
@@ -391,7 +439,14 @@ def generate_response(user_input):
 
     print(color_prefix("Creating a decision tree for action planning...", "Internal", time.time() - start_time, progress=35))
     decision_tree_prompt = f"{prompt}\nGiven the to-do list '{todo_response}', create a decision tree for actions."
-    decision_tree_text = llm(decision_tree_prompt)
+
+    if hasattr(tokenizer, 'encode_ordinary'):
+        decision_tree_prompt_tokens = len(tokenizer.encode_ordinary(decision_tree_prompt))
+    else:
+        decision_tree_prompt_tokens = len(tokenizer.encode(decision_tree_prompt))
+    print(color_prefix(f"Decision tree prompt token count: {decision_tree_prompt_tokens}", "Internal"))
+
+    decision_tree_text = llm.invoke(decision_tree_prompt)
     print(color_prefix(f"Decision tree (text): {decision_tree_text}", "Internal", time.time() - start_time, progress=40))
 
     print(color_prefix("Converting decision tree to JSON...", "Internal", time.time() - start_time, progress=45))
@@ -432,7 +487,14 @@ def generate_response(user_input):
     Do not stop generating until you are sure the JSON is complete and syntactically correct as defined in the format.
     Respond with JSON, and only JSON, strictly adhering to the above format.
     """
-    json_tree_response = llm(json_tree_prompt)
+
+    if hasattr(tokenizer, 'encode_ordinary'):
+        json_tree_prompt_tokens = len(tokenizer.encode_ordinary(json_tree_prompt))
+    else:
+        json_tree_prompt_tokens = len(tokenizer.encode(json_tree_prompt))
+    print(color_prefix(f"JSON tree prompt token count: {json_tree_prompt_tokens}", "Internal"))
+
+    json_tree_response = llm.invoke(json_tree_prompt)
 
     try:
         print(color_prefix("Parsing decision tree JSON...", "Internal", time.time() - start_time, progress=50))
@@ -462,7 +524,14 @@ def generate_response(user_input):
 
             Provide a final conclusion based on the entire process.
             """
-            conclusion_response = llm(conclusion_prompt)
+
+            if hasattr(tokenizer, 'encode_ordinary'):
+                conclusion_prompt_tokens = len(tokenizer.encode_ordinary(conclusion_prompt))
+            else:
+                conclusion_prompt_tokens = len(tokenizer.encode(conclusion_prompt))
+            print(color_prefix(f"Conclusion prompt token count: {conclusion_prompt_tokens}", "Internal"))
+
+            conclusion_response = llm.invoke(conclusion_prompt)
             print(color_prefix(f"Conclusion (after decision tree processing): {conclusion_response}", "Internal", time.time() - start_time, progress=92))
 
         else:
@@ -485,7 +554,13 @@ def generate_response(user_input):
     ```
     Generate JSON, and only JSON, with the above format.
     """
-    evaluation_response = llm(evaluation_prompt)
+    if hasattr(tokenizer, 'encode_ordinary'):
+        evaluation_prompt_tokens = len(tokenizer.encode_ordinary(evaluation_prompt))
+    else:
+        evaluation_prompt_tokens = len(tokenizer.encode(evaluation_prompt))
+    print(color_prefix(f"Evaluation prompt token count: {evaluation_prompt_tokens}", "Internal"))
+
+    evaluation_response = llm.invoke(evaluation_prompt)
 
     try:
         evaluation_json_string = extract_json(evaluation_response)
@@ -506,7 +581,14 @@ def generate_response(user_input):
 
     print(color_prefix("Handling a long response...", "Internal", time.time() - start_time, progress=98))
     long_response_estimate_prompt = f"{prompt}\nEstimate tokens needed for a detailed response to '{user_input}'. Respond with JSON, and only JSON, in this format:\n```json\n{{\"tokens\": <number of tokens>}}\n```"
-    long_response_estimate = llm(long_response_estimate_prompt)
+
+    if hasattr(tokenizer, 'encode_ordinary'):
+        long_response_estimate_prompt_tokens = len(tokenizer.encode_ordinary(long_response_estimate_prompt))
+    else:
+        long_response_estimate_prompt_tokens = len(tokenizer.encode(long_response_estimate_prompt))
+    print(color_prefix(f"Long response estimate prompt token count: {long_response_estimate_prompt_tokens}", "Internal"))
+
+    long_response_estimate = llm.invoke(long_response_estimate_prompt)
 
     try:
         tokens_estimate_json_string = extract_json(long_response_estimate)
@@ -525,9 +607,21 @@ def generate_response(user_input):
     while remaining_tokens > 0:
         print(color_prefix(f"Generating part of the long response. Remaining tokens: {remaining_tokens}...", "Internal", time.time() - start_time, progress=99))
         part_response_prompt = f"{prompt}\n{continue_prompt}"
-        part_response = llm(part_response_prompt)
+
+        if hasattr(tokenizer, 'encode_ordinary'):
+            part_response_prompt_tokens = len(tokenizer.encode_ordinary(part_response_prompt))
+        else:
+            part_response_prompt_tokens = len(tokenizer.encode(part_response_prompt))
+        print(color_prefix(f"Part response prompt token count: {part_response_prompt_tokens}", "Internal"))
+
+        part_response = llm.invoke(part_response_prompt)
         long_response += part_response
-        remaining_tokens -= estimate_tokens(part_response)
+
+        if hasattr(tokenizer, 'encode_ordinary'):
+          remaining_tokens -= len(tokenizer.encode_ordinary(part_response))
+        else:
+          remaining_tokens -= len(tokenizer.encode(part_response))
+
         prompt = f"{prompt}\n{part_response}"
 
         if remaining_tokens > 0:
@@ -537,7 +631,7 @@ def generate_response(user_input):
     loop.run_until_complete(async_db_write(user_input, long_response))
     end_time = time.time()
     generation_time = end_time - start_time
-    print(color_prefix(long_response, "Adelaide", generation_time))
+    print(color_prefix(long_response, "Adelaide", generation_time, token_count=prompt_tokens))
     cot_history.append({"role": "assistant", "content": long_response})
     return long_response
 
@@ -572,7 +666,22 @@ def try_parse_json(json_string, max_retries=3):
 
             if attempt < max_retries - 1:
                 print(color_prefix("Retrying with LLM-based correction...", "Internal"))
-                json_string = llm(f"""```json
+                if hasattr(tokenizer, 'encode_ordinary'):
+                    correction_prompt_tokens = len(tokenizer.encode_ordinary(f"""```json
+                    {json_string}
+                    ```
+                    Above JSON string has syntax error, fix the JSON so it can be parsed with json.loads() in python.
+                    Respond with JSON, and only JSON, with the correct format and make sure to comply the standard strictly.
+                    Do not stop generating until you are sure the JSON is complete and syntactically correct as defined in the format."""))
+                else:
+                    correction_prompt_tokens = len(tokenizer.encode(f"""```json
+                    {json_string}
+                    ```
+                    Above JSON string has syntax error, fix the JSON so it can be parsed with json.loads() in python.
+                    Respond with JSON, and only JSON, with the correct format and make sure to comply the standard strictly.
+                    Do not stop generating until you are sure the JSON is complete and syntactically correct as defined in the format."""))
+                print(color_prefix(f"Correction prompt token count: {correction_prompt_tokens}", "Internal"))
+                json_string = llm.invoke(f"""```json
                 {json_string}
                 ```
                 Above JSON string has syntax error, fix the JSON so it can be parsed with json.loads() in python.
