@@ -113,7 +113,7 @@ message(STATUS "Installing required Python packages into virtual environment..."
 
 # Install PyInstaller and other necessary packages
 execute_process(
-    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pyinstaller recoll pep517 pybind11 tiktoken transformers llama-index pandas numpy scikit-learn diffusers llama-cpp-python torch keras huggingface langchain langchain_community langchain_experimental colored faiss-cpu
+    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pyinstaller fuzzywuzzy python-Levenshtein recoll pep517 pybind11 tiktoken transformers llama-index pandas numpy scikit-learn diffusers llama-cpp-python torch keras huggingface langchain langchain_community langchain_experimental colored faiss-cpu
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     RESULT_VARIABLE INSTALL_PACKAGES_RESULT
 )

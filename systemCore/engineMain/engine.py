@@ -14,10 +14,9 @@ import asyncio
 import time
 import re
 import platform
-import sys
 import tiktoken
-import recoll
 from threading import Thread, Lock
+from fuzzywuzzy import fuzz
 
 # Constants
 LLM_MODEL_PATH = "./preTrainedModelBase.gguf"  # Ensure this path is correct
@@ -25,7 +24,7 @@ EMBEDDING_MODEL_PATH = "./snowflake-arctic-embed.gguf"  # Ensure this path is co
 CTX_WINDOW_LLM = 4096
 DATABASE_FILE = "./engine_interaction.db"
 MAX_TOKENS_GENERATE = 8192
-TOKENIZER = tiktoken.get_encoding("cl100k_base")  # Initialize tokenizer globally this is used in LLaMa 
+TOKENIZER = tiktoken.get_encoding("cl100k_base")  # Initialize tokenizer globally
 
 # Global Variables
 llm = None
@@ -34,9 +33,9 @@ vector_store = None
 loop = asyncio.get_event_loop()
 db_lock = asyncio.Lock()
 assistantName = "Adelaide Zephyrine Charlotte"
-ai_runtime_manager = None #For invoking llm.invoke
+ai_runtime_manager = None  # For invoking llm.invoke
 
-# Base64-encoded initial instructions
+# Base64-encoded initial instructions (keep this blank as requested)
 encoded_instructions = (
     "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZnQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUu"
 )
@@ -62,6 +61,17 @@ db_cursor.execute(
         role TEXT,
         message TEXT,
         timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+    )
+    """
+)
+db_cursor.execute(
+    """
+    CREATE TABLE IF NOT EXISTS cached_inference (
+        id INTEGER PRIMARY KEY AUTOINCREMENT,
+        prompt TEXT UNIQUE,
+        response TEXT,
+        context_type TEXT,
+        slot INTEGER
     )
     """
 )
@@ -122,6 +132,11 @@ def color_prefix(text, prefix_type, generation_time=None, progress=None, token_c
             f"{fg(153)}Βackbrain{reset} {fg(195)}∼{reset} {fg(159)}≡{reset} "
             f"{fg(195)}⟩{reset} {fg(250)}({generation_time:.2f}s){reset} {text}"
         )
+    elif prefix_type == "Prefetch":  # Special prefix for prefetcher
+        return (
+            f"{fg(220)}Prefetch{reset} {fg(221)}∼{reset} {fg(222)}≡{reset} "
+            f"{fg(223)}⟩{reset} {text}"
+        )
     else:
         return text
 
@@ -159,12 +174,18 @@ class AIRuntimeManager:
         self.backbrain_tasks = []  # Priority 3 tasks (CoT and others)
         self.lock = Lock()
         self.last_task_info = {}
-        self.start_time = None  # Initialize start_time as an instance variable
+        self.start_time = None
+        self.fuzzy_threshold = 0.69  # Threshold for fuzzy matching
 
         # Start the scheduler thread
         self.scheduler_thread = Thread(target=self.scheduler)
-        self.scheduler_thread.daemon = True  # Allow the program to exit even if the thread is running
+        self.scheduler_thread.daemon = True
         self.scheduler_thread.start()
+
+        # Start the prefetcher thread
+        self.prefetcher_thread = Thread(target=self.prefetcher)
+        self.prefetcher_thread.daemon = True
+        self.prefetcher_thread.start()
 
     def add_task(self, task, priority):
         with self.lock:
@@ -192,12 +213,42 @@ class AIRuntimeManager:
             else:
                 return None
 
+    def cached_inference(self, prompt, slot, context_type):
+        """Checks if a similar prompt exists in the database using fuzzy matching."""
+        db_cursor.execute("SELECT prompt, response FROM cached_inference WHERE slot = ? AND context_type = ?", (slot, context_type))
+        cached_results = db_cursor.fetchall()
+
+        best_match = None
+        best_score = 0
+
+        for cached_prompt, cached_response in cached_results:
+            score = fuzz.ratio(prompt, cached_prompt) / 100.0  # Normalize to 0-1 range
+            if score > best_score and score >= self.fuzzy_threshold:
+                best_match = (cached_prompt, cached_response)
+                best_score = score
+
+        if best_match:
+            print(color_prefix(f"Found cached inference with score: {best_score}", "BackbrainController"))
+            return best_match[1]  # Return the cached response
+        else:
+            return None
+
+    def add_to_cache(self, prompt, response, context_type, slot):
+        """Adds a prompt-response pair to the cached_inference table."""
+        try:
+            db_cursor.execute("INSERT INTO cached_inference (prompt, response, context_type, slot) VALUES (?, ?, ?, ?)", (prompt, response, context_type, slot))
+            db_connection.commit()
+        except sqlite3.IntegrityError:
+            print(color_prefix("Prompt already exists in cache. Skipping insertion.", "BackbrainController"))
+        except Exception as e:
+            print(color_prefix(f"Error adding to cache: {e}", "BackbrainController"))
+
     def scheduler(self):
         """Scheduler loop to manage and execute tasks based on priority."""
         while True:
             task = self.get_next_task()
             if task:
-                self.start_time = time.time()  # Set start_time at the beginning of the task
+                self.start_time = time.time()
 
                 # Unpack task and priority
                 task_item, priority = task
@@ -213,6 +264,17 @@ class AIRuntimeManager:
                     "BackbrainController",
                     self.start_time
                 ))
+
+                # Cached inference check (only for generate_response)
+                if task_callable == generate_response and priority != 4:
+                    user_input, slot, partition_context = task_args
+                    context_type = "CoT" if priority == 3 else "main"
+
+                    cached_response = self.cached_inference(user_input, slot, context_type)
+                    if cached_response:
+                        print(color_prefix(f"Using cached response for slot {slot}", "BackbrainController"))
+                        partition_context.add_context(slot, cached_response, context_type)
+                        continue  # Skip LLM generation
 
                 # Execute the task and get the result
                 try:
@@ -253,7 +315,6 @@ class AIRuntimeManager:
                                 "BackbrainController",
                                 time.time() - self.start_time
                             ))
-
                     else:  # Not a generate_response task
                         result = task_callable(*task_args)
 
@@ -266,9 +327,17 @@ class AIRuntimeManager:
 
                 elapsed_time = time.time() - self.start_time
 
-                # If it's a long generate_response task, store it in the main context
-                if task_callable == generate_response and elapsed_time < 58:
-                    partition_context.add_context(task_args[1], result, "main")
+                # If it's a generate_response task, store it in the main context
+                if task_callable == generate_response:
+                    if elapsed_time < 58:
+                        partition_context.add_context(task_args[1], result, "main")
+                        loop.run_until_complete(partition_context.async_embed_and_store(result, task_args[1]))
+                    
+                    # Add to cache (for non-prefetch tasks)
+                    if priority != 4:
+                        user_input, slot, partition_context = task_args
+                        context_type = "CoT" if priority == 3 else "main"
+                        self.add_to_cache(user_input, result, context_type, slot)
 
                 # Store the last task info for interruption handling
                 self.last_task_info = {
@@ -297,6 +366,114 @@ class AIRuntimeManager:
             # Now you can access self.start_time here
             print(color_prefix(f"Task {func.__name__} timed out after {timeout} seconds.", "BackbrainController", time.time() - self.start_time))
             return self.llm.invoke(args[0])
+            
+    def prefetcher(self):
+        """
+        Analyzes chat history, predicts likely user inputs, and prefetches responses.
+        This runs as a separate thread.
+        """
+        while True:
+            try:
+                for slot in range(5):  # Assuming a maximum of 5 slots
+                    print(color_prefix(f"Prefetcher analyzing slot {slot}...", "BackbrainController"))
+                    chat_history = get_chat_history_from_db(slot)
+
+                    if not chat_history:
+                        continue
+
+                    # 1. Generate Decision Tree for Analysis
+                    decision_tree_prompt = self.create_decision_tree_prompt(chat_history)
+                    decision_tree_text = self.invoke_llm(decision_tree_prompt)
+
+                    # 2. Convert Decision Tree to JSON
+                    json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
+                    json_tree_response = self.invoke_llm(json_tree_prompt)
+                    decision_tree_json = self.parse_decision_tree_json(json_tree_response)
+
+                    # 3. Extract Potential User Inputs
+                    potential_inputs = self.extract_potential_inputs(decision_tree_json)
+
+                    # 4. Prefetch Responses
+                    for user_input in potential_inputs:
+                        print(color_prefix(f"Prefetching response for: {user_input}", "Prefetch"))
+                        # Add "Prefetch: " prefix to indicate pregenerated responses
+                        prefixed_input = f"Prefetch: {user_input}"
+                        self.add_task((generate_response, (prefixed_input, slot, partition_context)), 4)  # Priority 4
+            except Exception as e:
+                print(color_prefix(f"Error in prefetcher: {e}", "BackbrainController"))
+
+            time.sleep(5)
+
+    def create_decision_tree_prompt(self, chat_history):
+        """Creates a prompt for generating a decision tree based on chat history."""
+        history_text = "\n".join([f"{msg[0]}: {msg[1]}" for msg in chat_history])
+        prompt = f"""
+        Analyze the following chat history and create a decision tree to predict likely user inputs:
+        {history_text}
+
+        The decision tree should outline key decision points and potential user actions or questions.
+        """
+        return prompt
+
+    def create_json_tree_prompt(self, decision_tree_text):
+        """Creates a prompt for converting a decision tree to JSON format."""
+        prompt = f"""
+        Convert the following decision tree to JSON, adhering to the specified format.
+        Decision Tree:
+        {decision_tree_text}
+
+        The JSON *must* be complete and follow this format:
+        ```json
+        {{
+            "input": "User input text",
+            "initial_response": "Initial response generated by the system",
+            "nodes": [
+                {{
+                    "node_id": "unique identifier for the node",
+                    "node_type": "question, action step, conclusion, or reflection",
+                    "content": "Text content of the node",
+                    "options": [
+                        {{
+                            "option_id": "unique identifier for the option",
+                            "next_node_id": "node_id of the next node if this option is chosen",
+                            "option_text": "Description of the option"
+                        }}
+                    ]
+                }}
+            ],
+            "edges": [
+                {{
+                    "from_node_id": "node_id of the source node",
+                    "to_node_id": "node_id of the destination node",
+                    "condition": "Optional condition for taking this edge"
+                }}
+            ]
+        }}
+        ```
+        Do not stop generating until you are sure the JSON is complete and syntactically correct as defined in the format.
+        Respond with JSON, and only JSON, strictly adhering to the above format.
+        """
+        return prompt
+
+    def parse_decision_tree_json(self, json_tree_response):
+      """Parses the decision tree JSON with error handling."""
+      try:
+          json_tree_string = extract_json(json_tree_response)  # Assuming you have this function
+          decision_tree_json = try_parse_json(json_tree_string, max_retries=3)  # And this function
+          return decision_tree_json
+      except Exception as e:
+          print(color_prefix(f"Error parsing decision tree JSON: {e}", "BackbrainController"))
+          return None
+
+    def extract_potential_inputs(self, decision_tree_json):
+        """Extracts potential user inputs from the decision tree JSON."""
+        potential_inputs = []
+        if decision_tree_json:
+            nodes = decision_tree_json.get("nodes", [])
+            for node in nodes:
+                if node["node_type"] == "question":
+                    potential_inputs.append(node["content"])
+        return potential_inputs
 
     def invoke_llm(self, prompt):
         """Invokes the LLM after checking and enforcing the 75% context window limit."""
@@ -393,22 +570,29 @@ class PartitionContext:
             return []
 
     async def async_embed_and_store(self, text_chunk, slot):
-      """Asynchronously embeds a text chunk and stores it in the database."""
-      async with db_lock:
-          try:
-              text_splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=0, separator="\n")
-              texts = text_splitter.split_text(text_chunk)
-              docs = [Document(page_content=t, metadata={"slot": slot}) for t in texts] # Add slot as metadata
-              self.vector_store.add_documents(docs)
-              self.vector_store.save_local("vector_store")
+        """Asynchronously embeds a text chunk and stores it in the database."""
+        async with db_lock:
+            try:
+                # Split the text chunk into smaller chunks if necessary
+                text_splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=0, separator="\n")
+                texts = text_splitter.split_text(text_chunk)
 
-              embedding = embedding_model.embed_query(text_chunk)
-              self.db_cursor.execute("INSERT INTO context_chunks (slot, chunk, embedding) VALUES (?, ?, ?)", (slot, text_chunk, pickle.dumps(embedding)))
-              db_connection.commit()
+                for text in texts:
+                    doc = Document(page_content=text, metadata={"slot": slot})
+                    self.vector_store.add_documents([doc])
+                    self.vector_store.save_local("vector_store")
 
-              print(f"Stored chunk for slot {slot}: {text_chunk[:50]}...")
-          except Exception as e:
-              print(f"Error in embed_and_store: {e}")
+                    embedding = embedding_model.embed_query(text)
+                    # Store each split chunk individually
+                    self.db_cursor.execute(
+                        "INSERT INTO context_chunks (slot, chunk, embedding) VALUES (?, ?, ?)",
+                        (slot, text, pickle.dumps(embedding))
+                    )
+
+                db_connection.commit()
+                print(f"Stored context chunk for slot {slot}: {text_chunk[:50]}...")
+            except Exception as e:
+                print(f"Error in embed_and_store: {e}")
 
     def calculate_total_context_length(self, slot, requester_type):
         """Calculates the total context length for a given slot and requester type."""
@@ -510,12 +694,14 @@ def process_node(node, prompt, start_time, progress_interval, partition_context,
         question_prompt_tokens = len(TOKENIZER.encode(question_prompt))
         response = ai_runtime_manager.invoke_llm(question_prompt)
         partition_context.add_context(slot, response, "CoT")
+        loop.run_until_complete(partition_context.async_embed_and_store(response, slot))
         print(color_prefix(f"Response to question: {response}", "Internal", time.time() - start_time, progress=progress_interval, token_count=question_prompt_tokens))
     elif node_type == "action step":
         if "literature_review" in content:
             review_query = re.search(r"literature_review\(['\"](.*?)['\"]\)", content).group(1)
             review_result = literature_review(review_query)
             partition_context.add_context(slot, f"Literature review result for '{review_query}': {review_result}", "CoT")
+            loop.run_until_complete(partition_context.async_embed_and_store(f"Literature review result for '{review_query}': {review_result}", slot))
             print(color_prefix(f"Literature review result: {review_result}", "Internal", time.time() - start_time, progress=progress_interval))
         else:
             print(color_prefix(f"Action step executed: {content}", "Internal", time.time() - start_time, progress=progress_interval))
@@ -525,6 +711,7 @@ def process_node(node, prompt, start_time, progress_interval, partition_context,
         reflection_prompt_tokens = len(TOKENIZER.encode(reflection_prompt))
         reflection = ai_runtime_manager.invoke_llm(reflection_prompt)
         partition_context.add_context(slot, reflection, "CoT")
+        loop.run_until_complete(partition_context.async_embed_and_store(reflection, slot))
         print(color_prefix(f"Reflection/Conclusion: {reflection}", "Internal", time.time() - start_time, progress=progress_interval, token_count=reflection_prompt_tokens))
 
     for option in node.get("options", []):
@@ -538,8 +725,9 @@ def generate_response(user_input, slot, partition_context):
     start_time = time.time()
 
     partition_context.add_context(slot, f"User: {user_input}", "main")
+    loop.run_until_complete(partition_context.async_embed_and_store(f"User: {user_input}", slot))
 
-    decoded_initial_instructions = base64.b64decode(encoded_instructions).decode("utf-8")
+    decoded_initial_instructions = base64.b64decode(encoded_instructions.strip()).decode("utf-8")
     decoded_initial_instructions = decoded_initial_instructions.replace("${assistantName}", assistantName)
 
     main_history = fetch_chat_history_from_db(slot)
@@ -613,6 +801,7 @@ def generate_response(user_input, slot, partition_context):
 
     print(color_prefix("Engaging in deep thinking process...", "Internal", time.time() - start_time, progress=10)) # Increased progress
     partition_context.add_context(slot, user_input, "CoT")
+    loop.run_until_complete(partition_context.async_embed_and_store(user_input, slot))
     
     print(color_prefix("Generating initial direct answer...", "Internal", time.time() - start_time, progress=15)) # Increased progress
     initial_response_prompt = f"{prompt}\nProvide a concise initial response."
@@ -621,6 +810,7 @@ def generate_response(user_input, slot, partition_context):
     print(color_prefix("Processing Initial Response Prompt", "Internal", time.time() - start_time, token_count=initial_response_prompt_tokens, progress=16))
 
     initial_response = ai_runtime_manager.invoke_llm(initial_response_prompt)
+    loop.run_until_complete(partition_context.async_embed_and_store(initial_response, slot))
     print(color_prefix(f"Initial response: {initial_response}", "Internal", time.time() - start_time, progress=20))
 
     print(color_prefix("Creating a to-do list for in-depth analysis...", "Internal", time.time() - start_time, progress=25))
@@ -634,6 +824,7 @@ def generate_response(user_input, slot, partition_context):
     print(color_prefix("Processing To-do Prompt", "Internal", time.time() - start_time, token_count=todo_prompt_tokens, progress=26))
 
     todo_response = ai_runtime_manager.invoke_llm(todo_prompt)
+    loop.run_until_complete(partition_context.async_embed_and_store(todo_response, slot))
     print(color_prefix(f"To-do list: {todo_response}", "Internal", time.time() - start_time, progress=30))
     
     search_queries = re.findall(r"literature_review\(['\"](.*?)['\"]\)", todo_response)
@@ -647,6 +838,7 @@ def generate_response(user_input, slot, partition_context):
     print(color_prefix("Processing Decision Tree Prompt", "Internal", time.time() - start_time, token_count=decision_tree_prompt_tokens, progress=36))
 
     decision_tree_text = ai_runtime_manager.invoke_llm(decision_tree_prompt)
+    loop.run_until_complete(partition_context.async_embed_and_store(decision_tree_text, slot))
     print(color_prefix(f"Decision tree (text): {decision_tree_text}", "Internal", time.time() - start_time, progress=40))
 
     print(color_prefix("Converting decision tree to JSON...", "Internal", time.time() - start_time, progress=45))
@@ -726,6 +918,7 @@ def generate_response(user_input, slot, partition_context):
             print(color_prefix("Processing Conclusion Prompt", "Internal", time.time() - start_time, token_count=conclusion_prompt_tokens, progress=91))
 
             conclusion_response = ai_runtime_manager.invoke_llm(conclusion_prompt)
+            loop.run_until_complete(partition_context.async_embed_and_store(conclusion_response, slot))
             print(color_prefix(f"Conclusion (after decision tree processing): {conclusion_response}", "Internal", time.time() - start_time, progress=92))
 
         else:
@@ -769,6 +962,7 @@ def generate_response(user_input, slot, partition_context):
         generation_time = end_time - start_time
         print(color_prefix(conclusion_response, "Adelaide", generation_time))
         partition_context.add_context(slot, conclusion_response, "main")
+        loop.run_until_complete(partition_context.async_embed_and_store(conclusion_response, slot))
         return conclusion_response
 
     print(color_prefix("Handling a long response...", "Internal", time.time() - start_time, progress=98))
@@ -816,6 +1010,7 @@ def generate_response(user_input, slot, partition_context):
     generation_time = end_time - start_time
     print(color_prefix(long_response, "Adelaide", generation_time, token_count=prompt_tokens))
     partition_context.add_context(slot, long_response, "main")
+    loop.run_until_complete(partition_context.async_embed_and_store(long_response, slot))
     return long_response
 
 # Extract JSON from LLM response
