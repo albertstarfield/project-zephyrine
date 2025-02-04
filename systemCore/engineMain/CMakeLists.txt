@@ -249,7 +249,7 @@ string(JOIN " " CMAKE_ARGS ${CMAKE_ARGS_LIST})
 message(STATUS "Downloading Zephyrine pre-requisite Library Status-Quo python-only Libraries Module")
 execute_process(
     COMMAND ${PYTHON_VENV_BIN_PATH}/pip install --upgrade pip
-    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pep517 pybind11 llama-index pandas numpy scikit-learn diffusers llama-cpp-python torch keras huggingface
+    COMMAND ${PYTHON_VENV_BIN_PATH}/pip install pep517 pybind11 llama-index pandas numpy scikit-learn diffusers llama-cpp-python torch keras huggingface langchain langchain_community langchain_experimental colored faiss-cpu
     WORKING_DIRECTORY ${CMAKE_BINARY_DIR}
     RESULT_VARIABLE INSTALL_PACKAGES_RESULT
 )
