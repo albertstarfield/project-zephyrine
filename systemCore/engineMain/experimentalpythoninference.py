@@ -15,7 +15,6 @@ import time
 import re
 import platform
 import tiktoken
-from transformers import AutoTokenizer
 
 # Constants
 LLM_MODEL_PATH = "./preTrainedModelBase.gguf"  # Ensure this path is correct
@@ -78,7 +77,7 @@ def get_username():
             return platform.node().split('.')[0]
 
 # Function to format with colors
-def color_prefix(text, prefix_type, generation_time=None, progress=None, token_count=None):
+def color_prefix(text, prefix_type, generation_time=None, progress=None, token_count=None, prompt=None):
     """Formats text with colors and additional information."""
     reset = attr('reset')
     if prefix_type == "User":
@@ -90,7 +89,7 @@ def color_prefix(text, prefix_type, generation_time=None, progress=None, token_c
           return (
               f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
               f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
-              f"{fg(250)}({generation_time:.2f}s){reset} {fg(250)}({token_count} tokens){reset} {text}"
+              f"{fg(250)}({generation_time:.2f}s){reset} {fg(250)}({token_count:.2f} tokens){reset} {text}"
           )
         else:
           return (
@@ -100,6 +99,12 @@ def color_prefix(text, prefix_type, generation_time=None, progress=None, token_c
         )
     elif prefix_type == "Internal":
         if progress is not None:
+          if token_count is not None:
+            return (
+                f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
+                f"{fg(183)}⟩{reset} {fg(177)}[{progress:.1f}%]{reset} {fg(250)}({generation_time:.2f}s, {token_count} tokens){reset} {text}"
+            )
+          else:
             return (
                 f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
                 f"{fg(183)}⟩{reset} {fg(177)}[{progress:.1f}%]{reset} {fg(250)}({generation_time:.2f}s){reset} {text}"
@@ -201,14 +206,8 @@ def initialize_models():
         vector_store = FAISS.from_texts(["Hello world!"], embedding_model)
 
     # Initialize tokenizer
-    try:
-        # Attempt to load a tokenizer locally (more accurate for the specific model)
-        tokenizer = AutoTokenizer.from_pretrained(LLM_MODEL_PATH)
-        print(color_prefix("Using local tokenizer.", "Internal"))
-    except Exception as e:
-        print(color_prefix(f"Local tokenizer not found, using tiktoken instead: {e}", "Internal"))
-        tokenizer = tiktoken.get_encoding("cl100k_base")
-        print(color_prefix("Using tiktoken tokenizer.", "Internal"))
+    tokenizer = tiktoken.get_encoding("cl100k_base")
+    print(color_prefix("Using tiktoken tokenizer.", "Internal"))
 
     # LLM Warmup
     print("Warming up the LLM...")
@@ -286,13 +285,16 @@ def process_node(node, prompt, start_time, progress_interval):
     node_type = node["node_type"]
     content = node["content"]
 
-    print(color_prefix(f"Processing node: {node_id} ({node_type}) - {content}", "Internal", time.time() - start_time, progress=progress_interval))
+    prompt_tokens = len(tokenizer.encode(prompt))
+
+    print(color_prefix(f"Processing node: {node_id} ({node_type}) - {content}", "Internal", time.time() - start_time, progress=progress_interval, token_count=prompt_tokens))
 
     if node_type == "question":
         question_prompt = f"{prompt}\nQuestion: {content}\nAnswer:"
+        question_prompt_tokens = len(tokenizer.encode(question_prompt))
         response = llm.invoke(question_prompt)
         cot_history.append({"role": "assistant", "content": response})
-        print(color_prefix(f"Response to question: {response}", "Internal", time.time() - start_time, progress=progress_interval))
+        print(color_prefix(f"Response to question: {response}", "Internal", time.time() - start_time, progress=progress_interval, token_count=question_prompt_tokens))
 
     elif node_type == "action step":
         if "literature_review" in content:
@@ -305,9 +307,10 @@ def process_node(node, prompt, start_time, progress_interval):
 
     elif node_type == "conclusion" or node_type == "reflection":
         reflection_prompt = f"{prompt}\n{content}\nThought:"
+        reflection_prompt_tokens = len(tokenizer.encode(reflection_prompt))
         reflection = llm.invoke(reflection_prompt)
         cot_history.append({"role": "assistant", "content": reflection})
-        print(color_prefix(f"Reflection/Conclusion: {reflection}", "Internal", time.time() - start_time, progress=progress_interval))
+        print(color_prefix(f"Reflection/Conclusion: {reflection}", "Internal", time.time() - start_time, progress=progress_interval, token_count=reflection_prompt_tokens))
 
     for option in node.get("options", []):
         print(color_prefix(f"Option considered: {option['option_text']}", "Internal", time.time() - start_time, progress=progress_interval))
@@ -353,14 +356,9 @@ def generate_response(user_input):
         prompt = chatml_template.render(messages=messages, add_generation_prompt=True)
 
     # Calculate tokens in the prompt
-    if hasattr(tokenizer, 'encode_ordinary'):
-        prompt_tokens = len(tokenizer.encode_ordinary(prompt))
-    else:
-        prompt_tokens = len(tokenizer.encode(prompt))
+    prompt_tokens = len(tokenizer.encode(prompt))
 
-    print(color_prefix(f"Prompt token count: {prompt_tokens}", "Internal"))
-
-    print(color_prefix("Deciding whether to engage in deep thinking...", "Internal", time.time() - start_time, progress=0))
+    print(color_prefix("Deciding whether to engage in deep thinking...", "Internal", time.time() - start_time, progress=0, token_count=prompt_tokens))
     decision_prompt = f"""
     Analyze the input and decide if it requires in-depth processing or a simple response.
     Input: "{user_input}"
@@ -375,11 +373,9 @@ def generate_response(user_input):
     Respond with JSON, and only JSON, strictly adhering to the above format.
     """
 
-    if hasattr(tokenizer, 'encode_ordinary'):
-        decision_prompt_tokens = len(tokenizer.encode_ordinary(decision_prompt))
-    else:
-        decision_prompt_tokens = len(tokenizer.encode(decision_prompt))
-    print(color_prefix(f"Decision prompt token count: {decision_prompt_tokens}", "Internal"))
+    decision_prompt_tokens = len(tokenizer.encode(decision_prompt))
+    print(color_prefix("Processing Decision Prompt", "Internal", time.time() - start_time, token_count=decision_prompt_tokens, progress=1))
+
     decision_response = llm.invoke(decision_prompt)
 
     try:
@@ -409,11 +405,9 @@ def generate_response(user_input):
     print(color_prefix("Generating initial direct answer...", "Internal", time.time() - start_time, progress=15)) # Increased progress
     initial_response_prompt = f"{prompt}\nProvide a concise initial response."
 
-    if hasattr(tokenizer, 'encode_ordinary'):
-        initial_response_prompt_tokens = len(tokenizer.encode_ordinary(initial_response_prompt))
-    else:
-        initial_response_prompt_tokens = len(tokenizer.encode(initial_response_prompt))
-    print(color_prefix(f"Initial response prompt token count: {initial_response_prompt_tokens}", "Internal"))
+    initial_response_prompt_tokens = len(tokenizer.encode(initial_response_prompt))
+    print(color_prefix("Processing Initial Response Prompt", "Internal", time.time() - start_time, token_count=initial_response_prompt_tokens, progress=16))
+
     initial_response = llm.invoke(initial_response_prompt)
     print(color_prefix(f"Initial response: {initial_response}", "Internal", time.time() - start_time, progress=20))
 
@@ -424,11 +418,8 @@ def generate_response(user_input):
     Include search queries for external resources, ending with self-reflection.
     """
 
-    if hasattr(tokenizer, 'encode_ordinary'):
-        todo_prompt_tokens = len(tokenizer.encode_ordinary(todo_prompt))
-    else:
-        todo_prompt_tokens = len(tokenizer.encode(todo_prompt))
-    print(color_prefix(f"To-do prompt token count: {todo_prompt_tokens}", "Internal"))
+    todo_prompt_tokens = len(tokenizer.encode(todo_prompt))
+    print(color_prefix("Processing To-do Prompt", "Internal", time.time() - start_time, token_count=todo_prompt_tokens, progress=26))
 
     todo_response = llm.invoke(todo_prompt)
     print(color_prefix(f"To-do list: {todo_response}", "Internal", time.time() - start_time, progress=30))
@@ -440,11 +431,8 @@ def generate_response(user_input):
     print(color_prefix("Creating a decision tree for action planning...", "Internal", time.time() - start_time, progress=35))
     decision_tree_prompt = f"{prompt}\nGiven the to-do list '{todo_response}', create a decision tree for actions."
 
-    if hasattr(tokenizer, 'encode_ordinary'):
-        decision_tree_prompt_tokens = len(tokenizer.encode_ordinary(decision_tree_prompt))
-    else:
-        decision_tree_prompt_tokens = len(tokenizer.encode(decision_tree_prompt))
-    print(color_prefix(f"Decision tree prompt token count: {decision_tree_prompt_tokens}", "Internal"))
+    decision_tree_prompt_tokens = len(tokenizer.encode(decision_tree_prompt))
+    print(color_prefix("Processing Decision Tree Prompt", "Internal", time.time() - start_time, token_count=decision_tree_prompt_tokens, progress=36))
 
     decision_tree_text = llm.invoke(decision_tree_prompt)
     print(color_prefix(f"Decision tree (text): {decision_tree_text}", "Internal", time.time() - start_time, progress=40))
@@ -488,11 +476,8 @@ def generate_response(user_input):
     Respond with JSON, and only JSON, strictly adhering to the above format.
     """
 
-    if hasattr(tokenizer, 'encode_ordinary'):
-        json_tree_prompt_tokens = len(tokenizer.encode_ordinary(json_tree_prompt))
-    else:
-        json_tree_prompt_tokens = len(tokenizer.encode(json_tree_prompt))
-    print(color_prefix(f"JSON tree prompt token count: {json_tree_prompt_tokens}", "Internal"))
+    json_tree_prompt_tokens = len(tokenizer.encode(json_tree_prompt))
+    print(color_prefix("Processing JSON Tree Prompt", "Internal", time.time() - start_time, token_count=json_tree_prompt_tokens, progress=46))
 
     json_tree_response = llm.invoke(json_tree_prompt)
 
@@ -525,11 +510,8 @@ def generate_response(user_input):
             Provide a final conclusion based on the entire process.
             """
 
-            if hasattr(tokenizer, 'encode_ordinary'):
-                conclusion_prompt_tokens = len(tokenizer.encode_ordinary(conclusion_prompt))
-            else:
-                conclusion_prompt_tokens = len(tokenizer.encode(conclusion_prompt))
-            print(color_prefix(f"Conclusion prompt token count: {conclusion_prompt_tokens}", "Internal"))
+            conclusion_prompt_tokens = len(tokenizer.encode(conclusion_prompt))
+            print(color_prefix("Processing Conclusion Prompt", "Internal", time.time() - start_time, token_count=conclusion_prompt_tokens, progress=91))
 
             conclusion_response = llm.invoke(conclusion_prompt)
             print(color_prefix(f"Conclusion (after decision tree processing): {conclusion_response}", "Internal", time.time() - start_time, progress=92))
@@ -554,11 +536,9 @@ def generate_response(user_input):
     ```
     Generate JSON, and only JSON, with the above format.
     """
-    if hasattr(tokenizer, 'encode_ordinary'):
-        evaluation_prompt_tokens = len(tokenizer.encode_ordinary(evaluation_prompt))
-    else:
-        evaluation_prompt_tokens = len(tokenizer.encode(evaluation_prompt))
-    print(color_prefix(f"Evaluation prompt token count: {evaluation_prompt_tokens}", "Internal"))
+
+    evaluation_prompt_tokens = len(tokenizer.encode(evaluation_prompt))
+    print(color_prefix("Processing Evaluation Prompt", "Internal", time.time() - start_time, token_count=evaluation_prompt_tokens, progress=95))
 
     evaluation_response = llm.invoke(evaluation_prompt)
 
@@ -582,11 +562,8 @@ def generate_response(user_input):
     print(color_prefix("Handling a long response...", "Internal", time.time() - start_time, progress=98))
     long_response_estimate_prompt = f"{prompt}\nEstimate tokens needed for a detailed response to '{user_input}'. Respond with JSON, and only JSON, in this format:\n```json\n{{\"tokens\": <number of tokens>}}\n```"
 
-    if hasattr(tokenizer, 'encode_ordinary'):
-        long_response_estimate_prompt_tokens = len(tokenizer.encode_ordinary(long_response_estimate_prompt))
-    else:
-        long_response_estimate_prompt_tokens = len(tokenizer.encode(long_response_estimate_prompt))
-    print(color_prefix(f"Long response estimate prompt token count: {long_response_estimate_prompt_tokens}", "Internal"))
+    long_response_estimate_prompt_tokens = len(tokenizer.encode(long_response_estimate_prompt))
+    print(color_prefix("Processing Long Response Estimate Prompt", "Internal", time.time() - start_time, token_count=long_response_estimate_prompt_tokens, progress=99))
 
     long_response_estimate = llm.invoke(long_response_estimate_prompt)
 
@@ -608,19 +585,13 @@ def generate_response(user_input):
         print(color_prefix(f"Generating part of the long response. Remaining tokens: {remaining_tokens}...", "Internal", time.time() - start_time, progress=99))
         part_response_prompt = f"{prompt}\n{continue_prompt}"
 
-        if hasattr(tokenizer, 'encode_ordinary'):
-            part_response_prompt_tokens = len(tokenizer.encode_ordinary(part_response_prompt))
-        else:
-            part_response_prompt_tokens = len(tokenizer.encode(part_response_prompt))
-        print(color_prefix(f"Part response prompt token count: {part_response_prompt_tokens}", "Internal"))
+        part_response_prompt_tokens = len(tokenizer.encode(part_response_prompt))
+        print(color_prefix("Processing Part Response Prompt", "Internal", time.time() - start_time, token_count=part_response_prompt_tokens, progress=99))
 
         part_response = llm.invoke(part_response_prompt)
         long_response += part_response
 
-        if hasattr(tokenizer, 'encode_ordinary'):
-          remaining_tokens -= len(tokenizer.encode_ordinary(part_response))
-        else:
-          remaining_tokens -= len(tokenizer.encode(part_response))
+        remaining_tokens -= len(tokenizer.encode(part_response))
 
         prompt = f"{prompt}\n{part_response}"
 
@@ -666,27 +637,17 @@ def try_parse_json(json_string, max_retries=3):
 
             if attempt < max_retries - 1:
                 print(color_prefix("Retrying with LLM-based correction...", "Internal"))
-                if hasattr(tokenizer, 'encode_ordinary'):
-                    correction_prompt_tokens = len(tokenizer.encode_ordinary(f"""```json
-                    {json_string}
-                    ```
-                    Above JSON string has syntax error, fix the JSON so it can be parsed with json.loads() in python.
-                    Respond with JSON, and only JSON, with the correct format and make sure to comply the standard strictly.
-                    Do not stop generating until you are sure the JSON is complete and syntactically correct as defined in the format."""))
-                else:
-                    correction_prompt_tokens = len(tokenizer.encode(f"""```json
-                    {json_string}
-                    ```
-                    Above JSON string has syntax error, fix the JSON so it can be parsed with json.loads() in python.
-                    Respond with JSON, and only JSON, with the correct format and make sure to comply the standard strictly.
-                    Do not stop generating until you are sure the JSON is complete and syntactically correct as defined in the format."""))
-                print(color_prefix(f"Correction prompt token count: {correction_prompt_tokens}", "Internal"))
-                json_string = llm.invoke(f"""```json
+                correction_prompt = f"""```json
                 {json_string}
                 ```
                 Above JSON string has syntax error, fix the JSON so it can be parsed with json.loads() in python.
                 Respond with JSON, and only JSON, with the correct format and make sure to comply the standard strictly.
-                Do not stop generating until you are sure the JSON is complete and syntactically correct as defined in the format.""")
+                Do not stop generating until you are sure the JSON is complete and syntactically correct as defined in the format."""
+
+                correction_prompt_tokens = len(tokenizer.encode(correction_prompt))
+                print(color_prefix("Processing Correction Prompt", "Internal", time.time(), token_count=correction_prompt_tokens))
+
+                json_string = llm.invoke(correction_prompt)
             else:
                 print(color_prefix("Max retries reached. Returning None.", "Internal"))
                 return None  # Explicitly return None on failure
