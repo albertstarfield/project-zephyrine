@@ -78,6 +78,69 @@ db_cursor.execute(
 )
 db_connection.commit()
 
+class DatabaseWriter:
+    def __init__(self, db_connection, loop):
+        self.db_connection = db_connection
+        self.db_cursor = db_connection.cursor()
+        self.write_queue = asyncio.Queue()
+        self.loop = loop
+        self.writer_task = None  # Initialize writer_task to None
+
+    def start_writer(self):
+        """Starts the writer task."""
+        self.writer_task = self.loop.create_task(self._writer())
+    
+    async def _writer(self):
+        while True:
+            try:
+                write_operation = await self.write_queue.get()
+                if write_operation is None:
+                    # Signal to stop the writer
+                    break
+
+                sql, data = write_operation
+                self.db_cursor.execute(sql, data)
+                self.db_connection.commit()
+                print(color_prefix(f"Database write successful: {sql[:50]}...", "Internal"))
+
+            except Exception as e:
+                print(color_prefix(f"Error during database write: {e}", "Internal"))
+                self.db_connection.rollback()
+            finally:
+                self.write_queue.task_done()
+
+    def schedule_write(self, sql, data):
+        """Schedules a write operation to be executed sequentially."""
+        self.write_queue.put_nowait((sql, data))
+
+    def close(self):
+        """Stops the writer task and closes the database connection."""
+        self.write_queue.put_nowait(None)  # Signal to stop
+        self.writer_task.cancel()
+        self.db_connection.close()
+
+def print_table_contents(db_cursor, table_name):
+    """Prints the contents of a specified table."""
+    print(color_prefix(f"--- Contents of table: {table_name} ---", "Internal"))
+    try:
+        db_cursor.execute(f"PRAGMA table_info({table_name})")
+        columns = [column[1] for column in db_cursor.fetchall()]
+        print(color_prefix(f"Columns: {', '.join(columns)}", "Internal"))
+
+        db_cursor.execute(f"SELECT * FROM {table_name}")
+        rows = db_cursor.fetchall()
+        if rows:
+            for row in rows:
+                print(color_prefix(row, "Internal"))
+        else:
+            print(color_prefix("Table is empty.", "Internal"))
+    except sqlite3.OperationalError as e:
+        print(color_prefix(f"Error reading table {table_name}: {e}", "Internal"))
+    print(color_prefix("--- End of table ---", "Internal"))
+
+
+
+
 # Function to get the username
 def get_username():
     """Gets the username of the current user."""
@@ -304,10 +367,9 @@ class AIRuntimeManager:
             return None
 
     def add_to_cache(self, prompt, response, context_type, slot):
-        """Adds a prompt-response pair to the cached_inference table."""
+        #"""Adds a prompt-response pair to the cached_inference table."""
         try:
-            db_cursor.execute("INSERT INTO cached_inference (prompt, response, context_type, slot) VALUES (?, ?, ?, ?)", (prompt, response, context_type, slot))
-            db_connection.commit()
+            db_writer.schedule_write("INSERT INTO cached_inference (prompt, response, context_type, slot) VALUES (?, ?, ?, ?)", (prompt, response, context_type, slot))
         except sqlite3.IntegrityError:
             print(color_prefix("Prompt already exists in cache. Skipping insertion.", "BackbrainController"))
         except Exception as e:
@@ -575,6 +637,10 @@ class AIRuntimeManager:
             response = self.llm.invoke(prompt)
         return response
 
+async def add_task_async(ai_runtime_manager, task, args, priority):
+    """Helper function to add a task to the scheduler from another thread."""
+    ai_runtime_manager.add_task((task, args), priority)
+
 class PartitionContext:
     def __init__(self, ctx_window_llm, db_cursor, vector_store):
         self.ctx_window_llm = ctx_window_llm
@@ -650,7 +716,7 @@ class PartitionContext:
             return []
 
     async def async_embed_and_store(self, text_chunk, slot):
-        """Asynchronously embeds a text chunk and stores it in the database."""
+        #"""Asynchronously embeds a text chunk and stores it in the database."""
         async with db_lock:
             try:
                 if text_chunk is None:
@@ -668,13 +734,11 @@ class PartitionContext:
 
                     embedding = embedding_model.embed_query(text)
                     # Store each split chunk individually
-                    self.db_cursor.execute(
+                    db_writer.schedule_write(
                         "INSERT INTO context_chunks (slot, chunk, embedding) VALUES (?, ?, ?)",
                         (slot, text, pickle.dumps(embedding))
                     )
-
-                db_connection.commit()
-                print(f"Stored context chunk for slot {slot}: {text_chunk[:50]}...")
+                print(f"Scheduled context chunk for storage for slot {slot}: {text_chunk[:50]}...")
             except Exception as e:
                 print(f"Error in embed_and_store: {e}")
 
@@ -684,23 +748,45 @@ class PartitionContext:
         total_length = sum([len(TOKENIZER.encode(item)) for item in context if isinstance(item, str)])
         return total_length
 
-# Async function to write to the database
-async def async_db_write(slot, query, response):
-    """Asynchronously writes user queries and AI responses to the database."""
-    async with db_lock:
+#thread target
+def input_thread_target(loop, ai_runtime_manager, partition_context):
+    current_slot = 0
+    while True:
         try:
-            db_cursor.execute(
-                "INSERT INTO chat_history (slot, role, message) VALUES (?, ?, ?)",
-                (slot, "User", query),
+            user_input = input(color_prefix("", "User"))
+            if user_input.lower() == "exit":
+                break  # Consider a more graceful shutdown mechanism
+            elif user_input.lower() == "next slot":
+                current_slot += 1
+                print(color_prefix(f"Switched to slot {current_slot}", "Internal"))
+                continue
+
+            # Schedule the task on the event loop
+            asyncio.run_coroutine_threadsafe(
+                add_task_async(ai_runtime_manager, generate_response, (user_input, current_slot, partition_context), 0),
+                loop
             )
-            db_cursor.execute(
-                "INSERT INTO chat_history (slot, role, message) VALUES (?, ?, ?)",
-                (slot, "AI", response),
-            )
-            db_connection.commit()
-        except Exception as e:
-            print(f"Error writing to database: {e}")
-            db_connection.rollback()
+        except EOFError:
+            print("EOF")
+        except KeyboardInterrupt:
+            print(color_prefix("\nExiting gracefully...", "Internal"))
+            break
+
+
+# Async function to write to the database
+async def async_db_write(db_writer, slot, query, response):
+    """Asynchronously writes user queries and AI responses to the database using the DatabaseWriter."""
+    try:
+        db_writer.schedule_write(
+            "INSERT INTO chat_history (slot, role, message) VALUES (?, ?, ?)",
+            (slot, "User", query),
+        )
+        db_writer.schedule_write(
+            "INSERT INTO chat_history (slot, role, message) VALUES (?, ?, ?)",
+            (slot, "AI", response),
+        )
+    except Exception as e:
+        print(f"Error scheduling write to database: {e}")
 
 # Initialize LLM and embedding models
 def initialize_models():
@@ -1153,29 +1239,45 @@ initialize_models()
 # Create PartitionContext instance
 partition_context = PartitionContext(CTX_WINDOW_LLM, db_cursor, vector_store)
 
+async def main():
+    global db_writer
+    # Initialize models (LLM, embedding model, vector store, and AIRuntimeManager)
+    initialize_models()
+
+    # Create PartitionContext instance after initializing ai_runtime_manager
+    partition_context = PartitionContext(CTX_WINDOW_LLM, db_cursor, vector_store)
+
+    # Start the input thread
+    input_thread = Thread(target=input_thread_target, args=(loop, ai_runtime_manager, partition_context))
+    input_thread.daemon = True
+    input_thread.start()
+
+    # Initialize DatabaseWriter with the loop
+    db_writer = DatabaseWriter(db_connection, loop)
+    db_writer.start_writer()  # Start the writer task
+
+    # The loop is already running, so we don't call loop.run_forever() here
+    # Instead, we'll use await to keep this async function alive
+    await asyncio.sleep(float('inf'))
+
 if __name__ == "__main__":
-    print("Chatbot initialized. Start chatting!")
-    current_slot = 0  # Start with slot 0
+    # Print contents of all tables after database setup
+    print_table_contents(db_cursor, "context_chunks")
+    print_table_contents(db_cursor, "chat_history")
+    print_table_contents(db_cursor, "cached_inference")
+
+    print("Adelaide & Albert Engine initialized. Interaction is ready!")
+
+    # Initialize the event loop
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
-    try:
-        while True:
-            try:
-                user_input = input(color_prefix("", "User"))
-                if user_input.lower() == "exit":
-                    break
-                elif user_input.lower() == "next slot":
-                    current_slot += 1
-                    print(color_prefix(f"Switched to slot {current_slot}", "Internal"))
-                    continue
 
-                # Add main task (user interaction) to the scheduler's queue
-                ai_runtime_manager.add_task((generate_response, (user_input, current_slot, partition_context)), 0)
-            except EOFError:
-              print("EOF")
+    try:
+        loop.run_until_complete(main())
     except KeyboardInterrupt:
         print(color_prefix("\nExiting gracefully...", "Internal"))
     finally:
-        # Perform any necessary cleanup here, such as:
-        db_connection.close()  # Close the database connection
+        if db_writer:
+            db_writer.close()  # Close the database connection and stop the writer task
+        loop.close()  # Close the event loop
         print(color_prefix("Cleanup complete. Goodbye!", "Internal"))
