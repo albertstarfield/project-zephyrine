@@ -21,8 +21,9 @@ from fuzzywuzzy import fuzz
 import inspect
 
 # Constants
-LLM_MODEL_PATH = "./preTrainedModelBase.gguf"
-EMBEDDING_MODEL_PATH = "./snowflake-arctic-embed.gguf"
+LLM_MODEL_PATH = "./pretrainedggufmodel/preTrainedModelBaseVLM.gguf"
+STABLEDIFF_DREAM_PATH = "./pretrainedggufmodel/sd21ggufq4_K.gguf"
+EMBEDDING_MODEL_PATH = "./pretrainedggufmodel/snowflake-arctic-embed.gguf"
 CTX_WINDOW_LLM = 4096
 DATABASE_FILE = "./engine_interaction.db"
 MAX_TOKENS_GENERATE = -1
