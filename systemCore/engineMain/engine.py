@@ -574,9 +574,9 @@ class AIRuntimeManager:
 
     def branch_predictor(self):
         """
-        Analyzes chat history, predicts likely user inputs, and branch_predictores responses.
+        Analyzes chat history, predicts likely user inputs, and schedules LLM invocations for decision tree processing.
         """
-        time.sleep(30)  # Delay for 30 seconds before starting
+        time.sleep(60)
         while True:
             try:
                 for slot in range(5):
@@ -586,23 +586,37 @@ class AIRuntimeManager:
                     if not chat_history:
                         continue
 
-                    decision_tree_prompt = self.create_decision_tree_prompt(chat_history)
-                    decision_tree_text = self.invoke_llm(decision_tree_prompt)
+                    # Schedule decision tree generation as a task
+                    self.add_task((self.process_branch_prediction_slot, (slot, chat_history)), 4)
 
-                    json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
-                    json_tree_response = self.invoke_llm(json_tree_prompt)
-                    decision_tree_json = self.parse_decision_tree_json(json_tree_response)
-
-                    potential_inputs = self.extract_potential_inputs(decision_tree_json)
-
-                    for user_input in potential_inputs:
-                        print(OutputFormatter.color_prefix(f"branch_predictoring response for: {user_input}", "branch_predictor"))
-                        prefixed_input = f"branch_predictor: {user_input}"
-                        self.add_task((self.generate_response, (prefixed_input, slot)), 4)
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Error in branch_predictor: {e}", "BackbrainController"))
 
             time.sleep(5)
+
+    def process_branch_prediction_slot(self, slot, chat_history):
+        """
+        Generates and processes the decision tree for a given slot's chat history.
+        This is now a separate function to be executed as a task.
+        """
+        decision_tree_prompt = self.create_decision_tree_prompt(chat_history)
+
+        # Invoke LLM within the task
+        decision_tree_text = self.invoke_llm(decision_tree_prompt)
+
+        json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
+
+        # Invoke LLM within the task
+        json_tree_response = self.invoke_llm(json_tree_prompt)
+        decision_tree_json = self.parse_decision_tree_json(json_tree_response)
+
+        potential_inputs = self.extract_potential_inputs(decision_tree_json)
+
+        for user_input in potential_inputs:
+            print(OutputFormatter.color_prefix(f"Scheduling generate_response for predicted input: {user_input}", "branch_predictor"))
+            prefixed_input = f"branch_predictor: {user_input}"
+            # Add generate_response task with the predicted input (still priority 4)
+            self.add_task((self.generate_response, (prefixed_input, slot)), 4)
 
     def create_decision_tree_prompt(self, chat_history):
         """Creates a prompt for generating a decision tree based on chat history."""
