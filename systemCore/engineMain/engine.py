@@ -18,6 +18,7 @@ import platform
 import tiktoken
 from threading import Thread, Lock
 from fuzzywuzzy import fuzz
+import inspect
 
 # Constants
 LLM_MODEL_PATH = "./preTrainedModelBase.gguf"
@@ -370,6 +371,7 @@ class AIRuntimeManager:
         self.database_manager = database_manager
         self.chat_formatter = ChatMLFormatter()
         self.partition_context = None # Initialize partition_context
+        self.is_llm_running = False  # Flag to track LLM invocation status
 
         # Start the scheduler thread
         self.scheduler_thread = Thread(target=self.scheduler)
@@ -380,6 +382,9 @@ class AIRuntimeManager:
         self.branch_predictor_thread = Thread(target=self.branch_predictor)
         self.branch_predictor_thread.daemon = True
         self.branch_predictor_thread.start()
+
+        # Start reporting thread after other threads
+        self.start_reporting_thread()
 
     def add_task(self, task, priority):
         with self.lock:
@@ -409,6 +414,11 @@ class AIRuntimeManager:
 
     def cached_inference(self, prompt, slot, context_type):
         """Checks if a similar prompt exists in the database using fuzzy matching."""
+        
+        # Ensure sequential execution by waiting if LLM is running
+        while self.is_llm_running:
+            time.sleep(0.1)
+
         db_cursor = self.database_manager.db_cursor
         db_cursor.execute("""
             SELECT interaction_history.response
@@ -465,18 +475,26 @@ class AIRuntimeManager:
                     self.start_time
                 ))
 
+                # Handle caching and LLM invocation sequentially
                 if task_callable == self.generate_response and priority != 4:
                     user_input, slot = task_args
                     context_type = "CoT" if priority == 3 else "main"
+
+                    # Wait for any ongoing LLM invocation to complete
+                    while self.is_llm_running:
+                        time.sleep(0.1)
 
                     cached_response = self.cached_inference(user_input, slot, context_type)
                     if cached_response:
                         print(OutputFormatter.color_prefix(f"Using cached response for slot {slot}", "BackbrainController"))
                         self.partition_context.add_context(slot, cached_response, context_type)
-                        continue
+                        continue  # Skip to the next task
 
                 try:
                     if task_callable == self.generate_response:
+                        # Set the flag to indicate LLM invocation is running
+                        self.is_llm_running = True
+
                         timeout = 60
                         result = None
                         # Wrap LLM invocation in a try-except block
@@ -507,7 +525,7 @@ class AIRuntimeManager:
                                     "BackbrainController",
                                     time.time() - self.start_time
                                 ))
-                                result = self.llm.invoke(task_args[0])
+                                result = self.llm.invoke(task_args[0], caller = task_callable.__name__)
                                 self.add_task((task_callable, task_args[:2]), 3) # Add only user_input and slot
                             else:
                                 print(OutputFormatter.color_prefix(
@@ -520,6 +538,9 @@ class AIRuntimeManager:
                             self.database_manager.print_table_contents("interaction_history")
                             self.database_manager.print_table_contents("CoT_generateResponse_History")
                             raise  # Re-raise the exception to potentially trigger the Watchdog
+                        finally:
+                            # Reset the flag after LLM invocation is complete or if an exception occurred
+                            self.is_llm_running = False
 
                     else:
                         result = task_callable(*task_args)
@@ -562,6 +583,38 @@ class AIRuntimeManager:
             else:
                 time.sleep(0.5)
 
+    def report_queue_status(self):
+        """Reports the queue status (length and contents) every 10 seconds."""
+        while True:
+            with self.lock:
+                task_queue_length = len(self.task_queue)
+                backbrain_tasks_length = len(self.backbrain_tasks)
+
+                task_queue_contents = [
+                    (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.task_queue
+                ]
+                backbrain_tasks_contents = [
+                    (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.backbrain_tasks
+                ]
+
+            print(OutputFormatter.color_prefix(
+                f"Task Queue Length: {task_queue_length} | Contents: {task_queue_contents}",
+                "BackbrainController"
+            ))
+            print(OutputFormatter.color_prefix(
+                f"Backbrain Tasks Length: {backbrain_tasks_length} | Contents: {backbrain_tasks_contents}",
+                "BackbrainController"
+            ))
+
+            time.sleep(10)
+
+    def start_reporting_thread(self):
+        """Starts the thread that reports the queue status."""
+        reporting_thread = Thread(target=self.report_queue_status)
+        reporting_thread.daemon = True
+        reporting_thread.start()
+    
+
     def run_with_timeout(self, func, args, timeout):
         """Runs a function with a timeout."""
         thread = Thread(target=func, args=args)
@@ -601,22 +654,29 @@ class AIRuntimeManager:
         """
         decision_tree_prompt = self.create_decision_tree_prompt(chat_history)
 
-        # Invoke LLM within the task
-        decision_tree_text = self.invoke_llm(decision_tree_prompt)
+        # Invoke LLM within the task, ensuring sequential execution
+        while self.is_llm_running:
+            time.sleep(0.1)
+        self.is_llm_running = True
+        try:
+            decision_tree_text = self.invoke_llm(decision_tree_prompt, caller="process_branch_prediction_slot")
 
-        json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
+            json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
 
-        # Invoke LLM within the task
-        json_tree_response = self.invoke_llm(json_tree_prompt)
-        decision_tree_json = self.parse_decision_tree_json(json_tree_response)
+            # Invoke LLM again, ensuring sequential execution
+            while self.is_llm_running:
+                json_tree_response = self.invoke_llm(json_tree_prompt, caller="process_branch_prediction_slot")
+            decision_tree_json = self.parse_decision_tree_json(json_tree_response)
 
-        potential_inputs = self.extract_potential_inputs(decision_tree_json)
+            potential_inputs = self.extract_potential_inputs(decision_tree_json)
 
-        for user_input in potential_inputs:
-            print(OutputFormatter.color_prefix(f"Scheduling generate_response for predicted input: {user_input}", "branch_predictor"))
-            prefixed_input = f"branch_predictor: {user_input}"
-            # Add generate_response task with the predicted input (still priority 4)
-            self.add_task((self.generate_response, (prefixed_input, slot)), 4)
+            for user_input in potential_inputs:
+                print(OutputFormatter.color_prefix(f"Scheduling generate_response for predicted input: {user_input}", "branch_predictor"))
+                prefixed_input = f"branch_predictor: {user_input}"
+                # Add generate_response task with the predicted input (still priority 4)
+                self.add_task((self.generate_response, (prefixed_input, slot)), 4)
+        finally:
+            self.is_llm_running = False
 
     def create_decision_tree_prompt(self, chat_history):
         """Creates a prompt for generating a decision tree based on chat history."""
@@ -689,27 +749,42 @@ class AIRuntimeManager:
                     potential_inputs.append(node["content"])
         return potential_inputs
 
-    def invoke_llm(self, prompt):
-        """Invokes the LLM after checking and enforcing the 75% context window limit."""
-        start_time = time.time()
-        prompt_tokens = len(TOKENIZER.encode(prompt))
+    def invoke_llm(self, prompt, caller="Unknown Caller"):
+        """
+        Invokes the LLM after checking and enforcing the 75% context window limit.
+        Ensures that only one LLM invocation is running at a time.
 
-        if prompt_tokens > int(CTX_WINDOW_LLM * 0.75):
-            print(OutputFormatter.color_prefix("Prompt exceeds 75% of context window. Truncating...", "BackbrainController", time.time() - start_time))
-            truncated_prompt = TOKENIZER.decode(TOKENIZER.encode(prompt)[:int(CTX_WINDOW_LLM * 0.75)])
-            if truncated_prompt[-1] not in [".", "?", "!"]:
-                last_period_index = truncated_prompt.rfind(".")
-                last_question_index = truncated_prompt.rfind("?")
-                last_exclamation_index = truncated_prompt.rfind("!")
-                last_punctuation_index = max(last_period_index, last_question_index, last_exclamation_index)
-                if last_punctuation_index != -1:
-                    truncated_prompt = truncated_prompt[:last_punctuation_index + 1]
+        Args:
+            prompt (str): The prompt to send to the LLM.
+            caller (str, optional): The name of the function calling invoke_llm. Defaults to "Unknown Caller".
+        """
+        # Wait for any ongoing LLM invocation to complete
+        while self.is_llm_running:
+            time.sleep(0.1)
 
-            print(OutputFormatter.color_prefix("Truncated prompt being used...", "BackbrainController", time.time() - start_time))
-            response = self.llm.invoke(truncated_prompt)
-        else:
-            response = self.llm.invoke(prompt)
-        return response
+        self.is_llm_running = True
+        try:
+            start_time = time.time()
+            prompt_tokens = len(TOKENIZER.encode(prompt))
+
+            if prompt_tokens > int(CTX_WINDOW_LLM * 0.75):
+                print(OutputFormatter.color_prefix(f"Prompt exceeds 75% of context window. Truncating... (called by {caller})", "BackbrainController", time.time() - start_time))
+                truncated_prompt = TOKENIZER.decode(TOKENIZER.encode(prompt)[:int(CTX_WINDOW_LLM * 0.75)])
+                if truncated_prompt[-1] not in [".", "?", "!"]:
+                    last_period_index = truncated_prompt.rfind(".")
+                    last_question_index = truncated_prompt.rfind("?")
+                    last_exclamation_index = truncated_prompt.rfind("!")
+                    last_punctuation_index = max(last_period_index, last_question_index, last_exclamation_index)
+                    if last_punctuation_index != -1:
+                        truncated_prompt = truncated_prompt[:last_punctuation_index + 1]
+
+                print(OutputFormatter.color_prefix(f"Truncated prompt being used... (called by {caller})", "BackbrainController", time.time() - start_time))
+                response = self.llm.invoke(truncated_prompt)
+            else:
+                response = self.llm.invoke(prompt)
+            return response
+        finally:
+            self.is_llm_running = False
 
     def extract_json(self, llm_response):
         """Extracts a JSON string from the LLM's response using regular expressions.
@@ -1150,8 +1225,7 @@ class PartitionContext:
             if self.vector_store:
                 # Fetch chunks from 'interaction_history'
                 interaction_history_docs_and_scores = self.vector_store.similarity_search_with_score(
-                    query,
-                    k=k,
+                    query, k=k,
                     filter={"table": "interaction_history", "slot": slot}
                 )
 
@@ -1433,4 +1507,3 @@ if __name__ == "__main__":
           database_manager.close()
         loop.close()
         print(OutputFormatter.color_prefix("Cleanup complete. Goodbye!", "Internal"))
-        
