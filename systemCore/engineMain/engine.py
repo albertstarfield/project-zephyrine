@@ -479,39 +479,48 @@ class AIRuntimeManager:
                     if task_callable == self.generate_response:
                         timeout = 60
                         result = None
-                        thread = Thread(
-                            target=self.run_with_timeout,
-                            args=(task_callable, task_args, timeout)
-                        )
-                        thread.start()
+                        # Wrap LLM invocation in a try-except block
+                        try:
+                            print(OutputFormatter.color_prefix(f"Invoking LLM for slot {task_args[1]}...", "BackbrainController"))
+                            thread = Thread(
+                                target=self.run_with_timeout,
+                                args=(task_callable, task_args, timeout)
+                            )
+                            thread.start()
 
-                        while thread.is_alive():
-                            current_time = time.time()
-                            elapsed_time = current_time - self.start_time
-                            time_left = timeout - elapsed_time
-                            print(OutputFormatter.color_prefix(
-                                f"Task {task_callable.__name__} running, time left: {time_left:.2f} seconds",
-                                "BackbrainController",
-                                current_time
-                            ), end='\r')
-                            time.sleep(0.5)
+                            while thread.is_alive():
+                                current_time = time.time()
+                                elapsed_time = current_time - self.start_time
+                                time_left = timeout - elapsed_time
+                                print(OutputFormatter.color_prefix(
+                                    f"Task {task_callable.__name__} running, time left: {time_left:.2f} seconds",
+                                    "BackbrainController",
+                                    current_time
+                                ), end='\r')
+                                time.sleep(0.5)
 
-                        thread.join(timeout)
+                            thread.join(timeout)
 
-                        if thread.is_alive():
-                            print(OutputFormatter.color_prefix(
-                                f"Task {task_callable.__name__} timed out after {timeout} seconds.",
-                                "BackbrainController",
-                                time.time() - self.start_time
-                            ))
-                            result = self.llm.invoke(task_args[0])
-                            self.add_task((task_callable, task_args[:2]), 3) # Add only user_input and slot
-                        else:
-                            print(OutputFormatter.color_prefix(
-                                f"Task {task_callable.__name__} completed within timeout.",
-                                "BackbrainController",
-                                time.time() - self.start_time
-                            ))
+                            if thread.is_alive():
+                                print(OutputFormatter.color_prefix(
+                                    f"Task {task_callable.__name__} timed out after {timeout} seconds.",
+                                    "BackbrainController",
+                                    time.time() - self.start_time
+                                ))
+                                result = self.llm.invoke(task_args[0])
+                                self.add_task((task_callable, task_args[:2]), 3) # Add only user_input and slot
+                            else:
+                                print(OutputFormatter.color_prefix(
+                                    f"Task {task_callable.__name__} completed within timeout.",
+                                    "BackbrainController",
+                                    time.time() - self.start_time
+                                ))
+                        except Exception as llm_e:
+                            print(OutputFormatter.color_prefix(f"Error invoking LLM: {llm_e}", "BackbrainController"))
+                            self.database_manager.print_table_contents("interaction_history")
+                            self.database_manager.print_table_contents("CoT_generateResponse_History")
+                            raise  # Re-raise the exception to potentially trigger the Watchdog
+
                     else:
                         result = task_callable(*task_args)
 
@@ -567,6 +576,7 @@ class AIRuntimeManager:
         """
         Analyzes chat history, predicts likely user inputs, and branch_predictores responses.
         """
+        time.sleep(30)  # Delay for 30 seconds before starting
         while True:
             try:
                 for slot in range(5):
