@@ -85,7 +85,81 @@ class DatabaseManager:
             )
             """
         )
+        # Create task_queue table
+        self.db_cursor.execute(
+            """
+            CREATE TABLE IF NOT EXISTS task_queue (
+                id INTEGER PRIMARY KEY AUTOINCREMENT,
+                task_name TEXT,
+                args TEXT,  -- Store arguments as JSON string
+                priority INTEGER,
+                created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+            )
+            """
+        )
         self.db_connection.commit()
+
+    def save_task_queue(self, task_queue, backbrain_tasks):
+        """Saves the current state of the task queues to the database."""
+        try:
+            # Clear the existing queue
+            self.db_cursor.execute("DELETE FROM task_queue")
+
+            # Save the main task queue
+            for task, priority in task_queue:
+                task_name = task[0].__name__ if isinstance(task, tuple) else task.__name__
+                args = json.dumps(task[1]) if isinstance(task, tuple) else "[]"
+                self.db_writer.schedule_write(
+                    "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
+                    (task_name, args, priority)
+                )
+
+            # Save the backbrain task queue
+            for task, priority in backbrain_tasks:
+                task_name = task[0].__name__ if isinstance(task, tuple) else task.__name__
+                args = json.dumps(task[1]) if isinstance(task, tuple) else "[]"
+                self.db_writer.schedule_write(
+                    "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
+                    (task_name, args, priority)
+                )
+
+            print(OutputFormatter.color_prefix("Task queue saved to database.", "Internal"))
+
+        except Exception as e:
+            print(OutputFormatter.color_prefix(f"Error saving task queue: {e}", "Internal"))
+    
+    def load_task_queue(self):
+        """Loads the task queue from the database."""
+        try:
+            self.db_cursor.execute("SELECT task_name, args, priority FROM task_queue ORDER BY created_at ASC")
+            rows = self.db_cursor.fetchall()
+
+            task_queue = []
+            backbrain_tasks = []
+            for task_name, args_str, priority in rows:
+                args = json.loads(args_str)
+
+                # Resolve the task function from its name
+                if task_name == "generate_response":
+                    task_callable = self.ai_runtime_manager.generate_response
+                elif task_name == "process_branch_prediction_slot":
+                    task_callable = self.ai_runtime_manager.process_branch_prediction_slot
+                # Add more task name to function mappings as needed
+                else:
+                    print(OutputFormatter.color_prefix(f"Unknown task name found in database: {task_name}", "Internal"))
+                    continue
+
+                task = (task_callable, args)
+                if priority == 3:
+                    backbrain_tasks.append((task, priority))
+                else:
+                    task_queue.append((task, priority))
+            print(OutputFormatter.color_prefix("Task queue loaded from database.", "Internal"))
+            return task_queue, backbrain_tasks
+
+        except Exception as e:
+            print(OutputFormatter.color_prefix(f"Error loading task queue: {e}", "Internal"))
+            return [], []
 
     def print_table_contents(self, table_name):
         """Prints the contents of a specified table."""
@@ -338,11 +412,24 @@ class Watchdog:
                     if task_name == "generate_response" and elapsed_time > 60:
                         print(
                             OutputFormatter.color_prefix(
-                                "Watchdog detected potential fatal error: generate_response timeout",
+                                "Watchdog detected potential issue: generate_response timeout",
                                 "Watchdog",
                             )
                         )
-                        self.restart()
+                        # self.restart() # Remove the restart from here
+                        # Instead of restarting, we'll attempt to recover by adding the task back to the queue
+
+                        # Retrieve the task arguments
+                        task_args = self.ai_runtime_manager.last_task_info["args"]
+
+                        # Add the task back to the queue with priority 0 to reattempt immediately
+                        self.ai_runtime_manager.add_task((self.ai_runtime_manager.generate_response, task_args), 0)
+                        print(
+                            OutputFormatter.color_prefix(
+                                f"Task 'generate_response' with arguments {task_args} added back to the queue for reattempt.",
+                                "Watchdog",
+                            )
+                        )
 
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Watchdog error: {e}", "Watchdog"))
@@ -386,6 +473,11 @@ class AIRuntimeManager:
         # Start reporting thread after other threads
         self.start_reporting_thread()
 
+        # Load the task queue from the database during initialization
+        self.task_queue, self.backbrain_tasks = self.database_manager.load_task_queue()
+        self.last_queue_save_time = time.time()
+        self.queue_save_interval = 60  # Save the queue every 60 seconds (adjust as needed)
+
     def add_task(self, task, priority):
         with self.lock:
             """Adds a task to the appropriate queue based on priority."""
@@ -402,6 +494,10 @@ class AIRuntimeManager:
             else:
                 raise ValueError("Invalid priority level.")
 
+            if time.time() - self.last_queue_save_time > self.queue_save_interval:
+                self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks)
+                self.last_queue_save_time = time.time()
+
     def get_next_task(self):
         with self.lock:
             """Gets the next task from the highest priority queue that is not empty."""
@@ -411,6 +507,10 @@ class AIRuntimeManager:
                 return self.backbrain_tasks.pop(0)
             else:
                 return None
+            
+            if time.time() - self.last_queue_save_time > self.queue_save_interval:
+                self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks)
+                self.last_queue_save_time = time.time()
 
     def cached_inference(self, prompt, slot, context_type):
         """Checks if a similar prompt exists in the database using fuzzy matching."""
@@ -582,6 +682,10 @@ class AIRuntimeManager:
                 self.current_task = None
             else:
                 time.sleep(0.5)
+                if time.time() - self.last_queue_save_time > self.queue_save_interval:
+                  with self.lock:  # Acquire lock before saving
+                    self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks)
+                    self.last_queue_save_time = time.time()
 
     def report_queue_status(self):
         """Reports the queue status (length and contents) every 10 seconds."""
@@ -1389,6 +1493,7 @@ def initialize_models():
 
     database_manager = DatabaseManager(DATABASE_FILE, loop)
     ai_runtime_manager = AIRuntimeManager(llm, database_manager)
+    database_manager.ai_runtime_manager = ai_runtime_manager
 
     # LLM Warmup
     print(OutputFormatter.color_prefix("Warming up the LLM...", "Internal"))
