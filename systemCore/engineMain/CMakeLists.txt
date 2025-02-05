@@ -107,9 +107,68 @@ execute_process(
     OUTPUT_STRIP_TRAILING_WHITESPACE
 )
 
+#--------- Hardware Acceleration Detection ---------
+
+# Detect CUDA
+find_program(CUDA_EXECUTABLE NAMES nvcc)
+if(CUDA_EXECUTABLE)
+    message(STATUS "CUDA detected. Enabling CUDA for llama-cpp-python and stable-diffusion-cpp-python.")
+    set(LLAMA_CPP_CMAKE_ARGS "-DGGML_CUDA=on" CACHE STRING "CMake arguments for llama-cpp-python" FORCE)
+    set(STABLE_DIFFUSION_CMAKE_ARGS "-DSD_CUDA=ON" CACHE STRING "CMake arguments for stable-diffusion-cpp-python" FORCE)
+else()
+    message(STATUS "CUDA not found.")
+    # Detect ROCm (AMD)
+    find_program(ROCM_EXECUTABLE NAMES hipcc)
+    if(ROCM_EXECUTABLE)
+        message(STATUS "ROCm detected. Enabling ROCm/hipBLAS for llama-cpp-python and stable-diffusion-cpp-python.")
+        # Get AMD GPU target - Replace gfxXXXX with your GPU architecture if known, or detect it in a more sophisticated way if needed.
+        # Detecting AMD GPU target in CMake can be complex and might require external scripts. A simple placeholder is used here.
+        set(AMD_GPU_TARGET "gfx90a" CACHE STRING "AMD GPU Target" FORCE)
+        set(LLAMA_CPP_CMAKE_ARGS "-DGGML_HIPBLAS=on" CACHE STRING "CMake arguments for llama-cpp-python" FORCE)
+        set(STABLE_DIFFUSION_CMAKE_ARGS "-G Ninja -DCMAKE_C_COMPILER=clang -DCMAKE_CXX_COMPILER=clang++ -DSD_HIPBLAS=ON -DCMAKE_BUILD_TYPE=Release -DAMDGPU_TARGETS=${AMD_GPU_TARGET}" CACHE STRING "CMake arguments for stable-diffusion-cpp-python" FORCE)
+    else()
+        message(STATUS "ROCm not found.")
+        # Detect Metal (Apple)
+        if(APPLE)
+            message(STATUS "Apple platform detected. Enabling Metal for llama-cpp-python and stable-diffusion-cpp-python.")
+            set(LLAMA_CPP_CMAKE_ARGS "-DGGML_METAL=on" CACHE STRING "CMake arguments for llama-cpp-python" FORCE)
+            set(STABLE_DIFFUSION_CMAKE_ARGS "-DSD_METAL=ON" CACHE STRING "CMake arguments for stable-diffusion-cpp-python" FORCE)
+        else()
+            message(STATUS "Apple Metal not available.")
+            # Detect SYCL (Intel)
+            find_program(INTEL_ONEAPI_EXECUTABLE NAMES setvars.sh PATHS "/opt/intel/oneapi/" NO_DEFAULT_PATH) # Adjust path if necessary
+            if (INTEL_ONEAPI_EXECUTABLE)
+                message(STATUS "Intel oneAPI detected. Enabling SYCL for llama-cpp-python and stable-diffusion-cpp-python.")
+                execute_process(
+                    COMMAND bash -c "source ${INTEL_ONEAPI_EXECUTABLE} && env"
+                    OUTPUT_VARIABLE env_output
+                )
+                string(REGEX MATCHALL "([^=]+)=([^\n]+)" SYCL_ENV_LIST "${env_output}")
+                foreach(entry ${SYCL_ENV_LIST})
+                    string(REGEX REPLACE "([^=]+)=([^\n]+)" "\\1" key "${entry}")
+                    string(REGEX REPLACE "([^=]+)=([^\n]+)" "\\2" value "${entry}")
+                    set(ENV{${key}} "${value}")
+                endforeach()
+                set(LLAMA_CPP_CMAKE_ARGS "-DGGML_SYCL=on -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" CACHE STRING "CMake arguments for llama-cpp-python" FORCE)
+                set(STABLE_DIFFUSION_CMAKE_ARGS "-DSD_SYCL=ON -DCMAKE_C_COMPILER=icx -DCMAKE_CXX_COMPILER=icpx" CACHE STRING "CMake arguments for stable-diffusion-cpp-python" FORCE)
+            else()
+               message(STATUS "Intel oneAPI not found.")
+                # Fallback to OpenBLAS
+                message(STATUS "No specific GPU acceleration detected. Enabling OpenBLAS for llama-cpp-python.")
+                set(LLAMA_CPP_CMAKE_ARGS "-DGGML_BLAS=ON -DGGML_BLAS_VENDOR=OpenBLAS" CACHE STRING "CMake arguments for llama-cpp-python" FORCE)
+                set(STABLE_DIFFUSION_CMAKE_ARGS "-DGGML_OPENBLAS=ON" CACHE STRING "CMake arguments for stable-diffusion-cpp-python" FORCE)
+
+            endif()
+        endif()
+    endif()
+endif()
 #--------- Install Required Python Packages ---------
 
 message(STATUS "Installing required Python packages into virtual environment...")
+
+# Set environment variables for llama-cpp-python and stable-diffusion-cpp-python installation
+set(ENV{CMAKE_ARGS} "${LLAMA_CPP_CMAKE_ARGS}")
+set(ENV{CMAKE_ARGS} "${STABLE_DIFFUSION_CMAKE_ARGS}")
 
 # Install PyInstaller and other necessary packages
 execute_process(
