@@ -8,6 +8,7 @@ models/*
 dist
 .DS_Store
 /release-builds/
+**.wav**
 *systemCore/src/release-builds*
 **_venv*
 **.venv**
@@ -70,6 +71,10 @@ systemCore/mirostat
 systemCore/bin/llmchildDynamicPromptSpill.tmp
 systemCore/bin/llmchildDynamicPromptSpill.tmp
 systemCore/raw_smallLanguageModel.gguf.bin
-
+**MeloTTS**
+**.wav**
 systemCore/engineMain/build/CMakeFiles/CMakeConfigureLog.yaml
 systemCore/OpenZephyUI/zephyvenv/lib/python3.12/site-packages/alembic/templates/generic/README
+systemCore/engineMain/reverseEngineeringAssets/MeloTTS
+systemCore/engineMain/reverseEngineeringAssets/MeloTTS
+systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3
