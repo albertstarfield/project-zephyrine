@@ -18,7 +18,7 @@
 </p>
 <h5 align="center">
 <sub align="center">
-<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/usr/icon/png/512x512.png?raw=true" height=128>
+<img src="https://github.com/albertstarfield/project-zephyrine/blob/adelaide-zephyrine-charlotte-assistant-dev-sync-stream/documentation/Project%20Zephyrine%20Logo.png?raw=true" height=128>
 </sub>
 </h5>
 <p align="center"><i>Greetings, I am called Project Zephyrine or the entity name so-be called Adelaide Zephyrine Charlotte, delighted to make your acquaintance. Shall we embark on our intellectual voyage through this endeavor? </i></p>
