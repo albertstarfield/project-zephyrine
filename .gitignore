@@ -17,6 +17,7 @@ dist
 **tmp-reposync*
 **repoworkspace*
 **installed.flag*
+**ffs_lock**
 **code_query**
 **code_queue**
 **.DS_Store**
@@ -78,3 +79,4 @@ systemCore/OpenZephyUI/zephyvenv/lib/python3.12/site-packages/alembic/templates/
 systemCore/engineMain/reverseEngineeringAssets/MeloTTS
 systemCore/engineMain/reverseEngineeringAssets/MeloTTS
 systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3
+sync.ffs_lock
