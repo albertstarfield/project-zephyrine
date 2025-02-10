@@ -19,6 +19,9 @@ import tiktoken
 from threading import Thread, Lock
 from fuzzywuzzy import fuzz
 import inspect
+import threading
+import signal
+
 
 # Constants
 LLM_MODEL_PATH = "./pretrainedggufmodel/preTrainedModelBaseVLM.gguf"
@@ -100,7 +103,7 @@ class DatabaseManager:
         )
         self.db_connection.commit()
 
-    def save_task_queue(self, task_queue, backbrain_tasks):
+    def save_task_queue(self, task_queue, backbrain_tasks): #modified to save the new task queue.
         """Saves the current state of the task queues to the database."""
         try:
             # Clear the existing queue
@@ -123,13 +126,23 @@ class DatabaseManager:
                     "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
                     (task_name, args, priority)
                 )
+            
+            #Save meshNetworkProcessingIO Queue
+            if hasattr(self, 'mesh_network_tasks'): #Check and save only when exists
+                for task, priority in self.mesh_network_tasks:
+                    task_name = task[0].__name__ if isinstance(task, tuple) else task.__name__
+                    args = json.dumps(task[1]) if isinstance(task, tuple) else "[]"
+                    self.db_writer.schedule_write(
+                        "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
+                        (task_name, args, priority)
+                    )
 
             print(OutputFormatter.color_prefix("Task queue saved to database.", "Internal"))
 
         except Exception as e:
             print(OutputFormatter.color_prefix(f"Error saving task queue: {e}", "Internal"))
     
-    def load_task_queue(self):
+    def load_task_queue(self): #modified to load the new task queue.
         """Loads the task queue from the database."""
         try:
             self.db_cursor.execute("SELECT task_name, args, priority FROM task_queue ORDER BY created_at ASC")
@@ -137,6 +150,7 @@ class DatabaseManager:
 
             task_queue = []
             backbrain_tasks = []
+            mesh_network_tasks = [] # Initialize mesh_network_tasks
             for task_name, args_str, priority in rows:
                 args = json.loads(args_str)
 
@@ -153,9 +167,18 @@ class DatabaseManager:
                 task = (task_callable, args)
                 if priority == 3:
                     backbrain_tasks.append((task, priority))
+                elif priority == 99:  # Load meshNetworkProcessingIO tasks
+                    mesh_network_tasks.append((task, priority))
                 else:
                     task_queue.append((task, priority))
+
             print(OutputFormatter.color_prefix("Task queue loaded from database.", "Internal"))
+             # Initialize mesh_network_tasks if it doesn't exist
+            if not hasattr(self, 'mesh_network_tasks'):
+                self.mesh_network_tasks = []
+
+            self.mesh_network_tasks = mesh_network_tasks  # Assign the loaded tasks
+
             return task_queue, backbrain_tasks
 
         except Exception as e:
@@ -492,6 +515,10 @@ class AIRuntimeManager:
                 self.backbrain_tasks.append((task, priority))
             elif priority == 4:
                 self.task_queue.append((task, priority))
+            elif priority == 99:  # Add the new priority level
+                if not hasattr(self, 'mesh_network_tasks'): # Initialize if it doesn't exist
+                    self.mesh_network_tasks = []
+                self.mesh_network_tasks.append((task, priority)) #tasks for priority level 99
             else:
                 raise ValueError("Invalid priority level.")
 
@@ -506,9 +533,11 @@ class AIRuntimeManager:
                 return self.task_queue.pop(0)  # FIFO
             elif self.backbrain_tasks:
                 return self.backbrain_tasks.pop(0)
+            elif hasattr(self, 'mesh_network_tasks') and self.mesh_network_tasks: #check priority level 99 tasks
+                return self.mesh_network_tasks.pop(0)
             else:
                 return None
-            
+
             if time.time() - self.last_queue_save_time > self.queue_save_interval:
                 self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks)
                 self.last_queue_save_time = time.time()
@@ -560,8 +589,6 @@ class AIRuntimeManager:
         while True:
             task = self.get_next_task()
             if task:
-                self.start_time = time.time()
-
                 task_item, priority = task
                 if isinstance(task_item, tuple):
                     task_callable, task_parameter = task_item
@@ -569,6 +596,8 @@ class AIRuntimeManager:
                 else:
                     task_callable = task_item
                     task_args = ()
+
+                self.start_time = time.time()  # Reset start_time for EACH task
 
                 print(OutputFormatter.color_prefix(
                     f"Starting task: {task_callable.__name__} with priority {priority}",
@@ -596,44 +625,48 @@ class AIRuntimeManager:
                         # Set the flag to indicate LLM invocation is running
                         self.is_llm_running = True
 
-                        timeout = 60
+                        timeout = 60 if priority == 0 else None  # Timeout only for priority 0
                         result = None
                         # Wrap LLM invocation in a try-except block
                         try:
                             print(OutputFormatter.color_prefix(f"Invoking LLM for slot {task_args[1]}...", "BackbrainController"))
-                            thread = Thread(
-                                target=self.run_with_timeout,
-                                args=(task_callable, task_args, timeout)
-                            )
-                            thread.start()
 
-                            while thread.is_alive():
-                                current_time = time.time()
-                                elapsed_time = current_time - self.start_time
-                                time_left = timeout - elapsed_time
-                                print(OutputFormatter.color_prefix(
-                                    f"Task {task_callable.__name__} running, time left: {time_left:.2f} seconds",
-                                    "BackbrainController",
-                                    current_time
-                                ), end='\r')
-                                time.sleep(0.5)
+                            if timeout is not None: # Check if we need the timeout logic.
+                                thread = Thread(
+                                    target=self.run_with_timeout,
+                                    args=(task_callable, task_args, timeout)
+                                )
+                                thread.start()
 
-                            thread.join(timeout)
+                                while thread.is_alive():
+                                    current_time = time.time()
+                                    elapsed_time = current_time - self.start_time
+                                    time_left = timeout - elapsed_time
+                                    print(OutputFormatter.color_prefix(
+                                        f"Task {task_callable.__name__} running, time left: {time_left:.2f} seconds",
+                                        "BackbrainController",
+                                        current_time
+                                    ), end='\r')
+                                    time.sleep(0.5)
 
-                            if thread.is_alive():
-                                print(OutputFormatter.color_prefix(
-                                    f"Task {task_callable.__name__} timed out after {timeout} seconds.",
-                                    "BackbrainController",
-                                    time.time() - self.start_time
-                                ))
-                                result = self.llm.invoke(task_args[0], caller = task_callable.__name__)
-                                self.add_task((task_callable, task_args[:2]), 3) # Add only user_input and slot
-                            else:
-                                print(OutputFormatter.color_prefix(
-                                    f"Task {task_callable.__name__} completed within timeout.",
-                                    "BackbrainController",
-                                    time.time() - self.start_time
-                                ))
+                                thread.join(timeout)
+
+                                if thread.is_alive():
+                                    print(OutputFormatter.color_prefix(
+                                        f"Task {task_callable.__name__} timed out after {timeout} seconds.",
+                                        "BackbrainController",
+                                        time.time() - self.start_time
+                                    ))
+                                    result = self.llm.invoke(task_args[0], caller = task_callable.__name__)
+                                    self.add_task((task_callable, task_args[:2]), 3)  # Add to backbrain on timeout
+                                else:
+                                     print(OutputFormatter.color_prefix(
+                                        f"Task {task_callable.__name__} completed within timeout.",
+                                        "BackbrainController",
+                                        time.time() - self.start_time
+                                     ))
+                            else: #If timeout is None, we run it without the timeout logic.
+                                result = task_callable(*task_args) # Execute directly.
                         except Exception as llm_e:
                             print(OutputFormatter.color_prefix(f"Error invoking LLM: {llm_e}", "BackbrainController"))
                             self.database_manager.print_table_contents("interaction_history")
@@ -656,7 +689,7 @@ class AIRuntimeManager:
                 elapsed_time = time.time() - self.start_time
 
                 if task_callable == self.generate_response:
-                    if elapsed_time < 58:
+                    if priority == 0 and elapsed_time < 58: # Still check this, but only for priority 0
                         self.partition_context.add_context(task_args[1], result, "main")
                         asyncio.run_coroutine_threadsafe(
                             self.partition_context.async_embed_and_store(result, task_args[1]),
@@ -685,15 +718,16 @@ class AIRuntimeManager:
                 time.sleep(0.5)
                 if time.time() - self.last_queue_save_time > self.queue_save_interval:
                   with self.lock:  # Acquire lock before saving
-                    self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks)
+                    self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
                     self.last_queue_save_time = time.time()
 
-    def report_queue_status(self):
+    def report_queue_status(self): #Modified to report the meshNetworkProcessingIO Queue
         """Reports the queue status (length and contents) every 10 seconds."""
         while True:
             with self.lock:
                 task_queue_length = len(self.task_queue)
                 backbrain_tasks_length = len(self.backbrain_tasks)
+                mesh_network_tasks_length = len(self.mesh_network_tasks) if hasattr(self, 'mesh_network_tasks') else 0
 
                 task_queue_contents = [
                     (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.task_queue
@@ -702,12 +736,21 @@ class AIRuntimeManager:
                     (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.backbrain_tasks
                 ]
 
+                mesh_network_tasks_contents = [
+                    (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.mesh_network_tasks
+                ] if hasattr(self,'mesh_network_tasks') else []
+
+
             print(OutputFormatter.color_prefix(
                 f"Task Queue Length: {task_queue_length} | Contents: {task_queue_contents}",
                 "BackbrainController"
             ))
             print(OutputFormatter.color_prefix(
                 f"Backbrain Tasks Length: {backbrain_tasks_length} | Contents: {backbrain_tasks_contents}",
+                "BackbrainController"
+            ))
+            print(OutputFormatter.color_prefix( #queue report
+                f"Mesh Network Tasks Length: {mesh_network_tasks_length} | Contents: {mesh_network_tasks_contents}",
                 "BackbrainController"
             ))
 
