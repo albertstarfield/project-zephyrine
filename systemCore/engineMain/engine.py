@@ -25,15 +25,15 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
 
-# Constants
-LLM_MODEL_PATH = "./pretrainedggufmodel/preTrainedModelBaseVLM.gguf"  # Replace with your actual model
-EMBEDDING_MODEL_PATH = "./pretrainedggufmodel/snowflake-arctic-embed.gguf" #  and embedding models.
-CTX_WINDOW_LLM = 4096
-DATABASE_FILE = "./engine_interaction.db"
-MAX_TOKENS_GENERATE = 512 # Reduced for testing, set to -1 or a larger number
+# Constants (from environment variables or defaults)
+LLM_MODEL_PATH = os.environ.get("LLM_MODEL_PATH", "./pretrainedggufmodel/preTrainedModelBaseVLM.gguf")
+EMBEDDING_MODEL_PATH = os.environ.get("EMBEDDING_MODEL_PATH", "./pretrainedggufmodel/snowflake-arctic-embed.gguf")
+CTX_WINDOW_LLM = int(os.environ.get("CTX_WINDOW_LLM", 4096))
+DATABASE_FILE = os.environ.get("DATABASE_FILE", "./engine_interaction.db")
+MAX_TOKENS_GENERATE = int(os.environ.get("MAX_TOKENS_GENERATE", 512))
 TOKENIZER = tiktoken.get_encoding("cl100k_base")
-HTTP_PORT = 8000
-
+HTTP_PORT = int(os.environ.get("HTTP_PORT", 8000))  # Get port from environment, default to 8000
+HTTP_HOST = os.environ.get("HTTP_HOST", "0.0.0.0")    # Get host from environment, default to 0.0.0.0
 
 # Global Variables
 llm = None
@@ -41,15 +41,12 @@ embedding_model = None
 vector_store = None
 loop = asyncio.get_event_loop()
 db_lock = asyncio.Lock()
-assistantName = "Adelaide Zephyrine Charlotte"  #  Give your assistant a name!
+assistantName = "Adelaide Zephyrine Charlotte"  # Give your assistant a name!
 ai_runtime_manager = None
 httpd = None  # Global variable for the HTTP server
 encoded_instructions = (
     "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZnQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUu"
 )
-
-# --- (DatabaseManager, DatabaseWriter, OutputFormatter, ChatMLFormatter - same as before)
-# --- Put the previous code for these classes here, unchanged.
 
 class DatabaseManager:
     def __init__(self, db_file, loop):
@@ -118,7 +115,7 @@ class DatabaseManager:
     def ai_runtime_manager(self, value):
         self._ai_runtime_manager = value
 
-    def save_task_queue(self, task_queue, backbrain_tasks): #modified to save the new task queue.
+    def save_task_queue(self, task_queue, backbrain_tasks, mesh_network_tasks): #modified to save the new task queue.
         """Saves the current state of the task queues to the database."""
         try:
             # Clear the existing queue
@@ -542,7 +539,7 @@ class AIRuntimeManager:
                 raise ValueError("Invalid priority level.")
 
             if time.time() - self.last_queue_save_time > self.queue_save_interval:
-                self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks)
+                self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
                 self.last_queue_save_time = time.time()
 
     def get_next_task(self):
@@ -558,7 +555,7 @@ class AIRuntimeManager:
                 return None
 
             if time.time() - self.last_queue_save_time > self.queue_save_interval:
-                self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks)
+                self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
                 self.last_queue_save_time = time.time()
 
     def cached_inference(self, prompt, slot, context_type):
@@ -636,8 +633,15 @@ class AIRuntimeManager:
                     cached_response = self.cached_inference(user_input, slot, context_type)
                     if cached_response:
                         print(OutputFormatter.color_prefix(f"Using cached response for slot {slot}", "BackbrainController"))
-                        self.partition_context.add_context(slot, cached_response, context_type)
+                        # Only add to context if not from /v1/completions (priority 0)
+                        if priority !=0:
+                            self.partition_context.add_context(slot, cached_response, context_type)
+                        # If cached, and it IS a /v1/completions call, still return it!
+                        elif priority == 0:
+                            return cached_response
+
                         continue  # Skip to the next task
+
 
                 try:
                     if task_callable == self.generate_response:
@@ -714,17 +718,25 @@ class AIRuntimeManager:
                 elapsed_time = time.time() - self.start_time
 
                 if task_callable == self.generate_response:
+                    # v1/completions calls should NOT add results to semantic memory.
                     if priority == 0 and elapsed_time < 58: # Still check this, but only for priority 0
-                        self.partition_context.add_context(task_args[1], result, "main")
+                        # BUT, we DO want to return the result to the user.  So we do that...
+                        # (see further below, where 'result' is returned)
+                        pass # Do nothing regarding context.
+
+                    elif priority != 4:
+                        user_input, slot, *_ = task_args # Unpack, ignore extra args.
+                        context_type = "CoT" if priority == 3 else "main"
+                        # Add all NON-v1/completions calls to cache.
+                        self.add_to_cache(user_input, result, context_type, slot)
+                        # And to the in-memory and vector store context
+                        self.partition_context.add_context(slot, result, "main" if priority == 0 else "CoT")
                         asyncio.run_coroutine_threadsafe(
-                            self.partition_context.async_embed_and_store(result, task_args[1]),
+                            self.partition_context.async_embed_and_store(result, slot, "main" if priority == 0 else "CoT"),
                             loop
                         )
 
-                    if priority != 4:
-                        user_input, slot, *_ = task_args # Unpack, ignore extra args.
-                        context_type = "CoT" if priority == 3 else "main"
-                        self.add_to_cache(user_input, result, context_type, slot)
+
 
                 self.last_task_info = {
                     "task": task_callable,
@@ -739,6 +751,12 @@ class AIRuntimeManager:
                     time.time() - self.start_time
                 ))
                 self.current_task = None
+
+                # If it's a generate_response call from /v1/completions, return the result *now*.
+                if task_callable == self.generate_response and priority == 0:
+                    return result  # Return directly for immediate response
+
+
             else:
                 time.sleep(0.5)
                 if time.time() - self.last_queue_save_time > self.queue_save_interval:
@@ -838,7 +856,8 @@ class AIRuntimeManager:
 
             # Invoke LLM again, ensuring sequential execution
             while self.is_llm_running:
-                json_tree_response = self.invoke_llm(json_tree_prompt, caller="process_branch_prediction_slot")
+                time.sleep(0.1)
+            json_tree_response = self.invoke_llm(json_tree_prompt, caller="process_branch_prediction_slot")
             decision_tree_json = self.parse_decision_tree_json(json_tree_response)
 
             potential_inputs = self.extract_potential_inputs(decision_tree_json)
@@ -996,41 +1015,70 @@ class AIRuntimeManager:
                 else:
                     print(OutputFormatter.color_prefix("Max retries reached. Returning None.", "Internal"))
                     return None
-
-    def generate_response(self, user_input, slot, stream=False):
-        """Generates a response to the user input, using CoT when appropriate."""
+    def _prepare_prompt(self, user_input, slot, is_v1_completions=False):
+        """Prepares the prompt for the LLM, handling context differently for /v1/completions."""
         global chatml_template, assistantName
-
-        start_time = time.time()
-
-        self.partition_context.add_context(slot, f"User: {user_input}", "main")
-        # Schedule the coroutine to embed and store the user input using run_coroutine_threadsafe
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(f"User: {user_input}", slot), loop)
 
         decoded_initial_instructions = base64.b64decode(encoded_instructions.strip()).decode("utf-8")
         decoded_initial_instructions = decoded_initial_instructions.replace("${assistantName}", assistantName)
 
-        main_history = self.database_manager.fetch_chat_history(slot)
-
-        # Construct the prompt using the PartitionContext
-        context = self.partition_context.get_context(slot, "main")  # Get context for the specific slot
-
         context_messages = [{"role": "system", "content": decoded_initial_instructions}]
 
-        # check if context is not empty
-        if context:
-            for entry in context:
-                context_messages.append({"role": "user", "content": entry})
+        if is_v1_completions:
+            # For /v1/completions, use ONLY the provided messages.  No history.
+            if isinstance(user_input, str):
+                try:
+                    messages = json.loads(user_input)  # Expecting JSON string
+                except json.JSONDecodeError:
+                    print(OutputFormatter.color_prefix("Invalid JSON in /v1/completions request.", "Internal"))
+                    return None  # Or raise, or return an error message.
+            else: #already list
+                messages = user_input
+            context_messages.extend(messages)
 
-        # check if main_history is not empty
-        if main_history:
-            for entry in main_history:
-                context_messages.append(entry)
+
+        else:
+            # For regular interactions, use history + context.
+            self.partition_context.add_context(slot, f"User: {user_input}", "main")
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(f"User: {user_input}", slot, "main"), loop)  # Specify requester_type
+            main_history = self.database_manager.fetch_chat_history(slot)
+            context = self.partition_context.get_context(slot, "main")
+
+            if context:
+                for entry in context:
+                    context_messages.append({"role": "user", "content": entry})
+            if main_history:
+                for entry in main_history:
+                    context_messages.append(entry)
 
         prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True)
+        return prompt
+
+
+    def generate_response(self, user_input, slot, stream=False):
+        """Generates a response to the user input, using CoT when appropriate."""
+
+        start_time = time.time()
+        is_v1_completions = isinstance(user_input, str) and user_input.startswith("{") #heuristic JSON
+
+        prompt = self._prepare_prompt(user_input, slot, is_v1_completions)
+        if prompt is None: #error parsing
+            return "Error: Invalid input format for /v1/completions."
 
         # Calculate tokens in the prompt
         prompt_tokens = len(TOKENIZER.encode(prompt))
+
+        if is_v1_completions: #Direct response
+            print(OutputFormatter.color_prefix("Direct query (/v1/completions). Generating a direct response...", "Internal", time.time() - start_time, progress=10, slot=slot)) # Corrected call
+            direct_response = self.invoke_llm(prompt)
+             # DO NOT add v1/completion results to semantic memory.
+            asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, direct_response), loop)
+            end_time = time.time()
+            generation_time = end_time - start_time
+            print(OutputFormatter.color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot)) # Corrected call
+            return direct_response
+
+
 
         print(OutputFormatter.color_prefix("Deciding whether to engage in deep thinking...", "Internal", time.time() - start_time, progress=0, token_count=prompt_tokens, slot=slot)) # Corrected call
         decision_prompt = f"""
@@ -1066,24 +1114,40 @@ class AIRuntimeManager:
 
         if not deep_thinking_required:
             print(OutputFormatter.color_prefix("Simple query detected. Generating a direct response...", "Internal", time.time() - start_time, progress=10, slot=slot)) # Corrected call
-            relevant_context = self.partition_context.get_relevant_chunks(user_input, slot, k=5)
+            relevant_context = self.partition_context.get_relevant_chunks(user_input, slot, k=5, requester_type="main") #added requester_type
             if relevant_context:
                 retrieved_context_text = "\n".join([item[0] for item in relevant_context])
-                context_messages.append({"role": "system", "content": f"Here's some relevant context:\n{retrieved_context_text}"})
+                context_messages = [{"role": "system", "content": decoded_initial_instructions}] # Rebuild with instructions.
 
-            prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True)
+                # check if context is not empty
+                if relevant_context: #use retrieved_context
+                    for entry in relevant_context:
+                      context_messages.append({"role": "user", "content": entry[0]})
+
+                # check if main_history is not empty
+                main_history = self.database_manager.fetch_chat_history(slot)
+                if main_history:
+                    for entry in main_history:
+                        context_messages.append(entry)
+                context_messages.append({"role":"user", "content": user_input}) # Add the current input, too!
+
+                prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True) # Rebuild the prompt.
+
             direct_response = self.invoke_llm(prompt)
-            # Schedule the coroutine to write to the database using run_coroutine_threadsafe and pass db_writer
             asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, direct_response), loop)
             end_time = time.time()
             generation_time = end_time - start_time
             print(OutputFormatter.color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot)) # Corrected call
+            # Add to context and vector store, since this is NOT a /v1/completions call.
+            self.partition_context.add_context(slot, direct_response, "main")
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(direct_response, slot, "main"), loop)
+
             return direct_response
 
         print(OutputFormatter.color_prefix("Engaging in deep thinking process...", "Internal", time.time() - start_time, progress=10, slot=slot)) # Corrected call
+        # CoT responses go into the CoT context, not 'main'.
         self.partition_context.add_context(slot, user_input, "CoT")
-        # Schedule the coroutine to embed and store the user input using run_coroutine_threadsafe
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(user_input, slot), loop)
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(user_input, slot, "CoT"), loop)  # Specify requester_type
 
         print(OutputFormatter.color_prefix("Generating initial direct answer...", "Internal", time.time() - start_time, progress=15, slot=slot)) # Corrected call
         initial_response_prompt = f"{prompt}\nProvide a concise initial response."
@@ -1092,8 +1156,7 @@ class AIRuntimeManager:
         print(OutputFormatter.color_prefix("Processing Initial Response Prompt", "Internal", time.time() - start_time, token_count=initial_response_prompt_tokens, progress=16, slot=slot)) # Corrected call
 
         initial_response = self.invoke_llm(initial_response_prompt)
-        # Schedule the coroutine to embed and store the initial response using run_coroutine_threadsafe
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(initial_response, slot), loop)
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(initial_response, slot, "CoT"), loop)  # Specify requester_type
         print(OutputFormatter.color_prefix(f"Initial response: {initial_response}", "Internal", time.time() - start_time, progress=20, slot=slot)) # Corrected call
 
         print(OutputFormatter.color_prefix("Creating a to-do list for in-depth analysis...", "Internal", time.time() - start_time, progress=25, slot=slot)) # Corrected call
@@ -1107,8 +1170,8 @@ class AIRuntimeManager:
         print(OutputFormatter.color_prefix("Processing To-do Prompt", "Internal", time.time() - start_time, token_count=todo_prompt_tokens, progress=26, slot=slot)) # Corrected call
 
         todo_response = self.invoke_llm(todo_prompt)
-        # Schedule the coroutine to embed and store the todo response using run_coroutine_threadsafe
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(todo_response, slot), loop)
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(todo_response, slot, "CoT"), loop)  # Specify requester_type
+
         print(OutputFormatter.color_prefix(f"To-do list: {todo_response}", "Internal", time.time() - start_time, progress=30, slot=slot)) # Corrected call
 
         search_queries = re.findall(r"literature_review\(['\"](.*?)['\"]\)", todo_response)
@@ -1122,8 +1185,7 @@ class AIRuntimeManager:
         print(OutputFormatter.color_prefix("Processing Decision Tree Prompt", "Internal", time.time() - start_time, token_count=decision_tree_prompt_tokens, progress=36, slot=slot)) # Corrected call
 
         decision_tree_text = self.invoke_llm(decision_tree_prompt)
-        # Schedule the coroutine to embed and store the decision tree text using run_coroutine_threadsafe
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_tree_text, slot), loop)
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_tree_text, slot, "CoT"), loop) # Specify requester_type
         print(OutputFormatter.color_prefix(f"Decision tree (text): {decision_tree_text}", "Internal", time.time() - start_time, progress=40, slot=slot)) # Corrected call
 
         print(OutputFormatter.color_prefix("Converting decision tree to JSON...", "Internal", time.time() - start_time, progress=45, slot=slot)) # Corrected call
@@ -1203,8 +1265,7 @@ class AIRuntimeManager:
                 print(OutputFormatter.color_prefix("Processing Conclusion Prompt", "Internal", time.time() - start_time, token_count=conclusion_prompt_tokens, progress=91, slot=slot)) # Corrected call
 
                 conclusion_response = self.invoke_llm(conclusion_prompt)
-                # Schedule the coroutine to embed and store the conclusion response using run_coroutine_threadsafe
-                asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot), loop)
+                asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot, "CoT"), loop)  # Specify requester_type
                 print(OutputFormatter.color_prefix(f"Conclusion (after decision tree processing): {conclusion_response}", "Internal", time.time() - start_time, progress=92, slot=slot)) # Corrected call
 
             else:
@@ -1243,14 +1304,14 @@ class AIRuntimeManager:
 
         if not requires_long_response:
             print(OutputFormatter.color_prefix("Determined a short response is sufficient...", "Internal", time.time() - start_time, progress=98, slot=slot)) # Corrected call
-            # Schedule the coroutine to write to the database using run_coroutine_threadsafe and pass db_writer
-            asyncio.run_coroutine_threadsafe(asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, conclusion_response), loop))
+            asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, conclusion_response), loop)
             end_time = time.time()
             generation_time = end_time - start_time
             print(OutputFormatter.color_prefix(conclusion_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot)) # Corrected call
+            # Add the final conclusion to main context, since this is NOT a /v1/completions call.
             self.partition_context.add_context(slot, conclusion_response, "main")
-            # Schedule the coroutine to embed and store the conclusion response using run_coroutine_threadsafe
-            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot), loop)
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot, "main"), loop)  # Specify requester_type
+
             return conclusion_response
 
         print(OutputFormatter.color_prefix("Handling a long response...", "Internal", time.time() - start_time, progress=98, slot=slot)) # Corrected call
@@ -1292,6 +1353,10 @@ class AIRuntimeManager:
             asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, long_response), loop)
             end_time = time.time()
             generation_time = end_time-start_time
+             # Add the final long response to main context.
+            self.partition_context.add_context(slot, long_response, "main")
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"), loop)  # Specify requester_type
+
             return long_response # Return the full response
         else:
           while remaining_tokens > 0:
@@ -1312,15 +1377,13 @@ class AIRuntimeManager:
                   time.sleep(2) #  Throttle requests to avoid rate limits
 
           print(OutputFormatter.color_prefix("Completed generation of the long response.", "Internal", time.time() - start_time, progress=100, slot=slot))  # Corrected call
-          # Schedule the coroutine to write to the database using run_coroutine_threadsafe
           asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, long_response), loop)
           end_time = time.time()
           generation_time = end_time - start_time
           print(OutputFormatter.color_prefix(long_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))  # Corrected call
-
+          # Add the final long response to main context.
           self.partition_context.add_context(slot, long_response, "main")
-                # Schedule the coroutine to embed and store the conclusion response using run_coroutine_threadsafe
-          asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot), loop)
+          asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"), loop)  # Specify requester_type
 
 
           return long_response
@@ -1401,12 +1464,12 @@ class PartitionContext:
         while l0_tokens > self.L0_size:
             overflowed_item = l0_context.pop(0)
             l0_tokens -= len(TOKENIZER.encode(overflowed_item))
-
+            # Demote to CoT table (it's still in the DB, just not 'main').
             asyncio.run_coroutine_threadsafe(self.async_store_CoT_generateResponse(overflowed_item, slot), loop)
 
-    def get_relevant_chunks(self, query, slot, k=5):
+    def get_relevant_chunks(self, query, slot, k=5, requester_type="main"):
         """
-        Retrieves relevant text chunks from the vector store based on a query, fetching from either 'interaction_history' or both 'interaction_history' and 'CoT_generateResponse_History' tables as needed.
+        Retrieves relevant text chunks, fetching from appropriate table based on requester_type.
         """
         start_time = time.time()
         try:
@@ -1455,9 +1518,10 @@ class PartitionContext:
                 combined[doc.metadata['doc_id']] = (doc, score)
         return sorted(combined.values(), key=lambda x: x[1])[:k]
 
-    async def async_embed_and_store(self, text_chunk, slot):
+    async def async_embed_and_store(self, text_chunk, slot, requester_type):
         """
-        Asynchronously embeds a text chunk and stores it in the database (vector store).
+        Asynchronously embeds a text chunk and stores it in the database (vector store),
+        specifying the requester_type for correct table selection.
         """
         async with db_lock:
             try:
@@ -1477,7 +1541,7 @@ class PartitionContext:
                         table_name = "CoT_generateResponse_History"
                     else:  # Default to "main"
                         table_name = "interaction_history"
-                    
+
                     db_writer.schedule_write(
                         f"INSERT INTO {table_name} (slot, doc_id, chunk, embedding) VALUES (?, ?, ?, ?)",
                         (slot, doc_id, text, pickle.dumps(embedding))
@@ -1486,7 +1550,7 @@ class PartitionContext:
                     doc = Document(page_content=text, metadata={"slot": slot, "doc_id": doc_id, "table": table_name})
                     self.vector_store.add_documents([doc])
 
-                print(OutputFormatter.color_prefix(f"Scheduled context chunk for storage for slot {slot}: {text_chunk[:50]}...", "Internal"))
+                print(OutputFormatter.color_prefix(f"Scheduled context chunk for storage for slot {slot} and type {requester_type}: {text_chunk[:50]}...", "Internal"))
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Error in embed_and_store: {e}", "Internal"))
 
@@ -1531,15 +1595,16 @@ class DecisionTreeProcessor:
             question_prompt = f"{prompt}\nQuestion: {content}\nAnswer:"
             question_prompt_tokens = len(TOKENIZER.encode(question_prompt))
             response = ai_runtime_manager.invoke_llm(question_prompt)
+            # Store ALL decision tree node results in CoT context.
             partition_context.add_context(slot, response, "CoT")
-            asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(response, slot), loop)
+            asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(response, slot, "CoT"), loop)
             print(OutputFormatter.color_prefix(f"Response to question: {response}", "Internal", generation_time=time.time() - start_time, token_count=question_prompt_tokens, progress=progress_interval, slot=slot))
         elif node_type == "action step":
             if "literature_review" in content:
                 review_query = re.search(r"literature_review\(['\"](.*?)['\"]\)", content).group(1)
                 review_result = LiteratureReviewer.literature_review(review_query)
                 partition_context.add_context(slot, f"Literature review result for '{review_query}': {review_result}", "CoT")
-                asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(f"Literature review result for '{review_query}': {review_result}", slot), loop)
+                asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(f"Literature review result for '{review_query}': {review_result}", slot, "CoT"), loop)
                 print(OutputFormatter.color_prefix(f"Literature review result: {review_result}", "Internal", generation_time=time.time() - start_time, progress=progress_interval, slot=slot))
             else:
                 print(OutputFormatter.color_prefix(f"Action step executed: {content}", "Internal", generation_time=time.time() - start_time, progress=progress_interval, slot=slot))
@@ -1549,7 +1614,7 @@ class DecisionTreeProcessor:
             reflection_prompt_tokens = len(TOKENIZER.encode(reflection_prompt))
             reflection = ai_runtime_manager.invoke_llm(reflection_prompt)
             partition_context.add_context(slot, reflection, "CoT")
-            asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(reflection, slot), loop)
+            asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(reflection, slot, "CoT"), loop)
             print(OutputFormatter.color_prefix(f"Reflection/Conclusion: {reflection}", "Internal", generation_time=time.time() - start_time, token_count=reflection_prompt_tokens, progress=progress_interval, slot=slot))
 
         for option in node.get("options", []):
@@ -1698,7 +1763,7 @@ class OpenAISpecRequestHandler(BaseHTTPRequestHandler):
             response_data = {
                 "data": [
                     {
-                        "id": "gpt-3.5-turbo-instruct", # Use the actual ID of your model
+                        "id": "Adelaide-and-Albert-Model", # Use the actual ID of your model
                         "object": "model",
                         "created": 1686935002,  # Replace with a valid timestamp
                         "owned_by": "user",  # Replace with the appropriate owner
@@ -1735,20 +1800,21 @@ class OpenAISpecRequestHandler(BaseHTTPRequestHandler):
             # Use slot 0 for all server requests.  In a real implementation, you'd need
             # a way to map requests to user sessions/slots.
             ai_runtime_manager.add_task(
-                (ai_runtime_manager.generate_response, (json.dumps(messages), 0, stream)), 0
+                (ai_runtime_manager.generate_response, (messages, 0, stream)), 0 # Pass messages directly.
             )
 
 
             # Basic response for non-streaming requests
             self.send_response(200)
             self.send_header("Content-type", "application/json")
+            self.send_header('Access-Control-Allow-Origin', '*') #CORS
             self.end_headers()
             # Placeholder response; actual response handled by generate_response
             self.wfile.write(json.dumps({
                 "id": "chatcmpl-placeholder",  # Use a placeholder, actual ID from task
                 "object": "chat.completion",
                 "created": int(time.time()),
-                "model": "gpt-3.5-turbo-instruct",  # Replace
+                "model": "Adelaide-and-Albert-Model",  # Replace
                 "choices": [],
                 "usage": {
                     "prompt_tokens": 0,
@@ -1771,11 +1837,56 @@ class OpenAISpecRequestHandler(BaseHTTPRequestHandler):
             self.end_headers()
             self.wfile.write(json.dumps({"error": {"message": "Not Found", "type": "invalid_request_error", "code": 404}}).encode('utf-8'))
 
-def run_server(port):
+def get_valid_port(port_str, default_port=8000):
+    """
+    Validates a port string and returns a valid integer port.
+    Returns the default port if the input is invalid.
+    """
+    try:
+        port = int(port_str)
+        if 1024 <= port <= 65535:  # Check for valid port range (non-system ports)
+            return port
+        else:
+            print(OutputFormatter.color_prefix(f"Invalid port number: {port_str}. Using default port {default_port}.", "ServerOpenAISpec"))
+            return default_port
+    except (ValueError, TypeError):
+        print(OutputFormatter.color_prefix(f"Invalid port value: {port_str}. Using default port {default_port}.", "ServerOpenAISpec"))
+        return default_port
+
+def get_valid_host(host_str, default_host='0.0.0.0'):
+    """
+    Validates a host string (basic check for now).
+    Returns the default host if the input is invalid.
+    """
+    # Basic validation (you might want to add more robust checks, e.g., using regex)
+    if host_str and isinstance(host_str, str) and host_str.strip():
+        return host_str.strip()
+    else:
+        print(OutputFormatter.color_prefix(f"Invalid host value: {host_str}. Using default host {default_host}.", "ServerOpenAISpec"))
+        return default_host
+
+def run_server(port=None, host=None): #Added parameters with None
     global httpd
-    server_address = ('', port)
+
+    # --- Environment Variable Handling (Prioritized) ---
+    env_port = os.environ.get('HTTP_PORT')
+    env_host = os.environ.get('HTTP_HOST')
+
+    # Use environment variables if available and valid, otherwise use defaults or provided args.
+    if env_port:
+        port = get_valid_port(env_port)
+    elif port is None: #Check the parameter
+        port = get_valid_port(None)  # Use default port
+
+    if env_host:
+        host = get_valid_host(env_host)
+    elif host is None:  #Check the parameter
+        host = get_valid_host(None) # Use the default.
+
+
+    server_address = (host, port)
     httpd = HTTPServer(server_address, OpenAISpecRequestHandler)
-    print(OutputFormatter.color_prefix(f"Starting OpenAI-compatible server on port {port}...", "ServerOpenAISpec"))
+    print(OutputFormatter.color_prefix(f"Starting OpenAI-compatible server on {host}:{port}...", "ServerOpenAISpec"))
     httpd.serve_forever()
 
 
@@ -1792,7 +1903,8 @@ if __name__ == "__main__":
     signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C gracefully
 
     # Start the HTTP server in a separate thread.  This is crucial.
-    server_thread = Thread(target=run_server, args=(HTTP_PORT,))
+    # Now we pass *no* arguments; the environment/defaults will be used.
+    server_thread = Thread(target=run_server)
     server_thread.daemon = True  #  Daemon threads exit when the main thread exits.
     server_thread.start()
     loop = asyncio.new_event_loop()
