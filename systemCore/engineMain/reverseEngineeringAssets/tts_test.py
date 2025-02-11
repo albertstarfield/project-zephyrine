@@ -71,7 +71,7 @@ audio_stereo = np.stack((audio_np, audio_np), axis=0)
 # 3. Reverb, Resonance (using pedalboard)
 board = Pedalboard([
     Resample(target_sample_rate=44100.0, quality=Resample.Quality.WindowedSinc256),
-    Reverb(room_size=0.9, damping=0.4, wet_level=0.007230, dry_level=0.7), #simulate bigger space on vocal voice
+    Reverb(room_size=0.9, damping=0.4, wet_level=0.02230, dry_level=0.7), #simulate bigger space on vocal voice
     Limiter(threshold_db=-2, release_ms=1000),  # Initial limiter
     Chorus(rate_hz=0.4, depth=0.25, centre_delay_ms=7.0, feedback=0.0, mix=0.03),
     Delay(delay_seconds=1, feedback=0.2, mix= 0.01),
