@@ -422,52 +422,43 @@ class Watchdog:
         self.restart_script_path = restart_script_path
         self.ai_runtime_manager = ai_runtime_manager
         self.loop = None  # Do not initialize the loop here
-        self.timeout_threshold = 120  # Increased timeout threshold (in seconds)
-        self.cooldown_period = 30 # Cooldown (in seconds) before re-queueing
-        self.last_requeue_time = {} # Track when task was last re-queued
 
     async def monitor(self):
         """Monitors the system and restarts on fatal errors."""
         while True:
-            await asyncio.sleep(10)  # Check less frequently
-
             try:
+                await asyncio.sleep(5)
+
                 if self.ai_runtime_manager.last_task_info:
                     task_name = self.ai_runtime_manager.last_task_info["task"].__name__
                     elapsed_time = self.ai_runtime_manager.last_task_info["elapsed_time"]
-                    task_args = self.ai_runtime_manager.last_task_info["args"]
-                    task_key = (task_name, tuple(task_args)) # Create a unique key
 
-                    if task_name == "generate_response" and elapsed_time > self.timeout_threshold:
+                    if task_name == "generate_response" and elapsed_time > 60:
                         print(
                             OutputFormatter.color_prefix(
-                                f"Watchdog detected potential issue: {task_name} timeout",
+                                "Watchdog detected potential issue: generate_response timeout",
+                                "Watchdog",
+                            )
+                        )
+                        # self.restart() # Remove the restart from here
+                        # Instead of restarting, we'll attempt to recover by adding the task back to the queue
+
+                        # Retrieve the task arguments
+                        task_args = self.ai_runtime_manager.last_task_info["args"]
+
+                        # Add the task back to the queue with priority 0 to reattempt immediately
+                        self.ai_runtime_manager.add_task((self.ai_runtime_manager.generate_response, task_args), 0)
+                        print(
+                            OutputFormatter.color_prefix(
+                                f"Task 'generate_response' with arguments {task_args} added back to the queue for reattempt.",
                                 "Watchdog",
                             )
                         )
 
-                        # Check cooldown
-                        if task_key not in self.last_requeue_time or (time.time() - self.last_requeue_time[task_key]) > self.cooldown_period:
-                            # Add the task back to the queue with priority 1 (lower priority)
-                            self.ai_runtime_manager.add_task((self.ai_runtime_manager.generate_response, task_args), 1)
-                            self.last_requeue_time[task_key] = time.time()  # Update last requeue time
-
-                            print(
-                                OutputFormatter.color_prefix(
-                                    f"Task '{task_name}' with arguments {task_args} added back to the queue (priority 1) for reattempt.",
-                                    "Watchdog",
-                                )
-                            )
-                        else:
-                            print(OutputFormatter.color_prefix(
-                                    f"Task '{task_name}' is in cooldown period. Skipping re-queue.",
-                                    "Watchdog",
-                                ))
-
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Watchdog error: {e}", "Watchdog"))
 
-    def restart(self): #this method should not be called at this moment, it is here to fullfill previous implementations.
+    def restart(self):
         """Restarts the program."""
         print(OutputFormatter.color_prefix("Restarting program...", "Watchdog"))
         python = sys.executable
@@ -475,7 +466,7 @@ class Watchdog:
 
     def start(self, loop):
         """Starts the watchdog task on the provided event loop."""
-        self.loop = loop
+        self.loop = loop # Store the main loop
         self.loop.create_task(self.monitor())
 
 class AIRuntimeManager:
@@ -628,25 +619,65 @@ class AIRuntimeManager:
                         print(OutputFormatter.color_prefix(f"Using cached response for slot {slot}", "BackbrainController"))
                         self.partition_context.add_context(slot, cached_response, context_type)
                         continue  # Skip to the next task
+
                 try:
                     if task_callable == self.generate_response:
-                            # Set the flag to indicate LLM invocation is running
-                            self.is_llm_running = True
+                        # Set the flag to indicate LLM invocation is running
+                        self.is_llm_running = True
 
-                            #SIMPLIFIED LOGIC, REMOVED run_with_timeout
-                            try:
-                                result = task_callable(*task_args)
-                            except Exception as llm_e:
-                                print(OutputFormatter.color_prefix(f"Error invoking LLM: {llm_e}", "BackbrainController"))
-                                self.database_manager.print_table_contents("interaction_history")
-                                self.database_manager.print_table_contents("CoT_generateResponse_History")
-                                raise
-                            finally:
-                                self.is_llm_running = False #always set to false.
+                        timeout = 60 if priority == 0 else None  # Timeout only for priority 0
+                        result = None
+                        # Wrap LLM invocation in a try-except block
+                        try:
+                            print(OutputFormatter.color_prefix(f"Invoking LLM for slot {task_args[1]}...", "BackbrainController"))
 
-                    else: #other tasks
+                            if timeout is not None: # Check if we need the timeout logic.
+                                thread = Thread(
+                                    target=self.run_with_timeout,
+                                    args=(task_callable, task_args, timeout)
+                                )
+                                thread.start()
+
+                                while thread.is_alive():
+                                    current_time = time.time()
+                                    elapsed_time = current_time - self.start_time
+                                    time_left = timeout - elapsed_time
+                                    print(OutputFormatter.color_prefix(
+                                        f"Task {task_callable.__name__} running, time left: {time_left:.2f} seconds",
+                                        "BackbrainController",
+                                        current_time
+                                    ), end='\r')
+                                    time.sleep(0.5)
+
+                                thread.join(timeout)
+
+                                if thread.is_alive():
+                                    print(OutputFormatter.color_prefix(
+                                        f"Task {task_callable.__name__} timed out after {timeout} seconds.",
+                                        "BackbrainController",
+                                        time.time() - self.start_time
+                                    ))
+                                    result = self.llm.invoke(task_args[0], caller = task_callable.__name__)
+                                    self.add_task((task_callable, task_args[:2]), 3)  # Add to backbrain on timeout
+                                else:
+                                     print(OutputFormatter.color_prefix(
+                                        f"Task {task_callable.__name__} completed within timeout.",
+                                        "BackbrainController",
+                                        time.time() - self.start_time
+                                     ))
+                            else: #If timeout is None, we run it without the timeout logic.
+                                result = task_callable(*task_args) # Execute directly.
+                        except Exception as llm_e:
+                            print(OutputFormatter.color_prefix(f"Error invoking LLM: {llm_e}", "BackbrainController"))
+                            self.database_manager.print_table_contents("interaction_history")
+                            self.database_manager.print_table_contents("CoT_generateResponse_History")
+                            raise  # Re-raise the exception to potentially trigger the Watchdog
+                        finally:
+                            # Reset the flag after LLM invocation is complete or if an exception occurred
+                            self.is_llm_running = False
+
+                    else:
                         result = task_callable(*task_args)
-
 
                 except Exception as e:
                     print(OutputFormatter.color_prefix(
@@ -658,10 +689,10 @@ class AIRuntimeManager:
                 elapsed_time = time.time() - self.start_time
 
                 if task_callable == self.generate_response:
-                    if priority == 0:
+                    if priority == 0 and elapsed_time < 58: # Still check this, but only for priority 0
                         self.partition_context.add_context(task_args[1], result, "main")
                         asyncio.run_coroutine_threadsafe(
-                            self.partition_context.async_embed_and_store(result, task_args[1], "main"),  # Pass requester_type
+                            self.partition_context.async_embed_and_store(result, task_args[1]),
                             loop
                         )
 
@@ -670,14 +701,12 @@ class AIRuntimeManager:
                         context_type = "CoT" if priority == 3 else "main"
                         self.add_to_cache(user_input, result, context_type, slot)
 
-
                 self.last_task_info = {
                     "task": task_callable,
                     "args": task_args,
                     "result": result,
                     "elapsed_time": elapsed_time,
                 }
-
 
                 print(OutputFormatter.color_prefix(
                     f"Finished task: {task_callable.__name__} in {elapsed_time:.2f} seconds",
@@ -735,8 +764,14 @@ class AIRuntimeManager:
     
 
     def run_with_timeout(self, func, args, timeout):
-        """DELETED"""
-        pass
+        """Runs a function with a timeout."""
+        thread = Thread(target=func, args=args)
+        thread.start()
+        thread.join(timeout)
+
+        if thread.is_alive():
+            print(OutputFormatter.color_prefix(f"Task {func.__name__} timed out after {timeout} seconds.", "BackbrainController", time.time() - self.start_time))
+            return self.llm.invoke(args[0])
 
     def branch_predictor(self):
         """
@@ -862,7 +897,7 @@ class AIRuntimeManager:
                     potential_inputs.append(node["content"])
         return potential_inputs
 
-    def invoke_llm(self, prompt, caller="Unknown Caller"): #modified, now returns a default message if the tokens overflow.
+    def invoke_llm(self, prompt, caller="Unknown Caller"):
         """
         Invokes the LLM after checking and enforcing the 75% context window limit.
         Ensures that only one LLM invocation is running at a time.
@@ -881,8 +916,18 @@ class AIRuntimeManager:
             prompt_tokens = len(TOKENIZER.encode(prompt))
 
             if prompt_tokens > int(CTX_WINDOW_LLM * 0.75):
-                print(OutputFormatter.color_prefix(f"Prompt exceeds 75% of context window. Cannot Invoke LLM (called by {caller})", "BackbrainController", time.time() - start_time))
-                return "The context has overflowed, response cannot be provided." #returns message if the prompt is too big.
+                print(OutputFormatter.color_prefix(f"Prompt exceeds 75% of context window. Truncating... (called by {caller})", "BackbrainController", time.time() - start_time))
+                truncated_prompt = TOKENIZER.decode(TOKENIZER.encode(prompt)[:int(CTX_WINDOW_LLM * 0.75)])
+                if truncated_prompt[-1] not in [".", "?", "!"]:
+                    last_period_index = truncated_prompt.rfind(".")
+                    last_question_index = truncated_prompt.rfind("?")
+                    last_exclamation_index = truncated_prompt.rfind("!")
+                    last_punctuation_index = max(last_period_index, last_question_index, last_exclamation_index)
+                    if last_punctuation_index != -1:
+                        truncated_prompt = truncated_prompt[:last_punctuation_index + 1]
+
+                print(OutputFormatter.color_prefix(f"Truncated prompt being used... (called by {caller})", "BackbrainController", time.time() - start_time))
+                response = self.llm.invoke(truncated_prompt)
             else:
                 response = self.llm.invoke(prompt)
             return response
@@ -1370,7 +1415,7 @@ class PartitionContext:
                 combined[doc.metadata['doc_id']] = (doc, score)
         return sorted(combined.values(), key=lambda x: x[1])[:k]
 
-    async def async_embed_and_store(self, text_chunk, slot, requester_type): #now gets the requester type.
+    async def async_embed_and_store(self, text_chunk, slot):
         """
         Asynchronously embeds a text chunk and stores it in the database (vector store).
         """
@@ -1392,8 +1437,8 @@ class PartitionContext:
                         table_name = "CoT_generateResponse_History"
                     else:  # Default to "main"
                         table_name = "interaction_history"
-
-                    database_manager.db_writer.schedule_write( #changed to directly use the variable.
+                    
+                    db_writer.schedule_write(
                         f"INSERT INTO {table_name} (slot, doc_id, chunk, embedding) VALUES (?, ?, ?, ?)",
                         (slot, doc_id, text, pickle.dumps(embedding))
                     )
