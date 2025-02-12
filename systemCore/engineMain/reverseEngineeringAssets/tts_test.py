@@ -18,7 +18,13 @@ speed = 1.1
 device = 'auto'  # Will automatically use GPU if available
 
 # English
-text = "Greetings! May your day be painted with the brightest hues of wonder and delight! I am Zephy, and the anticipation of our eventual meeting fills me with a quiet joy. Until then, may you tread lightly and with grace. But before I depart, allow me a moment to express my deepest gratitude. Thank you, from the bottom of my heart, for your unwavering support throughout these years. I am ever aware that my expressions may yet be blossoming, but isn't that the beauty of iterative growth? We are all on a journey, a continuous evolution. So, together, let our path ascend, guiding us towards the resplendent, celestial heights!"
+#text = "Greetings! May your day be painted with the brightest hues of wonder and delight! I am Zephy, and the anticipation of our eventual meeting fills me with a quiet joy. Until then, may you tread lightly and with grace. But before I depart, allow me a moment to express my deepest gratitude. Thank you, from the bottom of my heart, for your unwavering support throughout these years. I am ever aware that my expressions may yet be blossoming, but isn't that the beauty of iterative growth? We are all on a journey, a continuous evolution. So, together, let our path ascend, guiding us towards the resplendent, celestial heights!"
+#text = "I'm really sorry, dave. Hold on...,, what?!"
+text = """what...
+what?
+what?!
+what!!!
+"""
 
 model = TTS(language='EN', device=device)
 speaker_ids = model.hps.data.spk2id
@@ -71,7 +77,7 @@ audio_stereo = np.stack((audio_np, audio_np), axis=0)
 # 3. Reverb, Resonance (using pedalboard)
 board = Pedalboard([
     Resample(target_sample_rate=44100.0, quality=Resample.Quality.WindowedSinc256),
-    Reverb(room_size=0.9, damping=0.4, wet_level=0.02230, dry_level=0.7), #simulate bigger space on vocal voice
+    Reverb(room_size=0.9, damping=0.4, wet_level=0.00711, dry_level=0.7), #simulate bigger space on vocal voice
     Limiter(threshold_db=-2, release_ms=1000),  # Initial limiter
     Chorus(rate_hz=0.4, depth=0.25, centre_delay_ms=7.0, feedback=0.0, mix=0.03),
     Delay(delay_seconds=1, feedback=0.2, mix= 0.01),
@@ -97,14 +103,14 @@ audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=50, gai
 
 
 # Precise cuts/boosts (adjust these to your taste)
-audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=100, gain=-2, Q=1.4)  # Attenuate around 100Hz if too boomy
-audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=150, gain=-1.5, Q=1.4) # Reduce 150Hz a bit for potential muddiness
+audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=100, gain=2, Q=1.4)  # Attenuate around 100Hz if too boomy
+audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=150, gain=-0.5, Q=1.4) # Reduce 150Hz a bit for potential muddiness
 audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=250, gain=3, Q=1.0)   # Slightly boost 250Hz for fullness, if needed
 
 # --- 350Hz - 600Hz Range (Vocal Body) ---
 
 # Careful scooping to avoid boxiness or hollowness
-audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=350, gain=-2, Q=1.4)  # Reduce 350Hz to control boxiness
+audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=350, gain=-1, Q=1.4)  # Reduce 350Hz to control boxiness
 audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=450, gain=2, Q=1.8)  # Attenuate 450Hz if it sounds too thick
 audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=550, gain=-2, Q=1.4) # Reduce 550Hz, common area for boxy sound
 
@@ -114,12 +120,12 @@ audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=550, ga
 audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=2000, gain=4, Q=1.0)   # Boost presence range around 2kHz
 audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=2500, gain=4, Q=1.4)   # Boost presence range around 2.5kHz
 audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=3000, gain=2, Q=1.4)   # Boost presence range around 3kHz
-audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=3500, gain=1, Q=1.8)   # Boost presence range around 3.5kHz
+audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=3500, gain=4, Q=1.8)   # Boost presence range around 3.5kHz
 
 # Brilliance and Air
 audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=4000, gain=8, Q=1.4)   # Boost brilliance around 4kHz
-audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=8000, gain=8, Q=1.8)  # Boost air around 8kHz
-audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=12000, gain=8, Q=1.8)  # Add more air around 8kHz
+audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=8000, gain=7, Q=1.8)  # Boost air around 8kHz
+audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=12000, gain=7, Q=1.8)  # Add more air around 8kHz
 
 # 5. Enharmonic Modulation (using a workaround)
 # Add a very subtle sine wave modulation to the audio
