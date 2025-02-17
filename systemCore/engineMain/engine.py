@@ -25,7 +25,10 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import ctypes
 import subprocess  # Import subprocess
-from typing import Optional
+from typing import Dict, Any, List, Optional, BinaryIO, Tuple
+import struct
+import pickle
+
 
 
 
@@ -51,6 +54,156 @@ httpd = None  # Global variable for the HTTP server
 encoded_instructions = (
     "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZnQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUu"
 )
+
+# --- GGUF Parsing (Adapted from reference code) ---
+class GGUFValueType:  # Define outside the class
+    UINT8 = 0
+    INT8 = 1
+    UINT16 = 2
+    INT16 = 3
+    UINT32 = 4
+    INT32 = 5
+    FLOAT32 = 6
+    BOOL = 7
+    STRING = 8
+    ARRAY = 9
+    UINT64 = 10
+    INT64 = 11
+    FLOAT64 = 12
+
+GGUF_MAGIC = b"GGUF"
+
+class GGUFParser:
+    def __init__(self, gguf_file_path: str):
+        self.gguf_file_path = gguf_file_path
+        self.metadata: Dict[str, Any] = {}
+        self.tensor_infos: List[Tuple[str, List[int], int, int]] = []
+        self._parse()
+
+    def _read_bytes(self, file: BinaryIO, num_bytes: int) -> bytes:
+        data = file.read(num_bytes)
+        if len(data) != num_bytes:
+            raise ValueError(f"Expected {num_bytes} bytes, but got {len(data)}.")
+        return data
+
+    def _read_u8(self, file: BinaryIO) -> int:
+        return struct.unpack("<B", self._read_bytes(file, 1))[0]
+
+    def _read_i8(self, file: BinaryIO) -> int:
+        return struct.unpack("<b", self._read_bytes(file, 1))[0]
+
+    def _read_u16(self, file: BinaryIO) -> int:
+        return struct.unpack("<H", self._read_bytes(file, 2))[0]
+
+    def _read_i16(self, file: BinaryIO) -> int:
+        return struct.unpack("<h", self._read_bytes(file, 2))[0]
+
+    def _read_u32(self, file: BinaryIO) -> int:
+        return struct.unpack("<I", self._read_bytes(file, 4))[0]
+
+    def _read_i32(self, file: BinaryIO) -> int:
+        return struct.unpack("<i", self._read_bytes(file, 4))[0]
+
+    def _read_u64(self, file: BinaryIO) -> int:
+        return struct.unpack("<Q", self._read_bytes(file, 8))[0]
+
+    def _read_i64(self, file: BinaryIO) -> int:
+        return struct.unpack("<q", self._read_bytes(file, 8))[0]
+
+    def _read_f32(self, file: BinaryIO) -> float:
+        return struct.unpack("<f", self._read_bytes(file, 4))[0]
+
+    def _read_f64(self, file: BinaryIO) -> float:
+        return struct.unpack("<d", self._read_bytes(file, 8))[0]
+
+    def _read_bool(self, file: BinaryIO) -> bool:
+        return self._read_u8(file) != 0
+
+    def _read_string(self, file: BinaryIO) -> str:
+        length = self._read_u64(file)
+        data = self._read_bytes(file, length)
+        return data.decode("utf-8", errors="replace")
+
+    def _read_array(self, file: BinaryIO) -> List[Any]:
+        value_type = self._read_u32(file)
+        length = self._read_u64(file)
+        return [self._read_value(file, value_type) for _ in range(length)]
+
+    def _read_value(self, file: BinaryIO, value_type: int) -> Any:
+        if value_type == GGUFValueType.UINT8:
+            return self._read_u8(file)
+        elif value_type == GGUFValueType.INT8:
+            return self._read_i8(file)
+        elif value_type == GGUFValueType.UINT16:
+            return self._read_u16(file)
+        elif value_type == GGUFValueType.INT16:
+            return self._read_i16(file)
+        elif value_type == GGUFValueType.UINT32:
+            return self._read_u32(file)
+        elif value_type == GGUFValueType.INT32:
+            return self._read_i32(file)
+        elif value_type == GGUFValueType.FLOAT32:
+            return self._read_f32(file)
+        elif value_type == GGUFValueType.UINT64:
+            return self._read_u64(file)
+        elif value_type == GGUFValueType.INT64:
+            return self._read_i64(file)
+        elif value_type == GGUFValueType.FLOAT64:
+            return self._read_f64(file)
+        elif value_type == GGUFValueType.BOOL:
+            return self._read_bool(file)
+        elif value_type == GGUFValueType.STRING:
+            return self._read_string(file)
+        elif value_type == GGUFValueType.ARRAY:
+            return self._read_array(file)
+        else:
+            raise ValueError(f"Invalid GGUF value type: {value_type}")
+
+    def _read_metadata(self, file: BinaryIO) -> Dict[str, Any]:
+        metadata = {}
+        metadata_count = self._read_u64(file)
+        for _ in range(metadata_count):
+            key = self._read_string(file)
+            value_type = self._read_u32(file)
+            value = self._read_value(file, value_type)
+            metadata[key] = value
+        return metadata
+
+    def _read_tensor_info(self, file: BinaryIO) -> Tuple[str, List[int], int, int]:
+        name = self._read_string(file)
+        n_dims = self._read_u32(file)
+        dims = [self._read_u64(file) for _ in range(n_dims)]
+        tensor_type = self._read_u32(file)
+        offset = self._read_u64(file)
+        return name, dims, tensor_type, offset
+
+    def _parse(self):
+        """Parses the GGUF file and populates metadata and tensor_infos."""
+        try:
+            with open(self.gguf_file_path, "rb") as f:
+                magic = self._read_bytes(f, 4)
+                if magic != GGUF_MAGIC:
+                    raise ValueError("Invalid GGUF file (magic number mismatch).")
+
+                version = self._read_u32(f)
+                tensor_count = self._read_u64(f)
+
+                self.metadata = self._read_metadata(f)
+
+                for _ in range(tensor_count):
+                    self.tensor_infos.append(self._read_tensor_info(f))
+        except Exception as e:
+            print(OutputFormatter.color_prefix(f"Error parsing GGUF file: {e}", "Internal")) # Use consistent logging
+            self.metadata = {}  # Reset to empty dict on error
+            self.tensor_infos = []
+
+    def get_metadata(self) -> Dict[str, Any]:
+        """Returns the parsed metadata."""
+        return self.metadata
+
+    def get_tensor_infos(self) -> List[Tuple[str, List[int], int, int]]:
+        """Returns the parsed tensor information."""
+        return self.tensor_infos
 
 class DatabaseManager:
     def __init__(self, db_file, loop):
@@ -499,6 +652,9 @@ class AIRuntimeManager:
 
         self.json_interpreter = JSONInterpreter(self.invoke_llm)
 
+        #GGUF Lowlevel file metadata parser 
+        self.gguf_parser: Optional[GGUFParser] = None  # Store GGUF parser here
+
         # Start the branch_predictor thread
         self.branch_predictor_thread = Thread(target=self.branch_predictor)
         self.branch_predictor_thread.daemon = True
@@ -511,6 +667,18 @@ class AIRuntimeManager:
         self.task_queue, self.backbrain_tasks = self.database_manager.load_task_queue()
         self.last_queue_save_time = time.time()
         self.queue_save_interval = 60  # Save the queue every 60 seconds (adjust as needed)
+
+    def initialize_gguf_parser(self):
+      """Initializes the GGUF parser."""
+      if LLM_MODEL_PATH:  # Only initialize if a path is set
+          self.gguf_parser = GGUFParser(LLM_MODEL_PATH)
+          # Example usage: print the metadata
+          if self.gguf_parser:
+              metadata = self.gguf_parser.get_metadata()
+              print(OutputFormatter.color_prefix("GGUF Metadata:", "Internal"))
+              for key, value in metadata.items():
+                  print(OutputFormatter.color_prefix(f"  {key}: {value}", "Internal"))
+
 
     def process_json_response(self, json_response):
         """Processes a JSON response, attempting to repair it if invalid."""
@@ -1796,11 +1964,10 @@ class DecisionTreeProcessor:
             print(OutputFormatter.color_prefix(f"Option considered: {option['option_text']}", "Internal", generation_time=time.time() - start_time, progress=progress_interval, slot=slot))
 
 def initialize_models():
-    """Initializes the LLM, embedding model, and vector store."""
+    """Initializes the LLM, embedding model, and vector store, and GGUF parser"""
     global llm, embedding_model, vector_store, ai_runtime_manager, database_manager
 
     n_batch = 512
-    # Use subprocess to capture stderr from LlamaCpp
     with subprocess.Popen([sys.executable, "-c",
                            f"""
 from langchain.llms import LlamaCpp
@@ -1826,7 +1993,7 @@ llm = LlamaCpp(
         n_batch=n_batch,
         n_ctx=CTX_WINDOW_LLM,
         f16_kv=True,
-        verbose=True,  # Keep verbose for other logs
+        verbose=True,
         max_tokens=MAX_TOKENS_GENERATE,
         rope_freq_base=10000,
         rope_freq_scale=1
@@ -1840,6 +2007,10 @@ llm = LlamaCpp(
     ai_runtime_manager = AIRuntimeManager(llm, database_manager)
     database_manager.ai_runtime_manager = ai_runtime_manager
     ai_runtime_manager.llm = llm # Make absolutely sure this is set
+
+    # Initialize GGUF parser
+    ai_runtime_manager.initialize_gguf_parser()
+
 
     # LLM Warmup
     print(OutputFormatter.color_prefix("Warming up the LLM...", "Internal"))
