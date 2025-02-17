@@ -552,7 +552,7 @@ class OutputFormatter:
 
 class ChatFormatter:  # Renamed to be more generic
     def __init__(self, gguf_parser=None):
-        self.gguf_parser = gguf_parser
+        self.gguf_parser = gguf_parser  # Store the parser (might be None initially)
         self.default_template_string = """
         {% if messages[0]['role'] == 'system' %}
             {% set offset = 1 %}
@@ -577,7 +577,9 @@ class ChatFormatter:  # Renamed to be more generic
         {% endif %}
         """
         self.chatml_template = Template(self.default_template_string)
-        self.template = self._get_template()
+        # Don't initialize self.template here!
+        self.template = None # Initialize to None
+
 
 
     def _get_template(self) -> Template:
@@ -587,31 +589,26 @@ class ChatFormatter:  # Renamed to be more generic
             chat_template_str = metadata.get("tokenizer.chat_template")
 
             if chat_template_str:
-                if isinstance(chat_template_str, bytes): #Decode if necessary
+                if isinstance(chat_template_str, bytes):
                     chat_template_str = chat_template_str.decode('utf-8', errors='replace')
-
                 try:
                     print(OutputFormatter.color_prefix(f"Using chat template from GGUF metadata:\n{chat_template_str}", "Internal"))
                     return Template(chat_template_str)
                 except Exception as e:
                     print(OutputFormatter.color_prefix(f"Error creating template from GGUF metadata: {e}. Falling back to ChatML.", "Internal"))
-                    return self.chatml_template # Fallback to ChatML
+                    # Fallback to ChatML is handled below
 
         print(OutputFormatter.color_prefix("Using default ChatML template.", "Internal"))
-        return self.chatml_template
+        return self.chatml_template  # Return the ChatML template
 
 
     def create_prompt(self, messages, add_generation_prompt=True):
         """
-        Creates a prompt using the determined template.
-
-        Args:
-            messages: List of message dictionaries (role, content).
-            add_generation_prompt: Whether to add the assistant turn prompt.
-
-        Returns:
-            Formatted prompt string.
+        Creates a prompt using the determined template.  Template is lazily initialized.
         """
+        if self.template is None:  # Lazily initialize the template
+            self.template = self._get_template()
+
         return self.template.render(messages=messages, add_generation_prompt=add_generation_prompt)
 
 class Watchdog:
@@ -663,6 +660,7 @@ class AIRuntimeManager:
         self.start_time = None
         self.fuzzy_threshold = 0.69
         self.database_manager = database_manager
+        self.gguf_parser: Optional[GGUFParser] = None  # Store GGUF parser here
         self.chat_formatter = ChatFormatter(self.gguf_parser) 
         self.partition_context = None
         self.is_llm_running = False
@@ -677,7 +675,6 @@ class AIRuntimeManager:
         self.json_interpreter = JSONInterpreter(self.invoke_llm)
 
         #GGUF Lowlevel file metadata parser 
-        self.gguf_parser: Optional[GGUFParser] = None  # Store GGUF parser here
 
         # Start the branch_predictor thread
         self.branch_predictor_thread = Thread(target=self.branch_predictor)
