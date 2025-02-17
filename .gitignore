@@ -9,6 +9,7 @@ dist
 .DS_Store
 /release-builds/
 **.wav**
+systemCore/engineMain/reverseEngineeringAssets/models
 *systemCore/src/release-builds*
 **_venv*
 **.venv**
