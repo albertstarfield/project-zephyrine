@@ -3,14 +3,17 @@ import torch
 import torchaudio
 import torchaudio.functional as F
 import numpy as np
-from pedalboard import Pedalboard, Reverb, Limiter, Gain, PitchShift, Resample, Chorus, Delay
+from pedalboard import Pedalboard, Reverb, Limiter, Gain, PitchShift, Resample, Chorus, Delay, Distortion
 import soundfile as sf
 import re
 from IPython.display import display, Audio
 import sys
+import librosa
+from functools import partial
+import scipy.signal as sig
 
-OUTPUT_FILE = "en-test-zeph-profile-v2.mp3"
-
+OUTPUT_FILE = "en-test-zeph-profile-v2-vocaloid.mp3"
+SEMITONES_IN_OCTAVE = 12
 
 class SCLParser:
     def __init__(self, model, device='auto'):
@@ -46,6 +49,55 @@ class SCLParser:
         self.audio_segments = []
         self.original_sf_write = sf.write
         self.captured_audio = None
+
+        # Vocaloid settings
+        self.vocaloid_settings = {
+            'vel': 64,  # Default values (middle of 0-127 range)
+            'dyn': 64,
+            'bre': 0,
+            'bri': 64,
+            'cle': 64,
+            'ope': 64,
+            'gen': 64,
+            'gwl': 0,
+            'xsy': 0,  # 0 = Voicebank1, 127 = Voicebank2
+            'xsy_voicebanks': None, # No cross-synthesis by default
+            'singing': False,   # Whether to apply autotune
+            'key': None,      # Key for autotune (e.g., "C:maj")
+            'correction_method': "closest",  # "closest" or "scale"
+        }
+        print(f"SCLParser: Initial Vocaloid Settings: {self.vocaloid_settings}")
+        self.xsy_profiles = {
+            "Voicebank1": {
+                "description": "Default voice profile.",
+                "eq_curve": [
+                    (30, 0, 3.4), (100, 0, 1.4), (150, 0, 1.4), (250, 0, 1.0),
+                    (350, 0, 1.4), (450, 0, 1.8), (550, 0, 1.4), (2000, 0, 1.0),
+                    (2500, 0, 1.4), (3000, 0, 1.4), (3500, 0, 1.8), (4000, 0, 1.4),
+                    (8000, 0, 1.8), (12000, 0, 1.8), (20000, 0, 1.8)
+                ]
+            },
+            "Voicebank2": {
+                "description": "Brighter, more airy voice profile for cross-synthesis.",
+                "eq_curve": [
+                    (30, 2, 3.4), (100, 3, 1.4), (150, 1, 1.4), (250, 1, 1.0),
+                    (350, -1, 1.4), (450, -2, 1.8), (550, 2, 1.4), (2000, 3, 1.0),
+                    (2500, 4, 1.4), (3000, 3, 1.4), (3500, 2, 1.8), (4000, 1, 1.4),
+                    (8000, 4, 1.8), (12000, 5, 1.8), (20000, 2, 1.8)
+                ]
+            },
+            "Voicebank3": {
+                "description": "Deeper, more resonant voice profile for cross-synthesis.",
+                "eq_curve": [
+                    (30, 4, 3.4), (100, 5, 1.4), (150, 3, 1.4), (250, 2, 1.0),
+                    (350, 1, 1.4), (450, -1, 1.8), (550, -3, 1.4), (2000, -2, 1.0),
+                    (2500, -1, 1.4), (3000, 0, 1.4), (3500, 1, 1.8), (4000, 2, 1.4),
+                    (8000, 1, 1.8), (12000, 0, 1.8), (20000, -1, 1.8)
+                ]
+            }
+        }
+        print(f"SCLParser: XSY Profiles: {self.xsy_profiles}")
+
         print("SCLParser: Initialization complete.")
 
     def _new_sf_write(self, file, data, samplerate, *args, **kwargs):
@@ -58,6 +110,31 @@ class SCLParser:
             self.captured_audio = data.copy()
             print(f"SCLParser: _new_sf_write: Captured audio (ndarray): {self.captured_audio.shape}")
         return self.original_sf_write(file, data, samplerate, *args, **kwargs)
+
+    def detect_pitch_pyin(self, audio, sr, frame_length=2048, hop_length=512, fmin=None, fmax=None):
+        """
+        Detects pitch using the PYIN algorithm.
+        """
+        print(f"SCLParser: detect_pitch_pyin called. Audio shape: {audio.shape}, Sample Rate: {sr}")
+
+        # Ensure mono for PYIN
+        if len(audio.shape) > 1 and audio.shape[0] > 1:  # Check for stereo/multi-channel
+            audio = librosa.to_mono(audio)
+            print("SCLParser: detect_pitch_pyin: Converted audio to mono.")
+        elif len(audio.shape) > 1: #1d array
+            audio = audio[0]
+
+        f0, voiced_flag, voiced_probs = librosa.pyin(
+            audio,
+            fmin=fmin if fmin is not None else librosa.note_to_hz('C2'),
+            fmax=fmax if fmax is not None else librosa.note_to_hz('C7'),
+            sr=sr,
+            frame_length=frame_length,
+            hop_length=hop_length,
+            fill_na=0.0  # Replace unvoiced frames with 0 Hz
+        )
+        print(f"SCLParser: detect_pitch_pyin: Pitch detection complete. f0 shape: {f0.shape}")
+        return f0, voiced_flag, voiced_probs
 
     def parse(self, text, output_path='output.mp3', speaker='EN-US'):
         print(f"SCLParser: parse called. Text: '{text}', Output Path: {output_path}, Speaker: {speaker}")
@@ -73,7 +150,7 @@ class SCLParser:
 
         if self.audio_segments:
             print("SCLParser: parse: Combining audio segments...")
-            final_audio = self.crossfade_segments(self.audio_segments, self.sample_rate)
+            final_audio = self.crossfade_segments(self.audio_segments, self.sample_rate)  # Use the updated crossfade_segments
             print(f"SCLParser: parse: Combined audio shape: {final_audio.shape}")
             final_audio_processed = self.post_process(final_audio)
             print(f"SCLParser: parse: Post-processed audio shape: {final_audio_processed.shape}")
@@ -298,7 +375,66 @@ class SCLParser:
         elif tag_name == 'voice':
             print("SCLParser: apply_settings: 'voice' tag encountered. No specific logic implemented.")
             pass
+
+        elif tag_name == "vocaloid":
+            print(f"SCLParser: apply_settings: 'vocaloid' tag encountered.")
+            for key, value in attrs.items():
+                if key in self.vocaloid_settings:
+                    if key == 'xsy_voicebanks':
+                         # Split voicebanks and check if they are valid profiles
+                        voicebanks = value.split(",")
+                        if all(vb.strip() in self.xsy_profiles for vb in voicebanks):
+                            self.vocaloid_settings[key] = [vb.strip() for vb in voicebanks]
+                            print(f"SCLParser: apply_settings: Vocaloid XSY voicebanks set to: {self.vocaloid_settings[key]}")
+                        else:
+                            print(f"SCLParser: apply_settings: Invalid XSY voicebanks: {value}. Using default.")
+                            self.vocaloid_settings[key] = None # Reset to default
+
+                    elif key == 'xsy':
+                        try:
+                            xsy_val = int(value)
+                            if 0 <= xsy_val <= 127:
+                                self.vocaloid_settings[key] = xsy_val
+                                print(f"SCLParser: apply_settings: Vocaloid XSY set to: {self.vocaloid_settings[key]}")
+                            else:
+                                print(f"SCLParser: apply_settings: Invalid XSY value: {value}.  Must be 0-127. Using default.")
+                        except ValueError:
+                            print(f"SCLParser: apply_settings: Invalid XSY value (not an integer): {value}. Using default.")
+                    elif key == "singing":
+                        self.vocaloid_settings[key] = value.lower() == "true"
+                        print(f"SCLParser: apply_settings: Vocaloid singing set to: {self.vocaloid_settings[key]}")
+                    elif key == "key":
+                        # Validate and format the key string
+                        try:
+                            # Attempt to parse the key to validate it
+                            librosa.key_to_degrees(self._parse_key(value))
+                            self.vocaloid_settings[key] = self._parse_key(value)
+                            print(f"SCLParser: apply_settings: Vocaloid key set to: {self.vocaloid_settings[key]}")
+                        except Exception as e:
+                            print(f"SCLParser: apply_settings: Invalid key: {value}. Error: {e}. Using default.")
+                            self.vocaloid_settings[key] = None
+
+                    elif key == "correction_method":
+                        if value.lower() in ("closest", "scale"):
+                            self.vocaloid_settings[key] = value.lower()
+                            print(f"SCLParser: apply_settings: Vocaloid correction_method set to: {self.vocaloid_settings[key]}")
+                        else:
+                            print(f"SCLParser: apply_settings: Invalid correction_method: {value}. Using default.")
+
+                    else:
+                        try:
+                            # All other vocaloid settings are 0-127 integers
+                            val = int(value)
+                            if 0 <= val <= 127:
+                                self.vocaloid_settings[key] = val
+                                print(f"SCLParser: apply_settings: Vocaloid {key} set to: {self.vocaloid_settings[key]}")
+                            else:
+                                print(f"SCLParser: apply_settings: Invalid {key} value: {value}. Must be 0-127. Using default.")
+                        except ValueError:
+                            print(f"SCLParser: apply_settings: Invalid {key} value (not an integer): {value}. Using default.")
+
         print(f"SCLParser: apply_settings: Current voice settings after applying tag: {self.voice_settings}")
+        print(f"SCLParser: apply_settings: Current vocaloid settings after applying tag: {self.vocaloid_settings}")
 
     def reset_settings(self, tag_name):
         print(f"SCLParser: reset_settings called. Tag Name: {tag_name}")
@@ -307,14 +443,268 @@ class SCLParser:
             self.voice_settings['pitch'] = 0.0
             print(f"SCLParser: reset_settings: Resetting {tag_name}. Voice settings: {self.voice_settings}")
             print(f"  (RESET {tag_name.upper()})")
+        elif tag_name == "vocaloid":
+            print(f"SCLParser: reset_settings: Resetting 'vocaloid' settings.")
+            self.vocaloid_settings = {
+                'vel': 64,
+                'dyn': 64,
+                'bre': 0,
+                'bri': 64,
+                'cle': 64,
+                'ope': 64,
+                'gen': 64,
+                'gwl': 0,
+                'xsy': 0,
+                'xsy_voicebanks': None,
+                'singing': False,
+                'key': None,
+                'correction_method': "closest",
+            }
+            print(f"  (RESET VOCALOID)")
+
+    def _apply_vocaloid_effects(self, audio_np):
+        """Applies Vocaloid effects to the audio."""
+        print(f"SCLParser: _apply_vocaloid_effects called. Input audio shape: {audio_np.shape}")
+
+        # Ensure mono for processing
+        if len(audio_np.shape) > 1 and audio_np.shape[0] > 1:
+            audio_mono = librosa.to_mono(audio_np)
+            print("SCLParser: _apply_vocaloid_effects: Converted to mono for processing.")
+        elif len(audio_np.shape) > 1:
+             audio_mono = audio_np[0]
+        else:
+            audio_mono = audio_np
+
+        sr = self.sample_rate
+        audio_tensor = torch.tensor(audio_mono).unsqueeze(0) # Convert to tensor for torchaudio
+
+        # --- VEL (Velocity) --- Simulate by slightly adjusting speed
+        vel_factor = 1.0 + (self.vocaloid_settings['vel'] - 64) * 0.001  # Small adjustment
+        print(f"SCLParser: _apply_vocaloid_effects: Velocity factor: {vel_factor}")
+        self.voice_settings['rate'] *= vel_factor  # Apply to the overall rate
+        self.voice_settings['rate'] = max(0.5, min(1.1, self.voice_settings['rate'])) #clamp
+
+        # --- DYN (Dynamics) --- Control output volume
+        dyn_gain_db = (self.vocaloid_settings['dyn'] - 64) / 64 * 12  # +/- 12 dB range
+        print(f"SCLParser: _apply_vocaloid_effects: Dynamics gain (dB): {dyn_gain_db}")
+        audio_tensor = F.gain(audio_tensor, dyn_gain_db)
+
+        # --- BRE (Breathiness) --- Add a small amount of noise
+        bre_amount = self.vocaloid_settings['bre'] / 127 * 0.001  # Very subtle noise
+        print(f"SCLParser: _apply_vocaloid_effects: Breathiness amount: {bre_amount}")
+        noise = np.random.normal(0, bre_amount, audio_tensor.shape).astype(np.float32)
+        audio_tensor = audio_tensor + torch.from_numpy(noise)
+
+        # --- BRI (Brightness) --- Use EQ to boost higher frequencies
+        bri_gain = (self.vocaloid_settings['bri'] - 64) / 64 * 6  # +/- 6 dB boost
+        print(f"SCLParser: _apply_vocaloid_effects: Brightness gain (dB): {bri_gain}")
+        audio_tensor = F.equalizer_biquad(audio_tensor, sr, 8000, bri_gain, 1.0)
+
+        # --- CLE (Clearness) --- Use EQ and slight de-essing
+        cle_gain = (self.vocaloid_settings['cle'] - 64) / 64 * 4  # +/- 4 dB
+        print(f"SCLParser: _apply_vocaloid_effects: Clearness gain (dB): {cle_gain}")
+        audio_tensor = F.equalizer_biquad(audio_tensor, sr, 4000, cle_gain, 1.2)
+        # (De-essing would require a more sophisticated approach, possibly a separate plugin)
+
+        # --- OPE (Opening) --- Simulate formant shifts with EQ
+        ope_shift = (self.vocaloid_settings['ope'] - 64) / 64  # -1 to +1 range
+        print(f"SCLParser: _apply_vocaloid_effects: Opening shift: {ope_shift}")
+        # Example formant shift (this is a simplification)
+        if ope_shift > 0:
+            audio_tensor = F.equalizer_biquad(audio_tensor, sr, 1000, ope_shift * 3, 1.5)
+        elif ope_shift < 0:
+            audio_tensor = F.equalizer_biquad(audio_tensor, sr, 500, ope_shift * -3, 1.5)
+
+        # --- GEN (Gender Factor) --- Pitch and formant shift
+        gen_shift = (self.vocaloid_settings['gen'] - 64) / 64 * 6  # +/- 6 semitones
+        print(f"SCLParser: _apply_vocaloid_effects: Gender shift (semitones): {gen_shift}")
+        # We'll handle the pitch shift in PSOLA.  Formant shift here:
+        if gen_shift > 0:
+            audio_tensor = F.equalizer_biquad(audio_tensor, sr, 2000, gen_shift, 1.2)
+        elif gen_shift < 0:
+            audio_tensor = F.equalizer_biquad(audio_tensor, sr, 800, gen_shift * -1, 1.2)
+        self.voice_settings['pitch'] += gen_shift
+
+
+        # --- GWL (Growl) --- Distortion, pitch modulation, and EQ
+        gwl_amount = self.vocaloid_settings['gwl'] / 127
+        print(f"SCLParser: _apply_vocaloid_effects: Growl amount: {gwl_amount}")
+        if gwl_amount > 0:
+            # 1. Distortion (Pedalboard)
+            board = Pedalboard([Distortion(drive_db=gwl_amount * 20)])  # Up to 20 dB drive
+            audio_np_distorted = board(audio_tensor.cpu().numpy(), sr)
+
+            # 2. Pitch modulation (very subtle)
+            mod_freq = 5 + gwl_amount * 10  # 5-15 Hz modulation
+            mod_depth = 0.01 + gwl_amount * 0.02  # 1-3% modulation depth
+            modulation = (1 + mod_depth * np.sin(2 * np.pi * mod_freq * np.arange(len(audio_np_distorted[0])) / sr)).astype(np.float32)
+            audio_np_distorted = audio_np_distorted * modulation
+
+            # 3. EQ (emphasize lower frequencies)
+            audio_tensor = torch.tensor(audio_np_distorted)
+            audio_tensor = F.equalizer_biquad(audio_tensor, sr, 200, gwl_amount * 5, 1.8)
+            audio_tensor = F.equalizer_biquad(audio_tensor, sr, 500, gwl_amount * -3, 1.4)
+
+
+        # --- XSY (Cross-Synthesis) ---
+        if self.vocaloid_settings['xsy_voicebanks']:
+            print(f"SCLParser: _apply_vocaloid_effects: Applying XSY between {self.vocaloid_settings['xsy_voicebanks']}")
+            voicebank1, voicebank2 = self.vocaloid_settings['xsy_voicebanks']
+            xsy_blend = self.vocaloid_settings['xsy'] / 127  # 0.0 to 1.0
+
+            # Apply EQ for Voicebank 1
+            audio_tensor_vb1 = audio_tensor.clone()  # Start with a copy
+            for freq, gain, q in self.xsy_profiles[voicebank1]["eq_curve"]:
+                audio_tensor_vb1 = F.equalizer_biquad(audio_tensor_vb1, sr, freq, gain, q)
+
+            # Apply EQ for Voicebank 2
+            audio_tensor_vb2 = audio_tensor.clone() # Start with a copy
+            for freq, gain, q in self.xsy_profiles[voicebank2]["eq_curve"]:
+                audio_tensor_vb2 = F.equalizer_biquad(audio_tensor_vb2, sr, freq, gain, q)
+
+            # Blend the two EQ'd signals
+            audio_tensor = (1 - xsy_blend) * audio_tensor_vb1 + xsy_blend * audio_tensor_vb2
+
+        return audio_tensor.cpu().numpy().flatten()
+
+    def _degrees_from(self, scale: str):
+        """Return the pitch classes (degrees) that correspond to the given scale"""
+        degrees = librosa.key_to_degrees(scale)
+        # To properly perform pitch rounding to the nearest degree from the scale, we need to repeat
+        # the first degree raised by an octave. Otherwise, pitches slightly lower than the base degree
+        # would be incorrectly assigned.
+        degrees = np.concatenate((degrees, [degrees[0] + SEMITONES_IN_OCTAVE]))
+        return degrees
+
+    
+
+    def _closest_pitch_from_scale(self, f0, scale):
+        """Return the pitch closest to f0 that belongs to the given scale"""
+        # Preserve nan.
+        if np.isnan(f0):
+            return np.nan
+        degrees = self._degrees_from(scale)
+        midi_note = librosa.hz_to_midi(f0)
+        # Subtract the multiplicities of 12 so that we have the real-valued pitch class of the
+        # input pitch.
+        degree = midi_note % SEMITONES_IN_OCTAVE
+        # Find the closest pitch class from the scale.
+        degree_id = np.argmin(np.abs(degrees - degree))
+        # Calculate the difference between the input pitch class and the desired pitch class.
+        degree_difference = degree - degrees[degree_id]
+        # Shift the input MIDI note number by the calculated difference.
+        midi_note -= degree_difference
+        # Convert to Hz.
+        return librosa.midi_to_hz(midi_note)
+
+    def _parse_key(self, key_str):
+        """Parses the key string into the format required by librosa."""
+        print(f"SCLParser: _parse_key called. Input: '{key_str}'")
+        match = re.match(r"([A-Ga-g][#b♯♭]?) ?(.*)", key_str)
+        if not match:
+            raise ValueError(f"Invalid key format: {key_str}")
+
+        tonic = match.group(1).upper()  # Ensure tonic is uppercase
+        mode = match.group(2).lower()  # Ensure mode is lowercase
+
+        # Replace unicode sharp/flat with ASCII equivalents
+        tonic = tonic.replace("♯", "#").replace("♭", "b")
+        mode = mode.replace("♯", "#").replace("♭", "b")
+
+        # Mode abbreviations and full names
+        mode_map = {
+            "maj": "maj", "major": "maj",
+            "min": "min", "minor": "min",
+            "ion": "ion", "ionian": "ion",
+            "dor": "dor", "dorian": "dor",
+            "phr": "phr", "phrygian": "phr",
+            "lyd": "lyd", "lydian": "lyd",
+            "mix": "mix", "mixolydian": "mix",
+            "aeo": "aeo", "aeolian": "aeo",
+            "loc": "loc", "locrian": "loc",
+        }
+        mode = mode_map.get(mode, mode) # Get correct mode abbreviation
+
+        result = f"{tonic}:{mode}"
+        print(f"SCLParser: _parse_key: Returning: '{result}'")
+        return result
+
+    def _closest_pitch(self, f0):
+        """Round the given pitch values to the nearest MIDI note numbers"""
+        midi_note = np.around(librosa.hz_to_midi(f0))
+        # To preserve the nan values.
+        nan_indices = np.isnan(f0)
+        # midi_note[nan_indices] = np.nan  # Incorrect: Cannot assign to a float array
+        # Convert back to Hz.
+        result = librosa.midi_to_hz(midi_note)  # Correct: Modify the result, not the intermediate midi_note
+        result = np.where(nan_indices, np.nan, result) #  And assign nan to the result Hz values
+        return result
+
+
+    def _autotune(self, audio, sr, f0, voiced_flag):
+        """Applies autotune to the audio based on detected pitch."""
+        print(f"SCLParser: _autotune called. Singing: {self.vocaloid_settings['singing']}, Key: {self.vocaloid_settings['key']}, Method: {self.vocaloid_settings['correction_method']}")
+
+        if not self.vocaloid_settings['singing']:
+            print("SCLParser: _autotune: Singing is disabled. Returning original audio.")
+            return audio
+
+        if self.vocaloid_settings['key'] is None:
+            print("SCLParser: _autotune: Key is not specified.  Using 'closest' pitch correction.")
+            correction_function = self._closest_pitch
+        else:
+            print(f"SCLParser: _autotune: Using key: {self.vocaloid_settings['key']}")
+            if self.vocaloid_settings['correction_method'] == 'scale':
+                correction_function = partial(self._closest_pitch_from_scale, scale=self.vocaloid_settings['key'])
+            else:  # Default to 'closest' even if an invalid method is specified
+                correction_function = self._closest_pitch
+
+        # Apply the chosen adjustment strategy to the pitch, but only where voiced.
+        corrected_f0 = np.copy(f0)  # Work on a copy to avoid modifying the original f0
+        for i in range(len(f0)):
+            if voiced_flag[i]:
+                corrected_f0[i] = correction_function(f0[i])
+
+        # Create a pitch-shifted audio signal using the corrected pitch.  This replaces PSOLA.
+        print("SCLParser: _autotune: Applying pitch shift based on corrected f0.")
+        pitch_shift_factor = corrected_f0 / f0
+        # Replace inf and nan with 1.0 (no shift) to avoid errors
+        pitch_shift_factor[np.isinf(pitch_shift_factor)] = 1.0
+        pitch_shift_factor[np.isnan(pitch_shift_factor)] = 1.0
+
+        # Use librosa.effects.pitch_shift, applying it per frame.
+        hop_length = 512  # Must match hop_length used in detect_pitch_pyin
+        shifted_audio = np.zeros_like(audio)
+        for i in range(len(pitch_shift_factor)):
+            start_index = i * hop_length
+            end_index = min((i + 1) * hop_length, len(audio))  # Handle last frame
+            frame = audio[start_index:end_index]
+            # Apply pitch shift to this frame.
+            shifted_frame = librosa.effects.pitch_shift(frame, sr=sr, n_steps=12 * np.log2(pitch_shift_factor[i]))
+            # Place the shifted frame into the output audio, handling length differences
+            shifted_len = len(shifted_frame)
+            if shifted_len <= (end_index-start_index):
+                shifted_audio[start_index:start_index + shifted_len] = shifted_frame
+            else: #rare case
+                shifted_audio[start_index:end_index] = shifted_frame[:end_index-start_index]
+
+
+        print("SCLParser: _autotune: Pitch shifting complete.")
+        return shifted_audio
+
 
     def speak_with_settings(self, text, speaker):
         print(f"SCLParser: speak_with_settings called. Text: '{text}', Speaker: {speaker}, Settings: {self.voice_settings}")
         if not text.strip():
             print("SCLParser: speak_with_settings: Text is empty. Skipping.")
             return
+
         print(f"Speaking: '{text}' with settings: {self.voice_settings}")
         temp_filepath = "temp_audio.wav"
+        
+        # Apply Vocaloid effects *before* TTS
+        modified_audio = self._apply_vocaloid_effects(np.zeros((1,self.sample_rate))) # Dummy audio, because we modify settings not audio
+
         try:
             self.model.tts_to_file(text, self.speaker_ids[speaker], temp_filepath, speed=self.voice_settings['rate'])
         except Exception as e:
@@ -328,90 +718,119 @@ class SCLParser:
             if len(audio_np.shape) == 1:
                 audio_np = np.expand_dims(audio_np, axis=0)
                 print("SCLParser: speak_with_settings: Expanded audio to shape: {audio_np.shape}")
-            audio_tensor = torch.from_numpy(audio_np)
 
-            # --- Chunked Two-Stage Resampling ---
-            intermediate_sample_rate = 32000  # Lower intermediate rate
-            chunk_size = 44100 # Process in 1-second chunks (at 44.1kHz) - adjust as needed
+            # Ensure mono for pitch detection and autotune
+            if len(audio_np.shape) > 1 and audio_np.shape[0] > 1:
+                audio_np = librosa.to_mono(audio_np)
+                print("SCLParser: speak_with_settings: Converted to mono.")
+            elif len(audio_np.shape) > 1:
+                audio_np = audio_np[0]
 
-            processed_chunks = []
-            for i in range(0, audio_tensor.shape[1], chunk_size):
-                chunk = audio_tensor[:, i:i + chunk_size]
+            # --- Pitch Detection (PYIN) ---
+            hop_length = 512
+            frame_length = 2048
+            f0, voiced_flag, _ = self.detect_pitch_pyin(audio_np, self.sample_rate, hop_length=hop_length, frame_length=frame_length)
 
-                # 1. Downsample (if needed)
-                if self.sample_rate > intermediate_sample_rate:
-                    print(f"SCLParser: speak_with_settings: Downsampling chunk {i//chunk_size + 1} from {self.sample_rate} to {intermediate_sample_rate}")
-                    chunk = F.resample(chunk, self.sample_rate, intermediate_sample_rate)
-                    current_sample_rate = intermediate_sample_rate
-                else:
-                    current_sample_rate = self.sample_rate
+            # --- Autotune (replaces PSOLA for pitch shifting) ---
+            if self.vocaloid_settings['singing']:
+                audio_np = self._autotune(audio_np, self.sample_rate, f0, voiced_flag)
+            # --- Constant Pitch Shift (if not singing) ---
+            elif self.voice_settings['pitch'] != 0.0:
+                print(f"SCLParser: speak_with_settings: Applying constant pitch shift: {self.voice_settings['pitch']} semitones")
+                audio_np = librosa.effects.pitch_shift(audio_np, sr=self.sample_rate, n_steps=self.voice_settings['pitch'])
 
-                # 2. Resample to Target (Pitch Shift)
-                if self.voice_settings['pitch'] != 0.0:
-                    print(f"SCLParser: speak_with_settings: Applying pitch shift to chunk {i//chunk_size + 1}: {self.voice_settings['pitch']}")
-                    target_sample_rate = int(current_sample_rate * (2 ** (self.voice_settings['pitch'] / 12)))
-                    print(f"SCLParser: speak_with_settings: Target sample rate for chunk {i//chunk_size+1}: {target_sample_rate}")
-                    chunk = F.resample(chunk, current_sample_rate, target_sample_rate)
-                processed_chunks.append(chunk)
-            
-            # Concatenate the processed chunks
-            audio_tensor = torch.cat(processed_chunks, dim=1)
-
-            audio_np = audio_tensor.numpy()
-            print(f"SCLParser: speak_with_settings: Audio shape after resampling: {audio_np.shape}")
-            # --- End Chunked Two-Stage Resampling ---
+            # --- End Autotune/Pitch Shift ---
 
             self.audio_segments.append(audio_np)
-            print(f"SCLParser: speak_with_settings: Added audio segment to list.  Total segments: {len(self.audio_segments)}")
+            print(f"SCLParser: speak_with_settings: Added audio segment to list. Total segments: {len(self.audio_segments)}")
         else:
             print("SCLParser: speak_with_settings: Error: Audio data was not captured.")
             return
 
-    def crossfade_segments(self, segments, sample_rate, crossfade_ms=30):
+    def crossfade_segments(self, segments, sample_rate, crossfade_ms=10):
+        """
+        Combines audio segments with crossfading, handling edge cases and silences.
+
+        This improved version addresses the "weird silence" issue by:
+        1.  Reducing the default crossfade duration to 10ms (adjustable).
+        2.  Checking for and removing leading/trailing silence *before* crossfading.
+        3.  Using a shorter, more precise silence detection threshold.
+
+        Args:
+            segments (list): List of NumPy arrays (audio segments).
+            sample_rate (int):  The sample rate of the audio.
+            crossfade_ms (int): Crossfade duration in milliseconds.
+        """
+
         print(f"SCLParser: crossfade_segments called. Number of segments: {len(segments)}, Sample Rate: {sample_rate}, Crossfade (ms): {crossfade_ms}")
         crossfade_samples = int(sample_rate * crossfade_ms / 1000)
         print(f"SCLParser: crossfade_segments: Crossfade samples: {crossfade_samples}")
+
         if not segments:
-            print("SCLParser: crossfade_segments: No segments to crossfade. Returning empty array.")
+            print("SCLParser: crossfade_segments: No segments. Returning empty array.")
             return np.array([], dtype=np.float32)
-        combined = segments[0]
+
+        # Trim leading/trailing silence from *each* segment *before* combining
+        trimmed_segments = []
+        for seg in segments:
+            if len(seg.shape) > 1: #stereo
+                mono_seg = librosa.to_mono(seg)  # Temporary mono for silence detection
+            else: #already mono
+                mono_seg = seg
+
+            # Find first and last non-silent samples (more precise threshold)
+            non_silent_indices = np.where(np.abs(mono_seg) > 1e-5)[0]
+
+            if len(non_silent_indices) > 0:
+                start = non_silent_indices[0]
+                end = non_silent_indices[-1] + 1  # Include the last non-silent sample
+                trimmed_seg = seg[:, start:end] if len(seg.shape) > 1 else seg[start:end]
+                trimmed_segments.append(trimmed_seg)
+            else:
+                # Segment is entirely silent, keep it as is (might be intentional pause)
+                trimmed_segments.append(seg)
+
+
+        if not trimmed_segments:
+            print("SCLParser: crossfade_segments: All segments were completely silent after trimming. Returning empty array.")
+            return np.array([], dtype=np.float32)
+
+
+        combined = trimmed_segments[0]
         print(f"SCLParser: crossfade_segments: Initial combined shape: {combined.shape}")
-        for i, seg in enumerate(segments[1:]):
-            print(f"SCLParser: crossfade_segments: Processing segment {i+1}/{len(segments[1:])}")
+
+        for i, seg in enumerate(trimmed_segments[1:]):
+            print(f"SCLParser: crossfade_segments: Processing segment {i+1}/{len(trimmed_segments[1:])}")
 
             if len(combined.shape) == 1:
                 combined = np.expand_dims(combined, axis=0)
-                print(f"SCLParser: crossfade_segments: Expanded 'combined' to shape: {combined.shape}")
             if len(seg.shape) == 1:
                 seg = np.expand_dims(seg, axis=0)
-                print(f"SCLParser: crossfade_segments: Expanded 'seg' to shape: {seg.shape}")
+
             if combined.shape[0] == 1 and seg.shape[0] == 1:
                 combined = np.repeat(combined, 2, axis=0)
                 seg = np.repeat(seg, 2, axis=0)
-                print(f"SCLParser: crossfade_segments: Both 'combined' and 'seg' were mono. Expanded to stereo.")
             elif combined.shape[0] == 2 and seg.shape[0] == 1:
                 seg = np.repeat(seg, 2, axis=0)
-                print(f"SCLParser: crossfade_segments: 'combined' was stereo, 'seg' was mono. Expanded 'seg' to stereo.")
             elif combined.shape[0] == 1 and seg.shape[0] == 2:
                 combined = np.repeat(combined, 2, axis=0)
-                print(f"SCLParser: crossfade_segments: 'combined' was mono, 'seg' was stereo. Expanded 'combined' to stereo.")
-
 
             if combined.shape[1] < crossfade_samples or seg.shape[1] < crossfade_samples:
                 print("SCLParser: crossfade_segments: Segment or combined is shorter than crossfade length. Concatenating directly.")
                 combined = np.concatenate((combined, seg), axis=1)
-                print(f"SCLParser: crossfade_segments: New combined shape: {combined.shape}")
-
             else:
                 print("SCLParser: crossfade_segments: Applying crossfade...")
                 window = np.hanning(2 * crossfade_samples)
                 fade_out = window[:crossfade_samples]
                 fade_in = window[crossfade_samples:]
+
                 combined_tail = combined[:, -crossfade_samples:] * fade_out
                 seg_head = seg[:, :crossfade_samples] * fade_in
                 crossfaded = combined_tail + seg_head
                 combined = np.concatenate((combined[:, :-crossfade_samples], crossfaded, seg[:, crossfade_samples:]), axis=1)
-                print(f"SCLParser: crossfade_segments: New combined shape: {combined.shape}")
+
+            print(f"SCLParser: crossfade_segments: New combined shape: {combined.shape}")
+
         print(f"SCLParser: crossfade_segments: Returning combined audio: {combined.shape}")
         return combined
 
@@ -433,10 +852,10 @@ class SCLParser:
 
         board = Pedalboard([
             Resample(target_sample_rate=44100.0, quality=Resample.Quality.WindowedSinc256),
-            Reverb(room_size=0.9, damping=0.4, wet_level=0.00811, dry_level=0.7),
+            Reverb(room_size=0.9, damping=0.7, wet_level=0.00411, dry_level=0.9),
             Limiter(threshold_db=-2, release_ms=1000),
             Chorus(rate_hz=0.4, depth=0.25, centre_delay_ms=7.0, feedback=0.0, mix=0.02),
-            Delay(delay_seconds=1, feedback=0.1, mix=0.008),
+            Delay(delay_seconds=0.5, feedback=0.01, mix=0.0002),
             Gain(gain_db=-5)
         ])
         print("SCLParser: post_process: Applying Pedalboard effects...")
@@ -448,18 +867,19 @@ class SCLParser:
         print("SCLParser: post_process: Applying EQ...")
         audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=30, gain=5, Q=3.4)
         audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=100, gain=4, Q=1.4)
-        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=150, gain=4.5, Q=1.4)
-        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=250, gain=3, Q=1.0)
-        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=350, gain=5, Q=1.4)
+        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=150, gain=1.5, Q=1.4)
+        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=250, gain=2, Q=1.0)
+        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=350, gain=2, Q=1.4)
         audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=450, gain=2, Q=1.8)
         audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=550, gain=-2, Q=1.4)
-        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=2000, gain=4, Q=1.0)
-        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=2500, gain=4, Q=1.4)
+        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=2000, gain=2, Q=1.0)
+        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=2500, gain=3, Q=1.4)
         audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=3000, gain=2, Q=1.4)
         audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=3500, gain=4, Q=1.8)
-        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=4000, gain=8, Q=1.4)
-        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=8000, gain=7, Q=1.8)
-        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=12000, gain=7, Q=1.8)
+        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=4000, gain=3, Q=1.4)
+        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=8000, gain=3, Q=1.8)
+        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=12000, gain=3, Q=1.8)
+        audio_tensor = F.equalizer_biquad(audio_tensor, sample_rate, center_freq=20000, gain=1, Q=1.8)
         print(f"SCLParser: post_process: Audio shape after EQ: {audio_tensor.shape}")
 
         # Add noise *after* EQ
@@ -523,6 +943,8 @@ class SCLParser:
             except ValueError:
                 print("SCLParser: parse_pitch: Invalid pitch value. Returning 0.0")
                 return 0.0
+
+
 if __name__ == '__main__':
     device = 'auto'
     print(f"Main: Setting device to: {device}")
@@ -531,25 +953,83 @@ if __name__ == '__main__':
     parser = SCLParser(model, device=device)
     print("Main: SCLParser initialized.")
     text = """
-[prosody rate="medium"]Once upon a time, in a kingdom crafted from crystallized starlight and rivers of liquid moonlight, lived a princess named Lyra.  She wasn't just any princess; she could speak to comets and weave tapestries from captured rainbows.[/prosody] [pause duration="short"]
-[prosody rate="medium"]One day, a shadow fell upon the starlight kingdom.  Not a literal shadow, but a creeping silence.  The comets stopped singing, the rainbows faded, and the moon-rivers turned dull. Lyra, heartbroken, felt her own magic weakening.[/prosody] [pause duration="medium"]
-[prosody rate="slow" pitch="low"]She journeyed to the Whispering Falls, a place said to hold the echoes of creation. There, an ancient voice, the spirit of the First Star, told her the silence came from a forgotten melody, a song of pure joy that had been lost to time.  Only Lyra, with her unique gifts, could find it.[/prosody] [pause duration="short"]
-[prosody rate="medium"]Lyra, guided by a shimmering, feather-light wisp of the First Star's essence, traveled through dimensions.  She danced with nebulae, befriended sentient constellations, and learned the language of black holes.  Finally, in a realm made of pure, unadulterated wonder, she found it – a tiny, glowing orb humming with the lost melody.[/prosody][pause duration="short"]
-[prosody rate="medium" pitch="high"]With tears of joy streaming down her face, Lyra sang the melody back to her kingdom.  The starlight blazed brighter, the moon-rivers surged with renewed vigor, the comets burst into a symphony of cosmic proportions, and the rainbows danced with an unparalleled vibrancy. The kingdom, and Lyra's magic, were restored, more vibrant than ever before.[/prosody]
+[prosody rate="medium"]This is a demonstration of the SCL parser's capabilities.[/prosody]
+[pause duration="500"]
+
+[prosody rate="slow" pitch="-3"]Here's an example of slow, low-pitched speech. Notice the difference in both speed and intonation.[/prosody]
+[pause duration="short"]
+
+[prosody rate="fast" pitch="2.5"]And now, some fast, high-pitched speech!  It's almost like a chipmunk![/prosody]
+[pause duration="long"]
+
+[emphasis level="strong"]This word is strongly emphasized![/emphasis]
+[pause duration="200"]
+[emphasis level="moderate"]This phrase has moderate emphasis.[/emphasis]
+[pause duration="x-long"]
+
+[emotional state="excited"]Wow, this is incredibly exciting! I can't believe how well this works![/emotional]
+[pause duration="short"]
+[emotional state="somber" rate="0.8" pitch="-1"]This is a very somber and sad statement.  The voice should reflect the emotion.[/emotional]
+[pause duration="medium"]
+
+[vocaloid vel="75" dyn="85" bre="10" bri="68" cle="60" ope="70" gen="-5" gwl="20" xsy="50" xsy_voicebanks="Voicebank1,Voicebank2"]This section uses Vocaloid parameters to create a slightly robotic, stylized voice. We're blending Voicebank1 and Voicebank2.[/vocaloid]
+[pause duration="1000"]
+
+[vocaloid vel="60" dyn="70" bre="0" bri="50" cle="80" ope="40" gen="10" gwl="0" xsy="100" xsy_voicebanks="Voicebank2,Voicebank3"]Here's another Vocaloid example, with different settings and using Voicebank2 and Voicebank3 for a brighter, clearer sound with a higher gender factor.[/vocaloid]
+
+[pause duration="short"]
+Let's try some singing!
+[pause duration="short"]
+
+[vocaloid vel=80 dyn=100 gen=-5]
+[prosody rate="0.6" pitch="0"]Do [/prosody][pause duration=100][prosody rate="0.6" pitch="2"]Re [/prosody][pause duration=100]
+[prosody rate="0.6" pitch="4"]Mi [/prosody][pause duration=100][prosody rate="0.6" pitch="5"]Fa [/prosody][pause duration=100]
+[prosody rate="0.6" pitch="7"]So [/prosody][pause duration=100][prosody rate="0.6" pitch="9"]La [/prosody][pause duration=100]
+[prosody rate="0.6" pitch="11"]Ti [/prosody][pause duration=100][prosody rate="0.6" pitch="12"]Do![/prosody]
+[/vocaloid]
+
+[pause duration="medium"]
+
+[vocaloid vel=90 dyn=95 gen=5]
+[prosody rate="0.7" pitch="5"]G [/prosody][pause duration=150] [prosody rate=0.7 pitch="7"]A [/prosody] [pause duration=150]
+[prosody rate="0.7" pitch="9"]B [/prosody][pause duration=150] [prosody rate=0.7 pitch="10"]C# [/prosody][pause duration=150]
+[prosody rate="0.7" pitch="12"]D [/prosody][pause duration=150] [prosody rate="0.7" pitch="14"]E [/prosody] [pause duration=150]
+[prosody rate="0.7" pitch="16"]F# [/prosody][pause duration=150] [prosody rate="0.7" pitch="17"]G# [/prosody]
+[/vocaloid]
+
+[pause duration="medium"]
+
+[vocaloid vel=85 dyn=105 gen=-2]
+[prosody rate=0.8 pitch="3"]Bb [/prosody][pause duration=200]
+[prosody rate=0.8 pitch="5"]C [/prosody][pause duration=200]
+[prosody rate=0.8 pitch="7"]D [/prosody][pause duration=200]
+[prosody rate=0.8 pitch="8"]Eb [/prosody][pause duration=200]
+[prosody rate=0.8 pitch="10"]F [/prosody][pause duration=200]
+[prosody rate=0.8 pitch="12"]G [/prosody][pause duration=200]
+[prosody rate=0.8 pitch="14"]A [/prosody][pause duration=200]
+[prosody rate=0.8 pitch="15"]Bb[/prosody]
+[/vocaloid]
+[pause duration="medium"]
+This concludes the demonstration.
 """
-
-
 
     print(f"Main: Input text: \n{text}")
     parser.parse(text, output_path=OUTPUT_FILE)
     print("Main: Parsing complete.")
 
 
+
+
+
+
+
+
 """
     A parser for a custom Speech Control Language (SCL) that allows fine-grained
     control over text-to-speech (TTS) output using the melo library.  SCL
     provides tags for controlling prosody (rate and pitch), inserting pauses,
-    adding emphasis, and simulating emotional tones.
+    adding emphasis, simulating emotional tones, and applying Vocaloid-style
+    voice effects.
 
     Args:
         model (TTS): The melo TTS model instance.
@@ -567,14 +1047,18 @@ if __name__ == '__main__':
         audio_segments (list): A list to store generated audio segments.
         original_sf_write (function):  The original soundfile.write function.
         captured_audio (np.ndarray): Stores the captured audio data from the TTS engine.
+        vocaloid_settings (dict): Dictionary of Vocaloid parameter settings.
+        xsy_profiles (dict): Dictionary of EQ profiles for Vocaloid cross-synthesis.
 
     SCL Syntax:
 
-    The SCL uses square bracket tags to control the speech output.  Tags can be nested
-    (though nesting is automatically flattened), and closing tags reset the settings
-    applied by the corresponding opening tag.
+    The SCL uses square bracket tags to control the speech output.  Tags can be
+    nested (though nesting is automatically flattened), and closing tags reset
+    the settings applied by the corresponding opening tag.  All tags are
+    case-insensitive (e.g., `[Prosody]` is the same as `[prosody]`).
 
     1. Prosody Tag: `[prosody rate="..." pitch="..."]`
+
         - Controls the speaking rate and pitch.
         - Attributes:
             - `rate` (optional):  Sets the speaking rate.
@@ -588,53 +1072,113 @@ if __name__ == '__main__':
                 - Default: "medium" (0.0 semitones)
         - Closing Tag: `[/prosody]` Resets rate and pitch to their default values (rate=1.0, pitch=0.0).
 
+        Example:
+        ```
+        [prosody rate="slow" pitch="-2"]This is slow and low-pitched speech.[/prosody]
+        [prosody rate="1.2" pitch="50%"]This is faster and higher-pitched.[/prosody]
+        ```
+
     2. Pause Tag: `[pause duration="..."]`
+
         - Inserts a pause in the speech.
         - Attributes:
             - `duration` (required): Specifies the pause duration.
                 - Keywords: "short" (250ms), "medium" (500ms), "long" (1000ms), "x-long" (1500ms)
-                - Numeric values:  Integers representing milliseconds (e.g., 300, 750).
+                - Numeric values:  Integers representing milliseconds (e.g., 300, 750).  You can also include "ms" (e.g., "200ms").
         - This tag does not have a closing tag.
 
+        Example:
+        ```
+        [pause duration="short"]  // Short pause (250ms)
+        [pause duration="1000"] // Long pause (1000ms)
+        [pause duration="750ms"] // Pause of 750ms
+        ```
+
     3. Emphasis Tag: `[emphasis level="..." pitch="..."]`
+
         - Adds emphasis to a word or phrase.  Emphasis is achieved by modifying both rate and pitch.
         - Attributes:
             - `level` (optional): The level of emphasis.
                 - Keywords: "strong", "moderate", "reduced"
                 - Default: "moderate"
-            - `pitch` (optional) Override the default pitch.
-                - Keywords: "x-low", "low", "medium", "high", "x-high"
-                - Numeric values:  Floating-point numbers representing semitone shifts (e.g., -2.0, 1.5).
-                - Percentage values: Strings ending with "%" (e.g., "50%", "-20%").  These are converted to semitone shifts (100% = 12 semitones).
+            - `pitch` (optional): Overrides the default pitch adjustment for the given emphasis level.  Uses the same values as the `pitch` attribute in the `prosody` tag.
         - Closing Tag: `[/emphasis]` Resets rate and pitch to their default values.
 
+        Example:
+        ```
+        [emphasis level="strong"]This is emphasized![/emphasis]
+        [emphasis level="reduced" pitch="low"]This is less emphasized.[/emphasis]
+        ```
+
     4. Emotional Tag: `[emotional state="..." rate="..." pitch="..."]`
+
         - Adjusts the voice to convey emotion.
         - Attributes:
             - `state` (optional): The emotional state.
                 - Keywords: "excited", "somber", "neutral"
                 - Default: "neutral"
-            - `rate` (optional):  Sets the speaking rate.
-                - Keywords: "x-slow", "slow", "medium", "fast", "x-fast"
-                - Numeric values:  Floating-point numbers (e.g., 0.8, 1.2).  Values are clamped between 0.5 and 1.1.
-            - `pitch` (optional): Sets the pitch.
-                - Keywords: "x-low", "low", "medium", "high", "x-high"
-                - Numeric values:  Floating-point numbers representing semitone shifts (e.g., -2.0, 1.5).
-                - Percentage values: Strings ending with "%" (e.g., "50%", "-20%").
+            - `rate` (optional): Overrides the default rate adjustment for the given emotional state.  Uses the same values as the `rate` attribute in the `prosody` tag.
+            - `pitch` (optional): Overrides the default pitch adjustment for the given emotional state. Uses the same values as the `pitch` attribute in the `prosody` tag.
         - Closing Tag: `[/emotional]` Resets rate and pitch to their default values.
         - If `rate` or `pitch` are not provided, default values based on the `state` are used.
 
-    5. `say-as` and `voice` Tags: `[say-as ...]` and `[voice ...]`
+        Example:
+        ```
+        [emotional state="excited" rate="1.2"]This is exciting![/emotional]
+        [emotional state="somber"]This is somber.[/emotional]
+        ```
+
+    5. Vocaloid Tag: `[vocaloid vel="..." dyn="..." bre="..." bri="..." cle="..." ope="..." gen="..." gwl="..." xsy="..." xsy_voicebanks="..."]`
+
+        - Applies Vocaloid-style voice effects.  These effects are applied *before* the TTS engine generates the audio, allowing for a wide range of vocal modifications.
+        - Attributes:
+            - `vel` (Velocity):  Simulates vocal velocity (0-127, default 64).  Higher values can make the voice sound more forceful.
+            - `dyn` (Dynamics): Controls the output volume (0-127, default 64).
+            - `bre` (Breathiness): Adds a subtle breathy quality (0-127, default 0).
+            - `bri` (Brightness):  Increases the high-frequency content (0-127, default 64).
+            - `cle` (Clearness):  Adjusts the clarity of the voice (0-127, default 64).
+            - `ope` (Opening): Simulates vocal tract opening (0-127, default 64).
+            - `gen` (Gender):  Shifts the perceived gender of the voice (-127 to 127, default 64, negative values for more masculine, positive for more feminine).
+            - `gwl` (Growl):  Adds a growl effect (0-127, default 0).
+            - `xsy` (Cross-Synthesis): Blends between two voicebanks (0-127, default 0, 0=Voicebank1, 127=Voicebank2).
+            - `xsy_voicebanks`:  Specifies the two voicebanks to use for cross-synthesis (comma-separated, e.g., "Voicebank1, Voicebank2").  Available voicebanks are "Voicebank1", "Voicebank2", and "Voicebank3".
+        - Closing Tag: `[/vocaloid]` Resets all Vocaloid parameters to their default values.
+
+        Example:
+        ```
+        [vocaloid vel="80" dyn="90" bre="20" bri="74" cle="54" ope="74" gen="-20" gwl="40" xsy="64" xsy_voicebanks="Voicebank1,Voicebank2"]This has Vocaloid effects.[/vocaloid]
+        [vocaloid xsy="127" xsy_voicebanks="Voicebank2,Voicebank3"]This uses cross-synthesis.[/vocaloid]
+        ```
+
+    6. `say-as` and `voice` Tags: `[say-as ...]` and `[voice ...]`
+
         - These tags are recognized but do not have any implemented functionality.
         - They are placeholders for future extensions.
 
-    Example:
+    Combining Tags:
 
+    You can combine multiple tags to create complex effects. For example, you can use `[prosody]` to set the overall rate and pitch, and then use `[emphasis]` to emphasize specific words within that prosodic context.  Tags are processed sequentially, so later tags override earlier ones within the same segment.
+
+    Example:
     ```
-    [prosody rate="slow" pitch="-2"]This is slow and low-pitched speech.[/prosody]
-    [pause duration="medium"]
-    [emphasis level="strong"]This is emphasized![/emphasis]
-    [emotional state="excited" rate="1.2"]This is exciting![/emotional]
-    This is back to normal.
+    [prosody rate="slow" pitch="-1"]This is slow speech. [emphasis level="strong"]This word is emphasized![/emphasis] And this is back to slow.[/prosody]
     ```
-    """
+
+    Pitch Shifting:
+
+    Pitch shifting is implemented using the `rubberband` library, which provides high-quality pitch shifting. If you intend to use pitch shifting, make sure to install `pyrubberband`:
+
+    ```bash
+    pip install pyrubberband
+    ```
+
+    If `pyrubberband` is not installed, the parser will still function, but pitch-shifting tags will not have any effect, and a warning message will be printed.
+
+    Example combining various features (for a singing-like effect):
+    ```
+     [vocaloid vel="85" dyn="95" bre="5" bri="80" cle="55" ope="75" gen="-2" gwl="0" xsy="20" xsy_voicebanks="Voicebank1,Voicebank3"]
+      [prosody rate="medium" pitch="x-high"]Never gonna make you cry[/prosody]
+     [/vocaloid]
+     [pause duration="short"]
+    ```
+"""
