@@ -550,9 +550,10 @@ class OutputFormatter:
       else:
           return text
 
-class ChatMLFormatter:
-    def __init__(self):
-        self.template_string = """
+class ChatFormatter:  # Renamed to be more generic
+    def __init__(self, gguf_parser=None):
+        self.gguf_parser = gguf_parser
+        self.default_template_string = """
         {% if messages[0]['role'] == 'system' %}
             {% set offset = 1 %}
         {% else %}
@@ -575,20 +576,43 @@ class ChatMLFormatter:
             {{ '<|assistant|>\n' }}
         {% endif %}
         """
-        self.chatml_template = Template(self.template_string)
+        self.chatml_template = Template(self.default_template_string)
+        self.template = self._get_template()
+
+
+    def _get_template(self) -> Template:
+        """Gets the appropriate Jinja2 template, prioritizing GGUF metadata."""
+        if self.gguf_parser:
+            metadata = self.gguf_parser.get_metadata()
+            chat_template_str = metadata.get("tokenizer.chat_template")
+
+            if chat_template_str:
+                if isinstance(chat_template_str, bytes): #Decode if necessary
+                    chat_template_str = chat_template_str.decode('utf-8', errors='replace')
+
+                try:
+                    print(OutputFormatter.color_prefix(f"Using chat template from GGUF metadata:\n{chat_template_str}", "Internal"))
+                    return Template(chat_template_str)
+                except Exception as e:
+                    print(OutputFormatter.color_prefix(f"Error creating template from GGUF metadata: {e}. Falling back to ChatML.", "Internal"))
+                    return self.chatml_template # Fallback to ChatML
+
+        print(OutputFormatter.color_prefix("Using default ChatML template.", "Internal"))
+        return self.chatml_template
+
 
     def create_prompt(self, messages, add_generation_prompt=True):
-      """
-      Creates a prompt from a list of messages using the ChatML template.
+        """
+        Creates a prompt using the determined template.
 
-      Args:
-          messages (list): A list of message dictionaries, where each dictionary has 'role' and 'content' keys.
-          add_generation_prompt (bool, optional): Whether to add the '<|assistant|>\n' prompt. Defaults to True.
+        Args:
+            messages: List of message dictionaries (role, content).
+            add_generation_prompt: Whether to add the assistant turn prompt.
 
-      Returns:
-          str: The formatted prompt string.
-      """
-      return self.chatml_template.render(messages=messages, add_generation_prompt=add_generation_prompt)
+        Returns:
+            Formatted prompt string.
+        """
+        return self.template.render(messages=messages, add_generation_prompt=add_generation_prompt)
 
 class Watchdog:
     def __init__(self, restart_script_path, ai_runtime_manager):
@@ -639,7 +663,7 @@ class AIRuntimeManager:
         self.start_time = None
         self.fuzzy_threshold = 0.69
         self.database_manager = database_manager
-        self.chat_formatter = ChatMLFormatter()
+        self.chat_formatter = ChatFormatter(self.gguf_parser) 
         self.partition_context = None
         self.is_llm_running = False
         self._model_lock = threading.Lock()
@@ -1271,8 +1295,8 @@ class AIRuntimeManager:
         pass
 
     def _prepare_prompt(self, user_input, slot, is_v1_completions=False):
-        """Prepares the prompt for the LLM, handling context differently for /v1/completions."""
-        global chatml_template, assistantName
+        """Prepares the prompt, using the GGUF-aware ChatFormatter."""
+        global assistantName  # Ensure assistantName is accessible
 
         decoded_initial_instructions = base64.b64decode(encoded_instructions.strip()).decode("utf-8")
         decoded_initial_instructions = decoded_initial_instructions.replace("${assistantName}", assistantName)
@@ -1280,22 +1304,19 @@ class AIRuntimeManager:
         context_messages = [{"role": "system", "content": decoded_initial_instructions}]
 
         if is_v1_completions:
-            # For /v1/completions, use ONLY the provided messages.  No history.
             if isinstance(user_input, str):
                 try:
-                    messages = json.loads(user_input)  # Expecting JSON string
+                    messages = json.loads(user_input)
                 except json.JSONDecodeError:
                     print(OutputFormatter.color_prefix("Invalid JSON in /v1/completions request.", "Internal"))
-                    return None  # Or raise, or return an error message.
-            else: #already list
+                    return None
+            else:
                 messages = user_input
             context_messages.extend(messages)
 
-
         else:
-            # For regular interactions, use history + context.
             self.partition_context.add_context(slot, f"User: {user_input}", "main")
-            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(f"User: {user_input}", slot, "main"), loop)  # Specify requester_type
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(f"User: {user_input}", slot, "main"), loop)
             main_history = self.database_manager.fetch_chat_history(slot)
             context = self.partition_context.get_context(slot, "main")
 
@@ -1306,9 +1327,10 @@ class AIRuntimeManager:
                 for entry in main_history:
                     context_messages.append(entry)
 
+        # --- Use the self.chat_formatter ---
         prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True)
+        # --- End of modification ---
         return prompt
-
 
     def generate_response(self, user_input, slot, stream=False):
         """Generates a response, using CoT if necessary, and processing JSON."""
