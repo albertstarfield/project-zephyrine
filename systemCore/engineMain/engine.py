@@ -21,6 +21,7 @@ from fuzzywuzzy import fuzz
 import inspect
 import threading
 import signal
+import psutil
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 
@@ -443,7 +444,7 @@ class Watchdog:
         """Monitors the system and restarts on fatal errors."""
         while True:
             try:
-                await asyncio.sleep(5)
+                await asyncio.sleep(0.095)  # Check more frequently, in line with the display update
 
                 if self.ai_runtime_manager.last_task_info:
                     task_name = self.ai_runtime_manager.last_task_info["task"].__name__
@@ -670,7 +671,7 @@ class AIRuntimeManager:
                                         "BackbrainController",
                                         current_time
                                     ), end='\r')
-                                    time.sleep(0.5)
+                                    time.sleep(0.095)  # Check every 95ms
 
                                 thread.join(timeout)
 
