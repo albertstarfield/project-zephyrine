@@ -21,9 +21,11 @@ from fuzzywuzzy import fuzz
 import inspect
 import threading
 import signal
-import psutil
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
+import ctypes
+import subprocess  # Import subprocess
+
 
 
 # Constants (from environment variables or defaults)
@@ -441,36 +443,23 @@ class Watchdog:
         self.loop = None  # Do not initialize the loop here
 
     async def monitor(self):
-        """Monitors the system and restarts on fatal errors."""
+        """Monitors the system and triggers model unloading on timeout."""
         while True:
             try:
-                await asyncio.sleep(0.095)  # Check more frequently, in line with the display update
+                await asyncio.sleep(0.095)
 
                 if self.ai_runtime_manager.last_task_info:
                     task_name = self.ai_runtime_manager.last_task_info["task"].__name__
                     elapsed_time = self.ai_runtime_manager.last_task_info["elapsed_time"]
 
                     if task_name == "generate_response" and elapsed_time > 60:
-                        print(
-                            OutputFormatter.color_prefix(
-                                "Watchdog detected potential issue: generate_response timeout",
-                                "Watchdog",
-                            )
-                        )
-                        # self.restart() # Remove the restart from here
-                        # Instead of restarting, we'll attempt to recover by adding the task back to the queue
-
-                        # Retrieve the task arguments
-                        task_args = self.ai_runtime_manager.last_task_info["args"]
-
-                        # Add the task back to the queue with priority 0 to reattempt immediately
-                        self.ai_runtime_manager.add_task((self.ai_runtime_manager.generate_response, task_args), 0)
-                        print(
-                            OutputFormatter.color_prefix(
-                                f"Task 'generate_response' with arguments {task_args} added back to the queue for reattempt.",
-                                "Watchdog",
-                            )
-                        )
+                        print(OutputFormatter.color_prefix(
+                            "Watchdog detected potential issue: generate_response timeout",
+                            "Watchdog",
+                        ))
+                        # --- Corrected: Only unload the model ---
+                        self.ai_runtime_manager.unload_model()
+                        # --- No longer exiting the monitor loop ---
 
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Watchdog error: {e}", "Watchdog"))
@@ -482,25 +471,26 @@ class Watchdog:
         os.execl(python, python, self.restart_script_path)
 
     def start(self, loop):
-        """Starts the watchdog task on the provided event loop."""
-        self.loop = loop # Store the main loop
-        self.loop.create_task(self.monitor())
+      self.loop = loop
+      self.loop.create_task(self.monitor())
 
 class AIRuntimeManager:
     def __init__(self, llm_instance, database_manager):
         self.llm = llm_instance
         self.current_task = None
-        self.task_queue = []  # Priority 0 tasks
-        self.backbrain_tasks = []  # Priority 3 tasks (CoT and others)
+        self.task_queue = []
+        self.backbrain_tasks = []
         self.lock = Lock()
         self.last_task_info = {}
         self.start_time = None
         self.fuzzy_threshold = 0.69
         self.database_manager = database_manager
         self.chat_formatter = ChatMLFormatter()
-        self.partition_context = None # Initialize partition_context
-        self.is_llm_running = False  # Flag to track LLM invocation status
-
+        self.partition_context = None
+        self.is_llm_running = False
+        self._model_lock = threading.Lock()
+        self._stop_event = threading.Event()
+        self.llm_thread = None  # Keep track of running LLM threads.
         # Start the scheduler thread
         self.scheduler_thread = Thread(target=self.scheduler)
         self.scheduler_thread.daemon = True
@@ -518,6 +508,72 @@ class AIRuntimeManager:
         self.task_queue, self.backbrain_tasks = self.database_manager.load_task_queue()
         self.last_queue_save_time = time.time()
         self.queue_save_interval = 60  # Save the queue every 60 seconds (adjust as needed)
+
+    def force_unload_model(self):
+        """Forces the unloading of the LLM and exits."""
+        with self._model_lock:  # Ensure exclusive access to model operations
+            print(OutputFormatter.color_prefix("Forcefully unloading the model...", "Internal"))
+            self._stop_event.set() # Signal the thread to stop.
+            if self.llm_thread and self.llm_thread.is_alive():
+              try:
+                  # Windows-specific: Use TerminateThread
+                  if platform.system() == "Windows":
+                      import ctypes
+                      handle = self.llm_thread.native_id
+                      ctypes.windll.kernel32.TerminateThread(handle, 0)
+                      print(OutputFormatter.color_prefix("LLM thread terminated (Windows).", "Internal"))
+                  else:  # POSIX-compliant systems: Use pthread_kill with SIGKILL
+                    import signal
+                    import ctypes
+                    pthread_kill = ctypes.CDLL("libc.so.6").pthread_kill # or similar
+                    pthread_kill(self.llm_thread.native_id, signal.SIGKILL)
+
+                    print(OutputFormatter.color_prefix("LLM thread terminated (POSIX).", "Internal"))
+              except Exception as e:
+                print(OutputFormatter.color_prefix(f"Error terminating LLM thread: {e}","Internal"))
+
+            self.llm = None  # Release the LLM object
+            self.is_llm_running = False
+            global embedding_model, vector_store
+            embedding_model = None
+            vector_store = None
+            print(OutputFormatter.color_prefix("Model unloaded.", "Internal"))
+            database_manager.close() #Close the database connection
+            os._exit(1) #Exit immediately, by passing regular shutdown processes
+
+    def unload_model(self):
+        """Unloads the LLM from memory, safely interrupting any running inference."""
+        with self._model_lock:
+            print(OutputFormatter.color_prefix("Unloading the model...", "Internal"))
+            self._stop_event.set()  # Signal any running LLM thread to stop
+
+            if self.llm_thread and self.llm_thread.is_alive():
+                try:
+                    # OS-specific thread termination
+                    if platform.system() == "Windows":
+                        handle = self.llm_thread.native_id
+                        ctypes.windll.kernel32.TerminateThread(ctypes.c_void_p(handle), 0)
+                        print(OutputFormatter.color_prefix("LLM thread terminated (Windows).", "Internal"))
+
+                    else: # POSIX-compliant
+                        res = ctypes.pythonapi.pthread_kill(ctypes.c_ulong(self.llm_thread.native_id), signal.SIGKILL)
+                        if res == 0:
+                            print(OutputFormatter.color_prefix("LLM thread terminated (POSIX).", "Internal"))
+                        elif res != 1: # ESRCH (No such process) is acceptable
+                            print(OutputFormatter.color_prefix("Failed to terminate LLM thread.", "Internal"))
+
+                except Exception as e:
+                    print(OutputFormatter.color_prefix(f"Error terminating LLM thread: {e}", "Internal"))
+
+                self.llm_thread.join()  # Wait for the thread to actually finish
+
+            self.llm = None
+            self.is_llm_running = False
+            global embedding_model, vector_store #Also unload embeddings
+            embedding_model = None
+            vector_store = None
+            self._stop_event.clear()  # Reset for the next LLM run
+            print(OutputFormatter.color_prefix("Model unloaded.", "Internal"))
 
     def add_task(self, task, priority):
         with self.lock:
@@ -603,7 +659,7 @@ class AIRuntimeManager:
 
     def scheduler(self):
         """Scheduler loop to manage and execute tasks based on priority."""
-        while True:
+        while not self._stop_event.is_set():
             task = self.get_next_task()
             if task:
                 task_item, priority = task
@@ -614,7 +670,7 @@ class AIRuntimeManager:
                     task_callable = task_item
                     task_args = ()
 
-                self.start_time = time.time()  # Reset start_time for EACH task
+                self.start_time = time.time()
 
                 print(OutputFormatter.color_prefix(
                     f"Starting task: {task_callable.__name__} with priority {priority}",
@@ -622,89 +678,71 @@ class AIRuntimeManager:
                     self.start_time
                 ))
 
-                # Handle caching and LLM invocation sequentially
                 if task_callable == self.generate_response and priority != 4:
-                    user_input, slot, *other_args = task_args  # Unpack, allow for extra args
+                    user_input, slot, *other_args = task_args
                     context_type = "CoT" if priority == 3 else "main"
 
-                    # Wait for any ongoing LLM invocation to complete
-                    while self.is_llm_running:
-                        time.sleep(0.1)
+                    # --- Check and wait for LLM (using the lock) ---
+                    with self._model_lock:
+                        while self.is_llm_running:
+                            print(OutputFormatter.color_prefix("LLM is busy. Waiting...", "BackbrainController"))
+                            time.sleep(0.1)
+                    # --- End of check and wait ---
+
 
                     cached_response = self.cached_inference(user_input, slot, context_type)
                     if cached_response:
                         print(OutputFormatter.color_prefix(f"Using cached response for slot {slot}", "BackbrainController"))
-                        # Only add to context if not from /v1/completions (priority 0)
-                        if priority !=0:
+                        if priority != 0:
                             self.partition_context.add_context(slot, cached_response, context_type)
-                        # If cached, and it IS a /v1/completions call, still return it!
                         elif priority == 0:
                             return cached_response
-
-                        continue  # Skip to the next task
-
+                        continue
 
                 try:
                     if task_callable == self.generate_response:
-                        # Set the flag to indicate LLM invocation is running
-                        self.is_llm_running = True
-
-                        timeout = 60 if priority == 0 else None  # Timeout only for priority 0
+                        timeout = 60 if priority == 0 else None
                         result = None
-                        # Wrap LLM invocation in a try-except block
-                        try:
-                            print(OutputFormatter.color_prefix(f"Invoking LLM for slot {task_args[1]}...", "BackbrainController"))
 
-                            if timeout is not None: # Check if we need the timeout logic.
-                                thread = Thread(
-                                    target=self.run_with_timeout,
-                                    args=(task_callable, task_args, timeout)
-                                )
-                                thread.start()
+                        def run_llm_task():
+                            nonlocal result
+                            try:
+                                # --- Check for stop event *before* invoking ---
+                                if self._stop_event.is_set():
+                                    print(OutputFormatter.color_prefix("Stop event set. Skipping LLM invocation.", "BackbrainController"))
+                                    return
 
-                                while thread.is_alive():
-                                    current_time = time.time()
-                                    elapsed_time = current_time - self.start_time
-                                    time_left = timeout - elapsed_time
-                                    print(OutputFormatter.color_prefix(
-                                        f"Task {task_callable.__name__} running, time left: {time_left:.2f} seconds",
-                                        "BackbrainController",
-                                        current_time
-                                    ), end='\r')
-                                    time.sleep(0.095)  # Check every 95ms
-
-                                thread.join(timeout)
-
-                                if thread.is_alive():
-                                    print(OutputFormatter.color_prefix(
-                                        f"Task {task_callable.__name__} timed out after {timeout} seconds.",
-                                        "BackbrainController",
-                                        time.time() - self.start_time
-                                    ))
-                                    result = self.llm.invoke(task_args[0], caller = task_callable.__name__)
-                                    self.add_task((task_callable, task_args[:2]), 3)  # Add to backbrain on timeout.  task_args[:2] is crucial
-                                else:
-                                     print(OutputFormatter.color_prefix(
-                                        f"Task {task_callable.__name__} completed within timeout.",
-                                        "BackbrainController",
-                                        time.time() - self.start_time
-                                     ))
-                            else: #If timeout is None, we run it without the timeout logic.
-                                #result = task_callable(*task_args) # Execute directly.
-                                # Pass 'stream' to generate_response, if it's present.
                                 if len(task_args) == 3:
                                     result = task_callable(*task_args)
-                                else:  # Handle cases where 'stream' might not be provided
+                                else:
                                     result = task_callable(task_args[0], task_args[1])
+                            except Exception as e:
+                                print(OutputFormatter.color_prefix(f"Error in LLM task: {e}", "BackbrainController"))
 
-                        except Exception as llm_e:
-                            print(OutputFormatter.color_prefix(f"Error invoking LLM: {llm_e}", "BackbrainController"))
-                            self.database_manager.print_table_contents("interaction_history")
-                            self.database_manager.print_table_contents("CoT_generateResponse_History")
-                            raise  # Re-raise the exception to potentially trigger the Watchdog
-                        finally:
-                            # Reset the flag after LLM invocation is complete or if an exception occurred
-                            self.is_llm_running = False
+
+                        with self._model_lock:
+                            if self.llm is None:
+                                initialize_models()
+                                self.llm = ai_runtime_manager.llm
+                                self.partition_context.vector_store = vector_store
+
+                        self._stop_event.clear()
+                        self.llm_thread = threading.Thread(target=run_llm_task)
+                        self.llm_thread.start()
+
+                        if timeout is not None:
+                            self.llm_thread.join(timeout)
+                            if self.llm_thread.is_alive():
+                                print(OutputFormatter.color_prefix(
+                                    f"Task {task_callable.__name__} timed out after {timeout} seconds.",
+                                    "BackbrainController",
+                                    time.time() - self.start_time
+                                ))
+                                self.unload_model()
+                                return
+                        else:
+                            self.llm_thread.join()  # Wait indefinitely if no timeout
+
 
                     else:
                         result = task_callable(*task_args)
@@ -719,25 +757,20 @@ class AIRuntimeManager:
                 elapsed_time = time.time() - self.start_time
 
                 if task_callable == self.generate_response:
-                    # v1/completions calls should NOT add results to semantic memory.
-                    if priority == 0 and elapsed_time < 58: # Still check this, but only for priority 0
-                        # BUT, we DO want to return the result to the user.  So we do that...
-                        # (see further below, where 'result' is returned)
-                        pass # Do nothing regarding context.
-
+                    if priority == 0 and elapsed_time < 58:
+                        pass
                     elif priority != 4:
-                        user_input, slot, *_ = task_args # Unpack, ignore extra args.
+                        user_input, slot, *_ = task_args
                         context_type = "CoT" if priority == 3 else "main"
-                        # Add all NON-v1/completions calls to cache.
                         self.add_to_cache(user_input, result, context_type, slot)
-                        # And to the in-memory and vector store context
                         self.partition_context.add_context(slot, result, "main" if priority == 0 else "CoT")
-                        asyncio.run_coroutine_threadsafe(
-                            self.partition_context.async_embed_and_store(result, slot, "main" if priority == 0 else "CoT"),
-                            loop
-                        )
-
-
+                        # --- Fix for async_embed_and_store ---
+                        if result is not None:  # Check for None before embedding
+                            asyncio.run_coroutine_threadsafe(
+                                self.partition_context.async_embed_and_store(result, slot, "main" if priority == 0 else "CoT"),
+                                loop
+                            )
+                        # --- End of fix ---
 
                 self.last_task_info = {
                     "task": task_callable,
@@ -753,17 +786,16 @@ class AIRuntimeManager:
                 ))
                 self.current_task = None
 
-                # If it's a generate_response call from /v1/completions, return the result *now*.
                 if task_callable == self.generate_response and priority == 0:
-                    return result  # Return directly for immediate response
-
+                    return result
 
             else:
-                time.sleep(0.5)
+                time.sleep(0.095)
                 if time.time() - self.last_queue_save_time > self.queue_save_interval:
-                  with self.lock:  # Acquire lock before saving
-                    self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
-                    self.last_queue_save_time = time.time()
+                    with self.lock:
+                        self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
+                        self.last_queue_save_time = time.time()
+
 
     def report_queue_status(self): #Modified to report the meshNetworkProcessingIO Queue
         """Reports the queue status (length and contents) every 10 seconds."""
@@ -808,14 +840,8 @@ class AIRuntimeManager:
     
 
     def run_with_timeout(self, func, args, timeout):
-        """Runs a function with a timeout."""
-        thread = Thread(target=func, args=args)
-        thread.start()
-        thread.join(timeout)
-
-        if thread.is_alive():
-            print(OutputFormatter.color_prefix(f"Task {func.__name__} timed out after {timeout} seconds.", "BackbrainController", time.time() - self.start_time))
-            return self.llm.invoke(args[0])
+        """This function is no longer directly used for timed execution."""
+        pass # Remove the content, as it's now handled in scheduler.
 
     def branch_predictor(self):
         """
@@ -944,24 +970,25 @@ class AIRuntimeManager:
 
     def invoke_llm(self, prompt, caller="Unknown Caller"):
         """
-        Invokes the LLM after checking and enforcing the 75% context window limit.
-        Ensures that only one LLM invocation is running at a time.
-
-        Args:
-            prompt (str): The prompt to send to the LLM.
-            caller (str, optional): The name of the function calling invoke_llm. Defaults to "Unknown Caller".
+        Invokes the LLM, handling potential model unloading and checking for
+        existing invocations. Includes debug output and error handling.
         """
-        # Wait for any ongoing LLM invocation to complete
-        while self.is_llm_running:
-            time.sleep(0.1)
+        with self._model_lock:  # Ensure exclusive access for checking/setting is_llm_running
+            if self.is_llm_running:
+                print(OutputFormatter.color_prefix(
+                    "LLM invocation already in progress. Skipping this invocation.", "Internal"
+                ))
+                return "LLM busy."  # Or raise an exception
 
-        self.is_llm_running = True
+            self.is_llm_running = True
+
         try:
             start_time = time.time()
             prompt_tokens = len(TOKENIZER.encode(prompt))
+            print(OutputFormatter.color_prefix(f"Invoking LLM with prompt (called by {caller}):\n{prompt}", "Internal"))
 
             if prompt_tokens > int(CTX_WINDOW_LLM * 0.75):
-                print(OutputFormatter.color_prefix(f"Prompt exceeds 75% of context window. Truncating... (called by {caller})", "BackbrainController", time.time() - start_time))
+                print(OutputFormatter.color_prefix(f"Prompt exceeds 75% of context window. Truncating...", "BackbrainController"))
                 truncated_prompt = TOKENIZER.decode(TOKENIZER.encode(prompt)[:int(CTX_WINDOW_LLM * 0.75)])
                 if truncated_prompt[-1] not in [".", "?", "!"]:
                     last_period_index = truncated_prompt.rfind(".")
@@ -970,14 +997,21 @@ class AIRuntimeManager:
                     last_punctuation_index = max(last_period_index, last_question_index, last_exclamation_index)
                     if last_punctuation_index != -1:
                         truncated_prompt = truncated_prompt[:last_punctuation_index + 1]
-
-                print(OutputFormatter.color_prefix(f"Truncated prompt being used... (called by {caller})", "BackbrainController", time.time() - start_time))
+                print(OutputFormatter.color_prefix("Truncated prompt being used...", "BackbrainController"))
                 response = self.llm.invoke(truncated_prompt)
             else:
                 response = self.llm.invoke(prompt)
+
+            print(OutputFormatter.color_prefix(f"LLM response (called by {caller}):\n{response}", "Internal"))
             return response
+
+        except Exception as e:
+            print(OutputFormatter.color_prefix(f"Error during LLM invocation: {e}", "Internal"))
+            return "Error during LLM invocation."  # Return an error message
+
         finally:
-            self.is_llm_running = False
+            with self._model_lock:
+              self.is_llm_running = False
 
     def extract_json(self, llm_response):
         """Extracts a JSON string from the LLM's response using regular expressions.
@@ -1469,19 +1503,14 @@ class PartitionContext:
             asyncio.run_coroutine_threadsafe(self.async_store_CoT_generateResponse(overflowed_item, slot), loop)
 
     def get_relevant_chunks(self, query, slot, k=5, requester_type="main"):
-        """
-        Retrieves relevant text chunks, fetching from appropriate table based on requester_type.
-        """
         start_time = time.time()
         try:
             if self.vector_store:
-                # Fetch chunks from 'interaction_history'
                 interaction_history_docs_and_scores = self.vector_store.similarity_search_with_score(
                     query, k=k,
                     filter={"table": "interaction_history", "slot": slot}
                 )
 
-                # If the requester type is 'CoT', also fetch chunks from 'CoT_generateResponse_History'
                 cot_docs_and_scores = []
                 if requester_type == "CoT":
                     cot_docs_and_scores = self.vector_store.similarity_search_with_score(
@@ -1490,7 +1519,6 @@ class PartitionContext:
                         filter={"table": "CoT_generateResponse_History", "slot": slot}
                     )
 
-                # Combine the results, ensuring no duplication and maintaining order of relevance
                 combined_docs_and_scores = self.combine_results(interaction_history_docs_and_scores, cot_docs_and_scores, k)
 
                 relevant_chunks = []
@@ -1520,38 +1548,50 @@ class PartitionContext:
         return sorted(combined.values(), key=lambda x: x[1])[:k]
 
     async def async_embed_and_store(self, text_chunk, slot, requester_type):
-        """
-        Asynchronously embeds a text chunk and stores it in the database (vector store),
-        specifying the requester_type for correct table selection.
-        """
         async with db_lock:
             try:
                 if text_chunk is None:
                     print(OutputFormatter.color_prefix("Warning: Received None in async_embed_and_store. Skipping.", "Internal"))
                     return
 
+                # Ensure text_chunk is a string (it might be a different type if coming from CoT)
+                if not isinstance(text_chunk, str):
+                    print(OutputFormatter.color_prefix(f"Warning: Non-string content in async_embed_and_store: {type(text_chunk)}. Skipping.", "Internal"))
+                    return
+
                 text_splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=0, separator="\n")
-                texts = text_splitter.split_text(text_chunk)
+                texts = text_splitter.split_text(text_chunk)  # This now works correctly
 
                 for text in texts:
                     doc_id = str(time.time())
-                    embedding = embedding_model.embed_query(text)
 
-                    # Store in the appropriate table based on the requester type
-                    if requester_type == "CoT":
-                        table_name = "CoT_generateResponse_History"
-                    else:  # Default to "main"
-                        table_name = "interaction_history"
+                    # --- Use the global embedding_model ---
+                    global embedding_model
+                    if embedding_model is None: # Check first
+                        print(OutputFormatter.color_prefix("Embedding model is None. Attempting to reload...", "Internal"))
+                        initialize_models() # Reload if needed.
+                        self.vector_store = load_vector_store_from_db(embedding_model, database_manager.db_cursor) #reload vector store
+                    if embedding_model is not None: # Check again
+                        embedding = embedding_model.embed_query(text)
 
-                    db_writer.schedule_write(
-                        f"INSERT INTO {table_name} (slot, doc_id, chunk, embedding) VALUES (?, ?, ?, ?)",
-                        (slot, doc_id, text, pickle.dumps(embedding))
-                    )
+                        if requester_type == "CoT":
+                            table_name = "CoT_generateResponse_History"
+                        else:
+                            table_name = "interaction_history"
 
-                    doc = Document(page_content=text, metadata={"slot": slot, "doc_id": doc_id, "table": table_name})
-                    self.vector_store.add_documents([doc])
+                        db_writer.schedule_write(
+                            f"INSERT INTO {table_name} (slot, doc_id, chunk, embedding) VALUES (?, ?, ?, ?)",
+                            (slot, doc_id, text, pickle.dumps(embedding))
+                        )
 
-                print(OutputFormatter.color_prefix(f"Scheduled context chunk for storage for slot {slot} and type {requester_type}: {text_chunk[:50]}...", "Internal"))
+                        doc = Document(page_content=text, metadata={"slot": slot, "doc_id": doc_id, "table": table_name})
+                        self.vector_store.add_documents([doc])
+                        print(OutputFormatter.color_prefix(f"Scheduled context chunk for storage for slot {slot} and type {requester_type}: {text_chunk[:50]}...", "Internal"))
+                    # --- End of embedding section ---
+                    else:
+                        print(OutputFormatter.color_prefix("Embedding model still None after reload attempt. Skipping embedding.", "Internal"))
+
+
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Error in embed_and_store: {e}", "Internal"))
 
@@ -1568,7 +1608,6 @@ class PartitionContext:
                 print(OutputFormatter.color_prefix(f"Error storing CoT_generateResponse message: {e}", "Internal"))
 
     def calculate_total_context_length(self, slot, requester_type):
-        """Calculates the total context length for a given slot and requester type."""
         context = self.get_context(slot, requester_type)
         total_length = sum([len(TOKENIZER.encode(item)) for item in context if isinstance(item, str)])
         return total_length
@@ -1626,17 +1665,38 @@ def initialize_models():
     global llm, embedding_model, vector_store, ai_runtime_manager, database_manager
 
     n_batch = 512
+    # Use subprocess to capture stderr from LlamaCpp
+    with subprocess.Popen([sys.executable, "-c",
+                           f"""
+from langchain.llms import LlamaCpp
+llm = LlamaCpp(
+    model_path="{LLM_MODEL_PATH}",
+    n_gpu_layers=-1,
+    n_batch={n_batch},
+    n_ctx={CTX_WINDOW_LLM},
+    f16_kv=True,
+    verbose=True,
+    max_tokens={MAX_TOKENS_GENERATE},
+    rope_freq_base=10000,
+    rope_freq_scale=1
+)
+                           """],
+                          stderr=subprocess.PIPE, text=True) as proc:
+        for line in proc.stderr:
+            print(OutputFormatter.color_prefix(f"LlamaCpp stderr: {line.strip()}", "Internal"))
+
     llm = LlamaCpp(
         model_path=LLM_MODEL_PATH,
         n_gpu_layers=-1,
         n_batch=n_batch,
         n_ctx=CTX_WINDOW_LLM,
         f16_kv=True,
-        verbose=True,
+        verbose=True,  # Keep verbose for other logs
         max_tokens=MAX_TOKENS_GENERATE,
-        rope_freq_base=10000, # Added these back, as they are important for model config.
+        rope_freq_base=10000,
         rope_freq_scale=1
     )
+
 
     embedding_model = LlamaCppEmbeddings(model_path=EMBEDDING_MODEL_PATH, n_ctx=CTX_WINDOW_LLM, n_gpu_layers=-1, n_batch=n_batch)
     vector_store = FAISS.from_texts(["Hello world!"], embedding_model)
@@ -1644,6 +1704,7 @@ def initialize_models():
     database_manager = DatabaseManager(DATABASE_FILE, loop)
     ai_runtime_manager = AIRuntimeManager(llm, database_manager)
     database_manager.ai_runtime_manager = ai_runtime_manager
+    ai_runtime_manager.llm = llm # Make absolutely sure this is set
 
     # LLM Warmup
     print(OutputFormatter.color_prefix("Warming up the LLM...", "Internal"))
@@ -1664,8 +1725,9 @@ def load_vector_store_from_db(embedding_model, db_cursor):
         interaction_history_rows = db_cursor.fetchall()
 
         # Fetch data from CoT_generateResponse_History
-        db_cursor.execute("SELECT chunk, slot, doc_id FROM CoT_generateResponse_History")
+        db_cursor.execute("SELECT message, slot, doc_id FROM CoT_generateResponse_History") #Fixed query
         cot_rows = db_cursor.fetchall()
+
 
         if not interaction_history_rows and not cot_rows:
             print(OutputFormatter.color_prefix("No existing vector store found in the database. Creating a new one.", "Internal"))
@@ -1680,8 +1742,8 @@ def load_vector_store_from_db(embedding_model, db_cursor):
             metadatas.append({"slot": slot, "doc_id": doc_id, "table": "interaction_history"})
 
         # Process CoT_generateResponse_History rows
-        for chunk, slot, doc_id in cot_rows:
-            texts.append(chunk)
+        for message, slot, doc_id in cot_rows: # Fixed
+            texts.append(message) #Fixed
             metadatas.append({"slot": slot, "doc_id": doc_id, "table": "CoT_generateResponse_History"})
 
         vector_store = FAISS.from_texts(texts, embedding_model, metadatas=metadatas)
@@ -1689,7 +1751,7 @@ def load_vector_store_from_db(embedding_model, db_cursor):
         return vector_store
     except Exception as e:
         print(OutputFormatter.color_prefix(f"Error loading vector store from database: {e}", "Internal"))
-        return FAISS.from_texts(["This is a dummy text to initialize FAISS."], embedding_model)
+        return FAISS.from_texts(["This is a dummy text to initialize FAISS."], embedding_model) #Return dummy
 
 
 async def input_task(ai_runtime_manager, partition_context):
@@ -1719,7 +1781,7 @@ async def add_task_async(ai_runtime_manager, task, args, priority):
     ai_runtime_manager.add_task((task, args), priority)
 
 async def main():
-    global vector_store, db_writer, database_manager
+    global vector_store, db_writer, database_manager, ai_runtime_manager
 
     database_manager = initialize_models()
 
@@ -1728,8 +1790,8 @@ async def main():
     database_manager.print_table_contents("CoT_generateResponse_History")
     database_manager.print_table_contents("vector_learning_context_embedding")
     print(OutputFormatter.color_prefix("Adelaide & Albert Engine initialized. Interaction is ready!", "Internal"))
-    
-    
+
+
     partition_context = PartitionContext(CTX_WINDOW_LLM, database_manager, vector_store)
     ai_runtime_manager.partition_context = partition_context # Set partition_context in AIRuntimeManager
 
@@ -1890,14 +1952,15 @@ def run_server(port=None, host=None): #Added parameters with None
     print(OutputFormatter.color_prefix(f"Starting OpenAI-compatible server on {host}:{port}...", "ServerOpenAISpec"))
     httpd.serve_forever()
 
-
 def signal_handler(sig, frame):
-    global httpd
+    global httpd, ai_runtime_manager
     print(OutputFormatter.color_prefix("\nShutting down server...", "Internal"))
     if httpd:
         httpd.shutdown()
+    if ai_runtime_manager:
+        ai_runtime_manager.unload_model()  # Unload on Ctrl+C
     print(OutputFormatter.color_prefix("Server shut down.", "Internal"))
-    sys.exit(0)
+    sys.exit(0) #Still exit, but after the unload
 
 if __name__ == "__main__":
 
