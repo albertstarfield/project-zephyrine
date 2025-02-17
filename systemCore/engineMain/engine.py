@@ -25,6 +25,7 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
 import ctypes
 import subprocess  # Import subprocess
+from typing import Optional
 
 
 
@@ -496,6 +497,8 @@ class AIRuntimeManager:
         self.scheduler_thread.daemon = True
         self.scheduler_thread.start()
 
+        self.json_interpreter = JSONInterpreter(self.invoke_llm)
+
         # Start the branch_predictor thread
         self.branch_predictor_thread = Thread(target=self.branch_predictor)
         self.branch_predictor_thread.daemon = True
@@ -508,6 +511,22 @@ class AIRuntimeManager:
         self.task_queue, self.backbrain_tasks = self.database_manager.load_task_queue()
         self.last_queue_save_time = time.time()
         self.queue_save_interval = 60  # Save the queue every 60 seconds (adjust as needed)
+
+    def process_json_response(self, json_response):
+        """Processes a JSON response, attempting to repair it if invalid."""
+        repaired_json = self.json_interpreter.repair_json(json_response)
+
+        if repaired_json:
+            try:
+                data = json.loads(repaired_json)
+                print(OutputFormatter.color_prefix(f"Successfully processed JSON data: {data}", "Internal"))
+                return data
+            except json.JSONDecodeError:
+                print(OutputFormatter.color_prefix("Critical Error: Failed to parse JSON after repair.", "Internal"))
+                return None  # Or raise, or return a default value
+        else:
+            print(OutputFormatter.color_prefix("Failed to repair JSON.", "Internal"))
+            return None
 
     def force_unload_model(self):
         """Forces the unloading of the LLM and exits."""
@@ -658,7 +677,7 @@ class AIRuntimeManager:
             print(OutputFormatter.color_prefix(f"Error adding to cache: {e}", "BackbrainController"))
 
     def scheduler(self):
-        """Scheduler loop to manage and execute tasks based on priority."""
+        """Scheduler loop (modified to use process_json_response)."""
         while not self._stop_event.is_set():
             task = self.get_next_task()
             if task:
@@ -682,13 +701,10 @@ class AIRuntimeManager:
                     user_input, slot, *other_args = task_args
                     context_type = "CoT" if priority == 3 else "main"
 
-                    # --- Check and wait for LLM (using the lock) ---
                     with self._model_lock:
                         while self.is_llm_running:
                             print(OutputFormatter.color_prefix("LLM is busy. Waiting...", "BackbrainController"))
                             time.sleep(0.1)
-                    # --- End of check and wait ---
-
 
                     cached_response = self.cached_inference(user_input, slot, context_type)
                     if cached_response:
@@ -707,7 +723,6 @@ class AIRuntimeManager:
                         def run_llm_task():
                             nonlocal result
                             try:
-                                # --- Check for stop event *before* invoking ---
                                 if self._stop_event.is_set():
                                     print(OutputFormatter.color_prefix("Stop event set. Skipping LLM invocation.", "BackbrainController"))
                                     return
@@ -718,7 +733,6 @@ class AIRuntimeManager:
                                     result = task_callable(task_args[0], task_args[1])
                             except Exception as e:
                                 print(OutputFormatter.color_prefix(f"Error in LLM task: {e}", "BackbrainController"))
-
 
                         with self._model_lock:
                             if self.llm is None:
@@ -741,9 +755,74 @@ class AIRuntimeManager:
                                 self.unload_model()
                                 return
                         else:
-                            self.llm_thread.join()  # Wait indefinitely if no timeout
+                            self.llm_thread.join()
+
+                    elif task_callable == self.process_branch_prediction_slot: #Modified section
+                        slot, chat_history = task_args # Unpack.
+
+                        decision_tree_prompt = self.create_decision_tree_prompt(chat_history)
+                        decision_tree_text = self.invoke_llm(decision_tree_prompt, caller="process_branch_prediction_slot")
+
+                        json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
+                        json_tree_response = self.invoke_llm(json_tree_prompt, caller="process_branch_prediction_slot")
+
+                        # --- Use process_json_response ---
+                        decision_tree_json = self.process_json_response(json_tree_response)
+                        # --- End of modification ---
+
+                        if decision_tree_json: # Check for None
+                            potential_inputs = self.extract_potential_inputs(decision_tree_json)
+
+                            for user_input in potential_inputs:
+                                print(OutputFormatter.color_prefix(f"Scheduling generate_response for predicted input: {user_input}", "branch_predictor"))
+                                prefixed_input = f"branch_predictor: {user_input}"
+                                self.add_task((self.generate_response, (prefixed_input, slot)), 4)
+                        else:
+                            print(OutputFormatter.color_prefix("Decision tree JSON processing failed.", "branch_predictor"))
 
 
+
+                    elif task_callable == self.generate_response:
+                         timeout = 60 if priority == 0 else None
+                         result = None
+
+                         def run_llm_task():
+                             nonlocal result
+                             try:
+                                 # --- Check for stop event *before* invoking ---
+                                 if self._stop_event.is_set():
+                                     print(OutputFormatter.color_prefix("Stop event set. Skipping LLM invocation.", "BackbrainController"))
+                                     return
+
+                                 if len(task_args) == 3:
+                                      result = task_callable(*task_args)
+                                 else:
+                                      result = task_callable(task_args[0], task_args[1])
+                             except Exception as e:
+                                 print(OutputFormatter.color_prefix(f"Error in LLM task: {e}", "BackbrainController"))
+
+                         with self._model_lock:
+                             if self.llm is None:
+                                 initialize_models()
+                                 self.llm = ai_runtime_manager.llm
+                                 self.partition_context.vector_store = vector_store
+
+                         self._stop_event.clear()
+                         self.llm_thread = threading.Thread(target=run_llm_task)
+                         self.llm_thread.start()
+                    
+                         if timeout is not None:
+                            self.llm_thread.join(timeout)
+                            if self.llm_thread.is_alive():
+                                print(OutputFormatter.color_prefix(
+                                        f"Task {task_callable.__name__} timed out after {timeout} seconds.",
+                                        "BackbrainController",
+                                        time.time() - self.start_time
+                                ))
+                                self.unload_model()
+                                return
+                         else:
+                              self.llm_thread.join()
                     else:
                         result = task_callable(*task_args)
 
@@ -762,15 +841,22 @@ class AIRuntimeManager:
                     elif priority != 4:
                         user_input, slot, *_ = task_args
                         context_type = "CoT" if priority == 3 else "main"
-                        self.add_to_cache(user_input, result, context_type, slot)
-                        self.partition_context.add_context(slot, result, "main" if priority == 0 else "CoT")
-                        # --- Fix for async_embed_and_store ---
-                        if result is not None:  # Check for None before embedding
+
+                        # --- JSON Processing for decision and evaluation ---
+                        if context_type == "CoT":
+                            if "Decision:" in result:  # Check for decision prompt
+                                result = self.process_json_response(result)  # Process JSON
+                            elif "Evaluation:" in result:  # Check for evaluation prompt
+                                result = self.process_json_response(result)  # Process JSON
+
+                        # --- End of JSON Processing ---
+                        if result is not None: # Proceed if not None
+                            self.add_to_cache(user_input, result if isinstance(result, str) else json.dumps(result), context_type, slot)
+                            self.partition_context.add_context(slot, result if isinstance(result, str) else json.dumps(result), "main" if priority == 0 else "CoT")
                             asyncio.run_coroutine_threadsafe(
-                                self.partition_context.async_embed_and_store(result, slot, "main" if priority == 0 else "CoT"),
+                                self.partition_context.async_embed_and_store(result if isinstance(result, str) else json.dumps(result), slot, "main" if priority == 0 else "CoT"),
                                 loop
                             )
-                        # --- End of fix ---
 
                 self.last_task_info = {
                     "task": task_callable,
@@ -949,14 +1035,9 @@ class AIRuntimeManager:
         return prompt
 
     def parse_decision_tree_json(self, json_tree_response):
-        """Parses the decision tree JSON with error handling."""
-        try:
-            json_tree_string = self.extract_json(json_tree_response)
-            decision_tree_json = self.try_parse_json(json_tree_string, max_retries=3)
-            return decision_tree_json
-        except Exception as e:
-            print(OutputFormatter.color_prefix(f"Error parsing decision tree JSON: {e}", "BackbrainController"))
-            return None
+        """Parses the decision tree JSON, using the JSONInterpreter."""
+        # Use the process_json_response method
+        return self.process_json_response(json_tree_response)
 
     def extract_potential_inputs(self, decision_tree_json):
         """Extracts potential user inputs from the decision tree JSON."""
@@ -1014,42 +1095,13 @@ class AIRuntimeManager:
               self.is_llm_running = False
 
     def extract_json(self, llm_response):
-        """Extracts a JSON string from the LLM's response using regular expressions.
-        Also removes <|assistant|> token if present.
-        """
-        match = re.search(r"\{(?:[^{}]|(?:\".*?\")|(?:\{(?:[^{}]|(?:\".*?\"))*\}))*\}", llm_response, re.DOTALL)
-        if match:
-            json_string = match.group(0)
-            json_string = json_string.replace("<|assistant|>", "")
-            return json_string
-        return llm_response
+      """This method is no longer needed; use the JSONInterpreter's _extract_json"""
+      pass
 
     def try_parse_json(self, json_string, max_retries=3):
-        """Attempts to parse a JSON string, with retries and LLM-based correction."""
-        for attempt in range(max_retries):
-            try:
-                return json.loads(json_string)
-            except json.JSONDecodeError as e:
-                print(OutputFormatter.color_prefix(f"JSON parsing failed, attempt {attempt + 1} of {max_retries}.", "Internal"))
-                print(OutputFormatter.color_prefix(f"Error: {e}", "Internal"))
-                print(OutputFormatter.color_prefix(f"Raw JSON string:\n{json_string}", "Internal"))
+        """This method is no longer needed, use process_json_response instead"""
+        pass
 
-                if attempt < max_retries - 1:
-                    print(OutputFormatter.color_prefix("Retrying with LLM-based correction...", "Internal"))
-                    correction_prompt = f"""```json
-                    {json_string}
-                    ```
-                    Above JSON string has syntax error, fix the JSON so it can be parsed with json.loads() in python.
-                    Respond with JSON, and only JSON, with the correct format and make sure to comply the standard strictly.
-                    Do not stop generating until you are sure the JSON is complete and syntactically correct as defined in the format."""
-
-                    correction_prompt_tokens = len(TOKENIZER.encode(correction_prompt))
-                    print(OutputFormatter.color_prefix("Processing Correction Prompt", "Internal", time.time(), token_count=correction_prompt_tokens))
-
-                    json_string = self.invoke_llm(correction_prompt)
-                else:
-                    print(OutputFormatter.color_prefix("Max retries reached. Returning None.", "Internal"))
-                    return None
     def _prepare_prompt(self, user_input, slot, is_v1_completions=False):
         """Prepares the prompt for the LLM, handling context differently for /v1/completions."""
         global chatml_template, assistantName
@@ -1091,31 +1143,26 @@ class AIRuntimeManager:
 
 
     def generate_response(self, user_input, slot, stream=False):
-        """Generates a response to the user input, using CoT when appropriate."""
-
+        """Generates a response, using CoT if necessary, and processing JSON."""
         start_time = time.time()
-        is_v1_completions = isinstance(user_input, str) and user_input.startswith("{") #heuristic JSON
+        is_v1_completions = isinstance(user_input, str) and user_input.startswith("{")
 
         prompt = self._prepare_prompt(user_input, slot, is_v1_completions)
-        if prompt is None: #error parsing
+        if prompt is None:
             return "Error: Invalid input format for /v1/completions."
 
-        # Calculate tokens in the prompt
         prompt_tokens = len(TOKENIZER.encode(prompt))
 
-        if is_v1_completions: #Direct response
-            print(OutputFormatter.color_prefix("Direct query (/v1/completions). Generating a direct response...", "Internal", time.time() - start_time, progress=10, slot=slot)) # Corrected call
+        if is_v1_completions:
+            print(OutputFormatter.color_prefix("Direct query (/v1/completions). Generating direct response...", "Internal", time.time() - start_time, progress=10, slot=slot))
             direct_response = self.invoke_llm(prompt)
-             # DO NOT add v1/completion results to semantic memory.
             asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, direct_response), loop)
             end_time = time.time()
             generation_time = end_time - start_time
-            print(OutputFormatter.color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot)) # Corrected call
+            print(OutputFormatter.color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))
             return direct_response
 
-
-
-        print(OutputFormatter.color_prefix("Deciding whether to engage in deep thinking...", "Internal", time.time() - start_time, progress=0, token_count=prompt_tokens, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Deciding whether to engage in deep thinking...", "Internal", time.time() - start_time, progress=0, token_count=prompt_tokens, slot=slot))
         decision_prompt = f"""
         Analyze the input and decide if it requires in-depth processing or a simple response.
         Input: "{user_input}"
@@ -1131,70 +1178,68 @@ class AIRuntimeManager:
         """
 
         decision_prompt_tokens = len(TOKENIZER.encode(decision_prompt))
-        print(OutputFormatter.color_prefix("Processing Decision Prompt", "Internal", time.time() - start_time, token_count=decision_prompt_tokens, progress=1, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Processing Decision Prompt", "Internal", time.time() - start_time, token_count=decision_prompt_tokens, progress=1, slot=slot))
 
         decision_response = self.invoke_llm(decision_prompt)
 
-        try:
-            decision_json_string = self.extract_json(decision_response)
-            decision_json = self.try_parse_json(decision_json_string, max_retries=3)
+        # --- Use process_json_response for decision ---
+        decision_json = self.process_json_response(decision_response)
+        deep_thinking_required = False  # Default value
+        reasoning_summary = ""
+        if decision_json:
             deep_thinking_required = decision_json.get("decision", "no").lower() == "yes"
             reasoning_summary = decision_json.get("reasoning", "")
+        # --- End of JSON processing ---
 
-            print(OutputFormatter.color_prefix(f"Decision: {'Deep thinking required' if deep_thinking_required else 'Simple response sufficient'}", "Internal", time.time() - start_time, progress=5, slot=slot)) # Corrected call
-            print(OutputFormatter.color_prefix(f"Reasoning: {reasoning_summary}", "Internal", time.time() - start_time, progress=5, slot=slot)) # Corrected call
-        except (json.JSONDecodeError, AttributeError):
-            print(OutputFormatter.color_prefix("Failed to extract or parse decision JSON. Skipping deep thinking.", "Internal", time.time() - start_time, progress=5, slot=slot)) # Corrected call
-            deep_thinking_required = False
+
+        print(OutputFormatter.color_prefix(f"Decision: {'Deep thinking required' if deep_thinking_required else 'Simple response sufficient'}", "Internal", time.time() - start_time, progress=5, slot=slot))
+        print(OutputFormatter.color_prefix(f"Reasoning: {reasoning_summary}", "Internal", time.time() - start_time, progress=5, slot=slot))
 
         if not deep_thinking_required:
-            print(OutputFormatter.color_prefix("Simple query detected. Generating a direct response...", "Internal", time.time() - start_time, progress=10, slot=slot)) # Corrected call
-            relevant_context = self.partition_context.get_relevant_chunks(user_input, slot, k=5, requester_type="main") #added requester_type
+            print(OutputFormatter.color_prefix("Simple query detected. Generating a direct response...", "Internal", time.time() - start_time, progress=10, slot=slot))
+            relevant_context = self.partition_context.get_relevant_chunks(user_input, slot, k=5, requester_type="main")
             if relevant_context:
                 retrieved_context_text = "\n".join([item[0] for item in relevant_context])
-                context_messages = [{"role": "system", "content": decoded_initial_instructions}] # Rebuild with instructions.
+                context_messages = [{"role": "system", "content": decoded_initial_instructions}]
 
-                # check if context is not empty
-                if relevant_context: #use retrieved_context
+                if relevant_context:
                     for entry in relevant_context:
                       context_messages.append({"role": "user", "content": entry[0]})
 
-                # check if main_history is not empty
                 main_history = self.database_manager.fetch_chat_history(slot)
                 if main_history:
                     for entry in main_history:
                         context_messages.append(entry)
-                context_messages.append({"role":"user", "content": user_input}) # Add the current input, too!
+                context_messages.append({"role":"user", "content": user_input})
 
-                prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True) # Rebuild the prompt.
+                prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True)
 
             direct_response = self.invoke_llm(prompt)
             asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, direct_response), loop)
             end_time = time.time()
             generation_time = end_time - start_time
-            print(OutputFormatter.color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot)) # Corrected call
-            # Add to context and vector store, since this is NOT a /v1/completions call.
+            print(OutputFormatter.color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))
+
             self.partition_context.add_context(slot, direct_response, "main")
             asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(direct_response, slot, "main"), loop)
 
             return direct_response
 
-        print(OutputFormatter.color_prefix("Engaging in deep thinking process...", "Internal", time.time() - start_time, progress=10, slot=slot)) # Corrected call
-        # CoT responses go into the CoT context, not 'main'.
+        print(OutputFormatter.color_prefix("Engaging in deep thinking process...", "Internal", time.time() - start_time, progress=10, slot=slot))
         self.partition_context.add_context(slot, user_input, "CoT")
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(user_input, slot, "CoT"), loop)  # Specify requester_type
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(user_input, slot, "CoT"), loop)
 
-        print(OutputFormatter.color_prefix("Generating initial direct answer...", "Internal", time.time() - start_time, progress=15, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Generating initial direct answer...", "Internal", time.time() - start_time, progress=15, slot=slot))
         initial_response_prompt = f"{prompt}\nProvide a concise initial response."
 
         initial_response_prompt_tokens = len(TOKENIZER.encode(initial_response_prompt))
-        print(OutputFormatter.color_prefix("Processing Initial Response Prompt", "Internal", time.time() - start_time, token_count=initial_response_prompt_tokens, progress=16, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Processing Initial Response Prompt", "Internal", time.time() - start_time, token_count=initial_response_prompt_tokens, progress=16, slot=slot))
 
         initial_response = self.invoke_llm(initial_response_prompt)
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(initial_response, slot, "CoT"), loop)  # Specify requester_type
-        print(OutputFormatter.color_prefix(f"Initial response: {initial_response}", "Internal", time.time() - start_time, progress=20, slot=slot)) # Corrected call
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(initial_response, slot, "CoT"), loop)
+        print(OutputFormatter.color_prefix(f"Initial response: {initial_response}", "Internal", time.time() - start_time, progress=20, slot=slot))
 
-        print(OutputFormatter.color_prefix("Creating a to-do list for in-depth analysis...", "Internal", time.time() - start_time, progress=25, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Creating a to-do list for in-depth analysis...", "Internal", time.time() - start_time, progress=25, slot=slot))
         todo_prompt = f"""
         {prompt}\n
         Based on the query '{user_input}', list the steps for in-depth analysis.
@@ -1202,116 +1247,72 @@ class AIRuntimeManager:
         """
 
         todo_prompt_tokens = len(TOKENIZER.encode(todo_prompt))
-        print(OutputFormatter.color_prefix("Processing To-do Prompt", "Internal", time.time() - start_time, token_count=todo_prompt_tokens, progress=26, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Processing To-do Prompt", "Internal", time.time() - start_time, token_count=todo_prompt_tokens, progress=26, slot=slot))
 
         todo_response = self.invoke_llm(todo_prompt)
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(todo_response, slot, "CoT"), loop)  # Specify requester_type
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(todo_response, slot, "CoT"), loop)
 
-        print(OutputFormatter.color_prefix(f"To-do list: {todo_response}", "Internal", time.time() - start_time, progress=30, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix(f"To-do list: {todo_response}", "Internal", time.time() - start_time, progress=30, slot=slot))
 
         search_queries = re.findall(r"literature_review\(['\"](.*?)['\"]\)", todo_response)
         for query in search_queries:
             LiteratureReviewer.literature_review(query)
 
-        print(OutputFormatter.color_prefix("Creating a decision tree for action planning...", "Internal", time.time() - start_time, progress=35, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Creating a decision tree for action planning...", "Internal", time.time() - start_time, progress=35, slot=slot))
         decision_tree_prompt = f"{prompt}\nGiven the to-do list '{todo_response}', create a decision tree for actions."
 
         decision_tree_prompt_tokens = len(TOKENIZER.encode(decision_tree_prompt))
-        print(OutputFormatter.color_prefix("Processing Decision Tree Prompt", "Internal", time.time() - start_time, token_count=decision_tree_prompt_tokens, progress=36, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Processing Decision Tree Prompt", "Internal", time.time() - start_time, token_count=decision_tree_prompt_tokens, progress=36, slot=slot))
 
         decision_tree_text = self.invoke_llm(decision_tree_prompt)
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_tree_text, slot, "CoT"), loop) # Specify requester_type
-        print(OutputFormatter.color_prefix(f"Decision tree (text): {decision_tree_text}", "Internal", time.time() - start_time, progress=40, slot=slot)) # Corrected call
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_tree_text, slot, "CoT"), loop)
+        print(OutputFormatter.color_prefix(f"Decision tree (text): {decision_tree_text}", "Internal", time.time() - start_time, progress=40, slot=slot))
 
-        print(OutputFormatter.color_prefix("Converting decision tree to JSON...", "Internal", time.time() - start_time, progress=45, slot=slot)) # Corrected call
-        json_tree_prompt = f"""
-        {prompt}\n
-        Convert the following decision tree to JSON, adhering to the specified format.
-        Decision Tree:
-        {decision_tree_text}
+        print(OutputFormatter.color_prefix("Converting decision tree to JSON...", "Internal", time.time() - start_time, progress=45, slot=slot))
+        json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
 
-        The JSON *must* be complete and follow this format:
-        ```json
-        {{
-            "input": "User input text",
-            "initial_response": "Initial response generated by the system",
-            "nodes": [
-                {{
-                    "node_id": "unique identifier for the node",
-                    "node_type": "question, action step, conclusion, or reflection",
-                    "content": "Text content of the node",
-                    "options": [
-                        {{
-                            "option_id": "unique identifier for the option",
-                            "next_node_id": "node_id of the next node if this option is chosen",
-                            "option_text": "Description of the option"
-                        }}
-                    ]
-                }}
-            ],
-            "edges": [
-                {{
-                    "from_node_id": "node_id of the source node",
-                    "to_node_id": "node_id of the destination node",
-                    "condition": "Optional condition for taking this edge"
-                }}
-            ]
-        }}
-        ```
-        Do not stop generating until you are sure the JSON is complete and syntactically correct as defined in the format.
-        Respond with JSON, and only JSON, strictly adhering to the above format.
-        """
 
         json_tree_prompt_tokens = len(TOKENIZER.encode(json_tree_prompt))
-        print(OutputFormatter.color_prefix("Processing JSON Tree Prompt", "Internal", time.time() - start_time, token_count=json_tree_prompt_tokens, progress=46, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Processing JSON Tree Prompt", "Internal", time.time() - start_time, token_count=json_tree_prompt_tokens, progress=46, slot=slot))
 
         json_tree_response = self.invoke_llm(json_tree_prompt)
 
-        try:
-            print(OutputFormatter.color_prefix("Parsing decision tree JSON...", "Internal", time.time() - start_time, progress=50, slot=slot)) # Corrected call
-            json_tree_string = self.extract_json(json_tree_response)
-            decision_tree_json = self.try_parse_json(json_tree_string, max_retries=3)
+        # --- Use process_json_response for decision tree ---
+        decision_tree_json = self.process_json_response(json_tree_response)
+        if decision_tree_json:
+            print(OutputFormatter.color_prefix(f"Decision tree (JSON): {decision_tree_json}", "Internal", time.time() - start_time, progress=55, slot=slot))
+            nodes = decision_tree_json.get("nodes", [])
+            num_nodes = len(nodes)
 
-            # Check if parsing was successful before proceeding
-            if decision_tree_json:
-                print(OutputFormatter.color_prefix(f"Decision tree (JSON): {decision_tree_json}", "Internal", time.time() - start_time, progress=55, slot=slot)) # Corrected call
+            for i, node in enumerate(nodes):
+                progress_interval = 55 + (i / num_nodes) * 35
+                DecisionTreeProcessor.process_node(node, prompt, start_time, progress_interval, self.partition_context, slot)
 
-                nodes = decision_tree_json.get("nodes", [])
-                num_nodes = len(nodes)
+            print(OutputFormatter.color_prefix("Formulating a conclusion based on processed decision tree...", "Internal", time.time() - start_time, progress=90, slot=slot))
+            conclusion_prompt = f"""
+            {prompt}\n
+            Synthesize a comprehensive conclusion from these insights:\n
+            Initial Response: {initial_response}\n
+            To-do List: {todo_response}\n
+            Decision Tree (text): {decision_tree_text}\n
+            Processed Decision Tree Nodes: {self.partition_context.get_context(slot, "CoT")}\n
 
-                # Allocate most of the progress to decision tree processing
-                for i, node in enumerate(nodes):
-                    progress_interval = 55 + (i / num_nodes) * 35  # Range 55 to 90
-                    DecisionTreeProcessor.process_node(node, prompt, start_time, progress_interval, self.partition_context, slot)
+            Provide a final conclusion based on the entire process.
+            """
 
-                print(OutputFormatter.color_prefix("Formulating a conclusion based on processed decision tree...", "Internal", time.time() - start_time, progress=90, slot=slot)) # Corrected call
-                conclusion_prompt = f"""
-                {prompt}\n
-                Synthesize a comprehensive conclusion from these insights:\n
-                Initial Response: {initial_response}\n
-                To-do List: {todo_response}\n
-                Decision Tree (text): {decision_tree_text}\n
-                Processed Decision Tree Nodes: {self.partition_context.get_context(slot, "CoT")}\n
+            conclusion_prompt_tokens = len(TOKENIZER.encode(conclusion_prompt))
+            print(OutputFormatter.color_prefix("Processing Conclusion Prompt", "Internal", time.time() - start_time, token_count=conclusion_prompt_tokens, progress=91, slot=slot))
 
-                Provide a final conclusion based on the entire process.
-                """
+            conclusion_response = self.invoke_llm(conclusion_prompt)
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot, "CoT"), loop)
+            print(OutputFormatter.color_prefix(f"Conclusion (after decision tree processing): {conclusion_response}", "Internal", time.time() - start_time, progress=92, slot=slot))
 
-                conclusion_prompt_tokens = len(TOKENIZER.encode(conclusion_prompt))
-                print(OutputFormatter.color_prefix("Processing Conclusion Prompt", "Internal", time.time() - start_time, token_count=conclusion_prompt_tokens, progress=91, slot=slot)) # Corrected call
-
-                conclusion_response = self.invoke_llm(conclusion_prompt)
-                asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot, "CoT"), loop)  # Specify requester_type
-                print(OutputFormatter.color_prefix(f"Conclusion (after decision tree processing): {conclusion_response}", "Internal", time.time() - start_time, progress=92, slot=slot)) # Corrected call
-
-            else:
-                print(OutputFormatter.color_prefix("Error: Could not parse decision tree JSON after multiple retries.", "Internal", time.time() - start_time, progress=90, slot=slot)) # Corrected call
-                conclusion_response = "An error occurred while processing the decision tree. Unable to provide a full conclusion."
-
-        except (json.JSONDecodeError, AttributeError):
-            print(OutputFormatter.color_prefix("Error in parsing or processing decision tree JSON.", "Internal", time.time() - start_time, progress=90, slot=slot)) # Corrected call
+        else:
+            print(OutputFormatter.color_prefix("Error: Could not parse decision tree JSON after multiple retries.", "Internal", time.time() - start_time, progress=90, slot=slot))
             conclusion_response = "An error occurred while processing the decision tree. Unable to provide a full conclusion."
+        # --- End of decision tree processing ---
 
-        print(OutputFormatter.color_prefix("Evaluating the need for a long response...", "Internal", time.time() - start_time, progress=94, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Evaluating the need for a long response...", "Internal", time.time() - start_time, progress=94, slot=slot))
         evaluation_prompt = f"""
         {prompt}\n
         Based on: '{user_input}', initial response '{initial_response}', and conclusion '{conclusion_response}',
@@ -1325,100 +1326,96 @@ class AIRuntimeManager:
         """
 
         evaluation_prompt_tokens = len(TOKENIZER.encode(evaluation_prompt))
-        print(OutputFormatter.color_prefix("Processing Evaluation Prompt", "Internal", time.time() - start_time, token_count=evaluation_prompt_tokens, progress=95, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Processing Evaluation Prompt", "Internal", time.time() - start_time, token_count=evaluation_prompt_tokens, progress=95, slot=slot))
 
         evaluation_response = self.invoke_llm(evaluation_prompt)
 
-        try:
-            evaluation_json_string = self.extract_json(evaluation_response)
-            evaluation_json = self.try_parse_json(evaluation_json_string, max_retries=3)
+        # --- Use process_json_response for evaluation ---
+        evaluation_json = self.process_json_response(evaluation_response)
+        requires_long_response = False  # Default value
+        if evaluation_json:
             requires_long_response = evaluation_json.get("decision", "no").lower() == "yes"
-        except (json.JSONDecodeError, AttributeError):
-            print(OutputFormatter.color_prefix("Failed to parse evaluation JSON. Defaulting to a short response.", "Internal", time.time() - start_time, progress=95, slot=slot)) # Corrected call
-            requires_long_response = False
+        # --- End of JSON processing ---
 
         if not requires_long_response:
-            print(OutputFormatter.color_prefix("Determined a short response is sufficient...", "Internal", time.time() - start_time, progress=98, slot=slot)) # Corrected call
+            print(OutputFormatter.color_prefix("Determined a short response is sufficient...", "Internal", time.time() - start_time, progress=98, slot=slot))
             asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, conclusion_response), loop)
             end_time = time.time()
             generation_time = end_time - start_time
-            print(OutputFormatter.color_prefix(conclusion_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot)) # Corrected call
-            # Add the final conclusion to main context, since this is NOT a /v1/completions call.
+            print(OutputFormatter.color_prefix(conclusion_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))
             self.partition_context.add_context(slot, conclusion_response, "main")
-            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot, "main"), loop)  # Specify requester_type
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot, "main"), loop)
 
             return conclusion_response
 
-        print(OutputFormatter.color_prefix("Handling a long response...", "Internal", time.time() - start_time, progress=98, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Handling a long response...", "Internal", time.time() - start_time, progress=98, slot=slot))
         long_response_estimate_prompt = f"{prompt}\nEstimate tokens needed for a detailed response to '{user_input}'. Respond with JSON, and only JSON, in this format:\n```json\n{{\"tokens\": <number of tokens>}}\n```"
 
         long_response_estimate_prompt_tokens = len(TOKENIZER.encode(long_response_estimate_prompt))
-        print(OutputFormatter.color_prefix("Processing Long Response Estimate Prompt", "Internal", time.time() - start_time, token_count=long_response_estimate_prompt_tokens, progress=99, slot=slot)) # Corrected call
+        print(OutputFormatter.color_prefix("Processing Long Response Estimate Prompt", "Internal", time.time() - start_time, token_count=long_response_estimate_prompt_tokens, progress=99, slot=slot))
 
         long_response_estimate = self.invoke_llm(long_response_estimate_prompt)
 
-        try:
-            tokens_estimate_json_string = self.extract_json(long_response_estimate)
-            tokens_estimate_json = self.try_parse_json(tokens_estimate_json_string, max_retries=3)
-            required_tokens = int(tokens_estimate_json.get("tokens", 500))
-        except (json.JSONDecodeError, ValueError, AttributeError):
-            print(OutputFormatter.color_prefix("Failed to parse token estimate JSON. Defaulting to 500 tokens.", "Internal", time.time() - start_time, progress=99, slot=slot)) # Corrected call
-            required_tokens = 500
+        # --- Use process_json_response for token estimate ---
+        tokens_estimate_json = self.process_json_response(long_response_estimate)
+        required_tokens = 500  # Default value
+        if tokens_estimate_json:
+            try:
+                required_tokens = int(tokens_estimate_json.get("tokens", 500))
+            except (ValueError, TypeError):
+                print(OutputFormatter.color_prefix("Failed to parse token estimate. Defaulting to 500 tokens.", "Internal"))
+        # --- End of JSON processing ---
 
-        print(OutputFormatter.color_prefix(f"Estimated tokens needed: {required_tokens}", "Internal", time.time() - start_time, progress=99, slot=slot))  # Corrected call
+
+        print(OutputFormatter.color_prefix(f"Estimated tokens needed: {required_tokens}", "Internal", time.time() - start_time, progress=99, slot=slot))
 
         long_response = ""
         remaining_tokens = required_tokens
         continue_prompt = "Continue the response, maintaining coherence and relevance."
-        
-        #Modified long response generation to manage the cases of streaming and non streaming.
 
-        if stream: #If streaming enabled.
-            #Placeholder. We aren't doing actual streaming yet.
+        if stream:
             print (OutputFormatter.color_prefix("Streaming is enabled, but not yet implemented. Returning full response.", "Internal"))
             while remaining_tokens > 0:
               part_response_prompt = f"{prompt}\n{continue_prompt}"
               part_response = self.invoke_llm(part_response_prompt)
               long_response += part_response
               remaining_tokens -= len(TOKENIZER.encode(part_response))
-              prompt = f"{prompt}\n{part_response}"  # Correctly update the prompt
+              prompt = f"{prompt}\n{part_response}"
               if remaining_tokens > 0:
                   time.sleep(2)
 
             asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, long_response), loop)
             end_time = time.time()
             generation_time = end_time-start_time
-             # Add the final long response to main context.
             self.partition_context.add_context(slot, long_response, "main")
-            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"), loop)  # Specify requester_type
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"), loop)
 
-            return long_response # Return the full response
+            return long_response
         else:
           while remaining_tokens > 0:
-              print(OutputFormatter.color_prefix(f"Generating part of the long response. Remaining tokens: {remaining_tokens}...", "Internal", time.time() - start_time, progress=99, slot=slot))  # Corrected call
+              print(OutputFormatter.color_prefix(f"Generating part of the long response. Remaining tokens: {remaining_tokens}...", "Internal", time.time() - start_time, progress=99, slot=slot))
               part_response_prompt = f"{prompt}\n{continue_prompt}"
 
               part_response_prompt_tokens = len(TOKENIZER.encode(part_response_prompt))
-              print(OutputFormatter.color_prefix("Processing Part Response Prompt", "Internal", time.time() - start_time, token_count=part_response_prompt_tokens, progress=99, slot=slot))  # Corrected call
+              print(OutputFormatter.color_prefix("Processing Part Response Prompt", "Internal", time.time() - start_time, token_count=part_response_prompt_tokens, progress=99, slot=slot))
 
               part_response = self.invoke_llm(part_response_prompt)
               long_response += part_response
 
               remaining_tokens -= len(TOKENIZER.encode(part_response))
 
-              prompt = f"{prompt}\n{part_response}"  # Correctly update the prompt
+              prompt = f"{prompt}\n{part_response}"
 
               if remaining_tokens > 0:
-                  time.sleep(2) #  Throttle requests to avoid rate limits
+                  time.sleep(2)
 
-          print(OutputFormatter.color_prefix("Completed generation of the long response.", "Internal", time.time() - start_time, progress=100, slot=slot))  # Corrected call
+          print(OutputFormatter.color_prefix("Completed generation of the long response.", "Internal", time.time() - start_time, progress=100, slot=slot))
           asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, long_response), loop)
           end_time = time.time()
           generation_time = end_time - start_time
-          print(OutputFormatter.color_prefix(long_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))  # Corrected call
-          # Add the final long response to main context.
+          print(OutputFormatter.color_prefix(long_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))
           self.partition_context.add_context(slot, long_response, "main")
-          asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"), loop)  # Specify requester_type
+          asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"), loop)
 
 
           return long_response
@@ -1428,6 +1425,144 @@ class AIRuntimeManager:
     def calculate_total_context_length(self, slot, requester_type):
         """Calculates the total context length for a given slot and requester type."""
         return self.partition_context.calculate_total_context_length(slot, requester_type)
+
+
+class JSONInterpreter:
+    """
+    A class to interpret, validate, and self-repair JSON strings.
+    """
+
+    def __init__(self, llm_invoker):
+        """
+        Initializes the JSONInterpreter.
+
+        Args:
+            llm_invoker: A function that can invoke the LLM (e.g., ai_runtime_manager.invoke_llm).
+        """
+        self.llm_invoke = llm_invoker
+
+    def _extract_json(self, text: str) -> str:
+        """Extracts a JSON string from text using regex, handling various cases."""
+        # Match JSON objects that are complete
+        match = re.search(r"\{(?:[^{}]|(?:\".*?\")|(?:\{(?:[^{}]|(?:\".*?\"))*\}))*\}", text, re.DOTALL)
+        if match:
+            return match.group(0)
+
+        # Handle cases where JSON is incomplete by finding the largest valid JSON object
+        start = text.find('{')
+        if start == -1: return ""  # No JSON object found
+
+        balance = 0
+        end = -1
+        for i in range(start, len(text)):
+            if text[i] == '{':
+                balance += 1
+            elif text[i] == '}':
+                balance -= 1
+            if balance == 0 and text[i] == '}':
+                end = i + 1
+                break
+
+        if end != -1 :
+            return text[start:end]
+        else:
+            return text[start:]  # Return partial JSON if no complete object found
+
+
+
+    def _find_parsing_errors(self, json_string: str) -> Optional[list]:
+        """Identifies specific parsing errors in the JSON string."""
+        try:
+            json.loads(json_string)
+            return None  # No errors
+        except json.JSONDecodeError as e:
+            errors = []
+            errors.append(f"General error: {e.msg} at line {e.lineno}, column {e.colno}")
+
+            # Check for unescaped control characters
+            if "Unterminated string" in e.msg:
+                errors.append("Possible unterminated string.  Check for missing quotes or escaped characters.")
+            if "Expecting value" in e.msg and e.pos == len(json_string.strip())-1:
+                errors.append("JSON appears incomplete.  Check for missing closing braces or brackets.")
+            if "Expecting ',' delimiter" in e.msg:
+              errors.append("Missing comma between elements.  Check that elements in arrays and objects are separated by commas")
+
+            # Check for missing closing brackets/braces
+            open_brackets = json_string.count('{') + json_string.count('[')
+            close_brackets = json_string.count('}') + json_string.count(']')
+            if open_brackets > close_brackets:
+                errors.append(f"Missing closing brackets/braces.  Found {open_brackets} opening, but {close_brackets} closing.")
+
+            return errors
+
+
+    def repair_json(self, json_string: str, schema: Optional[str] = None, max_retries: int = 3) -> Optional[str]:
+        """
+        Repairs a JSON string using the LLM, with retries.  Includes error analysis
+        and provides specific guidance to the LLM.
+
+        Args:
+            json_string: The potentially invalid JSON string.
+            schema: Optional JSON schema for validation (not fully implemented here, but good practice).
+            max_retries: The maximum number of repair attempts.
+
+        Returns:
+            The repaired JSON string, or None if repair fails after max_retries.
+        """
+        json_string = self._extract_json(json_string) # Clean it
+        if not json_string:
+            return None
+
+        for attempt in range(max_retries):
+            errors = self._find_parsing_errors(json_string)
+            if errors is None:
+                try:
+                    json.loads(json_string) #Double-check
+                    return json_string # Valid JSON
+                except json.JSONDecodeError:
+                    pass
+
+            print(OutputFormatter.color_prefix(f"JSON repair attempt {attempt + 1}/{max_retries}", "Internal"))
+            if errors:
+                error_str = "\n".join(errors)
+                print(OutputFormatter.color_prefix(f"Detected errors:\n{error_str}", "Internal"))
+                prompt = f"""
+                The following JSON string has errors and cannot be parsed:
+                ```json
+                {json_string}
+                ```
+                The following errors were detected:
+                {error_str}
+
+                Please repair the JSON string, ensuring it is valid and complete.  Respond with ONLY the corrected JSON, and nothing else. Make sure the JSON is properly formatted and all brackets, braces and quotes are balanced and correctly placed.
+                """
+            else: # No specific error.
+                prompt = f"""The following JSON string could not be parsed, fix and return the complete JSON:
+                ```json
+                {json_string}
+                ```
+                Please repair the JSON string. Respond with ONLY the corrected JSON, and nothing else."""
+
+            repaired_json = self.llm_invoke(prompt, caller="JSONInterpreter")
+
+            if repaired_json:
+                repaired_json = self._extract_json(repaired_json) # Clean up the output.
+                try:
+                    json.loads(repaired_json)  # Try parsing the repaired JSON
+                    print(OutputFormatter.color_prefix("JSON successfully repaired.", "Internal"))
+                    return repaired_json
+                except json.JSONDecodeError as e:
+                    print(OutputFormatter.color_prefix(f"Repair attempt failed: {e}", "Internal"))
+                    json_string = repaired_json # Use the repaired JSON for the next attempt.
+            else:
+                print(OutputFormatter.color_prefix("Repair attempt failed: LLM returned None.", "Internal"))
+                return None
+
+
+        print(OutputFormatter.color_prefix("Max repair attempts reached.  JSON could not be repaired.", "Internal"))
+        return None
+    
+
 
 class PartitionContext:
     def __init__(self, ctx_window_llm, database_manager, vector_store):
