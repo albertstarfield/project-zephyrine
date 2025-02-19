@@ -1,10 +1,10 @@
 import sqlite3
 import pickle
 from langchain.llms import LlamaCpp
-from langchain.embeddings import LlamaCppEmbeddings
-from langchain.docstore.document import Document
-from langchain.vectorstores import FAISS
-from langchain.text_splitter import CharacterTextSplitter
+#from langchain.embeddings import LlamaCppEmbeddings
+#from langchain.docstore.document import Document
+#from langchain.vectorstores import FAISS
+#from langchain.text_splitter import CharacterTextSplitter
 import os
 from colored import fg, attr, stylize
 from jinja2 import Template
@@ -27,20 +27,27 @@ import ctypes
 import subprocess  # Import subprocess
 from typing import Dict, Any, List, Optional, BinaryIO, Tuple
 import struct
+import traceback
 import pickle
+import numpy as np #Added
+from llama_cpp import Llama #Added  
 
 
 
 
 # Constants (from environment variables or defaults)
 LLM_MODEL_PATH = os.environ.get("LLM_MODEL_PATH", "./pretrainedggufmodel/preTrainedModelBaseVLM.gguf")
-EMBEDDING_MODEL_PATH = os.environ.get("EMBEDDING_MODEL_PATH", "./pretrainedggufmodel/snowflake-arctic-embed.gguf")
+EMBEDDING_MODEL_PATH = os.environ.get("EMBEDDING_MODEL_PATH", "./pretrainedggufmodel/mxbai-embed-large-v1-f16.gguf")  # Use new model
 CTX_WINDOW_LLM = int(os.environ.get("CTX_WINDOW_LLM", 4096))
 DATABASE_FILE = os.environ.get("DATABASE_FILE", "./engine_interaction.db")
 MAX_TOKENS_GENERATE = int(os.environ.get("MAX_TOKENS_GENERATE", 512))
 TOKENIZER = tiktoken.get_encoding("cl100k_base")
 HTTP_PORT = int(os.environ.get("HTTP_PORT", 8000))  # Get port from environment, default to 8000
 HTTP_HOST = os.environ.get("HTTP_HOST", "0.0.0.0")    # Get host from environment, default to 0.0.0.0
+interrupt_count = 0
+MAX_INTERRUPTS = 3  # Define a threshold
+
+
 
 # Global Variables
 llm = None
@@ -78,6 +85,9 @@ class GGUFParser:
         self.gguf_file_path = gguf_file_path
         self.metadata: Dict[str, Any] = {}
         self.tensor_infos: List[Tuple[str, List[int], int, int]] = []
+        self.tokens: List[str] = []  # Store tokens here
+        self.token_scores: List[float] = [] #and scores
+        self.token_types: List[int] = []
         self._parse()
 
     def _read_bytes(self, file: BinaryIO, num_bytes: int) -> bytes:
@@ -661,7 +671,7 @@ class AIRuntimeManager:
         self.fuzzy_threshold = 0.69
         self.database_manager = database_manager
         self.gguf_parser: Optional[GGUFParser] = None  # Store GGUF parser here
-        self.chat_formatter = ChatFormatter(self.gguf_parser) 
+        self.chat_formatter = ChatFormatter(self.gguf_parser)
         self.partition_context = None
         self.is_llm_running = False
         self._model_lock = threading.Lock()
@@ -674,7 +684,6 @@ class AIRuntimeManager:
 
         self.json_interpreter = JSONInterpreter(self.invoke_llm)
 
-        #GGUF Lowlevel file metadata parser 
 
         # Start the branch_predictor thread
         self.branch_predictor_thread = Thread(target=self.branch_predictor)
@@ -879,7 +888,6 @@ class AIRuntimeManager:
                     task_args = ()
 
                 self.start_time = time.time()
-
                 print(OutputFormatter.color_prefix(
                     f"Starting task: {task_callable.__name__} with priority {priority}",
                     "BackbrainController",
@@ -890,10 +898,13 @@ class AIRuntimeManager:
                     user_input, slot, *other_args = task_args
                     context_type = "CoT" if priority == 3 else "main"
 
-                    with self._model_lock:
+                    with self._model_lock:  # Added lock acquisition check
+                        print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for generate_response (priority != 4)", "Internal")) # DEBUG
                         while self.is_llm_running:
                             print(OutputFormatter.color_prefix("LLM is busy. Waiting...", "BackbrainController"))
                             time.sleep(0.1)
+                        print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for generate_response (priority != 4)", "Internal"))  # DEBUG
+
 
                     cached_response = self.cached_inference(user_input, slot, context_type)
                     if cached_response:
@@ -904,6 +915,7 @@ class AIRuntimeManager:
                             return cached_response
                         continue
 
+
                 try:
                     if task_callable == self.generate_response:
                         timeout = 60 if priority == 0 else None
@@ -912,6 +924,7 @@ class AIRuntimeManager:
                         def run_llm_task():
                             nonlocal result
                             try:
+                                print(OutputFormatter.color_prefix(f"run_llm_task: _stop_event.is_set(): {self._stop_event.is_set()}", "Internal")) # DEBUG
                                 if self._stop_event.is_set():
                                     print(OutputFormatter.color_prefix("Stop event set. Skipping LLM invocation.", "BackbrainController"))
                                     return
@@ -922,14 +935,20 @@ class AIRuntimeManager:
                                     result = task_callable(task_args[0], task_args[1])
                             except Exception as e:
                                 print(OutputFormatter.color_prefix(f"Error in LLM task: {e}", "BackbrainController"))
+                                traceback.print_exc() # Print full traceback
+
 
                         with self._model_lock:
+                            print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for generate_response", "Internal"))  # DEBUG
                             if self.llm is None:
                                 initialize_models()
                                 self.llm = ai_runtime_manager.llm
                                 self.partition_context.vector_store = vector_store
+                            print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for generate_response", "Internal")) # DEBUG
 
                         self._stop_event.clear()
+                        print(OutputFormatter.color_prefix(f"scheduler: Cleared _stop_event", "Internal"))  # DEBUG
+
                         self.llm_thread = threading.Thread(target=run_llm_task)
                         self.llm_thread.start()
 
@@ -946,14 +965,26 @@ class AIRuntimeManager:
                         else:
                             self.llm_thread.join()
 
+
                     elif task_callable == self.process_branch_prediction_slot: #Modified section
                         slot, chat_history = task_args # Unpack.
 
                         decision_tree_prompt = self.create_decision_tree_prompt(chat_history)
-                        decision_tree_text = self.invoke_llm(decision_tree_prompt, caller="process_branch_prediction_slot")
+
+                        with self._model_lock: # Added lock
+                            print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for process_branch_prediction_slot", "Internal")) # DEBUG
+                            while self.is_llm_running:  # Added wait
+                                time.sleep(0.1)
+                            decision_tree_text = self.invoke_llm(decision_tree_prompt, caller="process_branch_prediction_slot")
+                            print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for process_branch_prediction_slot", "Internal")) # DEBUG
 
                         json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
-                        json_tree_response = self.invoke_llm(json_tree_prompt, caller="process_branch_prediction_slot")
+                        with self._model_lock: # Added lock
+                            print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for process_branch_prediction_slot (2nd LLM call)", "Internal")) # DEBUG
+                            while self.is_llm_running: # Added wait
+                                time.sleep(0.1)
+                            json_tree_response = self.invoke_llm(json_tree_prompt, caller="process_branch_prediction_slot")
+                            print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for process_branch_prediction_slot (2nd LLM call)", "Internal"))  # DEBUG
 
                         # --- Use process_json_response ---
                         decision_tree_json = self.process_json_response(json_tree_response)
@@ -970,48 +1001,6 @@ class AIRuntimeManager:
                             print(OutputFormatter.color_prefix("Decision tree JSON processing failed.", "branch_predictor"))
 
 
-
-                    elif task_callable == self.generate_response:
-                         timeout = 60 if priority == 0 else None
-                         result = None
-
-                         def run_llm_task():
-                             nonlocal result
-                             try:
-                                 # --- Check for stop event *before* invoking ---
-                                 if self._stop_event.is_set():
-                                     print(OutputFormatter.color_prefix("Stop event set. Skipping LLM invocation.", "BackbrainController"))
-                                     return
-
-                                 if len(task_args) == 3:
-                                      result = task_callable(*task_args)
-                                 else:
-                                      result = task_callable(task_args[0], task_args[1])
-                             except Exception as e:
-                                 print(OutputFormatter.color_prefix(f"Error in LLM task: {e}", "BackbrainController"))
-
-                         with self._model_lock:
-                             if self.llm is None:
-                                 initialize_models()
-                                 self.llm = ai_runtime_manager.llm
-                                 self.partition_context.vector_store = vector_store
-
-                         self._stop_event.clear()
-                         self.llm_thread = threading.Thread(target=run_llm_task)
-                         self.llm_thread.start()
-                    
-                         if timeout is not None:
-                            self.llm_thread.join(timeout)
-                            if self.llm_thread.is_alive():
-                                print(OutputFormatter.color_prefix(
-                                        f"Task {task_callable.__name__} timed out after {timeout} seconds.",
-                                        "BackbrainController",
-                                        time.time() - self.start_time
-                                ))
-                                self.unload_model()
-                                return
-                         else:
-                              self.llm_thread.join()
                     else:
                         result = task_callable(*task_args)
 
@@ -1021,48 +1010,51 @@ class AIRuntimeManager:
                         "BackbrainController",
                         time.time() - self.start_time
                     ))
+                    traceback.print_exc()  # Print the full traceback
 
-                elapsed_time = time.time() - self.start_time
+                else:  # Execute 'else' block if no exception occurred.
+                    elapsed_time = time.time() - self.start_time
 
-                if task_callable == self.generate_response:
-                    if priority == 0 and elapsed_time < 58:
-                        pass
-                    elif priority != 4:
-                        user_input, slot, *_ = task_args
-                        context_type = "CoT" if priority == 3 else "main"
+                    if task_callable == self.generate_response:
+                        if priority == 0 and elapsed_time < 58:
+                            pass
+                        elif priority != 4:
+                            user_input, slot, *_ = task_args
+                            context_type = "CoT" if priority == 3 else "main"
 
-                        # --- JSON Processing for decision and evaluation ---
-                        if context_type == "CoT":
-                            if "Decision:" in result:  # Check for decision prompt
-                                result = self.process_json_response(result)  # Process JSON
-                            elif "Evaluation:" in result:  # Check for evaluation prompt
-                                result = self.process_json_response(result)  # Process JSON
+                            # --- JSON Processing for decision and evaluation ---
+                            if context_type == "CoT":
+                                if "Decision:" in result:  # Check for decision prompt
+                                    result = self.process_json_response(result)  # Process JSON
+                                elif "Evaluation:" in result:  # Check for evaluation prompt
+                                    result = self.process_json_response(result)  # Process JSON
 
-                        # --- End of JSON Processing ---
-                        if result is not None: # Proceed if not None
-                            self.add_to_cache(user_input, result if isinstance(result, str) else json.dumps(result), context_type, slot)
-                            self.partition_context.add_context(slot, result if isinstance(result, str) else json.dumps(result), "main" if priority == 0 else "CoT")
-                            asyncio.run_coroutine_threadsafe(
-                                self.partition_context.async_embed_and_store(result if isinstance(result, str) else json.dumps(result), slot, "main" if priority == 0 else "CoT"),
-                                loop
-                            )
+                            # --- End of JSON Processing ---
+                            if result is not None: # Proceed if not None
+                                self.add_to_cache(user_input, result if isinstance(result, str) else json.dumps(result), context_type, slot)
+                                self.partition_context.add_context(slot, result if isinstance(result, str) else json.dumps(result), "main" if priority == 0 else "CoT")
+                                asyncio.run_coroutine_threadsafe(
+                                    self.partition_context.async_embed_and_store(result if isinstance(result, str) else json.dumps(result), slot, "main" if priority == 0 else "CoT"),
+                                    loop
+                                )
+                    self.last_task_info = {
+                        "task": task_callable,
+                        "args": task_args,
+                        "result": result,
+                        "elapsed_time": elapsed_time,
+                    }
+                    print(OutputFormatter.color_prefix(
+                        f"Finished task: {task_callable.__name__} in {elapsed_time:.2f} seconds",
+                        "BackbrainController",
+                        time.time() - self.start_time
+                    ))
 
-                self.last_task_info = {
-                    "task": task_callable,
-                    "args": task_args,
-                    "result": result,
-                    "elapsed_time": elapsed_time,
-                }
-
-                print(OutputFormatter.color_prefix(
-                    f"Finished task: {task_callable.__name__} in {elapsed_time:.2f} seconds",
-                    "BackbrainController",
-                    time.time() - self.start_time
-                ))
-                self.current_task = None
-
-                if task_callable == self.generate_response and priority == 0:
-                    return result
+                finally:  # Always execute finally (even if there's a return in try/except).
+                    if task_callable == self.generate_response and priority == 0:
+                        return result #Still return result from scheduler, when called by the Server.
+                    self.current_task = None # Ensure to remove task.
+                    if self.llm_thread:
+                        self._stop_event.clear()  # Reset for next use, after thread is done.
 
             else:
                 time.sleep(0.095)
@@ -1244,6 +1236,7 @@ class AIRuntimeManager:
         existing invocations. Includes debug output and error handling.
         """
         with self._model_lock:  # Ensure exclusive access for checking/setting is_llm_running
+            print(OutputFormatter.color_prefix(f"invoke_llm called by {caller}. is_llm_running: {self.is_llm_running}", "Internal")) # DEBUG
             if self.is_llm_running:
                 print(OutputFormatter.color_prefix(
                     "LLM invocation already in progress. Skipping this invocation.", "Internal"
@@ -1251,6 +1244,8 @@ class AIRuntimeManager:
                 return "LLM busy."  # Or raise an exception
 
             self.is_llm_running = True
+            print(OutputFormatter.color_prefix(f"invoke_llm: Set is_llm_running to True", "Internal")) # DEBUG
+
 
         try:
             start_time = time.time()
@@ -1281,7 +1276,9 @@ class AIRuntimeManager:
 
         finally:
             with self._model_lock:
+              print(OutputFormatter.color_prefix(f"invoke_llm: Entering finally block. is_llm_running: {self.is_llm_running}", "Internal")) # DEBUG
               self.is_llm_running = False
+              print(OutputFormatter.color_prefix(f"invoke_llm: Set is_llm_running to False in finally block", "Internal")) # DEBUG
 
     def extract_json(self, llm_response):
       """This method is no longer needed; use the JSONInterpreter's _extract_json"""
@@ -1367,10 +1364,11 @@ class AIRuntimeManager:
         decision_prompt_tokens = len(TOKENIZER.encode(decision_prompt))
         print(OutputFormatter.color_prefix("Processing Decision Prompt", "Internal", time.time() - start_time, token_count=decision_prompt_tokens, progress=1, slot=slot))
 
-        decision_response = self.invoke_llm(decision_prompt)
 
-        # --- Use process_json_response for decision ---
-        decision_json = self.process_json_response(decision_response)
+        decision_response = self.invoke_llm(decision_prompt)
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_response, slot, "CoT"), loop) # Moved Here
+        decision_json =  self.process_json_response(decision_response)
+
         deep_thinking_required = False  # Default value
         reasoning_summary = ""
         if decision_json:
@@ -1402,19 +1400,26 @@ class AIRuntimeManager:
                 prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True)
 
             direct_response = self.invoke_llm(prompt)
+
+            # --- Add to context and embed NOW (for simple responses) ---
+            self.partition_context.add_context(slot, direct_response, "main")
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(direct_response, slot, "main"), loop)
+            # ---
+
             asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, direct_response), loop)
             end_time = time.time()
             generation_time = end_time - start_time
             print(OutputFormatter.color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))
 
-            self.partition_context.add_context(slot, direct_response, "main")
-            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(direct_response, slot, "main"), loop)
+
 
             return direct_response
 
         print(OutputFormatter.color_prefix("Engaging in deep thinking process...", "Internal", time.time() - start_time, progress=10, slot=slot))
+        # --- Add to CoT context only for deep thinking ---
         self.partition_context.add_context(slot, user_input, "CoT")
         asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(user_input, slot, "CoT"), loop)
+        # ---
 
         print(OutputFormatter.color_prefix("Generating initial direct answer...", "Internal", time.time() - start_time, progress=15, slot=slot))
         initial_response_prompt = f"{prompt}\nProvide a concise initial response."
@@ -1423,6 +1428,7 @@ class AIRuntimeManager:
         print(OutputFormatter.color_prefix("Processing Initial Response Prompt", "Internal", time.time() - start_time, token_count=initial_response_prompt_tokens, progress=16, slot=slot))
 
         initial_response = self.invoke_llm(initial_response_prompt)
+          # --- Add to CoT and embed ---
         asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(initial_response, slot, "CoT"), loop)
         print(OutputFormatter.color_prefix(f"Initial response: {initial_response}", "Internal", time.time() - start_time, progress=20, slot=slot))
 
@@ -1530,8 +1536,10 @@ class AIRuntimeManager:
             end_time = time.time()
             generation_time = end_time - start_time
             print(OutputFormatter.color_prefix(conclusion_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))
+              # --- Add to context and embed NOW (for short, deep-thought responses) ---
             self.partition_context.add_context(slot, conclusion_response, "main")
             asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot, "main"), loop)
+            # ---
 
             return conclusion_response
 
@@ -1574,8 +1582,10 @@ class AIRuntimeManager:
             asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, long_response), loop)
             end_time = time.time()
             generation_time = end_time-start_time
+              # --- Add to context and embed NOW (for streamed responses) ---
             self.partition_context.add_context(slot, long_response, "main")
             asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"), loop)
+            # ---
 
             return long_response
         else:
@@ -1601,9 +1611,9 @@ class AIRuntimeManager:
           end_time = time.time()
           generation_time = end_time - start_time
           print(OutputFormatter.color_prefix(long_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))
+          # --- Add to context and embed NOW (for long responses) ---
           self.partition_context.add_context(slot, long_response, "main")
           asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"), loop)
-
 
           return long_response
 
@@ -1824,40 +1834,59 @@ class PartitionContext:
             # Demote to CoT table (it's still in the DB, just not 'main').
             asyncio.run_coroutine_threadsafe(self.async_store_CoT_generateResponse(overflowed_item, slot), loop)
 
+    # --- MODIFIED get_relevant_chunks ---
     def get_relevant_chunks(self, query, slot, k=5, requester_type="main"):
         start_time = time.time()
         try:
-            if self.vector_store:
-                interaction_history_docs_and_scores = self.vector_store.similarity_search_with_score(
-                    query, k=k,
-                    filter={"table": "interaction_history", "slot": slot}
-                )
+            # --- Embed the query using llm.embed() ---
+            query_embedding = llm.embed(query)
 
-                cot_docs_and_scores = []
-                if requester_type == "CoT":
-                    cot_docs_and_scores = self.vector_store.similarity_search_with_score(
-                        query,
-                        k=k,
-                        filter={"table": "CoT_generateResponse_History", "slot": slot}
-                    )
-
-                combined_docs_and_scores = self.combine_results(interaction_history_docs_and_scores, cot_docs_and_scores, k)
-
-                relevant_chunks = []
-                for doc, score in combined_docs_and_scores:
-                    if isinstance(doc.page_content, str):
-                        relevant_chunks.append((doc.page_content, score))
-                    else:
-                        print(OutputFormatter.color_prefix(f"Warning: Non-string content found in document: {type(doc.page_content)}", "Internal"))
-
-                print(OutputFormatter.color_prefix(f"Retrieved {len(relevant_chunks)} relevant chunks from vector store in {time.time() - start_time:.2f}s", "Internal"))
-                return relevant_chunks
+            # --- Fetch chunks from the database ---
+            if requester_type == "CoT":
+                table_name = "CoT_generateResponse_History"
             else:
-                print(OutputFormatter.color_prefix("vector_store is None. Check initialization.", "Internal", time.time() - start_time))
-                return []
+                table_name = "interaction_history"
+
+            self.db_cursor.execute(
+                f"SELECT chunk, embedding FROM {table_name} WHERE slot = ?", (slot,)
+            )
+            rows = self.db_cursor.fetchall()
+
+            # --- Calculate cosine similarities ---
+            similarities = []
+            chunks = []
+            for chunk, pickled_embedding in rows:
+                try:
+                    embedding = pickle.loads(pickled_embedding)
+                    # --- Robustness: Handle potential type errors ---
+                    if isinstance(embedding, float):
+                        embedding = [embedding]
+                    if not isinstance(embedding, list) or not all(isinstance(x, (int, float)) for x in embedding):
+                      print(f"Warning: Invalid embedding format for chunk: {chunk[:50]}...")
+                      continue # Skip
+
+                    similarity = cosine_similarity(query_embedding, embedding)
+                    similarities.append(similarity)
+                    chunks.append(chunk)
+                except Exception as e:
+                    print(f"Error processing chunk {chunk[:50]}...: {e}")
+                    continue
+
+            # --- Get top-k chunks ---
+            if chunks: # Ensure we have valid chunks before sorting.
+                top_k_indices = np.argsort(similarities)[::-1][:k]
+                relevant_chunks = [(chunks[i], similarities[i]) for i in top_k_indices]
+            else:
+                relevant_chunks = []
+
+            print(OutputFormatter.color_prefix(f"Retrieved {len(relevant_chunks)} relevant chunks from database in {time.time() - start_time:.2f}s", "Internal"))
+            return relevant_chunks
+
         except Exception as e:
             print(OutputFormatter.color_prefix(f"Error in retrieve_relevant_chunks: {e}", "Internal", time.time() - start_time))
+            traceback.print_exc()
             return []
+    # def combine_results(self, list1, list2, k): # REMOVED
 
     def combine_results(self, list1, list2, k):
         """
@@ -1876,46 +1905,65 @@ class PartitionContext:
                     print(OutputFormatter.color_prefix("Warning: Received None in async_embed_and_store. Skipping.", "Internal"))
                     return
 
-                # Ensure text_chunk is a string (it might be a different type if coming from CoT)
                 if not isinstance(text_chunk, str):
                     print(OutputFormatter.color_prefix(f"Warning: Non-string content in async_embed_and_store: {type(text_chunk)}. Skipping.", "Internal"))
                     return
 
-                text_splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=0, separator="\n")
-                texts = text_splitter.split_text(text_chunk)  # This now works correctly
+                # We no longer split with CharacterTextSplitter, embedding whole chunks
+                # text_splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=0, separator="\n") #REMOVED
+                # texts = text_splitter.split_text(text_chunk)
+                # if not isinstance(texts, list): #REMOVED
+                #    texts = [texts]
+                texts = [text_chunk] # Embed the whole chunk
+                texts = [str(t) for t in texts] # Ensure they're strings
 
                 for text in texts:
-                    doc_id = str(time.time())
+                    doc_id = str(time.time()) #Unique ID
 
-                    # --- Use the global embedding_model ---
-                    global embedding_model
-                    if embedding_model is None: # Check first
-                        print(OutputFormatter.color_prefix("Embedding model is None. Attempting to reload...", "Internal"))
-                        initialize_models() # Reload if needed.
-                        self.vector_store = load_vector_store_from_db(embedding_model, database_manager.db_cursor) #reload vector store
-                    if embedding_model is not None: # Check again
-                        embedding = embedding_model.embed_query(text)
+                    # global embedding_model # REMOVED
+                    # if embedding_model is None: #REMOVED
+                    #     print(OutputFormatter.color_prefix("Embedding model is None. Attempting to reload...", "Internal"))
+                    #     initialize_models()
+                    #     self.vector_store = load_vector_store_from_db(embedding_model, database_manager.db_cursor)
 
-                        if requester_type == "CoT":
-                            table_name = "CoT_generateResponse_History"
-                        else:
-                            table_name = "interaction_history"
+                    # if embedding_model is not None: #REMOVED
+                    try:
+                        # --- Use llm.embed() directly ---
+                        embedding = llm.embed(text)
+                    except Exception as e:
+                        print(OutputFormatter.color_prefix(f"Error during embedding generation: {e}", "Internal"))
+                        traceback.print_exc()
+                        continue
 
-                        db_writer.schedule_write(
-                            f"INSERT INTO {table_name} (slot, doc_id, chunk, embedding) VALUES (?, ?, ?, ?)",
-                            (slot, doc_id, text, pickle.dumps(embedding))
-                        )
+                    # --- Robustness: Handle float or list ---
+                    if isinstance(embedding, float):
+                        embedding = [embedding]  # Wrap in a list
+                    elif not isinstance(embedding, list):
+                        print(OutputFormatter.color_prefix(f"Warning: Unexpected embedding type: {type(embedding)}. Skipping.", "Internal"))
+                        continue
 
-                        doc = Document(page_content=text, metadata={"slot": slot, "doc_id": doc_id, "table": table_name})
-                        self.vector_store.add_documents([doc])
-                        print(OutputFormatter.color_prefix(f"Scheduled context chunk for storage for slot {slot} and type {requester_type}: {text_chunk[:50]}...", "Internal"))
-                    # --- End of embedding section ---
+                    if not all(isinstance(x, (int, float)) for x in embedding):
+                        print(OutputFormatter.color_prefix("Warning: Embedding contains non-numeric values. Skipping.", "Internal"))
+                        continue
+
+                    if requester_type == "CoT":
+                        table_name = "CoT_generateResponse_History"
                     else:
-                        print(OutputFormatter.color_prefix("Embedding model still None after reload attempt. Skipping embedding.", "Internal"))
+                        table_name = "interaction_history"
+                    db_writer.schedule_write(
+                        f"INSERT INTO {table_name} (slot, doc_id, chunk, embedding) VALUES (?, ?, ?, ?)",
+                        (slot, doc_id, text, pickle.dumps(embedding))
+                    )
 
+                    # doc = Document(page_content=text, metadata={"slot": slot, "doc_id": doc_id, "table": table_name}) # REMOVED
+                    # self.vector_store.add_documents([doc]) # REMOVED
+                    print(OutputFormatter.color_prefix(f"Scheduled context chunk for storage for slot {slot} and type {requester_type}: {text_chunk[:50]}...", "Internal"))
+                    # else: # REMOVED
+                    #     print(OutputFormatter.color_prefix("Embedding model still None after reload attempt. Skipping embedding.", "Internal"))
 
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Error in embed_and_store: {e}", "Internal"))
+                traceback.print_exc()
 
     async def async_store_CoT_generateResponse(self, message, slot):
         """Asynchronously stores data in CoT_generateResponse_History."""
@@ -1984,29 +2032,10 @@ class DecisionTreeProcessor:
 
 def initialize_models():
     """Initializes the LLM, embedding model, and vector store, and GGUF parser"""
-    global llm, embedding_model, vector_store, ai_runtime_manager, database_manager
+    global llm, ai_runtime_manager, database_manager # removed embedding_model, vector_store
 
     n_batch = 512
-    with subprocess.Popen([sys.executable, "-c",
-                           f"""
-from langchain.llms import LlamaCpp
-llm = LlamaCpp(
-    model_path="{LLM_MODEL_PATH}",
-    n_gpu_layers=-1,
-    n_batch={n_batch},
-    n_ctx={CTX_WINDOW_LLM},
-    f16_kv=True,
-    verbose=True,
-    max_tokens={MAX_TOKENS_GENERATE},
-    rope_freq_base=10000,
-    rope_freq_scale=1
-)
-                           """],
-                          stderr=subprocess.PIPE, text=True) as proc:
-        for line in proc.stderr:
-            print(OutputFormatter.color_prefix(f"LlamaCpp stderr: {line.strip()}", "Internal"))
-
-    llm = LlamaCpp(
+    llm = Llama(
         model_path=LLM_MODEL_PATH,
         n_gpu_layers=-1,
         n_batch=n_batch,
@@ -2015,21 +2044,22 @@ llm = LlamaCpp(
         verbose=True,
         max_tokens=MAX_TOKENS_GENERATE,
         rope_freq_base=10000,
-        rope_freq_scale=1
+        rope_freq_scale=1,
+        embedding=True,  # CRUCIAL: Enable embedding functionality
     )
 
-
-    embedding_model = LlamaCppEmbeddings(model_path=EMBEDDING_MODEL_PATH, n_ctx=CTX_WINDOW_LLM, n_gpu_layers=-1, n_batch=n_batch)
-    vector_store = FAISS.from_texts(["Hello world!"], embedding_model)
+    # embedding_model = LlamaCppEmbeddings(model_path=EMBEDDING_MODEL_PATH, n_ctx=CTX_WINDOW_LLM, n_gpu_layers=-1, n_batch=n_batch) # REMOVED
+    # vector_store = FAISS.from_texts(["Hello world!"], embedding_model) # REMOVED
 
     database_manager = DatabaseManager(DATABASE_FILE, loop)
     ai_runtime_manager = AIRuntimeManager(llm, database_manager)
     database_manager.ai_runtime_manager = ai_runtime_manager
     ai_runtime_manager.llm = llm # Make absolutely sure this is set
 
+
+
     # Initialize GGUF parser
     ai_runtime_manager.initialize_gguf_parser()
-
 
     # LLM Warmup
     print(OutputFormatter.color_prefix("Warming up the LLM...", "Internal"))
@@ -2042,42 +2072,8 @@ llm = LlamaCpp(
     return database_manager
 
 def load_vector_store_from_db(embedding_model, db_cursor):
-    """Loads the vector store from the database."""
-    print(OutputFormatter.color_prefix("Loading vector store from database...", "Internal"))
-    try:
-        # Fetch data from interaction_history
-        db_cursor.execute("SELECT chunk, slot, doc_id FROM interaction_history")
-        interaction_history_rows = db_cursor.fetchall()
-
-        # Fetch data from CoT_generateResponse_History
-        db_cursor.execute("SELECT message, slot, doc_id FROM CoT_generateResponse_History") #Fixed query
-        cot_rows = db_cursor.fetchall()
-
-
-        if not interaction_history_rows and not cot_rows:
-            print(OutputFormatter.color_prefix("No existing vector store found in the database. Creating a new one.", "Internal"))
-            return FAISS.from_texts(["This is a dummy text to initialize FAISS."], embedding_model)
-
-        texts = []
-        metadatas = []
-
-        # Process interaction_history rows
-        for chunk, slot, doc_id in interaction_history_rows:
-            texts.append(chunk)
-            metadatas.append({"slot": slot, "doc_id": doc_id, "table": "interaction_history"})
-
-        # Process CoT_generateResponse_History rows
-        for message, slot, doc_id in cot_rows: # Fixed
-            texts.append(message) #Fixed
-            metadatas.append({"slot": slot, "doc_id": doc_id, "table": "CoT_generateResponse_History"})
-
-        vector_store = FAISS.from_texts(texts, embedding_model, metadatas=metadatas)
-        print(OutputFormatter.color_prefix("Vector store loaded successfully from database.", "Internal"))
-        return vector_store
-    except Exception as e:
-        print(OutputFormatter.color_prefix(f"Error loading vector store from database: {e}", "Internal"))
-        return FAISS.from_texts(["This is a dummy text to initialize FAISS."], embedding_model) #Return dummy
-
+    print("stub")
+    return("stub")
 
 async def input_task(ai_runtime_manager, partition_context):
   """Task to handle user input in a separate thread (CLI)."""
@@ -2121,8 +2117,8 @@ async def main():
     ai_runtime_manager.partition_context = partition_context # Set partition_context in AIRuntimeManager
 
     # Load vector store from the database after starting the writer task
-    vector_store = load_vector_store_from_db(embedding_model, database_manager.db_cursor)
-    partition_context.vector_store = vector_store
+    #vector_store = load_vector_store_from_db(embedding_model, database_manager.db_cursor)
+    #partition_context.vector_store = vector_store
 
     #Engine runtime watchdog
     watchdog = Watchdog(sys.argv[0], ai_runtime_manager)
@@ -2278,14 +2274,29 @@ def run_server(port=None, host=None): #Added parameters with None
     httpd.serve_forever()
 
 def signal_handler(sig, frame):
-    global httpd, ai_runtime_manager
-    print(OutputFormatter.color_prefix("\nShutting down server...", "Internal"))
-    if httpd:
-        httpd.shutdown()
-    if ai_runtime_manager:
-        ai_runtime_manager.unload_model()  # Unload on Ctrl+C
-    print(OutputFormatter.color_prefix("Server shut down.", "Internal"))
-    sys.exit(0) #Still exit, but after the unload
+    global httpd, ai_runtime_manager, interrupt_count
+    interrupt_count += 1
+    print(OutputFormatter.color_prefix(f"\nInterrupt signal received ({interrupt_count}/{MAX_INTERRUPTS})...", "Internal"))
+
+    if interrupt_count >= MAX_INTERRUPTS:
+        print(OutputFormatter.color_prefix("Maximum interrupt count reached. Forcefully exiting...", "Internal"))
+        # Forceful exit (OS-specific)
+        if platform.system() == "Windows":
+            # On Windows, we can use TerminateProcess (very aggressive).
+            handle = ctypes.windll.kernel32.GetCurrentProcess()
+            ctypes.windll.kernel32.TerminateProcess(handle, -1)
+        else:
+            # On POSIX systems, send SIGKILL to the current process.
+            os.kill(os.getpid(), signal.SIGKILL)
+        sys.exit(1)  # Fallback exit.
+    else:
+        print(OutputFormatter.color_prefix("Shutting down server...", "Internal"))
+        if httpd:
+            httpd.shutdown()
+        if ai_runtime_manager:
+            ai_runtime_manager.unload_model()
+        print(OutputFormatter.color_prefix("Server shut down.", "Internal"))
+        sys.exit(0)
 
 if __name__ == "__main__":
 
