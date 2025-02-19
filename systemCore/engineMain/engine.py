@@ -42,6 +42,7 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 LLM_MODEL_PATH = os.environ.get("LLM_MODEL_PATH", "./pretrainedggufmodel/preTrainedModelBaseVLM.gguf")
 EMBEDDING_MODEL_PATH = os.environ.get("EMBEDDING_MODEL_PATH", "./pretrainedggufmodel/mxbai-embed-large-v1-f16.gguf")  # Use new model
 CTX_WINDOW_LLM = int(os.environ.get("CTX_WINDOW_LLM", 4096))
+N_BATCH = int(os.environ.get("N_BATCH", 512))  # Define n_batch globally
 DATABASE_FILE = os.environ.get("DATABASE_FILE", "./engine_interaction.db")
 MAX_TOKENS_GENERATE = int(os.environ.get("MAX_TOKENS_GENERATE", 512))
 TOKENIZER = tiktoken.get_encoding("cl100k_base")
@@ -65,6 +66,64 @@ httpd = None  # Global variable for the HTTP server
 encoded_instructions = (
     "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZnQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUu"
 )
+
+class EmbeddingThread(Thread):
+    def __init__(self, embedding_model_path, ctx_window_llm, n_batch, database_manager):
+        super().__init__(daemon=True)
+        self.embedding_model_path = embedding_model_path
+        self.ctx_window_llm = ctx_window_llm
+        self.n_batch = n_batch
+        self.embedding_queue = []  # Queue for text chunks to embed
+        self.queue_lock = threading.Lock()
+        self.database_manager = database_manager  # Store DatabaseManager
+        self.embedding_llm = None  # Initialize within the thread
+        self._stop_event = threading.Event() # Stop event.
+    def run(self):
+        """Thread's main loop."""
+        self.embedding_llm = Llama(model_path=self.embedding_model_path, n_ctx=self.ctx_window_llm, n_gpu_layers=-1, n_batch=self.n_batch, embedding=True)
+        while not self._stop_event.is_set():
+            with self.queue_lock:
+                if not self.embedding_queue:
+                    time.sleep(0.1)  # Avoid busy-waiting
+                    continue
+                task = self.embedding_queue.pop(0)
+            text_chunk, slot, requester_type, doc_id = task
+
+            try:
+                embedding = self.embedding_llm.embed(text_chunk)
+                 # --- Robustness: Handle float or list ---
+                if isinstance(embedding, float):
+                    embedding = [embedding]  # Wrap in a list
+                elif not isinstance(embedding, list):
+                    print(OutputFormatter.color_prefix(f"Warning: Unexpected embedding type: {type(embedding)}. Skipping.", "Internal"))
+                    continue
+
+                if not all(isinstance(x, (int, float)) for x in embedding):
+                    print(OutputFormatter.color_prefix("Warning: Embedding contains non-numeric values. Skipping.", "Internal"))
+                    continue
+
+                if requester_type == "CoT":
+                    table_name = "CoT_generateResponse_History"
+                else:
+                    table_name = "interaction_history"
+
+                self.database_manager.db_writer.schedule_write(
+                    f"INSERT INTO {table_name} (slot, doc_id, chunk, embedding) VALUES (?, ?, ?, ?)",
+                    (slot, doc_id, text_chunk, pickle.dumps(embedding))
+                )
+                print(OutputFormatter.color_prefix(f"Scheduled database write for embedding: slot {slot}, type {requester_type}", "Internal"))
+            except Exception as e:
+                print(OutputFormatter.color_prefix(f"Error in embedding thread: {e}", "Internal"))
+                traceback.print_exc()
+
+    def stop(self):
+        """Stops the embedding thread."""
+        self._stop_event.set()
+
+    def embed_and_store(self, text_chunk, slot, requester_type, doc_id):
+        """Adds a text chunk to the embedding queue."""
+        with self.queue_lock:
+            self.embedding_queue.append((text_chunk, slot, requester_type, doc_id))
 
 # --- GGUF Parsing (Adapted from reference code) ---
 class GGUFValueType:  # Define outside the class
@@ -232,16 +291,17 @@ class DatabaseManager:
         """Creates necessary tables if they don't exist."""
         self.db_cursor.execute(
             """
-            CREATE TABLE IF NOT EXISTS interaction_history ( 
-
-
+            CREATE TABLE IF NOT EXISTS interaction_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 slot INTEGER,
                 role TEXT,
                 message TEXT,
                 response TEXT,
                 context_type TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                doc_id TEXT,  -- Add doc_id
+                chunk TEXT,   -- Add chunk
+                embedding BLOB
             )
             """
         )
@@ -278,6 +338,7 @@ class DatabaseManager:
             )
             """
         )
+        
         self.db_connection.commit()
 
     @property
@@ -414,13 +475,14 @@ class DatabaseManager:
     async def async_db_write(self, slot, query, response):
         """Asynchronously writes user queries and AI responses to the database."""
         try:
+            doc_id = str(time.time())  # Generate a unique doc_id
             self.db_writer.schedule_write(
-                "INSERT INTO interaction_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
-                (slot, "User", query, response, "main"),
+                "INSERT INTO interaction_history (slot, role, message, response, context_type, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (slot, "User", query, response, "main", doc_id, query, pickle.dumps([])),  # Add doc_id and chunk with empty embedding initially
             )
             self.db_writer.schedule_write(
-                "INSERT INTO interaction_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
-                (slot, "AI", response, "", "main"),
+                "INSERT INTO interaction_history (slot, role, message, response, context_type, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (slot, "AI", response, "", "main", doc_id, response, pickle.dumps([])), # Add doc_id and chunk with empty embedding initially
             )
         except Exception as e:
             print(OutputFormatter.color_prefix(f"Error scheduling write to database: {e}", "Internal"))
@@ -1830,18 +1892,17 @@ class PartitionContext:
     def get_relevant_chunks(self, query, slot, k=5, requester_type="main"):
         start_time = time.time()
         try:
-            # --- Embed the query using llm.embed() ---
-            query_embedding = embedding_llm.embed(query) #Use embedding LLM
+            # --- Embed the query using embedding_llm ---
+            query_embedding = embedding_llm.embed(query)
 
             # --- Fetch chunks from the database ---
             if requester_type == "CoT":
                 table_name = "CoT_generateResponse_History"
             else:
                 table_name = "interaction_history"
-
-            self.db_cursor.execute(
-                f"SELECT chunk, embedding FROM {table_name} WHERE slot = ?", (slot,)
-            )
+                self.db_cursor.execute(
+                    f"SELECT '', embedding FROM {table_name} WHERE slot = ?", (slot,)  # Select an empty string
+                )
             rows = self.db_cursor.fetchall()
 
             # --- Calculate cosine similarities ---
@@ -1901,57 +1962,13 @@ class PartitionContext:
                     print(OutputFormatter.color_prefix(f"Warning: Non-string content in async_embed_and_store: {type(text_chunk)}. Skipping.", "Internal"))
                     return
 
-                # We no longer split with CharacterTextSplitter, embedding whole chunks
-                # text_splitter = CharacterTextSplitter(chunk_size=100, chunk_overlap=0, separator="\n") #REMOVED
-                # texts = text_splitter.split_text(text_chunk)
-                # if not isinstance(texts, list): #REMOVED
-                #    texts = [texts]
                 texts = [text_chunk] # Embed the whole chunk
                 texts = [str(t) for t in texts] # Ensure they're strings
 
                 for text in texts:
-                    doc_id = str(time.time()) #Unique ID
-
-                    # global embedding_model # REMOVED
-                    # if embedding_model is None: #REMOVED
-                    #     print(OutputFormatter.color_prefix("Embedding model is None. Attempting to reload...", "Internal"))
-                    #     initialize_models()
-                    #     self.vector_store = load_vector_store_from_db(embedding_model, database_manager.db_cursor)
-
-                    # if embedding_model is not None: #REMOVED
-                    try:
-                        # --- Use embedding_llm.embed() directly ---
-                        embedding = llm.embed(text)
-                    except Exception as e:
-                        print(OutputFormatter.color_prefix(f"Error during embedding generation: {e}", "Internal"))
-                        traceback.print_exc()
-                        continue
-
-                    # --- Robustness: Handle float or list ---
-                    if isinstance(embedding, float):
-                        embedding = [embedding]  # Wrap in a list
-                    elif not isinstance(embedding, list):
-                        print(OutputFormatter.color_prefix(f"Warning: Unexpected embedding type: {type(embedding)}. Skipping.", "Internal"))
-                        continue
-
-                    if not all(isinstance(x, (int, float)) for x in embedding):
-                        print(OutputFormatter.color_prefix("Warning: Embedding contains non-numeric values. Skipping.", "Internal"))
-                        continue
-
-                    if requester_type == "CoT":
-                        table_name = "CoT_generateResponse_History"
-                    else:
-                        table_name = "interaction_history"
-                    db_writer.schedule_write(
-                        f"INSERT INTO {table_name} (slot, doc_id, chunk, embedding) VALUES (?, ?, ?, ?)",
-                        (slot, doc_id, text, pickle.dumps(embedding))
-                    )
-
-                    # doc = Document(page_content=text, metadata={"slot": slot, "doc_id": doc_id, "table": table_name}) # REMOVED
-                    # self.vector_store.add_documents([doc]) # REMOVED
-                    print(OutputFormatter.color_prefix(f"Scheduled context chunk for storage for slot {slot} and type {requester_type}: {text_chunk[:50]}...", "Internal"))
-                    # else: # REMOVED
-                    #     print(OutputFormatter.color_prefix("Embedding model still None after reload attempt. Skipping embedding.", "Internal"))
+                    # Use the embedding thread.
+                    doc_id = str(time.time())  # Unique ID *before* adding to queue
+                    embedding_thread.embed_and_store(text, slot, requester_type, doc_id)
 
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Error in embed_and_store: {e}", "Internal"))
@@ -2024,7 +2041,7 @@ def initialize_models():
         n_batch=n_batch,
         n_ctx=CTX_WINDOW_LLM,
         f16_kv=True,
-        verbose=False,  # Less verbose during initialization
+        verbose=False,
         max_tokens=MAX_TOKENS_GENERATE
     )
 
@@ -2099,11 +2116,15 @@ async def main():
 
 
     partition_context = PartitionContext(CTX_WINDOW_LLM, database_manager, vector_store)
-    ai_runtime_manager.partition_context = partition_context # Set partition_context in AIRuntimeManager
+    ai_runtime_manager.partition_context = partition_context
 
     # Load vector store from the database after starting the writer task
     #vector_store = load_vector_store_from_db(embedding_model, database_manager.db_cursor)
     #partition_context.vector_store = vector_store
+
+    global embedding_thread
+    embedding_thread = EmbeddingThread(EMBEDDING_MODEL_PATH, CTX_WINDOW_LLM, N_BATCH, database_manager) # Use the global N_BATCH
+    embedding_thread.start()
 
     #Engine runtime watchdog
     watchdog = Watchdog(sys.argv[0], ai_runtime_manager)

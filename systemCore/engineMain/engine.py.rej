@@ -1,12 +1,68 @@
 --- engine.py
 +++ engine.py
-@@ -849,9 +849,6 @@
-     def cached_inference(self, prompt, slot, context_type):
-         """Checks if a similar prompt exists in the database using fuzzy matching."""
-         
--        # Ensure sequential execution by waiting if LLM is running
--        while self.is_llm_running: #Wait if LLM busy
--            time.sleep(0.1)
+@@ -404,12 +404,10 @@
+                 message TEXT,
+                 response TEXT,
+                 context_type TEXT,
+-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+-                doc_id TEXT,  -- Add doc_id
+-                chunk TEXT,   -- Add chunk
+-                embedding BLOB
++                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+             )
+             """
++        )
+         )
+         self.db_cursor.execute(
+             """
+@@ -491,12 +489,12 @@
+         """Asynchronously writes user queries and AI responses to the database."""
+         try:
+             doc_id = str(time.time())  # Generate a unique doc_id
+-            self.db_writer.schedule_write( #Modified to include chunk and doc_id.
+-                "INSERT INTO interaction_history (slot, role, message, response, context_type, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+-                (slot, "User", query, response, "main", doc_id, query, pickle.dumps([])),  # Add doc_id and chunk with empty embedding initially
+-            )
+-            self.db_writer.schedule_write( #Modified to include chunk and doc_id.
+-                "INSERT INTO interaction_history (slot, role, message, response, context_type, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
++            self.db_writer.schedule_write(
++                "INSERT INTO interaction_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
++                (slot, "User", query, response, "main"),
++            )
++            self.db_writer.schedule_write(
++                "INSERT INTO interaction_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
+                 (slot, "AI", response, "", "main", doc_id, response, pickle.dumps([])), # Add doc_id and chunk with empty embedding initially
+             )
+         except Exception as e:
+@@ -1896,14 +1894,13 @@
+             )
+             rows = self.db_cursor.fetchall()
  
-         db_cursor = self.database_manager.db_cursor
+-            # --- Calculate cosine similarities ---
+             similarities = []
+             chunks = []
+-            for text_content, pickled_embedding in rows:
++            for chunk, pickled_embedding in rows:
+                 try:
+                     embedding = pickle.loads(pickled_embedding)
+                     # --- Robustness: Handle potential type errors ---
+-                    if isinstance(embedding, float):  # Corrected variable name here
++                    if isinstance(embedding, float):
+                         embedding = [embedding]
+                     if not isinstance(embedding, list) or not all(isinstance(x, (int, float)) for x in embedding):
+                       print(f"Warning: Invalid embedding format for chunk: {chunk[:50]}...")
+@@ -1911,12 +1908,12 @@
+ 
+                     similarity = cosine_similarity(query_embedding, embedding)
+                     similarities.append(similarity)
+-                    chunks.append(text_content)
++                    chunks.append(chunk)
+                 except Exception as e:
+                     print(f"Error processing chunk {chunk[:50]}...: {e}")
+                     continue
+ 
+-            # --- Get top-k chunks.
++            # --- Get top-k chunks ---
+             if chunks: # Ensure we have valid chunks before sorting.
+                 top_k_indices = np.argsort(similarities)[::-1][:k]
  
