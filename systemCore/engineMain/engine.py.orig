@@ -1685,13 +1685,9 @@ class JSONInterpreter:
             return errors
 
 
-    def _basic_json_repair(self, json_string: str) -> str:
+    def _basic_json_repair(json_string: str) -> str:
         """
-        Attempts basic JSON repairs without using an LLM.  Handles:
-        1. Incomplete JSON (missing closing braces/brackets).
-        2. Trailing commas
-        3. Basic missing quotes
-        4. Add missing commas.
+        Attempts basic JSON repairs without using an LLM.
         """
         json_string = json_string.strip()
 
@@ -1703,25 +1699,27 @@ class JSONInterpreter:
             missing_brackets = open_brackets - close_brackets
             # Try to intelligently add closing brackets.  This is a heuristic!
             if json_string.count('{') > json_string.count('}'):
-              json_string += '}' * missing_brackets
+                json_string += '}' * missing_brackets
             elif json_string.count('[') > json_string.count(']'):
-               json_string += ']' * missing_brackets
+                json_string += ']' * missing_brackets
             else: #Just add
-               json_string += '}' * missing_brackets
+                json_string += '}' * missing_brackets
 
         #2. Handle Trailing commas
         json_string = re.sub(r',\s*}', '}', json_string)
         json_string = re.sub(r',\s*]', ']', json_string)
 
         #3. Basic attempt to add missing quotes around property names (VERY limited)
-        json_string = re.sub(r"{\s*([a-zA-Z0-9_]+)\s*:", r'{"\\1":', json_string)
-        json_string = re.sub(r",\s*([a-zA-Z0-9_]+)\s*:", r', "\\1":', json_string)
+        #   This regex is NOT robust, but it handles simple cases.
+        json_string = re.sub(r"{\s*([a-zA-Z0-9_]+)\s*:", r'{"\1":', json_string)
+        json_string = re.sub(r",\s*([a-zA-Z0-9_]+)\s*:", r',"\1":', json_string)
 
         #4. Add missing commas
-        json_string = re.sub(r'}(\s*)({)', r'}\1,\\2', json_string)
-        json_string = re.sub(r'](\s*)(\[)', r']\\1,\\2', json_string)
-        json_string = re.sub(r'}(\s*)(")', r'}\1,\\2', json_string)
-        json_string = re.sub(r'](\s*)(")', r']\\1,\\2', json_string)
+        json_string = re.sub(r'}(\s*)({)', r'}\1,\2', json_string)
+        json_string = re.sub(r'](\s*)(\[)', r']\1,\2', json_string)
+        json_string = re.sub(r'}(\s*)(")', r'}\1,\2', json_string)
+        json_string = re.sub(r'](\s*)(")', r']\1,\2', json_string)
+        #print(json_string) #debug
         return json_string
 
 
@@ -1742,11 +1740,11 @@ class JSONInterpreter:
             return None
 
         # --- Attempt basic repair ---
-        repaired_json = self._basic_json_repair(json_string)  # Corrected call
+        json_string = self._basic_json_repair(json_string)
         try:
-            json.loads(repaired_json)
+            json.loads(json_string)
             print(OutputFormatter.color_prefix("JSON successfully repaired with basic repair.", "Internal"))
-            return repaired_json  # Basic repair succeeded!
+            return json_string  # Basic repair succeeded!
         except json.JSONDecodeError:
             print(OutputFormatter.color_prefix("Basic JSON repair failed.", "Internal"))
             return None  # Basic repair failed

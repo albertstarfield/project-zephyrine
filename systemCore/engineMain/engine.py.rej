@@ -1,5 +1,5 @@
---- a/engine.py
-+++ b/engine.py
+--- engine.py
++++ engine.py
 @@ -849,9 +849,6 @@
      def cached_inference(self, prompt, slot, context_type):
          """Checks if a similar prompt exists in the database using fuzzy matching."""
@@ -9,4 +9,4 @@
 -            time.sleep(0.1)
  
          db_cursor = self.database_manager.db_cursor
-         db_cursor.execute("""
+ 
