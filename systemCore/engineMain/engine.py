@@ -20,6 +20,7 @@ from threading import Thread, Lock
 from fuzzywuzzy import fuzz
 import inspect
 import threading
+import logging
 import signal
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -31,6 +32,8 @@ import traceback
 import pickle
 import numpy as np #Added
 from llama_cpp import Llama #Added
+logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
+
 
 
 
@@ -228,7 +231,9 @@ class DatabaseManager:
         """Creates necessary tables if they don't exist."""
         self.db_cursor.execute(
             """
-            CREATE TABLE IF NOT EXISTS interaction_history (
+            CREATE TABLE IF NOT EXISTS interaction_history ( 
+
+
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 slot INTEGER,
                 role TEXT,
@@ -2019,18 +2024,20 @@ def initialize_models():
     global llm, ai_runtime_manager, database_manager
 
     n_batch = 512
+    # llm = Llama(
+    #     model_path=LLM_MODEL_PATH,
+    #     n_gpu_layers=-1,
+    #     n_batch=n_batch,
+    #     n_ctx=CTX_WINDOW_LLM,
+    #     f16_kv=True,
+    #     verbose=False,  # Less verbose during initialization
+    #     max_tokens=MAX_TOKENS_GENERATE,
+    #     rope_freq_base=10000,
+    #     rope_freq_scale=1,
+    #     embedding=True,
+    # )
     llm = Llama(
-        model_path=LLM_MODEL_PATH,
-        n_gpu_layers=-1,
-        n_batch=n_batch,
-        n_ctx=CTX_WINDOW_LLM,
-        f16_kv=True,
-        verbose=False,  # Less verbose during initialization
-        max_tokens=MAX_TOKENS_GENERATE,
-        rope_freq_base=10000,
-        rope_freq_scale=1,
-        embedding=True,
-    )
+            model_path=LLM_MODEL_PATH, n_ctx=512, verbose=False) # Reduced context
 
     database_manager = DatabaseManager(DATABASE_FILE, loop)
     ai_runtime_manager = AIRuntimeManager(llm, database_manager)
