@@ -1,0 +1,125 @@
+--- a/engine.py
++++ b/engine.py
+@@ -813,7 +813,7 @@
+ 
+     def add_task(self, task, args=(), priority=0): #Modified
+         """Adds a task to the appropriate queue based on priority."""
+-        with self.lock:
++        with self.lock: #Packing task and args into a single item caused the issue.
+             task_item = (task, args)  # Combine task and args into a single tuple
+ 
+             if priority == 0:
+@@ -838,10 +838,11 @@
+                 self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
+                 self.last_queue_save_time = time.time()
+ 
+-    def get_next_task(self):
++    def get_next_task(self): #Unpacking needed
+         with self.lock:
+             """Gets the next task from the highest priority queue that is not empty."""
+             if self.task_queue:
++                #return self.task_queue.pop(0)  # FIFO #Unpacking needed
+                 return self.task_queue.pop(0)  # FIFO
+             elif self.backbrain_tasks:
+                 return self.backbrain_tasks.pop(0)
+@@ -858,12 +859,13 @@
+     def scheduler(self):
+         """Scheduler loop (modified to use process_json_response)."""
+         while not self._stop_event.is_set():
+-            task = self.get_next_task()
++            task = self.get_next_task() #Now it returns the packed tuple.
+             if task:
+-                task_item, priority = task
++                task_item, priority = task #unpack the task and priority
+                 if isinstance(task_item, tuple):
+-                    task_callable, task_parameter = task_item
+-                    task_args = task_parameter
++                    # task_callable, task_parameter = task_item #Further unpacking.
++                    # task_args = task_parameter
++                    task_callable, task_args = task_item
+                 else:
+                     task_callable = task_item
+                     task_args = ()
+@@ -997,7 +999,7 @@
+                     print(OutputFormatter.color_prefix(f"Error during LLM invocation: {e}", "Internal"))
+                     return "LLM busy."  # Or raise an exception
+ 
+-            self.is_llm_running = True
++            self.is_llm_running = True #Flag to prevent concurrent access.
+             print(OutputFormatter.color_prefix(f"invoke_llm: Set is_llm_running to True", "Internal"))
+ 
+             try:
+@@ -1014,16 +1016,27 @@
+                             truncated_prompt = TOKENIZER.decode(TOKENIZER.encode(prompt)[:int(CTX_WINDOW_LLM * 0.75)])
+                     if truncated_prompt[-1] not in [".", "?", "!"]:
+                         last_period_index = truncated_prompt.rfind(".")
+-                        last_question_index = truncated_prompt.rfind("?")
++                        last_question_index = truncated_prompt.rfind("?") #Find the index of the last punctuation mark.
+                         last_exclamation_index = truncated_prompt.rfind("!")
+                         last_punctuation_index = max(last_period_index, last_question_index, last_exclamation_index)
+                         if last_punctuation_index != -1:
+-                            truncated_prompt = truncated_prompt[:last_punctuation_index + 1]
++                            truncated_prompt = truncated_prompt[:last_punctuation_index + 1] #Truncate to that.
+                     print(OutputFormatter.color_prefix("Truncated prompt being used...", "BackbrainController"))
+                     # Use __call__ (or llm()) to invoke the model, not .invoke()
+-                    response = self.llm(truncated_prompt)
++                    # response = self.llm(truncated_prompt)
++                    response = self.llm(truncated_prompt) #Call the LLM.
++                    # --- Extract text from response ---
++                    if isinstance(response, dict) and 'choices' in response:
++                        text = response['choices'][0]['text']
++                        return text
++                    else:
++                        return "Error: Unexpected response format."
++                    # --- End of text extraction ---
+                 else:
+                     # Use __call__ (or llm()) to invoke the model, not .invoke()
++                    # response = self.llm(prompt)
++
++
+                     response = self.llm(prompt)
+ 
+                 print(OutputFormatter.color_prefix(f"LLM response (called by {caller}):\n{response}", "Internal"))
+@@ -1041,15 +1054,15 @@
+                     if task_callable == self.generate_response and priority == 0:
+                         return result
+ 
+-            else:
++            else: #If no tasks, sleep.
+                 time.sleep(0.095)
+                 if time.time() - self.last_queue_save_time > self.queue_save_interval:
+                     with self.lock:
+                         self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
+                         self.last_queue_save_time = time.time()
+ 
+-    def report_queue_status(self): #Modified to report the meshNetworkProcessingIO Queue
+-        """Reports the queue status (length and contents) every 10 seconds."""
++    def report_queue_status(self):
++        """Reports the queue status (length and contents) every 10 seconds.""" #Corrected unpacking
+         while True:
+             with self.lock:
+                 task_queue_length = len(self.task_queue)
+@@ -1057,15 +1070,19 @@
+                 mesh_network_tasks_length = len(self.mesh_network_tasks) if hasattr(self, 'mesh_network_tasks') else 0
+ 
+                 task_queue_contents = [
+-                    (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.task_queue
++                    # (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.task_queue #ORIGINAL
++                    (task.__name__ if not isinstance(task, tuple) else task[0].__name__, args)
++                    for (task, args), _ in self.task_queue
+                 ]
+                 backbrain_tasks_contents = [
+-                    (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.backbrain_tasks
++                    (task.__name__ if not isinstance(task, tuple) else task[0].__name__, args)
++                    for (task, args), _ in self.backbrain_tasks
+                 ]
+ 
+                 mesh_network_tasks_contents = [
+-                    (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.mesh_network_tasks
+-                ] if hasattr(self,'mesh_network_tasks') else []
++                    (task.__name__ if not isinstance(task, tuple) else task[0].__name__, args)
++                    for (task, args), _ in self.mesh_network_tasks
++                ] if hasattr(self, 'mesh_network_tasks') else []
+ 
+ 
+             print(OutputFormatter.color_prefix(
