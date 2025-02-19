@@ -30,7 +30,7 @@ import struct
 import traceback
 import pickle
 import numpy as np #Added
-from llama_cpp import Llama #Added  
+from llama_cpp import Llama #Added
 
 
 
@@ -282,40 +282,39 @@ class DatabaseManager:
     def ai_runtime_manager(self, value):
         self._ai_runtime_manager = value
 
-    def save_task_queue(self, task_queue, backbrain_tasks, mesh_network_tasks): #modified to save the new task queue.
+    def save_task_queue(self, task_queue, backbrain_tasks, mesh_network_tasks):
         """Saves the current state of the task queues to the database."""
         try:
             # Clear the existing queue
             self.db_cursor.execute("DELETE FROM task_queue")
 
-            # Save the main task queue
-            for task, priority in task_queue:
-                task_name = task[0].__name__ if isinstance(task, tuple) else task.__name__
-                args = json.dumps(task[1]) if isinstance(task, tuple) else "[]"
+            # Save the main task queue.  Iterate directly over the combined (task, args), priority tuples.
+            for (task, args), priority in task_queue:
+                task_name = task.__name__
+                args_str = json.dumps(args)
                 self.db_writer.schedule_write(
                     "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
-                    (task_name, args, priority)
+                    (task_name, args_str, priority)
                 )
 
-            # Save the backbrain task queue
-            for task, priority in backbrain_tasks:
-                task_name = task[0].__name__ if isinstance(task, tuple) else task.__name__
-                args = json.dumps(task[1]) if isinstance(task, tuple) else "[]"
+            # Save the backbrain task queue.  Same iteration pattern.
+            for (task, args), priority in backbrain_tasks:
+                task_name = task.__name__
+                args_str = json.dumps(args)
                 self.db_writer.schedule_write(
                     "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
-                    (task_name, args, priority)
+                    (task_name, args_str, priority)
                 )
-            
-            #Save meshNetworkProcessingIO Queue
-            if hasattr(self, 'mesh_network_tasks'): #Check and save only when exists
-                for task, priority in self.mesh_network_tasks:
-                    task_name = task[0].__name__ if isinstance(task, tuple) else task.__name__
-                    args = json.dumps(task[1]) if isinstance(task, tuple) else "[]"
+
+            # Save meshNetworkProcessingIO Queue. Same iteration pattern.
+            if hasattr(self, 'mesh_network_tasks'):
+                for (task, args), priority in self.mesh_network_tasks:
+                    task_name = task.__name__
+                    args_str = json.dumps(args)
                     self.db_writer.schedule_write(
                         "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
-                        (task_name, args, priority)
+                        (task_name, args_str, priority)
                     )
-
             print(OutputFormatter.color_prefix("Task queue saved to database.", "Internal"))
 
         except Exception as e:
@@ -673,8 +672,8 @@ class AIRuntimeManager:
         self.gguf_parser: Optional[GGUFParser] = None  # Store GGUF parser here
         self.chat_formatter = ChatFormatter(self.gguf_parser)
         self.partition_context = None
-        self.is_llm_running = False
-        self._model_lock = threading.Lock()
+        self.is_llm_running = False  # Flag to indicate LLM usage
+        self._model_lock = threading.Lock() #A lock to serialize access to the LLM
         self._stop_event = threading.Event()
         self.llm_thread = None  # Keep track of running LLM threads.
         # Start the scheduler thread
@@ -697,6 +696,7 @@ class AIRuntimeManager:
         self.task_queue, self.backbrain_tasks = self.database_manager.load_task_queue()
         self.last_queue_save_time = time.time()
         self.queue_save_interval = 60  # Save the queue every 60 seconds (adjust as needed)
+
 
     def initialize_gguf_parser(self):
       """Initializes the GGUF parser."""
@@ -792,23 +792,25 @@ class AIRuntimeManager:
             self._stop_event.clear()  # Reset for the next LLM run
             print(OutputFormatter.color_prefix("Model unloaded.", "Internal"))
 
-    def add_task(self, task, priority):
+    def add_task(self, task, args=(), priority=0): #Modified
+        """Adds a task to the appropriate queue based on priority."""
         with self.lock:
-            """Adds a task to the appropriate queue based on priority."""
+            task_item = (task, args)  # Combine task and args into a single tuple
+
             if priority == 0:
-                self.task_queue.append((task, priority))
+                self.task_queue.append((task_item, priority))
             elif priority == 1:
-                self.task_queue.append((task, priority))
+                self.task_queue.append((task_item, priority))
             elif priority == 2:
-                self.task_queue.append((task, priority))
+                self.task_queue.append((task_item, priority))
             elif priority == 3:
-                self.backbrain_tasks.append((task, priority))
+                self.backbrain_tasks.append((task_item, priority))
             elif priority == 4:
-                self.task_queue.append((task, priority))
-            elif priority == 99:  # Add the new priority level
-                if not hasattr(self, 'mesh_network_tasks'): # Initialize if it doesn't exist
+                self.task_queue.append((task_item, priority))
+            elif priority == 99:
+                if not hasattr(self, 'mesh_network_tasks'):
                     self.mesh_network_tasks = []
-                self.mesh_network_tasks.append((task, priority)) #tasks for priority level 99
+                self.mesh_network_tasks.append((task_item, priority))
             else:
                 raise ValueError("Invalid priority level.")
 
@@ -894,28 +896,6 @@ class AIRuntimeManager:
                     self.start_time
                 ))
 
-                if task_callable == self.generate_response and priority != 4:
-                    user_input, slot, *other_args = task_args
-                    context_type = "CoT" if priority == 3 else "main"
-
-                    with self._model_lock:  # Added lock acquisition check
-                        print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for generate_response (priority != 4)", "Internal")) # DEBUG
-                        while self.is_llm_running:
-                            print(OutputFormatter.color_prefix("LLM is busy. Waiting...", "BackbrainController"))
-                            time.sleep(0.1)
-                        print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for generate_response (priority != 4)", "Internal"))  # DEBUG
-
-
-                    cached_response = self.cached_inference(user_input, slot, context_type)
-                    if cached_response:
-                        print(OutputFormatter.color_prefix(f"Using cached response for slot {slot}", "BackbrainController"))
-                        if priority != 0:
-                            self.partition_context.add_context(slot, cached_response, context_type)
-                        elif priority == 0:
-                            return cached_response
-                        continue
-
-
                 try:
                     if task_callable == self.generate_response:
                         timeout = 60 if priority == 0 else None
@@ -937,20 +917,37 @@ class AIRuntimeManager:
                                 print(OutputFormatter.color_prefix(f"Error in LLM task: {e}", "BackbrainController"))
                                 traceback.print_exc() # Print full traceback
 
-
                         with self._model_lock:
-                            print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for generate_response", "Internal"))  # DEBUG
+                            print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for generate_response", "Internal"))
                             if self.llm is None:
                                 initialize_models()
-                                self.llm = ai_runtime_manager.llm
+                                self.llm = ai_runtime_manager.llm  # Corrected line
                                 self.partition_context.vector_store = vector_store
-                            print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for generate_response", "Internal")) # DEBUG
+                            print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for generate_response", "Internal"))
+                            self._stop_event.clear()
+                            print(OutputFormatter.color_prefix(f"scheduler: Cleared _stop_event", "Internal"))
 
-                        self._stop_event.clear()
-                        print(OutputFormatter.color_prefix(f"scheduler: Cleared _stop_event", "Internal"))  # DEBUG
 
-                        self.llm_thread = threading.Thread(target=run_llm_task)
-                        self.llm_thread.start()
+                        if priority != 4:  # Handle cached inference for non-branch-prediction tasks
+                            user_input, slot, *other_args = task_args
+                            context_type = "CoT" if priority == 3 else "main"
+
+                            cached_response = self.cached_inference(user_input, slot, context_type)
+                            if cached_response:
+                                print(OutputFormatter.color_prefix(f"Using cached response for slot {slot}", "BackbrainController"))
+                                if priority != 0:
+                                  self.partition_context.add_context(slot, cached_response, context_type)
+                                elif priority == 0:
+                                    result = cached_response # Assign to result, for the return
+                                    continue # Skips the rest
+
+
+                        if priority != 4:
+                            self.llm_thread = threading.Thread(target=run_llm_task)
+                            self.llm_thread.start()
+                        else: #No thread needed
+                            run_llm_task()
+
 
                         if timeout is not None:
                             self.llm_thread.join(timeout)
@@ -961,10 +958,9 @@ class AIRuntimeManager:
                                     time.time() - self.start_time
                                 ))
                                 self.unload_model()
-                                return
-                        else:
+                                return  # Exit the scheduler loop on timeout
+                        elif priority != 4:
                             self.llm_thread.join()
-
 
                     elif task_callable == self.process_branch_prediction_slot: #Modified section
                         slot, chat_history = task_args # Unpack.
@@ -973,16 +969,12 @@ class AIRuntimeManager:
 
                         with self._model_lock: # Added lock
                             print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for process_branch_prediction_slot", "Internal")) # DEBUG
-                            while self.is_llm_running:  # Added wait
-                                time.sleep(0.1)
                             decision_tree_text = self.invoke_llm(decision_tree_prompt, caller="process_branch_prediction_slot")
                             print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for process_branch_prediction_slot", "Internal")) # DEBUG
 
                         json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
                         with self._model_lock: # Added lock
                             print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for process_branch_prediction_slot (2nd LLM call)", "Internal")) # DEBUG
-                            while self.is_llm_running: # Added wait
-                                time.sleep(0.1)
                             json_tree_response = self.invoke_llm(json_tree_prompt, caller="process_branch_prediction_slot")
                             print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for process_branch_prediction_slot (2nd LLM call)", "Internal"))  # DEBUG
 
@@ -1014,7 +1006,6 @@ class AIRuntimeManager:
 
                 else:  # Execute 'else' block if no exception occurred.
                     elapsed_time = time.time() - self.start_time
-
                     if task_callable == self.generate_response:
                         if priority == 0 and elapsed_time < 58:
                             pass
@@ -1037,6 +1028,7 @@ class AIRuntimeManager:
                                     self.partition_context.async_embed_and_store(result if isinstance(result, str) else json.dumps(result), slot, "main" if priority == 0 else "CoT"),
                                     loop
                                 )
+
                     self.last_task_info = {
                         "task": task_callable,
                         "args": task_args,
@@ -1049,12 +1041,13 @@ class AIRuntimeManager:
                         time.time() - self.start_time
                     ))
 
-                finally:  # Always execute finally (even if there's a return in try/except).
-                    if task_callable == self.generate_response and priority == 0:
-                        return result #Still return result from scheduler, when called by the Server.
-                    self.current_task = None # Ensure to remove task.
+
+                finally:
+                    self.current_task = None  # Always clear the current task
                     if self.llm_thread:
-                        self._stop_event.clear()  # Reset for next use, after thread is done.
+                        self._stop_event.clear()
+                    if task_callable == self.generate_response and priority == 0:
+                        return result
 
             else:
                 time.sleep(0.095)
@@ -1063,6 +1056,56 @@ class AIRuntimeManager:
                         self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
                         self.last_queue_save_time = time.time()
 
+    def invoke_llm(self, prompt, caller="Unknown Caller"):
+        """
+        Invokes the LLM, handling potential model unloading and checking for
+        existing invocations. Includes debug output and error handling.
+        """
+        with self._model_lock:  # Acquire the lock *before* checking/setting is_llm_running
+            print(OutputFormatter.color_prefix(f"invoke_llm called by {caller}. is_llm_running: {self.is_llm_running}", "Internal"))
+            if self.is_llm_running:
+                print(OutputFormatter.color_prefix(
+                    "LLM invocation already in progress. Skipping this invocation.", "Internal"
+                ))
+                return "LLM busy."  # Or raise an exception
+
+            self.is_llm_running = True
+            print(OutputFormatter.color_prefix(f"invoke_llm: Set is_llm_running to True", "Internal"))
+
+            try:
+                start_time = time.time()
+                prompt_tokens = len(TOKENIZER.encode(prompt))
+                print(OutputFormatter.color_prefix(f"Invoking LLM with prompt (called by {caller}):\n{prompt}", "Internal"))
+
+                if prompt_tokens > int(CTX_WINDOW_LLM * 0.75):
+                    print(OutputFormatter.color_prefix(f"Prompt exceeds 75% of context window. Truncating...", "BackbrainController"))
+                    truncated_prompt = TOKENIZER.decode(TOKENIZER.encode(prompt)[:int(CTX_WINDOW_LLM * 0.75)])
+                    if truncated_prompt[-1] not in [".", "?", "!"]:
+                        last_period_index = truncated_prompt.rfind(".")
+                        last_question_index = truncated_prompt.rfind("?")
+                        last_exclamation_index = truncated_prompt.rfind("!")
+                        last_punctuation_index = max(last_period_index, last_question_index, last_exclamation_index)
+                        if last_punctuation_index != -1:
+                            truncated_prompt = truncated_prompt[:last_punctuation_index + 1]
+                    print(OutputFormatter.color_prefix("Truncated prompt being used...", "BackbrainController"))
+                    # Use __call__ (or llm()) to invoke the model, not .invoke()
+                    response = self.llm(truncated_prompt)
+                else:
+                    # Use __call__ (or llm()) to invoke the model, not .invoke()
+                    response = self.llm(prompt)
+
+                print(OutputFormatter.color_prefix(f"LLM response (called by {caller}):\n{response}", "Internal"))
+                return response
+
+            except Exception as e:
+                print(OutputFormatter.color_prefix(f"Error during LLM invocation: {e}", "Internal"))
+                traceback.print_exc()  # Print the full traceback
+                return "Error during LLM invocation."  # Return an error message
+
+            finally:
+                self.is_llm_running = False  # Reset the flag in a finally block
+                print(OutputFormatter.color_prefix(f"invoke_llm: Set is_llm_running to False in finally block", "Internal"))
+                # The lock is automatically released when the 'with' block exits
 
     def report_queue_status(self): #Modified to report the meshNetworkProcessingIO Queue
         """Reports the queue status (length and contents) every 10 seconds."""
@@ -1229,65 +1272,6 @@ class AIRuntimeManager:
                 if node["node_type"] == "question":
                     potential_inputs.append(node["content"])
         return potential_inputs
-
-    def invoke_llm(self, prompt, caller="Unknown Caller"):
-        """
-        Invokes the LLM, handling potential model unloading and checking for
-        existing invocations. Includes debug output and error handling.
-        """
-        with self._model_lock:  # Ensure exclusive access for checking/setting is_llm_running
-            print(OutputFormatter.color_prefix(f"invoke_llm called by {caller}. is_llm_running: {self.is_llm_running}", "Internal")) # DEBUG
-            if self.is_llm_running:
-                print(OutputFormatter.color_prefix(
-                    "LLM invocation already in progress. Skipping this invocation.", "Internal"
-                ))
-                return "LLM busy."  # Or raise an exception
-
-            self.is_llm_running = True
-            print(OutputFormatter.color_prefix(f"invoke_llm: Set is_llm_running to True", "Internal")) # DEBUG
-
-
-        try:
-            start_time = time.time()
-            prompt_tokens = len(TOKENIZER.encode(prompt))
-            print(OutputFormatter.color_prefix(f"Invoking LLM with prompt (called by {caller}):\n{prompt}", "Internal"))
-
-            if prompt_tokens > int(CTX_WINDOW_LLM * 0.75):
-                print(OutputFormatter.color_prefix(f"Prompt exceeds 75% of context window. Truncating...", "BackbrainController"))
-                truncated_prompt = TOKENIZER.decode(TOKENIZER.encode(prompt)[:int(CTX_WINDOW_LLM * 0.75)])
-                if truncated_prompt[-1] not in [".", "?", "!"]:
-                    last_period_index = truncated_prompt.rfind(".")
-                    last_question_index = truncated_prompt.rfind("?")
-                    last_exclamation_index = truncated_prompt.rfind("!")
-                    last_punctuation_index = max(last_period_index, last_question_index, last_exclamation_index)
-                    if last_punctuation_index != -1:
-                        truncated_prompt = truncated_prompt[:last_punctuation_index + 1]
-                print(OutputFormatter.color_prefix("Truncated prompt being used...", "BackbrainController"))
-                response = self.llm.invoke(truncated_prompt)
-            else:
-                response = self.llm.invoke(prompt)
-
-            print(OutputFormatter.color_prefix(f"LLM response (called by {caller}):\n{response}", "Internal"))
-            return response
-
-        except Exception as e:
-            print(OutputFormatter.color_prefix(f"Error during LLM invocation: {e}", "Internal"))
-            return "Error during LLM invocation."  # Return an error message
-
-        finally:
-            with self._model_lock:
-              print(OutputFormatter.color_prefix(f"invoke_llm: Entering finally block. is_llm_running: {self.is_llm_running}", "Internal")) # DEBUG
-              self.is_llm_running = False
-              print(OutputFormatter.color_prefix(f"invoke_llm: Set is_llm_running to False in finally block", "Internal")) # DEBUG
-
-    def extract_json(self, llm_response):
-      """This method is no longer needed; use the JSONInterpreter's _extract_json"""
-      pass
-
-    def try_parse_json(self, json_string, max_retries=3):
-        """This method is no longer needed, use process_json_response instead"""
-        pass
-
     def _prepare_prompt(self, user_input, slot, is_v1_completions=False):
         """Prepares the prompt, using the GGUF-aware ChatFormatter."""
         global assistantName  # Ensure assistantName is accessible
@@ -1339,7 +1323,7 @@ class AIRuntimeManager:
 
         if is_v1_completions:
             print(OutputFormatter.color_prefix("Direct query (/v1/completions). Generating direct response...", "Internal", time.time() - start_time, progress=10, slot=slot))
-            direct_response = self.invoke_llm(prompt)
+            direct_response = self.invoke_llm(prompt)  # Corrected call
             asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, direct_response), loop)
             end_time = time.time()
             generation_time = end_time - start_time
@@ -1365,7 +1349,7 @@ class AIRuntimeManager:
         print(OutputFormatter.color_prefix("Processing Decision Prompt", "Internal", time.time() - start_time, token_count=decision_prompt_tokens, progress=1, slot=slot))
 
 
-        decision_response = self.invoke_llm(decision_prompt)
+        decision_response = self.invoke_llm(decision_prompt) # Corrected call
         asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_response, slot, "CoT"), loop) # Moved Here
         decision_json =  self.process_json_response(decision_response)
 
@@ -1399,7 +1383,7 @@ class AIRuntimeManager:
 
                 prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True)
 
-            direct_response = self.invoke_llm(prompt)
+            direct_response = self.invoke_llm(prompt) # Corrected call
 
             # --- Add to context and embed NOW (for simple responses) ---
             self.partition_context.add_context(slot, direct_response, "main")
@@ -1427,7 +1411,7 @@ class AIRuntimeManager:
         initial_response_prompt_tokens = len(TOKENIZER.encode(initial_response_prompt))
         print(OutputFormatter.color_prefix("Processing Initial Response Prompt", "Internal", time.time() - start_time, token_count=initial_response_prompt_tokens, progress=16, slot=slot))
 
-        initial_response = self.invoke_llm(initial_response_prompt)
+        initial_response = self.invoke_llm(initial_response_prompt)  # Corrected call
           # --- Add to CoT and embed ---
         asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(initial_response, slot, "CoT"), loop)
         print(OutputFormatter.color_prefix(f"Initial response: {initial_response}", "Internal", time.time() - start_time, progress=20, slot=slot))
@@ -1442,7 +1426,7 @@ class AIRuntimeManager:
         todo_prompt_tokens = len(TOKENIZER.encode(todo_prompt))
         print(OutputFormatter.color_prefix("Processing To-do Prompt", "Internal", time.time() - start_time, token_count=todo_prompt_tokens, progress=26, slot=slot))
 
-        todo_response = self.invoke_llm(todo_prompt)
+        todo_response = self.invoke_llm(todo_prompt) # Corrected call
         asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(todo_response, slot, "CoT"), loop)
 
         print(OutputFormatter.color_prefix(f"To-do list: {todo_response}", "Internal", time.time() - start_time, progress=30, slot=slot))
@@ -1457,7 +1441,7 @@ class AIRuntimeManager:
         decision_tree_prompt_tokens = len(TOKENIZER.encode(decision_tree_prompt))
         print(OutputFormatter.color_prefix("Processing Decision Tree Prompt", "Internal", time.time() - start_time, token_count=decision_tree_prompt_tokens, progress=36, slot=slot))
 
-        decision_tree_text = self.invoke_llm(decision_tree_prompt)
+        decision_tree_text = self.invoke_llm(decision_tree_prompt) # Corrected call
         asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_tree_text, slot, "CoT"), loop)
         print(OutputFormatter.color_prefix(f"Decision tree (text): {decision_tree_text}", "Internal", time.time() - start_time, progress=40, slot=slot))
 
@@ -1468,7 +1452,7 @@ class AIRuntimeManager:
         json_tree_prompt_tokens = len(TOKENIZER.encode(json_tree_prompt))
         print(OutputFormatter.color_prefix("Processing JSON Tree Prompt", "Internal", time.time() - start_time, token_count=json_tree_prompt_tokens, progress=46, slot=slot))
 
-        json_tree_response = self.invoke_llm(json_tree_prompt)
+        json_tree_response = self.invoke_llm(json_tree_prompt) # Corrected call
 
         # --- Use process_json_response for decision tree ---
         decision_tree_json = self.process_json_response(json_tree_response)
@@ -1496,7 +1480,7 @@ class AIRuntimeManager:
             conclusion_prompt_tokens = len(TOKENIZER.encode(conclusion_prompt))
             print(OutputFormatter.color_prefix("Processing Conclusion Prompt", "Internal", time.time() - start_time, token_count=conclusion_prompt_tokens, progress=91, slot=slot))
 
-            conclusion_response = self.invoke_llm(conclusion_prompt)
+            conclusion_response = self.invoke_llm(conclusion_prompt) # Corrected call
             asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot, "CoT"), loop)
             print(OutputFormatter.color_prefix(f"Conclusion (after decision tree processing): {conclusion_response}", "Internal", time.time() - start_time, progress=92, slot=slot))
 
@@ -1521,7 +1505,7 @@ class AIRuntimeManager:
         evaluation_prompt_tokens = len(TOKENIZER.encode(evaluation_prompt))
         print(OutputFormatter.color_prefix("Processing Evaluation Prompt", "Internal", time.time() - start_time, token_count=evaluation_prompt_tokens, progress=95, slot=slot))
 
-        evaluation_response = self.invoke_llm(evaluation_prompt)
+        evaluation_response = self.invoke_llm(evaluation_prompt) # Corrected call
 
         # --- Use process_json_response for evaluation ---
         evaluation_json = self.process_json_response(evaluation_response)
@@ -1549,7 +1533,7 @@ class AIRuntimeManager:
         long_response_estimate_prompt_tokens = len(TOKENIZER.encode(long_response_estimate_prompt))
         print(OutputFormatter.color_prefix("Processing Long Response Estimate Prompt", "Internal", time.time() - start_time, token_count=long_response_estimate_prompt_tokens, progress=99, slot=slot))
 
-        long_response_estimate = self.invoke_llm(long_response_estimate_prompt)
+        long_response_estimate = self.invoke_llm(long_response_estimate_prompt) # Corrected call
 
         # --- Use process_json_response for token estimate ---
         tokens_estimate_json = self.process_json_response(long_response_estimate)
@@ -1572,7 +1556,7 @@ class AIRuntimeManager:
             print (OutputFormatter.color_prefix("Streaming is enabled, but not yet implemented. Returning full response.", "Internal"))
             while remaining_tokens > 0:
               part_response_prompt = f"{prompt}\n{continue_prompt}"
-              part_response = self.invoke_llm(part_response_prompt)
+              part_response = self.invoke_llm(part_response_prompt)  # Corrected call
               long_response += part_response
               remaining_tokens -= len(TOKENIZER.encode(part_response))
               prompt = f"{prompt}\n{part_response}"
@@ -1596,7 +1580,7 @@ class AIRuntimeManager:
               part_response_prompt_tokens = len(TOKENIZER.encode(part_response_prompt))
               print(OutputFormatter.color_prefix("Processing Part Response Prompt", "Internal", time.time() - start_time, token_count=part_response_prompt_tokens, progress=99, slot=slot))
 
-              part_response = self.invoke_llm(part_response_prompt)
+              part_response = self.invoke_llm(part_response_prompt) # Corrected call
               long_response += part_response
 
               remaining_tokens -= len(TOKENIZER.encode(part_response))
@@ -2031,8 +2015,8 @@ class DecisionTreeProcessor:
             print(OutputFormatter.color_prefix(f"Option considered: {option['option_text']}", "Internal", generation_time=time.time() - start_time, progress=progress_interval, slot=slot))
 
 def initialize_models():
-    """Initializes the LLM, embedding model, and vector store, and GGUF parser"""
-    global llm, ai_runtime_manager, database_manager # removed embedding_model, vector_store
+    """Initializes the LLM and schedules the warmup task."""
+    global llm, ai_runtime_manager, database_manager
 
     n_batch = 512
     llm = Llama(
@@ -2041,35 +2025,37 @@ def initialize_models():
         n_batch=n_batch,
         n_ctx=CTX_WINDOW_LLM,
         f16_kv=True,
-        verbose=True,
+        verbose=False,  # Less verbose during initialization
         max_tokens=MAX_TOKENS_GENERATE,
         rope_freq_base=10000,
         rope_freq_scale=1,
-        embedding=True,  # CRUCIAL: Enable embedding functionality
+        embedding=True,
     )
-
-    # embedding_model = LlamaCppEmbeddings(model_path=EMBEDDING_MODEL_PATH, n_ctx=CTX_WINDOW_LLM, n_gpu_layers=-1, n_batch=n_batch) # REMOVED
-    # vector_store = FAISS.from_texts(["Hello world!"], embedding_model) # REMOVED
 
     database_manager = DatabaseManager(DATABASE_FILE, loop)
     ai_runtime_manager = AIRuntimeManager(llm, database_manager)
     database_manager.ai_runtime_manager = ai_runtime_manager
-    ai_runtime_manager.llm = llm # Make absolutely sure this is set
-
-
-
-    # Initialize GGUF parser
+    ai_runtime_manager.llm = llm
     ai_runtime_manager.initialize_gguf_parser()
 
-    # LLM Warmup
-    print(OutputFormatter.color_prefix("Warming up the LLM...", "Internal"))
-    try:
-        ai_runtime_manager.invoke_llm("a")
-    except Exception as e:
-        print(OutputFormatter.color_prefix(f"Error during LLM warmup: {e}", "Internal"))
-    print(OutputFormatter.color_prefix("LLM warmup complete.", "Internal"))
+    # Schedule warmup as a task with priority 0
+    print(OutputFormatter.color_prefix("Scheduling LLM warmup...", "Internal"))
+    ai_runtime_manager.add_task(warmup_llm, priority=0)  # Use the new warmup_llm function
 
     return database_manager
+
+def warmup_llm():
+    """Performs the LLM warmup."""
+    print(OutputFormatter.color_prefix("Warming up the LLM...", "Internal"))
+    try:
+        warmup_prompt = "What is the capital of France?"
+        # No need to set n_threads here; it's handled by invoke_llm
+        _ = ai_runtime_manager.invoke_llm(warmup_prompt, caller="Warmup")  # Use invoke_llm
+    except Exception as e:
+        print(OutputFormatter.color_prefix(f"Error during LLM warmup: {e}", "Internal"))
+        traceback.print_exc()  # Add traceback for debugging
+        sys.exit(1) # Exit on warmup error.
+    print(OutputFormatter.color_prefix("LLM warmup complete.", "Internal"))
 
 def load_vector_store_from_db(embedding_model, db_cursor):
     print("stub")
