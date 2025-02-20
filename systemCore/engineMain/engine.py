@@ -1,6 +1,6 @@
 import sqlite3
 import pickle
-from langchain.llms import LlamaCpp
+from huggingface_hub import hf_hub_download, HfApi
 #from langchain.embeddings import LlamaCppEmbeddings
 #from langchain.docstore.document import Document
 #from langchain.vectorstores import FAISS
@@ -21,6 +21,7 @@ from fuzzywuzzy import fuzz
 import inspect
 import threading
 import logging
+import shutil
 import signal
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -29,6 +30,7 @@ import subprocess  # Import subprocess
 from typing import Dict, Any, List, Optional, BinaryIO, Tuple
 import struct
 import traceback
+import glob
 import pickle
 import numpy as np #Added
 from llama_cpp import Llama #Added
@@ -500,39 +502,44 @@ class DatabaseWriter:
         self.loop = loop
         self.writer_task = None
 
-    def schedule_write(self, sql, data):
-        """Schedules a write operation to be executed by the writer thread."""
-        #Crucial:  use loop.call_soon_threadsafe to interact with the asyncio.Queue
-        self.loop.call_soon_threadsafe(self.write_queue.put_nowait, (sql, data))
-
-
     def start_writer(self):
         """Starts the writer task."""
         self.writer_task = self.loop.create_task(self._writer())
 
     async def _writer(self):
         while True:
-            print(OutputFormatter.color_prefix(f"DatabaseWriter: Waiting for write operation...", "Internal"))
+            print(OutputFormatter.color_prefix(f"DatabaseWriter: Waiting for write operation...", "Internal")) # Added Logging
             try:
-                write_operation = await asyncio.wait_for(self.write_queue.get(), timeout=5.0)
+                write_operation = await asyncio.wait_for(self.write_queue.get(), timeout=5.0)  # 5-second timeout
                 if write_operation is None:
-                    print(OutputFormatter.color_prefix(f"DatabaseWriter: Received shutdown signal.", "Internal"))
+                    print(OutputFormatter.color_prefix(f"DatabaseWriter: Received shutdown signal.", "Internal")) # Added Logging
                     break
 
                 sql, data = write_operation
-                print(OutputFormatter.color_prefix(f"DatabaseWriter: Executing SQL: {sql[:50]}...", "Internal"))
+                print(OutputFormatter.color_prefix(f"DatabaseWriter: Executing SQL: {sql[:50]}...", "Internal")) # Added Logging
                 self.db_cursor.execute(sql, data)
-                print(OutputFormatter.color_prefix(f"DatabaseWriter: Committing changes...", "Internal"))
+                print(OutputFormatter.color_prefix(f"DatabaseWriter: Committing changes...", "Internal")) # Added Logging
                 self.db_connection.commit()
                 print(OutputFormatter.color_prefix(f"Database write successful: {sql[:50]}...", "Internal"))
 
             except Exception as e:
-                print(OutputFormatter.color_prefix(f"Error during database write: {str(e)}", "Internal"))  # <---  str(e) IS CRUCIAL
+                print(OutputFormatter.color_prefix(f"Error during database write: {str(e)}", "Internal"))
                 self.db_connection.rollback()
-            except asyncio.TimeoutError:
+            except asyncio.TimeoutError: # Corrected Indentation: Same level as inner try
                 print(OutputFormatter.color_prefix(f"DatabaseWriter: Timeout waiting for write operation.", "Internal"))
             finally:
                 self.write_queue.task_done()
+
+    def schedule_write(self, sql, data):
+        """Schedules a write operation to be executed sequentially."""
+        self.write_queue.put_nowait((sql, data))
+
+    def close(self):
+        """Stops the writer task and closes the database connection."""
+        self.write_queue.put_nowait(None)  # Signal to stop
+        if self.writer_task:
+          self.writer_task.cancel()
+        self.db_connection.close()
 
 class OutputFormatter:
     @staticmethod
@@ -727,6 +734,160 @@ class Watchdog:
     def start(self, loop):
       self.loop = loop
       self.loop.create_task(self.monitor())
+
+class AIModelPreRuntimeManager:
+    """
+    This class manages the pre-runtime preparation of AI models.  It handles:
+
+    1.  Downloading models from the Hugging Face Hub.
+    2.  Converting models to GGUF format (for llama.cpp compatibility).
+    3.  Cloning necessary tools (like llama.cpp and stable-diffusion.cpp) into a local
+        './Library/' directory.  This is done to provide the *user* with the
+        capability to adapt and convert models themselves, beyond just downloading
+        pre-converted models.  The goal is to make the system more flexible and
+        user-empowering.
+    4. Managing the preparation of LLMs, embedding, and stablediffusion models
+
+    The objective is to make the program not just a consumer of pre-built models, but
+    also to give users the tools to adapt models. This class aims to be self-contained
+    and minimize external dependencies beyond Python itself.
+    """
+
+    @staticmethod
+    def cloning_tools():
+        """
+        Clones necessary repositories (llama.cpp and stable-diffusion.cpp) into ./Library/.
+        Uses Python's `subprocess` module to interact with git, avoiding external git binary dependencies.
+        """
+        library_dir = "./Library"
+        os.makedirs(library_dir, exist_ok=True)
+
+        repositories = {
+            "llama.cpp": "https://github.com/ggerganov/llama.cpp.git",
+            "stable-diffusion.cpp": "https://github.com/leejet/stable-diffusion.cpp.git",
+        }
+
+        for repo_name, repo_url in repositories.items():
+            target_dir = os.path.join(library_dir, repo_name)
+            if os.path.exists(target_dir):
+                print(f"Updating {repo_name} in {target_dir}...")
+                #Instead of git pull use shutil.rmtree to ensure clean updates
+                try:
+                    shutil.rmtree(target_dir)
+                    print(f"Existing {repo_name} directory removed for clean update.")
+                except OSError as e:
+                    print(f"Error removing existing {repo_name} directory: {e}")
+                    continue  # Skip to the next repository if removal fails
+            #Then clone.
+            print(f"Cloning {repo_name} from {repo_url} to {target_dir}...")
+            command = ["git", "clone", repo_url, target_dir] #git clone
+            try:
+                subprocess.run(command, check=True, cwd=library_dir) #Clone
+                print(f"Successfully cloned {repo_name}.")
+            except subprocess.CalledProcessError as e:
+                print(f"Error cloning {repo_name}: {e}")
+            except FileNotFoundError:
+                print("Error: 'git' command not found. Please ensure Git is installed and in your system's PATH.")
+                return #Exit if git is not found.
+
+
+    @staticmethod
+    def download_model(repo_id: str, local_dir: str, revision: str = None, **kwargs):
+        """
+        Downloads a model or file from the Hugging Face Hub to a custom local directory.
+        """
+        os.makedirs(local_dir, exist_ok=True)
+        api = HfApi()
+        repo_files = api.list_repo_files(repo_id=repo_id, revision=revision)
+
+        for file in repo_files:
+            try:
+                hf_hub_download(
+                    repo_id=repo_id,
+                    filename=file,
+                    local_dir=local_dir,
+                    local_dir_use_symlinks=False,
+                    revision=revision,
+                    **kwargs
+                )
+            except Exception as e:
+                print(f"Error downloading {file}: {e}")
+
+
+    @staticmethod
+    def convert_to_gguf(source_dir: str, target_dir: str, model_name: str):
+        """
+        Converts a Hugging Face model (typically in safetensors format) to GGUF format using llama.cpp's convert.py.
+        """
+        os.makedirs(target_dir, exist_ok=True)
+
+        # Use the cloned llama.cpp from the ./Library directory
+        llama_cpp_path = os.path.join("./Library", "llama.cpp")
+        convert_script_path = os.path.join(llama_cpp_path, "convert.py")
+        target_gguf_path = os.path.join(target_dir, f"{model_name}.gguf")
+
+        if not os.path.exists(convert_script_path):
+          raise FileNotFoundError(f"convert.py not found at {convert_script_path}.  Please ensure cloning_tools() has been run successfully.")
+
+        config_files = glob.glob(os.path.join(source_dir, "*.json"))
+        config_file = None
+        for file in config_files:
+            if "config.json" in file:
+                config_file = file
+                break
+
+        if not config_file:
+            print(f"Warning: No config.json file found in {source_dir}.  Conversion may fail.")
+            return
+
+        command = [
+            "python3",
+            convert_script_path,
+            source_dir,
+            "--outfile",
+            target_gguf_path,
+            "--outtype", "f16"  # Consider making outtype a parameter
+        ]
+
+        try:
+            print(f"Converting {source_dir} to GGUF format...")
+            subprocess.run(command, check=True)
+            print(f"Successfully converted model to {target_gguf_path}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error during conversion: {e}")
+        except FileNotFoundError: # This should not happen, but we are checking
+            print(f"Error: convert.py not found. Ensure cloning_tools() has run successfully.")
+
+
+    @staticmethod
+    def prepare_llm_model(repo_id: str, model_name: str, revision:str = None):
+        """Downloads and converts an LLM to GGUF."""
+        source_dir = os.path.join("./Model", model_name)
+        target_dir = os.path.join("./ModelCompiledRuntime")
+        AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
+        AIModelPreRuntimeManager.convert_to_gguf(source_dir, target_dir, model_name)
+        return os.path.join(target_dir, f"{model_name}.gguf")
+
+    @staticmethod
+    def prepare_embedding_model(repo_id: str, model_name: str, revision: str = None):
+        """Downloads the embedding model (no conversion needed)."""
+        source_dir = os.path.join("./Model", model_name)
+        AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
+        gguf_files = glob.glob(os.path.join(source_dir, "*.gguf"))
+        if gguf_files:
+            return gguf_files[0]
+        else:
+            print(f"Warning: No .gguf file found in {source_dir} for the embedding model.")
+            return None
+
+    @staticmethod
+    def prepare_stable_diffusion_model(repo_id: str, model_name: str, revision: str = None):
+        """Downloads the Stable Diffusion model (placeholder for conversion)."""
+        source_dir = os.path.join("./Model", model_name)
+        AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
+        print("Stable Diffusion model downloaded. Conversion to a runtime format is not yet implemented.")
+        #Future implementation can use the cloned stable-diffusion.cpp for conversion.
+        return source_dir
 
 class AIRuntimeManager:
     def __init__(self, llm_instance, database_manager):
@@ -1370,21 +1531,17 @@ class AIRuntimeManager:
             context_messages.extend(messages)
 
         else:
-            # Fetch chat history and format it for prompt
+            self.partition_context.add_context(slot, f"User: {user_input}", "main")
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(f"User: {user_input}", slot, "main"), loop)
             main_history = self.database_manager.fetch_chat_history(slot)
+            context = self.partition_context.get_context(slot, "main")
 
+            if context:
+                for entry in context:
+                    context_messages.append({"role": "user", "content": entry})
             if main_history:
                 for entry in main_history:
-                    context_messages.append(entry)  # Add directly from fetched history
-
-            # Add the *current* user input as a new user message
-            context_messages.append({"role": "user", "content": user_input})  # Append current input.
-
-
-        print(OutputFormatter.color_prefix(f"context_messages: {context_messages}", "Internal"))
-
-        prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True)
-        return prompt
+                    context_messages.append(entry)
 
         print(OutputFormatter.color_prefix(f"context_messages: {context_messages}", "Internal")) #DEBUG
 
@@ -1394,21 +1551,18 @@ class AIRuntimeManager:
         return prompt
 
 
-    def generate_response(self, user_input, slot, stream=False):
+    def generate_response(self, user_input, slot, stream=False): # Modified
         """Generates a response, using CoT if necessary, and processing JSON."""
         global assistantName
 
         start_time = time.time()
         is_v1_completions = isinstance(user_input, str) and user_input.startswith("{")
 
-        prompt = self._prepare_prompt(user_input, slot, is_v1_completions) # Moved Up
+        prompt = self._prepare_prompt(user_input, slot, is_v1_completions)
         if prompt is None:
             return "Error: Invalid input format for /v1/completions."
 
         prompt_tokens = len(TOKENIZER.encode(prompt))
-
-        self.partition_context.add_context(slot, f"User: {user_input}", "main") # Moved down
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(f"User: {user_input}", slot, "main"), loop)
 
         if is_v1_completions:
             print(OutputFormatter.color_prefix("Direct query (/v1/completions). Generating direct response...", "Internal", time.time() - start_time, progress=10, slot=slot))
@@ -2341,12 +2495,36 @@ def signal_handler(sig, frame):
 
 if __name__ == "__main__":
 
-    signal.signal(signal.SIGINT, signal_handler)  # Handle Ctrl+C gracefully
+    # --- Clone necessary tools ---
+    AIModelPreRuntimeManager.cloning_tools()
 
-    # Start the HTTP server in a separate thread.  This is crucial.
-    # Now we pass *no* arguments; the environment/defaults will be used.
+    # --- Download and convert models at startup ---
+    llm_model_path = AIModelPreRuntimeManager.prepare_llm_model(
+        repo_id="MBZUAI/LLaVA-Phi-3-mini-4k-instruct",
+        model_name="llava-phi-3",
+    )
+
+    embedding_model_path = AIModelPreRuntimeManager.prepare_embedding_model(
+        repo_id="mxbai-embed-large-v1",
+        model_name = "mxbai-embed",
+        revision="refs/pr/5"
+    )
+
+    sd_model_path = AIModelPreRuntimeManager.prepare_stable_diffusion_model(
+      repo_id="stabilityai/stable-diffusion-2-1",
+      model_name="stable-diffusion-2-1"
+    )
+    # --- End of model download/conversion ---
+
+    # Override environment variables
+    os.environ["LLM_MODEL_PATH"] = llm_model_path
+    if embedding_model_path:
+        os.environ["EMBEDDING_MODEL_PATH"] = embedding_model_path
+
+    signal.signal(signal.SIGINT, signal_handler)
+
     server_thread = Thread(target=run_server)
-    server_thread.daemon = True  #  Daemon threads exit when the main thread exits.
+    server_thread.daemon = True
     server_thread.start()
     loop = asyncio.new_event_loop()
     asyncio.set_event_loop(loop)
