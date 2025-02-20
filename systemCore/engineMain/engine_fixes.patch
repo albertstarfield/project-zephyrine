@@ -1,68 +1,41 @@
 --- a/engine.py
 +++ b/engine.py
-@@ -404,10 +404,12 @@
-                 message TEXT,
-                 response TEXT,
-                 context_type TEXT,
--                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
-+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
-+                doc_id TEXT,  -- Add doc_id
-+                chunk TEXT,   -- Add chunk
-+                embedding BLOB
-             )
-             """
--        )
-         )
-         self.db_cursor.execute(
-             """
-@@ -489,12 +491,12 @@
-         """Asynchronously writes user queries and AI responses to the database."""
-         try:
-             doc_id = str(time.time())  # Generate a unique doc_id
--            self.db_writer.schedule_write(
--                "INSERT INTO interaction_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
--                (slot, "User", query, response, "main"),
--            )
--            self.db_writer.schedule_write(
--                "INSERT INTO interaction_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
-+            self.db_writer.schedule_write( #Modified to include chunk and doc_id.
-+                "INSERT INTO interaction_history (slot, role, message, response, context_type, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-+                (slot, "User", query, response, "main", doc_id, query, pickle.dumps([])),  # Add doc_id and chunk with empty embedding initially
-+            )
-+            self.db_writer.schedule_write( #Modified to include chunk and doc_id.
-+                "INSERT INTO interaction_history (slot, role, message, response, context_type, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                 (slot, "AI", response, "", "main", doc_id, response, pickle.dumps([])), # Add doc_id and chunk with empty embedding initially
-             )
-         except Exception as e:
-@@ -1894,13 +1896,14 @@
-             )
-             rows = self.db_cursor.fetchall()
+@@ -492,6 +492,7 @@
+         self.llm_thread = None  # Keep track of running LLM threads.
+         # Start the scheduler thread
+         self.scheduler_thread = Thread(target=self.scheduler)
++        self._condition = threading.Condition(self._model_lock) # associate the condition with model lock
+         self.scheduler_thread.daemon = True
+         self.scheduler_thread.start()
  
-+            # --- Calculate cosine similarities ---
-             similarities = []
-             chunks = []
--            for chunk, pickled_embedding in rows:
-+            for text_content, pickled_embedding in rows:
-                 try:
-                     embedding = pickle.loads(pickled_embedding)
-                     # --- Robustness: Handle potential type errors ---
--                    if isinstance(embedding, float):
-+                    if isinstance(embedding, float):  # Corrected variable name here
-                         embedding = [embedding]
-                     if not isinstance(embedding, list) or not all(isinstance(x, (int, float)) for x in embedding):
-                       print(f"Warning: Invalid embedding format for chunk: {chunk[:50]}...")
-@@ -1908,12 +1911,12 @@
+@@ -636,8 +637,11 @@
  
-                     similarity = cosine_similarity(query_embedding, embedding)
-                     similarities.append(similarity)
--                    chunks.append(chunk)
-+                    chunks.append(text_content)
-                 except Exception as e:
-                     print(f"Error processing chunk {chunk[:50]}...: {e}")
-                     continue
+     def scheduler(self):
+         """Scheduler loop (modified to use process_json_response)."""
+-        while not self._stop_event.is_set():
+-          try: # Added broad exception handling
++        while not self._stop_event.is_set(): # Keep the main loop
++          with self._condition: # Acquire the condition (and thus the lock)
++            while not self.get_next_task() and not self._stop_event.is_set():
++              print(OutputFormatter.color_prefix(f"Scheduler waiting for condition...", "Internal"))
++              self._condition.wait()  # Wait for notification
+             task = self.get_next_task()
+             if task:
+                 task_item, priority = task  # Unpack the outer tuple: ((task, args), priority)
+@@ -803,7 +807,7 @@
+                     self.current_task = None  # Always clear the current task
+                     if self.llm_thread:
+                         self._stop_event.clear()
+-                    if task_callable == self.generate_response and priority == 0:
++                    if task_callable == self.generate_response and priority == 0: # for CLI prompt execution
+                         return result
  
--            # --- Get top-k chunks ---
-+            # --- Get top-k chunks.
-             if chunks: # Ensure we have valid chunks before sorting.
-                 top_k_indices = np.argsort(similarities)[::-1][:k]
-                 relevant_chunks = [(chunks[i], similarities[i]) for i in top_k_indices]
+             else:
+@@ -870,6 +874,7 @@
+             finally:
+                 self.is_llm_running = False
+                 print(OutputFormatter.color_prefix(f"invoke_llm: Set is_llm_running to False in finally block", "Internal"))
++                self._condition.notify() # Notify scheduler AFTER releasing the lock
+ 
+     def report_queue_status(self): #Modified to report the meshNetworkProcessingIO Queue
+         """Reports the queue status (length and contents) every 10 seconds."""
