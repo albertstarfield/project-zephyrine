@@ -291,16 +291,17 @@ class DatabaseManager:
         """Creates necessary tables if they don't exist."""
         self.db_cursor.execute(
             """
-            CREATE TABLE IF NOT EXISTS interaction_history ( 
-
-
+            CREATE TABLE IF NOT EXISTS interaction_history (
                 id INTEGER PRIMARY KEY AUTOINCREMENT,
                 slot INTEGER,
                 role TEXT,
                 message TEXT,
                 response TEXT,
                 context_type TEXT,
-                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP
+                timestamp DATETIME DEFAULT CURRENT_TIMESTAMP,
+                doc_id TEXT,  -- Add doc_id
+                chunk TEXT,   -- Add chunk
+                embedding BLOB
             )
             """
         )
@@ -337,6 +338,7 @@ class DatabaseManager:
             )
             """
         )
+        
         self.db_connection.commit()
 
     @property
@@ -355,7 +357,7 @@ class DatabaseManager:
 
             # Save the main task queue.  Iterate directly over the combined (task, args), priority tuples.
             for (task, args), priority in task_queue:
-                task_name = task.__name__
+                task_name = task.__name__ if callable(task) else str(task) # Handle non-callable tasks
                 args_str = json.dumps(args)
                 self.db_writer.schedule_write(
                     "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
@@ -364,7 +366,7 @@ class DatabaseManager:
 
             # Save the backbrain task queue.  Same iteration pattern.
             for (task, args), priority in backbrain_tasks:
-                task_name = task.__name__
+                task_name = task.__name__ if callable(task) else str(task) # Handle non-callable tasks
                 args_str = json.dumps(args)
                 self.db_writer.schedule_write(
                     "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
@@ -374,7 +376,7 @@ class DatabaseManager:
             # Save meshNetworkProcessingIO Queue. Same iteration pattern.
             if hasattr(self, 'mesh_network_tasks'):
                 for (task, args), priority in self.mesh_network_tasks:
-                    task_name = task.__name__
+                    task_name = task.__name__ if callable(task) else str(task)  # Handle non-callable tasks
                     args_str = json.dumps(args)
                     self.db_writer.schedule_write(
                         "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
@@ -467,19 +469,21 @@ class DatabaseManager:
             (slot,),
         )
         rows = self.db_cursor.fetchall()
-        history = [{"role": role.lower(), "content": message} for role, message in rows]
+        #Corrected line, filter out None values
+        history = [{"role": role.lower(), "content": message} for role, message in rows if role is not None]
         return history
 
     async def async_db_write(self, slot, query, response):
         """Asynchronously writes user queries and AI responses to the database."""
         try:
-            self.db_writer.schedule_write(
-                "INSERT INTO interaction_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
-                (slot, "User", query, response, "main"),
+            doc_id = str(time.time())  # Generate a unique doc_id
+            self.db_writer.schedule_write( #Modified to include chunk and doc_id.
+                "INSERT INTO interaction_history (slot, role, message, response, context_type, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (slot, "User", query, response, "main", doc_id, query, pickle.dumps([])),  # Add doc_id and chunk with empty embedding initially
             )
-            self.db_writer.schedule_write(
-                "INSERT INTO interaction_history (slot, role, message, response, context_type) VALUES (?, ?, ?, ?, ?)",
-                (slot, "AI", response, "", "main"),
+            self.db_writer.schedule_write( #Modified to include chunk and doc_id.
+                "INSERT INTO interaction_history (slot, role, message, response, context_type, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
+                (slot, "AI", response, "", "main", doc_id, response, pickle.dumps([])), # Add doc_id and chunk with empty embedding initially
             )
         except Exception as e:
             print(OutputFormatter.color_prefix(f"Error scheduling write to database: {e}", "Internal"))
@@ -496,38 +500,39 @@ class DatabaseWriter:
         self.loop = loop
         self.writer_task = None
 
+    def schedule_write(self, sql, data):
+        """Schedules a write operation to be executed by the writer thread."""
+        #Crucial:  use loop.call_soon_threadsafe to interact with the asyncio.Queue
+        self.loop.call_soon_threadsafe(self.write_queue.put_nowait, (sql, data))
+
+
     def start_writer(self):
         """Starts the writer task."""
         self.writer_task = self.loop.create_task(self._writer())
 
     async def _writer(self):
         while True:
+            print(OutputFormatter.color_prefix(f"DatabaseWriter: Waiting for write operation...", "Internal"))
             try:
-                write_operation = await self.write_queue.get()
+                write_operation = await asyncio.wait_for(self.write_queue.get(), timeout=5.0)
                 if write_operation is None:
+                    print(OutputFormatter.color_prefix(f"DatabaseWriter: Received shutdown signal.", "Internal"))
                     break
 
                 sql, data = write_operation
+                print(OutputFormatter.color_prefix(f"DatabaseWriter: Executing SQL: {sql[:50]}...", "Internal"))
                 self.db_cursor.execute(sql, data)
+                print(OutputFormatter.color_prefix(f"DatabaseWriter: Committing changes...", "Internal"))
                 self.db_connection.commit()
                 print(OutputFormatter.color_prefix(f"Database write successful: {sql[:50]}...", "Internal"))
 
             except Exception as e:
-                print(OutputFormatter.color_prefix(f"Error during database write: {e}", "Internal"))
+                print(OutputFormatter.color_prefix(f"Error during database write: {str(e)}", "Internal"))  # <---  str(e) IS CRUCIAL
                 self.db_connection.rollback()
+            except asyncio.TimeoutError:
+                print(OutputFormatter.color_prefix(f"DatabaseWriter: Timeout waiting for write operation.", "Internal"))
             finally:
                 self.write_queue.task_done()
-
-    def schedule_write(self, sql, data):
-        """Schedules a write operation to be executed sequentially."""
-        self.write_queue.put_nowait((sql, data))
-
-    def close(self):
-        """Stops the writer task and closes the database connection."""
-        self.write_queue.put_nowait(None)  # Signal to stop
-        if self.writer_task:
-          self.writer_task.cancel()
-        self.db_connection.close()
 
 class OutputFormatter:
     @staticmethod
@@ -886,6 +891,11 @@ class AIRuntimeManager:
     def get_next_task(self):
         with self.lock:
             """Gets the next task from the highest priority queue that is not empty."""
+            print(OutputFormatter.color_prefix(f"get_next_task: task_queue = {self.task_queue}", "Internal")) # Debugging
+            print(OutputFormatter.color_prefix(f"get_next_task: backbrain_tasks = {self.backbrain_tasks}", "Internal")) # Debugging
+            if hasattr(self, 'mesh_network_tasks'):
+                print(OutputFormatter.color_prefix(f"get_next_task: mesh_network_tasks = {self.mesh_network_tasks}", "Internal")) # Debugging
+
             if self.task_queue:
                 return self.task_queue.pop(0)  # FIFO
             elif self.backbrain_tasks:
@@ -940,6 +950,7 @@ class AIRuntimeManager:
     def scheduler(self):
         """Scheduler loop (modified to use process_json_response)."""
         while not self._stop_event.is_set():
+          try: # Added broad exception handling
             task = self.get_next_task()
             if task:
                 task_item, priority = task  # Unpack the outer tuple: ((task, args), priority)
@@ -951,7 +962,7 @@ class AIRuntimeManager:
 
                 print(OutputFormatter.color_prefix(
                     f"Starting task: {task_name} with priority {priority}",
-                    "BackbrainController", # The correct prefix type.
+                    "BackbrainController",  
                     self.start_time
                 ))
 
@@ -1098,7 +1109,7 @@ class AIRuntimeManager:
                     }
                     print(OutputFormatter.color_prefix(
                         f"Finished task: {task_callable.__name__} in {elapsed_time:.2f} seconds",
-                        "BackbrainController",
+                        "BackbrainController",  
                         time.time() - self.start_time
                     ))
 
@@ -1116,6 +1127,10 @@ class AIRuntimeManager:
                     with self.lock:
                         self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
                         self.last_queue_save_time = time.time()
+
+          except Exception as e: # Added broad exception handling.
+                print(OutputFormatter.color_prefix(f"FATAL ERROR IN SCHEDULER: {e}", "BackbrainController"))
+                traceback.print_exc() # Print full traceback
 
     def invoke_llm(self, prompt, caller="Unknown Caller"):
         """
@@ -1177,15 +1192,15 @@ class AIRuntimeManager:
                 backbrain_tasks_length = len(self.backbrain_tasks)
                 mesh_network_tasks_length = len(self.mesh_network_tasks) if hasattr(self, 'mesh_network_tasks') else 0
 
+                # Correctly handle the task item structure
                 task_queue_contents = [
-                    (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.task_queue
+                    ((task.__name__ if callable(task) else str(task)), args) for (task, args), _ in self.task_queue
                 ]
                 backbrain_tasks_contents = [
-                    (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.backbrain_tasks
+                    ((task.__name__ if callable(task) else str(task)), args) for (task, args), _ in self.backbrain_tasks
                 ]
-
                 mesh_network_tasks_contents = [
-                    (t[0].__name__ if not isinstance(t[0], tuple) else t[0][0].__name__, t[1]) for t in self.mesh_network_tasks
+                    ((task.__name__ if callable(task) else str(task)), args) for (task, args), _ in self.mesh_network_tasks
                 ] if hasattr(self,'mesh_network_tasks') else []
 
 
@@ -1355,17 +1370,21 @@ class AIRuntimeManager:
             context_messages.extend(messages)
 
         else:
-            self.partition_context.add_context(slot, f"User: {user_input}", "main")
-            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(f"User: {user_input}", slot, "main"), loop)
+            # Fetch chat history and format it for prompt
             main_history = self.database_manager.fetch_chat_history(slot)
-            context = self.partition_context.get_context(slot, "main")
 
-            if context:
-                for entry in context:
-                    context_messages.append({"role": "user", "content": entry})
             if main_history:
                 for entry in main_history:
-                    context_messages.append(entry)
+                    context_messages.append(entry)  # Add directly from fetched history
+
+            # Add the *current* user input as a new user message
+            context_messages.append({"role": "user", "content": user_input})  # Append current input.
+
+
+        print(OutputFormatter.color_prefix(f"context_messages: {context_messages}", "Internal"))
+
+        prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True)
+        return prompt
 
         print(OutputFormatter.color_prefix(f"context_messages: {context_messages}", "Internal")) #DEBUG
 
@@ -1375,18 +1394,21 @@ class AIRuntimeManager:
         return prompt
 
 
-    def generate_response(self, user_input, slot, stream=False): # Modified
+    def generate_response(self, user_input, slot, stream=False):
         """Generates a response, using CoT if necessary, and processing JSON."""
         global assistantName
 
         start_time = time.time()
         is_v1_completions = isinstance(user_input, str) and user_input.startswith("{")
 
-        prompt = self._prepare_prompt(user_input, slot, is_v1_completions)
+        prompt = self._prepare_prompt(user_input, slot, is_v1_completions) # Moved Up
         if prompt is None:
             return "Error: Invalid input format for /v1/completions."
 
         prompt_tokens = len(TOKENIZER.encode(prompt))
+
+        self.partition_context.add_context(slot, f"User: {user_input}", "main") # Moved down
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(f"User: {user_input}", slot, "main"), loop)
 
         if is_v1_completions:
             print(OutputFormatter.color_prefix("Direct query (/v1/completions). Generating direct response...", "Internal", time.time() - start_time, progress=10, slot=slot))
@@ -1405,10 +1427,12 @@ class AIRuntimeManager:
         Provide a JSON response in the following format:
         ```json
         {{
-            "decision": "yes" or "no",
-            "reasoning": "A very short one-paragraph summary of why this decision was made."
+            "decision": "<yes or no>",
+            "reasoning": "<A very short one-paragraph summary of why this decision was made.>"
         }}
         ```
+        Make sure the JSON you generate is valid and adheres to the formatting I have given. Do not stop generating before you can confirm it is valid.
+
         Respond with JSON, and only JSON, strictly adhering to the above format.
         """
 
@@ -1906,11 +1930,11 @@ class PartitionContext:
             # --- Calculate cosine similarities ---
             similarities = []
             chunks = []
-            for chunk, pickled_embedding in rows:
+            for text_content, pickled_embedding in rows:
                 try:
                     embedding = pickle.loads(pickled_embedding)
                     # --- Robustness: Handle potential type errors ---
-                    if isinstance(embedding, float):
+                    if isinstance(embedding, float):  # Corrected variable name here
                         embedding = [embedding]
                     if not isinstance(embedding, list) or not all(isinstance(x, (int, float)) for x in embedding):
                       print(f"Warning: Invalid embedding format for chunk: {chunk[:50]}...")
@@ -1918,12 +1942,12 @@ class PartitionContext:
 
                     similarity = cosine_similarity(query_embedding, embedding)
                     similarities.append(similarity)
-                    chunks.append(chunk)
+                    chunks.append(text_content)
                 except Exception as e:
                     print(f"Error processing chunk {chunk[:50]}...: {e}")
                     continue
 
-            # --- Get top-k chunks ---
+            # --- Get top-k chunks.
             if chunks: # Ensure we have valid chunks before sorting.
                 top_k_indices = np.argsort(similarities)[::-1][:k]
                 relevant_chunks = [(chunks[i], similarities[i]) for i in top_k_indices]
@@ -1976,15 +2000,28 @@ class PartitionContext:
         """Asynchronously stores data in CoT_generateResponse_History."""
         async with db_lock:
             try:
+                doc_id = str(time.time())  # Generate a unique doc_id
                 db_writer.schedule_write(
-                    "INSERT INTO CoT_generateResponse_History (slot, message) VALUES (?, ?)",
-                    (slot, message)
+                    "INSERT INTO CoT_generateResponse_History (slot, message, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?)",
+                    (slot, message, doc_id, message, pickle.dumps([])),  # Pass doc_id and chunk
                 )
                 print(OutputFormatter.color_prefix(f"Stored CoT_generateResponse message for slot {slot}: {message[:50]}...", "Internal"))
+
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Error storing CoT_generateResponse message: {e}", "Internal"))
 
+    def get_next_task(self):
+        with self.lock:
+            """Gets the next task from the highest priority queue that is not empty."""
+            print(OutputFormatter.color_prefix(f"get_next_task: task_queue = {self.task_queue}", "Internal")) # Debugging
+            print(OutputFormatter.color_prefix(f"get_next_task: backbrain_tasks = {self.backbrain_tasks}", "Internal")) # Debugging
+            if hasattr(self, 'mesh_network_tasks'):
+                print(OutputFormatter.color_prefix(f"get_next_task: mesh_network_tasks = {self.mesh_network_tasks}", "Internal")) # Debugging
+
+
+
     def calculate_total_context_length(self, slot, requester_type):
+        """Calculates the total context length for a given slot and requester type."""
         context = self.get_context(slot, requester_type)
         total_length = sum([len(TOKENIZER.encode(item)) for item in context if isinstance(item, str)])
         return total_length
