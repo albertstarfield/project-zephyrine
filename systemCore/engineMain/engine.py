@@ -930,7 +930,7 @@ class AIModelPreRuntimeManager:
     def prepare_llm_model(repo_id: str, model_name: str, revision:str = None):
         """Downloads, converts, and quantizes an LLM."""
         source_dir = os.path.join("./Model", model_name)
-        target_dir = os.path.join("./ModelCompiledRuntime")
+        target_dir = os.path.join("./Model/ModelCompiledRuntime")
         AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
         AIModelPreRuntimeManager.convert_to_gguf(source_dir, target_dir, model_name)
         return os.path.join(target_dir, f"{model_name}.gguf")
