@@ -48,8 +48,8 @@ N_BATCH = int(os.environ.get("N_BATCH", 512))  # Define n_batch globally
 DATABASE_FILE = os.environ.get("DATABASE_FILE", "./engine_interaction.db")
 MAX_TOKENS_GENERATE = int(os.environ.get("MAX_TOKENS_GENERATE", 512))
 TOKENIZER = tiktoken.get_encoding("cl100k_base")
-HTTP_PORT = int(os.environ.get("HTTP_PORT", 8000))  # Get port from environment, default to 8000
-HTTP_HOST = os.environ.get("HTTP_HOST", "0.0.0.0")    # Get host from environment, default to 0.0.0.0
+HTTP_PORT = int(os.environ.get("HTTP_PORT", 2738))  # Get port from environment, default to 8000
+HTTP_HOST = os.environ.get("HTTP_HOST", "127.0.0.1")    # Get host from environment, default to 0.0.0.0
 interrupt_count = 0
 MAX_INTERRUPTS = 3  # Define a threshold
 
@@ -737,65 +737,120 @@ class Watchdog:
 
 class AIModelPreRuntimeManager:
     """
-    This class manages the pre-runtime preparation of AI models.  It handles:
+    Manages pre-runtime preparation of AI models, including:
 
-    1.  Downloading models from the Hugging Face Hub.
-    2.  Converting models to GGUF format (for llama.cpp compatibility).
-    3.  Cloning necessary tools (like llama.cpp and stable-diffusion.cpp) into a local
-        './Library/' directory.  This is done to provide the *user* with the
-        capability to adapt and convert models themselves, beyond just downloading
-        pre-converted models.  The goal is to make the system more flexible and
-        user-empowering.
-    4. Managing the preparation of LLMs, embedding, and stablediffusion models
+    1. Downloading models from Hugging Face Hub.
+    2. Converting Hugging Face models (primarily LLMs) to GGUF format.
+    3. Cloning necessary tools (llama.cpp, stable-diffusion.cpp) into ./Library/.
+    4. Building llama.cpp's quantization tool (llama-quantize).
+    5. Quantizing the converted GGUF models.
 
-    The objective is to make the program not just a consumer of pre-built models, but
-    also to give users the tools to adapt models. This class aims to be self-contained
-    and minimize external dependencies beyond Python itself.
+    Objective: Empower users to adapt and convert models, not just consume pre-built ones.
     """
+
+    @staticmethod
+    def check_tool_integrity(tool_dir: str, essential_files: list) -> bool:
+        """
+        Checks if the essential files for a tool exist in the specified directory.
+        """
+        if not os.path.exists(tool_dir):
+            return False
+        for file in essential_files:
+            if not os.path.exists(os.path.join(tool_dir, file)):
+                return False
+        return True
 
     @staticmethod
     def cloning_tools():
         """
         Clones necessary repositories (llama.cpp and stable-diffusion.cpp) into ./Library/.
-        Uses Python's `subprocess` module to interact with git, avoiding external git binary dependencies.
+        Builds the llama-quantize tool.  Checks for tool integrity before cloning.
         """
         library_dir = "./Library"
         os.makedirs(library_dir, exist_ok=True)
 
         repositories = {
-            "llama.cpp": "https://github.com/ggerganov/llama.cpp.git",
-            "stable-diffusion.cpp": "https://github.com/leejet/stable-diffusion.cpp.git",
+            "llama.cpp": {
+                "url": "https://github.com/ggerganov/llama.cpp.git",
+                "essential_files": ["convert_hf_to_gguf.py", "CMakeLists.txt", "llama.h"],
+            },
+            "stable-diffusion.cpp": {
+                "url": "https://github.com/leejet/stable-diffusion.cpp.git",
+                "essential_files": ["stablediffusion.cpp", "CMakeLists.txt", "common.h"]
+            },
         }
 
-        for repo_name, repo_url in repositories.items():
+        for repo_name, repo_info in repositories.items():
             target_dir = os.path.join(library_dir, repo_name)
+            repo_url = repo_info["url"]
+            essential_files = repo_info["essential_files"]
+
+            # Check for tool integrity FIRST
+            if AIModelPreRuntimeManager.check_tool_integrity(target_dir, essential_files):
+                print(f"{repo_name} found in {target_dir} and appears to be complete. Skipping cloning.")
+                continue  # Skip to the next repository
+
+            # If integrity check fails, proceed with update/clone
             if os.path.exists(target_dir):
                 print(f"Updating {repo_name} in {target_dir}...")
-                #Instead of git pull use shutil.rmtree to ensure clean updates
                 try:
                     shutil.rmtree(target_dir)
                     print(f"Existing {repo_name} directory removed for clean update.")
                 except OSError as e:
                     print(f"Error removing existing {repo_name} directory: {e}")
                     continue  # Skip to the next repository if removal fails
-            #Then clone.
+
             print(f"Cloning {repo_name} from {repo_url} to {target_dir}...")
-            command = ["git", "clone", repo_url, target_dir] #git clone
+            command = ["git", "clone", "--depth=1", repo_url, target_dir]
             try:
-                subprocess.run(command, check=True, cwd=library_dir) #Clone
+                # --- cwd changed to os.getcwd() ---
+                subprocess.run(command, check=True, cwd=os.getcwd())  # Clone into the *current* working directory
                 print(f"Successfully cloned {repo_name}.")
             except subprocess.CalledProcessError as e:
                 print(f"Error cloning {repo_name}: {e}")
             except FileNotFoundError:
-                print("Error: 'git' command not found. Please ensure Git is installed and in your system's PATH.")
-                return #Exit if git is not found.
+                print("Error: 'git' command not found.")
+                return
+
+        # Build llama-quantize (check first if it exist).
+        quantize_tool_path = os.path.join("./Library", "llama.cpp", "build", "bin", "llama-quantize")
+        if not os.path.exists(quantize_tool_path):
+            quantize_tool_path = os.path.join("./Library", "llama.cpp", "build", "llama-quantize")
+            if not os.path.exists(quantize_tool_path):
+                AIModelPreRuntimeManager.build_llama_quantize() #Build.
+            else:
+                print("llama-quantize already built. Skipping build process.")
+        else:
+            print("llama-quantize already built. Skipping build process.")
+    @staticmethod
+    def build_llama_quantize():
+        """Builds the llama-quantize binary from the cloned llama.cpp repository."""
+        llama_cpp_path = os.path.join("./Library", "llama.cpp")
+        build_dir = os.path.join(llama_cpp_path, "build")
+        # --- Check moved INSIDE build_llama_quantize ---
+        if not os.path.exists(llama_cpp_path):
+            raise FileNotFoundError("llama.cpp directory not found.  Run cloning_tools() first.")
+
+        try:
+            print("Building llama-quantize...")
+            os.makedirs(build_dir, exist_ok=True)
+            # --- cwd changed to llama_cpp_path ---
+            cmake_config_command = ["cmake", "-B", "build"]
+            subprocess.run(cmake_config_command, check=True, cwd=llama_cpp_path) # Use llama_cpp_path
+            # --- cwd changed to llama_cpp_path ---
+            cmake_build_command = ["cmake", "--build", "build", "--config", "Release"]
+            subprocess.run(cmake_build_command, check=True, cwd=llama_cpp_path)  # Use llama_cpp_path
+            print("llama-quantize built successfully.")
+
+        except subprocess.CalledProcessError as e:
+            print(f"Error building llama-quantize: {e}")
+        except FileNotFoundError:
+            print("Error: cmake command not found")
 
 
     @staticmethod
     def download_model(repo_id: str, local_dir: str, revision: str = None, **kwargs):
-        """
-        Downloads a model or file from the Hugging Face Hub to a custom local directory.
-        """
+        """Downloads a model from the Hugging Face Hub."""
         os.makedirs(local_dir, exist_ok=True)
         api = HfApi()
         repo_files = api.list_repo_files(repo_id=repo_id, revision=revision)
@@ -817,51 +872,63 @@ class AIModelPreRuntimeManager:
     @staticmethod
     def convert_to_gguf(source_dir: str, target_dir: str, model_name: str):
         """
-        Converts a Hugging Face model (typically in safetensors format) to GGUF format using llama.cpp's convert.py.
+        Converts a Hugging Face model to GGUF format and then quantizes it.
         """
         os.makedirs(target_dir, exist_ok=True)
 
-        # Use the cloned llama.cpp from the ./Library directory
         llama_cpp_path = os.path.join("./Library", "llama.cpp")
-        convert_script_path = os.path.join(llama_cpp_path, "convert.py")
-        target_gguf_path = os.path.join(target_dir, f"{model_name}.gguf")
+        convert_script_path = os.path.join(llama_cpp_path, "convert_hf_to_gguf.py")
+        target_gguf_path_f16 = os.path.join(target_dir, f"{model_name}.tmp")
 
         if not os.path.exists(convert_script_path):
-          raise FileNotFoundError(f"convert.py not found at {convert_script_path}.  Please ensure cloning_tools() has been run successfully.")
-
-        config_files = glob.glob(os.path.join(source_dir, "*.json"))
-        config_file = None
-        for file in config_files:
-            if "config.json" in file:
-                config_file = file
-                break
-
-        if not config_file:
-            print(f"Warning: No config.json file found in {source_dir}.  Conversion may fail.")
-            return
+          raise FileNotFoundError(f"convert_hf_to_gguf.py not found at {convert_script_path}. Run cloning_tools() first.")
 
         command = [
             "python3",
             convert_script_path,
             source_dir,
-            "--outfile",
-            target_gguf_path,
-            "--outtype", "f16"  # Consider making outtype a parameter
+            "--outfile", target_gguf_path_f16,
+            "--outtype", "f16"
+        ]
+        try:
+            print(f"Converting {source_dir} to GGUF (f16) format...")
+            subprocess.run(command, check=True)
+            print(f"Successfully converted model to {target_gguf_path_f16}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error during conversion to GGUF: {e}")
+            return
+        except FileNotFoundError:
+            print(f"Error: convert_hf_to_gguf.py not found. Ensure cloning_tools() has run.")
+            return
+
+        quantize_tool_path = os.path.join("./Library", "llama.cpp", "build", "bin", "llama-quantize")
+        if not os.path.exists(quantize_tool_path):
+            quantize_tool_path = os.path.join("./Library", "llama.cpp", "build", "llama-quantize")
+            if not os.path.exists(quantize_tool_path):
+                raise FileNotFoundError("llama-quantize executable not found.  Build it using build_llama_quantize().")
+
+        target_gguf_path_quantized = os.path.join(target_dir, f"{model_name}.gguf")
+        quantize_command = [
+            quantize_tool_path,
+            target_gguf_path_f16,
+            target_gguf_path_quantized,
+            "Q4_K_M"
         ]
 
         try:
-            print(f"Converting {source_dir} to GGUF format...")
-            subprocess.run(command, check=True)
-            print(f"Successfully converted model to {target_gguf_path}")
+            print(f"Quantizing {target_gguf_path_f16} to {target_gguf_path_quantized}...")
+            subprocess.run(quantize_command, check=True)
+            print(f"Successfully quantized model to {target_gguf_path_quantized}")
+            os.remove(target_gguf_path_f16)
+            print(f"Temporary file {target_gguf_path_f16} removed.")
         except subprocess.CalledProcessError as e:
-            print(f"Error during conversion: {e}")
-        except FileNotFoundError: # This should not happen, but we are checking
-            print(f"Error: convert.py not found. Ensure cloning_tools() has run successfully.")
-
+            print(f"Error during quantization: {e}")
+        except FileNotFoundError as e:
+            print(f"Error: {e}. Ensure you have built llama-quantize.")
 
     @staticmethod
     def prepare_llm_model(repo_id: str, model_name: str, revision:str = None):
-        """Downloads and converts an LLM to GGUF."""
+        """Downloads, converts, and quantizes an LLM."""
         source_dir = os.path.join("./Model", model_name)
         target_dir = os.path.join("./ModelCompiledRuntime")
         AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
@@ -872,21 +939,20 @@ class AIModelPreRuntimeManager:
     def prepare_embedding_model(repo_id: str, model_name: str, revision: str = None):
         """Downloads the embedding model (no conversion needed)."""
         source_dir = os.path.join("./Model", model_name)
-        AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
+        AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision)
         gguf_files = glob.glob(os.path.join(source_dir, "*.gguf"))
         if gguf_files:
             return gguf_files[0]
         else:
-            print(f"Warning: No .gguf file found in {source_dir} for the embedding model.")
+            print(f"Warning: No .gguf file found in {source_dir}.")
             return None
 
     @staticmethod
     def prepare_stable_diffusion_model(repo_id: str, model_name: str, revision: str = None):
-        """Downloads the Stable Diffusion model (placeholder for conversion)."""
+        """Downloads the Stable Diffusion model (placeholder)."""
         source_dir = os.path.join("./Model", model_name)
         AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
-        print("Stable Diffusion model downloaded. Conversion to a runtime format is not yet implemented.")
-        #Future implementation can use the cloned stable-diffusion.cpp for conversion.
+        print("Stable Diffusion model downloaded. Conversion is not yet implemented.")
         return source_dir
 
 class AIRuntimeManager:
