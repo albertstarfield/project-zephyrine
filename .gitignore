@@ -86,3 +86,7 @@ systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3.zip
 **node_modules**
 **runtimecompiledmodel**
 **Model**
+**.diff**
+**.orig**
+**Library**
+**.rej**
