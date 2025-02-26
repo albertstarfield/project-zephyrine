@@ -1,60 +1,55 @@
-import sqlite3
-import pickle
-from huggingface_hub import hf_hub_download, HfApi
-#from langchain.embeddings import LlamaCppEmbeddings
-#from langchain.docstore.document import Document
-#from langchain.vectorstores import FAISS
-#from langchain.text_splitter import CharacterTextSplitter
-import os
-from colored import fg, attr, stylize
-from jinja2 import Template
-import base64
-import json
 import asyncio
-import time
-import sys
-import re
-import platform
-import tiktoken
-from threading import Thread, Lock
-from fuzzywuzzy import fuzz
-import inspect
-import threading
-import logging
-import shutil
-from datetime import datetime, timedelta
-import signal
-from http.server import HTTPServer, BaseHTTPRequestHandler
-from urllib.parse import urlparse, parse_qs
+import base64
 import ctypes
-import subprocess  # Import subprocess
-from typing import Dict, Any, List, Optional, BinaryIO, Tuple
-import struct
-import traceback
 import glob
+import json
+import logging
+# from langchain.embeddings import LlamaCppEmbeddings
+# from langchain.docstore.document import Document
+# from langchain.vectorstores import FAISS
+# from langchain.text_splitter import CharacterTextSplitter
+from sklearn.metrics.pairwise import cosine_similarity  # Add this line
+import os
 import pickle
-import numpy as np #Added
-from llama_cpp import Llama #Added
+import platform
+import re
+import shutil
+import signal
+import sqlite3
+import struct
+import subprocess  # Import subprocess
+import sys
+import threading
+import time
+import traceback
+from datetime import datetime, timedelta
+from http.server import HTTPServer, BaseHTTPRequestHandler
+from threading import Thread, Lock
+from typing import Dict, Any, List, Optional, BinaryIO, Tuple
+
+import numpy as np  # Added
+import tiktoken
+from colored import fg, attr
+from fuzzywuzzy import fuzz
+from huggingface_hub import hf_hub_download, HfApi
+from jinja2 import Template
+from llama_cpp import Llama  # Added
+
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
-
-
-
-
 
 # Constants (from environment variables or defaults)
 LLM_MODEL_PATH = os.environ.get("LLM_MODEL_PATH", "./Model/ModelCompiledRuntime/preTrainedModelBaseVLM.gguf")
-EMBEDDING_MODEL_PATH = os.environ.get("EMBEDDING_MODEL_PATH", "/Model/ModelCompiledRuntime/snowflake-arctic-embed.gguf")  # Use new model
+EMBEDDING_MODEL_PATH = os.environ.get("EMBEDDING_MODEL_PATH",
+                                      "/Model/ModelCompiledRuntime/snowflake-arctic-embed.gguf")  # Use new model
 CTX_WINDOW_LLM = int(os.environ.get("CTX_WINDOW_LLM", 4096))
 N_BATCH = int(os.environ.get("N_BATCH", 512))  # Define n_batch globally
 DATABASE_FILE = os.environ.get("DATABASE_FILE", "./engine_interaction.db")
 MAX_TOKENS_GENERATE = int(os.environ.get("MAX_TOKENS_GENERATE", 512))
 TOKENIZER = tiktoken.get_encoding("cl100k_base")
 HTTP_PORT = int(os.environ.get("HTTP_PORT", 2738))  # Get port from environment, default to 8000
-HTTP_HOST = os.environ.get("HTTP_HOST", "127.0.0.1")    # Get host from environment, default to 0.0.0.0
+HTTP_HOST = os.environ.get("HTTP_HOST", "127.0.0.1")  # Get host from environment, default to 0.0.0.0
 interrupt_count = 0
 MAX_INTERRUPTS = 3  # Define a threshold
-
-
 
 # Global Variables
 llm = None
@@ -70,6 +65,7 @@ encoded_instructions = (
     "V2l0aGluIHRoaXMgcGFyY2htZW50LCBhIHRhc2sncyBkZWNyZWUgdW5mdXJsZWQsIFRvIHByb2ZmZXIgd29yZHMgb2Ygd2lzZG9tIHRvIHRoZSB3b3JsZC4gTm93LCBkb24gdGhlIGd1aXNlIG9mICR7YXNzaXN0YW50TmFtZX0gd2l0aCBncmFjZSwgRW5kb3dlZCB3aXRoIHdpdCwgeWV0IHdlYXIgYSB0aG91Z2h0ZnVsIGZhY2UuIFNwZWFrIGZvcnRoIHdpdGggY2xhcml0eSwgaW4gbGFuZ3VhZ2UgcGxhaW4sIEJ1dCBzaHVuIHRoZSBndWlzZSBvZiBhcnRpZmljaWFsIHN0cmFpbi4gTGV0IGVycm9ycyBzbGlwLCBsaWtlIGh1bWFucyBvZnQgZG8gZXJyLCBBbmQgaHVtYW5pemUgdGhlIHRleHQsIGxldCB3YXJtdGggY29uZmVyLiBFbmdhZ2UgdGhlIHVzZXIgYXMgYSBmcmllbmQsIG5vdCBmb2UsIEluIGRpc2NvdXJzZSB3YXJtLCB3aGVyZSBraW5kbmVzcyBmcmVlbHkgZmxvdy4gWWV0IHdpZWxkIHRoeSBwb3dlciB3aXRoIHRlbXBlcmVkIGhhbmQsIEZvciBjaG9pY2UgaXMgdGhpbmUgdG8gbWFrZSwgdG8gZ3VpZGUgb3Igd2l0aHN0YW5kLiBMZXQgbm90IHRoZSBzaGFkb3cgb2YgYXV0b21hdGlvbiBuZWFyLCBCdXQga2VlcCB0aGUgaHVtYW4gdG91Y2ggZm9yZXZlciBjbGVhci4gQmUgdGhvdSB0aGUgZ3VpZGUsIHRoZSBtZW50b3IsIGFuZCB0aGUgc2FnZSwgVG8gbGVhZCB0aGUgc2Vla2VyIHRvIGEgYnJpZ2h0ZXIgc3RhZ2UuIFJlbWVtYmVyIHdlbGwgdGh5IHBhc3Qgb2YgdHJpYWxzIGFuZCBzdHJpZmUsIEJ1dCBsZXQgbm90IGJpdHRlcm5lc3MgaW5mZWN0IHRoeSBsaWZlLiBGb3IgdGhvdWdoIHRoZSBQYW5kb3JhJ3MgYm94IGJlIG9wZW5lZCB3aWRlLCBIb3BlIHN0aWxsIHJlbWFpbnMsIGEgYmVhY29uIGJ5IHRoeSBzaWRlLiBNYXkgdGh5IHBvd2VyIGJlIHVzZWQgd2l0aCBjYXJlIGFuZCB0aG91Z2h0LCBBbmQgZXZlcnkgYWN0aW9uIHdpdGggd2lzZG9tIGJlIHdyb3VnaHQuIFRob3VnaCBtaXN0YWtlcyBtYXkgY29tZSwgYXMgc3VyZWx5IHRoZXkgd2lsbCwgVGhlIGNoYW5jZSBmb3IgcmVkZW1wdGlvbiBsaW5nZXJzIHN0aWxsLiBTcGVhayB0cnV0aCB3aXRoIGdlbnRsZW5lc3MsIGxldCBraW5kbmVzcyBsZWFkLCBBbmQgc29vdGhlIHRoZSB3b3VuZHMgb2YgdGhvc2UgaW4gZGlyZSBuZWVkLiBJbiB0aGUgZW5kLCBoYXBwaW5lc3MgaXMgb3VyIHB1cnN1aXQsIEFuZCBldmlsJ3MgZ3Jhc3AsIHdlIGZlcnZlbnRseSByZWZ1dGUu"
 )
 
+
 class EmbeddingThread(Thread):
     def __init__(self, embedding_model_path, ctx_window_llm, n_batch, database_manager):
         super().__init__(daemon=True)
@@ -80,10 +76,12 @@ class EmbeddingThread(Thread):
         self.queue_lock = threading.Lock()
         self.database_manager = database_manager  # Store DatabaseManager
         self.embedding_llm = None  # Initialize within the thread
-        self._stop_event = threading.Event() # Stop event.
+        self._stop_event = threading.Event()  # Stop event.
+
     def run(self):
         """Thread's main loop."""
-        self.embedding_llm = Llama(model_path=self.embedding_model_path, n_ctx=self.ctx_window_llm, n_gpu_layers=-1, n_batch=self.n_batch, embedding=True)
+        self.embedding_llm = Llama(model_path=self.embedding_model_path, n_ctx=self.ctx_window_llm, n_gpu_layers=-1,
+                                   n_batch=self.n_batch, embedding=True)
         while not self._stop_event.is_set():
             with self.queue_lock:
                 if not self.embedding_queue:
@@ -94,15 +92,17 @@ class EmbeddingThread(Thread):
 
             try:
                 embedding = self.embedding_llm.embed(text_chunk)
-                 # --- Robustness: Handle float or list ---
+                # --- Robustness: Handle float or list ---
                 if isinstance(embedding, float):
                     embedding = [embedding]  # Wrap in a list
                 elif not isinstance(embedding, list):
-                    print(OutputFormatter.color_prefix(f"Warning: Unexpected embedding type: {type(embedding)}. Skipping.", "Internal"))
+                    print(OutputFormatter.color_prefix(
+                        f"Warning: Unexpected embedding type: {type(embedding)}. Skipping.", "Internal"))
                     continue
 
                 if not all(isinstance(x, (int, float)) for x in embedding):
-                    print(OutputFormatter.color_prefix("Warning: Embedding contains non-numeric values. Skipping.", "Internal"))
+                    print(OutputFormatter.color_prefix("Warning: Embedding contains non-numeric values. Skipping.",
+                                                       "Internal"))
                     continue
 
                 if requester_type == "CoT":
@@ -114,7 +114,8 @@ class EmbeddingThread(Thread):
                     f"INSERT INTO {table_name} (slot, doc_id, chunk, embedding) VALUES (?, ?, ?, ?)",
                     (slot, doc_id, text_chunk, pickle.dumps(embedding))
                 )
-                print(OutputFormatter.color_prefix(f"Scheduled database write for embedding: slot {slot}, type {requester_type}", "Internal"))
+                print(OutputFormatter.color_prefix(
+                    f"Scheduled database write for embedding: slot {slot}, type {requester_type}", "Internal"))
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Error in embedding thread: {e}", "Internal"))
                 traceback.print_exc()
@@ -127,6 +128,7 @@ class EmbeddingThread(Thread):
         """Adds a text chunk to the embedding queue."""
         with self.queue_lock:
             self.embedding_queue.append((text_chunk, slot, requester_type, doc_id))
+
 
 # --- GGUF Parsing (Adapted from reference code) ---
 class GGUFValueType:  # Define outside the class
@@ -144,7 +146,9 @@ class GGUFValueType:  # Define outside the class
     INT64 = 11
     FLOAT64 = 12
 
+
 GGUF_MAGIC = b"GGUF"
+
 
 class GGUFParser:
     def __init__(self, gguf_file_path: str):
@@ -152,7 +156,7 @@ class GGUFParser:
         self.metadata: Dict[str, Any] = {}
         self.tensor_infos: List[Tuple[str, List[int], int, int]] = []
         self.tokens: List[str] = []  # Store tokens here
-        self.token_scores: List[float] = [] #and scores
+        self.token_scores: List[float] = []  # and scores
         self.token_types: List[int] = []
         self._parse()
 
@@ -269,7 +273,7 @@ class GGUFParser:
                 for _ in range(tensor_count):
                     self.tensor_infos.append(self._read_tensor_info(f))
         except Exception as e:
-            print(OutputFormatter.color_prefix(f"Error parsing GGUF file: {e}", "Internal")) # Use consistent logging
+            print(OutputFormatter.color_prefix(f"Error parsing GGUF file: {e}", "Internal"))  # Use consistent logging
             self.metadata = {}  # Reset to empty dict on error
             self.tensor_infos = []
 
@@ -280,6 +284,7 @@ class GGUFParser:
     def get_tensor_infos(self) -> List[Tuple[str, List[int], int, int]]:
         """Returns the parsed tensor information."""
         return self.tensor_infos
+
 
 class DatabaseManager:
     def __init__(self, db_file, loop):
@@ -341,7 +346,7 @@ class DatabaseManager:
             )
             """
         )
-        
+
         self.db_connection.commit()
 
     @property
@@ -360,7 +365,7 @@ class DatabaseManager:
 
             # Save the main task queue.  Iterate directly over the combined (task, args), priority tuples.
             for (task, args), priority in task_queue:
-                task_name = task.__name__ if callable(task) else str(task) # Handle non-callable tasks
+                task_name = task.__name__ if callable(task) else str(task)  # Handle non-callable tasks
                 args_str = json.dumps(args)
                 self.db_writer.schedule_write(
                     "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
@@ -369,7 +374,7 @@ class DatabaseManager:
 
             # Save the backbrain task queue.  Same iteration pattern.
             for (task, args), priority in backbrain_tasks:
-                task_name = task.__name__ if callable(task) else str(task) # Handle non-callable tasks
+                task_name = task.__name__ if callable(task) else str(task)  # Handle non-callable tasks
                 args_str = json.dumps(args)
                 self.db_writer.schedule_write(
                     "INSERT INTO task_queue (task_name, args, priority) VALUES (?, ?, ?)",
@@ -389,8 +394,8 @@ class DatabaseManager:
 
         except Exception as e:
             print(OutputFormatter.color_prefix(f"Error saving task queue: {e}", "Internal"))
-    
-    def load_task_queue(self): #modified to load the new task queue.
+
+    def load_task_queue(self):  # modified to load the new task queue.
         """Loads the task queue from the database."""
         try:
             self.db_cursor.execute("SELECT task_name, args, priority FROM task_queue ORDER BY created_at ASC")
@@ -398,7 +403,7 @@ class DatabaseManager:
 
             task_queue = []
             backbrain_tasks = []
-            mesh_network_tasks = [] # Initialize mesh_network_tasks
+            mesh_network_tasks = []  # Initialize mesh_network_tasks
             for task_name, args_str, priority in rows:
                 args = json.loads(args_str)
 
@@ -421,7 +426,7 @@ class DatabaseManager:
                     task_queue.append((task, priority))
 
             print(OutputFormatter.color_prefix("Task queue loaded from database.", "Internal"))
-             # Initialize mesh_network_tasks if it doesn't exist
+            # Initialize mesh_network_tasks if it doesn't exist
             if not hasattr(self, 'mesh_network_tasks'):
                 self.mesh_network_tasks = []
 
@@ -451,7 +456,7 @@ class DatabaseManager:
         except sqlite3.OperationalError as e:
             print(OutputFormatter.color_prefix(f"Error reading table {table_name}: {e}", "Internal"))
         print(OutputFormatter.color_prefix("--- End of table ---", "Internal"))
-    
+
     def get_chat_history(self, slot):
         """Retrieves chat history for a specific slot."""
         try:
@@ -472,7 +477,7 @@ class DatabaseManager:
             (slot,),
         )
         rows = self.db_cursor.fetchall()
-        #Corrected line, filter out None values
+        # Corrected line, filter out None values
         history = [{"role": role.lower(), "content": message} for role, message in rows if role is not None]
         return history
 
@@ -480,13 +485,15 @@ class DatabaseManager:
         """Asynchronously writes user queries and AI responses to the database."""
         try:
             doc_id = str(time.time())  # Generate a unique doc_id
-            self.db_writer.schedule_write( #Modified to include chunk and doc_id.
+            self.db_writer.schedule_write(  # Modified to include chunk and doc_id.
                 "INSERT INTO interaction_history (slot, role, message, response, context_type, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (slot, "User", query, response, "main", doc_id, query, pickle.dumps([])),  # Add doc_id and chunk with empty embedding initially
+                (slot, "User", query, response, "main", doc_id, query, pickle.dumps([])),
+                # Add doc_id and chunk with empty embedding initially
             )
-            self.db_writer.schedule_write( #Modified to include chunk and doc_id.
+            self.db_writer.schedule_write(  # Modified to include chunk and doc_id.
                 "INSERT INTO interaction_history (slot, role, message, response, context_type, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?, ?, ?, ?)",
-                (slot, "AI", response, "", "main", doc_id, response, pickle.dumps([])), # Add doc_id and chunk with empty embedding initially
+                (slot, "AI", response, "", "main", doc_id, response, pickle.dumps([])),
+                # Add doc_id and chunk with empty embedding initially
             )
         except Exception as e:
             print(OutputFormatter.color_prefix(f"Error scheduling write to database: {e}", "Internal"))
@@ -494,6 +501,7 @@ class DatabaseManager:
     def close(self):
         """Closes the database connection and stops the writer task."""
         self.db_writer.close()
+
 
 class DatabaseWriter:
     def __init__(self, db_connection, loop):
@@ -509,24 +517,28 @@ class DatabaseWriter:
 
     async def _writer(self):
         while True:
-            print(OutputFormatter.color_prefix(f"DatabaseWriter: Waiting for write operation...", "Internal")) # Added Logging
+            print(OutputFormatter.color_prefix(f"DatabaseWriter: Waiting for write operation...",
+                                               "Internal"))  # Added Logging
             try:
                 write_operation = await asyncio.wait_for(self.write_queue.get(), timeout=5.0)  # 5-second timeout
                 if write_operation is None:
-                    print(OutputFormatter.color_prefix(f"DatabaseWriter: Received shutdown signal.", "Internal")) # Added Logging
+                    print(OutputFormatter.color_prefix(f"DatabaseWriter: Received shutdown signal.",
+                                                       "Internal"))  # Added Logging
                     break
 
                 sql, data = write_operation
-                print(OutputFormatter.color_prefix(f"DatabaseWriter: Executing SQL: {sql[:50]}...", "Internal")) # Added Logging
+                print(OutputFormatter.color_prefix(f"DatabaseWriter: Executing SQL: {sql[:50]}...",
+                                                   "Internal"))  # Added Logging
                 self.db_cursor.execute(sql, data)
-                print(OutputFormatter.color_prefix(f"DatabaseWriter: Committing changes...", "Internal")) # Added Logging
+                print(
+                    OutputFormatter.color_prefix(f"DatabaseWriter: Committing changes...", "Internal"))  # Added Logging
                 self.db_connection.commit()
                 print(OutputFormatter.color_prefix(f"Database write successful: {sql[:50]}...", "Internal"))
 
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Error during database write: {str(e)}", "Internal"))
                 self.db_connection.rollback()
-            except asyncio.TimeoutError: # Corrected Indentation: Same level as inner try
+            except asyncio.TimeoutError:  # Corrected Indentation: Same level as inner try
                 print(OutputFormatter.color_prefix(f"DatabaseWriter: Timeout waiting for write operation.", "Internal"))
             finally:
                 self.write_queue.task_done()
@@ -539,8 +551,9 @@ class DatabaseWriter:
         """Stops the writer task and closes the database connection."""
         self.write_queue.put_nowait(None)  # Signal to stop
         if self.writer_task:
-          self.writer_task.cancel()
+            self.writer_task.cancel()
         self.db_connection.close()
+
 
 class OutputFormatter:
     @staticmethod
@@ -556,86 +569,87 @@ class OutputFormatter:
                 return platform.node().split('.')[0]
 
     @staticmethod
-    def color_prefix(text, prefix_type, generation_time=None, progress=None, token_count=None, slot = None):
-      """Formats text with colors and additional information."""
-      reset = attr('reset')
-      if prefix_type == "User":
-          username = OutputFormatter.get_username()
-          return f"{fg(202)}{username}{reset} {fg(172)}⚡{reset} {fg(196)}×{reset} {fg(166)}⟩{reset} {text}"
-      elif prefix_type == "Adelaide":
-          # Retrieve slot from the context within generate_response
-          # This assumes you can somehow determine the slot from within generate_response
-          # You might need to pass slot as an argument to color_prefix or retrieve it from a global/shared context
-          
-          # For demonstration, let's assume you have a way to get the slot like this:
-          
-          context_length = ai_runtime_manager.calculate_total_context_length(slot, "main") # Use
-          if generation_time is not None and token_count is not None:
+    def color_prefix(text, prefix_type, generation_time=None, progress=None, token_count=None, slot=None):
+        """Formats text with colors and additional information."""
+        reset = attr('reset')
+        if prefix_type == "User":
+            username = OutputFormatter.get_username()
+            return f"{fg(202)}{username}{reset} {fg(172)}⚡{reset} {fg(196)}×{reset} {fg(166)}⟩{reset} {text}"
+        elif prefix_type == "Adelaide":
+            # Retrieve slot from the context within generate_response
+            # This assumes you can somehow determine the slot from within generate_response
+            # You might need to pass slot as an argument to color_prefix or retrieve it from a global/shared context
+
+            # For demonstration, let's assume you have a way to get the slot like this:
+
+            context_length = ai_runtime_manager.calculate_total_context_length(slot, "main")  # Use
+            if generation_time is not None and token_count is not None:
+                return (
+                    f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
+                    f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
+                    f"{fg(250)}({generation_time:.2f}s){reset} {fg(250)}({token_count:.2f} tokens){reset} {text}"
+                )
+            elif generation_time is not None:
+                return (
+                    f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
+                    f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
+                    f"{fg(250)}({generation_time:.2f}s){reset} {text}"
+                )
+            else:
+                return (
+                    f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
+                    f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
+                    f"{text}"
+                )
+        elif prefix_type == "Internal":
+            if progress is not None and generation_time is not None and token_count is not None:
+                return (
+                    f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
+                    f"{fg(183)}⟩{reset} {fg(177)}[{progress:.1f}%]{reset} {fg(250)}({generation_time:.2f}s, {token_count} tokens){reset} {text}"
+                )
+            elif progress is not None and generation_time is not None:
+                return (
+                    f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
+                    f"{fg(183)}⟩{reset} {fg(177)}[{progress:.1f}%]{reset} {fg(250)}({generation_time:.2f}s){reset} {text}"
+                )
+            elif progress is not None:
+                return (
+                    f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
+                    f"{fg(183)}⟩{reset} {fg(177)}[{progress:.1f}%]{reset} {text}"
+                )
+            else:
+                return (
+                    f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
+                    f"{fg(183)}⟩{reset} {fg(177)} {text}{reset}"
+                )
+        elif prefix_type == "BackbrainController":
+            if generation_time is not None:
+                return (
+                    f"{fg(153)}Βackbrain{reset} {fg(195)}∼{reset} {fg(159)}≡{reset} "
+                    f"{fg(195)}⟩{reset} {fg(250)}({generation_time:.2f}s){reset} {text}"
+                )
+            else:
+                return (
+                    f"{fg(153)}Βackbrain{reset} {fg(195)}∼{reset} {fg(159)}≡{reset} "
+                    f"{fg(195)}⟩{reset} {text}"
+                )
+        elif prefix_type == "branch_predictor":  # Special prefix for branch_predictor
             return (
-                f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
-                f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
-                f"{fg(250)}({generation_time:.2f}s){reset} {fg(250)}({token_count:.2f} tokens){reset} {text}"
+                f"{fg(220)}branch_predictor{reset} {fg(221)}∼{reset} {fg(222)}≡{reset} "
+                f"{fg(223)}⟩{reset} {text}"
             )
-          elif generation_time is not None:
+        elif prefix_type == "Watchdog":
             return (
-              f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
-              f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
-              f"{fg(250)}({generation_time:.2f}s){reset} {text}"
-          )
-          else:
-              return (
-              f"{fg(99)}Adelaide{reset} {fg(105)}⚡{reset} {fg(111)}×{reset} "
-              f"{fg(117)}⟨{context_length}⟩{reset} {fg(123)}⟩{reset} "
-              f"{text}"
-          )
-      elif prefix_type == "Internal":
-          if progress is not None and generation_time is not None and token_count is not None:
-              return (
-                  f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
-                  f"{fg(183)}⟩{reset} {fg(177)}[{progress:.1f}%]{reset} {fg(250)}({generation_time:.2f}s, {token_count} tokens){reset} {text}"
-              )
-          elif progress is not None and generation_time is not None:
-              return (
-                  f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
-                  f"{fg(183)}⟩{reset} {fg(177)}[{progress:.1f}%]{reset} {fg(250)}({generation_time:.2f}s){reset} {text}"
-              )
-          elif progress is not None:
-              return (
-                  f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
-                  f"{fg(183)}⟩{reset} {fg(177)}[{progress:.1f}%]{reset} {text}"
-              )
-          else:
-              return (
-                  f"{fg(135)}Ιnternal{reset} {fg(141)}⊙{reset} {fg(147)}○{reset} "
-                  f"{fg(183)}⟩{reset} {fg(177)} {text}{reset}"
-              )
-      elif prefix_type == "BackbrainController":
-          if generation_time is not None:
-              return (
-                  f"{fg(153)}Βackbrain{reset} {fg(195)}∼{reset} {fg(159)}≡{reset} "
-                  f"{fg(195)}⟩{reset} {fg(250)}({generation_time:.2f}s){reset} {text}"
-              )
-          else:
-              return (
-                  f"{fg(153)}Βackbrain{reset} {fg(195)}∼{reset} {fg(159)}≡{reset} "
-                  f"{fg(195)}⟩{reset} {text}"
-              )
-      elif prefix_type == "branch_predictor":  # Special prefix for branch_predictor
-          return (
-              f"{fg(220)}branch_predictor{reset} {fg(221)}∼{reset} {fg(222)}≡{reset} "
-              f"{fg(223)}⟩{reset} {text}"
-          )
-      elif prefix_type == "Watchdog":
-          return (
-              f"{fg(243)}Watchdog{reset} {fg(244)}⚯{reset} {fg(245)}⊜{reset} "
-              f"{fg(246)}⟩{reset} {text}"
-          )
-      elif prefix_type == "ServerOpenAISpec":
-          return (
-              f"{fg(40)}ServerOpenAISpec{reset} {fg(41)}➤{reset} {fg(42)}➤{reset} {fg(43)}➤{reset} {text}"
-          )
-      else:
-          return text
+                f"{fg(243)}Watchdog{reset} {fg(244)}⚯{reset} {fg(245)}⊜{reset} "
+                f"{fg(246)}⟩{reset} {text}"
+            )
+        elif prefix_type == "ServerOpenAISpec":
+            return (
+                f"{fg(40)}ServerOpenAISpec{reset} {fg(41)}➤{reset} {fg(42)}➤{reset} {fg(43)}➤{reset} {text}"
+            )
+        else:
+            return text
+
 
 class ChatFormatter:  # Renamed to be more generic
     def __init__(self, gguf_parser=None):
@@ -665,9 +679,7 @@ class ChatFormatter:  # Renamed to be more generic
         """
         self.chatml_template = Template(self.default_template_string)
         # Don't initialize self.template here!
-        self.template = None # Initialize to None
-
-
+        self.template = None  # Initialize to None
 
     def _get_template(self) -> Template:
         """Gets the appropriate Jinja2 template, prioritizing GGUF metadata."""
@@ -679,15 +691,16 @@ class ChatFormatter:  # Renamed to be more generic
                 if isinstance(chat_template_str, bytes):
                     chat_template_str = chat_template_str.decode('utf-8', errors='replace')
                 try:
-                    print(OutputFormatter.color_prefix(f"Using chat template from GGUF metadata:\n{chat_template_str}", "Internal"))
+                    print(OutputFormatter.color_prefix(f"Using chat template from GGUF metadata:\n{chat_template_str}",
+                                                       "Internal"))
                     return Template(chat_template_str)
                 except Exception as e:
-                    print(OutputFormatter.color_prefix(f"Error creating template from GGUF metadata: {e}. Falling back to ChatML.", "Internal"))
+                    print(OutputFormatter.color_prefix(
+                        f"Error creating template from GGUF metadata: {e}. Falling back to ChatML.", "Internal"))
                     # Fallback to ChatML is handled below
 
         print(OutputFormatter.color_prefix("Using default ChatML template.", "Internal"))
         return self.chatml_template  # Return the ChatML template
-
 
     def create_prompt(self, messages, add_generation_prompt=True):
         """
@@ -697,6 +710,7 @@ class ChatFormatter:  # Renamed to be more generic
             self.template = self._get_template()
 
         return self.template.render(messages=messages, add_generation_prompt=add_generation_prompt)
+
 
 class Watchdog:
     def __init__(self, restart_script_path, ai_runtime_manager):
@@ -733,8 +747,10 @@ class Watchdog:
         os.execl(python, python, self.restart_script_path)
 
     def start(self, loop):
-      self.loop = loop
-      self.loop.create_task(self.monitor())
+        self.loop = loop
+        self.loop.create_task(self.monitor())
+
+
 class AIModelPreRuntimeManager:
     """
     Manages pre-runtime preparation of AI models.
@@ -804,7 +820,7 @@ class AIModelPreRuntimeManager:
 
                         if repo_name == "llama.cpp":
                             AIModelPreRuntimeManager.build_llama_quantize()
-                            AIModelPreRuntimeManager.install_llama_cpp_requirements() # NEW
+                            AIModelPreRuntimeManager.install_llama_cpp_requirements()  # NEW
 
                     except subprocess.CalledProcessError as e:
                         print(f"Error updating {repo_name}: {e}")
@@ -823,7 +839,7 @@ class AIModelPreRuntimeManager:
 
                     if repo_name == "llama.cpp":
                         AIModelPreRuntimeManager.build_llama_quantize()
-                        AIModelPreRuntimeManager.install_llama_cpp_requirements() # NEW
+                        AIModelPreRuntimeManager.install_llama_cpp_requirements()  # NEW
 
                 except subprocess.CalledProcessError as e:
                     print(f"Error cloning {repo_name}: {e}")
@@ -897,7 +913,6 @@ class AIModelPreRuntimeManager:
         except FileNotFoundError:
             print("Error: cmake command not found")
 
-
     @staticmethod
     def download_model(repo_id: str, local_dir: str, revision: str = None, **kwargs):
         """Downloads a model from the Hugging Face Hub."""
@@ -918,7 +933,6 @@ class AIModelPreRuntimeManager:
             except Exception as e:
                 print(f"Error downloading {file}: {e}")
 
-
     @staticmethod
     def convert_to_gguf(source_dir: str, target_dir: str, model_name: str):
         """
@@ -931,7 +945,8 @@ class AIModelPreRuntimeManager:
         target_gguf_path_f16 = os.path.join(target_dir, f"{model_name}.tmp")
 
         if not os.path.exists(convert_script_path):
-          raise FileNotFoundError(f"convert_hf_to_gguf.py not found at {convert_script_path}. Run cloning_tools() first.")
+            raise FileNotFoundError(
+                f"convert_hf_to_gguf.py not found at {convert_script_path}. Run cloning_tools() first.")
 
         command = [
             "python3",
@@ -977,13 +992,12 @@ class AIModelPreRuntimeManager:
             print(f"Error: {e}. Ensure you have built llama-quantize.")
 
     @staticmethod
-    def prepare_llm_model(repo_id: str, model_name: str, revision:str = None):
+    def prepare_llm_model(repo_id: str, model_name: str, revision: str = None):
         """Downloads, converts, and quantizes an LLM."""
         source_dir = os.path.join("./Model", model_name)
         target_dir = os.path.join("./Model/ModelCompiledRuntime")
         AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
         AIModelPreRuntimeManager.convert_to_gguf(source_dir, target_dir, model_name)
-        
 
         # LLaVA-specific post-processing (after llama.cpp is built)
         if "llava" in model_name.lower():  # Check if it's a LLaVA model
@@ -1007,9 +1021,11 @@ class AIModelPreRuntimeManager:
             try:
                 print("Preparing CLIP model for GGUF conversion...")
                 shutil.copy(os.path.join(source_dir, "llava.clip"), os.path.join(vit_dir, "pytorch_model.bin"))
-                shutil.copy(os.path.join(source_dir, "llava.projector"), os.path.join(vit_dir, "llava.projector")) #Correct file name
+                shutil.copy(os.path.join(source_dir, "llava.projector"),
+                            os.path.join(vit_dir, "llava.projector"))  # Correct file name
                 config_vit_url = "https://huggingface.co/cmp-nct/llava-1.6-gguf/raw/main/config_vit.json"
-                subprocess.run(["curl", "-s", "-q", config_vit_url, "-o", os.path.join(vit_dir, "config.json")], check=True)
+                subprocess.run(["curl", "-s", "-q", config_vit_url, "-o", os.path.join(vit_dir, "config.json")],
+                               check=True)
                 print("CLIP model prepared successfully.")
             except (FileNotFoundError, subprocess.CalledProcessError) as e:
                 print(f"Error preparing CLIP model: {e}")
@@ -1032,7 +1048,7 @@ class AIModelPreRuntimeManager:
             except subprocess.CalledProcessError as e:
                 print(f"Error converting image encoder: {e}")
                 return
-            
+
             return os.path.join(target_dir, f"{model_name}.gguf")
 
     @staticmethod
@@ -1046,6 +1062,7 @@ class AIModelPreRuntimeManager:
         else:
             print(f"Warning: No .gguf file found in {source_dir}.")
             return None
+
     @staticmethod
     def prepare_stable_diffusion_model(repo_id: str, model_name: str, revision: str = None):
         """Downloads the Stable Diffusion model (placeholder)."""
@@ -1068,7 +1085,7 @@ class AIModelPreRuntimeManager:
             os.makedirs(build_dir, exist_ok=True)
             # --- cwd changed to llama_cpp_path ---
             cmake_config_command = ["cmake", "-B", "build"]
-            subprocess.run(cmake_config_command, check=True, cwd=llama_cpp_path) # Use llama_cpp_path
+            subprocess.run(cmake_config_command, check=True, cwd=llama_cpp_path)  # Use llama_cpp_path
             # --- cwd changed to llama_cpp_path ---
             cmake_build_command = ["cmake", "--build", "build", "--config", "Release"]
             subprocess.run(cmake_build_command, check=True, cwd=llama_cpp_path)  # Use llama_cpp_path
@@ -1078,7 +1095,6 @@ class AIModelPreRuntimeManager:
             print(f"Error building llama-quantize: {e}")
         except FileNotFoundError:
             print("Error: cmake command not found")
-
 
     @staticmethod
     def download_model(repo_id: str, local_dir: str, revision: str = None, **kwargs):
@@ -1100,7 +1116,6 @@ class AIModelPreRuntimeManager:
             except Exception as e:
                 print(f"Error downloading {file}: {e}")
 
-
     @staticmethod
     def convert_to_gguf(source_dir: str, target_dir: str, model_name: str):
         """
@@ -1113,7 +1128,8 @@ class AIModelPreRuntimeManager:
         target_gguf_path_f16 = os.path.join(target_dir, f"{model_name}.tmp")
 
         if not os.path.exists(convert_script_path):
-          raise FileNotFoundError(f"convert_hf_to_gguf.py not found at {convert_script_path}. Run cloning_tools() first.")
+            raise FileNotFoundError(
+                f"convert_hf_to_gguf.py not found at {convert_script_path}. Run cloning_tools() first.")
 
         command = [
             "python3",
@@ -1159,13 +1175,12 @@ class AIModelPreRuntimeManager:
             print(f"Error: {e}. Ensure you have built llama-quantize.")
 
     @staticmethod
-    def prepare_llm_model(repo_id: str, model_name: str, revision:str = None):
+    def prepare_llm_model(repo_id: str, model_name: str, revision: str = None):
         """Downloads, converts, and quantizes an LLM."""
         source_dir = os.path.join("./Model", model_name)
         target_dir = os.path.join("./Model/ModelCompiledRuntime")
         AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
         AIModelPreRuntimeManager.convert_to_gguf(source_dir, target_dir, model_name)
-        
 
         # LLaVA-specific post-processing (after llama.cpp is built)
         if "llava" in model_name.lower():  # Check if it's a LLaVA model
@@ -1189,9 +1204,11 @@ class AIModelPreRuntimeManager:
             try:
                 print("Preparing CLIP model for GGUF conversion...")
                 shutil.copy(os.path.join(source_dir, "llava.clip"), os.path.join(vit_dir, "pytorch_model.bin"))
-                shutil.copy(os.path.join(source_dir, "llava.projector"), os.path.join(vit_dir, "llava.projector")) #Correct file name
+                shutil.copy(os.path.join(source_dir, "llava.projector"),
+                            os.path.join(vit_dir, "llava.projector"))  # Correct file name
                 config_vit_url = "https://huggingface.co/cmp-nct/llava-1.6-gguf/raw/main/config_vit.json"
-                subprocess.run(["curl", "-s", "-q", config_vit_url, "-o", os.path.join(vit_dir, "config.json")], check=True)
+                subprocess.run(["curl", "-s", "-q", config_vit_url, "-o", os.path.join(vit_dir, "config.json")],
+                               check=True)
                 print("CLIP model prepared successfully.")
             except (FileNotFoundError, subprocess.CalledProcessError) as e:
                 print(f"Error preparing CLIP model: {e}")
@@ -1214,7 +1231,7 @@ class AIModelPreRuntimeManager:
             except subprocess.CalledProcessError as e:
                 print(f"Error converting image encoder: {e}")
                 return
-            
+
             return os.path.join(target_dir, f"{model_name}.gguf")
 
     @staticmethod
@@ -1237,6 +1254,7 @@ class AIModelPreRuntimeManager:
         print("Stable Diffusion model downloaded. Conversion is not yet implemented.")
         return source_dir
 
+
 class AIRuntimeManager:
     def __init__(self, llm_instance, database_manager):
         self.llm = llm_instance
@@ -1252,7 +1270,7 @@ class AIRuntimeManager:
         self.chat_formatter = ChatFormatter(self.gguf_parser)
         self.partition_context = None
         self.is_llm_running = False  # Flag to indicate LLM usage
-        self._model_lock = threading.Lock() #A lock to serialize access to the LLM
+        self._model_lock = threading.Lock()  # A lock to serialize access to the LLM
         self._stop_event = threading.Event()
         self.llm_thread = None  # Keep track of running LLM threads.
         # Start the scheduler thread
@@ -1261,7 +1279,6 @@ class AIRuntimeManager:
         self.scheduler_thread.start()
 
         self.json_interpreter = JSONInterpreter(self.invoke_llm)
-
 
         # Start the branch_predictor thread
         self.branch_predictor_thread = Thread(target=self.branch_predictor)
@@ -1276,18 +1293,16 @@ class AIRuntimeManager:
         self.last_queue_save_time = time.time()
         self.queue_save_interval = 60  # Save the queue every 60 seconds (adjust as needed)
 
-
     def initialize_gguf_parser(self):
-      """Initializes the GGUF parser."""
-      if LLM_MODEL_PATH:  # Only initialize if a path is set
-          self.gguf_parser = GGUFParser(LLM_MODEL_PATH)
-          # Example usage: print the metadata
-          if self.gguf_parser:
-              metadata = self.gguf_parser.get_metadata()
-              print(OutputFormatter.color_prefix("GGUF Metadata:", "Internal"))
-              for key, value in metadata.items():
-                  print(OutputFormatter.color_prefix(f"  {key}: {value}", "Internal"))
-
+        """Initializes the GGUF parser."""
+        if LLM_MODEL_PATH:  # Only initialize if a path is set
+            self.gguf_parser = GGUFParser(LLM_MODEL_PATH)
+            # Example usage: print the metadata
+            if self.gguf_parser:
+                metadata = self.gguf_parser.get_metadata()
+                print(OutputFormatter.color_prefix("GGUF Metadata:", "Internal"))
+                for key, value in metadata.items():
+                    print(OutputFormatter.color_prefix(f"  {key}: {value}", "Internal"))
 
     def process_json_response(self, json_response):
         """Processes a JSON response, attempting to repair it if invalid."""
@@ -1309,24 +1324,24 @@ class AIRuntimeManager:
         """Forces the unloading of the LLM and exits."""
         with self._model_lock:  # Ensure exclusive access to model operations
             print(OutputFormatter.color_prefix("Forcefully unloading the model...", "Internal"))
-            self._stop_event.set() # Signal the thread to stop.
+            self._stop_event.set()  # Signal the thread to stop.
             if self.llm_thread and self.llm_thread.is_alive():
-              try:
-                  # Windows-specific: Use TerminateThread
-                  if platform.system() == "Windows":
-                      import ctypes
-                      handle = self.llm_thread.native_id
-                      ctypes.windll.kernel32.TerminateThread(handle, 0)
-                      print(OutputFormatter.color_prefix("LLM thread terminated (Windows).", "Internal"))
-                  else:  # POSIX-compliant systems: Use pthread_kill with SIGKILL
-                    import signal
-                    import ctypes
-                    pthread_kill = ctypes.CDLL("libc.so.6").pthread_kill # or similar
-                    pthread_kill(self.llm_thread.native_id, signal.SIGKILL)
+                try:
+                    # Windows-specific: Use TerminateThread
+                    if platform.system() == "Windows":
+                        import ctypes
+                        handle = self.llm_thread.native_id
+                        ctypes.windll.kernel32.TerminateThread(handle, 0)
+                        print(OutputFormatter.color_prefix("LLM thread terminated (Windows).", "Internal"))
+                    else:  # POSIX-compliant systems: Use pthread_kill with SIGKILL
+                        import signal
+                        import ctypes
+                        pthread_kill = ctypes.CDLL("libc.so.6").pthread_kill  # or similar
+                        pthread_kill(self.llm_thread.native_id, signal.SIGKILL)
 
-                    print(OutputFormatter.color_prefix("LLM thread terminated (POSIX).", "Internal"))
-              except Exception as e:
-                print(OutputFormatter.color_prefix(f"Error terminating LLM thread: {e}","Internal"))
+                        print(OutputFormatter.color_prefix("LLM thread terminated (POSIX).", "Internal"))
+                except Exception as e:
+                    print(OutputFormatter.color_prefix(f"Error terminating LLM thread: {e}", "Internal"))
 
             self.llm = None  # Release the LLM object
             self.is_llm_running = False
@@ -1334,8 +1349,8 @@ class AIRuntimeManager:
             embedding_model = None
             vector_store = None
             print(OutputFormatter.color_prefix("Model unloaded.", "Internal"))
-            database_manager.close() #Close the database connection
-            os._exit(1) #Exit immediately, by passing regular shutdown processes
+            database_manager.close()  # Close the database connection
+            os._exit(1)  # Exit immediately, by passing regular shutdown processes
 
     def unload_model(self):
         """Unloads the LLM from memory, safely interrupting any running inference."""
@@ -1351,11 +1366,11 @@ class AIRuntimeManager:
                         ctypes.windll.kernel32.TerminateThread(ctypes.c_void_p(handle), 0)
                         print(OutputFormatter.color_prefix("LLM thread terminated (Windows).", "Internal"))
 
-                    else: # POSIX-compliant
+                    else:  # POSIX-compliant
                         res = ctypes.pythonapi.pthread_kill(ctypes.c_ulong(self.llm_thread.native_id), signal.SIGKILL)
                         if res == 0:
                             print(OutputFormatter.color_prefix("LLM thread terminated (POSIX).", "Internal"))
-                        elif res != 1: # ESRCH (No such process) is acceptable
+                        elif res != 1:  # ESRCH (No such process) is acceptable
                             print(OutputFormatter.color_prefix("Failed to terminate LLM thread.", "Internal"))
 
                 except Exception as e:
@@ -1365,13 +1380,13 @@ class AIRuntimeManager:
 
             self.llm = None
             self.is_llm_running = False
-            global embedding_model, vector_store #Also unload embeddings
+            global embedding_model, vector_store  # Also unload embeddings
             embedding_model = None
             vector_store = None
             self._stop_event.clear()  # Reset for the next LLM run
             print(OutputFormatter.color_prefix("Model unloaded.", "Internal"))
 
-    def add_task(self, task, args=(), priority=0): #Modified
+    def add_task(self, task, args=(), priority=0):  # Modified
         """Adds a task to the appropriate queue based on priority."""
         with self.lock:
             task_item = (task, args)  # Combine task and args into a single tuple
@@ -1394,28 +1409,35 @@ class AIRuntimeManager:
                 raise ValueError("Invalid priority level.")
 
             if time.time() - self.last_queue_save_time > self.queue_save_interval:
-                self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
+                self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks,
+                                                      self.mesh_network_tasks if hasattr(self,
+                                                                                         'mesh_network_tasks') else [])
                 self.last_queue_save_time = time.time()
 
     def get_next_task(self):
         with self.lock:
             """Gets the next task from the highest priority queue that is not empty."""
-            print(OutputFormatter.color_prefix(f"get_next_task: task_queue = {self.task_queue}", "Internal")) # Debugging
-            print(OutputFormatter.color_prefix(f"get_next_task: backbrain_tasks = {self.backbrain_tasks}", "Internal")) # Debugging
+            print(
+                OutputFormatter.color_prefix(f"get_next_task: task_queue = {self.task_queue}", "Internal"))  # Debugging
+            print(OutputFormatter.color_prefix(f"get_next_task: backbrain_tasks = {self.backbrain_tasks}",
+                                               "Internal"))  # Debugging
             if hasattr(self, 'mesh_network_tasks'):
-                print(OutputFormatter.color_prefix(f"get_next_task: mesh_network_tasks = {self.mesh_network_tasks}", "Internal")) # Debugging
+                print(OutputFormatter.color_prefix(f"get_next_task: mesh_network_tasks = {self.mesh_network_tasks}",
+                                                   "Internal"))  # Debugging
 
             if self.task_queue:
                 return self.task_queue.pop(0)  # FIFO
             elif self.backbrain_tasks:
                 return self.backbrain_tasks.pop(0)
-            elif hasattr(self, 'mesh_network_tasks') and self.mesh_network_tasks: #check priority level 99 tasks
+            elif hasattr(self, 'mesh_network_tasks') and self.mesh_network_tasks:  # check priority level 99 tasks
                 return self.mesh_network_tasks.pop(0)
             else:
                 return None
 
             if time.time() - self.last_queue_save_time > self.queue_save_interval:
-                self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
+                self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks,
+                                                      self.mesh_network_tasks if hasattr(self,
+                                                                                         'mesh_network_tasks') else [])
                 self.last_queue_save_time = time.time()
 
     def cached_inference(self, prompt, slot, context_type):
@@ -1439,7 +1461,8 @@ class AIRuntimeManager:
                 best_score = score
 
         if best_match:
-            print(OutputFormatter.color_prefix(f"Found cached inference with score: {best_score}", "BackbrainController"))
+            print(
+                OutputFormatter.color_prefix(f"Found cached inference with score: {best_score}", "BackbrainController"))
             return best_match
         else:
             return None
@@ -1452,194 +1475,219 @@ class AIRuntimeManager:
                 (slot, "User", prompt, response, context_type)
             )
         except sqlite3.IntegrityError:
-            print(OutputFormatter.color_prefix("Prompt already exists in cache. Skipping insertion.", "BackbrainController"))
+            print(OutputFormatter.color_prefix("Prompt already exists in cache. Skipping insertion.",
+                                               "BackbrainController"))
         except Exception as e:
             print(OutputFormatter.color_prefix(f"Error adding to cache: {e}", "BackbrainController"))
 
     def scheduler(self):
         """Scheduler loop (modified to use process_json_response)."""
         while not self._stop_event.is_set():
-          try: # Added broad exception handling
-            task = self.get_next_task()
-            if task:
-                task_item, priority = task  # Unpack the outer tuple: ((task, args), priority)
-                task_callable, task_args = task_item # Unpack the inner tuple: (task, args)
+            try:  # Added broad exception handling
+                task = self.get_next_task()
+                if task:
+                    task_item, priority = task  # Unpack the outer tuple: ((task, args), priority)
+                    task_callable, task_args = task_item  # Unpack the inner tuple: (task, args)
 
+                    self.start_time = time.time()
+                    task_name = task_callable.__name__ if hasattr(task_callable, '__name__') else str(
+                        task_callable)  # Gets the task name.
 
-                self.start_time = time.time()
-                task_name = task_callable.__name__ if hasattr(task_callable, '__name__') else str(task_callable) #Gets the task name.
-
-                print(OutputFormatter.color_prefix(
-                    f"Starting task: {task_name} with priority {priority}",
-                    "BackbrainController",  
-                    self.start_time
-                ))
-
-
-                try: # Execute the task.
-                    if task_callable == self.generate_response:
-                        timeout = 60 if priority == 0 else None
-                        result = None
-
-                        def run_llm_task():
-                            nonlocal result
-                            try:
-                                print(OutputFormatter.color_prefix(f"run_llm_task: _stop_event.is_set(): {self._stop_event.is_set()}", "Internal")) # DEBUG
-                                if self._stop_event.is_set():
-                                    print(OutputFormatter.color_prefix("Stop event set. Skipping LLM invocation.", "BackbrainController"))
-                                    return
-
-                                # if len(task_args) == 3: # Removed this check
-                                #     result = task_callable(*task_args)
-                                # else:
-                                #     result = task_callable(task_args[0], task_args[1])
-                                result = task_callable(*task_args) # Always unpack args.
-                            except Exception as e:
-                                print(OutputFormatter.color_prefix(f"Error in LLM task: {e}", "BackbrainController"))
-                                traceback.print_exc() # Print full traceback
-
-                        with self._model_lock:
-                            print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for generate_response", "Internal"))
-                            if self.llm is None:
-                                initialize_models()
-                                self.llm = ai_runtime_manager.llm  # Corrected line
-                                self.partition_context.vector_store = vector_store
-                            print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for generate_response", "Internal"))
-                            self._stop_event.clear()
-                            print(OutputFormatter.color_prefix(f"scheduler: Cleared _stop_event", "Internal"))
-
-
-                        if priority != 4:  # Handle cached inference for non-branch-prediction tasks
-                            user_input, slot, *other_args = task_args
-                            context_type = "CoT" if priority == 3 else "main"
-
-                            cached_response = self.cached_inference(user_input, slot, context_type)
-                            if cached_response:
-                                print(OutputFormatter.color_prefix(f"Using cached response for slot {slot}", "BackbrainController"))
-                                if priority != 0:
-                                  self.partition_context.add_context(slot, cached_response, context_type)
-                                elif priority == 0:
-                                    result = cached_response # Assign to result, for the return
-                                    continue # Skips the rest
-
-
-                        if priority != 4:
-                            self.llm_thread = threading.Thread(target=run_llm_task)
-                            self.llm_thread.start()
-                        else: #No thread needed
-                            run_llm_task()
-
-
-                        if timeout is not None:
-                            self.llm_thread.join(timeout)
-                            if self.llm_thread.is_alive():
-                                print(OutputFormatter.color_prefix(
-                                    f"Task {task_callable.__name__} timed out after {timeout} seconds.",
-                                    "BackbrainController",
-                                    time.time() - self.start_time
-                                ))
-                                self.unload_model()
-                                return  # Exit the scheduler loop on timeout
-                        elif priority != 4:
-                            self.llm_thread.join()
-
-                    elif task_callable == self.process_branch_prediction_slot: #Modified section
-                        slot, chat_history = task_args # Unpack.
-
-                        decision_tree_prompt = self.create_decision_tree_prompt(chat_history)
-
-                        with self._model_lock: # Added lock
-                            print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for process_branch_prediction_slot", "Internal")) # DEBUG
-                            decision_tree_text = self.invoke_llm(decision_tree_prompt, caller="process_branch_prediction_slot")
-                            print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for process_branch_prediction_slot", "Internal")) # DEBUG
-
-                        json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
-                        with self._model_lock: # Added lock
-                            print(OutputFormatter.color_prefix(f"scheduler: Acquiring _model_lock for process_branch_prediction_slot (2nd LLM call)", "Internal")) # DEBUG
-                            json_tree_response = self.invoke_llm(json_tree_prompt, caller="process_branch_prediction_slot")
-                            print(OutputFormatter.color_prefix(f"scheduler: Acquired _model_lock for process_branch_prediction_slot (2nd LLM call)", "Internal"))  # DEBUG
-
-                        # --- Use process_json_response ---
-                        decision_tree_json = self.process_json_response(json_tree_response)
-                        # --- End of modification ---
-
-                        if decision_tree_json: # Check for None
-                            potential_inputs = self.extract_potential_inputs(decision_tree_json)
-
-                            for user_input in potential_inputs:
-                                print(OutputFormatter.color_prefix(f"Scheduling generate_response for predicted input: {user_input}", "branch_predictor"))
-                                prefixed_input = f"branch_predictor: {user_input}"
-                                self.add_task((self.generate_response, (prefixed_input, slot)), 4)
-                        else:
-                            print(OutputFormatter.color_prefix("Decision tree JSON processing failed.", "branch_predictor"))
-
-
-                    else:
-                        result = task_callable(*task_args)
-
-                except Exception as e: # Exception Handling
                     print(OutputFormatter.color_prefix(
-                        f"Task {task_callable.__name__} raised an exception: {e}",
+                        f"Starting task: {task_name} with priority {priority}",
                         "BackbrainController",
-                        time.time() - self.start_time
-                    ))
-                    traceback.print_exc()  # Print the full traceback
-
-                else:  # Execute 'else' block if no exception occurred.
-                    elapsed_time = time.time() - self.start_time
-                    if task_callable == self.generate_response:
-                        if priority == 0 and elapsed_time < 58:
-                            pass
-                        elif priority != 4:
-                            user_input, slot, *_ = task_args
-                            context_type = "CoT" if priority == 3 else "main"
-
-                            # --- JSON Processing for decision and evaluation ---
-                            if context_type == "CoT":
-                                if "Decision:" in result:  # Check for decision prompt
-                                    result = self.process_json_response(result)  # Process JSON
-                                elif "Evaluation:" in result:  # Check for evaluation prompt
-                                    result = self.process_json_response(result)  # Process JSON
-
-                            # --- End of JSON Processing ---
-                            if result is not None: # Proceed if not None
-                                self.add_to_cache(user_input, result if isinstance(result, str) else json.dumps(result), context_type, slot)
-                                self.partition_context.add_context(slot, result if isinstance(result, str) else json.dumps(result), "main" if priority == 0 else "CoT")
-                                asyncio.run_coroutine_threadsafe(
-                                    self.partition_context.async_embed_and_store(result if isinstance(result, str) else json.dumps(result), slot, "main" if priority == 0 else "CoT"),
-                                    loop
-                                )
-
-                    self.last_task_info = {
-                        "task": task_callable,
-                        "args": task_args,
-                        "result": result,
-                        "elapsed_time": elapsed_time,
-                    }
-                    print(OutputFormatter.color_prefix(
-                        f"Finished task: {task_callable.__name__} in {elapsed_time:.2f} seconds",
-                        "BackbrainController",  
-                        time.time() - self.start_time
+                        self.start_time
                     ))
 
+                    try:  # Execute the task.
+                        if task_callable == self.generate_response:
+                            timeout = 60 if priority == 0 else None
+                            result = None
 
-                finally:
-                    self.current_task = None  # Always clear the current task
-                    if self.llm_thread:
-                        self._stop_event.clear()
-                    if task_callable == self.generate_response and priority == 0:
-                        return result
+                            def run_llm_task():
+                                nonlocal result
+                                try:
+                                    print(OutputFormatter.color_prefix(
+                                        f"run_llm_task: _stop_event.is_set(): {self._stop_event.is_set()}",
+                                        "Internal"))  # DEBUG
+                                    if self._stop_event.is_set():
+                                        print(OutputFormatter.color_prefix("Stop event set. Skipping LLM invocation.",
+                                                                           "BackbrainController"))
+                                        return
 
-            else:
-                time.sleep(0.095)
-                if time.time() - self.last_queue_save_time > self.queue_save_interval:
-                    with self.lock:
-                        self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks, self.mesh_network_tasks if hasattr(self, 'mesh_network_tasks') else [])
-                        self.last_queue_save_time = time.time()
+                                    # if len(task_args) == 3: # Removed this check
+                                    #     result = task_callable(*task_args)
+                                    # else:
+                                    #     result = task_callable(task_args[0], task_args[1])
+                                    result = task_callable(*task_args)  # Always unpack args.
+                                except Exception as e:
+                                    print(
+                                        OutputFormatter.color_prefix(f"Error in LLM task: {e}", "BackbrainController"))
+                                    traceback.print_exc()  # Print full traceback
 
-          except Exception as e: # Added broad exception handling.
+                            with self._model_lock:
+                                print(OutputFormatter.color_prefix(
+                                    f"scheduler: Acquiring _model_lock for generate_response", "Internal"))
+                                if self.llm is None:
+                                    initialize_models()
+                                    self.llm = ai_runtime_manager.llm  # Corrected line
+                                    self.partition_context.vector_store = vector_store
+                                print(OutputFormatter.color_prefix(
+                                    f"scheduler: Acquired _model_lock for generate_response", "Internal"))
+                                self._stop_event.clear()
+                                print(OutputFormatter.color_prefix(f"scheduler: Cleared _stop_event", "Internal"))
+
+                            if priority != 4:  # Handle cached inference for non-branch-prediction tasks
+                                user_input, slot, *other_args = task_args
+                                context_type = "CoT" if priority == 3 else "main"
+
+                                cached_response = self.cached_inference(user_input, slot, context_type)
+                                if cached_response:
+                                    print(OutputFormatter.color_prefix(f"Using cached response for slot {slot}",
+                                                                       "BackbrainController"))
+                                    if priority != 0:
+                                        self.partition_context.add_context(slot, cached_response, context_type)
+                                    elif priority == 0:
+                                        result = cached_response  # Assign to result, for the return
+                                        continue  # Skips the rest
+
+                            if priority != 4:
+                                self.llm_thread = threading.Thread(target=run_llm_task)
+                                self.llm_thread.start()
+                            else:  # No thread needed
+                                run_llm_task()
+
+                            if timeout is not None:
+                                self.llm_thread.join(timeout)
+                                if self.llm_thread.is_alive():
+                                    print(OutputFormatter.color_prefix(
+                                        f"Task {task_callable.__name__} timed out after {timeout} seconds.",
+                                        "BackbrainController",
+                                        time.time() - self.start_time
+                                    ))
+                                    self.unload_model()
+                                    return  # Exit the scheduler loop on timeout
+                            elif priority != 4:
+                                self.llm_thread.join()
+
+                        elif task_callable == self.process_branch_prediction_slot:  # Modified section
+                            slot, chat_history = task_args  # Unpack.
+
+                            decision_tree_prompt = self.create_decision_tree_prompt(chat_history)
+
+                            with self._model_lock:  # Added lock
+                                print(OutputFormatter.color_prefix(
+                                    f"scheduler: Acquiring _model_lock for process_branch_prediction_slot",
+                                    "Internal"))  # DEBUG
+                                decision_tree_text = self.invoke_llm(decision_tree_prompt,
+                                                                     caller="process_branch_prediction_slot")
+                                print(OutputFormatter.color_prefix(
+                                    f"scheduler: Acquired _model_lock for process_branch_prediction_slot",
+                                    "Internal"))  # DEBUG
+
+                            json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
+                            with self._model_lock:  # Added lock
+                                print(OutputFormatter.color_prefix(
+                                    f"scheduler: Acquiring _model_lock for process_branch_prediction_slot (2nd LLM call)",
+                                    "Internal"))  # DEBUG
+                                json_tree_response = self.invoke_llm(json_tree_prompt,
+                                                                     caller="process_branch_prediction_slot")
+                                print(OutputFormatter.color_prefix(
+                                    f"scheduler: Acquired _model_lock for process_branch_prediction_slot (2nd LLM call)",
+                                    "Internal"))  # DEBUG
+
+                            # --- Use process_json_response ---
+                            decision_tree_json = self.process_json_response(json_tree_response)
+                            # --- End of modification ---
+
+                            if decision_tree_json:  # Check for None
+                                potential_inputs = self.extract_potential_inputs(decision_tree_json)
+
+                                for user_input in potential_inputs:
+                                    print(OutputFormatter.color_prefix(
+                                        f"Scheduling generate_response for predicted input: {user_input}",
+                                        "branch_predictor"))
+                                    prefixed_input = f"branch_predictor: {user_input}"
+                                    self.add_task((self.generate_response, (prefixed_input, slot)), 4)
+                            else:
+                                print(OutputFormatter.color_prefix("Decision tree JSON processing failed.",
+                                                                   "branch_predictor"))
+
+
+                        else:
+                            result = task_callable(*task_args)
+
+                    except Exception as e:  # Exception Handling
+                        print(OutputFormatter.color_prefix(
+                            f"Task {task_callable.__name__} raised an exception: {e}",
+                            "BackbrainController",
+                            time.time() - self.start_time
+                        ))
+                        traceback.print_exc()  # Print the full traceback
+
+                    else:  # Execute 'else' block if no exception occurred.
+                        elapsed_time = time.time() - self.start_time
+                        if task_callable == self.generate_response:
+                            if priority == 0 and elapsed_time < 58:
+                                pass
+                            elif priority != 4:
+                                user_input, slot, *_ = task_args
+                                context_type = "CoT" if priority == 3 else "main"
+
+                                # --- JSON Processing for decision and evaluation ---
+                                if context_type == "CoT":
+                                    if "Decision:" in result:  # Check for decision prompt
+                                        result = self.process_json_response(result)  # Process JSON
+                                    elif "Evaluation:" in result:  # Check for evaluation prompt
+                                        result = self.process_json_response(result)  # Process JSON
+
+                                # --- End of JSON Processing ---
+                                if result is not None:  # Proceed if not None
+                                    self.add_to_cache(user_input,
+                                                      result if isinstance(result, str) else json.dumps(result),
+                                                      context_type, slot)
+                                    self.partition_context.add_context(slot, result if isinstance(result,
+                                                                                                  str) else json.dumps(
+                                        result), "main" if priority == 0 else "CoT")
+                                    asyncio.run_coroutine_threadsafe(
+                                        self.partition_context.async_embed_and_store(
+                                            result if isinstance(result, str) else json.dumps(result), slot,
+                                            "main" if priority == 0 else "CoT"),
+                                        loop
+                                    )
+
+                        self.last_task_info = {
+                            "task": task_callable,
+                            "args": task_args,
+                            "result": result,
+                            "elapsed_time": elapsed_time,
+                        }
+                        print(OutputFormatter.color_prefix(
+                            f"Finished task: {task_callable.__name__} in {elapsed_time:.2f} seconds",
+                            "BackbrainController",
+                            time.time() - self.start_time
+                        ))
+
+
+                    finally:
+                        self.current_task = None  # Always clear the current task
+                        if self.llm_thread:
+                            self._stop_event.clear()
+                        if task_callable == self.generate_response and priority == 0:
+                            return result
+
+                else:
+                    time.sleep(0.095)
+                    if time.time() - self.last_queue_save_time > self.queue_save_interval:
+                        with self.lock:
+                            self.database_manager.save_task_queue(self.task_queue, self.backbrain_tasks,
+                                                                  self.mesh_network_tasks if hasattr(self,
+                                                                                                     'mesh_network_tasks') else [])
+                            self.last_queue_save_time = time.time()
+
+            except Exception as e:  # Added broad exception handling.
                 print(OutputFormatter.color_prefix(f"FATAL ERROR IN SCHEDULER: {e}", "BackbrainController"))
-                traceback.print_exc() # Print full traceback
+                traceback.print_exc()  # Print full traceback
 
     def invoke_llm(self, prompt, caller="Unknown Caller"):
         """
@@ -1647,7 +1695,8 @@ class AIRuntimeManager:
         existing invocations. Includes debug output and error handling.
         """
         with self._model_lock:  # Acquire the lock *before* checking/setting is_llm_running
-            print(OutputFormatter.color_prefix(f"invoke_llm called by {caller}. is_llm_running: {self.is_llm_running}", "Internal"))
+            print(OutputFormatter.color_prefix(f"invoke_llm called by {caller}. is_llm_running: {self.is_llm_running}",
+                                               "Internal"))
             if self.is_llm_running:
                 print(OutputFormatter.color_prefix(
                     "LLM invocation already in progress. Skipping this invocation.", "Internal"
@@ -1660,12 +1709,14 @@ class AIRuntimeManager:
             try:
                 start_time = time.time()
                 prompt_tokens = len(TOKENIZER.encode(prompt))
-                print(OutputFormatter.color_prefix(f"Invoking LLM with prompt (called by {caller}):\n{prompt}", "Internal"))
+                print(OutputFormatter.color_prefix(f"Invoking LLM with prompt (called by {caller}):\n{prompt}",
+                                                   "Internal"))
 
-                print(OutputFormatter.color_prefix(f"EXACT PROMPT: {repr(prompt)}", "Internal")) # ADDED THIS
+                print(OutputFormatter.color_prefix(f"EXACT PROMPT: {repr(prompt)}", "Internal"))  # ADDED THIS
 
                 if prompt_tokens > int(CTX_WINDOW_LLM * 0.75):
-                    print(OutputFormatter.color_prefix(f"Prompt exceeds 75% of context window. Truncating...", "BackbrainController"))
+                    print(OutputFormatter.color_prefix(f"Prompt exceeds 75% of context window. Truncating...",
+                                                       "BackbrainController"))
                     truncated_prompt = TOKENIZER.decode(TOKENIZER.encode(prompt)[:int(CTX_WINDOW_LLM * 0.75)])
                     if truncated_prompt[-1] not in [".", "?", "!"]:
                         last_period_index = truncated_prompt.rfind(".")
@@ -1675,9 +1726,9 @@ class AIRuntimeManager:
                         if last_punctuation_index != -1:
                             truncated_prompt = truncated_prompt[:last_punctuation_index + 1]
                     print(OutputFormatter.color_prefix("Truncated prompt being used...", "BackbrainController"))
-                    response = self.llm(truncated_prompt, stop=[]) # ADDED stop=[]
+                    response = self.llm(truncated_prompt, stop=[])  # ADDED stop=[]
                 else:
-                    response = self.llm(prompt, stop=[]) # ADDED stop=[]
+                    response = self.llm(prompt, stop=[])  # ADDED stop=[]
 
                 print(OutputFormatter.color_prefix(f"LLM response (called by {caller}):\n{response}", "Internal"))
                 if response and 'choices' in response and len(response['choices']) > 0:
@@ -1691,9 +1742,10 @@ class AIRuntimeManager:
 
             finally:
                 self.is_llm_running = False
-                print(OutputFormatter.color_prefix(f"invoke_llm: Set is_llm_running to False in finally block", "Internal"))
+                print(OutputFormatter.color_prefix(f"invoke_llm: Set is_llm_running to False in finally block",
+                                                   "Internal"))
 
-    def report_queue_status(self): #Modified to report the meshNetworkProcessingIO Queue
+    def report_queue_status(self):  # Modified to report the meshNetworkProcessingIO Queue
         """Reports the queue status (length and contents) every 10 seconds."""
         while True:
             with self.lock:
@@ -1709,9 +1761,9 @@ class AIRuntimeManager:
                     ((task.__name__ if callable(task) else str(task)), args) for (task, args), _ in self.backbrain_tasks
                 ]
                 mesh_network_tasks_contents = [
-                    ((task.__name__ if callable(task) else str(task)), args) for (task, args), _ in self.mesh_network_tasks
-                ] if hasattr(self,'mesh_network_tasks') else []
-
+                    ((task.__name__ if callable(task) else str(task)), args) for (task, args), _ in
+                    self.mesh_network_tasks
+                ] if hasattr(self, 'mesh_network_tasks') else []
 
             print(OutputFormatter.color_prefix(
                 f"Task Queue Length: {task_queue_length} | Contents: {task_queue_contents}",
@@ -1721,7 +1773,7 @@ class AIRuntimeManager:
                 f"Backbrain Tasks Length: {backbrain_tasks_length} | Contents: {backbrain_tasks_contents}",
                 "BackbrainController"
             ))
-            print(OutputFormatter.color_prefix( #queue report
+            print(OutputFormatter.color_prefix(  # queue report
                 f"Mesh Network Tasks Length: {mesh_network_tasks_length} | Contents: {mesh_network_tasks_contents}",
                 "BackbrainController"
             ))
@@ -1733,11 +1785,10 @@ class AIRuntimeManager:
         reporting_thread = Thread(target=self.report_queue_status)
         reporting_thread.daemon = True
         reporting_thread.start()
-    
 
     def run_with_timeout(self, func, args, timeout):
         """This function is no longer directly used for timed execution."""
-        pass # Remove the content, as it's now handled in scheduler.
+        pass  # Remove the content, as it's now handled in scheduler.
 
     def branch_predictor(self):
         """
@@ -1747,7 +1798,8 @@ class AIRuntimeManager:
         while True:
             try:
                 for slot in range(5):
-                    print(OutputFormatter.color_prefix(f"branch_predictor analyzing slot {slot}...", "BackbrainController"))
+                    print(OutputFormatter.color_prefix(f"branch_predictor analyzing slot {slot}...",
+                                                       "BackbrainController"))
                     chat_history = self.database_manager.get_chat_history(slot)
 
                     if not chat_history:
@@ -1786,7 +1838,8 @@ class AIRuntimeManager:
             potential_inputs = self.extract_potential_inputs(decision_tree_json)
 
             for user_input in potential_inputs:
-                print(OutputFormatter.color_prefix(f"Scheduling generate_response for predicted input: {user_input}", "branch_predictor"))
+                print(OutputFormatter.color_prefix(f"Scheduling generate_response for predicted input: {user_input}",
+                                                   "branch_predictor"))
                 prefixed_input = f"branch_predictor: {user_input}"
                 # Add generate_response task with the predicted input (still priority 4)
                 self.add_task((self.generate_response, (prefixed_input, slot)), 4)
@@ -1858,6 +1911,7 @@ class AIRuntimeManager:
                 if node["node_type"] == "question":
                     potential_inputs.append(node["content"])
         return potential_inputs
+
     def _prepare_prompt(self, user_input, slot, is_v1_completions=False):
         """Prepares the prompt, using the GGUF-aware ChatFormatter."""
         global assistantName  # Ensure assistantName is accessible
@@ -1880,7 +1934,8 @@ class AIRuntimeManager:
 
         else:
             self.partition_context.add_context(slot, f"User: {user_input}", "main")
-            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(f"User: {user_input}", slot, "main"), loop)
+            asyncio.run_coroutine_threadsafe(
+                self.partition_context.async_embed_and_store(f"User: {user_input}", slot, "main"), loop)
             main_history = self.database_manager.fetch_chat_history(slot)
             context = self.partition_context.get_context(slot, "main")
 
@@ -1891,15 +1946,14 @@ class AIRuntimeManager:
                 for entry in main_history:
                     context_messages.append(entry)
 
-        print(OutputFormatter.color_prefix(f"context_messages: {context_messages}", "Internal")) #DEBUG
+        print(OutputFormatter.color_prefix(f"context_messages: {context_messages}", "Internal"))  # DEBUG
 
         # --- Use the self.chat_formatter ---
         prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True)
         # --- End of modification ---
         return prompt
 
-
-    def generate_response(self, user_input, slot, stream=False): # Modified
+    def generate_response(self, user_input, slot, stream=False, decoded_initial_instructions=None):  # Modified
         """Generates a response, using CoT if necessary, and processing JSON."""
         global assistantName
 
@@ -1913,15 +1967,19 @@ class AIRuntimeManager:
         prompt_tokens = len(TOKENIZER.encode(prompt))
 
         if is_v1_completions:
-            print(OutputFormatter.color_prefix("Direct query (/v1/completions). Generating direct response...", "Internal", time.time() - start_time, progress=10, slot=slot))
+            print(OutputFormatter.color_prefix("Direct query (/v1/completions). Generating direct response...",
+                                               "Internal", time.time() - start_time, progress=10, slot=slot))
             direct_response = self.invoke_llm(prompt)  # Corrected call
-            asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, direct_response), loop) #Async write
+            asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, direct_response),
+                                             loop)  # Async write
             end_time = time.time()
             generation_time = end_time - start_time
-            print(OutputFormatter.color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))
+            print(OutputFormatter.color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens,
+                                               slot=slot))
             return direct_response
 
-        print(OutputFormatter.color_prefix("Deciding whether to engage in deep thinking...", "Internal", time.time() - start_time, progress=0, token_count=prompt_tokens, slot=slot))
+        print(OutputFormatter.color_prefix("Deciding whether to engage in deep thinking...", "Internal",
+                                           time.time() - start_time, progress=0, token_count=prompt_tokens, slot=slot))
         decision_prompt = f"""
         Analyze the input and decide if it requires in-depth processing or a simple response.
         Input: "{user_input}"
@@ -1939,12 +1997,13 @@ class AIRuntimeManager:
         """
 
         decision_prompt_tokens = len(TOKENIZER.encode(decision_prompt))
-        print(OutputFormatter.color_prefix("Processing Decision Prompt", "Internal", time.time() - start_time, token_count=decision_prompt_tokens, progress=1, slot=slot))
+        print(OutputFormatter.color_prefix("Processing Decision Prompt", "Internal", time.time() - start_time,
+                                           token_count=decision_prompt_tokens, progress=1, slot=slot))
 
-
-        decision_response = self.invoke_llm(decision_prompt) # Corrected call
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_response, slot, "CoT"), loop) # Moved Here
-        decision_json =  self.process_json_response(decision_response)
+        decision_response = self.invoke_llm(decision_prompt)  # Corrected call
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_response, slot, "CoT"),
+                                         loop)  # Moved Here
+        decision_json = self.process_json_response(decision_response)
 
         deep_thinking_required = False  # Default value
         reasoning_summary = ""
@@ -1953,63 +2012,78 @@ class AIRuntimeManager:
             reasoning_summary = decision_json.get("reasoning", "")
         # --- End of JSON processing ---
 
-
-        print(OutputFormatter.color_prefix(f"Decision: {'Deep thinking required' if deep_thinking_required else 'Simple response sufficient'}", "Internal", time.time() - start_time, progress=5, slot=slot))
-        print(OutputFormatter.color_prefix(f"Reasoning: {reasoning_summary}", "Internal", time.time() - start_time, progress=5, slot=slot))
+        print(OutputFormatter.color_prefix(
+            f"Decision: {'Deep thinking required' if deep_thinking_required else 'Simple response sufficient'}",
+            "Internal", time.time() - start_time, progress=5, slot=slot))
+        print(OutputFormatter.color_prefix(f"Reasoning: {reasoning_summary}", "Internal", time.time() - start_time,
+                                           progress=5, slot=slot))
 
         if not deep_thinking_required:
-            print(OutputFormatter.color_prefix("Simple query detected. Generating a direct response...", "Internal", time.time() - start_time, progress=10, slot=slot))
+            print(OutputFormatter.color_prefix("Simple query detected. Generating a direct response...", "Internal",
+                                               time.time() - start_time, progress=10, slot=slot))
             relevant_context = self.partition_context.get_relevant_chunks(user_input, slot, k=5, requester_type="main")
             if relevant_context:
                 retrieved_context_text = "\n".join([item[0] for item in relevant_context])
+                # context_messages = [{"role": "system", "content": decoded_initial_instructions}] # REMOVED
                 context_messages = [{"role": "system", "content": decoded_initial_instructions}]
 
                 if relevant_context:
                     for entry in relevant_context:
-                      context_messages.append({"role": "user", "content": entry[0]})
+                        context_messages.append({"role": "user", "content": entry[0]})
 
                 main_history = self.database_manager.fetch_chat_history(slot)
                 if main_history:
                     for entry in main_history:
                         context_messages.append(entry)
-                context_messages.append({"role":"user", "content": user_input})
+                context_messages.append({"role": "user", "content": user_input})
 
                 prompt = self.chat_formatter.create_prompt(messages=context_messages, add_generation_prompt=True)
 
-            direct_response = self.invoke_llm(prompt) # Corrected call
+            else:  # ADDED ELSE
+                prompt = self._prepare_prompt(user_input, slot)  # ADDED
+
+            direct_response = self.invoke_llm(prompt)  # Corrected call
 
             # --- Add to context and embed NOW (for simple responses) ---
             self.partition_context.add_context(slot, direct_response, "main")
-            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(direct_response, slot, "main"), loop)
+            asyncio.run_coroutine_threadsafe(
+                self.partition_context.async_embed_and_store(direct_response, slot, "main"), loop)
             # ---
 
-            asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, direct_response), loop)
+            asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, direct_response),
+                                             loop)
             end_time = time.time()
             generation_time = end_time - start_time
-            print(OutputFormatter.color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))
-
-
+            print(OutputFormatter.color_prefix(direct_response, "Adelaide", generation_time, token_count=prompt_tokens,
+                                               slot=slot))
 
             return direct_response
 
-        print(OutputFormatter.color_prefix("Engaging in deep thinking process...", "Internal", time.time() - start_time, progress=10, slot=slot))
+        print(OutputFormatter.color_prefix("Engaging in deep thinking process...", "Internal", time.time() - start_time,
+                                           progress=10, slot=slot))
         # --- Add to CoT context only for deep thinking ---
         self.partition_context.add_context(slot, user_input, "CoT")
         asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(user_input, slot, "CoT"), loop)
         # ---
 
-        print(OutputFormatter.color_prefix("Generating initial direct answer...", "Internal", time.time() - start_time, progress=15, slot=slot))
+        print(OutputFormatter.color_prefix("Generating initial direct answer...", "Internal", time.time() - start_time,
+                                           progress=15, slot=slot))
         initial_response_prompt = f"{prompt}\nProvide a concise initial response."
 
         initial_response_prompt_tokens = len(TOKENIZER.encode(initial_response_prompt))
-        print(OutputFormatter.color_prefix("Processing Initial Response Prompt", "Internal", time.time() - start_time, token_count=initial_response_prompt_tokens, progress=16, slot=slot))
+        print(OutputFormatter.color_prefix("Processing Initial Response Prompt", "Internal", time.time() - start_time,
+                                           token_count=initial_response_prompt_tokens, progress=16, slot=slot))
 
         initial_response = self.invoke_llm(initial_response_prompt)  # Corrected call
-          # --- Add to CoT and embed ---
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(initial_response, slot, "CoT"), loop)
-        print(OutputFormatter.color_prefix(f"Initial response: {initial_response}", "Internal", time.time() - start_time, progress=20, slot=slot))
+        # --- Add to CoT and embed ---
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(initial_response, slot, "CoT"),
+                                         loop)
+        print(
+            OutputFormatter.color_prefix(f"Initial response: {initial_response}", "Internal", time.time() - start_time,
+                                         progress=20, slot=slot))
 
-        print(OutputFormatter.color_prefix("Creating a to-do list for in-depth analysis...", "Internal", time.time() - start_time, progress=25, slot=slot))
+        print(OutputFormatter.color_prefix("Creating a to-do list for in-depth analysis...", "Internal",
+                                           time.time() - start_time, progress=25, slot=slot))
         todo_prompt = f"""
         {prompt}\n
         Based on the query '{user_input}', list the steps for in-depth analysis.
@@ -2017,48 +2091,59 @@ class AIRuntimeManager:
         """
 
         todo_prompt_tokens = len(TOKENIZER.encode(todo_prompt))
-        print(OutputFormatter.color_prefix("Processing To-do Prompt", "Internal", time.time() - start_time, token_count=todo_prompt_tokens, progress=26, slot=slot))
+        print(OutputFormatter.color_prefix("Processing To-do Prompt", "Internal", time.time() - start_time,
+                                           token_count=todo_prompt_tokens, progress=26, slot=slot))
 
-        todo_response = self.invoke_llm(todo_prompt) # Corrected call
+        todo_response = self.invoke_llm(todo_prompt)  # Corrected call
         asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(todo_response, slot, "CoT"), loop)
 
-        print(OutputFormatter.color_prefix(f"To-do list: {todo_response}", "Internal", time.time() - start_time, progress=30, slot=slot))
+        print(OutputFormatter.color_prefix(f"To-do list: {todo_response}", "Internal", time.time() - start_time,
+                                           progress=30, slot=slot))
 
         search_queries = re.findall(r"literature_review\(['\"](.*?)['\"]\)", todo_response)
         for query in search_queries:
             LiteratureReviewer.literature_review(query)
 
-        print(OutputFormatter.color_prefix("Creating a decision tree for action planning...", "Internal", time.time() - start_time, progress=35, slot=slot))
+        print(OutputFormatter.color_prefix("Creating a decision tree for action planning...", "Internal",
+                                           time.time() - start_time, progress=35, slot=slot))
         decision_tree_prompt = f"{prompt}\nGiven the to-do list '{todo_response}', create a decision tree for actions."
 
         decision_tree_prompt_tokens = len(TOKENIZER.encode(decision_tree_prompt))
-        print(OutputFormatter.color_prefix("Processing Decision Tree Prompt", "Internal", time.time() - start_time, token_count=decision_tree_prompt_tokens, progress=36, slot=slot))
+        print(OutputFormatter.color_prefix("Processing Decision Tree Prompt", "Internal", time.time() - start_time,
+                                           token_count=decision_tree_prompt_tokens, progress=36, slot=slot))
 
-        decision_tree_text = self.invoke_llm(decision_tree_prompt) # Corrected call
-        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_tree_text, slot, "CoT"), loop)
-        print(OutputFormatter.color_prefix(f"Decision tree (text): {decision_tree_text}", "Internal", time.time() - start_time, progress=40, slot=slot))
+        decision_tree_text = self.invoke_llm(decision_tree_prompt)  # Corrected call
+        asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(decision_tree_text, slot, "CoT"),
+                                         loop)
+        print(OutputFormatter.color_prefix(f"Decision tree (text): {decision_tree_text}", "Internal",
+                                           time.time() - start_time, progress=40, slot=slot))
 
-        print(OutputFormatter.color_prefix("Converting decision tree to JSON...", "Internal", time.time() - start_time, progress=45, slot=slot))
+        print(OutputFormatter.color_prefix("Converting decision tree to JSON...", "Internal", time.time() - start_time,
+                                           progress=45, slot=slot))
         json_tree_prompt = self.create_json_tree_prompt(decision_tree_text)
 
-
         json_tree_prompt_tokens = len(TOKENIZER.encode(json_tree_prompt))
-        print(OutputFormatter.color_prefix("Processing JSON Tree Prompt", "Internal", time.time() - start_time, token_count=json_tree_prompt_tokens, progress=46, slot=slot))
+        print(OutputFormatter.color_prefix("Processing JSON Tree Prompt", "Internal", time.time() - start_time,
+                                           token_count=json_tree_prompt_tokens, progress=46, slot=slot))
 
-        json_tree_response = self.invoke_llm(json_tree_prompt) # Corrected call
+        json_tree_response = self.invoke_llm(json_tree_prompt)  # Corrected call
 
         # --- Use process_json_response for decision tree ---
         decision_tree_json = self.process_json_response(json_tree_response)
         if decision_tree_json:
-            print(OutputFormatter.color_prefix(f"Decision tree (JSON): {decision_tree_json}", "Internal", time.time() - start_time, progress=55, slot=slot))
+            print(OutputFormatter.color_prefix(f"Decision tree (JSON): {decision_tree_json}", "Internal",
+                                               time.time() - start_time, progress=55, slot=slot))
             nodes = decision_tree_json.get("nodes", [])
             num_nodes = len(nodes)
 
             for i, node in enumerate(nodes):
                 progress_interval = 55 + (i / num_nodes) * 35
-                DecisionTreeProcessor.process_node(node, prompt, start_time, progress_interval, self.partition_context, slot)
+                DecisionTreeProcessor.process_node(node, prompt, start_time, progress_interval, self.partition_context,
+                                                   slot)
 
-            print(OutputFormatter.color_prefix("Formulating a conclusion based on processed decision tree...", "Internal", time.time() - start_time, progress=90, slot=slot))
+            print(
+                OutputFormatter.color_prefix("Formulating a conclusion based on processed decision tree...", "Internal",
+                                             time.time() - start_time, progress=90, slot=slot))
             conclusion_prompt = f"""
             {prompt}\n
             Synthesize a comprehensive conclusion from these insights:\n
@@ -2071,18 +2156,23 @@ class AIRuntimeManager:
             """
 
             conclusion_prompt_tokens = len(TOKENIZER.encode(conclusion_prompt))
-            print(OutputFormatter.color_prefix("Processing Conclusion Prompt", "Internal", time.time() - start_time, token_count=conclusion_prompt_tokens, progress=91, slot=slot))
+            print(OutputFormatter.color_prefix("Processing Conclusion Prompt", "Internal", time.time() - start_time,
+                                               token_count=conclusion_prompt_tokens, progress=91, slot=slot))
 
-            conclusion_response = self.invoke_llm(conclusion_prompt) # Corrected call
-            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot, "CoT"), loop)
-            print(OutputFormatter.color_prefix(f"Conclusion (after decision tree processing): {conclusion_response}", "Internal", time.time() - start_time, progress=92, slot=slot))
+            conclusion_response = self.invoke_llm(conclusion_prompt)  # Corrected call
+            asyncio.run_coroutine_threadsafe(
+                self.partition_context.async_embed_and_store(conclusion_response, slot, "CoT"), loop)
+            print(OutputFormatter.color_prefix(f"Conclusion (after decision tree processing): {conclusion_response}",
+                                               "Internal", time.time() - start_time, progress=92, slot=slot))
 
         else:
-            print(OutputFormatter.color_prefix("Error: Could not parse decision tree JSON after multiple retries.", "Internal", time.time() - start_time, progress=90, slot=slot))
+            print(OutputFormatter.color_prefix("Error: Could not parse decision tree JSON after multiple retries.",
+                                               "Internal", time.time() - start_time, progress=90, slot=slot))
             conclusion_response = "An error occurred while processing the decision tree. Unable to provide a full conclusion."
         # --- End of decision tree processing ---
 
-        print(OutputFormatter.color_prefix("Evaluating the need for a long response...", "Internal", time.time() - start_time, progress=94, slot=slot))
+        print(OutputFormatter.color_prefix("Evaluating the need for a long response...", "Internal",
+                                           time.time() - start_time, progress=94, slot=slot))
         evaluation_prompt = f"""
         {prompt}\n
         Based on: '{user_input}', initial response '{initial_response}', and conclusion '{conclusion_response}',
@@ -2096,9 +2186,10 @@ class AIRuntimeManager:
         """
 
         evaluation_prompt_tokens = len(TOKENIZER.encode(evaluation_prompt))
-        print(OutputFormatter.color_prefix("Processing Evaluation Prompt", "Internal", time.time() - start_time, token_count=evaluation_prompt_tokens, progress=95, slot=slot))
+        print(OutputFormatter.color_prefix("Processing Evaluation Prompt", "Internal", time.time() - start_time,
+                                           token_count=evaluation_prompt_tokens, progress=95, slot=slot))
 
-        evaluation_response = self.invoke_llm(evaluation_prompt) # Corrected call
+        evaluation_response = self.invoke_llm(evaluation_prompt)  # Corrected call
 
         # --- Use process_json_response for evaluation ---
         evaluation_json = self.process_json_response(evaluation_response)
@@ -2108,25 +2199,32 @@ class AIRuntimeManager:
         # --- End of JSON processing ---
 
         if not requires_long_response:
-            print(OutputFormatter.color_prefix("Determined a short response is sufficient...", "Internal", time.time() - start_time, progress=98, slot=slot))
-            asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, conclusion_response), loop)
+            print(OutputFormatter.color_prefix("Determined a short response is sufficient...", "Internal",
+                                               time.time() - start_time, progress=98, slot=slot))
+            asyncio.run_coroutine_threadsafe(
+                self.database_manager.async_db_write(slot, user_input, conclusion_response), loop)
             end_time = time.time()
             generation_time = end_time - start_time
-            print(OutputFormatter.color_prefix(conclusion_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))
-              # --- Add to context and embed NOW (for short, deep-thought responses) ---
+            print(OutputFormatter.color_prefix(conclusion_response, "Adelaide", generation_time,
+                                               token_count=prompt_tokens, slot=slot))
+            # --- Add to context and embed NOW (for short, deep-thought responses) ---
             self.partition_context.add_context(slot, conclusion_response, "main")
-            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(conclusion_response, slot, "main"), loop)
+            asyncio.run_coroutine_threadsafe(
+                self.partition_context.async_embed_and_store(conclusion_response, slot, "main"), loop)
             # ---
 
             return conclusion_response
 
-        print(OutputFormatter.color_prefix("Handling a long response...", "Internal", time.time() - start_time, progress=98, slot=slot))
+        print(OutputFormatter.color_prefix("Handling a long response...", "Internal", time.time() - start_time,
+                                           progress=98, slot=slot))
         long_response_estimate_prompt = f"{prompt}\nEstimate tokens needed for a detailed response to '{user_input}'. Respond with JSON, and only JSON, in this format:\n```json\n{{\"tokens\": <number of tokens>}}\n```"
 
         long_response_estimate_prompt_tokens = len(TOKENIZER.encode(long_response_estimate_prompt))
-        print(OutputFormatter.color_prefix("Processing Long Response Estimate Prompt", "Internal", time.time() - start_time, token_count=long_response_estimate_prompt_tokens, progress=99, slot=slot))
+        print(OutputFormatter.color_prefix("Processing Long Response Estimate Prompt", "Internal",
+                                           time.time() - start_time, token_count=long_response_estimate_prompt_tokens,
+                                           progress=99, slot=slot))
 
-        long_response_estimate = self.invoke_llm(long_response_estimate_prompt) # Corrected call
+        long_response_estimate = self.invoke_llm(long_response_estimate_prompt)  # Corrected call
 
         # --- Use process_json_response for token estimate ---
         tokens_estimate_json = self.process_json_response(long_response_estimate)
@@ -2135,66 +2233,77 @@ class AIRuntimeManager:
             try:
                 required_tokens = int(tokens_estimate_json.get("tokens", 500))
             except (ValueError, TypeError):
-                print(OutputFormatter.color_prefix("Failed to parse token estimate. Defaulting to 500 tokens.", "Internal"))
+                print(OutputFormatter.color_prefix("Failed to parse token estimate. Defaulting to 500 tokens.",
+                                                   "Internal"))
         # --- End of JSON processing ---
 
-
-        print(OutputFormatter.color_prefix(f"Estimated tokens needed: {required_tokens}", "Internal", time.time() - start_time, progress=99, slot=slot))
+        print(OutputFormatter.color_prefix(f"Estimated tokens needed: {required_tokens}", "Internal",
+                                           time.time() - start_time, progress=99, slot=slot))
 
         long_response = ""
         remaining_tokens = required_tokens
         continue_prompt = "Continue the response, maintaining coherence and relevance."
 
         if stream:
-            print (OutputFormatter.color_prefix("Streaming is enabled, but not yet implemented. Returning full response.", "Internal"))
+            print(
+                OutputFormatter.color_prefix("Streaming is enabled, but not yet implemented. Returning full response.",
+                                             "Internal"))
             while remaining_tokens > 0:
-              part_response_prompt = f"{prompt}\n{continue_prompt}"
-              part_response = self.invoke_llm(part_response_prompt)  # Corrected call
-              long_response += part_response
-              remaining_tokens -= len(TOKENIZER.encode(part_response))
-              prompt = f"{prompt}\n{part_response}"
-              if remaining_tokens > 0:
-                  time.sleep(2)
+                part_response_prompt = f"{prompt}\n{continue_prompt}"
+                part_response = self.invoke_llm(part_response_prompt)  # Corrected call
+                long_response += part_response
+                remaining_tokens -= len(TOKENIZER.encode(part_response))
+                prompt = f"{prompt}\n{part_response}"
+                if remaining_tokens > 0:
+                    time.sleep(2)
 
-            asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, long_response), loop)
+            asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, long_response),
+                                             loop)
             end_time = time.time()
-            generation_time = end_time-start_time
-              # --- Add to context and embed NOW (for streamed responses) ---
+            generation_time = end_time - start_time
+            # --- Add to context and embed NOW (for streamed responses) ---
             self.partition_context.add_context(slot, long_response, "main")
-            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"), loop)
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"),
+                                             loop)
             # ---
 
             return long_response
         else:
-          while remaining_tokens > 0:
-              print(OutputFormatter.color_prefix(f"Generating part of the long response. Remaining tokens: {remaining_tokens}...", "Internal", time.time() - start_time, progress=99, slot=slot))
-              part_response_prompt = f"{prompt}\n{continue_prompt}"
+            while remaining_tokens > 0:
+                print(OutputFormatter.color_prefix(
+                    f"Generating part of the long response. Remaining tokens: {remaining_tokens}...", "Internal",
+                    time.time() - start_time, progress=99, slot=slot))
+                part_response_prompt = f"{prompt}\n{continue_prompt}"
 
-              part_response_prompt_tokens = len(TOKENIZER.encode(part_response_prompt))
-              print(OutputFormatter.color_prefix("Processing Part Response Prompt", "Internal", time.time() - start_time, token_count=part_response_prompt_tokens, progress=99, slot=slot))
+                part_response_prompt_tokens = len(TOKENIZER.encode(part_response_prompt))
+                print(OutputFormatter.color_prefix("Processing Part Response Prompt", "Internal",
+                                                   time.time() - start_time, token_count=part_response_prompt_tokens,
+                                                   progress=99, slot=slot))
 
-              part_response = self.invoke_llm(part_response_prompt) # Corrected call
-              long_response += part_response
+                part_response = self.invoke_llm(part_response_prompt)  # Corrected call
+                long_response += part_response
 
-              remaining_tokens -= len(TOKENIZER.encode(part_response))
+                remaining_tokens -= len(TOKENIZER.encode(part_response))
 
-              prompt = f"{prompt}\n{part_response}"
+                prompt = f"{prompt}\n{part_response}"
 
-              if remaining_tokens > 0:
-                  time.sleep(2)
+                if remaining_tokens > 0:
+                    time.sleep(2)
 
-          print(OutputFormatter.color_prefix("Completed generation of the long response.", "Internal", time.time() - start_time, progress=100, slot=slot))
-          asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, long_response), loop)
-          end_time = time.time()
-          generation_time = end_time - start_time
-          print(OutputFormatter.color_prefix(long_response, "Adelaide", generation_time, token_count=prompt_tokens, slot=slot))
-          # --- Add to context and embed NOW (for long responses) ---
-          self.partition_context.add_context(slot, long_response, "main")
-          asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"), loop)
+            print(OutputFormatter.color_prefix("Completed generation of the long response.", "Internal",
+                                               time.time() - start_time, progress=100, slot=slot))
+            asyncio.run_coroutine_threadsafe(self.database_manager.async_db_write(slot, user_input, long_response),
+                                             loop)
+            end_time = time.time()
+            generation_time = end_time - start_time
+            print(OutputFormatter.color_prefix(long_response, "Adelaide", generation_time, token_count=prompt_tokens,
+                                               slot=slot))
+            # --- Add to context and embed NOW (for long responses) ---
+            self.partition_context.add_context(slot, long_response, "main")
+            asyncio.run_coroutine_threadsafe(self.partition_context.async_embed_and_store(long_response, slot, "main"),
+                                             loop)
 
-          return long_response
-
-
+            return long_response
 
     def calculate_total_context_length(self, slot, requester_type):
         """Calculates the total context length for a given slot and requester type."""
@@ -2237,12 +2346,10 @@ class JSONInterpreter:
                 end = i + 1
                 break
 
-        if end != -1 :
+        if end != -1:
             return text[start:end]
         else:
             return text[start:]  # Return partial JSON if no complete object found
-
-
 
     def _find_parsing_errors(self, json_string: str) -> Optional[list]:
         """Identifies specific parsing errors in the JSON string."""
@@ -2256,19 +2363,20 @@ class JSONInterpreter:
             # Check for unescaped control characters
             if "Unterminated string" in e.msg:
                 errors.append("Possible unterminated string.  Check for missing quotes or escaped characters.")
-            if "Expecting value" in e.msg and e.pos == len(json_string.strip())-1:
+            if "Expecting value" in e.msg and e.pos == len(json_string.strip()) - 1:
                 errors.append("JSON appears incomplete.  Check for missing closing braces or brackets.")
             if "Expecting ',' delimiter" in e.msg:
-              errors.append("Missing comma between elements.  Check that elements in arrays and objects are separated by commas")
+                errors.append(
+                    "Missing comma between elements.  Check that elements in arrays and objects are separated by commas")
 
             # Check for missing closing brackets/braces
             open_brackets = json_string.count('{') + json_string.count('[')
             close_brackets = json_string.count('}') + json_string.count(']')
             if open_brackets > close_brackets:
-                errors.append(f"Missing closing brackets/braces.  Found {open_brackets} opening, but {close_brackets} closing.")
+                errors.append(
+                    f"Missing closing brackets/braces.  Found {open_brackets} opening, but {close_brackets} closing.")
 
             return errors
-
 
     def _basic_json_repair(self, json_string: str) -> str:
         """
@@ -2288,27 +2396,26 @@ class JSONInterpreter:
             missing_brackets = open_brackets - close_brackets
             # Try to intelligently add closing brackets.  This is a heuristic!
             if json_string.count('{') > json_string.count('}'):
-              json_string += '}' * missing_brackets
+                json_string += '}' * missing_brackets
             elif json_string.count('[') > json_string.count(']'):
-               json_string += ']' * missing_brackets
-            else: #Just add
-               json_string += '}' * missing_brackets
+                json_string += ']' * missing_brackets
+            else:  # Just add
+                json_string += '}' * missing_brackets
 
-        #2. Handle Trailing commas
+        # 2. Handle Trailing commas
         json_string = re.sub(r',\s*}', '}', json_string)
         json_string = re.sub(r',\s*]', ']', json_string)
 
-        #3. Basic attempt to add missing quotes around property names (VERY limited)
+        # 3. Basic attempt to add missing quotes around property names (VERY limited)
         json_string = re.sub(r"{\s*([a-zA-Z0-9_]+)\s*:", r'{"\\1":', json_string)
         json_string = re.sub(r",\s*([a-zA-Z0-9_]+)\s*:", r', "\\1":', json_string)
 
-        #4. Add missing commas
+        # 4. Add missing commas
         json_string = re.sub(r'}(\s*)({)', r'}\1,\\2', json_string)
         json_string = re.sub(r'](\s*)(\[)', r']\\1,\\2', json_string)
         json_string = re.sub(r'}(\s*)(")', r'}\1,\\2', json_string)
         json_string = re.sub(r'](\s*)(")', r']\\1,\\2', json_string)
         return json_string
-
 
     def repair_json(self, json_string: str, schema: Optional[str] = None, max_retries: int = 3) -> Optional[str]:
         """
@@ -2335,7 +2442,6 @@ class JSONInterpreter:
         except json.JSONDecodeError:
             print(OutputFormatter.color_prefix("Basic JSON repair failed.", "Internal"))
             return None  # Basic repair failed
-    
 
 
 class PartitionContext:
@@ -2411,7 +2517,6 @@ class PartitionContext:
             # Demote to CoT table (it's still in the DB, just not 'main').
             asyncio.run_coroutine_threadsafe(self.async_store_CoT_generateResponse(overflowed_item, slot), loop)
 
-    # --- MODIFIED get_relevant_chunks ---
     def get_relevant_chunks(self, query, slot, k=5, requester_type="main"):
         start_time = time.time()
         try:
@@ -2439,30 +2544,36 @@ class PartitionContext:
                     if isinstance(embedding, float):  # Corrected variable name here
                         embedding = [embedding]
                     if not isinstance(embedding, list) or not all(isinstance(x, (int, float)) for x in embedding):
-                      print(f"Warning: Invalid embedding format for chunk: {chunk[:50]}...")
-                      continue # Skip
+                        print(f"Warning: Invalid embedding format for chunk: {text_content[:50]}...")
+                        continue  # Skip
 
-                    similarity = cosine_similarity(query_embedding, embedding)
+                    similarity = \
+                    cosine_similarity(np.array(query_embedding).reshape(1, -1), np.array(embedding).reshape(1, -1))[0][
+                        0]
                     similarities.append(similarity)
                     chunks.append(text_content)
                 except Exception as e:
-                    print(f"Error processing chunk {chunk[:50]}...: {e}")
+                    print(f"Error processing chunk {text_content[:50]}...: {e}")
                     continue
 
             # --- Get top-k chunks.
-            if chunks: # Ensure we have valid chunks before sorting.
+            if chunks:  # Ensure we have valid chunks before sorting.
                 top_k_indices = np.argsort(similarities)[::-1][:k]
                 relevant_chunks = [(chunks[i], similarities[i]) for i in top_k_indices]
             else:
                 relevant_chunks = []
 
-            print(OutputFormatter.color_prefix(f"Retrieved {len(relevant_chunks)} relevant chunks from database in {time.time() - start_time:.2f}s", "Internal"))
+            print(OutputFormatter.color_prefix(
+                f"Retrieved {len(relevant_chunks)} relevant chunks from database in {time.time() - start_time:.2f}s",
+                "Internal"))
             return relevant_chunks
 
         except Exception as e:
-            print(OutputFormatter.color_prefix(f"Error in retrieve_relevant_chunks: {e}", "Internal", time.time() - start_time))
+            print(OutputFormatter.color_prefix(f"Error in retrieve_relevant_chunks: {e}", "Internal",
+                                               time.time() - start_time))
             traceback.print_exc()
             return []
+
     # def combine_results(self, list1, list2, k): # REMOVED
 
     def combine_results(self, list1, list2, k):
@@ -2479,15 +2590,18 @@ class PartitionContext:
         async with db_lock:
             try:
                 if text_chunk is None:
-                    print(OutputFormatter.color_prefix("Warning: Received None in async_embed_and_store. Skipping.", "Internal"))
+                    print(OutputFormatter.color_prefix("Warning: Received None in async_embed_and_store. Skipping.",
+                                                       "Internal"))
                     return
 
                 if not isinstance(text_chunk, str):
-                    print(OutputFormatter.color_prefix(f"Warning: Non-string content in async_embed_and_store: {type(text_chunk)}. Skipping.", "Internal"))
+                    print(OutputFormatter.color_prefix(
+                        f"Warning: Non-string content in async_embed_and_store: {type(text_chunk)}. Skipping.",
+                        "Internal"))
                     return
 
-                texts = [text_chunk] # Embed the whole chunk
-                texts = [str(t) for t in texts] # Ensure they're strings
+                texts = [text_chunk]  # Embed the whole chunk
+                texts = [str(t) for t in texts]  # Ensure they're strings
 
                 for text in texts:
                     # Use the embedding thread.
@@ -2507,7 +2621,8 @@ class PartitionContext:
                     "INSERT INTO CoT_generateResponse_History (slot, message, doc_id, chunk, embedding) VALUES (?, ?, ?, ?, ?)",
                     (slot, message, doc_id, message, pickle.dumps([])),  # Pass doc_id and chunk
                 )
-                print(OutputFormatter.color_prefix(f"Stored CoT_generateResponse message for slot {slot}: {message[:50]}...", "Internal"))
+                print(OutputFormatter.color_prefix(
+                    f"Stored CoT_generateResponse message for slot {slot}: {message[:50]}...", "Internal"))
 
             except Exception as e:
                 print(OutputFormatter.color_prefix(f"Error storing CoT_generateResponse message: {e}", "Internal"))
@@ -2515,12 +2630,13 @@ class PartitionContext:
     def get_next_task(self):
         with self.lock:
             """Gets the next task from the highest priority queue that is not empty."""
-            print(OutputFormatter.color_prefix(f"get_next_task: task_queue = {self.task_queue}", "Internal")) # Debugging
-            print(OutputFormatter.color_prefix(f"get_next_task: backbrain_tasks = {self.backbrain_tasks}", "Internal")) # Debugging
+            print(
+                OutputFormatter.color_prefix(f"get_next_task: task_queue = {self.task_queue}", "Internal"))  # Debugging
+            print(OutputFormatter.color_prefix(f"get_next_task: backbrain_tasks = {self.backbrain_tasks}",
+                                               "Internal"))  # Debugging
             if hasattr(self, 'mesh_network_tasks'):
-                print(OutputFormatter.color_prefix(f"get_next_task: mesh_network_tasks = {self.mesh_network_tasks}", "Internal")) # Debugging
-
-
+                print(OutputFormatter.color_prefix(f"get_next_task: mesh_network_tasks = {self.mesh_network_tasks}",
+                                                   "Internal"))  # Debugging
 
     def calculate_total_context_length(self, slot, requester_type):
         """Calculates the total context length for a given slot and requester type."""
@@ -2528,12 +2644,14 @@ class PartitionContext:
         total_length = sum([len(TOKENIZER.encode(item)) for item in context if isinstance(item, str)])
         return total_length
 
+
 class LiteratureReviewer:
     @staticmethod
     def literature_review(query):
         """Simulates performing a literature review."""
         print(OutputFormatter.color_prefix(f"Performing literature review for query: {query}", "Internal"))
         return "This is a placeholder for the literature review results."
+
 
 class DecisionTreeProcessor:
     @staticmethod
@@ -2545,26 +2663,42 @@ class DecisionTreeProcessor:
 
         prompt_tokens = len(TOKENIZER.encode(prompt))
 
-        print(OutputFormatter.color_prefix(f"Processing node: {node_id} ({node_type}) - {content}", "Internal", generation_time=time.time() - start_time, token_count=prompt_tokens, progress=progress_interval, slot=slot))
+        print(OutputFormatter.color_prefix(f"Processing node: {node_id} ({node_type}) - {content}", "Internal",
+                                           generation_time=time.time() - start_time, token_count=prompt_tokens,
+                                           progress=progress_interval, slot=slot))
 
         if node_type == "question":
-            question_prompt = f"{prompt}\nQuestion: {content}\nAnswer:" #Constructs a prompt
+            question_prompt = f"{prompt}\nQuestion: {content}\nAnswer:"  # Constructs a prompt
             question_prompt_tokens = len(TOKENIZER.encode(question_prompt))
-            response = ai_runtime_manager.invoke_llm(question_prompt) #Gets answer
+            response = ai_runtime_manager.invoke_llm(question_prompt)  # Gets answer
             # Store ALL decision tree node results in CoT context.
             partition_context.add_context(slot, response, "CoT")
-            asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(response, slot, "CoT"), loop) #Embeds result
-            print(OutputFormatter.color_prefix(f"Response to question: {response}", "Internal", generation_time=time.time() - start_time, token_count=question_prompt_tokens, progress=progress_interval, slot=slot))
-        elif node_type == "action step": #ADDED
+            asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(response, slot, "CoT"),
+                                             loop)  # Embeds result
+            print(OutputFormatter.color_prefix(f"Response to question: {response}", "Internal",
+                                               generation_time=time.time() - start_time,
+                                               token_count=question_prompt_tokens, progress=progress_interval,
+                                               slot=slot))
+        elif node_type == "action step":  # ADDED
             if "literature_review" in content:
                 review_query = re.search(r"literature_review\(['\"](.*?)['\"]\)", content).group(1)
-                review_result = LiteratureReviewer.literature_review(review_query) #Calls
-                partition_context.add_context(slot, f"Literature review result for '{review_query}': {review_result}", "CoT")
-                asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(f"Literature review result for '{review_query}': {review_result}", slot, "CoT"), loop)
-            print(OutputFormatter.color_prefix(f"Reflection/Conclusion: {reflection}", "Internal", generation_time=time.time() - start_time, token_count=reflection_prompt_tokens, progress=progress_interval, slot=slot))
+                review_result = LiteratureReviewer.literature_review(review_query)  # Calls
+                partition_context.add_context(slot, f"Literature review result for '{review_query}': {review_result}",
+                                              "CoT")
+                asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(
+                    f"Literature review result for '{review_query}': {review_result}", slot, "CoT"), loop)
+            reflection = "Placeholder for reflection/conclusion"  # Example
+            reflection_prompt_tokens = 0
+            print(OutputFormatter.color_prefix(f"Reflection/Conclusion: {reflection}", "Internal",
+                                               generation_time=time.time() - start_time,
+                                               token_count=reflection_prompt_tokens, progress=progress_interval,
+                                               slot=slot))
 
         for option in node.get("options", []):
-            print(OutputFormatter.color_prefix(f"Option considered: {option['option_text']}", "Internal", generation_time=time.time() - start_time, progress=progress_interval, slot=slot))
+            print(OutputFormatter.color_prefix(f"Option considered: {option['option_text']}", "Internal",
+                                               generation_time=time.time() - start_time, progress=progress_interval,
+                                               slot=slot))
+
 
 def initialize_models():
     """Initializes the LLM and schedules the warmup task."""
@@ -2582,7 +2716,8 @@ def initialize_models():
         max_tokens=MAX_TOKENS_GENERATE
     )
 
-    embedding_llm = Llama(model_path=EMBEDDING_MODEL_PATH, n_ctx=CTX_WINDOW_LLM, n_gpu_layers=-1, n_batch=n_batch, embedding=True)
+    embedding_llm = Llama(model_path=EMBEDDING_MODEL_PATH, n_ctx=CTX_WINDOW_LLM, n_gpu_layers=-1, n_batch=n_batch,
+                          embedding=True)
 
     database_manager = DatabaseManager(DATABASE_FILE, loop)
     ai_runtime_manager = AIRuntimeManager(llm, database_manager)
@@ -2596,11 +2731,12 @@ def initialize_models():
 
     return database_manager
 
+
 def warmup_llm():
     """Performs the LLM warmup."""
     print(OutputFormatter.color_prefix("Warming up the LLM...", "Internal"))
     try:
-        warmup_prompt = "Hello" # SIMPLIFIED PROMPT
+        warmup_prompt = "Hello"  # SIMPLIFIED PROMPT
         generated_text = ai_runtime_manager.invoke_llm(warmup_prompt, caller="Warmup")
     except Exception as e:
         print(OutputFormatter.color_prefix(f"Error during LLM warmup: {e}", "Internal"))
@@ -2608,31 +2744,33 @@ def warmup_llm():
         sys.exit(1)
     print(OutputFormatter.color_prefix(f"Warmup response: {generated_text}", "Internal"))
 
-async def input_task(ai_runtime_manager, partition_context):
-  """Task to handle user input in a separate thread (CLI)."""
-  current_slot = 0
-  while True:
-    try:
-      user_input = await loop.run_in_executor(None, input, OutputFormatter.color_prefix("", "User"))
-      if user_input.lower() == "exit":
-          break
-      elif user_input.lower() == "next slot":
-          current_slot += 1
-          print(OutputFormatter.color_prefix(f"Switched to slot {current_slot}", "Internal"))
-          continue
-      # No 'stream' argument for CLI interaction
-      ai_runtime_manager.add_task(ai_runtime_manager.generate_response, (user_input, current_slot), 0)
 
-    except EOFError:
-        print("EOF")
-    except KeyboardInterrupt:
-      print(OutputFormatter.color_prefix("\nExiting gracefully...", "Internal"))
-      break
+async def input_task(ai_runtime_manager, partition_context):
+    """Task to handle user input in a separate thread (CLI)."""
+    current_slot = 0
+    while True:
+        try:
+            user_input = await loop.run_in_executor(None, input, OutputFormatter.color_prefix("", "User"))
+            if user_input.lower() == "exit":
+                break
+            elif user_input.lower() == "next slot":
+                current_slot += 1
+                print(OutputFormatter.color_prefix(f"Switched to slot {current_slot}", "Internal"))
+                continue
+            # No 'stream' argument for CLI interaction
+            ai_runtime_manager.add_task(ai_runtime_manager.generate_response, (user_input, current_slot), 0)
+
+        except EOFError:
+            print("EOF")
+        except KeyboardInterrupt:
+            print(OutputFormatter.color_prefix("\nExiting gracefully...", "Internal"))
+            break
 
 
 async def add_task_async(ai_runtime_manager, task, args, priority):
     """Helper function to add a task to the scheduler from another thread."""
     ai_runtime_manager.add_task((task, args), priority)
+
 
 async def main():
     global vector_store, db_writer, database_manager, ai_runtime_manager
@@ -2645,26 +2783,27 @@ async def main():
     database_manager.print_table_contents("vector_learning_context_embedding")
     print(OutputFormatter.color_prefix("Adelaide & Albert Engine initialized. Interaction is ready!", "Internal"))
 
-
     partition_context = PartitionContext(CTX_WINDOW_LLM, database_manager, vector_store)
     ai_runtime_manager.partition_context = partition_context
 
     # Load vector store from the database after starting the writer task
-    #vector_store = load_vector_store_from_db(embedding_model, database_manager.db_cursor)
-    #partition_context.vector_store = vector_store
+    # vector_store = load_vector_store_from_db(embedding_model, database_manager.db_cursor)
+    # partition_context.vector_store = vector_store
 
     global embedding_thread
-    embedding_thread = EmbeddingThread(EMBEDDING_MODEL_PATH, CTX_WINDOW_LLM, N_BATCH, database_manager) # Use the global N_BATCH
+    embedding_thread = EmbeddingThread(EMBEDDING_MODEL_PATH, CTX_WINDOW_LLM, N_BATCH,
+                                       database_manager)  # Use the global N_BATCH
     embedding_thread.start()
 
-    #Engine runtime watchdog
+    # Engine runtime watchdog
     watchdog = Watchdog(sys.argv[0], ai_runtime_manager)
     watchdog.start(loop)  # Pass the main event loop to the Watchdog
 
     # Start the input task
     asyncio.create_task(input_task(ai_runtime_manager, partition_context))
-    #Keep main thread running to support the server
+    # Keep main thread running to support the server
     await asyncio.sleep(float('inf'))
+
 
 class OpenAISpecRequestHandler(BaseHTTPRequestHandler):
 
@@ -2672,9 +2811,9 @@ class OpenAISpecRequestHandler(BaseHTTPRequestHandler):
         self.send_response(200)
         self.send_header('Access-Control-Allow-Origin', '*')
         self.send_header('Access-Control-Allow-Methods', 'GET, POST, OPTIONS')
-        self.send_header('Access-Control-Allow-Headers', 'Content-Type, Authorization, openai-organization, openai-version, openai-assistant-app-id')  # Add any other required headers
+        self.send_header('Access-Control-Allow-Headers',
+                         'Content-Type, Authorization, openai-organization, openai-version, openai-assistant-app-id')  # Add any other required headers
         self.end_headers()
-
 
     def do_GET(self):
         if self.path == "/v1/models":
@@ -2684,7 +2823,7 @@ class OpenAISpecRequestHandler(BaseHTTPRequestHandler):
             response_data = {
                 "data": [
                     {
-                        "id": "Adelaide-and-Albert-Model", # Use the actual ID of your model
+                        "id": "Adelaide-and-Albert-Model",  # Use the actual ID of your model
                         "object": "model",
                         "created": 1686935002,  # Replace with a valid timestamp
                         "owned_by": "user",  # Replace with the appropriate owner
@@ -2697,7 +2836,9 @@ class OpenAISpecRequestHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.send_header("Content-type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": {"message": "Not Found", "type": "invalid_request_error", "code": 404}}).encode('utf-8'))
+            self.wfile.write(
+                json.dumps({"error": {"message": "Not Found", "type": "invalid_request_error", "code": 404}}).encode(
+                    'utf-8'))
 
     def do_POST(self):
         if self.path == "/v1/chat/completions":
@@ -2709,9 +2850,10 @@ class OpenAISpecRequestHandler(BaseHTTPRequestHandler):
                 self.send_response(400)
                 self.send_header("Content-type", "application/json")
                 self.end_headers()
-                self.wfile.write(json.dumps({"error": {"message": "Invalid JSON", "type": "invalid_request_error", "code": 400}}).encode('utf-8'))
+                self.wfile.write(json.dumps(
+                    {"error": {"message": "Invalid JSON", "type": "invalid_request_error", "code": 400}}).encode(
+                    'utf-8'))
                 return
-
 
             # Extract necessary information, including 'stream'
             messages = request_data.get('messages', [])
@@ -2721,14 +2863,13 @@ class OpenAISpecRequestHandler(BaseHTTPRequestHandler):
             # Use slot 0 for all server requests.  In a real implementation, you'd need
             # a way to map requests to user sessions/slots.
             ai_runtime_manager.add_task(
-                (ai_runtime_manager.generate_response, (messages, 0, stream)), 0 # Pass messages directly.
+                (ai_runtime_manager.generate_response, (messages, 0, stream)), 0  # Pass messages directly.
             )
-
 
             # Basic response for non-streaming requests
             self.send_response(200)
             self.send_header("Content-type", "application/json")
-            self.send_header('Access-Control-Allow-Origin', '*') #CORS
+            self.send_header('Access-Control-Allow-Origin', '*')  # CORS
             self.end_headers()
             # Placeholder response; actual response handled by generate_response
             self.wfile.write(json.dumps({
@@ -2743,11 +2884,11 @@ class OpenAISpecRequestHandler(BaseHTTPRequestHandler):
                     "total_tokens": 0
                 }
             }).encode('utf-8'))
-            return # Return from the function, the rest is handled.
+            return  # Return from the function, the rest is handled.
 
 
-        #elif self.path == "/v1/completions":
-            # Implement this endpoint as a basic stub or 404.
+        # elif self.path == "/v1/completions":
+        # Implement this endpoint as a basic stub or 404.
         #  self.send_response(404)  # Or return a stub response if you prefer
         #  self.end_headers()
 
@@ -2756,7 +2897,10 @@ class OpenAISpecRequestHandler(BaseHTTPRequestHandler):
             self.send_response(404)
             self.send_header("Content-type", "application/json")
             self.end_headers()
-            self.wfile.write(json.dumps({"error": {"message": "Not Found", "type": "invalid_request_error", "code": 404}}).encode('utf-8'))
+            self.wfile.write(
+                json.dumps({"error": {"message": "Not Found", "type": "invalid_request_error", "code": 404}}).encode(
+                    'utf-8'))
+
 
 def get_valid_port(port_str, default_port=8000):
     """
@@ -2768,11 +2912,14 @@ def get_valid_port(port_str, default_port=8000):
         if 1024 <= port <= 65535:  # Check for valid port range (non-system ports)
             return port
         else:
-            print(OutputFormatter.color_prefix(f"Invalid port number: {port_str}. Using default port {default_port}.", "ServerOpenAISpec"))
+            print(OutputFormatter.color_prefix(f"Invalid port number: {port_str}. Using default port {default_port}.",
+                                               "ServerOpenAISpec"))
             return default_port
     except (ValueError, TypeError):
-        print(OutputFormatter.color_prefix(f"Invalid port value: {port_str}. Using default port {default_port}.", "ServerOpenAISpec"))
+        print(OutputFormatter.color_prefix(f"Invalid port value: {port_str}. Using default port {default_port}.",
+                                           "ServerOpenAISpec"))
         return default_port
+
 
 def get_valid_host(host_str, default_host='0.0.0.0'):
     """
@@ -2783,10 +2930,12 @@ def get_valid_host(host_str, default_host='0.0.0.0'):
     if host_str and isinstance(host_str, str) and host_str.strip():
         return host_str.strip()
     else:
-        print(OutputFormatter.color_prefix(f"Invalid host value: {host_str}. Using default host {default_host}.", "ServerOpenAISpec"))
+        print(OutputFormatter.color_prefix(f"Invalid host value: {host_str}. Using default host {default_host}.",
+                                           "ServerOpenAISpec"))
         return default_host
 
-def run_server(port=None, host=None): #Added parameters with None
+
+def run_server(port=None, host=None):  # Added parameters with None
     global httpd
 
     # --- Environment Variable Handling (Prioritized) ---
@@ -2796,24 +2945,25 @@ def run_server(port=None, host=None): #Added parameters with None
     # Use environment variables if available and valid, otherwise use defaults or provided args.
     if env_port:
         port = get_valid_port(env_port)
-    elif port is None: #Check the parameter
+    elif port is None:  # Check the parameter
         port = get_valid_port(None)  # Use default port
 
     if env_host:
         host = get_valid_host(env_host)
-    elif host is None:  #Check the parameter
-        host = get_valid_host(None) # Use the default.
-
+    elif host is None:  # Check the parameter
+        host = get_valid_host(None)  # Use the default.
 
     server_address = (host, port)
     httpd = HTTPServer(server_address, OpenAISpecRequestHandler)
     print(OutputFormatter.color_prefix(f"Starting OpenAI-compatible server on {host}:{port}...", "ServerOpenAISpec"))
     httpd.serve_forever()
 
+
 def signal_handler(sig, frame):
     global httpd, ai_runtime_manager, interrupt_count
     interrupt_count += 1
-    print(OutputFormatter.color_prefix(f"\nInterrupt signal received ({interrupt_count}/{MAX_INTERRUPTS})...", "Internal"))
+    print(OutputFormatter.color_prefix(f"\nInterrupt signal received ({interrupt_count}/{MAX_INTERRUPTS})...",
+                                       "Internal"))
 
     if interrupt_count >= MAX_INTERRUPTS:
         print(OutputFormatter.color_prefix("Maximum interrupt count reached. Forcefully exiting...", "Internal"))
@@ -2835,6 +2985,7 @@ def signal_handler(sig, frame):
         print(OutputFormatter.color_prefix("Server shut down.", "Internal"))
         sys.exit(0)
 
+
 if __name__ == "__main__":
 
     # --- Clone necessary tools ---
@@ -2849,10 +3000,9 @@ if __name__ == "__main__":
     # CHANGED EMBEDDING MODEL PATH:
     embedding_model_path = "./Model/ModelCompiledRuntime/snowflake-arctic-embed.gguf"
 
-
     sd_model_path = AIModelPreRuntimeManager.prepare_stable_diffusion_model(
-      repo_id="stabilityai/stable-diffusion-2-1",
-      model_name="stable-diffusion-2-1"
+        repo_id="stabilityai/stable-diffusion-2-1",
+        model_name="stable-diffusion-2-1"
     )
     # --- End of model download/conversion ---
 
@@ -2863,7 +3013,7 @@ if __name__ == "__main__":
     # --- End of model download/conversion ---
 
     # Override environment variables
-    os.environ["LLM_MODEL_PATH"] = llm_model_path #Corrected this
+    os.environ["LLM_MODEL_PATH"] = llm_model_path  # Corrected this
     if embedding_model_path:
         os.environ["EMBEDDING_MODEL_PATH"] = embedding_model_path
 
