@@ -22,6 +22,7 @@ import inspect
 import threading
 import logging
 import shutil
+from datetime import datetime, timedelta
 import signal
 from http.server import HTTPServer, BaseHTTPRequestHandler
 from urllib.parse import urlparse, parse_qs
@@ -41,8 +42,8 @@ logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %
 
 
 # Constants (from environment variables or defaults)
-LLM_MODEL_PATH = os.environ.get("LLM_MODEL_PATH", "./pretrainedggufmodel/preTrainedModelBaseVLM.gguf")
-EMBEDDING_MODEL_PATH = os.environ.get("EMBEDDING_MODEL_PATH", "./pretrainedggufmodel/mxbai-embed-large-v1-f16.gguf")  # Use new model
+LLM_MODEL_PATH = os.environ.get("LLM_MODEL_PATH", "./Model/ModelCompiledRuntime/preTrainedModelBaseVLM.gguf")
+EMBEDDING_MODEL_PATH = os.environ.get("EMBEDDING_MODEL_PATH", "/Model/ModelCompiledRuntime/snowflake-arctic-embed.gguf")  # Use new model
 CTX_WINDOW_LLM = int(os.environ.get("CTX_WINDOW_LLM", 4096))
 N_BATCH = int(os.environ.get("N_BATCH", 512))  # Define n_batch globally
 DATABASE_FILE = os.environ.get("DATABASE_FILE", "./engine_interaction.db")
@@ -734,24 +735,15 @@ class Watchdog:
     def start(self, loop):
       self.loop = loop
       self.loop.create_task(self.monitor())
-
 class AIModelPreRuntimeManager:
     """
-    Manages pre-runtime preparation of AI models, including:
-
-    1. Downloading models from Hugging Face Hub.
-    2. Converting Hugging Face models (primarily LLMs) to GGUF format.
-    3. Cloning necessary tools (llama.cpp, stable-diffusion.cpp) into ./Library/.
-    4. Building llama.cpp's quantization tool (llama-quantize).
-    5. Quantizing the converted GGUF models.
-
-    Objective: Empower users to adapt and convert models, not just consume pre-built ones.
+    Manages pre-runtime preparation of AI models.
     """
 
     @staticmethod
     def check_tool_integrity(tool_dir: str, essential_files: list) -> bool:
         """
-        Checks if the essential files for a tool exist in the specified directory.
+        Checks if the essential files for a tool exist.
         """
         if not os.path.exists(tool_dir):
             return False
@@ -763,8 +755,7 @@ class AIModelPreRuntimeManager:
     @staticmethod
     def cloning_tools():
         """
-        Clones necessary repositories (llama.cpp and stable-diffusion.cpp) into ./Library/.
-        Builds the llama-quantize tool.  Checks for tool integrity before cloning.
+        Clones necessary repositories, builds llama-quantize, and manages updates.
         """
         library_dir = "./Library"
         os.makedirs(library_dir, exist_ok=True)
@@ -784,44 +775,285 @@ class AIModelPreRuntimeManager:
             target_dir = os.path.join(library_dir, repo_name)
             repo_url = repo_info["url"]
             essential_files = repo_info["essential_files"]
+            last_update_file = os.path.join(target_dir, ".last_update")
 
-            # Check for tool integrity FIRST
             if AIModelPreRuntimeManager.check_tool_integrity(target_dir, essential_files):
-                print(f"{repo_name} found in {target_dir} and appears to be complete. Skipping cloning.")
-                continue  # Skip to the next repository
+                print(f"{repo_name} found in {target_dir} and appears to be complete.")
 
-            # If integrity check fails, proceed with update/clone
-            if os.path.exists(target_dir):
-                print(f"Updating {repo_name} in {target_dir}...")
+                needs_update = True
+                if os.path.exists(last_update_file):
+                    try:
+                        with open(last_update_file, "r") as f:
+                            last_update_str = f.read().strip()
+                            last_update = datetime.fromisoformat(last_update_str)
+                            if datetime.now() - last_update < timedelta(days=7):
+                                needs_update = False
+                                print(f"{repo_name} was updated recently. Skipping update.")
+                    except (ValueError, OSError):
+                        print(f"Error reading last update time for {repo_name}.  Will attempt update.")
+
+                if needs_update:
+                    print(f"Updating {repo_name} in {target_dir}...")
+                    try:
+                        command = ["git", "pull", "--depth=1", "origin", "master"]
+                        subprocess.run(command, check=True, cwd=target_dir)
+
+                        with open(last_update_file, "w") as f:
+                            f.write(datetime.now().isoformat())
+                        print(f"{repo_name} updated successfully.")
+
+                        if repo_name == "llama.cpp":
+                            AIModelPreRuntimeManager.build_llama_quantize()
+                            AIModelPreRuntimeManager.install_llama_cpp_requirements() # NEW
+
+                    except subprocess.CalledProcessError as e:
+                        print(f"Error updating {repo_name}: {e}")
+                    except FileNotFoundError:
+                        print("Error: 'git' command not found.")
+                continue
+
+            if not os.path.exists(target_dir):
+                print(f"Cloning {repo_name} from {repo_url} to {target_dir}...")
+                command = ["git", "clone", "--depth=1", repo_url, target_dir]
                 try:
-                    shutil.rmtree(target_dir)
-                    print(f"Existing {repo_name} directory removed for clean update.")
-                except OSError as e:
-                    print(f"Error removing existing {repo_name} directory: {e}")
-                    continue  # Skip to the next repository if removal fails
+                    subprocess.run(command, check=True, cwd=os.getcwd())
+                    with open(last_update_file, "w") as f:
+                        f.write(datetime.now().isoformat())
+                    print(f"Successfully cloned {repo_name}.")
 
-            print(f"Cloning {repo_name} from {repo_url} to {target_dir}...")
-            command = ["git", "clone", "--depth=1", repo_url, target_dir]
-            try:
-                # --- cwd changed to os.getcwd() ---
-                subprocess.run(command, check=True, cwd=os.getcwd())  # Clone into the *current* working directory
-                print(f"Successfully cloned {repo_name}.")
-            except subprocess.CalledProcessError as e:
-                print(f"Error cloning {repo_name}: {e}")
-            except FileNotFoundError:
-                print("Error: 'git' command not found.")
-                return
+                    if repo_name == "llama.cpp":
+                        AIModelPreRuntimeManager.build_llama_quantize()
+                        AIModelPreRuntimeManager.install_llama_cpp_requirements() # NEW
 
-        # Build llama-quantize (check first if it exist).
+                except subprocess.CalledProcessError as e:
+                    print(f"Error cloning {repo_name}: {e}")
+                except FileNotFoundError:
+                    print("Error: 'git' command not found.")
+
         quantize_tool_path = os.path.join("./Library", "llama.cpp", "build", "bin", "llama-quantize")
         if not os.path.exists(quantize_tool_path):
             quantize_tool_path = os.path.join("./Library", "llama.cpp", "build", "llama-quantize")
             if not os.path.exists(quantize_tool_path):
-                AIModelPreRuntimeManager.build_llama_quantize() #Build.
+                AIModelPreRuntimeManager.build_llama_quantize()
             else:
                 print("llama-quantize already built. Skipping build process.")
         else:
             print("llama-quantize already built. Skipping build process.")
+
+    @staticmethod
+    def install_llama_cpp_requirements():
+        """Installs llama.cpp requirements, skipping version pinning."""
+        llama_cpp_path = os.path.join("./Library", "llama.cpp")
+        requirements_path = os.path.join(llama_cpp_path, "requirements.txt")
+
+        if not os.path.exists(requirements_path):
+            print("requirements.txt not found in llama.cpp directory. Skipping installation.")
+            return
+
+        try:
+            print("Installing llama.cpp requirements (without version pinning)...")
+
+            # Read the requirements file
+            with open(requirements_path, 'r') as f:
+                requirements = f.readlines()
+
+            # Filter out lines with == or >=
+            filtered_requirements = [
+                line.strip() for line in requirements
+                if not re.search(r'[=><]=', line)  # Use regex to check for =, >, <
+            ]
+
+            # Install the filtered requirements
+            if filtered_requirements:  # Only install if there are requirements left
+                subprocess.run(["pip", "install"] + filtered_requirements, check=True)
+                print("llama.cpp requirements installed successfully (without version pinning).")
+            else:
+                print("No requirements to install after filtering.")
+
+        except subprocess.CalledProcessError as e:
+            print(f"Error installing llama.cpp requirements: {e}")
+        except FileNotFoundError:
+            print("Error: pip command not found.")
+
+    @staticmethod
+    def build_llama_quantize():
+        """Builds the llama-quantize binary."""
+        llama_cpp_path = os.path.join("./Library", "llama.cpp")
+        build_dir = os.path.join(llama_cpp_path, "build")
+        if not os.path.exists(llama_cpp_path):
+            raise FileNotFoundError("llama.cpp directory not found.  Run cloning_tools() first.")
+
+        try:
+            print("Building llama-quantize...")
+            os.makedirs(build_dir, exist_ok=True)
+            cmake_config_command = ["cmake", "-B", "build"]
+            subprocess.run(cmake_config_command, check=True, cwd=llama_cpp_path)
+            cmake_build_command = ["cmake", "--build", "build", "--config", "Release"]
+            subprocess.run(cmake_build_command, check=True, cwd=llama_cpp_path)
+            print("llama-quantize built successfully.")
+
+        except subprocess.CalledProcessError as e:
+            print(f"Error building llama-quantize: {e}")
+        except FileNotFoundError:
+            print("Error: cmake command not found")
+
+
+    @staticmethod
+    def download_model(repo_id: str, local_dir: str, revision: str = None, **kwargs):
+        """Downloads a model from the Hugging Face Hub."""
+        os.makedirs(local_dir, exist_ok=True)
+        api = HfApi()
+        repo_files = api.list_repo_files(repo_id=repo_id, revision=revision)
+
+        for file in repo_files:
+            try:
+                hf_hub_download(
+                    repo_id=repo_id,
+                    filename=file,
+                    local_dir=local_dir,
+                    local_dir_use_symlinks=False,
+                    revision=revision,
+                    **kwargs
+                )
+            except Exception as e:
+                print(f"Error downloading {file}: {e}")
+
+
+    @staticmethod
+    def convert_to_gguf(source_dir: str, target_dir: str, model_name: str):
+        """
+        Converts a Hugging Face model to GGUF format and then quantizes it.
+        """
+        os.makedirs(target_dir, exist_ok=True)
+
+        llama_cpp_path = os.path.join("./Library", "llama.cpp")
+        convert_script_path = os.path.join(llama_cpp_path, "convert_hf_to_gguf.py")
+        target_gguf_path_f16 = os.path.join(target_dir, f"{model_name}.tmp")
+
+        if not os.path.exists(convert_script_path):
+          raise FileNotFoundError(f"convert_hf_to_gguf.py not found at {convert_script_path}. Run cloning_tools() first.")
+
+        command = [
+            "python3",
+            convert_script_path,
+            source_dir,
+            "--outfile", target_gguf_path_f16,
+            "--outtype", "f16"
+        ]
+        try:
+            print(f"Converting {source_dir} to GGUF (f16) format...")
+            subprocess.run(command, check=True)
+            print(f"Successfully converted model to {target_gguf_path_f16}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error during conversion to GGUF: {e}")
+            return
+        except FileNotFoundError:
+            print(f"Error: convert_hf_to_gguf.py not found. Ensure cloning_tools() has run.")
+            return
+
+        quantize_tool_path = os.path.join("./Library", "llama.cpp", "build", "bin", "llama-quantize")
+        if not os.path.exists(quantize_tool_path):
+            quantize_tool_path = os.path.join("./Library", "llama.cpp", "build", "llama-quantize")
+            if not os.path.exists(quantize_tool_path):
+                raise FileNotFoundError("llama-quantize executable not found.  Build it using build_llama_quantize().")
+
+        target_gguf_path_quantized = os.path.join(target_dir, f"{model_name}.gguf")
+        quantize_command = [
+            quantize_tool_path,
+            target_gguf_path_f16,
+            target_gguf_path_quantized,
+            "Q4_K_M"
+        ]
+
+        try:
+            print(f"Quantizing {target_gguf_path_f16} to {target_gguf_path_quantized}...")
+            subprocess.run(quantize_command, check=True)
+            print(f"Successfully quantized model to {target_gguf_path_quantized}")
+            os.remove(target_gguf_path_f16)
+            print(f"Temporary file {target_gguf_path_f16} removed.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error during quantization: {e}")
+        except FileNotFoundError as e:
+            print(f"Error: {e}. Ensure you have built llama-quantize.")
+
+    @staticmethod
+    def prepare_llm_model(repo_id: str, model_name: str, revision:str = None):
+        """Downloads, converts, and quantizes an LLM."""
+        source_dir = os.path.join("./Model", model_name)
+        target_dir = os.path.join("./Model/ModelCompiledRuntime")
+        AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
+        AIModelPreRuntimeManager.convert_to_gguf(source_dir, target_dir, model_name)
+        
+
+        # LLaVA-specific post-processing (after llama.cpp is built)
+        if "llava" in model_name.lower():  # Check if it's a LLaVA model
+            print(f"Performing LLaVA-specific GGUF conversion for {model_name}...")
+            llama_cpp_path = os.path.join("./Library", "llama.cpp")
+            llava_examples_path = os.path.join(llama_cpp_path, "examples", "llava")
+            requirements_path = os.path.join(llava_examples_path, "requirements.txt")
+
+            # 1. Install requirements
+            try:
+                print("Installing LLaVA requirements...")
+                subprocess.run(["pip", "install", "-r", requirements_path], check=True)
+                print("LLaVA requirements installed successfully.")
+            except subprocess.CalledProcessError as e:
+                print(f"Error installing LLaVA requirements: {e}")
+                return  # Or raise, depending on how critical this is
+
+            # 2. Prepare CLIP model
+            vit_dir = os.path.join(source_dir, "vit")
+            os.makedirs(vit_dir, exist_ok=True)
+            try:
+                print("Preparing CLIP model for GGUF conversion...")
+                shutil.copy(os.path.join(source_dir, "llava.clip"), os.path.join(vit_dir, "pytorch_model.bin"))
+                shutil.copy(os.path.join(source_dir, "llava.projector"), os.path.join(vit_dir, "llava.projector")) #Correct file name
+                config_vit_url = "https://huggingface.co/cmp-nct/llava-1.6-gguf/raw/main/config_vit.json"
+                subprocess.run(["curl", "-s", "-q", config_vit_url, "-o", os.path.join(vit_dir, "config.json")], check=True)
+                print("CLIP model prepared successfully.")
+            except (FileNotFoundError, subprocess.CalledProcessError) as e:
+                print(f"Error preparing CLIP model: {e}")
+                return
+
+            # 3. Convert image encoder
+            convert_script = os.path.join(llava_examples_path, "convert_image_encoder_to_gguf.py")
+            convert_command = [
+                "python3",
+                convert_script,
+                "-m", vit_dir,
+                "--llava-projector", os.path.join(vit_dir, "llava.projector"),
+                "--output-dir", vit_dir,
+                "--clip-model-is-vision"
+            ]
+            try:
+                print("Converting image encoder to GGUF...")
+                subprocess.run(convert_command, check=True)
+                print("Image encoder converted to GGUF successfully.")
+            except subprocess.CalledProcessError as e:
+                print(f"Error converting image encoder: {e}")
+                return
+            
+            return os.path.join(target_dir, f"{model_name}.gguf")
+
+    @staticmethod
+    def prepare_embedding_model(repo_id: str, model_name: str, revision: str = None):
+        """Downloads the embedding model (no conversion needed)."""
+        source_dir = os.path.join("./Model", model_name)
+        AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision)
+        gguf_files = glob.glob(os.path.join(source_dir, "*.gguf"))
+        if gguf_files:
+            return gguf_files[0]
+        else:
+            print(f"Warning: No .gguf file found in {source_dir}.")
+            return None
+    @staticmethod
+    def prepare_stable_diffusion_model(repo_id: str, model_name: str, revision: str = None):
+        """Downloads the Stable Diffusion model (placeholder)."""
+        source_dir = os.path.join("./Model", model_name)
+        AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
+        print("Stable Diffusion model downloaded. Conversion is not yet implemented.")
+        return source_dir
+
     @staticmethod
     def build_llama_quantize():
         """Builds the llama-quantize binary from the cloned llama.cpp repository."""
@@ -933,7 +1165,57 @@ class AIModelPreRuntimeManager:
         target_dir = os.path.join("./Model/ModelCompiledRuntime")
         AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
         AIModelPreRuntimeManager.convert_to_gguf(source_dir, target_dir, model_name)
-        return os.path.join(target_dir, f"{model_name}.gguf")
+        
+
+        # LLaVA-specific post-processing (after llama.cpp is built)
+        if "llava" in model_name.lower():  # Check if it's a LLaVA model
+            print(f"Performing LLaVA-specific GGUF conversion for {model_name}...")
+            llama_cpp_path = os.path.join("./Library", "llama.cpp")
+            llava_examples_path = os.path.join(llama_cpp_path, "examples", "llava")
+            requirements_path = os.path.join(llava_examples_path, "requirements.txt")
+
+            # 1. Install requirements
+            try:
+                print("Installing LLaVA requirements...")
+                subprocess.run(["pip", "install", "-r", requirements_path], check=True)
+                print("LLaVA requirements installed successfully.")
+            except subprocess.CalledProcessError as e:
+                print(f"Error installing LLaVA requirements: {e}")
+                return  # Or raise, depending on how critical this is
+
+            # 2. Prepare CLIP model
+            vit_dir = os.path.join(source_dir, "vit")
+            os.makedirs(vit_dir, exist_ok=True)
+            try:
+                print("Preparing CLIP model for GGUF conversion...")
+                shutil.copy(os.path.join(source_dir, "llava.clip"), os.path.join(vit_dir, "pytorch_model.bin"))
+                shutil.copy(os.path.join(source_dir, "llava.projector"), os.path.join(vit_dir, "llava.projector")) #Correct file name
+                config_vit_url = "https://huggingface.co/cmp-nct/llava-1.6-gguf/raw/main/config_vit.json"
+                subprocess.run(["curl", "-s", "-q", config_vit_url, "-o", os.path.join(vit_dir, "config.json")], check=True)
+                print("CLIP model prepared successfully.")
+            except (FileNotFoundError, subprocess.CalledProcessError) as e:
+                print(f"Error preparing CLIP model: {e}")
+                return
+
+            # 3. Convert image encoder
+            convert_script = os.path.join(llava_examples_path, "convert_image_encoder_to_gguf.py")
+            convert_command = [
+                "python3",
+                convert_script,
+                "-m", vit_dir,
+                "--llava-projector", os.path.join(vit_dir, "llava.projector"),
+                "--output-dir", vit_dir,
+                "--clip-model-is-vision"
+            ]
+            try:
+                print("Converting image encoder to GGUF...")
+                subprocess.run(convert_command, check=True)
+                print("Image encoder converted to GGUF successfully.")
+            except subprocess.CalledProcessError as e:
+                print(f"Error converting image encoder: {e}")
+                return
+            
+            return os.path.join(target_dir, f"{model_name}.gguf")
 
     @staticmethod
     def prepare_embedding_model(repo_id: str, model_name: str, revision: str = None):
@@ -2273,7 +2555,7 @@ class DecisionTreeProcessor:
             partition_context.add_context(slot, response, "CoT")
             asyncio.run_coroutine_threadsafe(partition_context.async_embed_and_store(response, slot, "CoT"), loop) #Embeds result
             print(OutputFormatter.color_prefix(f"Response to question: {response}", "Internal", generation_time=time.time() - start_time, token_count=question_prompt_tokens, progress=progress_interval, slot=slot))
-        elif node_type == "action step":
+        elif node_type == "action step": #ADDED
             if "literature_review" in content:
                 review_query = re.search(r"literature_review\(['\"](.*?)['\"]\)", content).group(1)
                 review_result = LiteratureReviewer.literature_review(review_query) #Calls
@@ -2286,7 +2568,7 @@ class DecisionTreeProcessor:
 
 def initialize_models():
     """Initializes the LLM and schedules the warmup task."""
-    global llm, embedding_llm, ai_runtime_manager, database_manager  # Add embedding_llm
+    global llm, embedding_llm, ai_runtime_manager, database_manager
 
     n_batch = 512
     # LLM for text generation (keep existing settings)
@@ -2300,9 +2582,7 @@ def initialize_models():
         max_tokens=MAX_TOKENS_GENERATE
     )
 
-    # Separate LLM for embeddings
     embedding_llm = Llama(model_path=EMBEDDING_MODEL_PATH, n_ctx=CTX_WINDOW_LLM, n_gpu_layers=-1, n_batch=n_batch, embedding=True)
-
 
     database_manager = DatabaseManager(DATABASE_FILE, loop)
     ai_runtime_manager = AIRuntimeManager(llm, database_manager)
@@ -2327,10 +2607,6 @@ def warmup_llm():
         traceback.print_exc()
         sys.exit(1)
     print(OutputFormatter.color_prefix(f"Warmup response: {generated_text}", "Internal"))
-
-def load_vector_store_from_db(embedding_model, db_cursor):
-    print("stub")
-    return("stub")
 
 async def input_task(ai_runtime_manager, partition_context):
   """Task to handle user input in a separate thread (CLI)."""
@@ -2570,11 +2846,9 @@ if __name__ == "__main__":
         model_name="llava-phi-3",
     )
 
-    embedding_model_path = AIModelPreRuntimeManager.prepare_embedding_model(
-        repo_id="mxbai-embed-large-v1",
-        model_name = "mxbai-embed",
-        revision="refs/pr/5"
-    )
+    # CHANGED EMBEDDING MODEL PATH:
+    embedding_model_path = "./Model/ModelCompiledRuntime/snowflake-arctic-embed.gguf"
+
 
     sd_model_path = AIModelPreRuntimeManager.prepare_stable_diffusion_model(
       repo_id="stabilityai/stable-diffusion-2-1",
@@ -2584,6 +2858,12 @@ if __name__ == "__main__":
 
     # Override environment variables
     os.environ["LLM_MODEL_PATH"] = llm_model_path
+    if embedding_model_path:
+        os.environ["EMBEDDING_MODEL_PATH"] = embedding_model_path
+    # --- End of model download/conversion ---
+
+    # Override environment variables
+    os.environ["LLM_MODEL_PATH"] = llm_model_path #Corrected this
     if embedding_model_path:
         os.environ["EMBEDDING_MODEL_PATH"] = embedding_model_path
 
