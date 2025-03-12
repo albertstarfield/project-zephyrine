@@ -66,6 +66,121 @@ encoded_instructions = (
 )
 
 
+class SystemInfoCollector:
+    @staticmethod
+    def get_cpu_info():
+        info = {}
+        try:
+            info['name'] = platform.processor() or cpuinfo.get_cpu_info()['brand_raw']
+            info['architecture'] = platform.machine()
+            info['cores'] = psutil.cpu_count(logical=False)
+            info['threads'] = psutil.cpu_count(logical=True)
+        except:
+            info['name'] = "Unknown"
+            info['architecture'] = platform.machine()
+        return info
+
+    @staticmethod
+    def get_memory_info():
+        mem = psutil.virtual_memory()
+        swap = psutil.swap_memory()
+        ecc = "Unknown"
+        if platform.system() == "Linux":
+            try:
+                ecc = "Enabled" if any('ECC' in line for line in open(
+                    '/sys/devices/system/edac/mc/mc0/ue_count')) else "Disabled"
+            except:
+                pass
+        return {
+            'total': f"{mem.total / 1e9:.2f} GB",
+            'available': f"{mem.available / 1e9:.2f} GB",
+            'ecc': ecc
+        }
+
+    @staticmethod
+    def get_gpu_info():
+        gpus = []
+        try:
+            if torch.cuda.is_available():
+                for i in range(torch.cuda.device_count()):
+                    gpus.append({
+                        'name': torch.cuda.get_device_name(i),
+                        'vram': f"{torch.cuda.get_device_properties(i).total_memory / 1e9:.2f} GB",
+                        'type': "Dedicated (CUDA)"
+                    })
+            else:
+                integrated_gpu = GPUtil.getGPUs()
+                if integrated_gpu:
+                    gpus.append({
+                        'name': integrated_gpu[0].name,
+                        'vram': f"{integrated_gpu[0].memoryTotal} MB",
+                        'type': "Integrated"
+                    })
+        except:
+            pass
+        return gpus if gpus else [{"name": "No GPU detected"}]
+
+    @staticmethod
+    def get_os_info():
+        os_map = {
+            "Linux": "Linux",
+            "Darwin": "Darwin",
+            "Windows": "WindowsNT",
+            "FreeBSD": "FreeBSD"
+        }
+        return os_map.get(platform.system(), "Unknown")
+
+    @staticmethod
+    def get_disk_info():
+        disk = psutil.disk_usage('/')
+        read_speed = 0.0
+        start = time.time()
+        with open(os.devnull, 'wb') as devnull:
+            subprocess.run(['dd', 'if=/dev/zero', 'of=testfile', 'bs=1M', 'count=1024'], 
+                          stdout=devnull, stderr=devnull)
+            read_time = time.time() - start
+            read_speed = (1024 * 1024 * 1024) / read_time  # 1GB in bytes
+        os.remove('testfile')
+        return {
+            'total': f"{disk.total / 1e9:.2f} GB",
+            'available': f"{disk.free / 1e9:.2f} GB",
+            'read_speed': f"{read_speed / 1e6:.2f} MB/s"
+        }
+
+    @staticmethod
+    def get_accelerator_info():
+        accelerators = []
+        if torch.backends.mps.is_available():
+            accelerators.append("MPSAccelerator (Apple)")
+        if torch.cuda.is_available():
+            accelerators.append("CUDA GPU")
+        if hasattr(torch, 'xpu') and torch.xpu.is_available():
+            accelerators.append("OneAPI Intel XPU")
+        if 'ROCM_PATH' in os.environ:
+            accelerators.append("AMD ROCm")
+        return accelerators if accelerators else ["None detected"]
+
+    @staticmethod
+    def get_vram_type():
+        if platform.system() == "Darwin":
+            return "Unified Memory Architecture"
+        elif torch.cuda.is_available():
+            return "Dedicated (NVIDIA)"
+        return "Integrated"
+
+    @classmethod
+    def generate_startup_banner(cls):
+        info = {
+            "CPU": cls.get_cpu_info(),
+            "Memory": cls.get_memory_info(),
+            "GPU": cls.get_gpu_info(),
+            "OS Kernel": cls.get_os_info(),
+            "Disk": cls.get_disk_info(),
+            "Accelerators": cls.get_accelerator_info(),
+            "VRAM Type": cls.get_vram_type()
+        }
+        return info
+
 class EmbeddingThread(Thread):
     def __init__(self, embedding_model_path, ctx_window_llm, n_batch, database_manager):
         super().__init__(daemon=True)
