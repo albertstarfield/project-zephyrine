@@ -4,20 +4,16 @@ import ctypes
 import glob
 import json
 import logging
-# from langchain.embeddings import LlamaCppEmbeddings
-# from langchain.docstore.document import Document
-# from langchain.vectorstores import FAISS
-# from langchain.text_splitter import CharacterTextSplitter
-from sklearn.metrics.pairwise import cosine_similarity  # Add this line
 import os
 import pickle
 import platform
+import psutil
 import re
 import shutil
 import signal
 import sqlite3
 import struct
-import subprocess  # Import subprocess
+import subprocess
 import sys
 import threading
 import time
@@ -27,13 +23,21 @@ from http.server import HTTPServer, BaseHTTPRequestHandler
 from threading import Thread, Lock
 from typing import Dict, Any, List, Optional, BinaryIO, Tuple
 
-import numpy as np  # Added
+import GPUtil
+import cpuinfo
+import numpy as np
 import tiktoken
+import torch
+from colorama import Fore, Style
 from colored import fg, attr
 from fuzzywuzzy import fuzz
 from huggingface_hub import hf_hub_download, HfApi
 from jinja2 import Template
-from llama_cpp import Llama  # Added
+from llama_cpp import Llama
+from sklearn.metrics.pairwise import cosine_similarity
+from tabulate import tabulate
+
+
 
 logging.basicConfig(level=logging.DEBUG, format='%(asctime)s - %(levelname)s - %(message)s')
 
@@ -3259,6 +3263,9 @@ def signal_handler(sig, frame):
 
 
 if __name__ == "__main__":
+
+    system_info = SystemInfoCollector.generate_startup_banner()
+    print(OutputFormatter.format_system_info(system_info))
 
     # --- Clone necessary tools ---
     AIModelPreRuntimeManager.cloning_tools()
