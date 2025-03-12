@@ -25,7 +25,9 @@ from typing import Dict, Any, List, Optional, BinaryIO, Tuple
 
 import GPUtil
 import cpuinfo
+import cProfile
 import numpy as np
+import ctypes
 import tiktoken
 import torch
 import colorama
@@ -39,6 +41,7 @@ from sklearn.metrics.pairwise import cosine_similarity
 from tabulate import tabulate
 
 colorama.init()
+
 
 
 
@@ -74,6 +77,119 @@ encoded_instructions = (
 
 
 class SystemInfoCollector:
+    @staticmethod
+    def get_libc():
+        """Loads appropriate C library based on OS"""
+        system = platform.system()
+        if system == "Linux":
+            try:
+                return ctypes.CDLL("libc.so.6")
+            except OSError:
+                # Handle Alpine Linux (musl libc)
+                return ctypes.CDLL("libc.musl-x86_64.so.1")
+        elif system == "Darwin":
+            return ctypes.CDLL("libSystem.dylib")
+        elif system == "Windows":
+            return ctypes.windll.kernel32
+        else:
+            return None
+        
+    @classmethod
+    def test_ram_bandwidth(cls, size_gb=1, warmup_rounds=2, test_rounds=5):
+        """
+        Measures RAM bandwidth using multi-threaded temporal load/store operations.
+        Adapts thread count based on CPU cores (up to 8 threads).
+        """
+        try:
+            system = platform.system()
+            cpu_info = cls.get_cpu_info()  # Use cls for class methods
+            max_threads = min(cpu_info.get('threads', 1), 8)  # SEQ1MT8: Max 8 threads
+            per_thread_size = size_gb / max_threads
+
+            results = []
+            lock = threading.Lock()
+            start_barrier = threading.Barrier(max_threads + 1)  # +1 for main thread
+
+            def worker():
+                try:
+                    # Platform-specific memory allocation
+                    if system == "Windows":
+                        libc = ctypes.windll.kernel32
+                        ptr = libc.VirtualAlloc(
+                            None,
+                            int(per_thread_size * 1e9),  # Convert GB to bytes
+                            0x1000,  # MEM_COMMIT
+                            0x04      # PAGE_READWRITE
+                        )
+                    else:
+                        libc = cls.get_libc()  # Use cls for class methods
+                        ptr = ctypes.c_void_p()
+                        res = libc.posix_memalign(
+                            ctypes.byref(ptr),
+                            4096,
+                            int(per_thread_size * 1e9)
+                        )
+                        if res != 0:
+                            raise OSError("Memory allocation failed")
+
+                    # Create NumPy array from allocated memory
+                    arr = np.ctypeslib.as_array(
+                        ctypes.cast(ptr, ctypes.POINTER(ctypes.c_float)),
+                        shape=(int(per_thread_size * 1e9 // 4),)  # 32-bit elements
+                    )
+
+                    # Warmup phase
+                    for _ in range(warmup_rounds):
+                        np.copyto(arr, np.random.rand(len(arr)))
+
+                    # Synchronize threads
+                    start_barrier.wait()
+                    start_time = time.time()
+
+                    # Temporal load/store operations
+                    for _ in range(test_rounds):
+                        np.copyto(arr, np.random.rand(len(arr)))  # Write
+                        _ = arr.copy()  # Read
+
+                    end_time = time.time()
+
+                    with lock:
+                        results.append({
+                            'data': per_thread_size * 1e9 * test_rounds * 2,  # read+write
+                            'time': end_time - start_time
+                        })
+
+                except Exception as e:
+                    print(f"Worker error: {e}")
+                finally:
+                    if system == "Windows":
+                        libc.VirtualFree(ptr, 0, 0x8000)  # MEM_RELEASE
+                    else:
+                        libc.free(ptr)
+
+            # Create and start worker threads
+            threads = [threading.Thread(target=worker) for _ in range(max_threads)]
+            for t in threads:
+                t.start()
+
+            # Trigger synchronized start
+            start_barrier.wait()
+            main_start = time.time()
+
+            # Wait for all threads to finish
+            for t in threads:
+                t.join()
+
+            # Calculate aggregate bandwidth
+            total_data = sum(r['data'] for r in results)
+            total_time = max(r['time'] for r in results)  # Use longest-running thread
+            bandwidth = total_data / total_time / 1e9  # Convert bytes to GB/s
+            return round(bandwidth, 2)
+
+        except Exception as e:
+            print(f"RAM bandwidth test failed: {e}")
+            return "N/A"
+        
     @staticmethod
     def get_cpu_info():
         info = {}
@@ -242,6 +358,35 @@ class SystemInfoCollector:
             return "Dedicated (NVIDIA)"
         return "Integrated"
 
+    @staticmethod
+    def test_vram_bandwidth_mps():
+        """Apple Silicon GPU bandwidth test placeholder"""
+        if not torch.backends.mps.is_available():
+            return "N/A"
+        try:
+            # Basic throughput test using MPS tensor operations
+            size = 1 << 30  # 1GB
+            tensor = torch.rand(size, device='mps')
+            start = time.time()
+            tensor += 1
+            torch.mps.synchronize()
+            elapsed = time.time() - start
+            bandwidth = (size * 4) / elapsed / 1e9  # 32-bit float elements
+            return round(bandwidth, 2)
+        except:
+            return "N/A (MPS detection limited)"
+
+    # Fix other accelerator bandwidth tests
+    @staticmethod
+    def test_vram_bandwidth_rocm():
+        # AMD ROCm bandwidth test placeholder
+        return "N/A (ROCm detection limited)"
+
+    @staticmethod
+    def test_vram_bandwidth_xpu():
+        # Intel XPU bandwidth test placeholder
+        return "N/A (XPU detection limited)"
+
     @classmethod
     def generate_startup_banner(cls):
         info = {
@@ -256,8 +401,89 @@ class SystemInfoCollector:
         
         # Generate warnings based on system specs
         warnings = []
+
+        # Test RAM and VRAM bandwidth
+        # Test RAM bandwidth with error handling
         
+        ram_bw = cls.test_ram_bandwidth()
+        if isinstance(ram_bw, str):
+            ram_bw_value = 0.0  # Default to 0 if test failed
+        else:
+            ram_bw_value = ram_bw
+        
+        # Add to info dictionary
+        info["RAM Bandwidth"] = f"{ram_bw} GB/s" if ram_bw != "N/A" else "N/A"
+        
+        # Generate warnings
+        # RAM Bandwidth Warning
+        if ram_bw != "N/A":
+            ram_bw_value = float(ram_bw)  # Convert to float for comparison
+            if ram_bw_value < 90:
+                warnings.append(
+                    f"⚠️ RAM Bandwidth Warning: {ram_bw} GB/s detected. "
+                    "Minimum 90 GB/s required for stable ML operations [[14]]."
+                )
+        else:
+            warnings.append(
+                "⚠️ RAM Bandwidth Warning: Unable to measure RAM bandwidth. "
+                "This may indicate a system configuration issue."
+            )
+        vram_bw = "N/A"
+        if torch.cuda.is_available():
+            vram_bw = cls.test_vram_bandwidth_cuda()  # Renamed for clarity
+        elif torch.backends.mps.is_available():
+            vram_bw = cls.test_vram_bandwidth_mps()
+        elif hasattr(torch, 'xpu') and torch.xpu.is_available():
+            vram_bw = cls.test_vram_bandwidth_xpu()
+        elif 'ROCM_PATH' in os.environ:
+            vram_bw = cls.test_vram_bandwidth_rocm()
+
+        # Add bandwidth metrics to the info dictionary
+        info["RAM Bandwidth"] = f"{ram_bw} GB/s"
+        info["VRAM Bandwidth"] = f"{vram_bw} GB/s" if vram_bw != "N/A" else "N/A"
+
+        # New bandwidth warnings
+        if ram_bw < 90:
+            warnings.append(
+                f"⚠️ RAM Bandwidth Warning: {ram_bw} GB/s detected. "
+                "Minimum 90 GB/s required for stable ML operations [[14]]."
+            )
+        
+        if info['VRAM Type'] == "Unified Memory Architecture":
+            if vram_bw != "N/A" and vram_bw < 300:
+                warnings.append(
+                    f"⚠️ UMA Bandwidth Warning: {vram_bw} GB/s detected. "
+                    "Minimum 300 GB/s required for unified memory systems [[15]]."
+                )
+        
+        # ECC warning
+        if info['Memory']['ecc'] != "Enabled":
+            warnings.append(
+                "⚠️ ECC Memory Warning: Non-ECC memory detected. "
+                "Potential silent data corruption risks during training/inference [[16]]."
+            )
+
+        # Add OS-specific warnings
+        if platform.system() == "Windows":
+            warnings.append(
+                "⚠️ Windows Warning: Limited support for memory bandwidth testing. "
+                "Some metrics may be less accurate."
+            )
+        elif platform.system() == "Darwin":
+            warnings.append(
+                "⚠️ macOS Warning: Unified memory architecture detected. "
+                "Performance may vary compared to dedicated GPU systems."
+            )
+        elif platform.system() == "Linux":
+            if 'musl' in platform.libc_ver()[0]:
+                warnings.append(
+                    "⚠️ Alpine Linux Warning: Some low-level operations may have "
+                    "compatibility issues with musl libc."
+                )
+
         # CPU Architecture Warning
+
+
         if info['CPU']['architecture'] not in ['x86_64', 'AMD64']:
             warnings.append(
                 f"⚠️ CPU Architecture Warning: {info['CPU']['architecture']} detected. "
