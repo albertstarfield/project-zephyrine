@@ -79,14 +79,21 @@
 }
 
 .logo {
-  font-weight: bold;
-  display: block;
-  font-size: 2.25rem;
-  line-height: 2.5rem;
-  color: var(--primary-text-alt);
-  margin: 5 auto 4rem;
-  width: 380px;
+  position: fixed;
+  top: 20px;
+  left: 50%;
+  transform: translateX(-50%);
+  z-index: 99999;
+  width: 200px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.project-logo {
+  width: 100%;
   height: auto;
+  filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
 }
 
 .character-container {
@@ -655,4 +662,25 @@ overlaytext {
 
 #bottom {
   height: 1px;
+}
+
+.entity-container {
+  position: fixed;
+  bottom: 20px;
+  right: 20px;
+  z-index: 99999;
+  width: 150px;
+  pointer-events: none;
+}
+
+.adelaide-entity {
+  width: 100%;
+  height: auto;
+  filter: drop-shadow(0 0 15px rgba(255, 255, 255, 0.3));
+  opacity: 0.9;
+  transition: opacity 0.3s ease;
+}
+
+.entity-container:hover .adelaide-entity {
+  opacity: 1;
 }

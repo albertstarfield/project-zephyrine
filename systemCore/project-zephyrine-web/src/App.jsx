@@ -1,6 +1,5 @@
 import { useState, useEffect, useRef } from "react";
 import "./styles/App.css";
-import TitleBar from "./components/TitleBar";
 import SideBar from "./components/SideBar";
 import ChatFeed from "./components/ChatFeed";
 import InputArea from "./components/InputArea";
@@ -161,13 +160,26 @@ function App() {
         ))}
       </div>
 
-      <TitleBar />
+      <div className="logo">
+        <img
+          src="/img/ProjectZephy023LogoRenewal.png"
+          alt="Project Zephyrine Logo"
+          className="project-logo"
+        />
+      </div>
 
       <div id="main">
         <SystemOverlay />
         <SideBar systemInfo={systemInfo} />
 
         <div id="feed" className={showPlaceholder ? "welcome-screen" : ""}>
+          <div className="entity-container">
+            <img
+              src="/img/AdelaideEntity.png"
+              alt="Adelaide Entity"
+              className="adelaide-entity"
+            />
+          </div>
           <ChatFeed
             messages={messages}
             showPlaceholder={showPlaceholder}
