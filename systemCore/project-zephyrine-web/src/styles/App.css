@@ -120,21 +120,24 @@
 }
 
 .logo {
-  position: fixed;
-  top: 10px;
-  left: 50%;
-  transform: translateX(-50%);
-  z-index: 99999;
-  width: 100px;
+  width: 220px;
+  margin: 2rem auto;
   display: flex;
   justify-content: center;
   align-items: center;
+  position: relative;
+  z-index: 99999;
 }
 
 .project-logo {
   width: 100%;
   height: auto;
   filter: drop-shadow(0 0 10px rgba(255, 255, 255, 0.2));
+  transition: transform 0.3s ease;
+}
+
+.logo:hover .project-logo {
+  transform: scale(1.05);
 }
 
 .character-container {
