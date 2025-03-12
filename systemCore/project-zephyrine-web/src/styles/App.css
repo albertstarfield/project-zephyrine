@@ -5,6 +5,7 @@
   width: 100%;
   background-color: var(--background-mid);
   position: relative;
+  overflow-x: hidden;
 }
 
 #sky {
@@ -47,13 +48,17 @@
   top: 0;
   left: 0;
   width: 100%;
+  gap: 1rem;
 }
 
 #feed {
-  width: calc(100vw - 4rem);
+  width: calc(100vw - 5rem);
   height: 100vh;
   overflow-y: auto;
   background-color: var(--background);
+  margin-left: 4rem;
+  padding: 1rem;
+  box-sizing: border-box;
 }
 
 #feed.welcome-screen {
@@ -84,7 +89,7 @@
   left: 50%;
   transform: translateX(-50%);
   z-index: 99999;
-  width: 200px;
+  width: 180px;
   display: flex;
   justify-content: center;
   align-items: center;
@@ -255,10 +260,15 @@ overlaytext {
   justify-content: flex-start;
   margin: 0;
   width: 4rem;
+  min-width: 4rem;
   background-color: var(--background);
   height: calc(100vh - 1rem);
   overflow: hidden auto;
   flex-direction: column;
+  border-radius: 1rem;
+  position: fixed;
+  left: 0.5rem;
+  top: 0.5rem;
 }
 
 .form-header * {
@@ -512,20 +522,123 @@ overlaytext {
     display: block;
     margin: 2vh 1.5rem 12rem;
   }
+
+  .logo {
+    width: 150px;
+    top: 15px;
+  }
+
+  .entity-container {
+    width: 100px;
+    bottom: 15px;
+    right: 15px;
+  }
+
+  #feed {
+    width: calc(100vw - 4.5rem);
+    margin-left: 3.5rem;
+  }
+
+  .form-header {
+    width: 3.5rem;
+    min-width: 3.5rem;
+  }
+
+  .input-container {
+    width: calc(100% - 4rem);
+  }
 }
 
-@media (max-width: 790px) {
+@media (max-width: 768px) {
+  .logo {
+    width: 120px;
+    top: 10px;
+  }
+
+  #main {
+    margin-top: 24px;
+  }
+
   .form-header {
-    width: 0rem;
+    width: 3rem;
+    min-width: 3rem;
+    left: 0.25rem;
   }
 
-  #titlebar {
-    width: calc(50% - 2px);
+  #feed {
+    width: calc(100vw - 3.5rem);
+    margin-left: 3rem;
+    padding: 0.5rem;
   }
 
-  .example-categories {
-    flex-direction: column;
-    align-items: center;
+  .input-container {
+    width: calc(100% - 3rem);
+    margin: 10px 10px;
+  }
+
+  .entity-container {
+    width: 80px;
+    bottom: 10px;
+    right: 10px;
+  }
+
+  .action-button {
+    margin: 0.25rem;
+    padding: 0.5rem;
+    width: calc(100% - 1rem);
+  }
+
+  .action-button svg {
+    width: 20px;
+    height: 20px;
+  }
+}
+
+@media (max-width: 480px) {
+  .logo {
+    width: 100px;
+  }
+
+  .form-header {
+    width: 2.5rem;
+    min-width: 2.5rem;
+  }
+
+  #feed {
+    width: calc(100vw - 3rem);
+    margin-left: 2.5rem;
+  }
+
+  .input-container {
+    width: calc(100% - 2.5rem);
+    margin: 10px 5px;
+  }
+
+  .entity-container {
+    width: 60px;
+    bottom: 5px;
+    right: 5px;
+  }
+
+  #send,
+  #stop {
+    width: 40px;
+    height: 40px;
+  }
+
+  #send svg {
+    width: 20px;
+    height: 20px;
+  }
+
+  .action-button {
+    margin: 0.25rem;
+    padding: 0.4rem;
+  }
+
+  .action-button svg {
+    width: 18px;
+    height: 18px;
   }
 }
 
@@ -569,9 +682,9 @@ overlaytext {
 }
 
 .input-container {
-  margin: 10px 48px;
+  margin: 10px 20px;
   max-width: 48rem;
-  width: calc(100vw - 4rem);
+  width: calc(100% - 6rem);
   position: sticky;
   bottom: 20px;
   padding: 0 1rem 1rem;
@@ -592,7 +705,7 @@ overlaytext {
   border-radius: 1.275rem;
   border: solid 1px var(--hover);
   pointer-events: all;
-  margin: 0rem 2rem 0rem 6rem;
+  margin: 0;
   width: 100%;
 }
 
@@ -669,7 +782,7 @@ overlaytext {
   bottom: 20px;
   right: 20px;
   z-index: 99999;
-  width: 150px;
+  width: 120px;
   pointer-events: none;
 }
 
