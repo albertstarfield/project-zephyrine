@@ -802,22 +802,26 @@
 		</div>
 		
 		<div id="sky" class=""></div>
-		<script src="socket.io.min.js"></script>
+		<!--<script src="socket.io.min.js"></script>-->
 		<!--https://cdn.jsdelivr.net/npm/marked/marked.min.js-->
+		
+		<script src="renderer.js"></script>
 		<script>
-			require("./renderer.js");
+			document.addEventListener('DOMContentLoaded', () => {
+				// Hide the splash screen after 10 seconds
+				setTimeout(() => {
+					const splashScreen = document.getElementById('splash-screen-overlay');
+					if (splashScreen) { // Check if the element exists
+						splashScreen.classList.add('fade-out'); // Add the fade-out class
+						setTimeout(() => {
+							splashScreen.style.display = 'none'; // Hide after animation
+						}, 1000); // Wait for 1 second (transition duration)
+					} else {
+						console.error("Error: 'splash-screen-overlay' element not found.");
+					}
+				}, 100); // 10 seconds
+			});
 		</script>
-		<script>
-			// Hide the splash screen after 10 seconds
-			setTimeout(() => {
-			  const splashScreen = document.getElementById('splash-screen-overlay');
-			  splashScreen.classList.add('fade-out'); // Add the fade-out class
-			  setTimeout(() => {
-				splashScreen.style.display = 'none'; // Hide the splash screen after the animation completes
-			  }, 1000); // Wait for 1 second (same duration as the transition in CSS)
-			}, 100); // 10000 milliseconds = 10 seconds
-		  </script>
-		  <script>
 			// for electron
 			if (typeof require !== 'undefined') {
 				const currentWebContents = require('electron').remote.getCurrentWebContents();
@@ -832,6 +836,10 @@
 				});
 			}
 		</script>
+		
+		</div>
+		<div id="splash-screen-overlay">
+			Loading Project Zephyrine
 		</div>
 	</body>
 </html>

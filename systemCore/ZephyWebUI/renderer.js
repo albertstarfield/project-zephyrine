@@ -23,9 +23,6 @@
  *          });
  */
 //https://stackoverflow.com/questions/72591633/electron-simplest-example-to-pass-variable-from-js-to-html-using-ipc-contextb
-const remote = require("@electron/remote");
-const { ipcRenderer, dialog } = require("electron");
-
 const win = remote.getCurrentWindow();
 
 const path = require("path");
@@ -183,32 +180,32 @@ document.addEventListener("DOMContentLoaded", function() {
 
 
 document.onreadystatechange = (event) => {
-	ipcRenderer.send("os");
+	("os");
 	console.log("docReadyState", document.readyState);
 	if (document.readyState == "complete") {
 		handleWindowControls();
 	}
 	document.querySelector("#path-dialog-bg > div > div.dialog-button > button.secondary").style.display = "none";
 	document.querySelector("#path-dialog-bg > div > div.dialog-title > h2").innerText = "Couldn't load model";
-	ipcRenderer.send("checkModelPath");
+	("checkModelPath");
 };
 
-ipcRenderer.on("os", (_error, { data }) => {
+("os", (_error, { data }) => {
 	document.querySelector("html").classList.add(data);
 });
 
-ipcRenderer.on("modelPathValid", (_event, { data }) => {
+("modelPathValid", (_event, { data }) => {
 	if (data) {
-		ipcRenderer.send("startInteraction");
+		("startInteraction");
 	} else {
-		ipcRenderer.send("getCurrentModel");
+		("getCurrentModel");
 		document.getElementById("path-dialog-bg").classList.remove("hidden");
 	}
 });
 /*
 document.querySelector("#path-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
 	var path = document.querySelector("#path-dialog input[type=text]").value.replaceAll('"', "");
-	ipcRenderer.send("checkPath", { data: path });
+	("checkPath", { data: path });
 });
 */
 // Replaced with automatic selection
@@ -217,12 +214,12 @@ document.querySelector("#path-dialog-bg > div > div.dialog-button > button.secon
 	document.getElementById("path-dialog-bg").classList.add("hidden");
 });
 
-ipcRenderer.on("pathIsValid", (_event, { data }) => {
+("pathIsValid", (_event, { data }) => {
 	console.log(data);
 	if (data) {
 		document.querySelector("#path-dialog > p.error-text").style.display = "none";
 		document.getElementById("path-dialog-bg").classList.add("hidden");
-		ipcRenderer.send("restart");
+		("restart");
 	} else {
 		document.querySelector("#path-dialog > p.error-text").style.display = "block";
 	}
@@ -231,9 +228,9 @@ ipcRenderer.on("pathIsValid", (_event, { data }) => {
 // Legacy alpaca-electron manual selection model file code
 
 document.querySelector("#path-dialog > div > button").addEventListener("click", () => {
-	ipcRenderer.send("pickFile");
+	("pickFile");
 });
-ipcRenderer.on("pickedFile", (_error, { data }) => {
+("pickedFile", (_error, { data }) => {
 	document.querySelector("#path-dialog input[type=text]").value = data;
 });
 
@@ -247,7 +244,7 @@ document.querySelector("#path-dialog input[type=text]").addEventListener("keypre
 
 */
 
-ipcRenderer.on("currentModel", (_event, { data }) => {
+("currentModel", (_event, { data }) => {
 	document.querySelector("#path-dialog input[type=text]").value = data;
 });
 
@@ -257,21 +254,6 @@ window.onbeforeunload = (event) => {
 };
 
 function handleWindowControls() {
-	document.getElementById("min-button").addEventListener("click", (event) => {
-		win.minimize();
-	});
-
-	document.getElementById("max-button").addEventListener("click", (event) => {
-		win.maximize();
-	});
-
-	document.getElementById("restore-button").addEventListener("click", (event) => {
-		win.unmaximize();
-	});
-
-	document.getElementById("close-button").addEventListener("click", (event) => {
-		win.close();
-	});
 
 	toggleMaxRestoreButtons();
 	win.on("maximize", toggleMaxRestoreButtons);
@@ -333,7 +315,17 @@ form.addEventListener("submit", (e) => {
 		say(input.value, `user${gen}`, true); // so ${gen} is for determining what part of the chat history that its belongs to, Nice!
 		gen++;
 		console.debug("[DEBUG MULTISUBMISSION]: Forwarding to main backend Engine!")
-		ipcRenderer.send("message", { data: prompt }); 
+		fetch('/api/message', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ prompt }),
+          })
+          .then(response => response.json())
+          .then(data => {
+            // Handle response here
+          });
 		console.debug("[DEBUG MULTISUBMISSION]: Resetting GUI input form!")
 		input.value = "";
 	}
@@ -346,7 +338,17 @@ form.addEventListener("submit", (e) => {
 
 		//Reverse engineering conclusion note : This is for sending the prompt or the User input to the GUI
 		// NO its not, this ipcRenderer is for sending the prompt to index.js then to whatever engine_component or can be said as interprocesscommunication for processing, not for rendering into the GUI
-		ipcRenderer.send("message", { data: prompt }); 
+		fetch('/api/message', {
+            method: 'POST',
+            headers: {
+              'Content-Type': 'application/json',
+            },
+            body: JSON.stringify({ prompt }),
+          })
+          .then(response => response.json())
+          .then(data => {
+            // Handle response here
+          });
 		// Reverse Engineering note : this might be the one that sends to the GUI! 
 		// but what is input.value? where does it come from? From the look of the var prompt = input.value.replaceAll("\n", "\\n"); it seems it stores the user message but what is the .value? 
 		// Ah, so the input variable is already or asyncrhonously determined by the renderer.js for the value subvariable
@@ -384,7 +386,7 @@ input.addEventListener("keydown", (e) => {
 stopButton.addEventListener("click", (e) => {
 	e.preventDefault();
 	e.stopPropagation();
-	ipcRenderer.send("stopGeneration");
+	("stopGeneration");
 	stopButton.setAttribute("disabled", "true");
 	setTimeout(() => {
 		isRunningModel = false;
@@ -403,7 +405,7 @@ const sha256 = async (input) => {
 // target Emotional Support Add---------------------------------------------------
 
 let profilePictureEmotions;
-ipcRenderer.on('emotionalEvaluationResult', (event, data) => {
+('emotionalEvaluationResult', (event, data) => {
 	// Use the received data in your renderer process
 	console.log('Received emotionalEvaluationResult:', data);
 	profilePictureEmotions = data;
@@ -527,13 +529,13 @@ let prefixConsoleLogStreamCapture = "[LLMMainBackendStreamCapture]: ";
 // add some custom remote ipc async routines (in this case the experiment is going to be conducted on the index.js where we manually inject the user input data to the GUI, this is important for the save and restore function of the program)
 
 // this is for recieving (load User input) message from the saved message routines
-ipcRenderer.on("manualUserPromptGUIHijack", async (_event, { data }) => { 
+("manualUserPromptGUIHijack", async (_event, { data }) => { 
 	var userPretendInput = data.interactionTextData; //marked.parse(responses[id]);
 	say(userPretendInput, `user${gen}`, true);
 	gen++;
 });
 // this is for recieving (load AI Output) message from the saved message routines
-ipcRenderer.on("manualAIAnswerGUIHijack", async (_event, { data }) => { 
+("manualAIAnswerGUIHijack", async (_event, { data }) => { 
 	const id = gen;
 	var response = data.interactionTextData;
 	let existing = document.querySelector(`[data-id='${id}']`);
@@ -576,7 +578,7 @@ ipcRenderer.on("manualAIAnswerGUIHijack", async (_event, { data }) => {
 
 
 
-ipcRenderer.on("result", async (_event, { data }) => {
+("result", async (_event, { data }) => {
 	var response = data;
 	const id = gen;
 	let existing = document.querySelector(`[data-id='${id}']`);
@@ -623,9 +625,9 @@ ipcRenderer.on("result", async (_event, { data }) => {
 
 			//responses[id] forward to Automata Mode if its Turned on then it will continue
 			// Why i put the Automata Triggering ipcRenderer in here? : because when the stream finished, it stopped in here
-			ipcRenderer.send("AutomataLLMMainResultReciever", { data: responses[id] });
-			ipcRenderer.send("saveAdelaideMessage", { data: responses[id] }); // Save Adelaide Paradigm Engine Message into the database by calling the IPC Call Function
-			ipcRenderer.send("CheckAsyncMessageQueue"); // Multiple-User submission support
+			("AutomataLLMMainResultReciever", { data: responses[id] });
+			("saveAdelaideMessage", { data: responses[id] }); // Save Adelaide Paradigm Engine Message into the database by calling the IPC Call Function
+			("CheckAsyncMessageQueue"); // Multiple-User submission support
 			console.log(prefixConsoleLogStreamCapture, "current ID of Output", id);
 
 			form.setAttribute("class", isRunningModel ? "running-model" : "");
@@ -680,14 +682,14 @@ document.querySelectorAll("#feed-placeholder-alpaca button.card").forEach((e) =>
 
 let username;
 let assistantName;
-ipcRenderer.send("username") //send request of that specific data from all process that is running
-ipcRenderer.send("assistantName") //send request
+("username") //send request of that specific data from all process that is running
+("assistantName") //send request
 
-ipcRenderer.on("username", (_event, { data }) => {
+("username", (_event, { data }) => {
 	username = data;
 	console.log("The username is: ", username);
 });
-ipcRenderer.on("assistantName", (_event, { data }) => {
+("assistantName", (_event, { data }) => {
 	assistantName = data;
 	console.log("I am :", assistantName);
 });
@@ -717,32 +719,32 @@ const BackBrainResultQueueText = document.querySelector("#BackBrainFinished .tex
 const BackBrainResultQueueBar = document.querySelector("#BackBrainFinished .bar-inner");
 
 var cpuCount, threadUtilized, totalmem, cpuPercent, freemem;
-ipcRenderer.send("cpuCount");
-ipcRenderer.send("threadUtilized");
-ipcRenderer.send("totalmem");
+("cpuCount");
+("threadUtilized");
+("totalmem");
 
-ipcRenderer.on("cpuCount", (_event, { data }) => {
+("cpuCount", (_event, { data }) => {
 	cpuCount = data;
 });
-ipcRenderer.on("threadUtilized", (_event, { data }) => {
+("threadUtilized", (_event, { data }) => {
 	threadUtilized = data;
 });
-ipcRenderer.on("totalmem", (_event, { data }) => {
+("totalmem", (_event, { data }) => {
 	totalmem = Math.round(data / 102.4) / 10;
 });
 //Render Alloc buffet Graphics Processing Allocator Manager
 
 // This basically set and send the data into ipcRenderer cpuUsage which manipulate the "green bar", maybe we can learn from this to create a progress bar 
 function engineStatsFetchReq(){
-	ipcRenderer.send("cpuUsage");
-	ipcRenderer.send("freemem");
-	ipcRenderer.send("hardwarestressload");
-	ipcRenderer.send("emotioncurrentDebugInterfaceFetch");
-	ipcRenderer.send("UMACheckUsage");
-	ipcRenderer.send("BackBrainQueueCheck");
-	ipcRenderer.send("BackBrainQueueResultCheck");
-	ipcRenderer.send("timingDegradationCheckFactor");
-	ipcRenderer.send("timingDegradationCheck");
+	("cpuUsage");
+	("freemem");
+	("hardwarestressload");
+	("emotioncurrentDebugInterfaceFetch");
+	("UMACheckUsage");
+	("BackBrainQueueCheck");
+	("BackBrainQueueResultCheck");
+	("timingDegradationCheckFactor");
+	("timingDegradationCheck");
 }
 
 engineStatsFetchReq
@@ -759,8 +761,8 @@ let dynamicTips = document.querySelector("#dynamicTipsUIPart .info-bottom-changa
 let dynamicTipsBar = document.querySelector("#dynamicTipsUIPart .loading-bar");
 
 function requestInternalThoughtStat(){
-	ipcRenderer.send("internalThoughtProgressGUI");
-	ipcRenderer.send("internalThoughtProgressTextGUI");
+	("internalThoughtProgressGUI");
+	("internalThoughtProgressTextGUI");
 }
 
 requestInternalThoughtStat();
@@ -771,29 +773,29 @@ setInterval(async () => {
 
 
 
-ipcRenderer.send("SystemBackplateHotplugCheck");
+("SystemBackplateHotplugCheck");
 setInterval(async () => {
-	ipcRenderer.send("SystemBackplateHotplugCheck");
+	("SystemBackplateHotplugCheck");
 }, generateRandomNumber(6000,10000));
 
 
 let dynamiTipsProgress="";
-ipcRenderer.on("internalTEProgressText", (_event, { data }) => {
+("internalTEProgressText", (_event, { data }) => {
 	dynamiTipsProgress=data;
 });
 
 
-ipcRenderer.on("timingDegradationFactorReciever_renderer", (_event, { data }) => {
+("timingDegradationFactorReciever_renderer", (_event, { data }) => {
 	console.debug("Factor Degradation GUI", data);
 });
 
-ipcRenderer.on("timingDegradationReciever_renderer", (_event, { data }) => {
+("timingDegradationReciever_renderer", (_event, { data }) => {
 	console.debug("Timing Degradation GUI (ms)", data);
 });
 
 
 
-ipcRenderer.on("systemBackPlateInfoView", (_event, { data }) => {
+("systemBackPlateInfoView", (_event, { data }) => {
 	SystemBackplateInfoText.style.opacity = 0;
 	SystemBackplateInfoText.style.transition = 'opacity 0.5s ease-in-out';
 	SystemBackplateInfoText.style.textAlign = 'left';
@@ -803,7 +805,7 @@ ipcRenderer.on("systemBackPlateInfoView", (_event, { data }) => {
 	}, 1000);
 });
 
-ipcRenderer.on("emotionDebugInterfaceStatistics", (_event, {data}) => {
+("emotionDebugInterfaceStatistics", (_event, {data}) => {
 	emotionindicatorText.style.opacity = 0;
 	emotionindicatorText.style.transition = 'opacity 0.5s ease-in-out';
 	// later on the bar is going to be color spectrum representing the emotion
@@ -813,7 +815,7 @@ ipcRenderer.on("emotionDebugInterfaceStatistics", (_event, {data}) => {
 	}, 1000);
 });
 
-ipcRenderer.on("BackBrainQueueCheck_render", (_event, {data}) => {
+("BackBrainQueueCheck_render", (_event, {data}) => {
 	BackBrainQueueText.style.opacity = 0;
 	BackBrainQueueText.style.transition = 'opacity 0.5s ease-in-out';
 	BackBrainQueueBar.style.transition = 'transform 0.5s ease-in-out';
@@ -826,7 +828,7 @@ ipcRenderer.on("BackBrainQueueCheck_render", (_event, {data}) => {
 	}, 1000);
 });
 
-ipcRenderer.on("BackBrainQueueResultCheck_render", (_event, {data}) => {
+("BackBrainQueueResultCheck_render", (_event, {data}) => {
 	BackBrainResultQueueText.style.opacity = 0;
 	BackBrainResultQueueText.style.transition = 'opacity 0.5s ease-in-out';
 	BackBrainResultQueueBar.style.transition = 'transform 0.5s ease-in-out';
@@ -839,7 +841,7 @@ ipcRenderer.on("BackBrainQueueResultCheck_render", (_event, {data}) => {
 	}, 1000);
 });
 
-ipcRenderer.on("internalTEProgress", (_event, { data }) => {
+("internalTEProgress", (_event, { data }) => {
 	if (data == 0){
 		dynamicTips.innerText = "Random Tips: Shift + Enter for multiple lines";
 		LLMChildEngineIndicatorText.innerText = "💤 LLMChild not invoked";
@@ -875,7 +877,7 @@ ipcRenderer.on("internalTEProgress", (_event, { data }) => {
 });
 
 
-ipcRenderer.on("cpuUsage", (_event, { data }) => {
+("cpuUsage", (_event, { data }) => {
 	cpuPercent = Math.round(data * 100);
 	cpuText.style.opacity = 0;
 	//cpuText.innerText = `🧠 ${cpuPercent}%, ${threadUtilized}/${cpuCount} threads`;
@@ -889,7 +891,7 @@ ipcRenderer.on("cpuUsage", (_event, { data }) => {
 		cpuText.style.opacity = 1;
 	}, 1000); // Adjust the delay as needed to match the transition duration
 });
-ipcRenderer.on("freemem", (_event, { data }) => {
+("freemem", (_event, { data }) => {
 	freemem = data;
 	ramText.style.opacity = 0;
 	ramText.style.transition = 'opacity 1.5s ease-in-out';
@@ -904,7 +906,7 @@ ipcRenderer.on("freemem", (_event, { data }) => {
 	}, 1000); // Adjust the delay as needed to match the transition duration
 });
 
-ipcRenderer.on("UMAAllocSizeStatisticsGB", (_event, { data }) => {
+("UMAAllocSizeStatisticsGB", (_event, { data }) => {
 	const UMAallocGB = data;
 	UMALoadText.style.opacity = 0;
 	UMALoadText.style.transition = 'opacity 1.5s ease-in-out';
@@ -918,7 +920,7 @@ ipcRenderer.on("UMAAllocSizeStatisticsGB", (_event, { data }) => {
 	}, 1000); // Adjust the delay as needed to match the transition duration
 });
 
-ipcRenderer.on("hardwareStressLoad", (_event, { data }) => {
+("hardwareStressLoad", (_event, { data }) => {
 	stressPercent = data;
 	HardwareStressLoadText.style.opacity = 0;
 	HardwareStressLoadText.style.transition = 'opacity 1.5s ease-in-out';
@@ -945,8 +947,8 @@ document.getElementById("clear").addEventListener("click", () => {
 document.getElementById("interaction-session-reset").addEventListener("click", () => {
 	stopButton.click();
 	stopButton.removeAttribute("disabled");
-	ipcRenderer.send("restart");
-	ipcRenderer.send("resetInteractionHistoryCTX");
+	("restart");
+	("resetInteractionHistoryCTX");
 	document.querySelectorAll("#messages li").forEach((element) => {
 		element.style.opacity = 1;
 		element.style.transition = 'opacity 1s ease-in-out';
@@ -966,76 +968,46 @@ document.getElementById("interaction-session-reset").addEventListener("click", (
 // since the program now come with predefined tuned model this won't be required and if its implemented it will make the program runs in buggy state or chaos like the button won't be able clicked without error and etc
 /*
 document.getElementById("change-model").addEventListener("click", () => {
-	ipcRenderer.send("getCurrentModel");
+	("getCurrentModel");
 	document.querySelector("#path-dialog-bg > div > div.dialog-button > button.secondary").style.display = "";
 	document.querySelector("#path-dialog-bg > div > div.dialog-title > h3").innerText = "Change model path";
 	document.getElementById("path-dialog-bg").classList.remove("hidden");
 });
 */
+async function fetchParams() {
+    try {
+        const response = await fetch('/api/params');
+        const data = await response.json();
+        updateUIWithParams(data); // Call a function to update the UI
+    } catch (error) {
+        console.error('Error fetching parameters:', error);
+    }
+}
 
-ipcRenderer.send("getParams");
+// Call fetchParams when needed
 document.getElementById("settings").addEventListener("click", () => {
-	document.getElementById("settings-dialog-bg").classList.remove("hidden");
-	ipcRenderer.send("getParams");
+    document.getElementById("settings-dialog-bg").classList.remove("hidden");
+    fetchParams();
 });
 
-ipcRenderer.send("getParams");
 document.getElementById("aboutSection").addEventListener("click", () => {
-	document.getElementById("info-dialog-bg").classList.remove("hidden");
-	ipcRenderer.send("getParams");
+    document.getElementById("info-dialog-bg").classList.remove("hidden");
+    fetchParams();
 });
 
-ipcRenderer.send("getParams");
 document.getElementById("interactionHistorySession").addEventListener("click", () => {
-	document.getElementById("interactionHistory-dialog-bg").classList.remove("hidden");
-	ipcRenderer.send("getParams");
+    document.getElementById("interactionHistory-dialog-bg").classList.remove("hidden");
+    fetchParams();
 });
 
-
-ipcRenderer.send("getParams");
 document.getElementById("autonomousHandlessInteraction").addEventListener("click", () => {
-	document.getElementById("AutonomousHandlessAssistantSwitch-dialog-bg").classList.remove("hidden");
-	ipcRenderer.send("getParams");
-});
-
-ipcRenderer.on("params", (_event, data) => {
-	// don't forget to scroll down to the bottom of index.js to update the value too
-	//document.getElementById("LLMBackendMode").value = data.llmBackendMode; // since the program now come with predefined tuned model this won't be required and if its implemented it will make the program runs in buggy state or chaos like the button won't be able clicked without error and etc, and selection are implemented on dictionary on index.js in Engine section of the Data
-	document.getElementById("repeat_last_n").value = data.repeat_last_n;
-	document.getElementById("repeat_penalty").value = data.repeat_penalty;
-	document.getElementById("top_k").value = data.top_k;
-	document.getElementById("top_p").value = data.top_p;
-	document.getElementById("temp").value = data.temp;
-	document.getElementById("seed").value = data.seed;
-	document.getElementById("QoSTimeoutLLMChildGlobal").value = data.qostimeoutllmchildglobal;
-	document.getElementById("QoSTimeoutLLMChildSubCategory").value = data.qostimeoutllmchildsubcategory;
-	document.getElementById("QoSTimeoutLLMChildBackBrainGlobalQueueMax").value = data.qostimeoutllmchildbackbrainglobalqueuemax;
-	document.getElementById("QoSTimeoutSwitch").checked = data.qostimeoutswitch;
-	document.getElementById("BackbrainQueue").checked = data.backbrainqueue;
-	document.getElementById("web-access").checked = data.webAccess;
-	document.getElementById("local-file-access").checked = data.localAccess;
-	document.getElementById("LLMChildDecision").checked = data.llmdecisionMode;
-	document.getElementById("longchainthought").checked = data.extensiveThought;
-	document.getElementById("saverestoreinteraction").checked = data.SaveandRestoreInteraction;
-	document.getElementById("historyChatCtx").checked = data.hisChatCTX;
-	document.getElementById("foreveretchedmemory").checked = data.foreverEtchedMemory;
-	document.getElementById("throwInitialGarbageResponse").checked = data.throwInitResponse;
-	document.getElementById("classicmode").checked = data.classicMode;
-	document.getElementById("attemptaccelerate").checked = data.AttemptAccelerate;
-	document.getElementById("hardwarelayeroffloading").value = data.hardwareLayerOffloading;
-	document.getElementById("sideloadexperienceuma").checked = data.sideloadExperienceUMA;
-	document.getElementById("emotionalllmchildengine").checked = data.emotionalLLMChildengine;
-	document.getElementById("profilepictureemotion").checked = data.profilePictureEmotion;
-	document.getElementById("longchainthought-neverfeelenough").checked = data.longChainThoughtNeverFeelenough;
-	document.getElementById("AutomateLoopback").checked = data.automateLoopback;
-	document.getElementById("openaiapiserverhost").checked = data.openAPIServer;
-	document.getElementById("ragprepromptprocesscontexting").checked = data.ragPrePromptProcessContexting;
-	document.getElementById("selfreintegrate").checked = data.selfReintegrate;
+    document.getElementById("AutonomousHandlessAssistantSwitch-dialog-bg").classList.remove("hidden");
+    fetchParams();
 });
 
 
 document.querySelector("#settings-dialog-bg > div > div.dialog-button > button.primary").addEventListener("click", () => {
-	ipcRenderer.send("storeParams", {
+	("storeParams", {
 		params: {
 			repeat_last_n: document.getElementById("repeat_last_n").value || document.getElementById("repeat_last_n").placeholder,
 			repeat_penalty: document.getElementById("repeat_penalty").value || document.getElementById("repeat_penalty").placeholder,
@@ -1106,112 +1078,112 @@ document.querySelector("#AutonomousHandlessAssistantSwitch-dialog-bg > div > div
 document.getElementById("BackbrainQueue").addEventListener("change", () => {
   // Sends a message to the main process indicating whether the "BackbrainQueue"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("backbrainqueue", document.getElementById("BackbrainQueue").checked);
+    ("backbrainqueue", document.getElementById("BackbrainQueue").checked);
 });
 
 // This event listener listens for changes in the "AutomateLoopback" checkbox.
 document.getElementById("AutomateLoopback").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "AutomateLoopback"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("automateLoopback", document.getElementById("AutomateLoopback").checked);
+    ("automateLoopback", document.getElementById("AutomateLoopback").checked);
 });
 
 // This event listener listens for changes in the "QoSTimeoutSwitch" checkbox.
 document.getElementById("QoSTimeoutSwitch").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "QoSTimeoutSwitch"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("qostimeoutswitch", document.getElementById("QoSTimeoutSwitch").checked);
+    ("qostimeoutswitch", document.getElementById("QoSTimeoutSwitch").checked);
 });
 
 // This event listener listens for changes in the "web-access" checkbox.
 document.getElementById("web-access").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "web-access"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("webAccess", document.getElementById("web-access").checked);
+    ("webAccess", document.getElementById("web-access").checked);
 });
 
 // This event listener listens for changes in the "ragprepromptprocesscontexting" checkbox.
 document.getElementById("ragprepromptprocesscontexting").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "ragprepromptprocesscontexting"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("webAccess", document.getElementById("ragprepromptprocesscontexting").checked);
+    ("webAccess", document.getElementById("ragprepromptprocesscontexting").checked);
 });
 
 // This event listener listens for changes in the "local-file-access" checkbox.
 document.getElementById("local-file-access").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "local-file-access"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("localAccess", document.getElementById("local-file-access").checked);
+    ("localAccess", document.getElementById("local-file-access").checked);
 });
 
 // This event listener listens for changes in the "LLMChildDecision" checkbox.
 document.getElementById("LLMChildDecision").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "LLMChildDecision"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("llmdecisionMode", document.getElementById("LLMChildDecision").checked);
+    ("llmdecisionMode", document.getElementById("LLMChildDecision").checked);
 });
 
 // This event listener listens for changes in the "longchainthought" checkbox.
 document.getElementById("longchainthought").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "longchainthought"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("extensiveThought", document.getElementById("longchainthought").checked);
+    ("extensiveThought", document.getElementById("longchainthought").checked);
 });
 
 // This event listener listens for changes in the "saverestoreinteraction" checkbox.
 document.getElementById("saverestoreinteraction").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "saverestoreinteraction"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("SaveandRestoreInteraction", document.getElementById("saverestoreinteraction").checked);
+    ("SaveandRestoreInteraction", document.getElementById("saverestoreinteraction").checked);
 });
 
 // This event listener listens for changes in the "historyChatCtx" checkbox.
 document.getElementById("historyChatCtx").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "historyChatCtx"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("hisChatCTX", document.getElementById("historyChatCtx").checked);
+    ("hisChatCTX", document.getElementById("historyChatCtx").checked);
 });
 
 // This event listener listens for changes in the "attemptaccelerate" checkbox.
 document.getElementById("attemptaccelerate").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "attemptaccelerate"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("AttemptAccelerate", document.getElementById("attemptaccelerate").checked);
+    ("AttemptAccelerate", document.getElementById("attemptaccelerate").checked);
 });
 
 // This event listener listens for changes in the "emotionalllmchildengine" checkbox.
 document.getElementById("emotionalllmchildengine").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "emotionalllmchildengine"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("emotionalLLMChildengine", document.getElementById("emotionalllmchildengine").checked);
+    ("emotionalLLMChildengine", document.getElementById("emotionalllmchildengine").checked);
 });
 
 // This event listener listens for changes in the "profilepictureemotion" checkbox.
 document.getElementById("profilepictureemotion").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "profilepictureemotion"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("profilePictureEmotion", document.getElementById("profilepictureemotion").checked);
+    ("profilePictureEmotion", document.getElementById("profilepictureemotion").checked);
 });
 
 // This event listener listens for changes in the "longchainthought-neverfeelenough" checkbox.
 document.getElementById("longchainthought-neverfeelenough").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "longchainthought-neverfeelenough"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("longChainThoughtNeverFeelenough", document.getElementById("longchainthought-neverfeelenough").checked);
+    ("longChainThoughtNeverFeelenough", document.getElementById("longchainthought-neverfeelenough").checked);
 });
 
 // This event listener listens for changes in the "sideloadexperienceuma" checkbox.
 document.getElementById("sideloadexperienceuma").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "sideloadexperienceuma"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("sideloadExperienceUMA", document.getElementById("sideloadexperienceuma").checked);
+    ("sideloadExperienceUMA", document.getElementById("sideloadexperienceuma").checked);
 });
 
 
 document.getElementById("selfreintegrate").addEventListener("change", () => {
     // Sends a message to the main process indicating whether the "selfreintegrate"
     // checkbox is checked or not. This allows the main process to know how to proceed.
-    ipcRenderer.send("selfReintegrate", document.getElementById("selfreintegrate").checked);
+    ("selfReintegrate", document.getElementById("selfreintegrate").checked);
 });
 
 

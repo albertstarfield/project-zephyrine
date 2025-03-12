@@ -556,6 +556,66 @@ class DatabaseWriter:
 
 
 class OutputFormatter:
+    def format_system_info(info):
+        header = f"{Fore.CYAN}Adelaide and Albert Engine Startup System Initialization{Style.RESET_ALL}"
+        table = []
+        
+        # CPU Section
+        cpu_section = [
+            ["CPU Architecture", info['CPU']['architecture']],
+            ["CPU Model", info['CPU']['name']],
+            ["Cores/Threads", f"{info['CPU']['cores']}/{info['CPU']['threads']}"]
+        ]
+        
+        # Memory Section
+        memory_section = [
+            ["Total Memory", info['Memory']['total']],
+            ["Available Memory", info['Memory']['available']],
+            ["ECC Support", info['Memory']['ecc']]
+        ]
+        
+        # GPU/VRAM Section
+        gpu_section = []
+        for gpu in info['GPU']:
+            gpu_section.extend([
+                ["GPU Model", gpu['name']],
+                ["VRAM", gpu['vram']],
+                ["VRAM Type", info['VRAM Type']]
+            ])
+        
+        # Storage Section
+        storage_section = [
+            ["Total Storage", info['Disk']['total']],
+            ["Available Storage", info['Disk']['available']],
+            ["Disk Read Speed", info['Disk']['read_speed']]
+        ]
+        
+        # Accelerator Section
+        accelerator_section = [
+            ["Accelerators", ', '.join(info['Accelerators'])]
+        ]
+        
+        # OS Section
+        os_section = [
+            ["Kernel Type", info['OS Kernel']]
+        ]
+        
+        # Combine all sections
+        full_table = (
+            cpu_section + [cls.separator()] +
+            memory_section + [cls.separator()] +
+            gpu_section + [cls.separator()] +
+            storage_section + [cls.separator()] +
+            accelerator_section + [cls.separator()] +
+            os_section
+        )
+        
+        return f"{header}\n{tabulate(full_table, headers=['Component', 'Specification'], tablefmt='psql')}"
+
+    @staticmethod
+    def separator():
+        return ["-"*20, "-"*20]
+
     @staticmethod
     def get_username():
         """Gets the username of the current user."""
@@ -1065,11 +1125,24 @@ class AIModelPreRuntimeManager:
 
     @staticmethod
     def prepare_stable_diffusion_model(repo_id: str, model_name: str, revision: str = None):
-        """Downloads the Stable Diffusion model (placeholder)."""
+        """Downloads ONLY .safetensors files for Stable Diffusion model."""
         source_dir = os.path.join("./Model", model_name)
-        AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
-        print("Stable Diffusion model downloaded. Conversion is not yet implemented.")
-        return source_dir
+        
+        # Modified download with .safetensors filtering
+        AIModelPreRuntimeManager.download_model(
+            repo_id,
+            source_dir,
+            revision=revision,
+            allowed_extensions=['.safetensors']  # New parameter
+        )
+        
+        # Verify .safetensors files exist
+        safetensors_files = glob.glob(os.path.join(source_dir, "*.safetensors"))
+        if not safetensors_files:
+            raise FileNotFoundError(f"No .safetensors files found in {source_dir}")
+        
+        print(f"Stable Diffusion model downloaded: {safetensors_files[0]}")
+        return safetensors_files[0]  # Return path to .safetensors file
 
     @staticmethod
     def build_llama_quantize():
@@ -1097,13 +1170,18 @@ class AIModelPreRuntimeManager:
             print("Error: cmake command not found")
 
     @staticmethod
-    def download_model(repo_id: str, local_dir: str, revision: str = None, **kwargs):
-        """Downloads a model from the Hugging Face Hub."""
+    def download_model(repo_id: str, local_dir: str, revision: str = None, 
+                      allowed_extensions: list = None, **kwargs):
+        """Downloads model files, optionally filtering by extensions."""
         os.makedirs(local_dir, exist_ok=True)
         api = HfApi()
         repo_files = api.list_repo_files(repo_id=repo_id, revision=revision)
-
+        
         for file in repo_files:
+            # Skip files that don't match allowed extensions
+            if allowed_extensions and not any(file.endswith(ext) for ext in allowed_extensions):
+                continue
+                
             try:
                 hf_hub_download(
                     repo_id=repo_id,
@@ -1176,63 +1254,112 @@ class AIModelPreRuntimeManager:
 
     @staticmethod
     def prepare_llm_model(repo_id: str, model_name: str, revision: str = None):
-        """Downloads, converts, and quantizes an LLM."""
+        """Downloads, converts, and quantizes an LLM with LLaVA-specific handling."""
         source_dir = os.path.join("./Model", model_name)
         target_dir = os.path.join("./Model/ModelCompiledRuntime")
+        
+        # Download original model
         AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
-        AIModelPreRuntimeManager.convert_to_gguf(source_dir, target_dir, model_name)
-
-        # LLaVA-specific post-processing (after llama.cpp is built)
-        if "llava" in model_name.lower():  # Check if it's a LLaVA model
-            print(f"Performing LLaVA-specific GGUF conversion for {model_name}...")
-            llama_cpp_path = os.path.join("./Library", "llama.cpp")
-            llava_examples_path = os.path.join(llama_cpp_path, "examples", "llava")
-            requirements_path = os.path.join(llava_examples_path, "requirements.txt")
-
-            # 1. Install requirements
-            try:
-                print("Installing LLaVA requirements...")
-                subprocess.run(["pip", "install", "-r", requirements_path], check=True)
-                print("LLaVA requirements installed successfully.")
-            except subprocess.CalledProcessError as e:
-                print(f"Error installing LLaVA requirements: {e}")
-                return  # Or raise, depending on how critical this is
-
-            # 2. Prepare CLIP model
-            vit_dir = os.path.join(source_dir, "vit")
-            os.makedirs(vit_dir, exist_ok=True)
-            try:
-                print("Preparing CLIP model for GGUF conversion...")
-                shutil.copy(os.path.join(source_dir, "llava.clip"), os.path.join(vit_dir, "pytorch_model.bin"))
-                shutil.copy(os.path.join(source_dir, "llava.projector"),
-                            os.path.join(vit_dir, "llava.projector"))  # Correct file name
-                config_vit_url = "https://huggingface.co/cmp-nct/llava-1.6-gguf/raw/main/config_vit.json"
-                subprocess.run(["curl", "-s", "-q", config_vit_url, "-o", os.path.join(vit_dir, "config.json")],
-                               check=True)
-                print("CLIP model prepared successfully.")
-            except (FileNotFoundError, subprocess.CalledProcessError) as e:
-                print(f"Error preparing CLIP model: {e}")
-                return
-
-            # 3. Convert image encoder
-            convert_script = os.path.join(llava_examples_path, "convert_image_encoder_to_gguf.py")
-            convert_command = [
-                "python3",
-                convert_script,
-                "-m", vit_dir,
-                "--llava-projector", os.path.join(vit_dir, "llava.projector"),
-                "--output-dir", vit_dir,
-                "--clip-model-is-vision"
-            ]
-            try:
-                print("Converting image encoder to GGUF...")
-                subprocess.run(convert_command, check=True)
-                print("Image encoder converted to GGUF successfully.")
-            except subprocess.CalledProcessError as e:
-                print(f"Error converting image encoder: {e}")
-                return
-
+        
+        # Special handling for LLaVA models
+        if "llava" in model_name.lower():
+            return AIModelPreRuntimeManager.convert_llava_model(
+                source_dir, 
+                target_dir,  # Now properly passed
+                model_name
+            )
+        else:
+            # Standard conversion for non-LLaVA models
+            AIModelPreRuntimeManager.convert_to_gguf(source_dir, target_dir, model_name)
             return os.path.join(target_dir, f"{model_name}.gguf")
+
+    @staticmethod
+    def convert_llava_model(source_dir: str, target_dir: str, model_name: str) -> str:
+        """
+        Converts an LLaVA model into GGUF format with separate main model and projector components.
+        Stores FP16 models in Modelfp16PreRuntime and prepares them for JIT quantization.
+        """
+        # Define directory paths
+        target_dir_fp16 = "./Model/Modelfp16PreRuntime"
+        os.makedirs(target_dir_fp16, exist_ok=True)
+
+        llama_cpp_path = os.path.join("./Library", "llama.cpp")
+        llava_examples_path = os.path.join(llama_cpp_path, "examples", "llava")
+
+        # Step 1: Split LLaVA model into components using llava_surgery_v2.py
+        surgery_script = os.path.join(llava_examples_path, "llava_surgery_v2.py")
+        split_command = [
+            "python3", surgery_script,
+            "-C",  # Compatibility flag for newer models
+            "-m", source_dir
+        ]
+        try:
+            print("Splitting LLaVA model into components...")
+            subprocess.run(split_command, check=True)
+            print("LLaVA model split successfully.")
+        except subprocess.CalledProcessError as e:
+            print(f"Error splitting LLaVA model: {e}")
+            raise
+
+        # Step 2: Prepare CLIP model directory
+        vit_dir = os.path.join(source_dir, "vit")
+        os.makedirs(vit_dir, exist_ok=True)
+        try:
+            print("Preparing CLIP model for GGUF conversion...")
+            # Copy CLIP and projector files
+            shutil.copy(os.path.join(source_dir, "llava.clip"), 
+                        os.path.join(vit_dir, "pytorch_model.bin"))
+            shutil.copy(os.path.join(source_dir, "llava.projector"), 
+                        os.path.join(vit_dir, "llava.projector"))
+            
+            # Download CLIP config
+            config_url = "https://huggingface.co/cmp-nct/llava-1.6-gguf/raw/main/config_vit.json"
+            subprocess.run(["curl", "-s", "-q", config_url, 
+                            "-o", os.path.join(vit_dir, "config.json")], check=True)
+            print("CLIP model prepared successfully.")
+        except (FileNotFoundError, subprocess.CalledProcessError) as e:
+            print(f"Error preparing CLIP model: {e}")
+            raise
+
+        # Step 3: Convert main LLM to GGUF (FP16)
+        llm_dir = os.path.join(source_dir, "language_model")  # Adjust based on surgery output
+        convert_script = os.path.join(llama_cpp_path, "examples", "convert_legacy_llama.py")
+        main_fp16_path = os.path.join(target_dir_fp16, f"{model_name}-main.gguf")
+        main_command = [
+            "python3", convert_script,
+            llm_dir,
+            "--outfile", main_fp16_path,
+            "--outtype", "f16",
+            "--skip-unknown"  # Required for newer architectures
+        ]
+        try:
+            print("Converting main LLM to GGUF (FP16)...")
+            subprocess.run(main_command, check=True)
+            print(f"Main LLM converted to GGUF: {main_fp16_path}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error converting main LLM: {e}")
+            raise
+
+        # Step 4: Convert image encoder (projector) to GGUF (FP16)
+        projector_script = os.path.join(llava_examples_path, "convert_image_encoder_to_gguf.py")
+        projector_fp16_path = os.path.join(target_dir_fp16, f"{model_name}-mmproj.gguf")
+        projector_command = [
+            "python3", projector_script,
+            "-m", vit_dir,
+            "--llava-projector", os.path.join(vit_dir, "llava.projector"),
+            "--output-dir", target_dir_fp16,
+            "--clip-model-is-vision"
+        ]
+        try:
+            print("Converting vision projector to GGUF (FP16)...")
+            subprocess.run(projector_command, check=True)
+            print(f"Vision projector converted to GGUF: {projector_fp16_path}")
+        except subprocess.CalledProcessError as e:
+            print(f"Error converting vision projector: {e}")
+            raise
+
+        # Return path to FP16 main model (used for JIT quantization later)
+        return main_fp16_path
 
     @staticmethod
     def prepare_embedding_model(repo_id: str, model_name: str, revision: str = None):
@@ -1253,6 +1380,36 @@ class AIModelPreRuntimeManager:
         AIModelPreRuntimeManager.download_model(repo_id, source_dir, revision=revision)
         print("Stable Diffusion model downloaded. Conversion is not yet implemented.")
         return source_dir
+    
+    @staticmethod
+    def jit_quantize(model_path: str, quant_type: str = "Q4_K_M") -> str:
+        """Performs JIT quantization and returns path to quantized model"""
+        target_dir_runtime = "./Model/ModelCompiledRuntime"
+        base_name = os.path.basename(model_path).replace("-main.gguf", "").replace("-mmproj.gguf", "")
+        target_path = os.path.join(target_dir_runtime, f"{base_name}.gguf")
+        
+        if not os.path.exists(target_path):
+            quantize_tool = "./Library/llama.cpp/build/bin/llama-quantize"
+            subprocess.run([
+                quantize_tool,
+                model_path,
+                target_path,
+                quant_type
+            ], check=True)
+        
+        return target_path
+
+    # In model loading code
+    def load_quantized_model(self, model_name: str):
+        fp16_path = os.path.join("./Model/Modelfp16PreRuntime", f"{model_name}-main.gguf")
+        quant_type = self.determine_optimal_quantization()
+        quantized_path = self.jit_quantize(fp16_path, quant_type)
+        return Llama(model_path=quantized_path)
+
+    def determine_optimal_quantization(self) -> str:
+        """Determines best quantization based on hardware"""
+        # Add actual hardware detection logic here
+        return "Q4_K_M"  # Default quantization
 
 
 class AIRuntimeManager:
