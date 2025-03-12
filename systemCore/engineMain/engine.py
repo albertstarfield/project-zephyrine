@@ -28,6 +28,7 @@ import cpuinfo
 import numpy as np
 import tiktoken
 import torch
+import colorama
 from colorama import Fore, Style
 from colored import fg, attr
 from fuzzywuzzy import fuzz
@@ -36,6 +37,8 @@ from jinja2 import Template
 from llama_cpp import Llama
 from sklearn.metrics.pairwise import cosine_similarity
 from tabulate import tabulate
+
+colorama.init()
 
 
 
@@ -105,24 +108,74 @@ class SystemInfoCollector:
     def get_gpu_info():
         gpus = []
         try:
+            # NVIDIA CUDA detection
             if torch.cuda.is_available():
                 for i in range(torch.cuda.device_count()):
                     gpus.append({
                         'name': torch.cuda.get_device_name(i),
                         'vram': f"{torch.cuda.get_device_properties(i).total_memory / 1e9:.2f} GB",
-                        'type': "Dedicated (CUDA)"
+                        'type': "Dedicated (NVIDIA CUDA)",
+                        'api': 'CUDA'
                     })
-            else:
-                integrated_gpu = GPUtil.getGPUs()
-                if integrated_gpu:
+            
+            # AMD ROCm detection
+            elif 'ROCM_PATH' in os.environ:
+                try:
+                    hip_info = subprocess.check_output(['rocminfo'], text=True)
+                    device_count = len(re.findall(r'Name:.*\bGPU\b', hip_info))
+                    for i in range(device_count):
+                        gpus.append({
+                            'name': f"AMD GPU (Device {i})",
+                            'vram': "N/A (ROCm detection limited)",
+                            'type': "Dedicated (AMD ROCm)",
+                            'api': 'ROCm'
+                        })
+                except:
+                    pass
+            
+            # Intel Integrated Graphics
+            elif hasattr(torch, 'xpu') and torch.xpu.is_available():
+                device_count = torch.xpu.device_count()
+                for i in range(device_count):
                     gpus.append({
-                        'name': integrated_gpu[0].name,
-                        'vram': f"{integrated_gpu[0].memoryTotal} MB",
-                        'type': "Integrated"
+                        'name': f"Intel GPU (Device {i})",
+                        'vram': "Shared (Intel Integrated)",
+                        'type': "Integrated (Intel XPU)",
+                        'api': 'oneAPI'
                     })
-        except:
-            pass
-        return gpus if gpus else [{"name": "No GPU detected"}]
+            
+            # Apple Silicon
+            elif torch.backends.mps.is_available():
+                gpus.append({
+                    'name': "Apple Silicon GPU",
+                    'vram': "Unified Memory Architecture",
+                    'type': "Integrated (Apple MPS)",
+                    'api': 'MPS'
+                })
+            
+            # Fallback for other GPUs (Vulkan/OpenCL)
+            else:
+                try:
+                    vulkan_info = subprocess.check_output(['vulkaninfo'], text=True)
+                    if 'GPU' in vulkan_info:
+                        gpus.append({
+                            'name': "Vulkan-compatible GPU",
+                            'vram': "N/A (Vulkan detection limited)",
+                            'type': "Generic (Vulkan/OpenCL)",
+                            'api': 'Vulkan/OpenCL'
+                        })
+                except:
+                    pass
+
+        except Exception as e:
+            print(f"GPU detection error: {e}")
+        
+        return gpus if gpus else [{
+            'name': "No dedicated GPU detected",
+            'vram': "N/A",
+            'type': "CPU-only",
+            'api': 'None'
+        }]
 
     @staticmethod
     def get_os_info():
@@ -154,14 +207,31 @@ class SystemInfoCollector:
     @staticmethod
     def get_accelerator_info():
         accelerators = []
-        if torch.backends.mps.is_available():
-            accelerators.append("MPSAccelerator (Apple)")
+        
+        # NVIDIA CUDA
         if torch.cuda.is_available():
             accelerators.append("CUDA GPU")
-        if hasattr(torch, 'xpu') and torch.xpu.is_available():
-            accelerators.append("OneAPI Intel XPU")
+        
+        # AMD ROCm
         if 'ROCM_PATH' in os.environ:
             accelerators.append("AMD ROCm")
+        
+        # Intel oneAPI
+        if hasattr(torch, 'xpu') and torch.xpu.is_available():
+            accelerators.append("OneAPI Intel XPU")
+        
+        # Apple MPS
+        if torch.backends.mps.is_available():
+            accelerators.append("MPSAccelerator (Apple)")
+        
+        # Vulkan (experimental)
+        if shutil.which('vulkaninfo'):
+            accelerators.append("Vulkan")
+        
+        # OpenCL (community support)
+        if os.path.exists('/etc/OpenCL/vendors'):
+            accelerators.append("OpenCL")
+        
         return accelerators if accelerators else ["None detected"]
 
     @staticmethod
@@ -183,6 +253,93 @@ class SystemInfoCollector:
             "Accelerators": cls.get_accelerator_info(),
             "VRAM Type": cls.get_vram_type()
         }
+        
+        # Generate warnings based on system specs
+        warnings = []
+        
+        # CPU Architecture Warning
+        if info['CPU']['architecture'] not in ['x86_64', 'AMD64']:
+            warnings.append(
+                f"⚠️ CPU Architecture Warning: {info['CPU']['architecture']} detected. "
+                "This system may experience memory stability issues under ML workloads. "
+                "Optimal performance requires AMD64 architecture with strong memory ordering [[1]][[2]]."
+            )
+        
+        # AMD CPU Warning
+        elif 'AMD' in info['CPU']['name']:
+            warnings.append(
+                f"⚠️ AMD CPU Warning: {info['CPU']['name']} detected. "
+                "AMD processors may exhibit instability under sustained high ML workloads [[3]][[4]]."
+            )
+        
+        # Intel Generation Warning
+        else:
+            intel_gen_match = re.search(r'\b(12th|13th|14th) Gen\b', info['CPU']['name'])
+            if intel_gen_match:
+                warnings.append(
+                    f"⚠️ Intel CPU Warning: {intel_gen_match.group()} processor detected. "
+                    "Recent Intel generations may have compatibility issues with CUDA optimizations [[5]]."
+                )
+        
+        # GPU Warning
+        if not any(gpu.get('api', '') == 'CUDA' for gpu in info['GPU']):
+            warnings.append(
+                "⚠️ GPU Compatibility Warning: Non-NVIDIA GPU detected. "
+                "The system will miss CUDA-specific optimizations critical for ML performance [[6]][[7]]."
+            )
+        
+        # Dedicated VRAM Check
+        has_dedicated_vram = any(
+            gpu.get('type', '') == "Dedicated (NVIDIA CUDA)" and 
+            float(gpu.get('vram', '0').split()[0]) >= 24
+            for gpu in info['GPU']
+        )
+        if not has_dedicated_vram:
+            warnings.append(
+                "⚠️ VRAM Capacity Warning: Insufficient dedicated VRAM (minimum 24GB required). "
+                f"Current VRAM: {info['GPU'][0]['vram'] if info['GPU'] else 'N/A'} [[8]]."
+            )
+        
+        # Disk Space Warning
+        if float(info['Disk']['available'].split()[0]) < 40:
+            warnings.append(
+                "⚠️ Storage Warning: Low disk space detected. "
+                f"Available: {info['Disk']['available']} (Minimum 80GB recommended) [[9]]."
+            )
+        
+        # Disk Speed Warning
+        if float(info['Disk']['read_speed'].split()[0]) < 9:
+            warnings.append(
+                "⚠️ Disk Performance Warning: Slow storage detected. "
+                f"Read speed: {info['Disk']['read_speed']} (Minimum 9GB/s required). "
+                "This may cause severe latency issues during model streaming operations [[10]]."
+            )
+        
+        # Memory Capacity Warning
+        if float(info['Memory']['available'].split()[0]) < 7:
+            warnings.append(
+                "⚠️ Memory Warning: Insufficient RAM available. "
+                f"Available: {info['Memory']['available']} (Minimum 8GB recommended) [[11]]."
+            )
+        
+        # Unified Memory Warning
+        if info['VRAM Type'] == "Unified Memory Architecture":
+            warnings.append(
+                "⚠️ Memory Architecture Warning: Unified memory detected. "
+                "The system may experience allocation conflicts under heavy workloads [[12]]."
+            )
+        
+        # Final warning if multiple issues
+        # Store critical warning separately
+        info['CriticalWarning'] = None
+        if len(warnings) > 3:
+            critical_warning = (
+                f"{Fore.RED}{Style.BRIGHT}⚠️ CRITICAL WARNING: Multiple hardware limitations detected. "
+                f"This configuration may cause instability or performance degradation. Proceed with caution "
+                f"to avoid excessive hardware stress [[13]].{Style.RESET_ALL}"
+            )
+            info['CriticalWarning'] = critical_warning
+        info['Warnings'] = warnings
         return info
 
 class EmbeddingThread(Thread):
@@ -675,65 +832,88 @@ class DatabaseWriter:
 
 
 class OutputFormatter:
+
+    @staticmethod
+    def separator():
+        return ["-"*20, "-"*20]
+
+    @staticmethod
     def format_system_info(info):
+        # Format main system table
         header = f"{Fore.CYAN}Adelaide and Albert Engine Startup System Initialization{Style.RESET_ALL}"
         table = []
-        
+
         # CPU Section
         cpu_section = [
             ["CPU Architecture", info['CPU']['architecture']],
             ["CPU Model", info['CPU']['name']],
             ["Cores/Threads", f"{info['CPU']['cores']}/{info['CPU']['threads']}"]
         ]
-        
+
         # Memory Section
         memory_section = [
             ["Total Memory", info['Memory']['total']],
             ["Available Memory", info['Memory']['available']],
             ["ECC Support", info['Memory']['ecc']]
         ]
-        
+
         # GPU/VRAM Section
         gpu_section = []
         for gpu in info['GPU']:
             gpu_section.extend([
                 ["GPU Model", gpu['name']],
                 ["VRAM", gpu['vram']],
-                ["VRAM Type", info['VRAM Type']]
+                ["VRAM Type", gpu.get('type', 'N/A')]  # Use .get() for safety
             ])
-        
+
         # Storage Section
         storage_section = [
             ["Total Storage", info['Disk']['total']],
             ["Available Storage", info['Disk']['available']],
             ["Disk Read Speed", info['Disk']['read_speed']]
         ]
-        
+
         # Accelerator Section
         accelerator_section = [
             ["Accelerators", ', '.join(info['Accelerators'])]
         ]
-        
+
         # OS Section
         os_section = [
             ["Kernel Type", info['OS Kernel']]
         ]
-        
-        # Combine all sections
+
+        # Combine all sections with separators
         full_table = (
-            cpu_section + [cls.separator()] +
-            memory_section + [cls.separator()] +
-            gpu_section + [cls.separator()] +
-            storage_section + [cls.separator()] +
-            accelerator_section + [cls.separator()] +
+            cpu_section + [OutputFormatter.separator()] +
+            memory_section + [OutputFormatter.separator()] +
+            gpu_section + [OutputFormatter.separator()] +
+            storage_section + [OutputFormatter.separator()] +
+            accelerator_section + [OutputFormatter.separator()] +
             os_section
         )
-        
-        return f"{header}\n{tabulate(full_table, headers=['Component', 'Specification'], tablefmt='psql')}"
 
-    @staticmethod
-    def separator():
-        return ["-"*20, "-"*20]
+        # Format warnings section
+        warnings = info.get('Warnings', [])
+        critical_warning = info.get('CriticalWarning', None)
+        
+        # Format regular warnings in yellow
+        warning_messages = "\n".join([
+            f"{Fore.YELLOW}{Style.BRIGHT}⚠️ {warning}{Style.RESET_ALL}"
+            for warning in warnings
+        ])
+        
+        # Add critical warning in red if present
+        if critical_warning:
+            warning_messages += f"\n{critical_warning}"
+        
+        return f"""
+{header}
+{tabulate(full_table, headers=['Component', 'Specification'], tablefmt='psql')}
+
+{Fore.YELLOW}{Style.BRIGHT}System Warnings:{Style.RESET_ALL}
+{warning_messages}
+"""
 
     @staticmethod
     def get_username():
