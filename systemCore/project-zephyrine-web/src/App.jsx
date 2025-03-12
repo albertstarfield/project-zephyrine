@@ -173,13 +173,6 @@ function App() {
         <SideBar systemInfo={systemInfo} />
 
         <div id="feed" className={showPlaceholder ? "welcome-screen" : ""}>
-          <div className="entity-container">
-            <img
-              src="/img/AdelaideEntity.png"
-              alt="Adelaide Entity"
-              className="adelaide-entity"
-            />
-          </div>
           <ChatFeed
             messages={messages}
             showPlaceholder={showPlaceholder}
