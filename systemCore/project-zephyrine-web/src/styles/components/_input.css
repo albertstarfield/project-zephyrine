@@ -1,0 +1,142 @@
+/* styles/components/_input.css */
+
+#form {
+  position: fixed;
+  bottom: 0;
+  left: 0; /* Align with main content area */
+  right: 0;
+  width: 100%; /* Take full width */
+  display: flex;
+  flex-direction: column;
+  align-items: center; /* THIS DOES THE HORIZONTAL CENTERING */
+  background: linear-gradient(180deg, transparent, var(--background-mid) 30%);
+  margin: 0;
+  pointer-events: none; /* Only children should be interactive */
+  padding: 40px 0 0; /* Space above the input container */
+  z-index: 50; /* Above content, below modals */
+}
+
+.input-container {
+  /* REMOVED margin: 0 auto; rely on parent flexbox */
+  margin: 0; /* Explicitly remove auto margins */
+  padding: 0 1rem 1rem; /* Default padding - keep left/right for internal spacing */
+  max-width: 48rem; /* Default max width */
+  width: 100%; /* Allow it to take available width *up to* max-width */
+  /* position: sticky; // Sticky might cause issues with fixed parent, reconsider */
+  /* bottom: 20px; // Handled by #form positioning */
+  background-color: transparent;
+  display: flex;
+  gap: 0.5rem;
+  align-items: flex-end; /* Align textarea and button bottom */
+  z-index: 51; /* Above form background */
+  pointer-events: none; /* Container itself isn't interactive */
+  box-sizing: border-box; /* Include padding in width calculation */
+}
+
+.input-field {
+  /* ... (styles for the inner field remain the same) ... */
+  display: flex;
+  align-items: flex-end;
+  padding: 0.4rem;
+  box-sizing: border-box;
+  background: var(--surface);
+  backdrop-filter: blur(8px);
+  box-shadow: 0 0 var(--shadow-disperse, 6px)
+    var(--shadow-color, rgba(0, 0, 0, 0.1));
+  border-radius: 1.275rem;
+  border: solid 1px var(--hover);
+  pointer-events: all;
+  margin: 0;
+  width: 100%;
+  flex-grow: 1;
+}
+
+#input {
+  /* ... (styles for textarea remain the same) ... */
+  padding: 0.5rem 0.75rem;
+  outline: none;
+  border: none;
+  flex-grow: 1;
+  box-sizing: border-box;
+  background: none;
+  max-height: 150px;
+  overflow: auto;
+  resize: none;
+  line-height: 1.5;
+  color: var(--primary-text);
+  font-size: 16px;
+  font-family: inherit;
+  white-space: pre-wrap;
+  word-break: break-word;
+}
+
+#input:focus {
+  outline: none;
+}
+
+/* Placeholder specific styling */
+.input-placeholder {
+  /* ... (remains the same) ... */
+}
+
+/* --- Responsive adjustments for input area --- */
+
+/* Adjust max-width and padding as needed, REMOVE margin-left and width: calc() */
+
+@media (min-width: 1440px) {
+  .input-container {
+    max-width: 64rem; /* Larger max-width on very wide screens */
+    padding: 0 1rem 1rem; /* Consistent padding */
+  }
+}
+
+@media (min-width: 1024px) {
+  .input-container {
+    /* max-width remains 48rem or adjust if needed */
+    padding: 0 1rem 1rem; /* Adjust padding */
+    /* REMOVED width: calc(...) */
+    /* REMOVED margin-left: 4rem; */
+  }
+}
+
+@media (max-width: 1023px) and (min-width: 768px) {
+  .input-container {
+    max-width: 42rem; /* Slightly smaller max-width maybe */
+    padding: 0 0.75rem 0.75rem; /* Adjust padding */
+    /* REMOVED width: calc(...) */
+    /* REMOVED margin-left: 3.5rem; */
+  }
+}
+
+@media (max-width: 767px) {
+  .input-container {
+    max-width: 95%; /* Use percentage or smaller fixed value */
+    padding: 0 0.5rem 0.5rem; /* Adjust padding */
+    gap: 0.25rem;
+    /* REMOVED width: calc(...) */
+    /* REMOVED margin-left: 3rem; */
+  }
+  #input {
+    padding: 0.4rem 0.6rem;
+  }
+}
+
+/* No specific changes needed for max-width: 480px unless reducing further */
+/* @media (max-width: 480px) { ... } */
+
+/* Touch device specific styling */
+@media (hover: none) {
+  .input-field {
+    -webkit-tap-highlight-color: transparent;
+  }
+}
+
+/* High contrast mode */
+@media (prefers-contrast: high) {
+  .input-field {
+    border: 2px solid var(--primary-text);
+  }
+  .input-placeholder {
+    border: 2px solid var(--primary-text);
+  }
+}

@@ -1,0 +1,32 @@
+/* styles/base/_base.css */
+
+/* Add basic resets here if you don't have them elsewhere (e.g., normalize.css) */
+* {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+body {
+  /* Define base font-family, colors if not done via variables */
+  font-family: "Inter", sans-serif; /* Example base font */
+  background-color: var(--background); /* Assuming --background is defined */
+  color: var(--primary-text); /* Assuming --primary-text is defined */
+  -webkit-font-smoothing: antialiased;
+  -moz-osx-font-smoothing: grayscale;
+}
+
+/* Apply smooth scrolling preference */
+@media (prefers-reduced-motion: no-preference) {
+  html {
+    scroll-behavior: smooth;
+  }
+}
+
+/* High contrast adjustments for base elements if needed */
+@media (prefers-contrast: high) {
+  /* Example: Ensure links have sufficient contrast */
+  a {
+    /* Add high-contrast styles */
+  }
+}
