@@ -1,0 +1,27 @@
+/* styles/utils/_overlay.css */
+
+#overlay-info {
+  z-index: 99999; /* Keep high if for debugging */
+  width: 100%;
+  height: 4%; /* Only take up bottom part */
+  opacity: 0.6; /* Slightly more visible */
+  position: fixed;
+  pointer-events: none;
+  bottom: 0; /* Position at bottom */
+  left: 0;
+  background-color: rgba(0, 0, 0, 0.5); /* Add background for readability */
+  padding: 0.2rem 0.5rem;
+  overflow: hidden;
+}
+
+/* Target the actual text element if it's nested */
+#overlay-info overlaytext, /* Or the actual tag/class used */
+  #overlay-info .overlay-text-content {
+  line-height: 1.3;
+  display: block;
+  font-size: 0.5rem; /* Slightly larger */
+  overflow: hidden;
+  font-family: Monaco, Andale Mono, Ubuntu Mono, monospace;
+  color: #eee; /* Light color on dark background */
+  white-space: nowrap;
+}

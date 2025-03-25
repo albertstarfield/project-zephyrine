@@ -1,0 +1,85 @@
+/* styles/layout/_main.css */
+
+#content {
+  display: flex;
+  flex-direction: column;
+  min-height: 100vh;
+  width: 100%;
+  background-color: var(--background-mid);
+  position: relative;
+  overflow-x: hidden;
+  -webkit-overflow-scrolling: touch; /* Smooth scrolling on iOS */
+}
+
+#main {
+  z-index: 10; /* Adjusted from very high number */
+  display: flex;
+  margin-top: 32px; /* Default margin, adjust in media queries */
+  max-height: calc(100vh - 32px); /* Corresponds to margin-top */
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  gap: 0.5rem;
+  padding: 0 0.5rem;
+}
+
+#feed {
+  flex-grow: 1; /* Allow feed to take remaining space */
+  height: calc(100vh - 32px); /* Match #main max-height */
+  overflow-y: auto;
+  background-color: var(--background);
+  border-radius: 1rem; /* Added for consistency */
+  padding: 0.5rem;
+  margin-left: 2.5rem; /* Default margin, adjust in media queries */
+  position: relative; /* Needed for potential absolute children */
+}
+
+/* Layout adjustments for different screen sizes */
+@media (min-width: 1024px) {
+  #main {
+    margin-top: 32px;
+    padding: 0 1rem;
+    gap: 1rem;
+  }
+  #feed {
+    height: calc(100vh - 32px);
+    margin-left: 4rem; /* Adjust based on sidebar width */
+    padding: 1rem;
+  }
+}
+
+@media (max-width: 1023px) and (min-width: 768px) {
+  #main {
+    margin-top: 24px;
+  }
+  #feed {
+    height: calc(100vh - 24px);
+    margin-left: 3.5rem; /* Adjust based on sidebar width */
+    padding: 0.75rem;
+  }
+}
+
+@media (max-width: 767px) {
+  #main {
+    margin-top: 24px;
+  }
+  #feed {
+    height: calc(100vh - 24px);
+    margin-left: 3rem; /* Adjust based on sidebar width */
+    padding: 0.5rem;
+  }
+}
+
+@media (max-width: 480px) {
+  #feed {
+    margin-left: 2.5rem; /* Adjust based on sidebar width */
+  }
+}
+
+/* Prevent layout shifts on keyboard open (mobile) */
+@media screen and (max-height: 600px) {
+  #feed {
+    height: calc(100vh - 80px); /* Adjust based on input area height */
+  }
+}

@@ -263,7 +263,7 @@ const ChatFeed = ({
             </div>
           </div>
 
-          <div className="input-placeholder">Enter a message here...</div>
+          {/* <div className="input-placeholder">Enter a message here...</div> */}
         </div>
       ) : (
         <ul id="messages" className={fadeIn ? "fade-in" : ""}>

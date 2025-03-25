@@ -1,0 +1,42 @@
+/* styles/components/_background.css */
+
+#sky {
+  z-index: 1; /* Lower z-index */
+  width: 100%;
+  height: 100vh;
+  background-color: var(--background);
+  position: absolute;
+  top: 0;
+  left: 0;
+  backdrop-filter: blur(9px);
+  overflow: hidden; /* Prevent stars from overflowing */
+  pointer-events: none; /* Allow clicks through */
+}
+
+.star {
+  position: absolute;
+  border-radius: 50%;
+  opacity: 0.1;
+  background-color: var(--accent); /* Use background for solid color */
+  box-shadow: 0 0 20px 10px var(--accent);
+  animation: twinkling 5s infinite alternate ease-in-out; /* Example animation */
+}
+
+/* Ensure twinkling animation is defined once */
+@keyframes twinkling {
+  0% {
+    opacity: 0.05;
+    transform: scale(0.8);
+    box-shadow: 0 0 10px 5px var(--accent);
+  }
+  50% {
+    opacity: 0.2;
+    transform: scale(1.1);
+    box-shadow: 0 0 25px 12px var(--accent);
+  }
+  100% {
+    opacity: 0.08;
+    transform: scale(0.9);
+    box-shadow: 0 0 15px 8px var(--accent);
+  }
+}
