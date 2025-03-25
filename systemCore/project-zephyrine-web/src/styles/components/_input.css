@@ -2,20 +2,19 @@
 
 #form {
   position: fixed;
-  bottom: 0;
-  left: 0; /* Align with main content area */
+  bottom: 40px; /* Change from 0 to move it higher */
+  left: 0;
   right: 0;
-  width: 100%; /* Take full width */
+  width: 100%;
   display: flex;
   flex-direction: column;
-  align-items: center; /* THIS DOES THE HORIZONTAL CENTERING */
+  align-items: center;
   background: linear-gradient(180deg, transparent, var(--background-mid) 30%);
   margin: 0;
-  pointer-events: none; /* Only children should be interactive */
-  padding: 40px 0 0; /* Space above the input container */
-  z-index: 50; /* Above content, below modals */
+  pointer-events: none;
+  padding: 40px 0 0;
+  z-index: 50;
 }
-
 .input-container {
   /* REMOVED margin: 0 auto; rely on parent flexbox */
   margin: 0; /* Explicitly remove auto margins */
