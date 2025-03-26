@@ -79,6 +79,9 @@ const InputArea = ({ value, onChange, onSend, onStop, isGenerating }) => {
           )}
         </div>
       </div>
+      <p className="disclaimer-text">
+        Pre-Alpha Developmental Version! Instabilities may occur! Use with caution! -Zephyrine Foundation (2024)
+      </p>
     </div>
   );
 };
