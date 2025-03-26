@@ -37,6 +37,7 @@
   --shadow-color-less-intense: #00000007;
   --shadow-intensity: 13;
   --shadow-disperse: 100px;
+  --sidebar-background: #3a3b43; /* Brighter than --background-mid for dark mode */
 }
 
 @media (prefers-color-scheme: light) {
@@ -67,6 +68,7 @@
     --shadow-intensity: 13;
     --shadow-disperse: 100px;
     --contrast-black-overlay: #525252;
+    --sidebar-background: #ffffff; /* White for light mode */
   }
 }
 

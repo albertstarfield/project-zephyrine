@@ -5,7 +5,9 @@
   flex-direction: column;
   width: 260px; /* Standard width for sidebars */
   height: 100%; /* Fill the height of .main-content-area */
-  background-color: var(--background-light); /* Slightly lighter background */
+  background-color: var(
+    --sidebar-background
+  ); /* Use the new brighter variable */
   padding: 0.75rem;
   box-sizing: border-box;
   border-radius: 1rem; /* Match chat area */
@@ -55,7 +57,8 @@
 }
 
 .sidebar:hover .sidebar-toggle-desktop,
-.sidebar--collapsed .sidebar-toggle-desktop { /* Show when sidebar hovered or collapsed */
+.sidebar--collapsed .sidebar-toggle-desktop {
+  /* Show when sidebar hovered or collapsed */
   opacity: 1;
 }
 
@@ -68,7 +71,6 @@
   z-index: 1100; /* Above sidebar and overlay */
   background-color: var(--background-medium); /* Make it visible */
 }
-
 
 .sidebar-top-actions {
   margin-bottom: 1rem;
@@ -171,7 +173,6 @@
   width: 1em;
   height: 1em;
 }
-
 
 .sidebar-history {
   flex-grow: 1; /* Takes up available space */
@@ -321,7 +322,6 @@
   gap: 0.2rem;
 }
 
-
 /* Hide button text content (spans, direct text) when collapsed */
 .sidebar--collapsed .sidebar-button > span,
 .sidebar--collapsed .sidebar-history li button {
@@ -337,7 +337,8 @@
 }
 
 .sidebar-gpts h4,
-.sidebar-projects h4 { /* Shared heading style if Projects uses h4 */
+.sidebar-projects h4 {
+  /* Shared heading style if Projects uses h4 */
   font-size: 0.75rem;
   color: var(--text-secondary);
   text-transform: uppercase;
@@ -347,14 +348,16 @@
 }
 
 .sidebar-gpts ul,
-.sidebar-projects ul { /* Shared list style if Projects uses ul */
+.sidebar-projects ul {
+  /* Shared list style if Projects uses ul */
   list-style: none;
   padding: 0;
   margin: 0;
 }
 
 .sidebar-gpts li button,
-.sidebar-projects li button { /* Shared list item button style */
+.sidebar-projects li button {
+  /* Shared list item button style */
   font-size: 0.85rem;
 }
 
@@ -362,7 +365,6 @@
 .sidebar-projects .sidebar-button {
   font-size: 0.85rem; /* Match history/gpts list items */
 }
-
 
 .sidebar-spacer {
   flex-grow: 1; /* Pushes bottom actions down */
@@ -373,7 +375,6 @@
   padding-top: 1rem;
   border-top: 1px solid var(--border-color);
 }
-
 
 /* --- Collapsed State Styles --- */
 .sidebar--collapsed {
@@ -409,14 +410,14 @@
 
 .sidebar--collapsed .sidebar-gpts li button span:last-child, /* Hide text span in GPTs */
 .sidebar--collapsed .sidebar-projects .sidebar-button span:last-child, /* Hide text span in Projects */
-.sidebar--collapsed .sidebar-bottom-actions .sidebar-button span:last-child { /* Hide text span in bottom actions */
-   display: none;
+.sidebar--collapsed .sidebar-bottom-actions .sidebar-button span:last-child {
+  /* Hide text span in bottom actions */
+  display: none;
 }
 
 .sidebar--collapsed .sidebar-toggle-desktop {
   right: -1.5rem; /* Keep toggle button position */
 }
-
 
 /* --- Responsive adjustments for sidebar (Mobile) --- */
 @media (max-width: 767px) {
@@ -436,15 +437,19 @@
     left: 0;
     top: 0;
     height: 100%; /* Full height */
-    z-index: 1000; /* Above main content */
+    z-index: 1200; /* Ensure above overlay (999) */
     transform: translateX(-100%); /* Hidden off-screen by default */
     width: 260px; /* Full width when open */
     border-radius: 0 1rem 1rem 0; /* Adjust border radius for slide-in */
     box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1); /* Add shadow */
+    background-color: var(
+      --sidebar-background
+    ); /* Use the new brighter variable on mobile */
   }
 
   /* State when sidebar should be visible on mobile */
-  .sidebar:not(.sidebar--collapsed) { /* When expanded (isCollapsed is false) */
+  .sidebar:not(.sidebar--collapsed) {
+    /* When expanded (isCollapsed is false) */
     transform: translateX(0); /* Slide in */
   }
 
@@ -468,8 +473,14 @@
   .sidebar:not(.sidebar--collapsed) .sidebar-button > span,
   .sidebar:not(.sidebar--collapsed) .sidebar-history li button,
   .sidebar:not(.sidebar--collapsed) .sidebar-gpts li button span:last-child,
-  .sidebar:not(.sidebar--collapsed) .sidebar-projects .sidebar-button span:last-child,
-  .sidebar:not(.sidebar--collapsed) .sidebar-bottom-actions .sidebar-button span:last-child {
+  .sidebar:not(.sidebar--collapsed)
+    .sidebar-projects
+    .sidebar-button
+    span:last-child,
+  .sidebar:not(.sidebar--collapsed)
+    .sidebar-bottom-actions
+    .sidebar-button
+    span:last-child {
     display: inline; /* Or block, depending on original */
     opacity: 1;
     width: auto;
@@ -487,5 +498,4 @@
 
   /* Adjust main content area when sidebar is open/closed? */
   /* This might need to be handled in _main.css or App.jsx */
-
 }
