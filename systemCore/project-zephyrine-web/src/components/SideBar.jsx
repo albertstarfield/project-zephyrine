@@ -1,15 +1,42 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
+import { v4 as uuidv4 } from "uuid";
 
 const SideBar = ({ systemInfo }) => {
+  const navigate = useNavigate();
+
+  const handleNewChat = () => {
+    navigate(`/chat/${uuidv4()}`);
+  };
+
   return (
     <div className="form-header">
-      <div className="action-button" id="interaction-session-reset">
+       {/* New Chat Button */}
+      <div className="action-button" id="new-chat" onClick={handleNewChat} title="New Chat">
+        <svg
+          viewBox="0 0 24 24"
+          fill="none"
+          xmlns="http://www.w3.org/2000/svg"
+          stroke="currentColor"
+        >
+          <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
+          <g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g>
+          <g id="SVGRepo_iconCarrier">
+            <path d="M12 7V17M7 12H17" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+            <path opacity="0.5" d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" strokeWidth="2"></path>
+          </g>
+        </svg>
+      </div>
+
+      {/* Existing Buttons */}
+      <div className="action-button" id="interaction-session-reset" title="Reset Session (Not Implemented)">
         <svg
           viewBox="0 0 24 24"
           stroke="currentColor"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
+          {/* SVG content for reset */}
           <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
           <g
             id="SVGRepo_tracerCarrier"
@@ -32,13 +59,14 @@ const SideBar = ({ systemInfo }) => {
         </svg>
       </div>
 
-      <div className="action-button" id="settings">
+      <div className="action-button" id="settings" title="Settings (Not Implemented)">
         <svg
           viewBox="0 0 24 24"
           stroke="currentColor"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
+          {/* SVG content for settings */}
           <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
           <g
             id="SVGRepo_tracerCarrier"
@@ -61,13 +89,14 @@ const SideBar = ({ systemInfo }) => {
         </svg>
       </div>
 
-      <div className="action-button" id="aboutSection">
+      <div className="action-button" id="aboutSection" title="About (Not Implemented)">
         <svg
           viewBox="0 0 24 24"
           stroke="currentColor"
           fill="none"
           xmlns="http://www.w3.org/2000/svg"
         >
+          {/* SVG content for about */}
           <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
           <g
             id="SVGRepo_tracerCarrier"
@@ -100,12 +129,13 @@ const SideBar = ({ systemInfo }) => {
         </svg>
       </div>
 
-      <div className="action-button" id="interactionHistorySession">
+      <div className="action-button" id="interactionHistorySession" title="History (Not Implemented)">
         <svg
           viewBox="0 0 24 24"
           stroke="currentColor"
           xmlns="http://www.w3.org/2000/svg"
         >
+          {/* SVG content for history */}
           <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
           <g
             id="SVGRepo_tracerCarrier"
@@ -128,7 +158,7 @@ const SideBar = ({ systemInfo }) => {
 
       <hr style={{ borderBottom: "4.2rem solid currentColor", opacity: 0.4 }} />
 
-      <div className="action-button" id="autonomousHandlessInteraction">
+      <div className="action-button" id="autonomousHandlessInteraction" title="Autonomous (Not Implemented)">
         <svg
           viewBox="0 -77.5 1179 1179"
           stroke="currentColor"
@@ -137,6 +167,7 @@ const SideBar = ({ systemInfo }) => {
           xmlns="http://www.w3.org/2000/svg"
           fill="#000000"
         >
+          {/* SVG content for autonomous */}
           <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
           <g
             id="SVGRepo_tracerCarrier"
@@ -178,6 +209,7 @@ const SideBar = ({ systemInfo }) => {
             viewBox="0 0 24 24"
             xmlns="http://www.w3.org/2000/svg"
           >
+            {/* SVG content for session button */}
             <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
             <g
               id="SVGRepo_tracerCarrier"
@@ -194,6 +226,7 @@ const SideBar = ({ systemInfo }) => {
             </g>
           </svg>
         </button>
+        {/* Add more session buttons here dynamically if needed */}
       </div>
     </div>
   );
