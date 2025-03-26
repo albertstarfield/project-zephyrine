@@ -138,6 +138,40 @@
   margin-left: 0.5rem; /* Space between text and arrow */
 }
 
+/* --- Model Selector Styles --- */
+.model-selector-container {
+  position: relative; /* For positioning the custom arrow */
+  width: 100%;
+}
+
+.model-selector-dropdown {
+  /* Inherit base button styles */
+  appearance: none; /* Remove default browser arrow */
+  -webkit-appearance: none;
+  -moz-appearance: none;
+  width: 100%;
+  cursor: pointer;
+  padding-right: 2rem; /* Make space for the custom arrow */
+  background-color: var(--background-light); /* Match sidebar */
+  border: 1px solid var(--border-color); /* Add border */
+}
+
+.model-selector-dropdown:hover {
+  border-color: var(--border-color-hover);
+  background-color: var(--background-hover);
+}
+
+.model-selector-container .dropdown-arrow {
+  position: absolute;
+  right: 0.8rem;
+  top: 50%;
+  transform: translateY(-50%);
+  pointer-events: none; /* Allow clicks to pass through to the select */
+  stroke: var(--text-secondary);
+  width: 1em;
+  height: 1em;
+}
+
 
 .sidebar-history {
   flex-grow: 1; /* Takes up available space */
