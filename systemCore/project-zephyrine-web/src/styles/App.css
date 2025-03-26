@@ -23,7 +23,7 @@
 @import "components/_logo.css";
 @import "components/_message.css";
 @import "components/_tab.css";
-@import "components/_titlebar.css"; /* Optional */
+/* @import "components/_titlebar.css"; Optional */
 
 /* 6. Views / Page-specific styles */
 @import "views/_welcomeScreen.css";
