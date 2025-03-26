@@ -81,8 +81,12 @@ const SideBar = ({
   user,
   onNewChat,
   chatHistory,
-  onRenameChat, // Add prop for renaming
-  onDeleteChat, // Add prop for deleting
+  onRenameChat,
+  onDeleteChat,
+  // Model Selection Props
+  availableModels,
+  selectedModel,
+  onModelChange,
 }) => {
   const navigate = useNavigate();
   const { signOut } = useAuth();
@@ -220,33 +224,35 @@ const SideBar = ({
             {!isCollapsed && <span>New Chat</span>}{" "}
             {/* Conditionally render text */}
           </button>
-          {/* Placeholder for Model Selector */}
-          {!isCollapsed && ( // Hide model selector when collapsed
-            <div className="sidebar-button model-selector-placeholder">
-              <span>GPT-4o</span> {/* Default/Current model */}
-              {/* Dropdown icon/arrow */}
+          {/* Model Selector Dropdown */}
+          {!isCollapsed && (
+            <div className="model-selector-container">
+              <select
+                className="sidebar-button model-selector-dropdown"
+                value={selectedModel}
+                onChange={(e) => onModelChange(e.target.value)}
+                title="Select AI Model"
+              >
+                {availableModels.map((model) => (
+                  <option key={model} value={model}>
+                    {model}
+                  </option>
+                ))}
+              </select>
+              {/* Custom arrow overlay */}
               <svg
+                className="dropdown-arrow"
                 viewBox="0 0 24 24"
                 fill="none"
                 xmlns="http://www.w3.org/2000/svg"
-                className="dropdown-arrow"
               >
-                <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-                <g
-                  id="SVGRepo_tracerCarrier"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                ></g>
-                <g id="SVGRepo_iconCarrier">
-                  {" "}
-                  <path
+                 <path
                     d="M7 10L12 15L17 10"
                     stroke="currentColor"
                     strokeWidth="1.5"
                     strokeLinecap="round"
                     strokeLinejoin="round"
-                  ></path>{" "}
-                </g>
+                  ></path>
               </svg>
             </div>
           )}

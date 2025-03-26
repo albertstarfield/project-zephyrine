@@ -1,6 +1,18 @@
 /* styles/ChatInterface.css */
 
+/* Style for the model name display above the chat feed */
 .chat-model-selector {
+  text-align: center;
+  padding: 0.5rem 1rem;
+  font-size: 0.9rem;
+  color: var(--text-secondary);
+  background-color: var(--background-light); /* Match sidebar/input area */
+  border-bottom: 1px solid var(--border-color);
+  /* Optional: Add some margin if needed */
+  /* margin-bottom: 0.5rem; */
+}
+
+.chat-interface {
   display: flex;
   justify-content: center; /* Center the selector */
   padding: 0.75rem 1rem; /* Padding around the selector */
