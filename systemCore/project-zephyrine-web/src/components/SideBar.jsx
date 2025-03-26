@@ -1,9 +1,9 @@
-import React, { useState } from "react"; // Import useState
-import { useNavigate } from "react-router-dom";
-import { v4 as uuidv4 } from "uuid";
-import "../styles/components/_sidebar.css"; // Import sidebar styles
+import React, { useState, useEffect, useRef } from 'react'; // Import useState, useEffect, useRef
+import { useNavigate } from 'react-router-dom';
+import { useAuth } from '../contexts/AuthContext'; // Import useAuth
+import '../styles/components/_sidebar.css';
 
-// Placeholder icons for collapse/expand and hamburger
+// --- Icons ---
 const CollapseIcon = () => (
   <svg
     viewBox="0 0 24 24"
@@ -45,21 +45,122 @@ const HamburgerIcon = () => (
   </svg>
 );
 
-// Receive isCollapsed and toggleSidebar as props
-const SideBar = ({ systemInfo, isCollapsed, toggleSidebar }) => {
-  const navigate = useNavigate();
-  // State is now managed by App.jsx
+// Placeholder Icons for Edit/Delete
+const EditIcon = () => (
+  <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" className="sidebar-action-icon edit-icon">
+    <path d="M17.414 2.586a2 2 0 00-2.828 0L7 10.172V13h2.828l7.586-7.586a2 2 0 000-2.828z"></path>
+    <path fillRule="evenodd" d="M2 6a2 2 0 012-2h4a1 1 0 010 2H4v10h10v-4a1 1 0 112 0v4a2 2 0 01-2 2H4a2 2 0 01-2-2V6z" clipRule="evenodd"></path>
+  </svg>
+);
 
-  const handleNewChat = () => {
-    navigate(`/chat/${uuidv4()}`);
+const DeleteIcon = () => (
+  <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" className="sidebar-action-icon delete-icon">
+    <path fillRule="evenodd" d="M9 2a1 1 0 00-.894.553L7.382 4H4a1 1 0 000 2v10a2 2 0 002 2h8a2 2 0 002-2V6a1 1 0 100-2h-3.382l-.724-1.447A1 1 0 0011 2H9zM7 8a1 1 0 012 0v6a1 1 0 11-2 0V8zm5-1a1 1 0 00-1 1v6a1 1 0 102 0V8a1 1 0 00-1-1z" clipRule="evenodd"></path>
+  </svg>
+);
+
+const CheckIcon = () => ( // Icon to confirm rename
+  <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" className="sidebar-action-icon confirm-icon">
+      <path fillRule="evenodd" d="M16.707 5.293a1 1 0 010 1.414l-8 8a1 1 0 01-1.414 0l-4-4a1 1 0 011.414-1.414L8 12.586l7.293-7.293a1 1 0 011.414 0z" clipRule="evenodd"></path>
+  </svg>
+);
+
+const CancelIcon = () => ( // Icon to cancel rename
+    <svg viewBox="0 0 20 20" fill="currentColor" width="16" height="16" className="sidebar-action-icon cancel-icon">
+        <path fillRule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clipRule="evenodd"></path>
+    </svg>
+);
+// --- End Icons ---
+
+
+// Receive user, onNewChat, chatHistory, onRenameChat, onDeleteChat props
+const SideBar = ({
+  systemInfo,
+  isCollapsed,
+  toggleSidebar,
+  user,
+  onNewChat,
+  chatHistory,
+  onRenameChat, // Add prop for renaming
+  onDeleteChat, // Add prop for deleting
+}) => {
+  const navigate = useNavigate();
+  const { signOut } = useAuth();
+  const [isUserMenuExpanded, setIsUserMenuExpanded] = useState(true);
+  const [editingChatId, setEditingChatId] = useState(null); // Track which chat is being edited
+  const [editText, setEditText] = useState(''); // Store the temporary edit text
+  const inputRef = useRef(null); // Ref for the input field
+
+  // Focus input when editing starts
+  useEffect(() => {
+    if (editingChatId && inputRef.current) {
+      inputRef.current.focus();
+      inputRef.current.select(); // Select text for easy replacement
+    }
+  }, [editingChatId]);
+
+
+  const handleNewChatClick = () => {
+    if (onNewChat) {
+      onNewChat();
+    }
   };
 
-  // Placeholder for chat history items
-  const chatHistory = [
-    { id: "chat1", title: "React Basics Discussion" },
-    { id: "chat2", title: "CSS Flexbox Help" },
-    { id: "chat3", title: "JavaScript Function Example" },
-  ];
+  const toggleUserMenu = () => {
+    setIsUserMenuExpanded(!isUserMenuExpanded);
+  };
+
+  const handleLogout = async () => {
+    await signOut();
+  };
+
+  // --- Edit/Delete Handlers ---
+  const startEditing = (chat) => {
+    setEditingChatId(chat.id);
+    setEditText(chat.title);
+  };
+
+  const cancelEditing = () => {
+    setEditingChatId(null);
+    setEditText('');
+  };
+
+  const handleRename = (chatId) => {
+    if (editText.trim() && onRenameChat) {
+      onRenameChat(chatId, editText.trim()); // Call prop function
+    }
+    cancelEditing(); // Exit editing mode
+  };
+
+  const handleDelete = (chatId) => {
+    // Optional: Add confirmation dialog here
+    if (onDeleteChat) {
+      onDeleteChat(chatId); // Call prop function
+    }
+     // If the currently viewed chat is deleted, navigate away (e.g., to home or new chat)
+    // This logic might be better handled in the parent component after deletion
+  };
+
+  // Handle Enter key press in input
+  const handleInputKeyDown = (event, chatId) => {
+    if (event.key === 'Enter') {
+      handleRename(chatId);
+    } else if (event.key === 'Escape') {
+      cancelEditing();
+    }
+  };
+
+  // Handle input blur (losing focus)
+  const handleInputBlur = (chatId) => {
+    // Delay slightly to allow confirm/cancel icon clicks
+    setTimeout(() => {
+        // Check if still editing the same item before saving on blur
+        if (editingChatId === chatId) {
+             handleRename(chatId);
+        }
+    }, 100); // 100ms delay
+  };
+
 
   return (
     <>
@@ -83,11 +184,11 @@ const SideBar = ({ systemInfo, isCollapsed, toggleSidebar }) => {
         </button>
 
         <div className="sidebar-top-actions">
-          {/* New Chat Button */}
+          {/* New Chat Button - Use handleNewChatClick */}
           <button
             className="sidebar-button new-chat-button"
-            onClick={handleNewChat}
-            title={isCollapsed ? "New Chat" : ""}
+            onClick={handleNewChatClick} // Use the passed handler
+            title={isCollapsed ? 'New Chat' : ''}
           >
             <svg
               viewBox="0 0 24 24"
@@ -155,97 +256,140 @@ const SideBar = ({ systemInfo, isCollapsed, toggleSidebar }) => {
         <nav className="sidebar-history">
           {!isCollapsed && <h4>History</h4>} {/* Hide title when collapsed */}
           <ul>
-            {chatHistory.map((chat) => (
-              <li key={chat.id} title={isCollapsed ? chat.title : ""}>
-                {" "}
-                {/* Add title for tooltip when collapsed */}
-                <button onClick={() => navigate(`/chat/${chat.id}`)}>
-                  {/* Placeholder for potential icon */}
-                  {!isCollapsed && chat.title} {/* Hide text when collapsed */}
-                </button>
-                {/* Add rename/delete icons here later */}
+             {chatHistory.map((chat) => (
+              <li
+                key={chat.id}
+                title={isCollapsed ? chat.title : ""}
+                className={`history-item ${editingChatId === chat.id ? 'editing' : ''}`}
+              >
+                {editingChatId === chat.id ? (
+                  // --- Editing State ---
+                  <div className="history-item-edit-container">
+                    <input
+                      ref={inputRef}
+                      type="text"
+                      value={editText}
+                      onChange={(e) => setEditText(e.target.value)}
+                      onKeyDown={(e) => handleInputKeyDown(e, chat.id)}
+                      onBlur={() => handleInputBlur(chat.id)}
+                      className="history-item-input"
+                    />
+                    <div className="history-item-edit-actions">
+                       <button onClick={() => handleRename(chat.id)} className="icon-button" title="Confirm rename">
+                         <CheckIcon />
+                       </button>
+                       <button onClick={cancelEditing} className="icon-button" title="Cancel rename">
+                         <CancelIcon />
+                       </button>
+                    </div>
+                  </div>
+                ) : (
+                  // --- Normal State ---
+                  <button
+                    className="history-item-button" // Use a more specific class
+                    onClick={() => !isCollapsed && navigate(`/chat/${chat.id}`)} // Prevent nav when collapsed? Or handle differently?
+                  >
+                    <span className="history-item-title">
+                      {!isCollapsed && chat.title}
+                    </span>
+                    {!isCollapsed && ( // Show icons only when not collapsed and not editing
+                      <div className="history-item-actions">
+                        <button onClick={(e) => { e.stopPropagation(); startEditing(chat); }} className="icon-button" title="Rename chat">
+                          <EditIcon />
+                        </button>
+                        <button onClick={(e) => { e.stopPropagation(); handleDelete(chat.id); }} className="icon-button" title="Delete chat">
+                          <DeleteIcon />
+                        </button>
+                      </div>
+                    )}
+                  </button>
+                )}
               </li>
             ))}
           </ul>
         </nav>
 
-        {/* GPTs Section Placeholder */}
-        <nav className="sidebar-gpts">
-          {!isCollapsed && <h4>GDTs</h4>} {/* Hide title when collapsed */}
-          {/* Placeholder for recently used/pinned GPTs */}
-          <ul>
-            <li title={isCollapsed ? "Web Browser" : ""}>
-              <button className="sidebar-button">
-                <span>🌐</span> {/* Keep icon */}
-                {!isCollapsed && <span>&nbsp;Web Browser</span>}{" "}
-                {/* Hide text */}
-              </button>
-            </li>
-            <li title={isCollapsed ? "Noisy thinking" : ""}>
-              <button className="sidebar-button">
-                <span>🎨</span> {/* Keep icon */}
-                {!isCollapsed && <span>&nbsp;Noisy thinking</span>}{" "}
-                {/* Hide text */}
-              </button>
-            </li>
-          </ul>
-        </nav>
+        {/* Conditionally render GPTs and Projects based on isUserMenuExpanded and !isCollapsed */}
+        {!isCollapsed && isUserMenuExpanded && (
+          <>
+            {/* GPTs Section Placeholder */}
+            <nav className="sidebar-gpts">
+              <h4>GDTs</h4> {/* Title only shown when expanded */}
+              {/* Placeholder for recently used/pinned GPTs */}
+              <ul>
+                <li> {/* Removed title as it's not needed when expanded */}
+                  <button className="sidebar-button">
+                    <span>🌐</span> {/* Keep icon */}
+                    <span>&nbsp;Web Browser</span> {/* Show text */}
+                  </button>
+                </li>
+                <li> {/* Removed title */}
+                  <button className="sidebar-button">
+                    <span>🎨</span> {/* Keep icon */}
+                    <span>&nbsp;Noisy thinking</span> {/* Show text */}
+                  </button>
+                </li>
+              </ul>
+            </nav>
 
-        {/* Projects Section Placeholder */}
-        <nav className="sidebar-projects">
-          {/* Could be a button or a list */}
-          <button
-            className="sidebar-button"
-            title={isCollapsed ? "Projects" : ""}
-          >
-            {/* Placeholder Icon */}
-            <svg
-              viewBox="0 0 24 24"
-              className="sidebar-icon"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-              <g
-                id="SVGRepo_tracerCarrier"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              ></g>
-              <g id="SVGRepo_iconCarrier">
-                {" "}
-                <path
-                  d="M9 4H15M9 4C8.44772 4 8 4.44772 8 5V7C8 7.55228 8.44772 8 9 8H15C15.5523 8 16 7.55228 16 7V5C16 4.44772 15.5523 4 15 4M9 4C6.52166 4 4.68603 4.44384 3.50389 5.28131C2.32175 6.11878 2 7.1433 2 9.19234V14.8077C2 16.8567 2.32175 17.8812 3.50389 18.7187C4.68603 19.5562 6.52166 20 9 20H15C17.4783 20 19.314 19.5562 20.4961 18.7187C21.6782 17.8812 22 16.8567 22 14.8077V9.19234C22 7.1433 21.6782 6.11878 20.4961 5.28131C19.314 4.44384 17.4783 4 15 4"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                ></path>{" "}
-                <path
-                  d="M12 11V17"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                ></path>{" "}
-                <path
-                  d="M9 14L12 17L15 14"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                ></path>{" "}
-              </g>
-            </svg>
-            {!isCollapsed && <span>Projects</span>} {/* Hide text */}
-          </button>
-        </nav>
+            {/* Projects Section Placeholder */}
+            <nav className="sidebar-projects">
+              {/* Could be a button or a list */}
+              <button
+                className="sidebar-button"
+                // Removed title
+              >
+                {/* Placeholder Icon */}
+                <svg
+                  viewBox="0 0 24 24"
+                  className="sidebar-icon"
+                  fill="none"
+                  xmlns="http://www.w3.org/2000/svg"
+                >
+                  <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
+                  <g
+                    id="SVGRepo_tracerCarrier"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  ></g>
+                  <g id="SVGRepo_iconCarrier">
+                    {" "}
+                    <path
+                      d="M9 4H15M9 4C8.44772 4 8 4.44772 8 5V7C8 7.55228 8.44772 8 9 8H15C15.5523 8 16 7.55228 16 7V5C16 4.44772 15.5523 4 15 4M9 4C6.52166 4 4.68603 4.44384 3.50389 5.28131C2.32175 6.11878 2 7.1433 2 9.19234V14.8077C2 16.8567 2.32175 17.8812 3.50389 18.7187C4.68603 19.5562 6.52166 20 9 20H15C17.4783 20 19.314 19.5562 20.4961 18.7187C21.6782 17.8812 22 16.8567 22 14.8077V9.19234C22 7.1433 21.6782 6.11878 20.4961 5.28131C19.314 4.44384 17.4783 4 15 4"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    ></path>{" "}
+                    <path
+                      d="M12 11V17"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    ></path>{" "}
+                    <path
+                      d="M9 14L12 17L15 14"
+                      stroke="currentColor"
+                      strokeWidth="1.5"
+                      strokeLinecap="round"
+                    ></path>{" "}
+                  </g>
+                </svg>
+                <span>Projects</span> {/* Show text */}
+              </button>
+            </nav>
+          </>
+        )}
 
         {/* Spacer to push bottom content down */}
         <div className="sidebar-spacer"></div>
 
-        {/* Bottom Actions (User, Settings) */}
+        {/* Bottom Actions (User, Logout, Settings) */}
         <div className="sidebar-bottom-actions">
-          {/* User Button */}
+          {/* User Button - Display user email */}
           <button
-            className="sidebar-button"
-            title={isCollapsed ? systemInfo.username || "User" : ""}
+            className="sidebar-button user-button" // Added user-button class for potential styling
+            title={isCollapsed ? user?.email : (isUserMenuExpanded ? 'Collapse Menu' : 'Expand Menu')}
+            onClick={toggleUserMenu} // Add onClick handler
           >
             <svg
               viewBox="0 0 24 24"
@@ -274,13 +418,36 @@ const SideBar = ({ systemInfo, isCollapsed, toggleSidebar }) => {
                 ></path>{" "}
               </g>
             </svg>
-            {!isCollapsed && <span>{systemInfo.username || "User"}</span>}{" "}
-            {/* Hide text */}
+            {!isCollapsed && <span className="user-email">{user?.email}</span>}{' '}
+            {/* Display email */}
+          </button>
+          {/* Logout Button */}
+          <button
+            className="sidebar-button logout-button" // Added logout-button class
+            onClick={handleLogout}
+            title={isCollapsed ? 'Logout' : ''}
+          >
+            {/* Simple Logout Icon */}
+            <svg
+              viewBox="0 0 24 24"
+              className="sidebar-icon"
+              fill="none"
+              xmlns="http://www.w3.org/2000/svg"
+              stroke="currentColor"
+            >
+              <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
+              <g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g>
+              <g id="SVGRepo_iconCarrier">
+                <path d="M15 3H7C5.89543 3 5 3.89543 5 5V19C5 20.1046 5.89543 21 7 21H15" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+                <path d="M19 12L15 8M19 12L15 16M19 12H9" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+              </g>
+            </svg>
+            {!isCollapsed && <span>Logout</span>}
           </button>
           {/* Settings Button Placeholder */}
           <button
-            className="sidebar-button"
-            title={isCollapsed ? "Settings" : ""}
+            className="sidebar-button settings-button" // Added settings-button class
+            title={isCollapsed ? 'Settings' : ''}
           >
             <svg
               viewBox="0 0 24 24"

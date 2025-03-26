@@ -31,3 +31,205 @@
   /* Adjust padding if selector takes up space */
   /* padding-top: 0; */ /* Example: remove top padding if selector handles it */
 }
+
+/* --- Collapsible History Styles --- */
+
+.chat-interface {
+  display: flex;
+  flex-direction: column;
+  height: 100%; /* Ensure it takes full height */
+  overflow: hidden; /* Prevent main container scroll */
+}
+
+.chat-history-header {
+  display: flex;
+  justify-content: flex-end; /* Position button to the right */
+  padding: 0.25rem 0.5rem; /* Small padding */
+  background-color: var(--surface-medium); /* Use theme color */
+  border-bottom: 1px solid var(--border-color); /* Separator */
+  flex-shrink: 0; /* Prevent header from shrinking */
+}
+
+.collapse-toggle-button {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  background: none;
+  border: none;
+  color: var(--text-secondary); /* Use theme color */
+  cursor: pointer;
+  font-size: 0.8rem;
+  padding: 0.2rem 0.4rem;
+  border-radius: var(--border-radius-small);
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.collapse-toggle-button:hover {
+  background-color: var(--background-hover);
+  color: var(--text-primary);
+}
+
+.collapse-toggle-button svg {
+  stroke-width: 2; /* Adjust icon thickness if needed */
+}
+
+.chat-messages-container {
+  flex-grow: 1; /* Allow message container to fill space */
+  overflow-y: auto; /* Enable scrolling for messages */
+  transition: max-height 0.3s ease-out, opacity 0.3s ease-out; /* Smooth transition */
+  max-height: 1000px; /* Arbitrary large height when expanded */
+  opacity: 1;
+  /* Add some padding */
+  padding: 0.5rem;
+}
+
+.chat-messages-container.collapsed {
+  max-height: 0;
+  opacity: 0;
+  overflow: hidden; /* Hide content when collapsed */
+  padding-top: 0;
+  padding-bottom: 0;
+  border-top: none; /* Hide border when collapsed */
+}
+
+.chat-messages {
+  display: flex;
+  flex-direction: column;
+  gap: 0.75rem; /* Space between messages */
+}
+
+/* --- Message Styling (Refined with Theme Variables) --- */
+
+.message {
+  padding: 0.7rem 1rem; /* Slightly larger padding */
+  border-radius: var(--rounded-border, 8px); /* Use theme variable */
+  max-width: 85%; /* Allow slightly wider messages */
+  word-wrap: break-word;
+  line-height: 1.5; /* Slightly increased line height */
+  box-shadow: var(--small-shadow); /* Add subtle shadow */
+}
+
+.user-message {
+  background-color: var(--accent); /* Yellow accent */
+  /* Use a dark text color for contrast on yellow background */
+  /* Consider adding a specific variable like --text-on-accent if needed */
+  color: #1f1f1f; /* Dark grey/black for readability */
+  align-self: flex-end;
+  /* Chat bubble effect: make the corner towards the user sharp */
+  border-bottom-right-radius: 2px;
+}
+
+.assistant-message {
+  background-color: var(--background-alt); /* Use a theme background color */
+  color: var(--primary-text); /* Use theme text color */
+  align-self: flex-start;
+  /* Chat bubble effect: make the corner towards the assistant sharp */
+  border-bottom-left-radius: 2px;
+}
+
+.message-content {
+  /* Styles for the text itself */
+  font-size: 1rem; /* Match base font size */
+  /* Ensure code blocks within messages are styled */
+}
+
+/* Style code blocks within messages */
+.message code {
+  font-size: 0.9em; /* Slightly smaller font for code */
+  white-space: pre-wrap; /* Allow wrapping */
+  word-break: break-all; /* Break long code lines */
+}
+
+.message pre:has(code) {
+  margin-top: 0.5em;
+  padding: 0.6em;
+  border-radius: calc(var(--rounded-border, 8px) / 2); /* Smaller radius for code block */
+  background: rgba(0, 0, 0, 0.2); /* Darker background for code */
+  border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle border */
+}
+
+.error-message {
+  background-color: var(--error-background);
+  color: var(--error-text);
+  padding: 0.75rem;
+  border-radius: var(--border-radius-medium);
+  margin-bottom: 0.5rem;
+  text-align: center;
+  font-size: 0.9rem;
+}
+
+.generating-indicator {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  padding: 0.5rem;
+  color: var(--text-secondary);
+  font-style: italic;
+  font-size: 0.9rem;
+}
+
+.dot-animation {
+  /* Basic dot animation if needed */
+}
+
+
+/* --- Input Area --- */
+.chat-input-area {
+  display: flex;
+  padding: 0.5rem 0.75rem;
+  border-top: 1px solid var(--border-color);
+  background-color: var(--surface-low); /* Use theme color */
+  flex-shrink: 0; /* Prevent input area from shrinking */
+}
+
+.chat-input-area input[type="text"] {
+  flex-grow: 1;
+  padding: 0.6rem 0.8rem;
+  border: 1px solid var(--border-color-medium);
+  border-radius: var(--border-radius-large);
+  background-color: var(--surface-medium); /* Use theme color */
+  color: var(--text-primary);
+  font-size: 0.95rem;
+  margin-right: 0.5rem;
+  outline: none;
+  transition: border-color 0.2s ease;
+}
+
+.chat-input-area input[type="text"]:focus {
+  border-color: var(--primary-accent);
+}
+
+.chat-input-area input[type="text"]::placeholder {
+  color: var(--text-placeholder);
+}
+
+.chat-input-area button {
+  padding: 0.6rem 1rem;
+  border: none;
+  border-radius: var(--border-radius-large);
+  background-color: var(--primary-accent);
+  color: var(--text-on-primary);
+  cursor: pointer;
+  font-weight: 500;
+  transition: background-color 0.2s ease;
+  flex-shrink: 0;
+}
+
+.chat-input-area button:hover:not(:disabled) {
+  background-color: var(--primary-accent-hover);
+}
+
+.chat-input-area button:disabled {
+  background-color: var(--button-disabled-background);
+  color: var(--button-disabled-text);
+  cursor: not-allowed;
+}
+
+.chat-input-area .stop-button {
+  background-color: var(--error-background); /* Or a specific stop color */
+  color: var(--error-text);
+}
+
+.chat-input-area .stop-button:hover:not(:disabled) {
+  background-color: var(--error-background-hover);
+}
