@@ -22,7 +22,7 @@
   --surface-alt: #56586992;
   --surface-alt-bright: #acacbe;
   --tertiary: #3e3f4b;
-  --accent: #0bbc02; /* Azure Turquoise Sweet Blue accent */
+  --accent: #FFFF00; /* Yellow accent */
   --oppositeaccent: #ff581b;
   --secondary: #1a7f64; /* Azure Turquoise Sweet Blue secondary */
   --error: #ff5d5d;
@@ -51,7 +51,7 @@
     --surface-alt: #7575755e;
     --surface-alt-bright: #acacbe;
     --tertiary: #f1f1f1;
-    --accent: #0bbc02; /* Azure Turquoise Sweet Blue accent */
+    --accent: #FFFF00; /* Yellow accent */
     --oppositeaccent: #ff581b;
     --secondary: #1a7f64; /* Azure Turquoise Sweet Blue secondary */
     --error: #ff5d5d;

@@ -77,7 +77,6 @@
   height: 20px;
 }
 
-
 #input {
   /* ... (styles for textarea remain the same) ... */
   padding: 0.5rem 0.75rem;
@@ -170,15 +169,28 @@
 
 /* Disclaimer text below input */
 .disclaimer-text {
-  font-size: 0.75rem; /* Small font size */
-  color: var(--text-secondary); /* Use secondary text color */
-  text-align: center;
-  margin-top: 0.5rem; /* Add some space above it */
-  padding: 0 1rem; /* Add horizontal padding */
-  max-width: 48rem; /* Match input container max-width for alignment */
+  font-size: 0.65rem; /* Smaller font size */
+  color: #808080; /* Grey color */
+  opacity: 0.3; /* 30% opacity */
+  text-align: right; /* Align text to the right */
+  margin-top: 0rem; /* Keep space above */
+  padding: 0 2rem; /* Keep horizontal padding */
+  max-width: 30rem; /* Match input container max-width */
   width: 100%;
   box-sizing: border-box;
   pointer-events: none; /* Text is not interactive */
-  /* Ensure it's within the flex flow of #form */
-  align-self: center;
+  /* Align item to the right within the flex container (#form) */
+  align-self: flex-end;
+  /*the line spacing between the input and the disclaimer text*/
+  line-height: 1;
+  /* bottom margin*/
+  margin-bottom: -2rem;
+}
+/*mobile*/
+@media (max-width: 767px) {
+  .disclaimer-text {
+    text-align: middle; /* Align text to the left */
+    padding: 0 1rem; /* Adjust horizontal padding */
+    max-width: 95%; /* Use percentage or smaller fixed value */
+  }
 }
