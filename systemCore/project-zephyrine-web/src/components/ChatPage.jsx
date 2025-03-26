@@ -1,11 +1,12 @@
-import { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../utils/supabaseClient';
 import ChatFeed from "./ChatFeed";
 import InputArea from './InputArea';
-import '../styles/ChatInterface.css'; // Keep relevant styles if needed
-import '../styles/utils/_overlay.css'; // Keep relevant styles if needed
+import { Copy, RefreshCw } from 'lucide-react'; // Added icons
+import '../styles/ChatInterface.css';
+import '../styles/utils/_overlay.css';
 
 // Define WebSocket URL
 const WEBSOCKET_URL = "ws://localhost:3001";
@@ -18,11 +19,35 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
   const [isGenerating, setIsGenerating] = useState(false);
   const [showPlaceholder, setShowPlaceholder] = useState(true);
   const [error, setError] = useState(null);
-  const [streamingAssistantMessage, setStreamingAssistantMessage] = useState(null); // State for the message being streamed
+  const [streamingAssistantMessage, setStreamingAssistantMessage] = useState(null);
+  const [copySuccess, setCopySuccess] = useState(''); // State for copy feedback
   const bottomRef = useRef(null);
-  const ws = useRef(null); // Ref for WebSocket instance
-  const currentAssistantMessageId = useRef(null); // Ref to track the ID of the message being streamed
-  const accumulatedContentRef = useRef(""); // Ref to accumulate content chunks
+  const ws = useRef(null);
+  const currentAssistantMessageId = useRef(null);
+  const accumulatedContentRef = useRef("");
+
+  // --- Function to Update Chat Title in DB ---
+  const updateChatTitleInDb = async (receivedChatId, newTitle) => {
+    if (!receivedChatId || !newTitle) return;
+    console.log(`Updating title for chat ${receivedChatId} to: ${newTitle}`);
+    try {
+      const { error: updateError } = await supabase
+        .from('chats') // Assuming your table is named 'chats'
+        .update({ title: newTitle })
+        .eq('id', receivedChatId);
+
+      if (updateError) {
+        throw updateError;
+      }
+      console.log(`Chat ${receivedChatId} title updated successfully.`);
+      refreshHistory(); // Refresh the sidebar list
+    } catch (error) {
+      console.error("Error updating chat title:", error);
+      // Optionally set an error state or notify the user
+      setError("Failed to update chat title.");
+    }
+  };
+
 
   // Fetch messages when chatId changes
   useEffect(() => {
@@ -164,11 +189,26 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
           accumulatedContentRef.current = "";
           currentAssistantMessageId.current = null;
           break;
-        case 'error':
-          console.error("WebSocket Server Error:", message.payload.error);
-          setError(`Assistant error: ${message.payload.error}`);
+        case 'title': // Handle incoming title from backend
+           console.log("Received title message:", message.payload);
+           if (message.payload.chatId === chatId) { // Ensure title is for the current chat
+             updateChatTitleInDb(message.payload.chatId, message.payload.title);
+           } else {
+              console.warn(`Received title for different chat (${message.payload.chatId}), ignoring.`);
+            }
+            break;
+        case 'title_updated': // Handle confirmation that title was saved
+           console.log("Received title_updated confirmation:", message.payload);
+           if (message.payload.chatId === chatId) {
+             console.log("Refreshing history after title update confirmation.");
+             refreshHistory(); // Refresh the sidebar list
+           }
+           break;
+         case 'error':
+           console.error("WebSocket Server Error:", message.payload.error);
+           setError(`Assistant error: ${message.payload.error}`);
           setIsGenerating(false);
-          setStreamingAssistantMessage(null);
+          setStreamingAssistantMessage(null); // Clear any streaming state on error
           accumulatedContentRef.current = "";
           currentAssistantMessageId.current = null;
           break;
@@ -183,12 +223,15 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
       accumulatedContentRef.current = "";
       currentAssistantMessageId.current = null;
     }
-  }, [chatId]); // Dependencies - Removed streamingAssistantMessage
+  }, [chatId, refreshHistory]);
 
 
   // --- Function to save assistant message to Supabase ---
-  const saveAssistantMessage = async (content, tempId) => { // Accept tempId
-    if (!content || !chatId) return;
+  const saveAssistantMessage = async (content, tempId) => {
+    if (!content || !chatId) {
+        console.warn("Attempted to save assistant message without content or chatId.");
+        return; // Don't proceed if no content or chat ID
+    }
 
     const { data: dbAssistantMessage, error: assistantSaveError } = await supabase
       .from('messages')
@@ -217,44 +260,68 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
         return [...existingMessages, dbAssistantMessage]; // Add the final message
       });
       console.log("Assistant message saved:", dbAssistantMessage.id);
+
+      // NOTE: Title generation logic is now moved to the backend service.
+      // The backend will handle calling the AI and updating the 'chats' table.
+      // We still need to refresh the history here if it was the first AI response
+      // so the sidebar potentially picks up the new title generated by the backend.
+      const isFirstAssistantResponse = prev.length === 1 && prev[0].sender === 'user';
+      if (isFirstAssistantResponse) {
+          console.log("First assistant response saved, refreshing history for potential title update.");
+          refreshHistory();
+      }
+
     }
   };
 
-
-  // --- Send Message Handler (WebSocket) ---
-  const handleSendMessage = async (text) => {
-    if (!text.trim() || !chatId || isGenerating) return; // Prevent sending while generating
-
+  // --- Send Message / Regenerate Handler (WebSocket) ---
+  const sendMessageOrRegenerate = async (contentToSend, isRegeneration = false) => {
+    if (!chatId) {
+      setError("Cannot send message: No active chat selected.");
+      console.error("sendMessageOrRegenerate called without chatId");
+      return;
+    }
+    if (!contentToSend.trim() || isGenerating) return;
     setError(null);
-    const userMessageContent = text;
-    setInputValue(''); // Clear input field
-    setShowPlaceholder(false); // Hide placeholder on send
+    setShowPlaceholder(false); // Hide placeholder on send/regen
 
-    // --- 1. Prepare and Save User Message ---
-    const userMessageData = {
-      sender: 'user',
-      content: userMessageContent,
-      chat_id: chatId,
-      user_id: user?.id,
-    };
-    // Add user message optimistically to UI
-    const optimisticUserMessage = { ...userMessageData, created_at: new Date().toISOString(), id: uuidv4() };
-    let currentMessages = [...messages, optimisticUserMessage];
-    setMessages(currentMessages);
+    let currentMessages = [...messages]; // Copy current messages
 
-    // Save user message to DB (no need to await)
-    supabase.from('messages').insert([userMessageData]).select().single().then(({ data: dbUserMessage, error: insertError }) => {
-      if (insertError) {
-        console.error("Error saving user message:", insertError);
-        setError("Failed to save your message.");
-        setMessages(prev => prev.map(msg => msg.id === optimisticUserMessage.id ? { ...msg, error: 'Failed to save' } : msg));
-      } else {
-        // Optionally update message ID if needed, or just log success
-        console.log("User message saved:", dbUserMessage?.id);
-        // Refresh history if it was the first message
-        if (messages.length === 0) refreshHistory();
+    // --- 1. Prepare and Save User Message (if not regenerating) ---
+    if (!isRegeneration) {
+      setInputValue(''); // Clear input only for new messages
+      const userMessageData = {
+        sender: 'user',
+        content: contentToSend,
+        chat_id: chatId,
+        user_id: user?.id,
+      };
+      // Add user message optimistically to UI
+      const optimisticUserMessage = { ...userMessageData, created_at: new Date().toISOString(), id: uuidv4() };
+      currentMessages = [...currentMessages, optimisticUserMessage];
+      setMessages(currentMessages);
+
+      // Save user message to DB (no need to await)
+      supabase.from('messages').insert([userMessageData]).select().single().then(({ data: dbUserMessage, error: insertError }) => {
+        if (insertError) {
+          console.error("Error saving user message:", insertError);
+          setError("Failed to save your message.");
+          setMessages(prev => prev.map(msg => msg.id === optimisticUserMessage.id ? { ...msg, error: 'Failed to save' } : msg));
+        } else {
+          console.log("User message saved:", dbUserMessage?.id);
+          // Refresh history if it was the first message in this chat session (client-side check)
+          if (messages.length === 0) refreshHistory();
+        }
+      });
+    } else {
+      // If regenerating, remove the last assistant message visually
+      const lastAssistantMsgIndex = currentMessages.findLastIndex(msg => msg.sender === 'assistant');
+      if (lastAssistantMsgIndex > -1) {
+        // Optionally delete from DB or mark as replaced later
+        currentMessages.splice(lastAssistantMsgIndex, 1);
+        setMessages(currentMessages); // Update UI immediately
       }
-    });
+    }
 
     // --- 2. Send Message via WebSocket ---
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
@@ -262,21 +329,26 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
         const messageToSend = {
           type: 'chat',
           payload: {
-            // Send relevant message history (adjust context length as needed)
-            messages: currentMessages.slice(-10).map(m => ({ sender: m.sender, content: m.content })), // Format for backend
-            model: selectedModel
+            // Send history *up to the point of the message being sent/regenerated*
+            messages: currentMessages.slice(-10).map(m => ({ sender: m.sender, content: m.content })),
+            model: selectedModel,
+            chatId: chatId,
+            userId: user?.id, // Include the user ID
+            // Include the first user message content if this is the first message
+            // Note: The backend uses the *presence* of this field along with message history length to trigger title gen
+            firstUserMessageContent: currentMessages.filter(m => m.sender === 'user').length === 1 ? contentToSend : undefined
           }
         };
         ws.current.send(JSON.stringify(messageToSend));
         setIsGenerating(true);
 
-        // --- 3. Prepare Streaming State (Initialize refs and state) ---
-        accumulatedContentRef.current = ""; // Reset accumulator
-        currentAssistantMessageId.current = `temp-assistant-${Date.now()}`; // Generate temporary ID
-        setStreamingAssistantMessage({ // Set initial streaming state for UI
+        // --- 3. Prepare Streaming State ---
+        accumulatedContentRef.current = "";
+        currentAssistantMessageId.current = `temp-assistant-${Date.now()}`;
+        setStreamingAssistantMessage({
           id: currentAssistantMessageId.current,
           sender: 'assistant',
-          content: '', // Start empty
+          content: '',
           chat_id: chatId,
           created_at: new Date().toISOString(),
           isLoading: true,
@@ -286,52 +358,86 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
         console.error("WebSocket send error:", sendError);
         setError("Failed to communicate with the assistant.");
         setIsGenerating(false);
-        setStreamingAssistantMessage(null); // Clear placeholder on send error
+        setStreamingAssistantMessage(null);
       }
     } else {
       setError("WebSocket is not connected. Cannot send message.");
       console.error("WebSocket is not open. ReadyState:", ws.current?.readyState);
-      // Optionally try to reconnect here
+    }
+  };
+
+  // Specific handler for the form submission (uses the combined function)
+  const handleSendMessage = (text) => {
+    sendMessageOrRegenerate(text, false);
+  };
+
+  // Specific handler for the regenerate button (uses the combined function)
+  const handleRegenerate = () => {
+    if (isGenerating) return;
+    // Find the last *user* message before the last *assistant* message
+    const lastAssistantIndex = messages.findLastIndex(msg => msg.sender === 'assistant');
+    const relevantHistory = lastAssistantIndex > -1 ? messages.slice(0, lastAssistantIndex) : messages;
+    const lastUserMessage = relevantHistory.slice().reverse().find(msg => msg.sender === 'user');
+
+    if (lastUserMessage) {
+      sendMessageOrRegenerate(lastUserMessage.content, true);
+    } else {
+      setError("Cannot regenerate: No previous user message found to use as context.");
+    }
+  };
+
+  // Handler for copying text
+  const handleCopy = async (text, messageId) => {
+    try {
+      await navigator.clipboard.writeText(text);
+      setCopySuccess(messageId); // Set the ID of the message that was copied
+      setTimeout(() => setCopySuccess(''), 1500); // Clear feedback after 1.5s
+    } catch (err) {
+      console.error('Failed to copy text: ', err);
+      setError('Failed to copy text.');
     }
   };
 
 
   const handleStopGeneration = () => {
-    // Basic stop: close WebSocket or send a 'stop' message if backend supports it
     console.log("Stopping generation...");
     if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-       // Option 1: Send a stop message (if backend handles it)
-       // ws.current.send(JSON.stringify({ type: 'stop' }));
-
-       // Option 2: Just close the connection (might be abrupt)
-       // ws.current.close();
+       ws.current.send(JSON.stringify({ type: 'stop' }));
+       console.log("Sent stop request to backend.");
     }
     setIsGenerating(false);
-    // Finalize potentially partial message if needed, or just clear it
-    if (streamingAssistantMessage && streamingAssistantMessage.content) {
-       saveAssistantMessage(streamingAssistantMessage.content); // Save what we have
-       setMessages(prev => [...prev, { ...streamingAssistantMessage, isLoading: false }]);
+    if (streamingAssistantMessage && streamingAssistantMessage.content && currentAssistantMessageId.current) {
+       const finalPartialMessage = { ...streamingAssistantMessage, isLoading: false };
+       saveAssistantMessage(finalPartialMessage.content, finalPartialMessage.id);
+       setMessages(prev => {
+           if (prev.some(msg => msg.id === finalPartialMessage.id)) {
+               return prev.map(msg => msg.id === finalPartialMessage.id ? finalPartialMessage : msg);
+           }
+           return [...prev, finalPartialMessage];
+       });
     }
     setStreamingAssistantMessage(null);
+    accumulatedContentRef.current = "";
     currentAssistantMessageId.current = null;
   };
 
   const handleExampleClick = (text) => {
     setInputValue(text);
-    // Optionally focus the input area here
   };
+
+  // Find the index of the last assistant message for the regenerate button
+  const lastAssistantMessageIndex = messages.findLastIndex(msg => msg.sender === 'assistant');
 
   return (
     <>
-      {/* Model Selector Display */}
       {!showPlaceholder && (
         <div className="chat-model-selector">
           <span>{selectedModel}</span>
         </div>
       )}
 
-      {/* Main feed and input area */}
       <div id="feed" className={showPlaceholder ? "welcome-screen" : ""}>
+        {/* Pass handlers and state down to ChatFeed */}
         <ChatFeed
           messages={messages}
           streamingMessage={streamingAssistantMessage}
@@ -340,12 +446,17 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
           onExampleClick={handleExampleClick}
           bottomRef={bottomRef}
           assistantName={systemInfo.assistantName}
+          // Add props for copy/regenerate
+          onCopy={handleCopy}
+          onRegenerate={handleRegenerate}
+          copySuccessId={copySuccess}
+          lastAssistantMessageIndex={lastAssistantMessageIndex}
         />
         {error && <div className="error-message chat-error">{error}</div>}
         <InputArea
           value={inputValue}
           onChange={setInputValue}
-          onSend={handleSendMessage}
+          onSend={handleSendMessage} // Use the specific handler for form submission
           onStop={handleStopGeneration}
           isGenerating={isGenerating}
         />

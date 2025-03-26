@@ -119,30 +119,74 @@
   word-wrap: break-word;
   line-height: 1.5; /* Slightly increased line height */
   box-shadow: var(--small-shadow); /* Add subtle shadow */
+  /* Removed flex from here, handled by message-container */
 }
 
-.user-message {
-  background-color: var(--accent); /* Yellow accent */
-  /* Use a dark text color for contrast on yellow background */
-  /* Consider adding a specific variable like --text-on-accent if needed */
-  color: #1f1f1f; /* Dark grey/black for readability */
-  align-self: flex-end;
-  /* Chat bubble effect: make the corner towards the user sharp */
-  border-bottom-right-radius: 2px;
+.message-container {
+  display: flex;
+  gap: 0.5rem; /* Space between avatar and content */
+  width: 100%; /* Ensure container takes full width for alignment */
 }
 
-.assistant-message {
-  background-color: var(--background-alt); /* Use a theme background color */
-  color: var(--primary-text); /* Use theme text color */
-  align-self: flex-start;
-  /* Chat bubble effect: make the corner towards the assistant sharp */
-  border-bottom-left-radius: 2px;
+.message-bubble.user-bubble .message-container {
+  justify-content: flex-end; /* Align user content to the right */
 }
+
+.message-bubble.assistant-bubble .message-container {
+  justify-content: flex-start; /* Align assistant content to the left */
+}
+
+.avatar {
+  width: 30px;
+  height: 30px;
+  border-radius: 50%;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-weight: bold;
+  color: var(--text-on-primary); /* White/light text */
+  flex-shrink: 0;
+  margin-top: 0.2rem; /* Align avatar slightly lower */
+}
+
+.user-avatar {
+  background-color: var(--primary-accent); /* Or a user-specific color */
+}
+
+.assistant-avatar {
+  background-color: var(--secondary-accent); /* Or an assistant-specific color */
+}
+
+/* Wrapper for message content and actions inside the bubble */
+.message-content-wrapper {
+  display: flex;
+  flex-direction: column;
+  padding: 0.7rem 1rem; /* Padding moved here */
+  border-radius: var(--rounded-border, 8px);
+  max-width: 85%;
+  word-wrap: break-word;
+  line-height: 1.5;
+  box-shadow: var(--small-shadow);
+  position: relative; /* Needed for action button positioning */
+}
+
+.user-bubble .message-content-wrapper {
+  background-color: #d7e2d7; /* Pastel Green */
+  color: #1f1f1f; /* Keep dark text for contrast */
+  border-bottom-right-radius: 2px; /* Bubble tail */
+}
+
+.assistant-bubble .message-content-wrapper {
+  background-color: #cddbe9; /* Pastel Blue */
+  color: var(--primary-text); /* Assuming this is dark enough */
+  border-bottom-left-radius: 2px; /* Bubble tail */
+}
+
 
 .message-content {
   /* Styles for the text itself */
   font-size: 1rem; /* Match base font size */
-  /* Ensure code blocks within messages are styled */
+  padding-bottom: 1.5rem; /* Add space below content for actions */
 }
 
 /* Style code blocks within messages */
@@ -159,6 +203,65 @@
   background: rgba(0, 0, 0, 0.2); /* Darker background for code */
   border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle border */
 }
+
+/* --- Message Actions --- */
+.message-actions {
+  position: absolute;
+  bottom: 4px; /* Position near the bottom */
+  right: 8px; /* Position to the right */
+  display: flex;
+  gap: 4px;
+  opacity: 0; /* Hidden by default */
+  transition: opacity 0.2s ease-in-out;
+}
+
+.message-content-wrapper:hover .message-actions {
+  opacity: 1; /* Show on hover */
+}
+
+.message-action-button {
+  background: rgba(0, 0, 0, 0.1); /* Semi-transparent background */
+  border: none;
+  border-radius: 4px;
+  padding: 3px 5px;
+  cursor: pointer;
+  color: var(--text-secondary); /* Use secondary text color */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: background-color 0.2s ease, color 0.2s ease;
+}
+
+.message-action-button:hover {
+  background: rgba(0, 0, 0, 0.2);
+  color: var(--text-primary);
+}
+
+.message-action-button svg {
+  stroke-width: 2;
+}
+
+.copy-button span { /* Style for 'Copied!' text */
+  font-size: 0.75rem;
+  padding: 0 2px;
+}
+
+/* --- Streaming Cursor --- */
+.streaming-cursor {
+  display: inline-block;
+  width: 8px;
+  height: 1em; /* Match line height */
+  background-color: var(--text-primary);
+  margin-left: 2px;
+  animation: blink 1s step-end infinite;
+  vertical-align: text-bottom; /* Align with text */
+}
+
+@keyframes blink {
+  from, to { background-color: transparent }
+  50% { background-color: var(--text-primary); }
+}
+
 
 .error-message {
   background-color: var(--error-background);
@@ -244,4 +347,23 @@
 
 .chat-input-area .stop-button:hover:not(:disabled) {
   background-color: var(--error-background-hover);
+}
+
+/* Style for inline stop button within generating indicator */
+.generating-indicator .stop-button-inline {
+  background: none;
+  border: 1px solid var(--text-secondary);
+  color: var(--text-secondary);
+  padding: 2px 6px;
+  margin-left: 10px;
+  font-size: 0.8rem;
+  border-radius: var(--border-radius-small);
+  cursor: pointer;
+  transition: all 0.2s ease;
+}
+
+.generating-indicator .stop-button-inline:hover {
+  background-color: var(--background-hover);
+  color: var(--text-primary);
+  border-color: var(--text-primary);
 }
