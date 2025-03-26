@@ -13,6 +13,8 @@ import SideBar from "./components/SideBar";
 import ChatFeed from "./components/ChatFeed";
 import InputArea from "./components/InputArea";
 import SystemOverlay from "./components/SystemOverlay";
+import "./styles/ChatInterface.css"; // Import chat interface styles
+import "./styles/utils/_overlay.css"; // Import overlay styles (will create/modify later)
 
 // Component to handle individual chat sessions
 function ChatPage({ systemInfo }) {
@@ -96,23 +98,38 @@ function ChatPage({ systemInfo }) {
   };
 
   return (
-    <div id="feed" className={showPlaceholder ? "welcome-screen" : ""}>
-      <ChatFeed
-        messages={messages}
-        showPlaceholder={showPlaceholder}
-        isGenerating={isGenerating}
-        onExampleClick={handleExampleClick}
-        bottomRef={bottomRef}
-        assistantName={systemInfo.assistantName}
-      />
-      <InputArea
-        value={inputValue}
-        onChange={setInputValue}
-        onSend={handleSendMessage}
-        onStop={handleStopGeneration}
-        isGenerating={isGenerating}
-      />
-    </div>
+    // Use a fragment <> to return multiple elements from ChatPage
+    <>
+      {/* Model Selector Placeholder - Placed at the top of the chat area */}
+      {/* Only show selector if not in welcome state */}
+      {!showPlaceholder && (
+        <div className="chat-model-selector">
+          {/* This would dynamically show the selected model */}
+          <span>GPT-4o ▼</span>
+          {/* Add dropdown logic later */}
+        </div>
+      )}
+
+      {/* The main feed and input area */}
+      <div id="feed" className={showPlaceholder ? "welcome-screen" : ""}>
+        <ChatFeed
+          messages={messages}
+          showPlaceholder={showPlaceholder}
+          isGenerating={isGenerating}
+          onExampleClick={handleExampleClick}
+          bottomRef={bottomRef}
+          assistantName={systemInfo.assistantName}
+        />
+        {/* Ensure only one InputArea is rendered here */}
+        <InputArea
+          value={inputValue}
+          onChange={setInputValue}
+          onSend={handleSendMessage}
+          onStop={handleStopGeneration}
+          isGenerating={isGenerating}
+        />
+      </div>
+    </> // Close the fragment
   );
 }
 
@@ -141,6 +158,29 @@ function App() {
   });
   const [stars, setStars] = useState([]);
   const location = useLocation(); // Get current location
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false); // State for sidebar
+
+  // Toggle sidebar function
+  const toggleSidebar = () => {
+    setIsSidebarCollapsed(!isSidebarCollapsed);
+  };
+
+  // Close sidebar if clicking outside on mobile (using overlay)
+  // Also reset sidebar state if window resizes from mobile to desktop while open
+  useEffect(() => {
+    const handleResize = () => {
+      if (window.innerWidth > 767 && !isSidebarCollapsed) {
+        // If resizing to desktop and sidebar was open (mobile style), collapse it by default? Or keep open? Let's keep it open for now.
+        // setIsSidebarCollapsed(true); // Optional: collapse on resize to desktop
+      } else if (window.innerWidth <= 767 && !isSidebarCollapsed) {
+        // Ensure it stays open if it was open on mobile resize
+      }
+    };
+
+    window.addEventListener('resize', handleResize);
+    return () => window.removeEventListener('resize', handleResize);
+  }, [isSidebarCollapsed]);
+
 
   // Create stars for the background
   useEffect(() => {
@@ -190,12 +230,15 @@ function App() {
   // Function to handle creating a new chat (can be passed to SideBar)
   const handleNewChat = () => {
     const navigate = useNavigate(); // Need to get navigate here or pass it down
-    navigate(`/chat/${uuidv4()}`);
+    // navigate(`/chat/${uuidv4()}`); // This was defined but not used, removing for now
   };
 
 
   return (
     <div id="content">
+      {/* Overlay for mobile sidebar */}
+      {!isSidebarCollapsed && <div className="sidebar-overlay" onClick={toggleSidebar}></div>}
+
       <div id="sky">
         {stars.map((star) => (
           <div
@@ -222,19 +265,28 @@ function App() {
 
       <div id="main">
         <SystemOverlay />
-        {/* Pass handleNewChat and potentially chat history/list to SideBar */}
-        {/* Note: handleNewChat needs access to navigate, might need adjustment */}
-        <SideBar systemInfo={systemInfo} /* onNewChat={handleNewChat} - Re-enable later if needed */ />
+        {/* Container for the two-column layout */}
+        {/* Add class based on sidebar state */}
+        <div className={`main-content-area ${isSidebarCollapsed ? "main-content-area--sidebar-collapsed" : ""}`}>
+          {/* Pass state and toggle function to SideBar */}
+          <SideBar
+            systemInfo={systemInfo}
+            isCollapsed={isSidebarCollapsed}
+            toggleSidebar={toggleSidebar}
+          />
 
-        {/* Main content area switches based on route */}
-        <Routes>
-           {/* Redirect root path to a new chat */}
-          <Route path="/" element={<RedirectToNewChat />} />
-          {/* Route for specific chat sessions */}
-          <Route path="/chat/:chatId" element={<ChatPage systemInfo={systemInfo} />} />
-           {/* Optional: Add a 404 or default route */}
-          <Route path="*" element={<Navigate to="/" replace />} />
-        </Routes>
+          {/* Main chat area switches based on route */}
+          <div className="chat-area-wrapper"> {/* Added wrapper for chat content */}
+            <Routes>
+              {/* Redirect root path to a new chat */}
+              <Route path="/" element={<RedirectToNewChat />} />
+              {/* Route for specific chat sessions */}
+              <Route path="/chat/:chatId" element={<ChatPage systemInfo={systemInfo} />} />
+              {/* Optional: Add a 404 or default route */}
+              <Route path="*" element={<Navigate to="/" replace />} />
+            </Routes>
+          </div>
+        </div>
       </div>
     </div>
   );
