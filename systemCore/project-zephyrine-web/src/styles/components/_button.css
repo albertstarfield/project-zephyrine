@@ -38,21 +38,21 @@
 #send,
 #stop {
   border: none;
-  border-radius: 50%; /* Make it circular */
+  border-radius: 1.124rem; /* Soft edge rectangle */
   outline: none;
   box-sizing: border-box;
-  padding: 0.5rem; /* Default padding */
+  padding: 0.7rem; /* Default padding */
   width: 40px; /* Default size */
   height: 40px; /* Default size */
   display: flex;
   align-items: center;
   justify-content: center;
-  background-color: var(--accent);
-  color: var(--on-accent, white); /* Text color on accent */
+  background-color: #fafad2; /* Pastel yellow */
+  color: #333; /* Darker text for better contrast on yellow */
   font-weight: bold;
   cursor: pointer;
   transition: background-color 0.2s, transform 0.1s ease;
-  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
   flex-shrink: 0; /* Prevent shrinking in flex container */
   pointer-events: all; /* Ensure clickable within form */
 }
