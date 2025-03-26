@@ -1,15 +1,20 @@
-import React, { useState, useEffect, useRef } from "react";
+import React, { useState, useEffect, useRef, useCallback } from "react"; // Added useCallback
 import { supabase } from "../utils/supabaseClient"; // Import Supabase client
 import "../styles/ChatInterface.css";
 import { ChevronDown, ChevronUp } from 'lucide-react'; // Example icons
 
-const ChatInterface = () => {
+// Define outside component or in a config file
+const WEBSOCKET_URL = "ws://localhost:3001"; // Assuming backend runs on port 3001
+
+const ChatInterface = ({ selectedModel = "llama3-8b-8192" }) => { // Added selectedModel prop with default
   const [messages, setMessages] = useState([]); // Initialize with empty array
   const [inputValue, setInputValue] = useState("");
-  const [isGenerating, setIsGenerating] = useState(false); // Keep this for potential future use with actual generation
+  const [isGenerating, setIsGenerating] = useState(false);
   const [error, setError] = useState(null); // Add error state
   const [isHistoryCollapsed, setIsHistoryCollapsed] = useState(false); // State for collapsing history
   const messagesEndRef = useRef(null); // Ref to scroll to bottom
+  const ws = useRef(null); // Ref for WebSocket instance
+  const currentAssistantMessageId = useRef(null); // Ref to track the ID of the message being streamed
 
   // Fetch messages on component mount
   useEffect(() => {
@@ -31,7 +36,40 @@ const ChatInterface = () => {
 
     fetchMessages();
 
-    // Optional: Set up real-time subscription
+    // --- WebSocket Connection Setup ---
+    const connectWebSocket = () => {
+      console.log("Attempting to connect WebSocket...");
+      ws.current = new WebSocket(WEBSOCKET_URL);
+
+      ws.current.onopen = () => {
+        console.log("WebSocket Connected");
+        setError(null); // Clear connection errors on successful connect
+      };
+
+      ws.current.onmessage = (event) => {
+        handleWebSocketMessage(event.data);
+      };
+
+      ws.current.onerror = (err) => {
+        console.error("WebSocket Error:", err);
+        setError("WebSocket connection error. Please try refreshing.");
+        // Attempt to reconnect after a delay
+        // setTimeout(connectWebSocket, 5000); // Simple reconnect logic
+      };
+
+      ws.current.onclose = () => {
+        console.log("WebSocket Disconnected");
+        // Optionally attempt to reconnect or notify user
+        // setError("WebSocket connection closed. Attempting to reconnect...");
+        // setTimeout(connectWebSocket, 5000); // Simple reconnect logic
+      };
+    };
+
+    connectWebSocket();
+    // --- End WebSocket Setup ---
+
+
+    // Optional: Set up real-time subscription (Keep commented out if using WebSocket for updates)
     // const subscription = supabase
     //   .channel('public:messages')
     //   .on('postgres_changes', { event: 'INSERT', schema: 'public', table: 'messages' }, payload => {
@@ -39,12 +77,13 @@ const ChatInterface = () => {
     //   })
     //   .subscribe();
 
-    // // Cleanup subscription on unmount
-    // return () => {
-    //   supabase.removeChannel(subscription);
-    // };
+    // Cleanup WebSocket on unmount
+    return () => {
+      ws.current?.close();
+      // supabase.removeChannel(subscription); // If using Supabase subscription
+    };
 
-  }, []);
+  }, []); // Empty dependency array ensures this runs only once on mount
 
   // Scroll to bottom when messages change or history is expanded
   useEffect(() => {
@@ -53,66 +92,148 @@ const ChatInterface = () => {
     }
   }, [messages, isHistoryCollapsed]);
 
+  // --- WebSocket Message Handler ---
+  const handleWebSocketMessage = useCallback((data) => {
+    try {
+      const message = JSON.parse(data);
+      // console.log("WS Message Received:", message); // Debug log
+
+      switch (message.type) {
+        case 'chunk':
+          setIsGenerating(true); // Ensure generating state is true while receiving chunks
+          setMessages((prevMessages) => {
+            const lastMessage = prevMessages[prevMessages.length - 1];
+            // If the last message is from the assistant and matches the current stream ID, append content
+            if (lastMessage?.sender === 'assistant' && lastMessage.id === currentAssistantMessageId.current) {
+              return prevMessages.map((msg) =>
+                msg.id === currentAssistantMessageId.current
+                  ? { ...msg, content: msg.content + message.payload.content }
+                  : msg
+              );
+            } else {
+              // Otherwise, add a new assistant message placeholder
+              const newAssistantMessage = {
+                // Use a temporary ID until saved to DB
+                id: `temp-${Date.now()}`, // Or use a UUID library
+                sender: 'assistant',
+                content: message.payload.content,
+                created_at: new Date().toISOString(),
+              };
+              currentAssistantMessageId.current = newAssistantMessage.id; // Track the new message ID
+              return [...prevMessages, newAssistantMessage];
+            }
+          });
+          break;
+        case 'end':
+          setIsGenerating(false);
+          // Save the completed message to Supabase
+          const finalMessage = messages.find(msg => msg.id === currentAssistantMessageId.current);
+          if (finalMessage) {
+             saveAssistantMessage(finalMessage.content);
+          }
+          currentAssistantMessageId.current = null; // Reset tracker
+          break;
+        case 'error':
+          console.error("WebSocket Server Error:", message.payload.error);
+          setError(`Assistant error: ${message.payload.error}`);
+          setIsGenerating(false);
+          currentAssistantMessageId.current = null; // Reset tracker
+          break;
+        default:
+          console.warn("Unknown WebSocket message type:", message.type);
+      }
+    } catch (error) {
+      console.error("Failed to parse WebSocket message:", error);
+      setError("Received invalid data from server.");
+      setIsGenerating(false); // Stop generation on parse error
+      currentAssistantMessageId.current = null; // Reset tracker
+    }
+  }, [messages]); // Include messages in dependency array for saving final message
+
+
+  // --- Function to save assistant message to Supabase ---
+  const saveAssistantMessage = async (content) => {
+    const { data: insertedAssistantMessage, error: assistantInsertError } = await supabase
+      .from("messages")
+      .insert([{ sender: "assistant", content: content }])
+      .select()
+      .single();
+
+    if (assistantInsertError) {
+      console.error("Error saving assistant message:", assistantInsertError);
+      setError("Failed to save assistant response.");
+      // Optionally handle UI update if needed (e.g., mark message as unsaved)
+    } else if (insertedAssistantMessage) {
+      // Replace the temporary message ID with the actual ID from Supabase
+      setMessages(prevMessages => prevMessages.map(msg =>
+        msg.id === currentAssistantMessageId.current ? { ...msg, id: insertedAssistantMessage.id } : msg
+      ));
+    }
+  };
+
+
+  // --- Send Message Handler ---
   const handleSendMessage = async (e) => {
     e.preventDefault();
+    if (!inputValue.trim() || isGenerating) return; // Prevent sending while generating
     setError(null); // Clear previous errors
-
-    if (!inputValue.trim()) return;
 
     const userMessageContent = inputValue;
     setInputValue(""); // Clear input immediately
 
-    // Optimistically add user message to UI (optional, improves perceived speed)
-    // const optimisticId = Date.now(); // Temporary ID
-    // setMessages((prev) => [
-    //   ...prev,
-    //   { id: optimisticId, sender: "user", content: userMessageContent, created_at: new Date().toISOString() },
-    // ]);
-
-    // Insert user message into Supabase
+    // 1. Save User Message to Supabase
     const { data: insertedMessage, error: insertError } = await supabase
       .from("messages")
       .insert([{ sender: "user", content: userMessageContent }])
-      .select() // Return the inserted row
-      .single(); // Expecting a single row back
+      .select()
+      .single();
 
     if (insertError) {
       console.error("Error sending message:", insertError);
       setError("Failed to send message.");
-      // Optional: Remove optimistic message if insertion failed
-      // setMessages((prev) => prev.filter(msg => msg.id !== optimisticId));
       setInputValue(userMessageContent); // Restore input value
       return;
     }
 
-    // Update state with the actual message from Supabase (if not using optimistic update or subscription)
+    // 2. Update Local State with User Message
+    let currentMessages = [];
     if (insertedMessage) {
-       setMessages((prev) => [...prev, insertedMessage]);
+       setMessages((prev) => {
+           currentMessages = [...prev, insertedMessage];
+           return currentMessages;
+       });
+    } else {
+        // Fallback if insert didn't return data (should not happen with .select())
+        currentMessages = [...messages, { id: `temp-user-${Date.now()}`, sender: 'user', content: userMessageContent, created_at: new Date().toISOString() }];
+        setMessages(currentMessages);
     }
 
 
-    // --- Assistant Response Logic Placeholder ---
-    // Here you would typically call your backend/AI service
-    // For now, we are just saving the user message.
-    // setIsGenerating(true);
-    // const assistantResponse = await getAssistantResponse(userMessageContent); // Example function
-    // if (assistantResponse) {
-    //   const { data: insertedAssistantMessage, error: assistantInsertError } = await supabase
-    //     .from("messages")
-    //     .insert([{ sender: "assistant", content: assistantResponse }])
-    //     .select()
-    //     .single();
-    //   if (insertedAssistantMessage) {
-    //      setMessages((prev) => [...prev, insertedAssistantMessage]);
-    //   } else {
-    //      console.error("Error saving assistant message:", assistantInsertError);
-    //      setError("Failed to save assistant response.");
-    //   }
-    // } else {
-    //    setError("Failed to get assistant response.");
-    // }
-    // setIsGenerating(false);
-    // --- End Placeholder ---
+    // 3. Send Message via WebSocket
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      try {
+        const messageToSend = {
+          type: 'chat',
+          payload: {
+            // Send relevant message history (adjust as needed for context)
+            messages: currentMessages.slice(-10), // Example: send last 10 messages
+            model: selectedModel // Use the model passed via props
+          }
+        };
+        ws.current.send(JSON.stringify(messageToSend));
+        setIsGenerating(true); // Start generating indicator
+        currentAssistantMessageId.current = null; // Reset assistant message tracker for the new request
+      } catch (sendError) {
+        console.error("WebSocket send error:", sendError);
+        setError("Failed to communicate with the assistant.");
+        setIsGenerating(false);
+      }
+    } else {
+      setError("WebSocket is not connected. Cannot send message.");
+      console.error("WebSocket is not open. ReadyState:", ws.current?.readyState);
+      // Optionally try to reconnect here
+      // connectWebSocket();
+    }
   };
 
   const toggleHistoryCollapse = () => {

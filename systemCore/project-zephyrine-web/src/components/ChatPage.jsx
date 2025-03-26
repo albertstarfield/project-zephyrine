@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react'; // Added useCallback
 import { useParams } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { supabase } from '../utils/supabaseClient';
@@ -6,6 +6,9 @@ import ChatFeed from "./ChatFeed";
 import InputArea from './InputArea';
 import '../styles/ChatInterface.css'; // Keep relevant styles if needed
 import '../styles/utils/_overlay.css'; // Keep relevant styles if needed
+
+// Define WebSocket URL
+const WEBSOCKET_URL = "ws://localhost:3001";
 
 // Component to handle individual chat sessions
 function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
@@ -17,6 +20,9 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
   const [error, setError] = useState(null);
   const [streamingAssistantMessage, setStreamingAssistantMessage] = useState(null); // State for the message being streamed
   const bottomRef = useRef(null);
+  const ws = useRef(null); // Ref for WebSocket instance
+  const currentAssistantMessageId = useRef(null); // Ref to track the ID of the message being streamed
+  const accumulatedContentRef = useRef(""); // Ref to accumulate content chunks
 
   // Fetch messages when chatId changes
   useEffect(() => {
@@ -53,6 +59,42 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
     // return () => {
     //   supabase.removeChannel(subscription);
     // };
+
+    // --- WebSocket Connection Setup ---
+    const connectWebSocket = () => {
+      console.log("Attempting to connect WebSocket...");
+      ws.current = new WebSocket(WEBSOCKET_URL);
+
+      ws.current.onopen = () => {
+        console.log("WebSocket Connected");
+        setError(null); // Clear connection errors on successful connect
+      };
+
+      ws.current.onmessage = (event) => {
+        handleWebSocketMessage(event.data);
+      };
+
+      ws.current.onerror = (err) => {
+        console.error("WebSocket Error:", err);
+        setError("WebSocket connection error. Please try refreshing.");
+        // Consider adding reconnect logic here if needed
+      };
+
+      ws.current.onclose = () => {
+        console.log("WebSocket Disconnected");
+        // Consider adding reconnect logic or user notification
+      };
+    };
+
+    connectWebSocket();
+    // --- End WebSocket Setup ---
+
+    // Cleanup WebSocket on unmount or chatId change
+    return () => {
+      ws.current?.close();
+      // supabase.removeChannel(subscription); // If using Supabase subscription
+    };
+
   }, [chatId]); // Re-run effect when chatId changes
 
   // Scroll to bottom when messages change
@@ -62,177 +104,216 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
     }
   }, [messages, streamingAssistantMessage]); // Also scroll when streaming message updates
 
+
+  // --- WebSocket Message Handler ---
+  const handleWebSocketMessage = useCallback((data) => {
+    try {
+      const message = JSON.parse(data);
+      // console.log("WS Message Received:", message); // Debug log
+
+      switch (message.type) {
+        case 'chunk':
+          setIsGenerating(true);
+          const contentChunk = message.payload.content;
+          accumulatedContentRef.current += contentChunk; // Append to ref
+
+          // Update UI state for streaming display
+          setStreamingAssistantMessage(prev => {
+            // Ensure we have a streaming message object to update
+            if (!prev && currentAssistantMessageId.current) {
+              // Initialize if it's the first chunk for this message ID
+              return {
+                id: currentAssistantMessageId.current,
+                sender: 'assistant',
+                content: accumulatedContentRef.current, // Use accumulated content
+                chat_id: chatId,
+                created_at: new Date().toISOString(), // Consider using a fixed start time
+                isLoading: true,
+              };
+            } else if (prev) {
+               // Update existing streaming message content
+               return { ...prev, content: accumulatedContentRef.current };
+            }
+            return prev; // Should not happen if currentAssistantMessageId is set
+          });
+          break;
+        case 'end':
+          setIsGenerating(false);
+          const finalContent = accumulatedContentRef.current; // Get final content from ref
+
+          if (finalContent && currentAssistantMessageId.current) {
+            // Create the final message object
+            const finalMessage = {
+              ...streamingAssistantMessage, // Get base details like chatId, created_at
+              id: currentAssistantMessageId.current, // Use the tracked ID
+              content: finalContent,
+              isLoading: false,
+            };
+
+            // Save to Supabase
+            saveAssistantMessage(finalContent, finalMessage.id); // Pass ID for potential update
+
+            // Add the final message to the main messages list
+            setMessages(prev => [...prev, finalMessage]);
+          } else {
+             console.log("End event received but no content accumulated or ID tracked.");
+          }
+
+          // Reset for next message
+          setStreamingAssistantMessage(null);
+          accumulatedContentRef.current = "";
+          currentAssistantMessageId.current = null;
+          break;
+        case 'error':
+          console.error("WebSocket Server Error:", message.payload.error);
+          setError(`Assistant error: ${message.payload.error}`);
+          setIsGenerating(false);
+          setStreamingAssistantMessage(null);
+          accumulatedContentRef.current = "";
+          currentAssistantMessageId.current = null;
+          break;
+        default:
+          console.warn("Unknown WebSocket message type:", message.type);
+      }
+    } catch (error) {
+      console.error("Failed to parse WebSocket message:", error);
+      setError("Received invalid data from server.");
+      setIsGenerating(false);
+      setStreamingAssistantMessage(null);
+      accumulatedContentRef.current = "";
+      currentAssistantMessageId.current = null;
+    }
+  }, [chatId]); // Dependencies - Removed streamingAssistantMessage
+
+
+  // --- Function to save assistant message to Supabase ---
+  const saveAssistantMessage = async (content, tempId) => { // Accept tempId
+    if (!content || !chatId) return;
+
+    const { data: dbAssistantMessage, error: assistantSaveError } = await supabase
+      .from('messages')
+      .insert([
+        {
+          sender: 'assistant',
+          content: content,
+          chat_id: chatId,
+          user_id: user?.id, // Associate with user if logged in
+        },
+      ])
+      .select()
+      .single();
+
+    if (assistantSaveError) {
+      console.error("Error saving assistant message:", assistantSaveError);
+      setError("Failed to save assistant response.");
+      // Update the message in the list to show an error state
+      setMessages(prev => prev.map(msg =>
+        msg.id === tempId ? { ...msg, error: 'Failed to save' } : msg
+      ));
+    } else if (dbAssistantMessage) {
+      // Replace the temporary message with the final one from the database
+      setMessages(prev => {
+        const existingMessages = prev.filter(msg => msg.id !== tempId); // Remove potential temp message
+        return [...existingMessages, dbAssistantMessage]; // Add the final message
+      });
+      console.log("Assistant message saved:", dbAssistantMessage.id);
+    }
+  };
+
+
+  // --- Send Message Handler (WebSocket) ---
   const handleSendMessage = async (text) => {
     if (!text.trim() || !chatId || isGenerating) return; // Prevent sending while generating
 
     setError(null);
     const userMessageContent = text;
-    setInputValue('');
+    setInputValue(''); // Clear input field
     setShowPlaceholder(false); // Hide placeholder on send
 
-    // --- 1. Add User Message ---
-    const userMessage = {
+    // --- 1. Prepare and Save User Message ---
+    const userMessageData = {
       sender: 'user',
       content: userMessageContent,
       chat_id: chatId,
       user_id: user?.id,
     };
-    // Optimistically add user message to UI
-    const optimisticUserMessage = { ...userMessage, created_at: new Date().toISOString(), id: uuidv4() }; // Add temp ID and timestamp
-    setMessages((prev) => [...prev, optimisticUserMessage]);
+    // Add user message optimistically to UI
+    const optimisticUserMessage = { ...userMessageData, created_at: new Date().toISOString(), id: uuidv4() };
+    let currentMessages = [...messages, optimisticUserMessage];
+    setMessages(currentMessages);
 
-    // Save user message to DB (async, don't necessarily wait)
-    supabase
-      .from('messages')
-      .insert([userMessage]) // Insert the original object without temp ID
-      .select()
-      .single()
-      .then(({ data: dbUserMessage, error: insertError }) => {
-        if (insertError) {
-          console.error("Error saving user message:", insertError);
-          setError("Failed to save your message.");
-          // Optionally update the optimistic message to show an error state
-          setMessages(prev => prev.map(msg => msg.id === optimisticUserMessage.id ? { ...msg, error: 'Failed to save' } : msg));
-        } else {
-          // Update the message in state with the ID from DB if needed (optional)
-          // setMessages(prev => prev.map(msg => msg.id === optimisticUserMessage.id ? dbUserMessage : msg));
-          console.log("User message saved:", dbUserMessage);
-          // If this was the first message, refresh the history list in the sidebar
-          if (messages.length === 0) { // Check if messages *before* adding the new one was empty
-             refreshHistory();
-          }
-        }
-      });
-
-
-    // --- 2. Prepare for Assistant Response ---
-    setIsGenerating(true);
-    const assistantMessageId = uuidv4(); // Generate ID for the assistant message
-    let fullAssistantResponse = "";
-
-    // --- 2. Prepare Streaming State ---
-    setStreamingAssistantMessage({
-      id: assistantMessageId, // Use generated ID
-      sender: 'assistant',
-      content: '',
-      chat_id: chatId,
-      created_at: new Date().toISOString(),
-      isLoading: true,
+    // Save user message to DB (no need to await)
+    supabase.from('messages').insert([userMessageData]).select().single().then(({ data: dbUserMessage, error: insertError }) => {
+      if (insertError) {
+        console.error("Error saving user message:", insertError);
+        setError("Failed to save your message.");
+        setMessages(prev => prev.map(msg => msg.id === optimisticUserMessage.id ? { ...msg, error: 'Failed to save' } : msg));
+      } else {
+        // Optionally update message ID if needed, or just log success
+        console.log("User message saved:", dbUserMessage?.id);
+        // Refresh history if it was the first message
+        if (messages.length === 0) refreshHistory();
+      }
     });
 
+    // --- 2. Send Message via WebSocket ---
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      try {
+        const messageToSend = {
+          type: 'chat',
+          payload: {
+            // Send relevant message history (adjust context length as needed)
+            messages: currentMessages.slice(-10).map(m => ({ sender: m.sender, content: m.content })), // Format for backend
+            model: selectedModel
+          }
+        };
+        ws.current.send(JSON.stringify(messageToSend));
+        setIsGenerating(true);
 
-    // --- 3. Call Backend API for Streaming ---
-    try {
-       const response = await fetch(`http://localhost:3001/api/chat`, {
-         method: 'POST',
-         headers: {
-           'Content-Type': 'application/json',
-         },
-         body: JSON.stringify({
-           messages: [...messages, { sender: 'user', content: userMessageContent }].map(m => ({ sender: m.sender, content: m.content })),
-           model: selectedModel,
-         }),
-       });
+        // --- 3. Prepare Streaming State (Initialize refs and state) ---
+        accumulatedContentRef.current = ""; // Reset accumulator
+        currentAssistantMessageId.current = `temp-assistant-${Date.now()}`; // Generate temporary ID
+        setStreamingAssistantMessage({ // Set initial streaming state for UI
+          id: currentAssistantMessageId.current,
+          sender: 'assistant',
+          content: '', // Start empty
+          chat_id: chatId,
+          created_at: new Date().toISOString(),
+          isLoading: true,
+        });
 
-       if (!response.ok) {
-         const errorData = await response.json().catch(() => ({ error: 'Failed to fetch stream' }));
-         throw new Error(errorData.error || `HTTP error! status: ${response.status}`);
-       }
-
-       if (!response.body) {
-         throw new Error('Response body is null');
-       }
-
-       const reader = response.body.getReader();
-       const decoder = new TextDecoder();
-       let buffer = '';
-
-       while (true) {
-         const { done, value } = await reader.read();
-         if (done) {
-           console.log('Stream finished.');
-           break;
-         }
-
-         buffer += decoder.decode(value, { stream: true });
-         const lines = buffer.split('\n');
-         buffer = lines.pop() || '';
-
-         for (const line of lines) {
-           if (line.startsWith('data:')) {
-             try {
-               const jsonData = JSON.parse(line.substring(5).trim());
-               if (jsonData.content) {
-                 fullAssistantResponse += jsonData.content;
-                 setStreamingAssistantMessage(prev => prev ? { ...prev, content: fullAssistantResponse } : null);
-               } else if (jsonData.error) {
-                 console.error("Error from stream:", jsonData.error);
-                 setError(`Stream error: ${jsonData.error}`);
-                 reader.cancel();
-                 break;
-               }
-             } catch (e) {
-               console.error('Error parsing SSE data:', e, 'Line:', line);
-             }
-           } else if (line.startsWith('event: error')) {
-             // Handle explicit error event
-           } else if (line.startsWith('event: end')) {
-             console.log('Received end event from stream.');
-             reader.cancel();
-             break;
-           }
-         }
-         if (reader.closed) {
-            break;
-         }
-       }
-
-       setIsGenerating(false);
-       setStreamingAssistantMessage(prev => prev ? { ...prev, isLoading: false } : null);
-
-       if (fullAssistantResponse.trim()) {
-         console.log("Attempting to save full response:", fullAssistantResponse);
-         const { data: dbAssistantMessage, error: assistantSaveError } = await supabase
-           .from('messages')
-           .insert([
-             {
-               sender: 'assistant',
-               content: fullAssistantResponse,
-               chat_id: chatId,
-               user_id: user?.id, // Associate with user if logged in
-             },
-           ])
-           .select()
-           .single();
-
-         if (assistantSaveError) {
-           console.error("Error saving assistant message:", assistantSaveError);
-           setError("Failed to save assistant response.");
-           setStreamingAssistantMessage(prev => prev ? { ...prev, error: 'Failed to save' } : null);
-         } else {
-           setMessages(prev => [...prev, dbAssistantMessage]);
-           setStreamingAssistantMessage(null);
-           console.log("Assistant message saved:", dbAssistantMessage);
-         }
-       } else {
-         console.log("No content received from stream, clearing placeholder.");
-         setStreamingAssistantMessage(null);
-       }
-
-    } catch (err) {
-      console.error("Error fetching or processing stream:", err);
-      setError(`Failed to get response: ${err.message}`);
-      setStreamingAssistantMessage(null);
-      setIsGenerating(false);
+      } catch (sendError) {
+        console.error("WebSocket send error:", sendError);
+        setError("Failed to communicate with the assistant.");
+        setIsGenerating(false);
+        setStreamingAssistantMessage(null); // Clear placeholder on send error
+      }
+    } else {
+      setError("WebSocket is not connected. Cannot send message.");
+      console.error("WebSocket is not open. ReadyState:", ws.current?.readyState);
+      // Optionally try to reconnect here
     }
   };
 
 
   const handleStopGeneration = () => {
-    // TODO: Implement AbortController logic to stop the fetch request
-    console.log("Stopping generation - cancellation logic needed");
-    setIsGenerating(false); // Reset UI state
-    setStreamingAssistantMessage(null); // Clear any partial streaming message
+    // Basic stop: close WebSocket or send a 'stop' message if backend supports it
+    console.log("Stopping generation...");
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+       // Option 1: Send a stop message (if backend handles it)
+       // ws.current.send(JSON.stringify({ type: 'stop' }));
+
+       // Option 2: Just close the connection (might be abrupt)
+       // ws.current.close();
+    }
+    setIsGenerating(false);
+    // Finalize potentially partial message if needed, or just clear it
+    if (streamingAssistantMessage && streamingAssistantMessage.content) {
+       saveAssistantMessage(streamingAssistantMessage.content); // Save what we have
+       setMessages(prev => [...prev, { ...streamingAssistantMessage, isLoading: false }]);
+    }
+    setStreamingAssistantMessage(null);
+    currentAssistantMessageId.current = null;
   };
 
   const handleExampleClick = (text) => {

@@ -2,9 +2,13 @@ require('dotenv').config(); // Load .env variables
 const express = require('express');
 const cors = require('cors');
 const Groq = require('groq-sdk');
+const http = require('http'); // Import http module
+const { WebSocketServer } = require('ws'); // Import WebSocketServer
 
 const app = express();
 const port = process.env.PORT || 3001;
+const server = http.createServer(app); // Create HTTP server from Express app
+const wss = new WebSocketServer({ server }); // Create WebSocket server
 
 // --- Middleware ---
 // Enable CORS for requests from your frontend (adjust origin in production)
@@ -28,67 +32,84 @@ const formatMessages = (messages) => {
   }));
 };
 
-// --- API Endpoint ---
-app.post('/api/chat', async (req, res) => {
-  const { messages, model } = req.body;
+// --- WebSocket Handling ---
+wss.on('connection', (ws) => {
+  console.log('Client connected via WebSocket');
 
-  // Basic validation
-  if (!messages || !Array.isArray(messages) || messages.length === 0) {
-    return res.status(400).json({ error: 'Missing or invalid "messages" array in request body.' });
-  }
-  if (!model) {
-    return res.status(400).json({ error: 'Missing "model" in request body.' });
-  }
+  ws.on('message', async (message) => {
+    console.log('Received message:', message.toString());
+    let requestData;
 
-  try {
-    const formattedMsgs = formatMessages(messages);
+    try {
+      requestData = JSON.parse(message.toString());
+    } catch (error) {
+      console.error('Failed to parse incoming message:', error);
+      ws.send(JSON.stringify({ type: 'error', payload: { error: 'Invalid message format. Expected JSON.' } }));
+      return;
+    }
 
-    // Set headers for Server-Sent Events (SSE)
-    res.setHeader('Content-Type', 'text/event-stream');
-    res.setHeader('Cache-Control', 'no-cache');
-    res.setHeader('Connection', 'keep-alive');
-    res.flushHeaders(); // Send headers immediately
+    // Handle 'chat' message type
+    if (requestData.type === 'chat') {
+      const { messages, model } = requestData.payload;
 
-    console.log(`Streaming response for model: ${model}`);
-
-    const stream = await groq.chat.completions.create({
-      messages: formattedMsgs,
-      model: model,
-      temperature: 0.7,
-      max_tokens: 1024,
-      top_p: 1,
-      stream: true,
-    });
-
-    // Stream data to the client
-    for await (const chunk of stream) {
-      const content = chunk.choices[0]?.delta?.content || '';
-      if (content) {
-        // Format as SSE: data: {...}\n\n
-        res.write(`data: ${JSON.stringify({ content })}\n\n`);
+      // Basic validation
+      if (!messages || !Array.isArray(messages) || messages.length === 0) {
+        ws.send(JSON.stringify({ type: 'error', payload: { error: 'Missing or invalid "messages" array in payload.' } }));
+        return;
       }
-    }
+      if (!model) {
+        ws.send(JSON.stringify({ type: 'error', payload: { error: 'Missing "model" in payload.' } }));
+        return;
+      }
 
-    // Signal end of stream (optional, client might handle closure)
-    // res.write('event: end\ndata: {}\n\n');
+      try {
+        const formattedMsgs = formatMessages(messages);
+        console.log(`Streaming response via WebSocket for model: ${model}`);
 
-    console.log('Stream finished.');
-    res.end(); // End the response when the stream is finished
+        const stream = await groq.chat.completions.create({
+          messages: formattedMsgs,
+          model: model,
+          temperature: 0.7,
+          max_tokens: 1024,
+          top_p: 1,
+          stream: true,
+        });
 
-  } catch (error) {
-    console.error('Error calling Groq API:', error);
-    // If headers haven't been sent, send a JSON error
-    if (!res.headersSent) {
-      res.status(500).json({ error: 'Failed to get response from Groq API.' });
+        // Stream data back to the client via WebSocket
+        for await (const chunk of stream) {
+          const content = chunk.choices[0]?.delta?.content || '';
+          if (content) {
+            ws.send(JSON.stringify({ type: 'chunk', payload: { content } }));
+          }
+        }
+
+        // Signal end of stream
+        ws.send(JSON.stringify({ type: 'end' }));
+        console.log('Stream finished for WebSocket client.');
+
+      } catch (error) {
+        console.error('Error calling Groq API:', error);
+        ws.send(JSON.stringify({ type: 'error', payload: { error: 'Failed to get response from Groq API.' } }));
+      }
     } else {
-      // If headers were sent, try to send an error event via SSE
-      res.write(`event: error\ndata: ${JSON.stringify({ error: 'Groq API error' })}\n\n`);
-      res.end(); // End the response
+      console.log(`Received unhandled message type: ${requestData.type}`);
+      // Optionally send an error or ignore
+      // ws.send(JSON.stringify({ type: 'error', payload: { error: `Unhandled message type: ${requestData.type}` } }));
     }
-  }
+  });
+
+  ws.on('close', () => {
+    console.log('Client disconnected');
+  });
+
+  ws.on('error', (error) => {
+    console.error('WebSocket error:', error);
+  });
 });
 
+
 // --- Start Server ---
-app.listen(port, () => {
-  console.log(`Backend service listening on port ${port}`);
+// Start the HTTP server which includes WebSocket support
+server.listen(port, () => {
+  console.log(`Backend service with WebSocket listening on port ${port}`);
 });
