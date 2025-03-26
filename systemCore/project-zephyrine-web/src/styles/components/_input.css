@@ -167,3 +167,18 @@
     border: 2px solid var(--primary-text);
   }
 }
+
+/* Disclaimer text below input */
+.disclaimer-text {
+  font-size: 0.75rem; /* Small font size */
+  color: var(--text-secondary); /* Use secondary text color */
+  text-align: center;
+  margin-top: 0.5rem; /* Add some space above it */
+  padding: 0 1rem; /* Add horizontal padding */
+  max-width: 48rem; /* Match input container max-width for alignment */
+  width: 100%;
+  box-sizing: border-box;
+  pointer-events: none; /* Text is not interactive */
+  /* Ensure it's within the flex flow of #form */
+  align-self: center;
+}
