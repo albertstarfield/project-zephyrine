@@ -1,234 +1,136 @@
-import React from "react";
+import React, { useState } from "react"; // Import useState
 import { useNavigate } from "react-router-dom";
 import { v4 as uuidv4 } from "uuid";
+import "../styles/components/_sidebar.css"; // Import sidebar styles
 
-const SideBar = ({ systemInfo }) => {
+// Placeholder icons for collapse/expand and hamburger
+const CollapseIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="9" y1="3" x2="9" y2="21"></line></svg>;
+const ExpandIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><rect x="3" y="3" width="18" height="18" rx="2" ry="2"></rect><line x1="15" y1="3" x2="15" y2="21"></line></svg>;
+const HamburgerIcon = () => <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"><line x1="3" y1="12" x2="21" y2="12"></line><line x1="3" y1="6" x2="21" y2="6"></line><line x1="3" y1="18" x2="21" y2="18"></line></svg>;
+
+
+// Receive isCollapsed and toggleSidebar as props
+const SideBar = ({ systemInfo, isCollapsed, toggleSidebar }) => {
   const navigate = useNavigate();
+  // State is now managed by App.jsx
 
   const handleNewChat = () => {
     navigate(`/chat/${uuidv4()}`);
   };
 
+  // Placeholder for chat history items
+  const chatHistory = [
+    { id: "chat1", title: "React Basics Discussion" },
+    { id: "chat2", title: "CSS Flexbox Help" },
+    { id: "chat3", title: "JavaScript Function Example" },
+  ];
+
   return (
-    <div className="form-header">
-       {/* New Chat Button */}
-      <div className="action-button" id="new-chat" onClick={handleNewChat} title="New Chat">
-        <svg
-          viewBox="0 0 24 24"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-          stroke="currentColor"
-        >
-          <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-          <g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g>
-          <g id="SVGRepo_iconCarrier">
-            <path d="M12 7V17M7 12H17" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
-            <path opacity="0.5" d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" strokeWidth="2"></path>
-          </g>
-        </svg>
-      </div>
+    <>
+      {/* Hamburger button for mobile - styling will handle visibility */}
+      <button className="sidebar-hamburger-button" onClick={toggleSidebar} aria-label="Toggle sidebar">
+        <HamburgerIcon />
+      </button>
 
-      {/* Existing Buttons */}
-      <div className="action-button" id="interaction-session-reset" title="Reset Session (Not Implemented)">
-        <svg
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {/* SVG content for reset */}
-          <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-          <g
-            id="SVGRepo_tracerCarrier"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          ></g>
-          <g id="SVGRepo_iconCarrier">
-            <path
-              opacity="0.5"
-              fillRule="evenodd"
-              clipRule="evenodd"
-              d="M12.4277 2C11.3139 2 10.2995 2.6007 8.27081 3.80211L7.58466 4.20846C5.55594 5.40987 4.54158 6.01057 3.98466 7C3.42773 7.98943 3.42773 9.19084 3.42773 11.5937V12.4063C3.42773 14.8092 3.42773 16.0106 3.98466 17C4.54158 17.9894 5.55594 18.5901 7.58466 19.7915L8.27081 20.1979C10.2995 21.3993 11.3139 22 12.4277 22C13.5416 22 14.5559 21.3993 16.5847 20.1979L17.2708 19.7915C19.2995 18.5901 20.3139 17.9894 20.8708 17C21.4277 16.0106 21.4277 14.8092 21.4277 12.4063V11.5937C21.4277 9.19084 21.4277 7.98943 20.8708 7C20.3139 6.01057 19.2995 5.40987 17.2708 4.20846L16.5847 3.80211C14.5559 2.6007 13.5416 2 12.4277 2Z"
-              fill="#545454"
-            ></path>
-            <path
-              d="M12.4277 8.25C10.3567 8.25 8.67773 9.92893 8.67773 12C8.67773 14.0711 10.3567 15.75 12.4277 15.75C14.4988 15.75 16.1777 14.0711 16.1777 12C16.1777 9.92893 14.4988 8.25 12.4277 8.25Z"
-              fill="#545454"
-            ></path>
-          </g>
-        </svg>
-      </div>
+      <aside className={`sidebar ${isCollapsed ? "sidebar--collapsed" : ""}`}>
+        {/* Desktop Collapse/Expand Button - Placed at the top for now */}
+        <button className="sidebar-toggle-button sidebar-toggle-desktop" onClick={toggleSidebar} title={isCollapsed ? "Expand sidebar" : "Collapse sidebar"}>
+          {isCollapsed ? <ExpandIcon /> : <CollapseIcon />}
+        </button>
 
-      <div className="action-button" id="settings" title="Settings (Not Implemented)">
-        <svg
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {/* SVG content for settings */}
-          <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-          <g
-            id="SVGRepo_tracerCarrier"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          ></g>
-          <g id="SVGRepo_iconCarrier">
-            <path
-              opacity="0.5"
-              fillRule="evenodd"
-              clipRule="evenodd"
-              d="M12.4277 2C11.3139 2 10.2995 2.6007 8.27081 3.80211L7.58466 4.20846C5.55594 5.40987 4.54158 6.01057 3.98466 7C3.42773 7.98943 3.42773 9.19084 3.42773 11.5937V12.4063C3.42773 14.8092 3.42773 16.0106 3.98466 17C4.54158 17.9894 5.55594 18.5901 7.58466 19.7915L8.27081 20.1979C10.2995 21.3993 11.3139 22 12.4277 22C13.5416 22 14.5559 21.3993 16.5847 20.1979L17.2708 19.7915C19.2995 18.5901 20.3139 17.9894 20.8708 17C21.4277 16.0106 21.4277 14.8092 21.4277 12.4063V11.5937C21.4277 9.19084 21.4277 7.98943 20.8708 7C20.3139 6.01057 19.2995 5.40987 17.2708 4.20846L16.5847 3.80211C14.5559 2.6007 13.5416 2 12.4277 2Z"
-              fill="#545454"
-            ></path>
-            <path
-              d="M12.4277 8.25C10.3567 8.25 8.67773 9.92893 8.67773 12C8.67773 14.0711 10.3567 15.75 12.4277 15.75C14.4988 15.75 16.1777 14.0711 16.1777 12C16.1777 9.92893 14.4988 8.25 12.4277 8.25Z"
-              fill="#545454"
-            ></path>
-          </g>
-        </svg>
-      </div>
-
-      <div className="action-button" id="aboutSection" title="About (Not Implemented)">
-        <svg
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          fill="none"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {/* SVG content for about */}
-          <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-          <g
-            id="SVGRepo_tracerCarrier"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          ></g>
-          <g id="SVGRepo_iconCarrier">
-            <path
-              opacity="0.5"
-              d="M12 5.21395C11.3163 5.21395 10.9426 5.05264 10.2823 4.87544C8.9381 4.51475 8.04921 3.76429 7 3.48742C6.11349 3.25349 4.95877 3.13488 3.9824 3.07487C2.8863 3.0075 2 3.89961 2 4.99778V16.1436C2 17.2545 2.90605 18.1534 4.01486 18.2228C4.98428 18.2834 6.12329 18.402 7 18.6333C7.48596 18.7616 8.21615 19.0645 8.87295 19.3592C9.87751 19.81 10.7139 20.3926 12 20.3926C13.2861 20.3926 14.1225 19.81 15.127 19.3592C15.7838 19.0645 16.514 18.7616 17 18.6333C17.8767 18.402 19.0157 18.2834 19.9851 18.2228C21.094 18.1534 22 17.2545 22 16.1436V4.99778C22 3.89961 21.1137 3.0075 20.0176 3.07487C19.0412 3.13488 17.8865 3.25349 17 3.48742C15.9508 3.76429 15.0619 4.51475 13.7177 4.87544C13.0574 5.05264 12.6837 5.21395 12 5.21395Z"
-              fill="#383838"
-            ></path>
-            <path
-              d="M4.27257 12.8183C4.37303 12.4164 4.78023 12.1721 5.18208 12.2726L9.18208 13.2726C9.58393 13.373 9.82825 13.7802 9.72778 14.1821C9.62732 14.5839 9.22012 14.8282 8.81828 14.7278L4.81828 13.7278C4.41643 13.6273 4.17211 13.2201 4.27257 12.8183Z"
-              fill="#383838"
-            ></path>
-            <path
-              d="M5.18208 8.27257C4.78023 8.17211 4.37303 8.41643 4.27257 8.81828C4.17211 9.22012 4.41643 9.62732 4.81828 9.72778L8.81828 10.7278C9.22012 10.8282 9.62732 10.5839 9.72778 10.1821C9.82825 9.78023 9.58393 9.37303 9.18208 9.27257L5.18208 8.27257Z"
-              fill="#383838"
-            ></path>
-            <path
-              d="M19.7274 12.8183C19.627 12.4164 19.2198 12.1721 18.8179 12.2726L14.8179 13.2726C14.4161 13.373 14.1718 13.7802 14.2722 14.1821C14.3727 14.5839 14.7799 14.8282 15.1817 14.7278L19.1817 13.7278C19.5836 13.6273 19.8279 13.2201 19.7274 12.8183Z"
-              fill="#383838"
-            ></path>
-            <path
-              d="M18.8179 8.27257C19.2198 8.17211 19.627 8.41643 19.7274 8.81828C19.8279 9.22012 19.5836 9.62732 19.1817 9.72778L15.1817 10.7278C14.7799 10.8282 14.3727 10.5839 14.2722 10.1821C14.1718 9.78023 14.4161 9.37303 14.8179 9.27257L18.8179 8.27257Z"
-              fill="#383838"
-            ></path>
-          </g>
-        </svg>
-      </div>
-
-      <div className="action-button" id="interactionHistorySession" title="History (Not Implemented)">
-        <svg
-          viewBox="0 0 24 24"
-          stroke="currentColor"
-          xmlns="http://www.w3.org/2000/svg"
-        >
-          {/* SVG content for history */}
-          <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-          <g
-            id="SVGRepo_tracerCarrier"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          ></g>
-          <g id="SVGRepo_iconCarrier">
-            <path
-              d="M7.45648 3.08984C4.21754 4.74468 2 8.1136 2 12.0004C2 13.6001 2.37562 15.1121 3.04346 16.4529C3.22094 16.8092 3.28001 17.2165 3.17712 17.6011L2.58151 19.8271C2.32295 20.7934 3.20701 21.6775 4.17335 21.4189L6.39939 20.8233C6.78393 20.7204 7.19121 20.7795 7.54753 20.957C8.88836 21.6248 10.4003 22.0005 12 22.0005C16.8853 22.0005 20.9524 18.4973 21.8263 13.866C20.1758 15.7851 17.7298 17.0004 15 17.0004C10.0294 17.0004 6 12.971 6 8.00045C6 6.18869 6.53534 4.50197 7.45648 3.08984Z"
-              fill="#4d4d4d"
-            ></path>
-            <path
-              opacity="0.5"
-              d="M21.8263 13.8655C21.9403 13.2611 22 12.6375 22 12C22 6.47715 17.5228 2 12 2C10.4467 2 8.97611 2.35415 7.66459 2.98611C7.59476 3.01975 7.52539 3.05419 7.45648 3.08939C6.53534 4.50152 6 6.18824 6 8C6 12.9706 10.0294 17 15 17C17.7298 17 20.1758 15.7847 21.8263 13.8655Z"
-              fill="#4d4d4d"
-            ></path>
-          </g>
-        </svg>
-      </div>
-
-      <hr style={{ borderBottom: "4.2rem solid currentColor", opacity: 0.4 }} />
-
-      <div className="action-button" id="autonomousHandlessInteraction" title="Autonomous (Not Implemented)">
-        <svg
-          viewBox="0 -77.5 1179 1179"
-          stroke="currentColor"
-          className="icon"
-          version="1.1"
-          xmlns="http://www.w3.org/2000/svg"
-          fill="#000000"
-        >
-          {/* SVG content for autonomous */}
-          <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-          <g
-            id="SVGRepo_tracerCarrier"
-            strokeLinecap="round"
-            strokeLinejoin="round"
-          ></g>
-          <g id="SVGRepo_iconCarrier">
-            <path
-              d="M597.215632 994.574713h403.714943s43.549425-8.945287 43.549425-114.64092 94.16092-577.677241-459.976092-577.677241-457.151264 541.425287-457.151264 541.425287-25.423448 160.77977 54.848735 157.013333 415.014253-6.12046 415.014253-6.120459z"
-              fill="#FFFFFF"
-            ></path>
-            <path
-              d="M1071.786667 712.798161h72.503908v136.297931h-72.503908zM36.016552 712.798161h72.503908v136.297931H36.016552z"
-              fill="#7a7a7a"
-            ></path>
-            <path
-              d="M305.68366 559.40926l556.254412-1.165018 0.398364 190.20464-556.254412 1.165018-0.398364-190.20464Z"
-              fill="#9297a5"
-            ></path>
-            <path
-              d="M1129.931034 680.312644h-59.556781c-3.295632-152.069885-67.56046-258.942529-172.079081-324.384368l115.347127-238.462529a47.08046 47.08046 0 1 0-42.372414-20.48l-114.640919 236.57931a625.934713 625.934713 0 0 0-269.30023-53.200919 625.228506 625.228506 0 0 0-270.006437 54.848736l-115.817931-235.402299a47.08046 47.08046 0 1 0-42.372414 20.715402l117.701149 238.462529c-103.812414 65.441839-167.135632 173.02069-169.960459 324.61977H47.786667a47.08046 47.08046 0 0 0-47.08046 47.08046v117.701149a47.08046 47.08046 0 0 0 47.08046 47.08046h58.615172v57.908965a70.62069 70.62069 0 0 0 70.62069 70.62069l823.908046-1.647816a70.62069 70.62069 0 0 0 70.620689-70.62069v-57.908965h59.085977a47.08046 47.08046 0 0 0 47.08046-47.08046v-117.701149A47.08046 47.08046 0 0 0 1129.931034 680.312644zM94.16092 847.212874H47.08046v-117.70115h47.08046v117.70115z m929.83908 103.106206a23.54023 23.54023 0 0 1-23.54023 23.54023l-823.908046 1.647816a23.54023 23.54023 0 0 1-23.54023-23.540229v-258.942529c0-329.563218 303.668966-365.57977 434.788046-365.815173s435.494253 34.604138 436.20046 363.931954z m105.46023-105.224827h-47.08046v-117.70115h47.08046v117.70115z"
-              fill="#3F4651"
-            ></path>
-            <path
-              d="M464.684138 135.827126l22.363218-19.53839 40.018391 62.381609a30.131494 30.131494 0 0 0 25.423448 13.888735h2.824828a30.131494 30.131494 0 0 0 25.188046-19.067586l20.715402-79.095172 21.186207 74.387126v2.118621a30.366897 30.366897 0 0 0 52.494713 6.826667l30.366896-57.202759 13.182529 12.947126a30.131494 30.131494 0 0 0 21.186207 8.709886h57.673563a23.54023 23.54023 0 0 0 23.54023-23.54023 23.54023 23.54023 0 0 0-23.54023-23.54023h-50.140689l-23.54023-23.54023a30.366897 30.366897 0 0 0-45.668046 3.766437l-21.42161 40.01839L629.465747 19.302989a30.131494 30.131494 0 0 0-28.012873-19.067587 30.131494 30.131494 0 0 0-28.012874 19.067587l-26.60046 101.693793-29.660689-47.08046a30.366897 30.366897 0 0 0-20.48-13.653333 30.837701 30.837701 0 0 0-23.54023 6.826666l-32.250115 28.248276h-60.027586a23.54023 23.54023 0 0 0-23.54023 23.54023 23.54023 23.54023 0 0 0 23.54023 23.54023h66.148046a31.308506 31.308506 0 0 0 17.655172-6.591265zM776.121379 532.950805H404.421149A121.232184 121.232184 0 0 0 282.482759 639.352644a117.701149 117.701149 0 0 0 117.701149 129.000459h371.70023a121.232184 121.232184 0 0 0 121.938391-106.401839 117.701149 117.701149 0 0 0-117.70115-129.000459z m0 188.321839H402.302529a72.503908 72.503908 0 0 1-72.268506-56.496552 70.62069 70.62069 0 0 1 68.972874-84.744828h373.81885a72.503908 72.503908 0 0 1 72.268506 56.496552 70.62069 70.62069 0 0 1-68.502069 84.744828z"
-              fill="#3F4651"
-            ></path>
-          </g>
-        </svg>
-      </div>
-
-      <div className="interactionSessionTab info hidden">
-        <button id="session0">
+        <div className="sidebar-top-actions">
+          {/* New Chat Button */}
+          <button className="sidebar-button new-chat-button" onClick={handleNewChat} title={isCollapsed ? "New Chat" : ""}>
           <svg
-            stroke="currentColor"
-            fill="none"
-            height="1em"
-            width="1em"
             viewBox="0 0 24 24"
+            className="sidebar-icon"
+            fill="none"
             xmlns="http://www.w3.org/2000/svg"
+            stroke="currentColor"
           >
-            {/* SVG content for session button */}
             <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-            <g
-              id="SVGRepo_tracerCarrier"
-              strokeLinecap="round"
-              strokeLinejoin="round"
-            ></g>
+            <g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g>
             <g id="SVGRepo_iconCarrier">
-              <path
-                opacity="0.5"
-                d="M13.6288 20.4718L13.0867 21.3877C12.6035 22.204 11.3965 22.204 10.9133 21.3877L10.3712 20.4718C9.95073 19.7614 9.74049 19.4063 9.40279 19.2098C9.06509 19.0134 8.63992 19.0061 7.78958 18.9915C6.53422 18.9698 5.74689 18.8929 5.08658 18.6194C3.86144 18.1119 2.88807 17.1386 2.3806 15.9134C2 14.9946 2 13.8297 2 11.5V10.5C2 7.22657 2 5.58985 2.7368 4.38751C3.14908 3.71473 3.71473 3.14908 4.38751 2.7368C5.58985 2 7.22657 2 10.5 2H13.5C16.7734 2 18.4101 2 19.6125 2.7368C20.2853 3.14908 20.8509 3.71473 21.2632 4.38751C22 5.58985 22 7.22657 22 10.5V11.5C22 13.8297 22 14.9946 21.6194 15.9134C21.1119 17.1386 20.1386 18.1119 18.9134 18.6194C18.2531 18.8929 17.4658 18.9698 16.2104 18.9915C15.36 19.0061 14.9349 19.0134 14.5972 19.2098C14.2595 19.4062 14.0492 19.7614 13.6288 20.4718Z"
-              ></path>
-              <path d="M7.25 9C7.25 8.58579 7.58579 8.25 8 8.25H16C16.4142 8.25 16.75 8.58579 16.75 9C16.75 9.41421 16.4142 9.75 16 9.75H8C7.58579 9.75 7.25 9.41421 7.25 9Z"></path>
-              <path d="M7.25 12.5C7.25 12.0858 7.58579 11.75 8 11.75H13.5C13.9142 11.75 14.25 12.0858 14.25 12.5C14.25 12.9142 13.9142 13.25 13.5 13.25H8C7.58579 13.25 7.25 12.9142 7.25 12.5Z"></path>
+              <path d="M12 7V17M7 12H17" strokeWidth="2" strokeLinecap="round" strokeLinejoin="round"></path>
+              <path opacity="0.5" d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" strokeWidth="2"></path>
             </g>
           </svg>
+          {!isCollapsed && <span>New Chat</span>} {/* Conditionally render text */}
         </button>
-        {/* Add more session buttons here dynamically if needed */}
+        {/* Placeholder for Model Selector */}
+        {!isCollapsed && ( // Hide model selector when collapsed
+          <div className="sidebar-button model-selector-placeholder">
+            <span>GPT-4o</span> {/* Default/Current model */}
+            {/* Dropdown icon/arrow */}
+            <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" className="dropdown-arrow"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M7 10L12 15L17 10" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> </g></svg>
+          </div>
+        )}
       </div>
-    </div>
+
+      {/* Chat History Section */}
+      <nav className="sidebar-history">
+        {!isCollapsed && <h4>History</h4>} {/* Hide title when collapsed */}
+        <ul>
+          {chatHistory.map(chat => (
+            <li key={chat.id} title={isCollapsed ? chat.title : ""}> {/* Add title for tooltip when collapsed */}
+              <button onClick={() => navigate(`/chat/${chat.id}`)}>
+                {/* Placeholder for potential icon */}
+                {!isCollapsed && chat.title} {/* Hide text when collapsed */}
+              </button>
+              {/* Add rename/delete icons here later */}
+            </li>
+          ))}
+        </ul>
+      </nav>
+
+      {/* GPTs Section Placeholder */}
+      <nav className="sidebar-gpts">
+        {!isCollapsed && <h4>GPTs</h4>} {/* Hide title when collapsed */}
+         {/* Placeholder for recently used/pinned GPTs */}
+        <ul>
+          <li title={isCollapsed ? "Web Browser" : ""}>
+            <button className="sidebar-button">
+              <span>🌐</span> {/* Keep icon */}
+              {!isCollapsed && <span>&nbsp;Web Browser</span>} {/* Hide text */}
+            </button>
+          </li>
+          <li title={isCollapsed ? "DALL-E" : ""}>
+            <button className="sidebar-button">
+              <span>🎨</span> {/* Keep icon */}
+              {!isCollapsed && <span>&nbsp;DALL-E</span>} {/* Hide text */}
+            </button>
+          </li>
+        </ul>
+      </nav>
+
+      {/* Projects Section Placeholder */}
+      <nav className="sidebar-projects">
+         {/* Could be a button or a list */}
+         <button className="sidebar-button" title={isCollapsed ? "Projects" : ""}>
+           {/* Placeholder Icon */}
+           <svg viewBox="0 0 24 24" className="sidebar-icon" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M9 4H15M9 4C8.44772 4 8 4.44772 8 5V7C8 7.55228 8.44772 8 9 8H15C15.5523 8 16 7.55228 16 7V5C16 4.44772 15.5523 4 15 4M9 4C6.52166 4 4.68603 4.44384 3.50389 5.28131C2.32175 6.11878 2 7.1433 2 9.19234V14.8077C2 16.8567 2.32175 17.8812 3.50389 18.7187C4.68603 19.5562 6.52166 20 9 20H15C17.4783 20 19.314 19.5562 20.4961 18.7187C21.6782 17.8812 22 16.8567 22 14.8077V9.19234C22 7.1433 21.6782 6.11878 20.4961 5.28131C19.314 4.44384 17.4783 4 15 4" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"></path> <path d="M12 11V17" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"></path> <path d="M9 14L12 17L15 14" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"></path> </g></svg>
+           {!isCollapsed && <span>Projects</span>} {/* Hide text */}
+         </button>
+      </nav>
+
+      {/* Spacer to push bottom content down */}
+      <div className="sidebar-spacer"></div>
+
+      {/* Bottom Actions (User, Settings) */}
+      <div className="sidebar-bottom-actions">
+         {/* User Button */}
+        <button className="sidebar-button" title={isCollapsed ? (systemInfo.username || "User") : ""}>
+          <svg viewBox="0 0 24 24" className="sidebar-icon" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"> <path opacity="0.5" d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z" stroke="currentColor" strokeWidth="1.5"></path> <path d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="currentColor" strokeWidth="1.5"></path> </g></svg>
+          {!isCollapsed && <span>{systemInfo.username || "User"}</span>} {/* Hide text */}
+        </button>
+         {/* Settings Button Placeholder */}
+         <button className="sidebar-button" title={isCollapsed ? "Settings" : ""}>
+           <svg viewBox="0 0 24 24" className="sidebar-icon" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M16.694 9.506L15.3808 8.1928C14.818 7.63001 14.818 6.70968 15.3808 6.14689L16.694 4.83369C17.2568 4.2709 18.1771 4.2709 18.7399 4.83369L20.0531 6.14689C20.6159 6.70968 20.6159 7.63001 20.0531 8.1928L18.7399 9.506C18.1771 10.0688 17.2568 10.0688 16.694 9.506Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> <path d="M16.694 19.1663L15.3808 17.8531C14.818 17.2903 14.818 16.3699 15.3808 15.8071L16.694 14.4939C17.2568 13.9311 18.1771 13.9311 18.7399 14.4939L20.0531 15.8071C20.6159 16.3699 20.6159 17.2903 20.0531 17.8531L18.7399 19.1663C18.1771 19.7291 17.2568 19.7291 16.694 19.1663Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> <path d="M8.1928 9.506L6.8796 8.1928C6.31681 7.63001 6.31681 6.70968 6.8796 6.14689L8.1928 4.83369C8.75559 4.2709 9.67592 4.2709 10.2387 4.83369L11.5519 6.14689C12.1147 6.70968 12.1147 7.63001 11.5519 8.1928L10.2387 9.506C9.67592 10.0688 8.75559 10.0688 8.1928 9.506Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> <path d="M8.1928 19.1663L6.8796 17.8531C6.31681 17.2903 6.31681 16.3699 6.8796 15.8071L8.1928 14.4939C8.75559 13.9311 9.67592 13.9311 10.2387 14.4939L11.5519 15.8071C12.1147 16.3699 12.1147 17.2903 11.5519 17.8531L10.2387 19.1663C9.67592 19.7291 8.75559 19.7291 8.1928 19.1663Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> </g></svg>
+           {!isCollapsed && <span>Settings</span>} {/* Hide text */}
+         </button>
+      </div>
+    </aside>
+    </> // Close the fragment
   );
 };
 

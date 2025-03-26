@@ -270,17 +270,39 @@ const ChatFeed = ({
           {messages.map((message) => (
             <li
               key={message.id}
-              className={message.sender === "user" ? "user-msg" : "bot-default"}
+              className={`message-bubble ${message.sender === "user" ? "user-bubble" : "assistant-bubble"}`}
             >
-              {renderMessageContent(message.content)}
+              <div className="message-container">
+                {/* Avatar Placeholder */}
+                <div className={`avatar ${message.sender === "user" ? "user-avatar" : "assistant-avatar"}`}>
+                  {message.sender === 'user' ? 'U' : 'A'} {/* Simple text avatar */}
+                </div>
+                <div className="message-content">
+                  {renderMessageContent(message.content)}
+                   {/* Interaction Buttons Placeholder (only for assistant) */}
+                   {message.sender === 'assistant' && (
+                    <div className="message-interactions">
+                      {/* Buttons like Copy, Regenerate, Thumbs up/down will go here */}
+                      <button title="Copy"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"></path></svg></button>
+                      <button title="Regenerate"><svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"></path></svg></button>
+                      {/* Add more button placeholders */}
+                    </div>
+                  )}
+                </div>
+              </div>
             </li>
           ))}
           {isGenerating && (
-            <li className="bot-default">
-              <div className="generating-indicator">
-                <span>Generating response</span>
-                <span className="dot-animation">...</span>
-              </div>
+            <li className="message-bubble assistant-bubble">
+               <div className="message-container">
+                 <div className="avatar assistant-avatar">A</div>
+                 <div className="message-content">
+                    <div className="generating-indicator">
+                      <span>Generating response</span>
+                      <span className="dot-animation">...</span>
+                    </div>
+                 </div>
+               </div>
             </li>
           )}
           <div id="bottom" ref={bottomRef}></div>

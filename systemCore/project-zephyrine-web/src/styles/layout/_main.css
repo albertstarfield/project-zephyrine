@@ -12,74 +12,135 @@
 }
 
 #main {
-  z-index: 10; /* Adjusted from very high number */
-  display: flex;
+  z-index: 10;
+  display: flex; /* Use flex for the overall main container */
+  flex-direction: column; /* Stack SystemOverlay and main-content-area */
   margin-top: 32px; /* Default margin, adjust in media queries */
-  max-height: calc(100vh - 32px); /* Corresponds to margin-top */
-  position: fixed;
+  height: calc(100vh - 32px); /* Fill remaining viewport height */
+  position: fixed; /* Keep it fixed */
   top: 0;
   left: 0;
   width: 100%;
-  gap: 0.5rem;
-  padding: 0 0.5rem;
+  padding: 0 0.5rem; /* Add horizontal padding */
+  box-sizing: border-box; /* Include padding in width/height */
+}
+
+.main-content-area {
+  display: flex; /* This enables the two-column layout */
+  flex-grow: 1; /* Allow this area to grow and fill #main */
+  width: 100%;
+  gap: 0.5rem; /* Space between sidebar and chat area */
+  overflow: hidden; /* Prevent content overflow */
+  transition: gap 0.3s ease; /* Add transition for gap */
+}
+
+/* Style adjustments when sidebar is collapsed (desktop) */
+/* This might not be strictly needed if only sidebar width changes */
+.main-content-area--sidebar-collapsed {
+  /* Example: Adjust gap if desired */
+  /* gap: 0.25rem; */
+}
+
+
+.chat-area-wrapper {
+  flex-grow: 1; /* Takes up remaining space */
+  display: flex; /* Use flex to manage ChatPage content */
+  flex-direction: column; /* Stack ChatFeed and InputArea */
+  overflow: hidden; /* Prevent internal overflow */
+  background-color: var(--background); /* Background for the chat area */
+  border-radius: 1rem; /* Rounded corners */
+  position: relative; /* For positioning elements like InputArea */
 }
 
 #feed {
-  flex-grow: 1; /* Allow feed to take remaining space */
-  height: calc(100vh - 32px); /* Match #main max-height */
-  overflow-y: auto;
-  background-color: var(--background);
-  border-radius: 1rem; /* Added for consistency */
+  flex-grow: 1; /* Allow feed to take available space within wrapper */
+  overflow-y: auto; /* Enable scrolling for messages */
   padding: 0.5rem;
-  margin-left: 2.5rem; /* Default margin, adjust in media queries */
-  position: relative; /* Needed for potential absolute children */
+  /* margin-left is removed as flexbox handles positioning */
+  position: relative; /* Needed for welcome screen absolute positioning */
+  display: flex; /* Use flex to manage internal content (welcome vs messages) */
+  flex-direction: column; /* Stack messages vertically */
 }
 
-/* Layout adjustments for different screen sizes */
+/* --- Responsive Adjustments --- */
+
+/* Large screens */
 @media (min-width: 1024px) {
   #main {
     margin-top: 32px;
+    height: calc(100vh - 32px);
     padding: 0 1rem;
+  }
+  .main-content-area {
     gap: 1rem;
   }
+  .chat-area-wrapper {
+    border-radius: 1rem; /* Consistent rounding */
+  }
   #feed {
-    height: calc(100vh - 32px);
-    margin-left: 4rem; /* Adjust based on sidebar width */
     padding: 1rem;
   }
 }
 
+/* Medium screens (Tablets) */
 @media (max-width: 1023px) and (min-width: 768px) {
   #main {
     margin-top: 24px;
+    height: calc(100vh - 24px);
+    padding: 0 0.75rem;
+  }
+  .main-content-area {
+    gap: 0.75rem;
+  }
+  .chat-area-wrapper {
+    border-radius: 0.75rem;
   }
   #feed {
-    height: calc(100vh - 24px);
-    margin-left: 3.5rem; /* Adjust based on sidebar width */
     padding: 0.75rem;
   }
+  /* Consider collapsing sidebar here if needed */
 }
 
+/* Small screens (Mobile) */
 @media (max-width: 767px) {
   #main {
     margin-top: 24px;
+    height: calc(100vh - 24px);
+    padding: 0 0.5rem;
+  }
+  .main-content-area {
+    gap: 0.5rem;
+    /* Potentially hide sidebar by default */
+    /* Example: .sidebar { display: none; } */
+  }
+  .chat-area-wrapper {
+    border-radius: 0.5rem;
   }
   #feed {
-    height: calc(100vh - 24px);
-    margin-left: 3rem; /* Adjust based on sidebar width */
     padding: 0.5rem;
   }
+  /* Adjust sidebar display/positioning for mobile toggle */
+  /* On mobile, sidebar is fixed, so main content doesn't need margin adjustments */
+  .main-content-area--sidebar-collapsed {
+     /* Reset any desktop-specific collapsed styles if needed */
+     gap: 0.5rem; /* Ensure mobile gap is consistent */
+  }
 }
 
+/* Extra small screens */
 @media (max-width: 480px) {
-  #feed {
-    margin-left: 2.5rem; /* Adjust based on sidebar width */
+  #main {
+    padding: 0 0.25rem;
   }
+  .main-content-area {
+    gap: 0.25rem;
+  }
+  /* Further adjustments if needed */
 }
 
-/* Prevent layout shifts on keyboard open (mobile) */
-@media screen and (max-height: 600px) {
-  #feed {
-    height: calc(100vh - 80px); /* Adjust based on input area height */
-  }
-}
+
+/* Prevent layout shifts on keyboard open (mobile) - May need further refinement */
+/* This is tricky with flexbox; consider adjusting InputArea position or using JS */
+/* @media screen and (max-height: 600px) { */
+  /* #feed might not need height adjustment if InputArea is handled correctly */
+/* } */

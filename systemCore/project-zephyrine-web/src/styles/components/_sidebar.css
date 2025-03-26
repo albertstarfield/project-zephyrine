@@ -1,0 +1,340 @@
+/* styles/components/_sidebar.css */
+
+.sidebar {
+  display: flex;
+  flex-direction: column;
+  width: 260px; /* Standard width for sidebars */
+  height: 100%; /* Fill the height of .main-content-area */
+  background-color: var(--background-light); /* Slightly lighter background */
+  padding: 0.75rem;
+  box-sizing: border-box;
+  border-radius: 1rem; /* Match chat area */
+  overflow-y: auto; /* Allow scrolling if content exceeds height */
+  flex-shrink: 0; /* Prevent sidebar from shrinking */
+  color: var(--text-primary);
+  transition: width 0.3s ease, transform 0.3s ease; /* Add transition for width and transform */
+  position: relative; /* Needed for absolute positioning of toggle button */
+}
+
+/* --- Toggle Buttons --- */
+.sidebar-toggle-button,
+.sidebar-hamburger-button {
+  background: none;
+  border: none;
+  color: var(--text-secondary);
+  cursor: pointer;
+  padding: 0.5rem;
+  display: flex; /* Use flex for centering icon */
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.3rem;
+}
+
+.sidebar-toggle-button:hover,
+.sidebar-hamburger-button:hover {
+  background-color: var(--background-hover);
+  color: var(--text-primary);
+}
+
+.sidebar-toggle-button svg,
+.sidebar-hamburger-button svg {
+  width: 1.2em;
+  height: 1.2em;
+}
+
+/* Desktop toggle button specific positioning */
+.sidebar-toggle-desktop {
+  position: absolute;
+  top: 0.75rem;
+  right: -1.5rem; /* Position outside the sidebar */
+  background-color: var(--background-light);
+  border: 1px solid var(--border-color);
+  z-index: 10; /* Ensure it's above content */
+  opacity: 0; /* Hidden by default, show on hover */
+  transition: opacity 0.2s ease, background-color 0.2s ease;
+}
+
+.sidebar:hover .sidebar-toggle-desktop,
+.sidebar--collapsed .sidebar-toggle-desktop { /* Show when sidebar hovered or collapsed */
+  opacity: 1;
+}
+
+/* Mobile hamburger button - hidden by default */
+.sidebar-hamburger-button {
+  display: none;
+  position: fixed; /* Position relative to viewport */
+  top: 1rem;
+  left: 1rem;
+  z-index: 1100; /* Above sidebar and overlay */
+  background-color: var(--background-medium); /* Make it visible */
+}
+
+
+.sidebar-top-actions {
+  margin-bottom: 1rem;
+  /* Ensure buttons stack correctly when collapsed */
+  display: flex;
+  flex-direction: column;
+  gap: 0.5rem;
+}
+
+.sidebar-button {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.6rem 0.8rem;
+  border-radius: 0.5rem;
+  background-color: transparent;
+  border: none;
+  color: var(--text-primary);
+  font-size: 0.9rem;
+  text-align: left;
+  cursor: pointer;
+  transition: background-color 0.2s ease, padding 0.3s ease; /* Add padding transition */
+  overflow: hidden; /* Prevent text overflow during transition */
+  white-space: nowrap; /* Keep text on one line */
+}
+
+.sidebar-button:hover {
+  background-color: var(--background-hover);
+}
+
+.sidebar-icon {
+  width: 1.2em;
+  height: 1.2em;
+  margin-right: 0.8rem;
+  stroke-width: 1.5; /* Adjust icon stroke */
+  flex-shrink: 0; /* Prevent icon from shrinking */
+}
+
+.new-chat-button {
+  /* Specific styles if needed, e.g., border */
+  border: 1px solid var(--border-color);
+  /* margin-bottom removed, using gap in parent */
+}
+
+/* Styles for the model selector placeholder */
+.model-selector-placeholder {
+  justify-content: space-between; /* Push arrow to the right */
+  cursor: pointer; /* Indicate it's clickable */
+  /* Inherits .sidebar-button styles for padding, alignment etc. */
+  /* margin-top removed, using gap in parent */
+  border: 1px solid transparent; /* Add border space for consistency on hover */
+}
+
+.model-selector-placeholder:hover {
+  background-color: var(--background-hover);
+  border-color: var(--border-color); /* Show border on hover */
+}
+
+.model-selector-placeholder span {
+  font-weight: 500; /* Make model name slightly bolder */
+}
+
+.dropdown-arrow {
+  width: 1em; /* Adjust size as needed */
+  height: 1em;
+  stroke: var(--text-secondary); /* Lighter color for arrow */
+  margin-left: 0.5rem; /* Space between text and arrow */
+}
+
+
+.sidebar-history {
+  flex-grow: 1; /* Takes up available space */
+  overflow-y: auto; /* Scroll history if needed */
+  margin-bottom: 1rem;
+}
+
+.sidebar-history h4 {
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  padding: 0 0.8rem;
+  margin-bottom: 0.5rem;
+  transition: opacity 0.3s ease; /* Fade out title */
+}
+
+.sidebar-history ul {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-history li {
+  /* Add transition for potential icon display later */
+}
+
+.sidebar-history li button {
+  font-size: 0.85rem;
+  /* white-space, overflow, text-overflow handled by parent .sidebar-button */
+  width: 100%;
+  justify-content: flex-start; /* Align text left */
+}
+
+/* Hide button text content (spans, direct text) when collapsed */
+.sidebar--collapsed .sidebar-button > span,
+.sidebar--collapsed .sidebar-history li button {
+  opacity: 0;
+  width: 0; /* Collapse width */
+  margin-right: 0; /* Remove margin next to icon */
+}
+
+/* Styles for GPTs and Projects sections */
+.sidebar-gpts,
+.sidebar-projects {
+  margin-top: 1rem; /* Space above these sections */
+}
+
+.sidebar-gpts h4,
+.sidebar-projects h4 { /* Shared heading style if Projects uses h4 */
+  font-size: 0.75rem;
+  color: var(--text-secondary);
+  text-transform: uppercase;
+  padding: 0 0.8rem;
+  margin-bottom: 0.5rem;
+  transition: opacity 0.3s ease; /* Fade out title */
+}
+
+.sidebar-gpts ul,
+.sidebar-projects ul { /* Shared list style if Projects uses ul */
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.sidebar-gpts li button,
+.sidebar-projects li button { /* Shared list item button style */
+  font-size: 0.85rem;
+}
+
+/* Specific style for the single Projects button example */
+.sidebar-projects .sidebar-button {
+  font-size: 0.85rem; /* Match history/gpts list items */
+}
+
+
+.sidebar-spacer {
+  flex-grow: 1; /* Pushes bottom actions down */
+}
+
+.sidebar-bottom-actions {
+  margin-top: auto; /* Stick to bottom */
+  padding-top: 1rem;
+  border-top: 1px solid var(--border-color);
+}
+
+
+/* --- Collapsed State Styles --- */
+.sidebar--collapsed {
+  width: 80px; /* Width when collapsed */
+  padding: 0.75rem 0.5rem; /* Adjust padding */
+}
+
+.sidebar--collapsed .sidebar-top-actions {
+  gap: 0.75rem; /* Adjust gap */
+}
+
+.sidebar--collapsed .sidebar-button {
+  justify-content: center; /* Center icon */
+  padding: 0.6rem 0; /* Adjust padding for icon only */
+}
+
+.sidebar--collapsed .sidebar-icon {
+  margin-right: 0; /* No margin needed when text is hidden */
+}
+
+/* Hide elements fully when collapsed */
+.sidebar--collapsed .model-selector-placeholder,
+.sidebar--collapsed .sidebar-history h4,
+.sidebar--collapsed .sidebar-gpts h4,
+.sidebar--collapsed .sidebar-projects h4 {
+  display: none;
+}
+
+.sidebar--collapsed .sidebar-history li button {
+  /* Specific adjustments for history items if needed */
+  justify-content: center;
+}
+
+.sidebar--collapsed .sidebar-gpts li button span:last-child, /* Hide text span in GPTs */
+.sidebar--collapsed .sidebar-projects .sidebar-button span:last-child, /* Hide text span in Projects */
+.sidebar--collapsed .sidebar-bottom-actions .sidebar-button span:last-child { /* Hide text span in bottom actions */
+   display: none;
+}
+
+.sidebar--collapsed .sidebar-toggle-desktop {
+  right: -1.5rem; /* Keep toggle button position */
+}
+
+
+/* --- Responsive adjustments for sidebar (Mobile) --- */
+@media (max-width: 767px) {
+  /* Hide desktop toggle */
+  .sidebar-toggle-desktop {
+    display: none;
+  }
+
+  /* Show mobile hamburger */
+  .sidebar-hamburger-button {
+    display: flex; /* Show the button */
+  }
+
+  /* Sidebar positioning and visibility for mobile */
+  .sidebar {
+    position: fixed; /* Take out of flow */
+    left: 0;
+    top: 0;
+    height: 100%; /* Full height */
+    z-index: 1000; /* Above main content */
+    transform: translateX(-100%); /* Hidden off-screen by default */
+    width: 260px; /* Full width when open */
+    border-radius: 0 1rem 1rem 0; /* Adjust border radius for slide-in */
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1); /* Add shadow */
+  }
+
+  /* State when sidebar should be visible on mobile */
+  .sidebar:not(.sidebar--collapsed) { /* When expanded (isCollapsed is false) */
+    transform: translateX(0); /* Slide in */
+  }
+
+  /* --- Mobile specific overrides when sidebar is OPEN --- */
+  .sidebar:not(.sidebar--collapsed) {
+    /* Ensure full width and padding are applied */
+    width: 260px;
+    padding: 0.75rem;
+  }
+
+  .sidebar:not(.sidebar--collapsed) .sidebar-button {
+    justify-content: flex-start; /* Align items left */
+    padding: 0.6rem 0.8rem; /* Restore padding */
+  }
+
+  .sidebar:not(.sidebar--collapsed) .sidebar-icon {
+    margin-right: 0.8rem; /* Restore margin */
+  }
+
+  /* Show text elements when open on mobile */
+  .sidebar:not(.sidebar--collapsed) .sidebar-button > span,
+  .sidebar:not(.sidebar--collapsed) .sidebar-history li button,
+  .sidebar:not(.sidebar--collapsed) .sidebar-gpts li button span:last-child,
+  .sidebar:not(.sidebar--collapsed) .sidebar-projects .sidebar-button span:last-child,
+  .sidebar:not(.sidebar--collapsed) .sidebar-bottom-actions .sidebar-button span:last-child {
+    display: inline; /* Or block, depending on original */
+    opacity: 1;
+    width: auto;
+  }
+
+  .sidebar:not(.sidebar--collapsed) .model-selector-placeholder,
+  .sidebar:not(.sidebar--collapsed) .sidebar-history h4,
+  .sidebar:not(.sidebar--collapsed) .sidebar-gpts h4,
+  .sidebar:not(.sidebar--collapsed) .sidebar-projects h4 {
+    display: block; /* Or initial */
+  }
+
+  /* --- Mobile specific overrides when sidebar is CLOSED --- */
+  /* (Styles are handled by the default hidden state via transform: translateX(-100%)) */
+
+  /* Adjust main content area when sidebar is open/closed? */
+  /* This might need to be handled in _main.css or App.jsx */
+
+}
