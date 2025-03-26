@@ -2,24 +2,34 @@ import React, { useEffect, useState } from "react";
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
+import { Copy, RefreshCw } from 'lucide-react'; // Import icons
 
 const ChatFeed = ({
   messages,
+  streamingMessage, // Added prop for streaming message object
   showPlaceholder,
-  isGenerating,
+  isGenerating, // Still needed for the overall generating indicator
   onExampleClick,
   bottomRef,
   assistantName,
+  // Add new props for actions
+  onCopy,
+  onRegenerate,
+  copySuccessId,
+  lastAssistantMessageIndex,
 }) => {
   const [fadeIn, setFadeIn] = useState(false);
 
   useEffect(() => {
-    if (messages.length > 0) {
+    // Fade in logic remains the same
+    if (messages.length > 0 || streamingMessage) { // Also consider streaming message for fade-in
       setTimeout(() => {
         setFadeIn(true);
-      }, 100);
+      }, 100); // Short delay for effect
+    } else {
+      setFadeIn(false); // Reset if messages are cleared
     }
-  }, [messages]);
+  }, [messages, streamingMessage]);
 
   // Function to render message content with markdown support
   const renderMessageContent = (content) => {
@@ -267,44 +277,70 @@ const ChatFeed = ({
         </div>
       ) : (
         <ul id="messages" className={fadeIn ? "fade-in" : ""}>
-          {messages.map((message) => (
+          {/* Render saved messages */}
+          {messages.map((message, index) => (
             <li
-              key={message.id}
+              key={message.id} // Use actual ID from DB
               className={`message-bubble ${message.sender === "user" ? "user-bubble" : "assistant-bubble"}`}
             >
               <div className="message-container">
-                {/* Avatar Placeholder */}
                 <div className={`avatar ${message.sender === "user" ? "user-avatar" : "assistant-avatar"}`}>
-                  {message.sender === 'user' ? 'U' : 'A'} {/* Simple text avatar */}
+                  {message.sender === 'user' ? 'U' : 'A'}
                 </div>
-                <div className="message-content">
-                  {renderMessageContent(message.content)}
-                   {/* Interaction Buttons Placeholder (only for assistant) */}
-                   {message.sender === 'assistant' && (
-                    <div className="message-interactions">
-                      {/* Buttons like Copy, Regenerate, Thumbs up/down will go here */}
-                      <button title="Copy"><svg viewBox="0 0 24 24"><path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"></path></svg></button>
-                      <button title="Regenerate"><svg viewBox="0 0 24 24"><path d="M17.65 6.35C16.2 4.9 14.21 4 12 4c-4.42 0-7.99 3.58-7.99 8s3.57 8 7.99 8c3.73 0 6.84-2.55 7.73-6h-2.08c-.82 2.33-3.04 4-5.65 4-3.31 0-6-2.69-6-6s2.69-6 6-6c1.66 0 3.14.69 4.22 1.78L13 11h7V4l-2.35 2.35z"></path></svg></button>
-                      {/* Add more button placeholders */}
-                    </div>
-                  )}
+                <div className="message-content-wrapper"> {/* Wrapper for content + actions */}
+                  <div className="message-content">
+                    {renderMessageContent(message.content)}
+                    {message.error && <span className="message-error"> ({message.error})</span>}
+                  </div>
+                  {/* Action Buttons */}
+                  <div className="message-actions">
+                    <button
+                      onClick={() => onCopy(message.content, message.id)}
+                      className="message-action-button copy-button"
+                      title="Copy message"
+                    >
+                      {copySuccessId === message.id ? 'Copied!' : <Copy size={14} />}
+                    </button>
+                    {/* Show Regenerate button only for the last assistant message when not generating */}
+                    {message.sender === 'assistant' && index === lastAssistantMessageIndex && !isGenerating && (
+                      <button
+                        onClick={onRegenerate}
+                        className="message-action-button regenerate-button"
+                        title="Regenerate response"
+                        disabled={isGenerating} // Double check disabled state
+                      >
+                        <RefreshCw size={14} />
+                      </button>
+                    )}
+                  </div>
                 </div>
               </div>
             </li>
           ))}
-          {isGenerating && (
-            <li className="message-bubble assistant-bubble">
+
+          {/* Render streaming assistant message */}
+          {streamingMessage && streamingMessage.isLoading && (
+             <li
+               key={streamingMessage.id} // Use temp ID
+               className="message-bubble assistant-bubble streaming"
+             >
                <div className="message-container">
                  <div className="avatar assistant-avatar">A</div>
-                 <div className="message-content">
-                    <div className="generating-indicator">
-                      <span>Generating response</span>
-                      <span className="dot-animation">...</span>
-                    </div>
+                 <div className="message-content-wrapper">
+                   <div className="message-content">
+                     {renderMessageContent(streamingMessage.content)}
+                     {/* Optional: Blinking cursor effect */}
+                     <span className="streaming-cursor"></span>
+                   </div>
+                   {/* No actions needed for streaming message usually */}
                  </div>
                </div>
-            </li>
-          )}
+             </li>
+           )}
+
+          {/* Optional: Keep a general indicator if needed, though streaming message replaces it */}
+          {/* {isGenerating && !streamingMessage && ( ... ) } */}
+
           <div id="bottom" ref={bottomRef}></div>
         </ul>
       )}

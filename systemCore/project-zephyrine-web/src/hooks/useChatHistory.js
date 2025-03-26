@@ -16,60 +16,33 @@ export function useChatHistory() {
     }
 
     try {
-      // Get distinct chat IDs associated with the user
-      const { data: distinctChats, error: distinctError } = await supabase
-        .from('messages')
-        .select('chat_id') // Just need chat_id
-        .eq('user_id', user.id);
+      // Fetch chat entries directly from the 'chats' table for the current user
+      console.log(`Fetching chat history for user: ${user.id}`); // Add log
+      const { data: chatsData, error: chatsError } = await supabase
+        .from('chats')
+        .select('id, title, created_at') // Select necessary fields
+        .eq('user_id', user.id)
+        .order('created_at', { ascending: false }); // Order by creation date, newest first
 
-      if (distinctError) {
-        console.error("Error fetching distinct chat IDs:", distinctError);
+      if (chatsError) {
+        console.error("Error fetching chats from chats table:", chatsError);
         setChatHistory([]); // Reset on error
         return;
       }
 
-      if (!distinctChats || distinctChats.length === 0) {
-        setChatHistory([]); // No history yet
-        return;
-      }
+      // Format the data for the state
+      const formattedHistory = chatsData.map(chat => ({
+        id: chat.id,
+        // Use the stored title, provide a fallback if somehow null/empty
+        title: chat.title || `Chat ${chat.id.substring(0, 8)}...`,
+        timestamp: chat.created_at
+      }));
 
-      // Get unique chat IDs
-      const uniqueChatIds = [...new Set(distinctChats.map(c => c.chat_id))];
-
-      // Fetch the first message for each unique chat ID to generate a title
-      const historyPromises = uniqueChatIds.map(async (chatId) => {
-        const { data: firstMessage, error: firstMsgError } = await supabase
-          .from('messages')
-          .select('content, created_at')
-          .eq('chat_id', chatId)
-          .order('created_at', { ascending: true })
-          .limit(1)
-          .maybeSingle();
-
-        if (firstMsgError) {
-          console.error(`Error fetching first message for chat ${chatId}:`, firstMsgError);
-          return null; // Skip this chat on error
-        }
-
-        if (!firstMessage) {
-            return null; // Skip if chat has no messages
-        }
-
-        return {
-          id: chatId,
-          title: firstMessage.content.substring(0, 40) + (firstMessage.content.length > 40 ? '...' : ''),
-          timestamp: firstMessage.created_at
-        };
-      });
-
-      const resolvedHistory = (await Promise.all(historyPromises))
-                                .filter(item => item !== null);
-
-      resolvedHistory.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-      setChatHistory(resolvedHistory);
+      // No need to sort again if ordered in the query
+      setChatHistory(formattedHistory);
 
     } catch (error) {
-        console.error("Unexpected error fetching chat history:", error);
+        console.error("Unexpected error fetching chat history from chats table:", error);
         setChatHistory([]);
     }
   }, [user]); // Dependency on user
@@ -79,53 +52,68 @@ export function useChatHistory() {
     fetchChatHistory();
   }, [fetchChatHistory]); // fetchChatHistory depends on user, so this covers user changes
 
+  // Function to rename a chat title in the 'chats' table
   const handleRenameChat = async (chatId, newTitle) => {
+    if (!user) return; // Need user
+
     // Optimistically update local state
+    const originalHistory = [...chatHistory];
     setChatHistory(prevHistory =>
       prevHistory.map(chat =>
         chat.id === chatId ? { ...chat, title: newTitle } : chat
       )
     );
-    // TODO: Backend persistence logic remains here or could be further abstracted
-    console.log(`Rename chat ${chatId} to "${newTitle}" (Local state updated, backend persistence needed)`);
-    // Consider adding error handling and reverting state if backend fails
+
+    try {
+      const { error } = await supabase
+        .from('chats')
+        .update({ title: newTitle, updated_at: new Date().toISOString() }) // Update title and timestamp
+        .eq('id', chatId)
+        .eq('user_id', user.id); // Ensure user owns the chat
+
+      if (error) throw error;
+      console.log(`Renamed chat ${chatId} to "${newTitle}"`);
+    } catch (error) {
+      console.error("Error renaming chat:", error);
+      // Revert optimistic update on error
+      setChatHistory(originalHistory);
+      alert(`Error renaming chat: ${error.message}`); // Simple feedback
+    }
   };
 
+  // Function to delete a chat from the 'chats' table (and messages via CASCADE)
   const handleDeleteChat = async (chatId) => {
-    // Basic confirmation - consider a modal for better UX
+    if (!user) return; // Need user
+
     const confirmed = window.confirm("Are you sure you want to delete this chat and all its messages?");
     if (!confirmed) return;
 
+    // Optimistically update local state
+    const originalHistory = [...chatHistory];
+    setChatHistory(prevHistory => prevHistory.filter(chat => chat.id !== chatId));
+
     try {
-      // Ensure user is available before attempting deletion
-      if (!user) {
-        console.error("Cannot delete chat: User not logged in.");
-        // Optionally show an error message to the user
-        return;
-      }
-
-      const { error: deleteError } = await supabase
-        .from('messages')
+      const { error } = await supabase
+        .from('chats') // Delete the entry in the 'chats' table
         .delete()
-        .eq('chat_id', chatId)
-        .eq('user_id', user.id); // Ensure user can only delete their messages
+        .eq('id', chatId)
+        .eq('user_id', user.id); // Ensure user owns the chat
 
-      if (deleteError) {
-        throw deleteError;
-      }
+      if (error) throw error;
 
-      // Remove from local state *after* successful deletion
-      setChatHistory(prevHistory => prevHistory.filter(chat => chat.id !== chatId));
+      // Messages should be deleted automatically due to the CASCADE constraint set up in SQL
+
+      console.log(`Deleted chat ${chatId}`);
 
       // Navigate away if the current chat was deleted
       if (location.pathname === `/chat/${chatId}`) {
         navigate('/', { replace: true });
       }
-      console.log(`Deleted chat ${chatId}`);
     } catch (error) {
       console.error("Error deleting chat:", error);
-      // Add user feedback for error (e.g., using a toast notification library)
-      alert(`Error deleting chat: ${error.message}`); // Simple alert for now
+      // Revert optimistic update on error
+      setChatHistory(originalHistory);
+      alert(`Error deleting chat: ${error.message}`); // Simple feedback
     }
   };
 
