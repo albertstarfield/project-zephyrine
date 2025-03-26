@@ -11,6 +11,7 @@
   "dependencies": {
     "@supabase/supabase-js": "^2.49.3",
     "dotenv": "^16.4.7",
+    "lucide-react": "^0.484.0",
     "os-utils": "^0.0.14",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",

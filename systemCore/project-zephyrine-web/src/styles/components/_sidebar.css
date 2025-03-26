@@ -166,10 +166,127 @@
 
 .sidebar-history li button {
   font-size: 0.85rem;
-  /* white-space, overflow, text-overflow handled by parent .sidebar-button */
   width: 100%;
   justify-content: flex-start; /* Align text left */
+  background-color: var(--background-primary); /* Make background white */
+  border: 1px solid var(--border-color-light); /* Subtle border */
+  margin-bottom: 0.3rem; /* Add some space between history items */
+  border-radius: 0.4rem; /* Slightly rounded corners */
+  color: var(--text-primary); /* Ensure text color is standard */
+  padding: 0.5rem 0.8rem; /* Adjust padding slightly */
+  position: relative; /* Needed for absolute positioning of actions */
+  overflow: hidden; /* Prevent text overflow */
+  text-overflow: ellipsis; /* Add ellipsis for long titles */
+  white-space: nowrap; /* Keep title on one line */
 }
+
+/* Use the more specific class from JSX */
+.history-item-button {
+  display: flex; /* Use flex to align title and actions */
+  justify-content: space-between; /* Push actions to the right */
+  align-items: center;
+  width: 100%;
+  /* Inherit styles from .sidebar-history li button */
+  font-size: inherit;
+  background-color: inherit;
+  border: inherit;
+  margin-bottom: inherit;
+  border-radius: inherit;
+  color: inherit;
+  padding: inherit;
+  text-align: left;
+  cursor: pointer;
+}
+
+.history-item-button:hover {
+  background-color: var(--background-hover); /* Use standard hover */
+  border-color: var(--border-color); /* Slightly darker border on hover */
+}
+
+.history-item-title {
+  flex-grow: 1; /* Allow title to take available space */
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+  margin-right: 0.5rem; /* Space between title and actions */
+}
+
+/* Container for edit/delete icons */
+.history-item-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.3rem;
+  opacity: 0; /* Hidden by default */
+  transition: opacity 0.2s ease;
+  /* Position absolutely if needed, but flex space-between might be enough */
+  /* position: absolute; */
+  /* right: 0.5rem; */
+  /* top: 50%; */
+  /* transform: translateY(-50%); */
+  background-color: var(--background-primary); /* Match button background */
+}
+
+/* Show actions on hover of the list item */
+.history-item:hover .history-item-actions {
+  opacity: 1;
+}
+
+/* Styling for the small icon buttons */
+.icon-button {
+  background: none;
+  border: none;
+  padding: 0.2rem;
+  margin: 0;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  border-radius: 0.2rem;
+  color: var(--text-secondary);
+}
+
+.icon-button:hover {
+  background-color: var(--background-medium);
+  color: var(--text-primary);
+}
+
+.sidebar-action-icon {
+  /* Size is set inline on SVG */
+}
+
+.sidebar-action-icon.delete-icon:hover {
+  color: var(--color-danger); /* Red color for delete on hover */
+}
+
+/* --- Styles for Editing State --- */
+.history-item-edit-container {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  padding: 0.1rem 0.2rem; /* Minimal padding around input */
+  background-color: var(--background-primary); /* Match button background */
+  border: 1px solid var(--border-color); /* Border like hover state */
+  border-radius: 0.4rem; /* Match button radius */
+  margin-bottom: 0.3rem; /* Match button margin */
+}
+
+.history-item-input {
+  flex-grow: 1;
+  border: none;
+  outline: none;
+  background-color: transparent;
+  color: var(--text-primary);
+  font-size: 0.85rem; /* Match button text */
+  padding: 0.4rem 0.6rem; /* Match button padding vertically */
+  margin-right: 0.3rem;
+}
+
+.history-item-edit-actions {
+  display: flex;
+  align-items: center;
+  gap: 0.2rem;
+}
+
 
 /* Hide button text content (spans, direct text) when collapsed */
 .sidebar--collapsed .sidebar-button > span,
