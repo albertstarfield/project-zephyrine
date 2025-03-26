@@ -87,10 +87,8 @@ function App() {
   // If session exists, render the main app using hooks
   return (
     <div id="content">
-      {/* Overlay for mobile sidebar */}
-      {!isSidebarCollapsed && (
-        <div className="sidebar-overlay" onClick={toggleSidebar}></div>
-      )}
+      {/* Overlay for mobile sidebar - CSS handles visibility */}
+      <div className="sidebar-overlay" onClick={toggleSidebar}></div>
 
       {/* Star Background */}
       <div id="sky">
