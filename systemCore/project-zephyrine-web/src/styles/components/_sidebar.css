@@ -11,10 +11,10 @@
   padding: 0.75rem;
   box-sizing: border-box;
   border-radius: 1rem; /* Match chat area */
-  overflow-y: auto; /* Allow scrolling if content exceeds height */
+
   flex-shrink: 0; /* Prevent sidebar from shrinking */
   color: var(--text-primary);
-  transition: width 0.3s ease, transform 0.3s ease; /* Add transition for width and transform */
+  transition: transform 0.3s ease; /* Only transition transform (for mobile slide-in) */
   position: relative; /* Needed for absolute positioning of toggle button */
 }
 
