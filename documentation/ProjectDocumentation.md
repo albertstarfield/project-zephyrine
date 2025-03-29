@@ -166,10 +166,43 @@ Based on the codebase and documentation:
 
 ## 6. Contributing & Development
 
-*(Placeholder: This section would typically include guidelines for setting up the development environment, running tests, coding standards, and contribution process. Currently inferred from `package.json` scripts and `run.sh`)*
+*(This section provides a basic guide based on current analysis. Further details may require examining `coreRuntimeManagement.py` and specific `package.json` scripts.)*
 
-*   **Installation:** Likely involves Python and Node.js setup. The root `run.sh` or specific `package.json` scripts (`npm start`, `npm run dev`) are entry points.
-*   **Dependencies:** Managed via `pip` (implied for Python) and `npm`.
-*   **Building:** `package.json` files contain scripts for building the Electron app (`electron-packager`, `electron-builder`) and the React app (`vite build`).
+*   **Prerequisites:**
+    *   Python 3
+    *   Node.js and npm (for `backend-service`, `project-zephyrine-web`, `ZephyWebUI`)
+    *   Git
+
+*   **Core Engine Setup (Local Path):**
+    1.  Ensure required directories exist (`systemCore`, `launchcontrol`, etc.).
+    2.  Navigate to the project root directory.
+    3.  Run the setup script: `bash launchcontrol/run.sh`
+    4.  This script will:
+        *   Create a Python virtual environment named `_venv`.
+        *   Activate the environment.
+        *   Execute `launchcontrol/coreRuntimeManagement.py` (which likely handles dependency installation via `pip` and starts the engine).
+
+*   **Cloud Backend Setup (`backend-service`):**
+    1.  Navigate to `systemCore/backend-service`.
+    2.  Install dependencies: `npm install`
+    3.  Create a `.env` file with `GROQ_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY`.
+    4.  Start the service: `npm start`
+
+*   **Web Frontend Setup (`project-zephyrine-web`):**
+    1.  Navigate to `systemCore/project-zephyrine-web`.
+    2.  Install dependencies: `npm install`
+    3.  Create a `.env` file (likely for Supabase public key/URL, check `src/utils/supabaseClient.js`).
+    4.  Start the development server: `npm run dev`
+    5.  Build for production: `npm run build`
+
+*   **Desktop UI Setup (`ZephyWebUI` - Legacy/Stub):**
+    1.  Navigate to `systemCore/ZephyWebUI`.
+    2.  Install dependencies: `npm install`
+    3.  Start the Flask backend stub (requires Flask installed, potentially in a separate Python env): `python app.py`
+    4.  Start the Electron app: `npm start`
+    5.  Build scripts (`make-*`, `pack-*`) exist in `package.json` for creating distributables.
+
+*   **Dependencies:** Managed via `pip` (likely within `coreRuntimeManagement.py`) and `npm`.
+*   **Building:** Handled by `npm run build` (React), `electron-packager`/`electron-builder` (Electron via npm scripts).
 
 *(End of Draft)*
