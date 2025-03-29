@@ -62,7 +62,7 @@ systemCore/bin/universalBinarySystemPrompt.txt
 systemCore/engine_component/ModelReintegration/datasetPool/nonSFT_UMA_dataset.txt
 systemCore/engine_component/ModelReintegration/datasetPool/SFT_Interaction_Instruction_dataset.txt
 systemCore/*.gguf
-systemCore/engine_component/ModelReintegration/*Fragment* 
+systemCore/engine_component/ModelReintegration/*Fragment*
 systemCore/engine_component/ModelReintegration/*quicksave*
 systemCore/precalculatedLLMChildslightlyFastJump.state
 systemCore/raw_smallLanguageModel.bin
@@ -93,3 +93,11 @@ systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3.zip
 **.idea**
 **venv**
 **env
+
+# Amaryllis generated files/folders
+RuntimeNotebook.md
+ToolCheck/
+commands/
+helperCode/
+commandOutput.log
+LiteratureReviewPool/
