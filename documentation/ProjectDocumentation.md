@@ -166,21 +166,44 @@ Based on the codebase and documentation:
 
 ## 6. Contributing & Development
 
-*(This section provides a basic guide based on current analysis. Further details may require examining `coreRuntimeManagement.py` and specific `package.json` scripts.)*
+*(This section details the setup process, primarily focusing on the local Core Engine path orchestrated by `launchcontrol/coreRuntimeManagement.py`)*
 
 *   **Prerequisites:**
     *   Python 3
-    *   Node.js and npm (for `backend-service`, `project-zephyrine-web`, `ZephyWebUI`)
     *   Git
+    *   Node.js and npm (Required by `coreRuntimeManagement.py` for updates, and for other components)
+    *   C/C++ Build Toolchain:
+        *   **Linux:** `build-essential` (Debian/Ubuntu), `gcc-c++` (Fedora/CentOS), `base-devel` (Arch), etc.
+        *   **macOS:** Xcode Command Line Tools (install via `xcode-select --install`)
+        *   **Windows:** Visual Studio Build Tools (Installed automatically by the script if needed, requires Chocolatey)
+    *   CMake
+    *   **Optional (for GPU Acceleration):**
+        *   NVIDIA CUDA Toolkit (if using NVIDIA GPU)
+        *   Metal SDK (comes with Xcode on macOS)
+        *   OpenCL drivers/headers (if using OpenCL)
+    *   **Optional (Windows):** Chocolatey package manager (Installed automatically by the script if needed)
 
-*   **Core Engine Setup (Local Path):**
-    1.  Ensure required directories exist (`systemCore`, `launchcontrol`, etc.).
-    2.  Navigate to the project root directory.
-    3.  Run the setup script: `bash launchcontrol/run.sh`
-    4.  This script will:
-        *   Create a Python virtual environment named `_venv`.
-        *   Activate the environment.
-        *   Execute `launchcontrol/coreRuntimeManagement.py` (which likely handles dependency installation via `pip` and starts the engine).
+*   **Core Engine Setup & Build (Local Path):**
+    1.  **Navigate** to the project root directory.
+    2.  **Run the main setup script:**
+        ```bash
+        bash launchcontrol/run.sh
+        ```
+    3.  **What the script does:**
+        *   Checks for required directories (`systemCore`, `launchcontrol`, etc.).
+        *   Creates a Python virtual environment (`_venv`).
+        *   Activates `_venv`.
+        *   Executes `python3 ./launchcontrol/coreRuntimeManagement.py`.
+    4.  **`coreRuntimeManagement.py` Orchestration:** This script performs the heavy lifting:
+        *   Installs basic Python packages (`requests`, `bs4`) into `_venv`.
+        *   Sets up environment variables (e.g., for potential Conda/Node paths).
+        *   **Installs System Dependencies:** Attempts to install required system packages (compilers, libraries like CMake, OpenBLAS, Node.js) based on the detected OS (Linux, macOS, Windows) using appropriate package managers (apt, dnf, brew, choco). This can be time-consuming and may require `sudo` privileges.
+        *   **Cleans Previous Builds:** Removes old `vendor`, `node_modules`, `conda_python_modules`, `nodeLocalRuntime` directories.
+        *   **Clones C++ Submodules:** Downloads source code for `llama.cpp`, `ggml`, `whisper.cpp`, `gemma.cpp`, and the `gnat-llvm` Ada compiler into `systemCore/vendor/`.
+        *   **Builds C++ Backends:** Compiles `llama.cpp`, `gemma.cpp`, etc. using CMake, automatically detecting and enabling hardware acceleration (CUDA, Metal, OpenCL) where possible. Builds are placed in respective `build` subdirectories within `systemCore/vendor/`.
+        *   **Builds Ada Compiler:** Attempts to build the `gnat-llvm` Ada compiler from source (a complex and potentially lengthy process).
+        *   **Fixes Permissions:** Adjusts file permissions (details depend on OS).
+        *   **(Likely) Launches Core Engine:** The final steps (not fully visible in the truncated analysis) probably involve starting the main `systemCore/engineMain/engine.py` application.
 
 *   **Cloud Backend Setup (`backend-service`):**
     1.  Navigate to `systemCore/backend-service`.
@@ -198,11 +221,11 @@ Based on the codebase and documentation:
 *   **Desktop UI Setup (`ZephyWebUI` - Legacy/Stub):**
     1.  Navigate to `systemCore/ZephyWebUI`.
     2.  Install dependencies: `npm install`
-    3.  Start the Flask backend stub (requires Flask installed, potentially in a separate Python env): `python app.py`
+    3.  Start the Flask backend stub (requires Flask installed, potentially in `_venv` or a separate env): `python app.py`
     4.  Start the Electron app: `npm start`
     5.  Build scripts (`make-*`, `pack-*`) exist in `package.json` for creating distributables.
 
-*   **Dependencies:** Managed via `pip` (likely within `coreRuntimeManagement.py`) and `npm`.
-*   **Building:** Handled by `npm run build` (React), `electron-packager`/`electron-builder` (Electron via npm scripts).
+*   **Dependencies:** Managed via `pip` (within `_venv`, primarily by `coreRuntimeManagement.py`) and `npm` (for Node.js components). System-level dependencies are handled by `coreRuntimeManagement.py`.
+*   **Building:** C++ components are built via CMake by `coreRuntimeManagement.py`. The React app is built using `npm run build`. The Electron app uses `electron-packager`/`electron-builder` via npm scripts.
 
 *(End of Draft)*
