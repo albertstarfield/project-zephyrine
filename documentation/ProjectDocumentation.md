@@ -12,7 +12,7 @@ Project Zephyrine currently comprises several distinct components, suggesting di
 
 *   **Core Engine (`systemCore/engineMain`):** A Python application responsible for local LLM inference, context management, hardware interaction, and providing an OpenAI-compatible API.
 *   **Backend Service (`systemCore/backend-service`):** A Node.js WebSocket server that utilizes cloud services (Groq API for LLM inference, Supabase for database) for chat functionality.
-*   **Web Frontend (`systemCore/project-zephyrine-web`):** A React-based web application providing a modern chat interface, likely interacting with either the Core Engine API or the Backend Service WebSocket/Supabase.
+*   **Web Frontend (`systemCore/project-zephyrine-web`):** A React-based web application providing a modern chat interface. It interacts with the **Backend Service** via WebSockets (`ws://localhost:3001`) for chat streaming and directly with **Supabase** for authentication and data persistence.
 *   **Desktop UI (`systemCore/ZephyWebUI`):** An Electron application that appears to be a legacy component or a simplified interface. It currently uses a basic Flask backend stub for simulated interaction.
 
 ### High-Level Architecture Diagram
@@ -38,7 +38,7 @@ graph TD
 
     UI_Web --> B_Cloud;
     UI_Web --> DB_Cloud;
-    UI_Web -- Potentially --> B_Local;
+    %% UI_Web -- Potentially --> B_Local;  (Removed: Connects via B_Cloud/DB_Cloud)
 
     UI_Desktop --> B_Local; %% Or potentially its own stub Flask backend
 
@@ -126,7 +126,7 @@ A modern web interface for interacting with the system.
     *   **Chat Interface:** Provides a standard chat layout with a sidebar (history, model selection, settings) and a main chat area.
     *   **Rich Content:** Renders Markdown in chat messages.
     *   **State Management:** Uses custom React hooks extensively.
-    *   **Backend Agnostic (Potentially):** Likely connects to either the Core Engine's HTTP API or the Backend Service's WebSocket API, possibly determined by configuration or runtime detection.
+    *   **Backend Connection:** Connects to the **Backend Service** (`systemCore/backend-service`) via WebSocket (`ws://localhost:3001`) for real-time chat functionality and title generation. It also interacts directly with **Supabase** for fetching/storing messages and handling user authentication.
 
 ### 3.4. Desktop UI (`systemCore/ZephyWebUI/`)
 
