@@ -153,6 +153,7 @@ Project Zephyrine leverages several key concepts from AI and computer science:
 *   **Hardware Acceleration & Awareness:** The core engine actively checks system hardware (CPU architecture, RAM/VRAM bandwidth, ECC memory, available accelerators like CUDA, ROCm, MPS) and provides warnings. This reflects an understanding that ML performance is heavily dependent on underlying hardware capabilities and aims to guide users towards optimal configurations or manage expectations.
 *   **Prompt Engineering:** The base64 encoded instructions in `engine.py` and the specific prompts used (e.g., for title generation in `backend-service`) demonstrate deliberate prompt engineering to guide the LLM's behavior and output format.
 *   **Decision Trees (Branch Predictor):** The experimental "branch predictor" feature attempts to use the LLM to generate structured decision trees, potentially exploring techniques like Chain-of-Thought or Tree-of-Thoughts for more complex reasoning or planning.
+*   **Ada Integration (Potential):** The setup scripts include complex steps to build the `gnat-llvm` Ada compiler toolchain from source. While no Ada source code is currently part of the main application build, this indicates a potential future direction towards using Ada for specific components, possibly for performance, reliability, or interfacing with Ada-based libraries. The presence of C-to-Ada conversion manuals further supports this possibility.
 
 ## 5. Future Goals
 
@@ -201,6 +202,7 @@ Based on the codebase and documentation:
         *   **Cleans Previous Builds:** Removes old `vendor`, `node_modules`, `conda_python_modules`, `nodeLocalRuntime` directories.
         *   **Clones C++ Submodules:** Downloads source code for `llama.cpp`, `ggml`, `whisper.cpp`, `gemma.cpp`, and the `gnat-llvm` Ada compiler into `systemCore/vendor/`.
         *   **Builds C++ Backends:** Compiles `llama.cpp`, `gemma.cpp`, etc. using CMake, automatically detecting and enabling hardware acceleration (CUDA, Metal, OpenCL) where possible. Builds are placed in respective `build` subdirectories within `systemCore/vendor/`.
+        *   **Builds Ada Compiler:** Attempts to build the `gnat-llvm` Ada compiler from source (a complex and potentially lengthy process), likely in preparation for future Ada development or to build an Ada-based dependency.
         *   **Builds Ada Compiler:** Attempts to build the `gnat-llvm` Ada compiler from source (a complex and potentially lengthy process).
         *   **Fixes Permissions:** Adjusts file permissions (details depend on OS).
         *   **(Likely) Launches Core Engine:** The final steps (not fully visible in the truncated analysis) probably involve starting the main `systemCore/engineMain/engine.py` application.
