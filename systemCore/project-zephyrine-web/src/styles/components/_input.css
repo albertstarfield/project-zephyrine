@@ -3,11 +3,11 @@
 #form {
   position: fixed;
   bottom: 40px; /* Change from 0 to move it higher */
-  left: 260px; /* Align with expanded sidebar */
-  width: calc(100% - 260px); /* Adjust width */
+  left: 0; /* Default: Full width for mobile */
+  width: 100%; /* Default: Full width for mobile */
   display: flex;
   flex-direction: column;
-  transition: left 0.3s ease, width 0.3s ease; /* Add transition */
+  /* transition moved into media query */
   align-items: center;
   /* background: linear-gradient(180deg, transparent, var(--background-mid) 30%); */ /* Removed gradient */
   margin: 0;
@@ -16,11 +16,19 @@
   z-index: 50;
 }
 
-/* Adjust form position when sidebar is collapsed */
-/* Targets #form when the ancestor .main-content-area has the collapsed class */
-.main-content-area.main-content-area--sidebar-collapsed #form {
-  left: 80px; /* Align with collapsed sidebar */
-  width: calc(100% - 80px); /* Adjust width */
+/* Apply dynamic positioning only on larger screens (desktop/tablet) */
+@media (min-width: 768px) {
+  #form {
+    left: 260px; /* Align with expanded sidebar */
+    width: calc(100% - 260px); /* Adjust width */
+    transition: left 0.3s ease, width 0.3s ease; /* Add transition */
+  }
+
+  /* Adjust form position when sidebar is collapsed (only on larger screens) */
+  .main-content-area.main-content-area--sidebar-collapsed #form {
+    left: 80px; /* Align with collapsed sidebar */
+    width: calc(100% - 80px); /* Adjust width */
+  }
 }
 
 .input-container {
