@@ -19,7 +19,7 @@
   /* REMOVED margin: 0 auto; rely on parent flexbox */
   margin: 0; /* Explicitly remove auto margins */
   padding: 0 1rem 1rem; /* Default padding - keep left/right for internal spacing */
-  max-width: 48rem; /* Default max width */
+  max-width: 40rem; /* Default max width */
   width: 100%; /* Allow it to take available width *up to* max-width */
   /* position: sticky; // Sticky might cause issues with fixed parent, reconsider */
   /* bottom: 20px; // Handled by #form positioning */
