@@ -68,11 +68,12 @@
   position: fixed; /* Position relative to viewport */
   top: 1rem;
   left: 1rem;
-  z-index: 1100; /* Above sidebar and overlay */
+  z-index: 1201; /* Above sidebar (1200) and overlay */
   background-color: var(--background-medium); /* Make it visible */
 }
 
 .sidebar-top-actions {
+  margin-top: 3rem;
   margin-bottom: 1rem;
   /* Ensure buttons stack correctly when collapsed */
   display: flex;

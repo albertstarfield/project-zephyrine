@@ -20,11 +20,12 @@
     display: block; /* Enable overlay on mobile */
   }
 
-  /* If sidebar is open (not collapsed), show overlay */
-  /* This selector assumes the overlay is placed directly inside #content, before #main */
+  /* Overlay is disabled on mobile */
+  /* 
   #content:has(#main .sidebar:not(.sidebar--collapsed)) > .sidebar-overlay {
     opacity: 1;
     visibility: visible;
     transition: opacity 0.3s ease, visibility 0s linear 0s;
-  }
+  } 
+  */
 }
