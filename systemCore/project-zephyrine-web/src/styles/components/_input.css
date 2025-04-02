@@ -3,11 +3,11 @@
 #form {
   position: fixed;
   bottom: 40px; /* Change from 0 to move it higher */
-  left: 0;
-  right: 0;
-  width: 100%;
+  left: 260px; /* Align with expanded sidebar */
+  width: calc(100% - 260px); /* Adjust width */
   display: flex;
   flex-direction: column;
+  transition: left 0.3s ease, width 0.3s ease; /* Add transition */
   align-items: center;
   /* background: linear-gradient(180deg, transparent, var(--background-mid) 30%); */ /* Removed gradient */
   margin: 0;
@@ -15,13 +15,21 @@
   padding: 40px 0 0;
   z-index: 50;
 }
+
+/* Adjust form position when sidebar is collapsed */
+/* Targets #form when the ancestor .main-content-area has the collapsed class */
+.main-content-area.main-content-area--sidebar-collapsed #form {
+  left: 80px; /* Align with collapsed sidebar */
+  width: calc(100% - 80px); /* Adjust width */
+}
+
 .input-container {
   /* REMOVED margin: 0 auto; rely on parent flexbox */
   margin: 0; /* Explicitly remove auto margins */
   padding: 0 1rem 1rem; /* Default padding - keep left/right for internal spacing */
   max-width: 40rem; /* Default max width */
   width: 100%; /* Allow it to take available width *up to* max-width */
-  /* position: sticky; // Sticky might cause issues with fixed parent, reconsider */
+  position: relative; /* Changed as requested */
   /* bottom: 20px; // Handled by #form positioning */
   background-color: transparent;
   display: flex;
