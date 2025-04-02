@@ -35,7 +35,7 @@
 .input-field {
   /* ... (styles for the inner field remain the same) ... */
   display: flex;
-  align-items: flex-end;
+  align-items: center; /* Changed from flex-end to center */
   padding: 0.4rem;
   box-sizing: border-box;
   background: var(--surface);
