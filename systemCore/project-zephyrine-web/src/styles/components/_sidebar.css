@@ -48,7 +48,7 @@
 .sidebar-toggle-desktop {
   position: absolute;
   top: 0.75rem;
-  right: -1.5rem; /* Position outside the sidebar */
+  left: 1.4rem; /* Position inside the sidebar, aligned with padding */
   background-color: var(--background-light);
   border: 1px solid var(--border-color);
   z-index: 10; /* Ensure it's above content */
@@ -417,7 +417,7 @@
 }
 
 .sidebar--collapsed .sidebar-toggle-desktop {
-  right: -1.5rem; /* Keep toggle button position */
+  /* left: 0.75rem; */ /* Position remains the same when collapsed */
 }
 
 /* --- Responsive adjustments for sidebar (Mobile) --- */
