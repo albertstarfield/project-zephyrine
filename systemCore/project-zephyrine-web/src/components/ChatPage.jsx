@@ -413,6 +413,101 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
     }
   };
 
+  // --- Edit Message Handler ---
+  const handleEditSave = async (messageId, newContent) => {
+    if (isGenerating) return; // Don't allow edits while generating
+
+    setError(null);
+    const editedMessageIndex = messages.findIndex((msg) => msg.id === messageId);
+
+    if (editedMessageIndex === -1) {
+      console.error("Cannot save edit: Message not found", messageId);
+      setError("Failed to save edit: Message not found.");
+      return;
+    }
+
+    // Ensure the message being edited is a user message
+    if (messages[editedMessageIndex].sender !== 'user') {
+        console.error("Cannot edit non-user message", messageId);
+        setError("Only user messages can be edited.");
+        return;
+    }
+
+    // 1. Prepare the updated message and the history up to that point
+    const updatedMessage = { ...messages[editedMessageIndex], content: newContent };
+    const historyUpToEdit = messages.slice(0, editedMessageIndex); // History *before* the edited message
+    const messagesForRegeneration = [...historyUpToEdit, updatedMessage]; // Include the *updated* user message
+
+    // 2. Update UI State: Show only messages up to the edited one
+    setMessages(messagesForRegeneration);
+    setShowPlaceholder(false); // Ensure placeholder is hidden
+
+    // 3. Update the edited message in the database (async, don't block UI)
+    supabase
+      .from("messages")
+      .update({ content: newContent })
+      .eq("id", messageId)
+      .then(({ error: updateError }) => {
+        if (updateError) {
+          console.error("Error updating message in DB:", updateError);
+          // Optionally revert UI or show persistent error
+          setError("Failed to save edit to database.");
+        } else {
+          console.log("Message updated successfully in DB:", messageId);
+          // Potentially delete subsequent messages from DB here if needed
+          // For now, we rely on the UI state update and regeneration overwriting
+        }
+      });
+
+    // 4. Trigger regeneration using the history up to the edited message
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      try {
+        const messageToSend = {
+          type: "chat", // Use the same type as regular chat
+          payload: {
+            // Send history *up to and including the edited message*
+            messages: messagesForRegeneration
+              .slice(-10) // Limit history if needed
+              .map((m) => ({ sender: m.sender, content: m.content })),
+            model: selectedModel,
+            chatId: chatId,
+            userId: user?.id,
+            // No need for firstUserMessageContent here as it's not the first message
+          },
+        };
+        ws.current.send(JSON.stringify(messageToSend));
+        setIsGenerating(true);
+
+        // Prepare streaming state
+        accumulatedContentRef.current = "";
+        currentAssistantMessageId.current = `temp-assistant-${Date.now()}`;
+        setStreamingAssistantMessage({
+          id: currentAssistantMessageId.current,
+          sender: "assistant",
+          content: "",
+          chat_id: chatId,
+          created_at: new Date().toISOString(),
+          isLoading: true,
+        });
+      } catch (sendError) {
+        console.error("WebSocket send error during edit regeneration:", sendError);
+        setError("Failed to communicate with the assistant after edit.");
+        setIsGenerating(false);
+        setStreamingAssistantMessage(null);
+        // Consider how to handle UI state if regeneration fails (e.g., show error, revert?)
+      }
+    } else {
+      setError("WebSocket is not connected. Cannot regenerate after edit.");
+      console.error(
+        "WebSocket is not open during edit regeneration. ReadyState:",
+        ws.current?.readyState
+      );
+       // Consider how to handle UI state if regeneration fails
+    }
+  };
+  // --- End Edit Message Handler ---
+
+
   // Specific handler for the form submission (uses the combined function)
   const handleSendMessage = (text) => {
     sendMessageOrRegenerate(text, false);
@@ -516,6 +611,7 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
           // Add props for copy/regenerate
           onCopy={handleCopy}
           onRegenerate={handleRegenerate}
+          onEditSave={handleEditSave} // Pass the new handler
           copySuccessId={copySuccess}
           lastAssistantMessageIndex={lastAssistantMessageIndex}
         />

@@ -145,7 +145,7 @@ const InputArea = ({ value, onChange, onSend, onStop, isGenerating }) => {
       </div>
       <p className="disclaimer-text">
         Pre-Alpha Developmental Version! Instabilities may occur! Use with
-        caution! -Zephyrine Foundation (2024)
+        caution! -Zephyrine Foundation (2025)
       </p>
     </div>
   );

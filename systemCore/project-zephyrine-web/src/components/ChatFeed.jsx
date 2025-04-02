@@ -1,8 +1,8 @@
-import React, { useEffect, useState } from "react";
+import React, { useEffect, useState, useRef } from "react"; // Added useRef
 import ReactMarkdown from "react-markdown";
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
-import { Copy, RefreshCw } from 'lucide-react'; // Import icons
+import { Copy, RefreshCw, Edit, Check, X } from "lucide-react"; // Import more icons
 
 const ChatFeed = ({
   messages,
@@ -15,14 +15,19 @@ const ChatFeed = ({
   // Add new props for actions
   onCopy,
   onRegenerate,
+  onEditSave, // Add new prop for saving edits
   copySuccessId,
   lastAssistantMessageIndex,
 }) => {
   const [fadeIn, setFadeIn] = useState(false);
+  const [editingMessageId, setEditingMessageId] = useState(null); // Track which message is being edited
+  const [editedContent, setEditedContent] = useState(""); // Store the edited content
+  const editTextAreaRef = useRef(null); // Ref for the textarea
 
   useEffect(() => {
     // Fade in logic remains the same
-    if (messages.length > 0 || streamingMessage) { // Also consider streaming message for fade-in
+    if (messages.length > 0 || streamingMessage) {
+      // Also consider streaming message for fade-in
       setTimeout(() => {
         setFadeIn(true);
       }, 100); // Short delay for effect
@@ -30,6 +35,37 @@ const ChatFeed = ({
       setFadeIn(false); // Reset if messages are cleared
     }
   }, [messages, streamingMessage]);
+
+  // --- Edit Handlers ---
+  const handleEditClick = (message) => {
+    setEditingMessageId(message.id);
+    setEditedContent(message.content);
+  };
+
+  const handleCancelEdit = () => {
+    setEditingMessageId(null);
+    setEditedContent("");
+  };
+
+  const handleSaveEdit = () => {
+    if (editingMessageId && editedContent.trim()) {
+      onEditSave(editingMessageId, editedContent); // Call the prop function
+      setEditingMessageId(null);
+      setEditedContent("");
+    } else {
+      // Maybe show an error or just cancel if content is empty
+      handleCancelEdit();
+    }
+  };
+
+  // Auto-resize textarea
+  useEffect(() => {
+    if (editingMessageId && editTextAreaRef.current) {
+      editTextAreaRef.current.style.height = "auto"; // Reset height
+      editTextAreaRef.current.style.height = `${editTextAreaRef.current.scrollHeight}px`; // Set to scroll height
+    }
+  }, [editedContent, editingMessageId]);
+  // --- End Edit Handlers ---
 
   // Function to render message content with markdown support
   const renderMessageContent = (content) => {
@@ -281,38 +317,99 @@ const ChatFeed = ({
           {messages.map((message, index) => (
             <li
               key={message.id} // Use actual ID from DB
-              className={`message-bubble ${message.sender === "user" ? "user-bubble" : "assistant-bubble"}`}
+              className={`message-bubble ${
+                message.sender === "user" ? "user-bubble" : "assistant-bubble"
+              }`}
             >
               <div className="message-container">
-                <div className={`avatar ${message.sender === "user" ? "user-avatar" : "assistant-avatar"}`}>
-                  {message.sender === 'user' ? 'U' : 'A'}
+                <div
+                  className={`avatar ${
+                    message.sender === "user"
+                      ? "user-avatar"
+                      : "assistant-avatar"
+                  }`}
+                >
+                  {message.sender === "user" ? "U" : "A"}
                 </div>
                 <div className="message-content-wrapper"> {/* Wrapper for content + actions */}
-                  <div className="message-content">
-                    {renderMessageContent(message.content)}
-                    {message.error && <span className="message-error"> ({message.error})</span>}
-                  </div>
-                  {/* Action Buttons */}
-                  <div className="message-actions">
-                    <button
-                      onClick={() => onCopy(message.content, message.id)}
-                      className="message-action-button copy-button"
-                      title="Copy message"
-                    >
-                      {copySuccessId === message.id ? 'Copied!' : <Copy size={14} />}
-                    </button>
-                    {/* Show Regenerate button only for the last assistant message when not generating */}
-                    {message.sender === 'assistant' && index === lastAssistantMessageIndex && !isGenerating && (
-                      <button
-                        onClick={onRegenerate}
-                        className="message-action-button regenerate-button"
-                        title="Regenerate response"
-                        disabled={isGenerating} // Double check disabled state
-                      >
-                        <RefreshCw size={14} />
-                      </button>
-                    )}
-                  </div>
+                  {editingMessageId === message.id ? (
+                    // --- Edit Mode ---
+                    <div className="message-edit-area">
+                      <textarea
+                        ref={editTextAreaRef}
+                        value={editedContent}
+                        onChange={(e) => setEditedContent(e.target.value)}
+                        onKeyDown={(e) => {
+                          // Save on Enter (Shift+Enter for newline)
+                          if (e.key === 'Enter' && !e.shiftKey) {
+                            e.preventDefault();
+                            handleSaveEdit();
+                          }
+                          // Cancel on Escape
+                          if (e.key === 'Escape') {
+                            handleCancelEdit();
+                          }
+                        }}
+                        rows={1} // Start with 1 row, auto-resizes
+                        style={{ overflowY: 'hidden' }} // Prevent scrollbar initially
+                      />
+                      <div className="edit-actions">
+                        <button
+                          onClick={handleSaveEdit}
+                          className="message-action-button save-edit-button"
+                          title="Save changes (Enter)"
+                        >
+                          <Check size={16} />
+                        </button>
+                        <button
+                          onClick={handleCancelEdit}
+                          className="message-action-button cancel-edit-button"
+                          title="Cancel edit (Esc)"
+                        >
+                          <X size={16} />
+                        </button>
+                      </div>
+                    </div>
+                  ) : (
+                    // --- Display Mode ---
+                    <>
+                      <div className="message-content">
+                        {renderMessageContent(message.content)}
+                        {message.error && <span className="message-error"> ({message.error})</span>}
+                      </div>
+                      {/* Action Buttons */}
+                      <div className="message-actions">
+                        {/* Edit button for user messages */}
+                        {message.sender === 'user' && !isGenerating && (
+                           <button
+                             onClick={() => handleEditClick(message)}
+                             className="message-action-button edit-button"
+                             title="Edit message"
+                           >
+                             <Edit size={14} />
+                           </button>
+                         )}
+                        <button
+                          onClick={() => onCopy(message.content, message.id)}
+                          className="message-action-button copy-button"
+                          title="Copy message"
+                        >
+                          {copySuccessId === message.id ? 'Copied!' : <Copy size={14} />}
+                        </button>
+                        {/* Show Regenerate button only for the last assistant message when not generating */}
+                        {message.sender === 'assistant' && index === lastAssistantMessageIndex && !isGenerating && (
+                          <button
+                            onClick={onRegenerate}
+                            className="message-action-button regenerate-button"
+                            title="Regenerate response"
+                            disabled={isGenerating} // Double check disabled state
+                          >
+                            <RefreshCw size={14} />
+                          </button>
+                        )}
+                      </div>
+                    </>
+                  )}
                 </div>
               </div>
             </li>
@@ -320,23 +417,23 @@ const ChatFeed = ({
 
           {/* Render streaming assistant message */}
           {streamingMessage && streamingMessage.isLoading && (
-             <li
-               key={streamingMessage.id} // Use temp ID
-               className="message-bubble assistant-bubble streaming"
-             >
-               <div className="message-container">
-                 <div className="avatar assistant-avatar">A</div>
-                 <div className="message-content-wrapper">
-                   <div className="message-content">
-                     {renderMessageContent(streamingMessage.content)}
-                     {/* Optional: Blinking cursor effect */}
-                     <span className="streaming-cursor"></span>
-                   </div>
-                   {/* No actions needed for streaming message usually */}
-                 </div>
-               </div>
-             </li>
-           )}
+            <li
+              key={streamingMessage.id} // Use temp ID
+              className="message-bubble assistant-bubble streaming"
+            >
+              <div className="message-container">
+                <div className="avatar assistant-avatar">A</div>
+                <div className="message-content-wrapper">
+                  <div className="message-content">
+                    {renderMessageContent(streamingMessage.content)}
+                    {/* Optional: Blinking cursor effect */}
+                    <span className="streaming-cursor"></span>
+                  </div>
+                  {/* No actions needed for streaming message usually */}
+                </div>
+              </div>
+            </li>
+          )}
 
           {/* Optional: Keep a general indicator if needed, though streaming message replaces it */}
           {/* {isGenerating && !streamingMessage && ( ... ) } */}
