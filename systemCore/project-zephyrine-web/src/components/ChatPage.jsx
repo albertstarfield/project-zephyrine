@@ -418,7 +418,9 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
     if (isGenerating) return; // Don't allow edits while generating
 
     setError(null);
-    const editedMessageIndex = messages.findIndex((msg) => msg.id === messageId);
+    const editedMessageIndex = messages.findIndex(
+      (msg) => msg.id === messageId
+    );
 
     if (editedMessageIndex === -1) {
       console.error("Cannot save edit: Message not found", messageId);
@@ -427,14 +429,17 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
     }
 
     // Ensure the message being edited is a user message
-    if (messages[editedMessageIndex].sender !== 'user') {
-        console.error("Cannot edit non-user message", messageId);
-        setError("Only user messages can be edited.");
-        return;
+    if (messages[editedMessageIndex].sender !== "user") {
+      console.error("Cannot edit non-user message", messageId);
+      setError("Only user messages can be edited.");
+      return;
     }
 
     // 1. Prepare the updated message and the history up to that point
-    const updatedMessage = { ...messages[editedMessageIndex], content: newContent };
+    const updatedMessage = {
+      ...messages[editedMessageIndex],
+      content: newContent,
+    };
     const historyUpToEdit = messages.slice(0, editedMessageIndex); // History *before* the edited message
     const messagesForRegeneration = [...historyUpToEdit, updatedMessage]; // Include the *updated* user message
 
@@ -490,7 +495,10 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
           isLoading: true,
         });
       } catch (sendError) {
-        console.error("WebSocket send error during edit regeneration:", sendError);
+        console.error(
+          "WebSocket send error during edit regeneration:",
+          sendError
+        );
         setError("Failed to communicate with the assistant after edit.");
         setIsGenerating(false);
         setStreamingAssistantMessage(null);
@@ -502,11 +510,10 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
         "WebSocket is not open during edit regeneration. ReadyState:",
         ws.current?.readyState
       );
-       // Consider how to handle UI state if regeneration fails
+      // Consider how to handle UI state if regeneration fails
     }
   };
   // --- End Edit Message Handler ---
-
 
   // Specific handler for the form submission (uses the combined function)
   const handleSendMessage = (text) => {
