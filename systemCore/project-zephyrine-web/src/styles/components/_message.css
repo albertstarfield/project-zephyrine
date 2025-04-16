@@ -204,6 +204,136 @@
   } /* ... */
 }
 
+
+/* --- Message Editing Styles --- */
+.message-content-wrapper {
+  position: relative; /* Needed for absolute positioning of actions */
+  display: flex;
+  flex-direction: column; /* Stack content and actions */
+  flex-grow: 1;
+}
+
+.message-actions {
+  display: flex;
+  gap: 6px;
+  position: absolute; /* Position relative to wrapper */
+  bottom: 5px; /* Position inside the bubble near the bottom */
+  right: 8px; /* Position inside the bubble near the right */
+  /* background-color: var(--surface-low); /* Remove background or make transparent if desired */
+  padding: 1px 3px; /* Adjust padding if needed */
+  border-radius: 4px;
+  /* box-shadow: 0 1px 3px rgba(0, 0, 0, 0.1); /* Optional shadow */
+  opacity: 0; /* Hidden by default */
+  transition: opacity 0.2s ease-in-out; /* Only fade transition */
+  pointer-events: none; /* Don't block clicks when hidden */
+  z-index: 1; /* Ensure buttons are above content if overlap occurs */
+}
+
+.message-bubble:hover .message-actions {
+  opacity: 1;
+  /* bottom: -15px; /* No vertical movement on hover */
+  pointer-events: auto; /* Allow clicks when visible */
+}
+
+/* Add padding to message content to avoid overlap with buttons */
+.message-content {
+  /* Existing styles... */
+  padding: 10px 12px; /* Default padding */
+  padding-bottom: 28px; /* Add extra padding at the bottom for buttons */
+  /* Existing styles... */
+}
+
+/* Adjust action button style */
+.message-action-button {
+  background: none;
+  border: none;
+  padding: 2px;
+  cursor: pointer;
+  color: var(--text-secondary);
+  display: flex; /* Align icon */
+  align-items: center;
+  justify-content: center;
+  transition: color 0.2s ease;
+}
+
+.message-action-button:hover {
+  color: var(--text-primary);
+  /* Make buttons slightly transparent on user bubble for better contrast */
+  .user-bubble & {
+    color: rgba(var(--on-primary-rgb), 0.8);
+  }
+  .user-bubble &:hover {
+    color: var(--on-primary);
+  }
+   /* Make buttons slightly transparent on assistant bubble */
+  .assistant-bubble & {
+     color: rgba(var(--text-primary-rgb), 0.6);
+  }
+   .assistant-bubble &:hover {
+     color: var(--text-primary);
+  }
+}
+
+.message-action-button svg {
+  width: 14px; /* Consistent icon size */
+  height: 14px;
+}
+
+.copy-button[title="Copied!"] {
+  color: var(--success); /* Indicate success */
+}
+
+
+/* Edit Area */
+.message-edit-area {
+  display: flex;
+  flex-direction: column;
+  background-color: var(--surface-high); /* Slightly different background for edit */
+  border-radius: 8px;
+  padding: 8px 10px;
+  border: 1px solid var(--border-color);
+}
+
+.message-edit-area textarea {
+  width: 100%;
+  background: transparent;
+  border: none;
+  outline: none;
+  resize: none; /* Disable manual resize */
+  color: var(--text-primary);
+  font-family: inherit; /* Use the same font as messages */
+  font-size: inherit; /* Use the same font size */
+  line-height: 1.5;
+  padding: 0; /* Remove default padding */
+  margin: 0;
+  min-height: 24px; /* Ensure it doesn't collapse */
+  box-sizing: border-box;
+}
+
+.edit-actions {
+  display: flex;
+  justify-content: flex-end;
+  gap: 8px;
+  margin-top: 6px;
+}
+
+.edit-actions .message-action-button {
+  padding: 3px 5px; /* Slightly larger click area */
+  border-radius: 4px;
+}
+
+.edit-actions .save-edit-button:hover {
+  background-color: rgba(var(--success-rgb), 0.1);
+  color: var(--success);
+}
+
+.edit-actions .cancel-edit-button:hover {
+  background-color: rgba(var(--error-rgb), 0.1);
+  color: var(--error);
+}
+/* --- End Message Editing Styles --- */
+
+
 /* Responsive adjustments */
 @media (min-width: 1024px) {
   .message-bubble {
