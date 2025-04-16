@@ -35,7 +35,7 @@
 /* Adjustments for welcome screen */
 .welcome-screen .chat-model-selector {
   /* Hide or style differently on welcome screen if needed */
-   display: none; /* Hide when placeholder is shown */
+  display: none; /* Hide when placeholder is shown */
 }
 
 /* Adjust padding/margin within the chat area wrapper */
@@ -154,7 +154,9 @@
 }
 
 .assistant-avatar {
-  background-color: var(--secondary-accent); /* Or an assistant-specific color */
+  background-color: var(
+    --secondary-accent
+  ); /* Or an assistant-specific color */
 }
 
 /* Wrapper for message content and actions inside the bubble */
@@ -171,17 +173,16 @@
 }
 
 .user-bubble .message-content-wrapper {
-  background-color: #d7e2d7; /* Pastel Green */
+  background-color: #ecd3a4; /* Pastel Green */
   color: #1f1f1f; /* Keep dark text for contrast */
   border-bottom-right-radius: 2px; /* Bubble tail */
 }
 
 .assistant-bubble .message-content-wrapper {
-  background-color: #cddbe9; /* Pastel Blue */
+  background-color: #a9e6ae; /* Pastel Blue */
   color: var(--primary-text); /* Assuming this is dark enough */
   border-bottom-left-radius: 2px; /* Bubble tail */
 }
-
 
 .message-content {
   /* Styles for the text itself */
@@ -199,7 +200,9 @@
 .message pre:has(code) {
   margin-top: 0.5em;
   padding: 0.6em;
-  border-radius: calc(var(--rounded-border, 8px) / 2); /* Smaller radius for code block */
+  border-radius: calc(
+    var(--rounded-border, 8px) / 2
+  ); /* Smaller radius for code block */
   background: rgba(0, 0, 0, 0.2); /* Darker background for code */
   border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle border */
 }
@@ -241,7 +244,8 @@
   stroke-width: 2;
 }
 
-.copy-button span { /* Style for 'Copied!' text */
+.copy-button span {
+  /* Style for 'Copied!' text */
   font-size: 0.75rem;
   padding: 0 2px;
 }
@@ -258,10 +262,14 @@
 }
 
 @keyframes blink {
-  from, to { background-color: transparent }
-  50% { background-color: var(--text-primary); }
+  from,
+  to {
+    background-color: transparent;
+  }
+  50% {
+    background-color: var(--text-primary);
+  }
 }
-
 
 .error-message {
   background-color: var(--error-background);
@@ -286,7 +294,6 @@
 .dot-animation {
   /* Basic dot animation if needed */
 }
-
 
 /* --- Input Area --- */
 .chat-input-area {
