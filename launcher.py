@@ -10,8 +10,7 @@ from datetime import datetime
 
 try:
     import colorama
-    colorama.init() # Initialize colorama for Windows compatibility
-    # Define colors using colorama
+    colorama.init()
     COLOR_RESET = colorama.Style.RESET_ALL
     COLOR_ENGINE = colorama.Fore.CYAN + colorama.Style.BRIGHT
     COLOR_BACKEND = colorama.Fore.MAGENTA + colorama.Style.BRIGHT
@@ -21,7 +20,6 @@ try:
 except ImportError:
     print("Warning: colorama not found. Logs will not be colored.")
     print("Install it using: pip install colorama")
-    # Define colors as empty strings if colorama is not available
     COLOR_RESET = ""
     COLOR_ENGINE = ""
     COLOR_BACKEND = ""
@@ -34,15 +32,19 @@ ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 VENV_DIR = os.path.join(ROOT_DIR, "venv")
 ENGINE_MAIN_DIR = os.path.join(ROOT_DIR, "systemCore", "engineMain")
 BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "backend-service")
-
 FRONTEND_DIR = os.path.join(ROOT_DIR, "systemCore", "frontend-face-zephyrine")
 
-PYTHON_EXECUTABLE = os.path.join(VENV_DIR, "bin", "python") if os.name != 'nt' else os.path.join(VENV_DIR, "Scripts", "python.exe")
-PIP_EXECUTABLE = os.path.join(VENV_DIR, "bin", "pip") if os.name != 'nt' else os.path.join(VENV_DIR, "Scripts", "pip.exe")
+# Define paths to executables within the virtual environment
+IS_WINDOWS = os.name == 'nt'
+VENV_BIN_DIR = os.path.join(VENV_DIR, "Scripts" if IS_WINDOWS else "bin")
+PYTHON_EXECUTABLE = os.path.join(VENV_BIN_DIR, "python.exe" if IS_WINDOWS else "python")
+PIP_EXECUTABLE = os.path.join(VENV_BIN_DIR, "pip.exe" if IS_WINDOWS else "pip")
+HYPERCORN_EXECUTABLE = os.path.join(VENV_BIN_DIR, "hypercorn.exe" if IS_WINDOWS else "hypercorn") # <-- Added
+NPM_CMD = 'npm.cmd' if IS_WINDOWS else 'npm' # Use npm command based on OS
 
 # Global list to keep track of running subprocesses
 running_processes = []
-process_lock = threading.Lock() # To safely append to the list
+process_lock = threading.Lock() # To safely append/remove
 
 # --- Helper Functions ---
 def print_colored(prefix, message, color):
@@ -60,7 +62,6 @@ def run_command(command, cwd, name, color, check=True, capture_output=False):
     """Runs a command, optionally checks for errors, and can stream output."""
     print_system(f"Running command in '{os.path.basename(cwd)}': {' '.join(command)}")
     try:
-        # Use Popen for potentially long-running commands or if streaming needed
         process = subprocess.Popen(
             command,
             cwd=cwd,
@@ -68,42 +69,40 @@ def run_command(command, cwd, name, color, check=True, capture_output=False):
             stderr=subprocess.PIPE,
             text=True,
             encoding='utf-8',
-            errors='replace', # Handle potential decoding errors
-            bufsize=1, # Line-buffered
-            # Use shell=True cautiously, needed for things like 'npm' on Windows sometimes
-            shell=(os.name == 'nt' and command[0] in ['npm', 'node'])
+            errors='replace',
+            bufsize=1,
+             # Use shell=True cautiously, but often needed for npm/node on Windows
+            shell=(IS_WINDOWS and command[0] in [NPM_CMD, 'node'])
         )
 
-        # Stream stdout
         stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, name, color), daemon=True)
         stdout_thread.start()
-
-        # Stream stderr (using error color)
         stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{name}-ERR", COLOR_ERROR), daemon=True)
         stderr_thread.start()
 
-        process.wait() # Wait for the command to complete
+        process.wait()
         stdout_thread.join()
         stderr_thread.join()
 
         if check and process.returncode != 0:
             raise subprocess.CalledProcessError(process.returncode, command)
 
-        print_system(f"Command finished in '{os.path.basename(cwd)}': {' '.join(command)}")
-        return True # Indicate success
+        print_system(f"Command finished successfully in '{os.path.basename(cwd)}': {' '.join(command)}")
+        return True
 
     except FileNotFoundError:
         print_error(f"Command not found: {command[0]}. Is it installed and in PATH?")
-        if command[0] == 'npm':
+        if command[0] in [NPM_CMD, 'node']:
             print_error("Ensure Node.js and npm are installed: https://nodejs.org/")
-        return False # Indicate failure
+        elif command[0] == HYPERCORN_EXECUTABLE:
+             print_error(f"Ensure '{os.path.basename(HYPERCORN_EXECUTABLE)}' is installed in the venv (check requirements.txt).")
+        return False
     except subprocess.CalledProcessError as e:
         print_error(f"Command failed in '{os.path.basename(cwd)}' with exit code {e.returncode}: {' '.join(command)}")
-        # Error output was already streamed by stderr_thread
-        return False # Indicate failure
+        return False
     except Exception as e:
         print_error(f"An unexpected error occurred while running command in '{os.path.basename(cwd)}': {e}")
-        return False # Indicate failure
+        return False
 
 def stream_output(pipe, name, color):
     """Reads lines from a subprocess pipe and prints them with prefix and color."""
@@ -112,7 +111,6 @@ def stream_output(pipe, name, color):
             if line:
                 print_colored(name, line, color)
     except Exception as e:
-        # Handle potential errors during reading (e.g., if process closes abruptly)
         print_error(f"Error reading output stream for {name}: {e}")
     finally:
         if pipe:
@@ -120,7 +118,7 @@ def stream_output(pipe, name, color):
 
 def start_service_thread(target_func, name):
     """Starts a service in a daemon thread."""
-    print_system(f"Starting service: {name}")
+    print_system(f"Preparing to start service: {name}")
     thread = threading.Thread(target=target_func, name=name, daemon=True)
     thread.start()
     return thread
@@ -129,27 +127,28 @@ def cleanup_processes():
     """Attempts to terminate all tracked subprocesses."""
     print_system("\nShutting down services...")
     with process_lock:
-        # Iterate backwards to avoid issues if removal happens (though not strictly needed here)
-        for proc, name in reversed(running_processes):
-            if proc.poll() is None: # Check if process is still running
-                print_system(f"Terminating {name} (PID: {proc.pid})...")
+        # Use slice copy for safe iteration if removing items (though we clear at end)
+        procs_to_terminate = list(running_processes)
+        running_processes.clear() # Clear original list
+
+    for proc, name in reversed(procs_to_terminate): # Iterate backwards
+        if proc.poll() is None:
+            print_system(f"Terminating {name} (PID: {proc.pid})...")
+            try:
+                # Send SIGTERM (terminate) first
+                proc.terminate()
                 try:
-                    # Try graceful termination first
-                    proc.terminate()
-                    try:
-                        # Wait a short time for graceful shutdown
-                        proc.wait(timeout=2)
-                        print_system(f"{name} terminated gracefully.")
-                    except subprocess.TimeoutExpired:
-                        print_system(f"{name} did not terminate gracefully, killing...")
-                        proc.kill() # Force kill
-                        proc.wait() # Wait for kill
-                        print_system(f"{name} killed.")
-                except Exception as e:
-                    print_error(f"Error terminating {name}: {e}")
-            else:
-                print_system(f"{name} already exited (return code: {proc.poll()}).")
-        running_processes.clear() # Clear the list after attempting termination
+                    proc.wait(timeout=3) # Wait 3 seconds
+                    print_system(f"{name} terminated gracefully.")
+                except subprocess.TimeoutExpired:
+                    print_system(f"{name} did not terminate gracefully, killing...")
+                    proc.kill() # Force kill (SIGKILL)
+                    proc.wait() # Wait for kill to complete
+                    print_system(f"{name} killed.")
+            except Exception as e:
+                print_error(f"Error terminating {name}: {e}")
+        else:
+            print_system(f"{name} already exited (return code: {proc.poll()}).")
 
 # Register cleanup function to run on script exit
 atexit.register(cleanup_processes)
@@ -165,37 +164,48 @@ signal.signal(signal.SIGINT, signal_handler)
 
 # --- Service Start Functions ---
 def start_engine_main():
-    """Starts the Python Engine Main service."""
+    """Starts the Python Engine Main service using Hypercorn."""
     name = "ENGINE"
     color = COLOR_ENGINE
-    command = [PYTHON_EXECUTABLE, "app.py"] # Use venv python
-    print_system(f"Launching Engine Main: {' '.join(command)} in {ENGINE_MAIN_DIR}")
+    # --- Command Changed Here ---
+    # We run hypercorn directly from the venv's bin directory
+    command = [
+        HYPERCORN_EXECUTABLE,
+        "app:app",                   # Load the 'app' object from 'app.py'
+        "--bind", "127.0.0.1:11434", # Bind to localhost port 11434
+        "--workers", "1"             # Number of worker processes
+        # Add other hypercorn options if needed, e.g., --log-level debug
+    ]
+    # Ensure hypercorn is installed via requirements.txt!
+    print_system(f"Launching Engine Main via Hypercorn: {' '.join(command)} in {ENGINE_MAIN_DIR}")
     try:
         process = subprocess.Popen(
             command,
-            cwd=ENGINE_MAIN_DIR,
+            cwd=ENGINE_MAIN_DIR, # Run hypercorn from the engineMain directory
             stdout=subprocess.PIPE,
-            stderr=subprocess.PIPE,
+            stderr=subprocess.PIPE, # Capture stderr separately
             text=True,
             encoding='utf-8',
             errors='replace',
             bufsize=1
+            # shell=False should be okay for hypercorn even on Windows if path is correct
         )
         with process_lock:
             running_processes.append((process, name))
 
         # Start streaming threads
         stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, name, color), daemon=True)
+        # Stream stderr using a different color/prefix
         stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{name}-ERR", COLOR_ERROR), daemon=True)
         stdout_thread.start()
         stderr_thread.start()
 
-        # Wait for process to complete (optional, services usually run indefinitely)
-        # process.wait()
-        # stdout_thread.join()
-        # stderr_thread.join()
-        # print_system(f"{name} process finished.") # Usually won't print if service runs forever
+        # We don't wait here, the process runs in the background.
+        # The main loop will monitor it.
 
+    except FileNotFoundError:
+         print_error(f"Command failed: '{HYPERCORN_EXECUTABLE}' not found.")
+         print_error("Ensure 'hypercorn' is listed in systemCore/engineMain/requirements.txt and the venv is active.")
     except Exception as e:
         print_error(f"Failed to start {name}: {e}")
 
@@ -215,17 +225,14 @@ def start_backend_service():
             encoding='utf-8',
             errors='replace',
             bufsize=1,
-            shell=(os.name == 'nt') # May need shell=True for node on Windows
+            shell=IS_WINDOWS # May need shell=True for node on Windows
         )
         with process_lock:
             running_processes.append((process, name))
-
-        # Start streaming threads
         stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, name, color), daemon=True)
         stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{name}-ERR", COLOR_ERROR), daemon=True)
         stdout_thread.start()
         stderr_thread.start()
-
     except Exception as e:
         print_error(f"Failed to start {name}: {e}")
 
@@ -233,9 +240,7 @@ def start_frontend():
     """Starts the Vite Frontend Development Server."""
     name = "FRONTEND"
     color = COLOR_FRONTEND
-    # Use 'npm.cmd' on Windows, 'npm' otherwise
-    npm_cmd = 'npm.cmd' if os.name == 'nt' else 'npm'
-    command = [npm_cmd, "run", "dev"]
+    command = [NPM_CMD, "run", "dev"]
     print_system(f"Launching Frontend (Vite): {' '.join(command)} in {FRONTEND_DIR}")
     try:
         process = subprocess.Popen(
@@ -247,17 +252,14 @@ def start_frontend():
             encoding='utf-8',
             errors='replace',
             bufsize=1,
-            shell=(os.name == 'nt') # npm often requires shell=True on Windows
+            shell=IS_WINDOWS # npm often requires shell=True on Windows
         )
         with process_lock:
             running_processes.append((process, name))
-
-        # Start streaming threads
         stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, name, color), daemon=True)
         stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{name}-ERR", COLOR_ERROR), daemon=True)
         stdout_thread.start()
         stderr_thread.start()
-
     except Exception as e:
         print_error(f"Failed to start {name}: {e}")
 
@@ -266,27 +268,20 @@ def start_frontend():
 if __name__ == "__main__":
     print_system("--- Project Zephyrine Launcher ---")
 
-    # 1. Check if running inside the desired virtual environment
-    is_in_target_venv = (os.getenv('VIRTUAL_ENV') == VENV_DIR) or (hasattr(sys, 'prefix') and sys.prefix == VENV_DIR)
+    # 1. Check/Create/Relaunch in Virtual Environment
+    # (Keep existing venv check and relaunch logic)
+    is_in_target_venv = (os.getenv('VIRTUAL_ENV') == VENV_DIR) or \
+                         (hasattr(sys, 'prefix') and sys.prefix == VENV_DIR) or \
+                         (hasattr(sys, 'real_prefix') and sys.real_prefix == VENV_DIR) # More checks
 
     if not is_in_target_venv:
         print_system(f"Not running in the target virtual environment: {VENV_DIR}")
-
-        # 2. Check if venv directory exists
         if not os.path.exists(VENV_DIR):
             print_system(f"Virtual environment not found. Creating it at: {VENV_DIR}")
             try:
-                # Find a suitable python3 executable
-                python_cmd = sys.executable # Use the python that's running this script
-                if 'venv' not in python_cmd: # Prefer system python if possible for creating venv
-                   try:
-                       result = subprocess.run(['which', 'python3'], capture_output=True, text=True, check=True)
-                       python_cmd = result.stdout.strip()
-                   except (FileNotFoundError, subprocess.CalledProcessError):
-                       print_warning("Could not find 'python3' via 'which', using current executable.")
-
-                print_system(f"Using Python interpreter: {python_cmd}")
-                subprocess.run([python_cmd, "-m", "venv", VENV_DIR], check=True)
+                python_cmd_for_venv = sys.executable
+                print_system(f"Using Python interpreter for venv creation: {python_cmd_for_venv}")
+                subprocess.run([python_cmd_for_venv, "-m", "venv", VENV_DIR], check=True)
                 print_system("Virtual environment created successfully.")
             except subprocess.CalledProcessError as e:
                 print_error(f"Failed to create virtual environment: {e}")
@@ -295,96 +290,95 @@ if __name__ == "__main__":
                 print_error(f"An unexpected error occurred during venv creation: {e}")
                 sys.exit(1)
 
-        # 3. Relaunch the script using the venv's Python interpreter
         print_system(f"Relaunching script using Python from virtual environment: {PYTHON_EXECUTABLE}")
         if not os.path.exists(PYTHON_EXECUTABLE):
              print_error(f"Python executable not found in venv: {PYTHON_EXECUTABLE}")
              print_error("Virtual environment might be corrupted or incomplete.")
              sys.exit(1)
         try:
-            # Pass original arguments, replacing the current process
+            # Use execv to replace the current process with the one in the venv
             os.execv(PYTHON_EXECUTABLE, [PYTHON_EXECUTABLE] + sys.argv)
         except Exception as e:
             print_error(f"Failed to relaunch script in virtual environment: {e}")
             sys.exit(1)
 
-    else:
-        # 4. Now running inside the correct virtual environment
-        print_system(f"Running inside the correct virtual environment: {VENV_DIR}")
+    # --- Running inside the correct venv ---
+    print_system(f"Running inside the correct virtual environment: {VENV_DIR}")
 
-        # 5. Install dependencies (Python)
-        print_system("--- Installing/Checking Python Dependencies ---")
-        req_path = os.path.join(ENGINE_MAIN_DIR, "requirements.txt")
-        if not os.path.exists(req_path):
-            print_error(f"requirements.txt not found at {req_path}")
-            sys.exit(1)
-        if not run_command([PIP_EXECUTABLE, "install", "-r", req_path], ENGINE_MAIN_DIR, "PIP", COLOR_SYSTEM):
-             print_error("Failed to install Python dependencies. Exiting.")
-             sys.exit(1)
-        print_system("Python dependencies checked/installed.")
+    # 2. Install/Check Dependencies (Python)
+    print_system("--- Installing/Checking Python Dependencies (Engine) ---")
+    req_path = os.path.join(ENGINE_MAIN_DIR, "requirements.txt")
+    if not os.path.exists(req_path):
+        print_error(f"requirements.txt not found at {req_path}")
+        sys.exit(1)
+    if not run_command([PIP_EXECUTABLE, "install", "-r", req_path], ENGINE_MAIN_DIR, "PIP", COLOR_SYSTEM):
+         print_error("Failed to install Python dependencies. Exiting.")
+         sys.exit(1)
+    print_system("Python dependencies checked/installed.")
 
-        # 6. Install dependencies (Node.js Backend Service)
-        print_system("--- Installing/Checking Node Backend Dependencies ---")
-        pkg_path = os.path.join(BACKEND_SERVICE_DIR, "package.json")
-        if not os.path.exists(pkg_path):
-             print_error(f"package.json not found at {pkg_path}")
-             sys.exit(1)
-        # Use 'npm.cmd' on Windows, 'npm' otherwise
-        npm_cmd = 'npm.cmd' if os.name == 'nt' else 'npm'
-        if not run_command([npm_cmd, "install"], BACKEND_SERVICE_DIR, "NPM-BE", COLOR_SYSTEM):
-             print_error("Failed to install Node backend dependencies. Exiting.")
-             sys.exit(1)
-        print_system("Node backend dependencies checked/installed.")
+    # 3. Install/Check Dependencies (Node.js Backend Service)
+    print_system("--- Installing/Checking Node Backend Dependencies ---")
+    pkg_path = os.path.join(BACKEND_SERVICE_DIR, "package.json")
+    if not os.path.exists(pkg_path):
+         print_error(f"package.json not found at {pkg_path}")
+         sys.exit(1)
+    if not run_command([NPM_CMD, "install"], BACKEND_SERVICE_DIR, "NPM-BE", COLOR_SYSTEM):
+         print_error("Failed to install Node backend dependencies. Exiting.")
+         sys.exit(1)
+    print_system("Node backend dependencies checked/installed.")
+
+    # 4. Install/Check Dependencies (Node.js Frontend)
+    print_system("--- Installing/Checking Node Frontend Dependencies ---")
+    pkg_path_fe = os.path.join(FRONTEND_DIR, "package.json")
+    if not os.path.exists(pkg_path_fe):
+         print_error(f"package.json not found at {pkg_path_fe}")
+         sys.exit(1)
+    if not run_command([NPM_CMD, "install"], FRONTEND_DIR, "NPM-FE", COLOR_SYSTEM):
+         print_error("Failed to install Node frontend dependencies. Exiting.")
+         sys.exit(1)
+    print_system("Node frontend dependencies checked/installed.")
+
+    # 5. Start all services concurrently
+    print_system("--- Starting Services ---")
+    threads = []
+    # Start Engine first if others depend on its API
+    threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
+    time.sleep(2) # Give engine a moment to bind port
+    threads.append(start_service_thread(start_backend_service, "BackendServiceThread"))
+    time.sleep(1)
+    threads.append(start_service_thread(start_frontend, "FrontendThread"))
+
+    print_system("All services are starting up. Press Ctrl+C to shut down.")
+
+    # 6. Keep the main thread alive and monitor processes
+    try:
+        while True:
+            active_process_found = False
+            with process_lock: # Lock for safe checking/modification
+                # Iterate safely if removing items (though we don't remove here, good practice)
+                current_running = list(running_processes)
+
+            for i in range(len(current_running) - 1, -1, -1):
+                 proc, name = current_running[i]
+                 if proc.poll() is None: # Process is still running
+                     active_process_found = True
+                 else: # Process has exited
+                     print_error(f"Service '{name}' exited unexpectedly with code {proc.poll()}.")
+                     # Remove from the main list so cleanup doesn't try to kill it again
+                     with process_lock:
+                        # Find the specific tuple to remove
+                        running_processes[:] = [p for p in running_processes if p[0].pid != proc.pid]
 
 
-        # 7. Install dependencies (Node.js Frontend)
-        print_system("--- Installing/Checking Node Frontend Dependencies ---")
-        pkg_path_fe = os.path.join(FRONTEND_DIR, "package.json")
-        if not os.path.exists(pkg_path_fe):
-             print_error(f"package.json not found at {pkg_path_fe}")
-             sys.exit(1)
-        # Use 'npm.cmd' on Windows, 'npm' otherwise
-        npm_cmd = 'npm.cmd' if os.name == 'nt' else 'npm'
-        if not run_command([npm_cmd, "install"], FRONTEND_DIR, "NPM-FE", COLOR_SYSTEM):
-             print_error("Failed to install Node frontend dependencies. Exiting.")
-             sys.exit(1)
-        print_system("Node frontend dependencies checked/installed.")
+            if not active_process_found and threads:
+                print_system("All managed service processes seem to have exited.")
+                break # Exit the main loop
 
-        # 8. Start all services concurrently
-        print_system("--- Starting Services ---")
-        threads = []
-        threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
-        time.sleep(1) # Small delay between starts if needed
-        threads.append(start_service_thread(start_backend_service, "BackendServiceThread"))
-        time.sleep(1)
-        threads.append(start_service_thread(start_frontend, "FrontendThread"))
+            time.sleep(5) # Check process status periodically
 
-        print_system("All services are starting up. Press Ctrl+C to shut down.")
-
-        # 9. Keep the main thread alive (or wait for threads, though they are daemons)
-        # Services run indefinitely, so just wait for interruption
-        try:
-            while True:
-                # Check if any service process has exited unexpectedly
-                with process_lock:
-                    for i in range(len(running_processes) - 1, -1, -1):
-                         proc, name = running_processes[i]
-                         if proc.poll() is not None: # Process has exited
-                             print_error(f"Service '{name}' exited unexpectedly with code {proc.poll()}.")
-                             # Optionally decide if this should trigger a full shutdown
-                             # For now, just report it. The thread streaming its output will stop.
-                             # Remove it from the list to avoid repeated checks/termination attempts
-                             del running_processes[i]
-
-                if not running_processes and threads: # If all processes are gone but threads were started
-                    print_system("All service processes seem to have exited.")
-                    break # Exit the main loop
-
-                time.sleep(5) # Check status periodically
-
-        except KeyboardInterrupt:
-            # Handled by signal handler, just pass here
-            pass
-        finally:
-            # Cleanup is handled by atexit
-            print_system("Launcher finished.")
+    except KeyboardInterrupt:
+        # Handled by signal handler, just pass here to allow cleanup
+        pass
+    finally:
+        # Cleanup is handled by atexit registration
+        print_system("Launcher shutting down or finished.")
