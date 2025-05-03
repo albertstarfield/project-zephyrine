@@ -156,7 +156,7 @@ except ImportError:
 
 # --- Local Imports with Error Handling ---
 try:
-    from ai_provider import AIProvider
+    from ai_provider import AIProvider, ai_provider_instance as global_ai_provider_ref
     # Import database components needed in app.py
     
     from database import (
@@ -4684,9 +4684,12 @@ def _format_legacy_completion_response(response_text: str, model_name: str = MET
 
 # === Global AI Instances ===
 ai_agent: Optional[AmaryllisAgent] = None
-ai_provider: Optional[AIProvider] = None # Ensure ai_provider is defined globally
+ai_provider: Optional[AIProvider] = None # Defined globally
+ai_chat: Optional[AIChat] = None # Define ai_chat globally too
+
 try:
     ai_provider = AIProvider(PROVIDER) # <<< ai_provider is initialized here
+    global_ai_provider_ref = ai_provider
     ai_chat = AIChat(ai_provider)
     AGENT_CWD = os.path.dirname(os.path.abspath(__file__))
     SUPPORTS_COMPUTER_USE = True # Or determine dynamically

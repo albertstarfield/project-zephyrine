@@ -1,5 +1,7 @@
 # Generated requirements for Amaryllis/Adelaide Project
 
+colorama
+
 # --- Web Framework & Server ---
 Flask
 hypercorn
@@ -48,3 +50,7 @@ zstandard # For database compression
 # asyncio, base64, contextlib, datetime, difflib, hashlib, io, json,
 # mimetypes, operator, os, random, re, shlex, shutil, subprocess,
 # sys, tempfile, threading, time, typing, urllib.parse, uuid
+#Standard LLM VLM loader
+llama-cpp-python
+#Additional Imagination Pipeline
+stable-diffusion-cpp-python

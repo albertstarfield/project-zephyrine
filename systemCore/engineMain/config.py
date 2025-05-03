@@ -8,7 +8,7 @@ load_dotenv()
 logger.info("Attempting to load environment variables from .env file...")
 
 # --- General Settings ---
-PROVIDER = os.getenv("PROVIDER", "ollama") # "ollama" or "fireworks"
+PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "fireworks"
 MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 5))
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 30)) # Target for *quick* answers
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", 8192)) # Default token limit for LLM calls
@@ -46,6 +46,33 @@ MODEL_CODE = os.getenv("MODEL_CODE", "qwen2.5-coder:3b-instruct-q5_K_M") # Needs
 MODEL_GENERAL_FAST = os.getenv("MODEL_GENERAL_FAST", "qwen3:0.6b-q4_K_M") # New fast model
 MODEL_TRANSLATOR = os.getenv("MODEL_TRANSLATOR", "hf.co/mradermacher/NanoTranslator-immersive_translate-0.5B-GGUF:Q4_K_M") # Check exact Ollama name
 MODEL_DEFAULT_CHAT = MODEL_ROUTER # Use the router/corrector as default
+
+# --- NEW: LLAMA_CPP Settings (Used if PROVIDER="llama_cpp") ---
+_engine_main_dir = os.path.dirname(os.path.abspath(__file__)) # Assumes config.py is in engineMain
+LLAMA_CPP_GGUF_DIR = os.path.join(_engine_main_dir, "staticmodelpool")
+LLAMA_CPP_N_GPU_LAYERS = int(os.getenv("LLAMA_CPP_N_GPU_LAYERS", -1)) # Default: Offload all possible layers
+LLAMA_CPP_N_CTX = int(os.getenv("LLAMA_CPP_N_CTX", 4096)) # Context window size
+LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "False").lower() == "true"
+
+# --- Mapping logical roles to GGUF filenames within LLAMA_CPP_GGUF_DIR ---
+LLAMA_CPP_MODEL_MAP = {
+    "router": os.getenv("LLAMA_CPP_MODEL_ROUTER_FILE", "deepscaler.gguf"), # Adelaide Zephyrine Charlotte Persona
+    "vlm": os.getenv("LLAMA_CPP_MODEL_VLM_FILE", "gemma3-4b-it-qat.gguf"), # Use LatexMind as VLM for now
+    "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf"),
+    "math": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen2-math-1.5b-instruct-q5_K_M.gguf"),
+    "code": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "qwen2.5-coder-3b-instruct-q5_K_M.gguf"),
+    "general": os.getenv("LLAMA_CPP_MODEL_GENERAL_FILE", "deepscaler.gguf"), # Use router as general
+    "general_fast": os.getenv("LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "qwen3-0.6b-q4_K_M.gguf"),
+    "translator": os.getenv("LLAMA_CPP_MODEL_TRANSLATOR_FILE", "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf"), # Assuming download renamed it
+    # --- Embedding Model ---
+    "embeddings": os.getenv("LLAMA_CPP_EMBEDDINGS_FILE", "mxbai-embed-large-v1.gguf") # Example name
+}
+# Define default chat model based on map
+MODEL_DEFAULT_CHAT_LLAMA_CPP = "general" # Use the logical name
+
+# --- Placeholder for Stable Diffusion ---
+STABLE_DIFFUSION_CPP_MODEL_PATH = os.getenv("STABLE_DIFFUSION_CPP_MODEL_PATH", None)
+# --- END NEW ---
 
 # --- Prompts ---
 
@@ -344,6 +371,17 @@ FIREWORKS_EMBEDDINGS_MODEL = os.getenv("FIREWORKS_EMBEDDINGS_MODEL", "nomic-ai/n
 
 # --- Validation ---
 if PROVIDER == "fireworks" and not FIREWORKS_API_KEY:
-     print("⚠️ WARNING: FIREWORKS_API_KEY missing/placeholder.")
+     logger.warning("⚠️ PROVIDER=fireworks but FIREWORKS_API_KEY missing/placeholder.")
+if PROVIDER == "llama_cpp" and not os.path.isdir(LLAMA_CPP_GGUF_DIR):
+     logger.error(f"❌ PROVIDER=llama_cpp but GGUF directory not found: {LLAMA_CPP_GGUF_DIR}")
+     # Decide whether to exit or continue (app will likely fail later)
+     # sys.exit(f"Required GGUF directory missing: {LLAMA_CPP_GGUF_DIR}")
+     logger.warning("Continuing despite missing GGUF directory...")
 
 logger.info("✅ Configuration loaded successfully.")
+logger.info(f"✅ Selected PROVIDER: {PROVIDER}")
+if PROVIDER == "llama_cpp":
+    logger.info(f"    GGUF Directory: {LLAMA_CPP_GGUF_DIR}")
+    logger.info(f"   GPU Layers: {LLAMA_CPP_N_GPU_LAYERS}")
+    logger.info(f"   Context Size: {LLAMA_CPP_N_CTX}")
+    logger.info(f"   Model Map: {LLAMA_CPP_MODEL_MAP}")
