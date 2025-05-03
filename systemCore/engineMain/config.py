@@ -52,7 +52,7 @@ _engine_main_dir = os.path.dirname(os.path.abspath(__file__)) # Assumes config.p
 LLAMA_CPP_GGUF_DIR = os.path.join(_engine_main_dir, "staticmodelpool")
 LLAMA_CPP_N_GPU_LAYERS = int(os.getenv("LLAMA_CPP_N_GPU_LAYERS", -1)) # Default: Offload all possible layers
 LLAMA_CPP_N_CTX = int(os.getenv("LLAMA_CPP_N_CTX", 4096)) # Context window size
-LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "False").lower() == "true"
+LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "True").lower() == "true"
 
 # --- Mapping logical roles to GGUF filenames within LLAMA_CPP_GGUF_DIR ---
 LLAMA_CPP_MODEL_MAP = {
