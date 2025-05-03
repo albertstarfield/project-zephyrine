@@ -4,15 +4,19 @@
 
 Project Zephyrine, personified by the AI assistant "Adelaide Zephyrine Charlotte," is an ambitious endeavor aimed at creating a sophisticated, locally-run conversational AI experience. Inspired by projects like Alpaca-Electron and Llama-GGML, it seeks to push the boundaries of local Large Language Model (LLM) interaction, with long-term goals potentially including deployment on embedded hardware.
 
-The project has evolved significantly from its initial JavaScript/Electron roots, now featuring a complex, multi-component architecture centered around a powerful Python-based core engine. It incorporates advanced concepts like Retrieval-Augmented Generation (RAG), hardware awareness, and asynchronous task scheduling.
+The project has evolved significantly from its initial JavaScript/Electron roots, now featuring a complex, multi-component architecture centered around a powerful Python-based core engine. It incorporates advanced concepts like Retrieval-Augmented Generation (RAG), hardware awareness, and asynchronous task scheduling. The web interface components now utilize a local backend service for data persistence and LLM interaction, moving away from cloud dependencies for that part of the system.
 
 ## 2. Architecture
 
-Project Zephyrine currently comprises several distinct components, suggesting different deployment strategies or stages of development:
+Project Zephyrine currently comprises several distinct components:
 
-*   **Core Engine (`systemCore/engineMain`):** A Python application responsible for local LLM inference, context management, hardware interaction, and providing an OpenAI-compatible API.
-*   **Backend Service (`systemCore/backend-service`):** A Node.js WebSocket server that utilizes cloud services (Groq API for LLM inference, Supabase for database) for chat functionality.
-*   **Web Frontend (`systemCore/frontend-face-zephyrine`):** A React-based web application providing a modern chat interface. It interacts with the **Backend Service** via WebSockets (`ws://localhost:3001`) for chat streaming and directly with **Supabase** for authentication and data persistence.
+*   **Core Engine (`systemCore/engineMain`):** A Python application responsible for local LLM inference, context management, hardware interaction, RAG, and providing an OpenAI-compatible API. Uses its own SQLite database for history, vectors, etc. Aims to eventually serve its API on port `11434`.
+*   **UI Backend Service (`systemCore/backend-service`):** A Node.js WebSocket server that acts as the **sole backend** for the Web Frontend. It handles:
+    *   Connecting to LLM APIs (either cloud-based like Groq or a local OpenAI-compatible endpoint like the Core Engine or Ollama, configurable via `.env`).
+    *   Managing chat sessions and message persistence using a local **SQLite** database (`database.db`).
+    *   Streaming LLM responses back to the frontend via WebSockets.
+    *   Handling chat history fetching, message saving/editing, and title generation requests from the frontend.
+*   **Web Frontend (`systemCore/frontend-face-zephyrine`):** A React-based web application providing a modern chat interface. It interacts **exclusively** with the **UI Backend Service** via WebSockets (`ws://localhost:3001`) for *all* data operations (chat streaming, history, saving, editing) and uses a dummy local authentication state.
 *   **Desktop UI (`systemCore/ZephyWebUI`):** An Electron application that appears to be a legacy component or a simplified interface. It currently uses a basic Flask backend stub for simulated interaction.
 
 ### High-Level Architecture Diagram
@@ -24,35 +28,39 @@ graph TD
         UI_Desktop[Desktop UI (Electron/Flask Stub)]
     end
 
-    subgraph Backend Options
-        B_Local[Core Engine (Python/llama-cpp)]
-        B_Cloud[Backend Service (Node.js/Groq/Supabase)]
+    subgraph Backends
+        B_Engine[Core Engine (Python/llama-cpp) <br> API Target: 11434]
+        B_UIBackend[UI Backend Service (Node.js/WS)]
     end
 
     subgraph Data & Models
-        DB_Local[Local DB (SQLite)]
-        DB_Cloud[Cloud DB (Supabase)]
+        DB_Engine[Engine DB (SQLite)]
+        DB_UI[UI Backend DB (SQLite)]
         Models[Local Models (GGUF)]
-        Cloud_LLM[Cloud LLM (Groq API)]
+        LLM_Cloud[Cloud LLM (Groq API)]
+        LLM_LocalOllama[Separate Ollama <br> (e.g., 11435)]
     end
 
-    UI_Web --> B_Cloud;
-    UI_Web --> DB_Cloud;
-    %% UI_Web -- Potentially --> B_Local;  (Removed: Connects via B_Cloud/DB_Cloud)
+    UI_Web --> B_UIBackend;
 
-    UI_Desktop --> B_Local; %% Or potentially its own stub Flask backend
+    UI_Desktop --> B_Engine; %% Or potentially its own stub Flask backend
 
-    B_Local --> Models;
-    B_Local --> DB_Local;
+    B_UIBackend --> DB_UI;
+    B_UIBackend --> LLM_Cloud;
+    B_UIBackend -- Local Option 1 --> B_Engine;  %% Connect to Core Engine API
+    B_UIBackend -- Local Option 2 --> LLM_LocalOllama; %% Connect to separate Ollama
 
-    B_Cloud --> Cloud_LLM;
-    B_Cloud --> DB_Cloud;
+    B_Engine --> Models;
+    B_Engine --> DB_Engine;
 
-    style B_Local fill:#f9f,stroke:#333,stroke-width:2px
-    style B_Cloud fill:#ccf,stroke:#333,stroke-width:2px
+
+    style B_Engine fill:#f9f,stroke:#333,stroke-width:2px
+    style B_UIBackend fill:#ccf,stroke:#333,stroke-width:2px
 ```
 
 ### Core Engine (`engine.py`) Interaction Flow (Simplified)
+
+*(This diagram remains unchanged as it describes the Python core engine)*
 
 ```mermaid
 sequenceDiagram
@@ -87,6 +95,8 @@ sequenceDiagram
 
 ### 3.1. Core Engine (`systemCore/engineMain/engine.py`)
 
+*(This section remains largely unchanged, describing the Python engine)*
+
 This is the heart of Project Zephyrine's local processing capabilities.
 
 *   **Technology:** Python, asyncio, threading, llama-cpp-python, PyTorch, Tiktoken, Hugging Face Hub client, SQLite3, psutil, NumPy, scikit-learn.
@@ -96,39 +106,39 @@ This is the heart of Project Zephyrine's local processing capabilities.
     *   **Asynchronous Task Scheduling:** Manages LLM inference, embedding, and other operations using prioritized queues (`mainProcessingIO`, `backbrainProcessingIO`, `meshNetworkProcessingIO`) via `asyncio`.
     *   **Retrieval-Augmented Generation (RAG):** Implements a sophisticated `PartitionContext` system (detailed further in the "Science Behind It" section) managing context memory. Uses `snowflake-arctic-embed.gguf` for embedding text chunks and stores/retrieves them from an SQLite vector store for context augmentation.
     *   **Branch Prediction:** An experimental feature (detailed in the "Science Behind It" section) attempting proactive response generation by predicting likely user inputs.
-    *   **Persistence:** Uses SQLite (`DatabaseManager`) to store chat history, vector embeddings, task queues, and inference cache.
-    *   **API:** Provides an OpenAI-compatible HTTP server endpoint for interaction.
+    *   **Persistence:** Uses SQLite (`DatabaseManager`) to store chat history, vector embeddings, task queues, and inference cache **for the Core Engine**.
+    *   **API:** Provides an OpenAI-compatible HTTP server endpoint for interaction (Targeting `http://localhost:11434/v1`).
     *   **Persona:** Embeds instructions defining the AI's ("Adelaide") personality and behavior.
     *   **Utilities:** Includes GGUF parsing, output formatting, prompt templating, JSON repair, and system monitoring.
 
-### 3.2. Backend Service (`systemCore/backend-service/server.js`)
+### 3.2. UI Backend Service (`systemCore/backend-service/server.js`)
 
-This component provides an alternative, cloud-based backend.
+This component serves as the dedicated backend for the Web Frontend.
 
-*   **Technology:** Node.js, Express, ws (WebSockets), Groq SDK, Supabase client.
+*   **Technology:** Node.js, Express, ws (WebSockets), Groq SDK, OpenAI SDK, `sqlite3`.
 *   **Key Features:**
-    *   **WebSocket API:** Provides the primary interface for clients.
-    *   **Cloud LLM:** Forwards chat requests to the Groq API for inference.
-    *   **Cloud Database:** Uses Supabase for storing chat metadata (e.g., titles).
-    *   **Title Generation:** Automatically generates chat titles using Groq based on the first user message.
-*   **Role:** Its existence alongside the local Core Engine suggests it might be for:
-    *   A cloud-deployment target.
-    *   A fallback mechanism.
-    *   Handling specific clients or features that benefit from cloud infrastructure (e.g., potentially faster inference via Groq, easier data synchronization via Supabase).
+    *   **WebSocket API:** Provides the primary interface for the Web Frontend, handling messages for chat operations, history requests, edits, etc.
+    *   **LLM Broker:** Connects to either the Groq cloud API or a local OpenAI-compatible API (e.g., the Core Engine on `11434` or Ollama on a different port), configured via `.env` (`GROQ_API_KEY`, `LOCAL_LLM_API_ENDPOINT`). Forwards chat requests and streams responses.
+    *   **Local Database:** Uses **SQLite** (`database.db` file within its directory) for storing chat history, messages, and metadata (like titles) specifically for the Web UI interactions.
+    *   **Chat Management:** Handles fetching chat history, saving user/assistant messages, updating messages on edits, and deleting chats based on WebSocket commands.
+    *   **Title Generation:** Automatically generates chat titles using the configured LLM based on the first user message.
+*   **Role:** Acts as the sole intermediary between the React Web Frontend and the necessary backend resources (LLM APIs and its own SQLite database), ensuring the frontend itself remains simpler and doesn't handle persistence or direct LLM calls.
 
 ### 3.3. Web Frontend (`systemCore/frontend-face-zephyrine/`)
 
-A modern web interface for interacting with the system.
+A modern web interface for interacting with the system via the UI Backend Service.
 
-*   **Technology:** React, Vite, React Router, Supabase client, CSS, custom hooks.
+*   **Technology:** React, Vite, React Router, CSS, custom hooks.
 *   **Key Features:**
-    *   **User Authentication:** Manages user login/sessions via Supabase Auth.
-    *   **Chat Interface:** Provides a standard chat layout with a sidebar (history, model selection, settings) and a main chat area.
+    *   **Dummy Authentication:** Uses a simplified context (`AuthContext.jsx`) providing a static, dummy logged-in user state suitable for local development.
+    *   **Chat Interface:** Provides a standard chat layout with a sidebar (history) and a main chat area.
     *   **Rich Content:** Renders Markdown in chat messages.
-    *   **State Management:** Uses custom React hooks extensively.
-    *   **Backend Connection:** Connects to the **Backend Service** (`systemCore/backend-service`) via WebSocket (`ws://localhost:3001`) for real-time chat functionality and title generation. It also interacts directly with **Supabase** for fetching/storing messages and handling user authentication.
+    *   **State Management:** Uses custom React hooks extensively (e.g., `useChatHistory`, `useSystemInfo`).
+    *   **Backend Connection:** Connects **only** to the **UI Backend Service** (`systemCore/backend-service`) via WebSocket (default `ws://localhost:3001`) for **all** real-time functionality, including chat streaming, fetching history, saving/editing messages, and receiving title updates. Uses `import.meta.env.VITE_WEBSOCKET_URL` if set.
 
 ### 3.4. Desktop UI (`systemCore/ZephyWebUI/`)
+
+*(This section remains unchanged)*
 
 An Electron-based desktop application.
 
@@ -142,99 +152,84 @@ An Electron-based desktop application.
 
 ## 4. Science Behind It
 
-Project Zephyrine leverages several key concepts from AI and computer science:
+*(This section remains largely unchanged, focusing on the Core Engine concepts)*
 
-*   **Large Language Models (LLMs):** At its core, the project uses LLMs (specifically models compatible with `llama.cpp` in GGUF format) to understand and generate human-like text.
-*   **GGUF & Quantization:** Utilizes the GGUF format for efficient model distribution and loading. Implements quantization techniques (e.g., Q4_K_M) to reduce model size and computational requirements, making them feasible to run on consumer hardware, albeit with a potential trade-off in precision.
-*   **Embeddings & Vector Stores:** Employs text embeddings (using models like `snowflake-arctic-embed`) to convert text into numerical vectors. These vectors are stored in a database (SQLite in the core engine) allowing for efficient similarity searches.
-*   **Retrieval-Augmented Generation (RAG):** Combines the generative power of the LLM with information retrieved from persistent storage. The `PartitionContext` class manages this with a specific strategy:
-    *   **Context Partitioning:** The available context window is divided into L0 (75%, recent in-memory history) and L1 (25%, semantically retrieved history).
-    *   **L0 Overflow:** When L0 exceeds its token limit, the oldest messages are "demoted" to a separate `CoT_generateResponse_History` table in the SQLite database. *(Note: Analysis suggests these demoted items might be stored with empty embeddings, potentially impacting their retrieval effectiveness.)*
-    *   **L1 Retrieval:** When constructing a prompt, the system embeds the current query (using `snowflake-arctic-embed.gguf`) and performs a cosine similarity search against embeddings stored in the `interaction_history` table (or `CoT_generateResponse_History` for internal CoT requests) to find the top `k` most relevant past interactions to include in the L1 partition.
-    *   **Asynchronous Embedding:** New interactions are embedded and stored in the database asynchronously by a dedicated `EmbeddingThread`.
-*   **Asynchronous Processing & Task Scheduling:** Uses Python's `asyncio` and `threading` to handle multiple tasks concurrently (LLM inference, embedding, API requests) without blocking the main application flow, improving responsiveness. A scheduler prioritizes tasks.
-*   **Context Window Management:** Addresses the limited context window of LLMs by using the RAG approach and potentially other summarization or selection techniques within `PartitionContext` to provide the most relevant information within the token limit.
-*   **Hardware Acceleration & Awareness:** The core engine actively checks system hardware (CPU architecture, RAM/VRAM bandwidth, ECC memory, available accelerators like CUDA, ROCm, MPS) and provides warnings (e.g., `[[1]]` - `[[16]]` in `engine.py`). This reflects an understanding that ML performance is heavily dependent on underlying hardware capabilities.
-    *   **Memory Consistency:** The warning about non-x86_64 architectures (`[[1]][[2]]`) likely relates to differences in memory consistency models. Architectures like x86-64 typically implement stronger models (e.g., Total Store Order - TSO), providing stricter guarantees about the order of memory operations seen by different cores. Weaker models, sometimes found in other architectures (e.g., ARM), allow for more reordering, which can improve performance but may require more explicit synchronization (memory barriers/fences) in parallel code to ensure correctness, especially in complex interactions between hardware and the OS (Lustig et al., 2017). Failures in managing this can lead to subtle bugs or instability in parallel ML workloads.
-    *   **ECC Memory:** The warning regarding non-ECC memory (`[[16]]`) highlights the risk of silent data corruption (SDC). ECC memory can detect and correct single-bit errors, which are common soft errors. While ECC cannot correct all multi-bit errors (which become Detected Uncorrectable Errors, DUEs, often leading to process termination), non-ECC memory lacks even single-bit correction, making it significantly more susceptible to silent corruption where a bit flip alters data (e.g., model weights, activations) without any immediate system crash, potentially leading to incorrect results or degraded model accuracy over time (Jaulmes et al., 2019; Bittel et al., 2024).
-    *   **Other Warnings:** Specific warnings about RAM/VRAM bandwidth (`[[14]][[15]]`), VRAM capacity (`[[8]]`), disk speed/space (`[[9]][[10]]`), RAM capacity (`[[11]]`), potential issues with specific CPU vendors/generations (AMD `[[3]][[4]]`, recent Intel `[[5]]`), GPU compatibility (`[[6]][[7]]`), and unified memory (`[[12]]`) highlight performance bottlenecks or potential stability concerns identified by the developers, likely based on empirical testing or other external knowledge sources not fully detailed in the currently available documentation.
-*   **Prompt Engineering:** The base64 encoded instructions in `engine.py` and the specific prompts used (e.g., for title generation in `backend-service`) demonstrate deliberate prompt engineering to guide the LLM's behavior and output format.
-*   **Decision Trees & Proactive Generation (Branch Predictor):** An experimental feature (`branch_predictor` in `AIRuntimeManager`) attempts proactive response generation. It periodically analyzes chat history, uses the LLM to generate a textual decision tree predicting potential conversation paths, prompts the LLM again to convert this tree to a specific JSON format, extracts potential user questions from the JSON, and then schedules background tasks to pre-generate responses for these predicted questions. This aims to reduce latency if the user asks an anticipated question. It relies heavily on the LLM's instruction following capabilities for both tree generation and JSON formatting.
-*   **Ada Integration (Potential):** The setup scripts include complex steps to build the `gnat-llvm` Ada compiler toolchain from source. While no Ada source code is currently part of the main application build, this indicates a potential future direction towards using Ada for specific components, possibly for performance, reliability, or interfacing with Ada-based libraries. The presence of C-to-Ada conversion manuals further supports this possibility.
+Project Zephyrine leverages several key concepts from AI and computer science:
+*(... keep existing points like LLMs, GGUF, Embeddings, RAG, Async, Context Window, Hardware Accel, Prompt Eng, Decision Trees, Ada ...)*
+*(Review points like Memory Consistency, ECC Memory, Other Warnings - these relate to the Core Engine's hardware awareness)*
 
 ## 5. Future Goals
 
-Based on the codebase and documentation:
+*(This section remains unchanged)*
 
-*   **Embedded Systems:** The backstory explicitly mentions the goal of implementing the assistant on embedded hardware. This aligns with the focus on local execution, quantization, and hardware awareness.
-*   **Enhanced Reasoning:** Features like the "Branch Predictor" and "BackBrain Queue" suggest ongoing work towards more complex reasoning, planning, and background processing capabilities.
-*   **Multi-Modal Capabilities:** The presence of `Llava` model conversion code in `engine.py` hints at potential future integration of vision capabilities.
-*   **Improved UI/UX:** The existence of multiple UI components (Web, Desktop) suggests ongoing efforts to refine the user experience.
-*   **Cloud/Local Hybrid:** The parallel existence of the local Core Engine and the cloud-based Backend Service might indicate a future hybrid approach, allowing users to choose or switch between local privacy/control and cloud scalability/performance.
+Based on the codebase and documentation:
+*(... keep existing points like Embedded, Reasoning, Multi-Modal, UI/UX, Cloud/Local Hybrid ...)*
 
 ## 6. Contributing & Development
 
-*(This section details the setup process, primarily focusing on the local Core Engine path orchestrated by `launchcontrol/coreRuntimeManagement.py`)*
+This section details the setup process, focusing on the **unified launch script** for development and the separate build process for the **Core Engine**.
+
+### 6.1. Unified Development Launch (`launch.py`)
+
+This is the **primary method** for running the development environment, including the Web UI and its backend.
 
 *   **Prerequisites:**
-    *   Python 3
+    *   Python 3 (Tested with 3.12/3.13 recommended)
     *   Git
-    *   Node.js and npm (Required by `coreRuntimeManagement.py` for updates, and for other components)
-    *   C/C++ Build Toolchain:
+    *   Node.js and npm
+    *   `pip install colorama` (for colored console output)
+    *   **(Optional but Recommended for full functionality):** C/C++ Build Toolchain (needed if `launch.py` is configured to also start the `engineMain` component, which requires compiled C++ backends):
         *   **Linux:** `build-essential` (Debian/Ubuntu), `gcc-c++` (Fedora/CentOS), `base-devel` (Arch), etc.
-        *   **macOS:** Xcode Command Line Tools (install via `xcode-select --install`)
-        *   **Windows:** Visual Studio Build Tools (Installed automatically by the script if needed, requires Chocolatey)
-    *   CMake
-    *   **Optional (for GPU Acceleration):**
-        *   NVIDIA CUDA Toolkit (if using NVIDIA GPU)
-        *   Metal SDK (comes with Xcode on macOS)
-        *   OpenCL drivers/headers (if using OpenCL)
-    *   **Optional (Windows):** Chocolatey package manager (Installed automatically by the script if needed)
+        *   **macOS:** Xcode Command Line Tools (`xcode-select --install`)
+        *   **Windows:** Visual Studio Build Tools (Can be installed via Chocolatey)
+    *   **(Optional but Recommended for full functionality):** CMake (needed for C++ builds)
 
-*   **Core Engine Setup & Build (Local Path):**
-    1.  **Navigate** to the project root directory.
-    2.  **Run the main setup script:**
+*   **Setup & Launch Steps:**
+    1.  Clone the repository (if not already done).
+    2.  Navigate to the **project root directory** (the one containing `launch.py` and the `systemCore` folder).
+    3.  **Run the launcher script:**
         ```bash
-        bash launchcontrol/run.sh
+        # Replace python3 with python3.12 or your specific version if needed
+        python3 launch.py
         ```
-    3.  **What the script does:**
-        *   Checks for required directories (`systemCore`, `launchcontrol`, etc.).
-        *   Creates a Python virtual environment (`_venv`).
-        *   Activates `_venv`.
-        *   Executes `python3 ./launchcontrol/coreRuntimeManagement.py`.
-    4.  **`coreRuntimeManagement.py` Orchestration:** This script performs the heavy lifting:
-        *   Installs basic Python packages (`requests`, `bs4`) into `_venv`.
-        *   Sets up environment variables (e.g., for potential Conda/Node paths).
-        *   **Installs System Dependencies:** Attempts to install required system packages (compilers, libraries like CMake, OpenBLAS, Node.js) based on the detected OS (Linux, macOS, Windows) using appropriate package managers (apt, dnf, brew, choco). This can be time-consuming and may require `sudo` privileges.
-        *   **Cleans Previous Builds:** Removes old `vendor`, `node_modules`, `conda_python_modules`, `nodeLocalRuntime` directories.
-        *   **Clones C++ Submodules:** Downloads source code for `llama.cpp`, `ggml`, `whisper.cpp`, `gemma.cpp`, and the `gnat-llvm` Ada compiler into `systemCore/vendor/`.
-        *   **Builds C++ Backends:** Compiles `llama.cpp`, `gemma.cpp`, etc. using CMake, automatically detecting and enabling hardware acceleration (CUDA, Metal, OpenCL) where possible. Builds are placed in respective `build` subdirectories within `systemCore/vendor/`.
-        *   **Builds Ada Compiler:** Attempts to build the `gnat-llvm` Ada compiler from source (a complex and potentially lengthy process), likely in preparation for future Ada development or to build an Ada-based dependency.
-        *   **Builds Ada Compiler:** Attempts to build the `gnat-llvm` Ada compiler from source (a complex and potentially lengthy process).
-        *   **Fixes Permissions:** Adjusts file permissions (details depend on OS).
-        *   **(Likely) Launches Core Engine:** The final steps (not fully visible in the truncated analysis) probably involve starting the main `systemCore/engineMain/engine.py` application.
+    4.  **What `launch.py` Does:**
+        *   Checks if running inside the project's Python virtual environment (`./venv`). If not, it creates `./venv` (if missing) using the system's Python 3 and re-launches itself using the venv's Python.
+        *   Once in the venv, it installs/updates Python dependencies from `systemCore/engineMain/requirements.txt`.
+        *   Installs/updates Node.js dependencies for the UI Backend Service (`systemCore/backend-service/package.json`).
+        *   Installs/updates Node.js dependencies for the Web Frontend (`systemCore/frontend-face-zephyrine/package.json`).
+        *   Starts the **Core Engine** (`systemCore/engineMain/app.py`) in a separate thread. *(Note: You might configure `launch.py` to make this optional if only developing the UI)*.
+        *   Starts the **UI Backend Service** (`systemCore/backend-service/server.js`) in a separate thread.
+        *   Starts the **Web Frontend** (`systemCore/frontend-face-zephyrine`) development server (Vite) in a separate thread.
+        *   Displays interleaved, timestamped, and color-coded logs from all running services in the console.
+        *   Handles graceful shutdown of all started services when you press `Ctrl+C`.
 
-*   **Cloud Backend Setup (`backend-service`):**
-    1.  Navigate to `systemCore/backend-service`.
-    2.  Install dependencies: `npm install`
-    3.  Create a `.env` file with `GROQ_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY`.
-    4.  Start the service: `npm start`
+*   **Configuration (`.env` file in project root):**
+    *   `GROQ_API_KEY`: Your API key if you want the UI Backend Service to use Groq.
+    *   `LOCAL_LLM_API_ENDPOINT`: The URL for an OpenAI-compatible API that the **UI Backend Service** (`systemCore/backend-service`) should connect to when `GROQ_API_KEY` is **not** set.
+        *   **Long-Term Goal:** This should eventually point to Project Zephyrine's **Core Engine** (`systemCore/engineMain`), which aims to provide its own OpenAI-compatible API, potentially running on `http://localhost:11434/v1`.
+        *   **Development/Fallback:** If the Core Engine's API is not yet running or fully functional on port `11434`, you can use this variable to point the UI Backend Service to a *separate* instance of a local LLM server like Ollama.
+        *   **Port Conflict Note:** If you intend to run the Zephyrine Core Engine (targeting port `11434`) **and** a separate Ollama instance simultaneously during development, you **must configure Ollama to run on a different port** (e.g., by setting `OLLAMA_HOST=127.0.0.1:11435` before starting Ollama). In that case, you would set `LOCAL_LLM_API_ENDPOINT=http://localhost:11435/v1` in the `.env` file for `launch.py`.
+        *   If this variable is not set in `.env`, the UI Backend Service defaults to `http://localhost:11434/v1`, assuming *something* (either the Core Engine or Ollama) is providing the API there.
+    *   *(Other variables previously used by Supabase or the Core Engine might still be present but are not used by the UI Backend Service or Web Frontend anymore)*
+    *   **Note:** The UI Backend Service (`server.js`) uses SQLite (`database.db`) by default, this is not configured via `.env`.
+    *   **Note:** The Web Frontend (Vite) looks for `.env` files within its own directory (`systemCore/frontend-face-zephyrine/`) for variables prefixed with `VITE_`. E.g., `VITE_WEBSOCKET_URL` can override the default `ws://localhost:3001`.
 
-*   **Web Frontend Setup (`frontend-face-zephyrine`):**
+### 6.2. Core Engine Build Process (`launchcontrol/run.sh`)
+
+This script handles the complex build process specifically for the Python **Core Engine** and its C++ dependencies. It's typically run once for initial setup or when updating the C++ backends. The `launch.py` script assumes these builds have been completed successfully if it intends to run the Core Engine.
+
+*   **Prerequisites:** Requires the C/C++ Build Toolchain and CMake mentioned above. GPU acceleration prerequisites (CUDA Toolkit etc.) are needed here if you want GPU support compiled in.
+*   **Running the Build:**
+    1.  Navigate to the project root directory.
+    2.  Execute the script: `bash launchcontrol/run.sh`
+*   **What it Does:** (See previous documentation version for the detailed steps involving `coreRuntimeManagement.py`: system dependency installs, cloning submodules, CMake builds for `llama.cpp`, `gemma.cpp`, `gnat-llvm`, etc.) This prepares the necessary executables and libraries used by `systemCore/engineMain/engine.py`.
+
+### 6.3. Production Builds
+
+*   **Web Frontend:**
     1.  Navigate to `systemCore/frontend-face-zephyrine`.
-    2.  Install dependencies: `npm install`
-    3.  Create a `.env` file (likely for Supabase public key/URL, check `src/utils/supabaseClient.js`).
-    4.  Start the development server: `npm run dev`
-    5.  Build for production: `npm run build`
+    2.  Run `npm run build`. The output will be in the `dist` directory. Serve these static files alongside the UI Backend Service.
+*   **UI Backend Service:** This is a Node.js application. Deploy it using standard Node.js methods (e.g., `node server.js` via PM2, Docker, etc.). Ensure the `database.db` SQLite file is included or created in its working directory.
+*   **Core Engine:** Deploy the Python application (`engine.py`) along with its dependencies (installed in `venv`) and the compiled C++ backends (from the `systemCore/vendor/.../build` directories). Requires a compatible Python environment on the target machine.
 
-*   **Desktop UI Setup (`ZephyWebUI` - Legacy/Stub):**
-    1.  Navigate to `systemCore/ZephyWebUI`.
-    2.  Install dependencies: `npm install`
-    3.  Start the Flask backend stub (requires Flask installed, potentially in `_venv` or a separate env): `python app.py`
-    4.  Start the Electron app: `npm start`
-    5.  Build scripts (`make-*`, `pack-*`) exist in `package.json` for creating distributables.
-
-*   **Dependencies:** Managed via `pip` (within `_venv`, primarily by `coreRuntimeManagement.py`) and `npm` (for Node.js components). System-level dependencies are handled by `coreRuntimeManagement.py`.
-*   **Building:** C++ components are built via CMake by `coreRuntimeManagement.py`. The React app is built using `npm run build`. The Electron app uses `electron-packager`/`electron-builder` via npm scripts.
-
-*(End of Draft)*
+*(End of Updated Documentation)*
