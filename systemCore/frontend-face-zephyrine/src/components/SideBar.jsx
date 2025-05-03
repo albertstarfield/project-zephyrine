@@ -83,10 +83,7 @@ const SideBar = ({
   chatHistory,
   onRenameChat,
   onDeleteChat,
-  // Model Selection Props
-  availableModels,
-  selectedModel,
-  onModelChange,
+
 }) => {
   const navigate = useNavigate();
   const { signOut } = useAuth();
@@ -227,18 +224,6 @@ const SideBar = ({
           {/* Model Selector Dropdown */}
           {!isCollapsed && (
             <div className="model-selector-container">
-              <select
-                className="sidebar-button model-selector-dropdown"
-                value={selectedModel}
-                onChange={(e) => onModelChange(e.target.value)}
-                title="Select AI Model"
-              >
-                {availableModels.map((model) => (
-                  <option key={model} value={model}>
-                    {model}
-                  </option>
-                ))}
-              </select>
               {/* Custom arrow overlay */}
               <svg
                 className="dropdown-arrow"
@@ -262,7 +247,7 @@ const SideBar = ({
         <nav className="sidebar-history">
           {!isCollapsed && <h4>History</h4>} {/* Hide title when collapsed */}
           <ul>
-             {chatHistory.map((chat) => (
+          {(chatHistory || []).map(chat => (
               <li
                 key={chat.id}
                 title={isCollapsed ? chat.title : ""}

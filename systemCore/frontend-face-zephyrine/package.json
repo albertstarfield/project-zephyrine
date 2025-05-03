@@ -1,5 +1,5 @@
 {
-  "name": "project-zephyrine-web",
+  "name": "frontend-face-zephyrine",
   "private": true,
   "version": "0.1.0",
   "type": "module",
@@ -9,7 +9,6 @@
     "preview": "vite preview"
   },
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.3",
     "dotenv": "^16.4.7",
     "lucide-react": "^0.484.0",
     "os-utils": "^0.0.14",
@@ -18,7 +17,9 @@
     "react-markdown": "^8.0.7",
     "react-router-dom": "^7.4.0",
     "react-syntax-highlighter": "^15.6.1",
-    "uuid": "^11.1.0"
+    "uuid": "^11.1.0",
+    "openai":"^4.97.0",
+    "sqlite3": "^5.1.7"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
