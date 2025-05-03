@@ -19,7 +19,8 @@
     "react-syntax-highlighter": "^15.6.1",
     "uuid": "^11.1.0",
     "openai":"^4.97.0",
-    "sqlite3": "^5.1.7"
+    "sqlite3": "^5.1.7",
+    "vite-plugin-pwa":"^1.0.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
