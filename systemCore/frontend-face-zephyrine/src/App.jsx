@@ -1,53 +1,44 @@
-import { useState, useEffect, useCallback } from 'react'; // Removed useRef, useParams
-import {
-  Routes,
-  Route,
-  // useParams is used in ChatPage
-  useNavigate,
-  Navigate,
-  // useLocation is used in useChatHistory hook
-} from 'react-router-dom';
+import { useState, useEffect, useCallback } from 'react'; // Keep necessary imports
+import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
-// supabase is used in useChatHistory hook
-import { useAuth } from './contexts/AuthContext'; // Import useAuth
-import Auth from './components/Auth'; // Import Auth component
+import { useAuth } from './contexts/AuthContext';
+// Removed: import Auth from './components/Auth'; // Remove if Auth component is no longer used
 import './styles/App.css';
 import SideBar from './components/SideBar';
-// ChatFeed and InputArea are now used within ChatPage
 import SystemOverlay from './components/SystemOverlay';
-import ChatPage from './components/ChatPage'; // Import the extracted component
+import ChatPage from './components/ChatPage';
 import './styles/ChatInterface.css';
 import './styles/utils/_overlay.css';
-import RedirectToNewChat from './components/RedirectToNewChat'; // Import the extracted component
+import RedirectToNewChat from './components/RedirectToNewChat';
 
 // Import custom hooks
 import { useStarBackground } from './hooks/useStarBackground';
 import { useSystemInfo } from './hooks/useSystemInfo';
-import { useChatHistory } from './hooks/useChatHistory';
-import { useModelSelection } from './hooks/useModelSelection';
-
+import { useChatHistory } from './hooks/useChatHistory'; // Keep this hook
 
 // Main App component handles layout, routing, and authentication check
 function App() {
-  const { session, loading, user } = useAuth(); // Get auth state
+  // _s(); // REMOVE THIS LINE (was line 32)
+
+  // Since AuthContext now provides a dummy session immediately, loading should always be false
+  // and session/user should always exist.
+  const { session, user } = useAuth(); // Get dummy auth state
   const navigate = useNavigate();
 
   // Use custom hooks for state management
   const systemInfo = useSystemInfo();
   const stars = useStarBackground();
+
+  // useChatHistory hook (Needs adaptation for WebSocket fetching/updates)
   const {
     chatHistory,
-    fetchChatHistory, // Keep fetchChatHistory to pass to ChatPage for refresh
-    handleRenameChat,
-    handleDeleteChat
+    isLoadingHistory, // Get loading state from the hook
+    fetchChatHistory, // Function to trigger a fetch (needs WS implementation)
+    handleRenameChat, // Needs WS implementation for backend call
+    handleDeleteChat  // Needs WS implementation for backend call
   } = useChatHistory();
-  const {
-    availableModels,
-    selectedModel,
-    handleModelChange
-  } = useModelSelection();
 
-  // Sidebar state remains simple, keep it here for now
+  // Sidebar state
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
 
   // Toggle sidebar function
@@ -55,39 +46,41 @@ function App() {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
-  // Effect for handling resize and mobile overlay remains relevant to sidebar state
+  // Effect for handling resize
   useEffect(() => {
     const handleResize = () => {
-      if (window.innerWidth > 767 && !isSidebarCollapsed) {
-        // Optional: Adjust behavior on resize to desktop
-      }
+      // Adjust behavior on resize if needed
     };
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, [isSidebarCollapsed]);
+  }, []); // Removed dependency on isSidebarCollapsed if not needed inside
 
-
-  // Function to handle creating a new chat (uses navigate)
+  // Function to handle creating a new chat
   const handleNewChat = () => {
     const newChatId = uuidv4();
+    console.log("Creating new chat with ID:", newChatId);
+    // TODO: Send a message to backend via WebSocket to potentially create
+    // the chat entry in DB immediately? Or wait for first message?
+    // Example: ws.send(JSON.stringify({ type: "create_chat", payload: { chatId: newChatId, userId: user.id } }));
     navigate(`/chat/${newChatId}`);
-    // History is updated when the first message is sent in the new chat via fetchChatHistory
+    // History will be updated when fetchChatHistory is called or based on WS messages
   };
 
-  // Show loading indicator during initial auth check
-  if (loading) {
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Loading...</div>;
+  // No need for the loading check or !session check if using the dummy AuthContext
+  /*
+  if (loading) { // This block can likely be removed
+    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Loading Auth...</div>;
   }
-
-  // If no session, show Auth component
-  if (!session) {
-    return <Auth />;
+  if (!session) { // This block can likely be removed
+    // return <Auth />; // Remove the Auth component import/usage
+    return <div>Please Log In (Auth Component Removed)</div>; // Placeholder if needed
   }
+  */
 
-  // If session exists, render the main app using hooks
+  // Render the main app using hooks
   return (
     <div id="content">
-      {/* Overlay for mobile sidebar - CSS handles visibility */}
+      {/* Overlay for mobile sidebar */}
       <div className="sidebar-overlay" onClick={toggleSidebar}></div>
 
       {/* Star Background */}
@@ -97,10 +90,7 @@ function App() {
             key={star.id}
             className="star"
             style={{
-              left: star.left,
-              top: star.top,
-              width: star.size,
-              height: star.size,
+              left: star.left, top: star.top, width: star.size, height: star.size,
               animation: `twinkling ${star.animationDuration} infinite ${star.animationDelay}`,
             }}
           />
@@ -118,28 +108,22 @@ function App() {
 
       {/* Main Content */}
       <div id="main">
-        {/* System Overlay - Consider if this needs systemInfo or if it can be self-contained */}
-        <SystemOverlay /* Pass systemInfo if needed: systemInfo={systemInfo} */ />
+        <SystemOverlay systemInfo={systemInfo} />
 
-        {/* Main Layout Area */}
-        <div
-          className={`main-content-area ${
-            isSidebarCollapsed ? "main-content-area--sidebar-collapsed" : ""
-          }`}
-        >
-          {/* Sidebar using hook values */}
+        <div className={`main-content-area ${isSidebarCollapsed ? "main-content-area--sidebar-collapsed" : ""}`}>
+          {/* Sidebar */}
           <SideBar
-            systemInfo={systemInfo} // From useSystemInfo
+            systemInfo={systemInfo}
             isCollapsed={isSidebarCollapsed}
             toggleSidebar={toggleSidebar}
-            user={user} // From useAuth
+            user={user} // From dummy AuthContext
             onNewChat={handleNewChat}
-            chatHistory={chatHistory} // From useChatHistory
-            onRenameChat={handleRenameChat} // From useChatHistory
-            onDeleteChat={handleDeleteChat} // From useChatHistory
-            availableModels={availableModels} // From useModelSelection
-            selectedModel={selectedModel} // From useModelSelection
-            onModelChange={handleModelChange} // From useModelSelection
+            chatHistory={chatHistory} // From useChatHistory (needs proper fetching)
+            isLoadingHistory={isLoadingHistory} // Pass loading state
+            onRenameChat={handleRenameChat} // From useChatHistory (needs WS call)
+            onDeleteChat={handleDeleteChat} // From useChatHistory (needs WS call)
+            // Removed model selection props
+            // Pass WebSocket related functions if needed for rename/delete
           />
 
           {/* Chat Area Wrapper */}
@@ -150,14 +134,16 @@ function App() {
                 path="/chat/:chatId"
                 element={
                   <ChatPage
-                    systemInfo={systemInfo} // Pass systemInfo from hook
-                    user={user} // Pass user from useAuth
-                    refreshHistory={fetchChatHistory} // Pass refresh function from useChatHistory
-                    selectedModel={selectedModel} // Pass selectedModel from hook
+                    systemInfo={systemInfo}
+                    user={user} // Pass user from dummy AuthContext
+                    refreshHistory={fetchChatHistory} // Pass refresh trigger
+                    // Pass selectedModel if needed (using a fixed value or state)
+                    selectedModel={"default-model"} // Example fixed value
+                    // Pass WebSocket instance or send function if needed directly
                   />
                 }
               />
-              <Route path="*" element={<Navigate to="/" replace />} />
+              <Route path="*" element={<Navigate to="/" replace />} /> {/* Catch-all redirect */}
             </Routes>
           </div>
         </div>

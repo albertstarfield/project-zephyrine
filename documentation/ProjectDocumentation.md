@@ -12,7 +12,7 @@ Project Zephyrine currently comprises several distinct components, suggesting di
 
 *   **Core Engine (`systemCore/engineMain`):** A Python application responsible for local LLM inference, context management, hardware interaction, and providing an OpenAI-compatible API.
 *   **Backend Service (`systemCore/backend-service`):** A Node.js WebSocket server that utilizes cloud services (Groq API for LLM inference, Supabase for database) for chat functionality.
-*   **Web Frontend (`systemCore/project-zephyrine-web`):** A React-based web application providing a modern chat interface. It interacts with the **Backend Service** via WebSockets (`ws://localhost:3001`) for chat streaming and directly with **Supabase** for authentication and data persistence.
+*   **Web Frontend (`systemCore/frontend-face-zephyrine`):** A React-based web application providing a modern chat interface. It interacts with the **Backend Service** via WebSockets (`ws://localhost:3001`) for chat streaming and directly with **Supabase** for authentication and data persistence.
 *   **Desktop UI (`systemCore/ZephyWebUI`):** An Electron application that appears to be a legacy component or a simplified interface. It currently uses a basic Flask backend stub for simulated interaction.
 
 ### High-Level Architecture Diagram
@@ -116,7 +116,7 @@ This component provides an alternative, cloud-based backend.
     *   A fallback mechanism.
     *   Handling specific clients or features that benefit from cloud infrastructure (e.g., potentially faster inference via Groq, easier data synchronization via Supabase).
 
-### 3.3. Web Frontend (`systemCore/project-zephyrine-web/`)
+### 3.3. Web Frontend (`systemCore/frontend-face-zephyrine/`)
 
 A modern web interface for interacting with the system.
 
@@ -220,8 +220,8 @@ Based on the codebase and documentation:
     3.  Create a `.env` file with `GROQ_API_KEY`, `SUPABASE_URL`, and `SUPABASE_SERVICE_ROLE_KEY`.
     4.  Start the service: `npm start`
 
-*   **Web Frontend Setup (`project-zephyrine-web`):**
-    1.  Navigate to `systemCore/project-zephyrine-web`.
+*   **Web Frontend Setup (`frontend-face-zephyrine`):**
+    1.  Navigate to `systemCore/frontend-face-zephyrine`.
     2.  Install dependencies: `npm install`
     3.  Create a `.env` file (likely for Supabase public key/URL, check `src/utils/supabaseClient.js`).
     4.  Start the development server: `npm run dev`

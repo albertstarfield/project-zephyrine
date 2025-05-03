@@ -21,7 +21,7 @@ This is a web-based version of the Project Zephyrine interface, built with React
 1. Clone the repository
 2. Navigate to the project directory:
    ```
-   cd systemCore/project-zephyrine-web
+   cd systemCore/frontend-face-zephyrine
    ```
 3. Install dependencies:
    ```

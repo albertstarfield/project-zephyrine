@@ -11,11 +11,13 @@
   "author": "",
   "license": "ISC",
   "dependencies": {
-    "@supabase/supabase-js": "^2.49.3",
     "cors": "^2.8.5",
     "dotenv": "^16.4.7",
     "express": "^4.21.2",
     "groq-sdk": "^0.17.0",
-    "ws": "^8.18.1"
+    "ws": "^8.18.1",
+    "openai": "^4.97.0",
+    "sqlite3": "^5.1.7",
+    "uuid":"^11.1.0"
   }
 }
