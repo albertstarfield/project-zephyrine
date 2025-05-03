@@ -1,0 +1,50 @@
+# Generated requirements for Amaryllis/Adelaide Project
+
+# --- Web Framework & Server ---
+Flask
+hypercorn
+uvicorn # Alternative ASGI server, optional if only using hypercorn
+werkzeug # Flask dependency
+
+# --- Core AI & Langchain ---
+langchain-core
+langchain-community
+langchain-ollama # For Ollama integration
+langchain-fireworks # For Fireworks integration
+
+# --- Database & ORM ---
+SQLAlchemy
+alembic # For database migrations
+# Note: psycopg2-binary and pgvector removed as SQLite is used
+
+# --- Web Scraping & Parsing ---
+requests
+beautifulsoup4
+selenium
+webdriver-manager # For automated chromedriver handling
+lxml # Often used by BeautifulSoup
+
+# --- Data Handling & Utilities ---
+python-dotenv # For .env file loading
+loguru # Logging
+Pillow # Image handling (direct use + pdf2image dependency)
+numpy # Common ML dependency, potentially used by embedding libs
+
+# --- Fuzzy Search ---
+thefuzz
+python-Levenshtein # Performance enhancer for thefuzz
+
+# --- Document Indexing & Processing ---
+pypdf # PDF text extraction
+python-docx # DOCX text extraction
+openpyxl # XLSX text extraction
+python-pptx # PPTX text extraction
+pdf2image # For converting PDF pages to images (requires poppler)
+
+# --- Compression ---
+zstandard # For database compression
+
+# --- Standard library packages used but not listed here: ---
+# asyncio, base64, contextlib, datetime, difflib, hashlib, io, json,
+# mimetypes, operator, os, random, re, shlex, shutil, subprocess,
+# sys, tempfile, threading, time, typing, urllib.parse, uuid
