@@ -314,7 +314,16 @@ class AmaryllisAgent:
         final_system_prompt_template_string = f"{formatted_base_prompt_content.strip()}\n{user_custom_instructions_content.strip()}\n====\nCURRENT ENVIRONMENT DETAILS\n# Mode: {{mode}}\nFile list:\n{{file_list}}\nActively Running Terminals:\n{{running_terminals}}\n====\nCONVERSATION HISTORY SNIPPETS (RAG)\n{{agent_history_rag}}\n====\nRAG CONTEXT FROM DOCUMENTS/URLS\n{{url_rag_context}}\n====\n"
 
         self.agent_prompt_template = ChatPromptTemplate.from_messages([ SystemMessage(content=final_system_prompt_template_string), MessagesPlaceholder(variable_name="agent_history_turns"), HumanMessage(content="{current_input}"),])
-        self.agent_chain = self.agent_prompt_template | self.provider.model | StrOutputParser()
+
+        agent_model_role = "default" # Or "router" if you want it to use the same as the corrector
+        agent_llm = self.provider.get_model(agent_model_role)
+        if not agent_llm:
+             # Handle error: The required model wasn't initialized in AIProvider
+             logger.error(f"Agent setup failed: Could not get model for role '{agent_model_role}' from AIProvider.")
+             # You might want to raise an exception here to stop initialization
+             raise ValueError(f"Agent model role '{agent_model_role}' not found in AIProvider.")
+
+        self.agent_chain = self.agent_prompt_template | agent_llm | StrOutputParser()
 
 
     def _parse_tool_request(self, llm_response: str) -> Tuple[Optional[str], Optional[Dict[str, Any]]]:
