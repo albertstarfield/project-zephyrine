@@ -104,3 +104,4 @@ LiteratureReviewPool/
 /systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/QAlign
 *.zst
 **__pycache__**
+**alembic**

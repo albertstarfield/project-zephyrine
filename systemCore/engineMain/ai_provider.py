@@ -8,11 +8,32 @@ from typing import Dict, Any, Optional, List, Iterator
 from loguru import logger
 
 # --- Langchain Imports ---
+# Core Language Model components
 from langchain_core.language_models.chat_models import BaseChatModel, SimpleChatModel
-from langchain_core.messages import BaseMessage, AIMessage, HumanMessage, SystemMessage, ChatMessage
-from langchain_core.outputs import ChatResult, ChatGeneration, GenerationChunk, ChatGenerationChunk
-from langchain_core.callbacks import CallbackManagerForLLMRun
+# Core Message types (including Chunks)
+from langchain_core.messages import (
+    BaseMessage,
+    AIMessage,
+    HumanMessage,
+    SystemMessage,
+    ChatMessage,
+    AIMessageChunk, # <<< Correct location
+    # HumanMessageChunk, # (Import if needed)
+    # SystemMessageChunk, # (Import if needed)
+    # FunctionMessageChunk, # (Import if needed)
+    # ToolMessageChunk # (Import if needed)
+)
+# Core Output types (excluding Message Chunks)
+from langchain_core.outputs import (
+    ChatResult,
+    ChatGeneration,
+    GenerationChunk,
+    ChatGenerationChunk
+)
+# Core Embeddings interface
 from langchain_core.embeddings import Embeddings
+# Core Callbacks
+from langchain_core.callbacks import CallbackManagerForLLMRun
 
 # --- Conditional Imports ---
 # Ollama
@@ -61,11 +82,10 @@ except ImportError:
 # --- Local Imports ---
 try:
     # Import all config variables
-    from config import * # Includes PROVIDER, model names, paths, etc.
+    from config import * # Includes PROVIDER, model names, paths, MAX_TOKENS etc.
 except ImportError:
     logger.critical("❌ Failed to import config.py in ai_provider.py!")
     sys.exit("AIProvider cannot function without config.")
-
 
 # === llama-cpp-python Langchain Wrappers ===
 
@@ -73,11 +93,73 @@ except ImportError:
 class LlamaCppChatWrapper(SimpleChatModel):
     """
     Langchain chat model wrapper for a dynamically loaded llama-cpp-python instance
-    managed by AIProvider.
+    managed by AIProvider. NOW uses non-streaming _call internally.
     """
     ai_provider: 'AIProvider' # Forward reference
     model_role: str # Logical role (e.g., "router", "vlm") to request from provider
     model_kwargs: Dict[str, Any] # Kwargs for Llama.create_chat_completion
+
+    def _format_messages_for_llama_cpp(self, messages: List[BaseMessage]) -> List[Dict[str, Any]]:
+        """
+        Helper function to format Langchain messages into the llama_cpp dictionary list format.
+        Handles multimodal content for the 'vlm' role.
+        (Extracted formatting logic from original _stream method)
+        """
+        formatted_messages = []
+        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role) # Needed for VLM check
+
+        for msg in messages:
+            role = "user" # Default
+            if isinstance(msg, HumanMessage): role = "user"
+            elif isinstance(msg, AIMessage): role = "assistant"
+            elif isinstance(msg, SystemMessage): role = "system"
+            elif isinstance(msg, ChatMessage): role = msg.role # Use role if specified
+
+            # --- Handle Content Formatting ---
+            if isinstance(msg.content, str):
+                # Simple string content
+                formatted_messages.append({"role": role, "content": msg.content})
+            elif isinstance(msg.content, list):
+                # List content (potentially multimodal)
+                # Check if it's the VLM role AND the loaded instance appears valid
+                if self.model_role == "vlm" and llm_instance:
+                    logger.debug(f"Formatting multimodal input for role '{self.model_role}'...")
+                    content_list = []
+                    has_image = False
+                    for item in msg.content:
+                        if isinstance(item, dict) and item.get("type") == "text":
+                            content_list.append({"type": "text", "text": item.get("text", "")})
+                        elif isinstance(item, dict) and item.get("type") == "image_url":
+                            img_url_data = item.get("image_url", {}).get("url", "")
+                            if img_url_data.startswith("data:image"):
+                                content_list.append({"type": "image_url", "image_url": {"url": img_url_data}})
+                                has_image = True
+                                logger.trace("Image part formatted for llama.cpp input.")
+                            else:
+                                logger.warning(f"Skipping unsupported image_url format: {img_url_data[:50]}...")
+                                content_list.append({"type": "text", "text": "[Unsupported Image Placeholder]"})
+                        else:
+                            logger.warning(f"Unexpected item type in message content list: {type(item)}")
+                            content_list.append({"type": "text", "text": str(item)})
+
+                    if has_image:
+                        formatted_messages.append({"role": role, "content": content_list})
+                        logger.trace(f"Appended multimodal message for role '{role}'.")
+                    else: # List format but no image found, combine text
+                        text_content = " ".join([c.get("text","") for c in content_list if c.get("type")=="text"])
+                        formatted_messages.append({"role": role, "content": text_content})
+                        logger.trace(f"Appended combined text message (no image) for role '{role}'.")
+                else:
+                    # Not VLM role or no llm_instance, treat as text
+                    logger.warning(f"Model role '{self.model_role}' received list content but is not VLM or instance missing. Combining text.")
+                    text_content = " ".join([item.get("text", "") for item in msg.content if isinstance(item, dict) and item.get("type") == "text"])
+                    formatted_messages.append({"role": role, "content": text_content})
+            else:
+                 # Fallback for other types
+                 formatted_messages.append({"role": role, "content": str(msg.content)})
+            # --- End Content Formatting ---
+
+        return formatted_messages
 
     def _call(
         self,
@@ -86,14 +168,67 @@ class LlamaCppChatWrapper(SimpleChatModel):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> str:
-        """Sync generation (Not recommended for llama.cpp, use _stream)."""
-        # Streaming is generally preferred for llama.cpp
-        # Combine chunks from the streaming method for sync behavior
-        full_response = ""
-        for chunk in self._stream(messages, stop, run_manager, **kwargs):
-            full_response += chunk.content
-        return full_response
+        """
+        INTERNAL Non-streaming generation call to llama.cpp.
+        Returns the full response text at once.
+        """
+        logger.debug(f"LlamaCppChatWrapper: Executing non-streaming '_call' for role '{self.model_role}'.")
+        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role)
+        if not llm_instance:
+            err_msg = f"LLAMA_CPP_ERROR (_call): Model for role '{self.model_role}' could not be loaded."
+            logger.error(err_msg)
+            # Propagate error clearly. Langchain might handle this, or raise it.
+            # Returning error string is safer for now than raising within Langchain internal method.
+            return f"[LLAMA_CPP_LOAD_ERROR: {err_msg}]"
 
+        # Format messages using the helper
+        formatted_messages = self._format_messages_for_llama_cpp(messages)
+        if not formatted_messages:
+            logger.warning(f"LlamaCppChatWrapper: No valid messages formatted for role '{self.model_role}'.")
+            return "[LLAMA_CPP_FORMAT_ERROR: No messages to send]"
+
+        logger.debug(f"llama_cpp invoking role '{self.model_role}' (non-streaming) with {len(formatted_messages)} messages.")
+        try:
+            # --- Call create_chat_completion with stream=False ---
+            completion = llm_instance.create_chat_completion(
+                messages=formatted_messages,
+                max_tokens=self.model_kwargs.get("max_tokens", MAX_TOKENS),
+                temperature=self.model_kwargs.get("temperature", 1.2),
+                top_p=self.model_kwargs.get("top_p", 0.95),
+                stop=stop,
+                stream=False, # <<< Explicitly set stream to False
+                **kwargs
+            )
+
+            # --- Extract content from the non-streaming response ---
+            # Check the structure based on llama-cpp-python documentation/output
+            if completion and 'choices' in completion and completion['choices']:
+                first_choice = completion['choices'][0]
+                if 'message' in first_choice and 'content' in first_choice['message']:
+                    full_response_text = first_choice['message']['content']
+                    logger.debug(f"LlamaCppChatWrapper: Received non-streaming response (len: {len(full_response_text)}).")
+                    # Log a snippet of the actual response content for debugging
+                    response_snippet = full_response_text.replace('\n', '\\n') # Show first 200 chars, escape newlines
+                    logger.trace(f"LlamaCppChatWrapper: VLM Response Content Snippet: '{response_snippet}...'")
+                    # Optional: Log token usage if available in 'completion.get("usage")'
+                    return full_response_text or "" # Return empty string if content is None
+                else:
+                    logger.error(f"LLAMA_CPP_ERROR (_call): Response structure missing 'message' or 'content' in first choice: {completion}")
+                    return "[LLAMA_CPP_RESPONSE_ERROR: Invalid structure]"
+            else:
+                logger.error(f"LLAMA_CPP_ERROR (_call): Unexpected non-streaming response structure: {completion}")
+                return "[LLAMA_CPP_RESPONSE_ERROR: Unexpected structure]"
+
+        except Exception as e:
+            # Catch errors during the non-streaming call itself
+            logger.error(f"LLAMA_CPP_ERROR (_call): Error during non-streaming call for role '{self.model_role}': {e}")
+            logger.exception("Llama.cpp non-streaming call traceback:")
+            # Return error message
+            return f"[LLAMA_CPP_CALL_ERROR: {e}]"
+
+    # --- _stream method remains mostly the same (but fixed previously) ---
+    # It's good practice to keep it functional in case Langchain uses it elsewhere
+    # or if you explicitly want streaming via .stream()/.astream().
     def _stream(
         self,
         messages: List[BaseMessage],
@@ -101,105 +236,54 @@ class LlamaCppChatWrapper(SimpleChatModel):
         run_manager: Optional[CallbackManagerForLLMRun] = None,
         **kwargs: Any,
     ) -> Iterator[ChatGenerationChunk]:
-        """Streaming generation."""
+        """Streaming generation (kept functional, uses AIMessageChunk)."""
+        logger.debug(f"LlamaCppChatWrapper: Executing streaming '_stream' for role '{self.model_role}'.") # Log differentiate
         llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role)
         if not llm_instance:
-            err_msg = f"LLAMA_CPP_ERROR: Model for role '{self.model_role}' could not be loaded."
+            err_msg = f"LLAMA_CPP_ERROR (_stream): Model for role '{self.model_role}' could not be loaded."
             logger.error(err_msg)
-            yield ChatGenerationChunk(message=AIMessage(content=err_msg))
+            yield ChatGenerationChunk(message=AIMessageChunk(content=f"[LLAMA_CPP_LOAD_ERROR: {err_msg}]")) # Yield error chunk
             return
 
-        # --- Format messages for llama_cpp ---
-        # Needs conversion from Langchain BaseMessage to llama_cpp dict format
-        formatted_messages = []
-        for msg in messages:
-            role = "user" # Default
-            if isinstance(msg, HumanMessage): role = "user"
-            elif isinstance(msg, AIMessage): role = "assistant"
-            elif isinstance(msg, SystemMessage): role = "system"
-            elif isinstance(msg, ChatMessage): role = msg.role # Use role if specified
+        # Format messages using the helper
+        formatted_messages = self._format_messages_for_llama_cpp(messages)
+        if not formatted_messages:
+             logger.warning(f"LlamaCppChatWrapper: No valid messages formatted for streaming role '{self.model_role}'.")
+             yield ChatGenerationChunk(message=AIMessageChunk(content="[LLAMA_CPP_FORMAT_ERROR: No messages to send]"))
+             return
 
-            content = ""
-            # Handle complex content (text + image) for VLM models
-            if isinstance(msg.content, str):
-                content = msg.content
-            elif isinstance(msg.content, list):
-                # If VLM role, format for llama_cpp multimodal
-                if self.model_role == "vlm" and hasattr(llm_instance, "tokenize"):
-                     logger.debug(f"Formatting multimodal input for role '{self.model_role}'...")
-                     # llama_cpp expects list of dicts: {"type": "text", "text": ...} or {"type": "image_url", "image_url": {"url": "data:..."}}
-                     # We assume image_content_part was correctly added to the HumanMessage content list in app.py
-                     content_list = []
-                     has_image = False
-                     for item in msg.content:
-                         if isinstance(item, dict) and item.get("type") == "text":
-                             content_list.append({"type": "text", "text": item.get("text", "")})
-                         elif isinstance(item, dict) and item.get("type") == "image_url":
-                             img_url_data = item.get("image_url", {}).get("url", "")
-                             if img_url_data.startswith("data:image"):
-                                 content_list.append({"type": "image_url", "image_url": {"url": img_url_data}})
-                                 has_image = True
-                                 logger.debug("Image part added to llama.cpp input.")
-                             else:
-                                 logger.warning(f"Skipping unsupported image_url format: {img_url_data[:50]}...")
-                                 content_list.append({"type": "text", "text": "[Unsupported Image Placeholder]"})
-                         else:
-                              # Fallback for unexpected content types
-                              logger.warning(f"Unexpected item type in message content list: {type(item)}")
-                              content_list.append({"type": "text", "text": str(item)}) # Convert to string as fallback
-
-                     # Only pass list content if an image was actually included
-                     if has_image:
-                          formatted_messages.append({"role": role, "content": content_list})
-                     else: # If no image found despite list format, combine text
-                          text_content = " ".join([c.get("text","") for c in content_list if c.get("type")=="text"])
-                          formatted_messages.append({"role": role, "content": text_content})
-                     continue # Skip default content assignment below for this message
-                else:
-                    # Non-VLM or model doesn't support multimodal, just combine text parts
-                    logger.warning(f"Model role '{self.model_role}' received list content but isn't VLM/multimodal. Combining text.")
-                    content = " ".join([item.get("text", "") for item in msg.content if isinstance(item, dict) and item.get("type") == "text"])
-            else:
-                 content = str(msg.content) # Fallback
-
-            formatted_messages.append({"role": role, "content": content})
-        # --- End message formatting ---
-
-        logger.debug(f"llama_cpp invoking role '{self.model_role}' with {len(formatted_messages)} messages.")
+        logger.debug(f"llama_cpp invoking role '{self.model_role}' (streaming) with {len(formatted_messages)} messages.")
         try:
             streamer = llm_instance.create_chat_completion(
                 messages=formatted_messages,
-                max_tokens=self.model_kwargs.get("max_tokens", MAX_TOKENS), # Use configured max_tokens
-                temperature=self.model_kwargs.get("temperature", 1.2), # Use configured temperature
+                max_tokens=self.model_kwargs.get("max_tokens", MAX_TOKENS),
+                temperature=self.model_kwargs.get("temperature", 1.2),
                 top_p=self.model_kwargs.get("top_p", 0.95),
                 stop=stop,
-                stream=True, # Force stream=True
-                **kwargs # Pass any additional kwargs
+                stream=True, # <<< Use stream=True for this method
+                **kwargs
             )
 
             for chunk in streamer:
                 delta = chunk["choices"][0]["delta"]
                 if "content" in delta and delta["content"] is not None:
                     content_chunk = delta["content"]
-                    # Yield Langchain chunk format
-                    yield ChatGenerationChunk(message=AIMessage(content=content_chunk))
+                    # Yield CORRECT Langchain chunk format
+                    yield ChatGenerationChunk(message=AIMessageChunk(content=content_chunk))
                     # Optional: Callback manager usage
                     if run_manager:
                         run_manager.on_llm_new_token(content_chunk)
-                # Handle finish reason if present in the last chunk
-                # finish_reason = chunk["choices"][0].get("finish_reason")
-                # if finish_reason:
-                #     # Need to check how llama-cpp signals finish in stream chunk
-                #     # For now, assume Langchain handles the overall finish reason
-                #     pass
+                # Handle finish reason if needed
 
         except Exception as e:
-            logger.error(f"LLAMA_CPP_ERROR: Error during streaming for role '{self.model_role}': {e}")
+            logger.error(f"LLAMA_CPP_ERROR (_stream): Error during streaming for role '{self.model_role}': {e}")
             logger.exception("Llama.cpp streaming traceback:")
-            yield ChatGenerationChunk(message=AIMessage(content=f"[LLAMA_CPP STREAM ERROR: {e}]"))
+            # Yield a final chunk indicating the error
+            yield ChatGenerationChunk(message=AIMessageChunk(content=f"[LLAMA_CPP_STREAM_ERROR: {e}]"))
 
     @property
     def _llm_type(self) -> str:
+        # Keep this property
         return "llama_cpp_chat_wrapper"
 
 # --- Embeddings Wrapper ---
@@ -211,6 +295,8 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
         """Initialize the wrapper with a reference to the AIProvider."""
         super().__init__() # Call parent initializer if necessary (good practice)
         self.ai_provider = ai_provider
+        
+        
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """Embed multiple documents."""
@@ -257,22 +343,29 @@ class AIProvider:
     """
     def __init__(self, provider_name):
         self.provider_name = provider_name.lower()
-        self.models: Dict[str, Any] = {} # Cache for model *wrappers* or instances {role: instance}
+        self.models: Dict[str, Any] = {}
         self.embeddings: Optional[Embeddings] = None
-        self.EMBEDDINGS_MODEL_NAME: Optional[str] = None # Store configured name
-        self.image_generator: Any = None # Placeholder for Stable Diffusion
+        self.EMBEDDINGS_MODEL_NAME: Optional[str] = None
+        self.image_generator: Any = None
 
         # --- llama.cpp specific state ---
         self._loaded_gguf_path: Optional[str] = None
         self._loaded_llama_instance: Optional[llama_cpp.Llama] = None
-        self._model_load_lock = threading.Lock() if LLAMA_CPP_AVAILABLE else None
-        self._llama_model_map: Dict[str, str] = {} # {role: filename.gguf}
+        # <<< Initialize the lock ONLY if provider is llama_cpp >>>
+        self._llama_model_access_lock = threading.Lock() if LLAMA_CPP_AVAILABLE and self.provider_name == "llama_cpp" else None
+        # <<< End Lock Init >>>
+        self._llama_model_map: Dict[str, str] = {}
         self._llama_gguf_dir: Optional[str] = None
 
         logger.info(f"🤖 Initializing AI Provider: {self.provider_name}")
+        if self.provider_name == "llama_cpp" and self._llama_model_access_lock:
+             logger.info("   🔑 Initialized threading.Lock for llama.cpp access.")
+        elif self.provider_name == "llama_cpp":
+             logger.error("   ❌ Failed to initialize threading.Lock for llama.cpp (LLAMA_CPP_AVAILABLE might be False).")
+
         self._validate_config()
         self.setup_provider()
-        self._setup_image_generator() # Placeholder call
+        self._setup_image_generator()
 
     def _validate_config(self):
         """Basic checks for required config based on provider."""
@@ -295,85 +388,97 @@ class AIProvider:
     def _load_llama_model(self, required_gguf_path: str) -> Optional[llama_cpp.Llama]:
         """
         Loads or returns the cached llama_cpp.Llama instance.
-        Handles unloading previous model if necessary. Thread-safe.
+        Handles unloading previous model if necessary. Thread-safe via lock.
         """
-        if not LLAMA_CPP_AVAILABLE or self._model_load_lock is None:
-            logger.error("Cannot load llama.cpp model: Library not available or lock not initialized.")
+        # Check necessary conditions first (outside lock)
+        if not LLAMA_CPP_AVAILABLE:
+            logger.error("_load_llama_model: llama.cpp library not available.")
+            return None
+        if not self._llama_model_access_lock:
+            logger.error("_load_llama_model: Access lock not initialized (should not happen if provider is llama_cpp).")
             return None
 
-        with self._model_load_lock:
-            # 1. Check if already loaded
+        # The core logic MUST be protected by the lock
+        with self._llama_model_access_lock:
+            logger.trace(f"Acquired lock for potential load/switch: {os.path.basename(required_gguf_path)}")
+
+            # 1. Check cache
             if self._loaded_llama_instance and self._loaded_gguf_path == required_gguf_path:
                 logger.debug(f"Using cached llama.cpp instance: {os.path.basename(required_gguf_path)}")
-                return self._loaded_llama_instance
+                # Instance already loaded, return it (it's safe to access self._loaded... inside lock)
+                instance_to_return = self._loaded_llama_instance
+            else:
+                # Needs loading or switching
+                instance_to_return = None # Default to None if load fails
 
-            # 2. Unload existing model if different
-            if self._loaded_llama_instance:
-                logger.warning(f"Unloading previous llama.cpp model: {os.path.basename(self._loaded_gguf_path or 'Unknown')}")
-                # Simply deleting the reference might be enough for llama-cpp to release VRAM
-                # Explicit cleanup steps if needed:
-                # if hasattr(self._loaded_llama_instance, 'close'): # Or similar method? Check llama-cpp docs
-                #     self._loaded_llama_instance.close()
-                del self._loaded_llama_instance
-                self._loaded_llama_instance = None
-                self._loaded_gguf_path = None
-                gc.collect() # Hint Python's garbage collector
-                logger.info("Previous llama.cpp model unloaded.")
-                # Optional: Add a small delay if GPU needs time to release memory
-                # time.sleep(0.5)
+                # 2. Unload if necessary
+                if self._loaded_llama_instance:
+                    logger.warning(f"Unloading previous llama.cpp model: {os.path.basename(self._loaded_gguf_path or 'Unknown')}")
+                    try:
+                        # Try explicit deletion to potentially trigger __del__ and release resources
+                        del self._loaded_llama_instance
+                    except Exception as del_err:
+                         logger.error(f"Error during explicit deletion of Llama instance: {del_err}")
+                    self._loaded_llama_instance = None
+                    self._loaded_gguf_path = None
+                    gc.collect() # Hint garbage collector
+                    logger.info("Previous llama.cpp model unloaded.")
+                    # Optional short sleep if needed for GPU memory release
+                    # time.sleep(0.5)
 
-            # 3. Load the new model
-            logger.info(f"Loading llama.cpp model: {os.path.basename(required_gguf_path)}...")
-            logger.info(f"  >> Path: {required_gguf_path}")
-            logger.info(f"  >> GPU Layers: {LLAMA_CPP_N_GPU_LAYERS}")
-            logger.info(f"  >> Context Size: {LLAMA_CPP_N_CTX}")
+                # 3. Load new model
+                logger.info(f"Loading llama.cpp model: {os.path.basename(required_gguf_path)}...")
+                logger.info(f"  >> Path: {required_gguf_path}")
+                logger.info(f"  >> GPU Layers: {LLAMA_CPP_N_GPU_LAYERS}")
+                logger.info(f"  >> Context Size: {LLAMA_CPP_N_CTX}")
 
-            if not os.path.isfile(required_gguf_path):
-                 logger.error(f"LLAMA_CPP_ERROR: Model file not found: {required_gguf_path}")
-                 return None
+                if not os.path.isfile(required_gguf_path):
+                     logger.error(f"LLAMA_CPP_ERROR: Model file not found: {required_gguf_path}")
+                     # instance_to_return remains None
+                else:
+                     load_start_time = time.monotonic()
+                     try:
+                         # Find the role for logging/embedding check
+                         role_for_path = None
+                         for r, f in self._llama_model_map.items():
+                             if os.path.join(self._llama_gguf_dir or "", f) == required_gguf_path:
+                                 role_for_path = r
+                                 break
 
-            load_start_time = time.monotonic()
-            try:
-                # --- Simplified Loading ---
-                # Let llama-cpp-python auto-detect multimodal capabilities from the GGUF metadata
-                # Removed the explicit Llava15ChatHandler initialization based on role.
-                # llama.cpp will use internal handlers if the GGUF indicates multimodal capability.
-                # If issues arise with specific models, explicit handlers might be needed again.
+                         logger.info(f"Initializing Llama for role '{role_for_path}' (auto-detecting multimodal)...")
+                         chat_format_to_use = "chatml" # Explicitly set based on previous findings
+                         logger.info(f"  >> Explicitly setting chat_format='{chat_format_to_use}'")
 
-                # Find the role for logging/embedding check
-                role_for_path = None
-                for r, f in self._llama_model_map.items():
-                    if os.path.join(self._llama_gguf_dir or "", f) == required_gguf_path:
-                        role_for_path = r
-                        break
+                         new_instance = llama_cpp.Llama(
+                             model_path=required_gguf_path,
+                             n_gpu_layers=LLAMA_CPP_N_GPU_LAYERS,
+                             n_ctx=LLAMA_CPP_N_CTX,
+                             embedding=(role_for_path == "embeddings"),
+                             verbose=LLAMA_CPP_VERBOSE,
+                             chat_format=chat_format_to_use, # Use explicit format
+                         )
+                         self._loaded_llama_instance = new_instance # Assign to instance variable
+                         self._loaded_gguf_path = required_gguf_path
+                         instance_to_return = new_instance # Set return value
+                         load_duration = time.monotonic() - load_start_time
+                         logger.success(f"✅ Loaded '{os.path.basename(required_gguf_path)}' in {load_duration:.2f}s.")
+                     except Exception as e:
+                         logger.error(f"LLAMA_CPP_ERROR: Failed to load model {required_gguf_path}: {e}")
+                         logger.exception("Llama.cpp loading traceback:")
+                         self._loaded_llama_instance = None # Ensure state is clean on error
+                         self._loaded_gguf_path = None
+                         instance_to_return = None # Ensure None is returned
 
-                logger.info(f"Initializing Llama for role '{role_for_path}' (auto-detecting multimodal)...")
+            logger.trace(f"Releasing lock after load/switch check for: {os.path.basename(required_gguf_path)}")
+        # Lock released here automatically by 'with' statement
 
-                self._loaded_llama_instance = llama_cpp.Llama(
-                    model_path=required_gguf_path,
-                    n_gpu_layers=LLAMA_CPP_N_GPU_LAYERS,
-                    n_ctx=LLAMA_CPP_N_CTX,
-                    embedding=(role_for_path == "embeddings"), # Enable embedding mode only for the embeddings model
-                    verbose=LLAMA_CPP_VERBOSE,
-                    # chat_handler=None, # Let llama.cpp handle chat format internally if possible
-                    # chat_format="auto", # Or explicitly set if needed, check llama-cpp-python docs
-                )
-                self._loaded_gguf_path = required_gguf_path
-                load_duration = time.monotonic() - load_start_time
-                logger.success(f"✅ Loaded '{os.path.basename(required_gguf_path)}' in {load_duration:.2f}s.")
-                # Optionally log detected model type if available
-                # logger.info(f"   Model Type Detected by llama.cpp: {self._loaded_llama_instance.model_type()}" ) # Check if method exists
-                return self._loaded_llama_instance
-
-            except Exception as e:
-                logger.error(f"LLAMA_CPP_ERROR: Failed to load model {required_gguf_path}: {e}")
-                logger.exception("Llama.cpp loading traceback:")
-                self._loaded_llama_instance = None
-                self._loaded_gguf_path = None
-                return None
+        return instance_to_return # Return the instance determined inside the lock
 
     def _get_loaded_llama_instance(self, model_role: str) -> Optional[llama_cpp.Llama]:
-        """Ensures the correct llama.cpp model for the role is loaded and returns it."""
+        """
+        Ensures the correct llama.cpp model for the role is loaded via _load_llama_model
+        (which handles locking internally) and returns it.
+        """
         if self.provider_name != "llama_cpp":
             logger.error("Attempted to get llama.cpp instance when provider is not llama_cpp.")
             return None
@@ -387,6 +492,7 @@ class AIProvider:
             return None
 
         required_path = os.path.join(self._llama_gguf_dir, gguf_filename)
+        # _load_llama_model handles the caching, loading, unloading, and locking
         return self._load_llama_model(required_path)
 
     def setup_provider(self):
@@ -546,20 +652,29 @@ class AIProvider:
         return self.image_generator
 
     def unload_llama_model_if_needed(self):
-        """Explicitly unload the currently loaded llama.cpp model (if any)."""
-        if self.provider_name == "llama_cpp" and self._model_load_lock:
-            with self._model_load_lock:
-                if self._loaded_llama_instance:
-                    logger.warning(f"Explicitly unloading llama.cpp model: {os.path.basename(self._loaded_gguf_path or 'Unknown')}")
+        """Explicitly unload the currently loaded llama.cpp model (if any), acquiring the lock."""
+        # Check if llama_cpp provider and lock exist
+        if not self._llama_model_access_lock:
+             logger.debug("Unload called, but provider is not llama_cpp or lock not initialized.")
+             return
+
+        logger.info("Attempting to acquire lock for explicit model unload...")
+        with self._llama_model_access_lock: # Acquire lock to safely modify shared state
+            logger.info("Acquired lock for explicit model unload.")
+            if self._loaded_llama_instance:
+                logger.warning(f"Explicitly unloading llama.cpp model: {os.path.basename(self._loaded_gguf_path or 'Unknown')}")
+                try:
                     del self._loaded_llama_instance
-                    self._loaded_llama_instance = None
-                    self._loaded_gguf_path = None
-                    gc.collect()
-                    logger.info("llama.cpp model unloaded via explicit call.")
-                else:
-                    logger.info("Explicit unload called, but no llama.cpp model was loaded.")
-        else:
-            logger.debug("Unload called, but provider is not llama_cpp or not initialized.")
+                except Exception as del_err:
+                    logger.error(f"Error during explicit deletion of Llama instance: {del_err}")
+                self._loaded_llama_instance = None
+                self._loaded_gguf_path = None
+                gc.collect()
+                logger.info("llama.cpp model unloaded via explicit call.")
+            else:
+                logger.info("Explicit unload called, but no llama.cpp model was loaded.")
+            logger.info("Releasing lock after explicit unload attempt.")
+        # Lock released here
 
 # --- Optional: Add a shutdown hook specific to AIProvider for llama.cpp ---
 # This ensures the model is unloaded even if the main DB hook runs first/fails.

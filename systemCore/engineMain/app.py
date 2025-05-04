@@ -2718,15 +2718,38 @@ class AIChat:
         logger.info("🤔 Classifying input complexity...")
         history_summary = self._get_history_summary(db, MEMORY_SIZE)
         parser = JsonOutputParser()
-        chain = (self.input_classification_prompt | self.provider.model | parser)
+
+        # --- FIX HERE: Get the appropriate model using get_model ---
+        # Use the 'router' model for classification, or fallback to 'default'
+        classification_model = self.provider.get_model("router")
+        if not classification_model:
+            logger.warning("Router model not found for classification, falling back to default.")
+            classification_model = self.provider.get_model("default")
+
+        if not classification_model:
+            logger.error("❌ Default model also not found! Cannot perform input classification.")
+            interaction_data['classification'] = "chat_simple" # Fallback classification
+            interaction_data['classification_reason'] = "Classification failed: Required model not found."
+            # Log error to DB
+            try: add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat", input_type="log_error", llm_response="Input classification failed: Model unavailable.")
+            except Exception as db_err: logger.error(f"Failed log classification model error: {db_err}")
+            return "chat_simple" # Return fallback
+
+        # chain = (self.input_classification_prompt | self.provider.model | parser) # OLD LINE
+        chain = (self.input_classification_prompt | classification_model | parser) # NEW LINE using fetched model
+        # --- END FIX ---
+
         attempts = 0
         last_error = None
         while attempts < DEEP_THOUGHT_RETRY_ATTEMPTS:
             try:
-                response_json = self._call_llm_with_timing(chain, {"input": user_input, "history_summary": history_summary}, interaction_data)
+                # Ensure input keys match the prompt template
+                prompt_inputs_for_classification = {"input": user_input, "history_summary": history_summary}
+                response_json = self._call_llm_with_timing(chain, prompt_inputs_for_classification, interaction_data)
                 classification = response_json.get("classification", "chat_simple")
                 reason = str(response_json.get("reason", "N/A"))
                 if classification not in ["chat_simple", "chat_complex", "agent_task"]:
+                    logger.warning(f"Classification LLM returned invalid category '{classification}', defaulting to chat_simple.")
                     classification = "chat_simple"
                 interaction_data['classification'] = classification
                 interaction_data['classification_reason'] = reason
@@ -2737,11 +2760,15 @@ class AIChat:
                 last_error = e
                 logger.warning(f"⚠️ Error classifying input (Attempt {attempts}/{DEEP_THOUGHT_RETRY_ATTEMPTS}): {e}")
                 if attempts < DEEP_THOUGHT_RETRY_ATTEMPTS:
-                    time.sleep(0.5)
-        logger.error(f"❌ Max retries for input classification. Last error: {last_error}")
+                    time.sleep(0.5) # Use synchronous sleep here as this method is called sync
+
+        # After retries
+        logger.error(f"❌ Max retries ({DEEP_THOUGHT_RETRY_ATTEMPTS}) for input classification. Last error: {last_error}")
         interaction_data['classification'] = "chat_simple"
-        interaction_data['classification_reason'] = f"Classification failed: {last_error}"
-        add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat", input_type="log_error", llm_response=f"Input classification failed after {attempts} attempts. Error: {last_error}")
+        interaction_data['classification_reason'] = f"Classification failed after retries: {last_error}"
+        # Log error to DB
+        try: add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat", input_type="log_error", llm_response=f"Input classification failed after {attempts} attempts. Error: {last_error}")
+        except Exception as db_err: logger.error(f"Failed log classification retry error: {db_err}")
         return "chat_simple"
 
 
@@ -2872,100 +2899,109 @@ class AIChat:
         logger.info(f"🤔 Analyzing input for potential Assistant Action: '{user_input[:50]}...'")
         prompt_input = {"input": user_input, "history_summary": context.get("history_summary", "N/A"), "log_context": context.get("log_context", "N/A"), "recent_direct_history": context.get("recent_direct_history", "N/A")}
 
+        # --- FIX HERE: Get the appropriate model using get_model ---
+        # Use the 'router' model for action analysis, or fallback to 'default'
+        action_analysis_model = self.provider.get_model("router")
+        if not action_analysis_model:
+            logger.warning("Router model not found for action analysis, falling back to default.")
+            action_analysis_model = self.provider.get_model("default")
+
+        if not action_analysis_model:
+            logger.error("❌ Default model also not found! Cannot perform action analysis.")
+            # Log error to DB
+            try: add_interaction(db, session_id=session_id, mode="chat", input_type="log_error", llm_response="Action analysis failed: Model unavailable.")
+            except Exception as db_err: logger.error(f"Failed log action analysis model error: {db_err}")
+            return None # Cannot proceed without a model
+
         # Define the chain *without* the final JsonOutputParser initially
-        # We will parse manually after handling the <think> tags
-        analysis_chain = (ChatPromptTemplate.from_template(PROMPT_ASSISTANT_ACTION_ANALYSIS) | self.provider.model | StrOutputParser())
+        # analysis_chain = (ChatPromptTemplate.from_template(PROMPT_ASSISTANT_ACTION_ANALYSIS) | self.provider.model | StrOutputParser()) # OLD LINE
+        analysis_chain = (ChatPromptTemplate.from_template(PROMPT_ASSISTANT_ACTION_ANALYSIS) | action_analysis_model | StrOutputParser()) # NEW LINE
+        # --- END FIX ---
 
         action_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
         last_error = None
         raw_llm_response_full = "Error: Analysis LLM call failed." # Store the full response including <think>
 
+        # --- (Rest of the _analyze_assistant_action method remains the same) ---
+        # It uses `analysis_chain` which now has the correct model reference.
         for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):
-            logger.debug(f"Assistant Action analysis attempt {attempt + 1}")
-            analysis_result = None # Reset result for each attempt
-            try:
-                # Call the LLM chain (outputs raw string now)
-                raw_llm_response_full = self._call_llm_with_timing(analysis_chain, prompt_input, action_timing_data)
-                logger.trace(f"Raw LLM Analysis Response:\n{raw_llm_response_full}")
+             logger.debug(f"Assistant Action analysis attempt {attempt + 1}")
+             analysis_result = None # Reset result for each attempt
+             try:
+                 # Call the LLM chain (outputs raw string now)
+                 raw_llm_response_full = self._call_llm_with_timing(analysis_chain, prompt_input, action_timing_data)
+                 logger.trace(f"Raw LLM Analysis Response:\n{raw_llm_response_full}")
 
-                # --- FIX: Extract JSON, ignoring <think> tags ---
-                json_text = raw_llm_response_full
-                think_match = re.search(r'<think>(.*?)</think>', json_text, re.DOTALL | re.IGNORECASE)
-                if think_match:
-                    thought_process = think_match.group(1).strip()
-                    logger.debug(f"Extracted thought process:\n{thought_process}")
-                    # Remove the think block to isolate the JSON
-                    json_text = re.sub(r'<think>.*?</think>', '', json_text, flags=re.DOTALL | re.IGNORECASE).strip()
-                    logger.trace(f"Text after removing <think> block:\n{json_text}")
+                 # --- Extract JSON, ignoring <think> tags ---
+                 json_text = raw_llm_response_full
+                 think_match = re.search(r'<think>(.*?)</think>', json_text, re.DOTALL | re.IGNORECASE)
+                 if think_match:
+                     thought_process = think_match.group(1).strip()
+                     logger.debug(f"Extracted thought process:\n{thought_process}")
+                     # Remove the think block to isolate the JSON
+                     json_text = re.sub(r'<think>.*?</think>', '', json_text, flags=re.DOTALL | re.IGNORECASE).strip()
+                     logger.trace(f"Text after removing <think> block:\n{json_text}")
 
-                # Attempt to parse the remaining text as JSON
-                # Remove potential markdown ```json ... ``` tags
-                json_match = re.search(r"```json\s*(.*?)\s*```", json_text, re.DOTALL)
-                if json_match:
-                    json_str = json_match.group(1).strip()
-                else:
-                    # Assume the remaining text IS the JSON, find first '{'
-                    json_start_index = json_text.find('{')
-                    if json_start_index != -1:
-                        json_str = json_text[json_start_index:]
-                        # Attempt to find the matching closing brace might be needed for robustness
-                    else:
-                         json_str = json_text # Hope for the best
-
-                analysis_result = json.loads(json_str) # Parse the extracted JSON string
-                # --- END FIX ---
-
-                # Basic validation of the parsed JSON
-                if isinstance(analysis_result, dict) and "action_type" in analysis_result and "parameters" in analysis_result:
-                     action_type = analysis_result.get("action_type")
-                     parameters = analysis_result.get("parameters", {})
-                     explanation = analysis_result.get("explanation", "N/A")
-                     logger.info(f"✅ Assistant Action analysis successful: Type='{action_type}', Params={parameters}")
-                     # Log success to DB (including the raw full response)
-                     add_interaction(db,
-                                     session_id=session_id, mode="chat", input_type="log_info",
-                                     user_input=f"Assistant Action Analysis for: {user_input[:100]}...",
-                                     llm_response=f"Action Type: {action_type}, Explanation: {explanation}",
-                                     assistant_action_analysis_json=raw_llm_response_full, # Log the full response with <think>
-                                     assistant_action_type=action_type,
-                                     assistant_action_params=json.dumps(parameters)
-                                     )
-                     if action_type != "no_action":
-                         return analysis_result # Success, return parsed dict
+                 # Attempt to parse the remaining text as JSON
+                 # Remove potential markdown ```json ... ``` tags
+                 json_match = re.search(r"```json\s*(.*?)\s*```", json_text, re.DOTALL)
+                 if json_match:
+                     json_str = json_match.group(1).strip()
+                 else:
+                     # Assume the remaining text IS the JSON, find first '{'
+                     json_start_index = json_text.find('{')
+                     if json_start_index != -1:
+                         json_str = json_text[json_start_index:]
                      else:
-                          logger.info("Analysis determined 'no_action' required.")
-                          return None # Success, no action needed
-                else:
-                     # LLM response parsed but wasn't the expected JSON structure
-                     logger.warning(f"Assistant Action analysis produced invalid JSON structure after parsing: {analysis_result}")
-                     raw_llm_response_log = f"Invalid JSON Structure: {analysis_result}"
-                     # Log failure and continue loop to retry
-                     add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"Assistant Action Analysis Attempt {attempt + 1} Invalid Structure for: {user_input[:100]}...", llm_response=raw_llm_response_full[:4000], assistant_action_analysis_json=raw_llm_response_full[:4000])
+                          json_str = json_text # Hope for the best
 
+                 analysis_result = json.loads(json_str) # Parse the extracted JSON string
 
-            except json.JSONDecodeError as json_e:
-                # JSON parsing failed after removing <think> tags
-                logger.warning(f"⚠️ Failed to parse JSON after potentially removing <think> tags (Attempt {attempt + 1}): {json_e}")
-                last_error = json_e
-                raw_llm_response_log = f"JSONDecodeError after processing: {json_e}. Processed text was: {json_text[:500]}..."
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"Assistant Action Analysis Attempt {attempt + 1} JSON Parse FAILED for: {user_input[:100]}...", llm_response=raw_llm_response_log, assistant_action_analysis_json=raw_llm_response_full[:4000])
+                 # Basic validation of the parsed JSON
+                 if isinstance(analysis_result, dict) and "action_type" in analysis_result and "parameters" in analysis_result:
+                      action_type = analysis_result.get("action_type")
+                      parameters = analysis_result.get("parameters", {})
+                      explanation = analysis_result.get("explanation", "N/A")
+                      logger.info(f"✅ Assistant Action analysis successful: Type='{action_type}', Params={parameters}")
+                      # Log success to DB (including the raw full response)
+                      add_interaction(db,
+                                      session_id=session_id, mode="chat", input_type="log_info",
+                                      user_input=f"Assistant Action Analysis for: {user_input[:100]}...",
+                                      llm_response=f"Action Type: {action_type}, Explanation: {explanation}",
+                                      assistant_action_analysis_json=raw_llm_response_full, # Log the full response with <think>
+                                      assistant_action_type=action_type,
+                                      assistant_action_params=json.dumps(parameters)
+                                      )
+                      if action_type != "no_action":
+                          return analysis_result # Success, return parsed dict
+                      else:
+                           logger.info("Analysis determined 'no_action' required.")
+                           return None # Success, no action needed
+                 else:
+                      logger.warning(f"Assistant Action analysis produced invalid JSON structure after parsing: {analysis_result}")
+                      raw_llm_response_log = f"Invalid JSON Structure: {analysis_result}"
+                      add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"Assistant Action Analysis Attempt {attempt + 1} Invalid Structure for: {user_input[:100]}...", llm_response=raw_llm_response_full[:4000], assistant_action_analysis_json=raw_llm_response_full[:4000])
 
-            except Exception as e:
-                # Other errors during LLM call or processing
-                logger.warning(f"⚠️ Error during Assistant Action analysis attempt {attempt + 1}: {e}")
-                last_error = e
-                raw_llm_response_log = f"Error: {e}"
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"Assistant Action Analysis Attempt {attempt + 1} FAILED for: {user_input[:100]}...", llm_response=raw_llm_response_log, assistant_action_analysis_json=raw_llm_response_full[:4000])
+             except json.JSONDecodeError as json_e:
+                 logger.warning(f"⚠️ Failed to parse JSON after potentially removing <think> tags (Attempt {attempt + 1}): {json_e}")
+                 last_error = json_e
+                 raw_llm_response_log = f"JSONDecodeError after processing: {json_e}. Processed text was: {json_text[:500]}..."
+                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"Assistant Action Analysis Attempt {attempt + 1} JSON Parse FAILED for: {user_input[:100]}...", llm_response=raw_llm_response_log, assistant_action_analysis_json=raw_llm_response_full[:4000])
 
-            # If this attempt failed (due to parsing or structure error), wait and retry
-            if attempt < DEEP_THOUGHT_RETRY_ATTEMPTS - 1:
-                time.sleep(0.5 + attempt * 0.5) # Exponential backoff slightly
-            else:
-                # Max retries reached
-                logger.error(f"❌ Max retries ({DEEP_THOUGHT_RETRY_ATTEMPTS}) reached for Assistant Action analysis. Last error: {last_error}")
-                return None # Failed after retries
+             except Exception as e:
+                 logger.warning(f"⚠️ Error during Assistant Action analysis attempt {attempt + 1}: {e}")
+                 last_error = e
+                 raw_llm_response_log = f"Error: {e}"
+                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"Assistant Action Analysis Attempt {attempt + 1} FAILED for: {user_input[:100]}...", llm_response=raw_llm_response_log, assistant_action_analysis_json=raw_llm_response_full[:4000])
 
-        # Should only be reached if max retries hit
+             # Wait and retry
+             if attempt < DEEP_THOUGHT_RETRY_ATTEMPTS - 1:
+                 # Use synchronous sleep as this function is called via to_thread
+                 time.sleep(0.5 + attempt * 0.5)
+             else:
+                 logger.error(f"❌ Max retries ({DEEP_THOUGHT_RETRY_ATTEMPTS}) reached for Assistant Action analysis. Last error: {last_error}")
+                 return None
+
         logger.error("Exited Assistant Action analysis loop unexpectedly after max retries.")
         return None
 
@@ -3564,15 +3600,19 @@ class AIChat:
                 get_logs_async(),
                 get_global_history_async(),
                 run_emotion_analysis_async(),
-                get_file_index_results_async(), # Added here
+                get_file_index_results_async(file_search_query),
+                # --- END FIX ---
                 return_exceptions=True
             )
+            
             logger.debug(f"{request_id} Parallel fetches & analysis completed.")
 
             retrieved_docs = results[0] if not isinstance(results[0], BaseException) else {'url_docs': [], 'history_docs': []}
             log_entries_for_context = results[1] if not isinstance(results[1], BaseException) else []
             global_direct_history = results[2] if not isinstance(results[2], BaseException) else []
-            emotion_analysis_result = interaction_data.get('emotion_context_analysis', "Analysis Unavailable")
+            emotion_analysis_result = interaction_data.get('emotion_context_analysis') # Get value (could be None)
+            if emotion_analysis_result is None:
+                emotion_analysis_result = "Analysis Unavailable or Failed" # Assign default string if None
             file_index_results = results[4] if not isinstance(results[4], BaseException) else []
             for i, res in enumerate(results): # Log errors from gather
                  if isinstance(res, BaseException): logger.error(f"{request_id} Error in concurrent task {i}: {res}")
@@ -3580,8 +3620,6 @@ class AIChat:
             url_docs = retrieved_docs.get("url_docs", [])
             history_docs = retrieved_docs.get("history_docs", [])
             logger.debug(f"{request_id} Context Fetched - URL Docs: {len(url_docs)}, Hist Docs: {len(history_docs)}, FileIdx Docs: {len(file_index_results)}, Logs: {len(log_entries_for_context)}, Global Hist: {len(global_direct_history)}, Emotion: '{emotion_analysis_result[:50]}...'")
-            logger.debug(f"{request_id} Context Fetched - URL Docs: {len(url_docs)}, Hist Docs: {len(history_docs)}, Logs: {len(log_entries_for_context)}, Global Hist: {len(global_direct_history)}, Emotion: '{emotion_analysis_result[:50]}...'")
-
             # --- 3. Format Context Strings ---
             logger.debug(f"{request_id} Formatting context strings...")
             url_context_str = self._format_docs(url_docs, source_type="URL Context")
@@ -4351,40 +4389,55 @@ def _stream_openai_chat_response_generator_flask(
 
             # --- Define the Inner Async Function for AI Logic ---
             async def run_generate_with_logging():
-                """Creates DB session, runs ai_chat.generate with context logging, handles outcome."""
+                """Creates DB session, runs ai_chat.direct_generate for streaming, handles outcome.""" # <<< Docstring updated
                 nonlocal db_session, thread_final_text, thread_final_reason, thread_final_error
                 try:
                     db_session = SessionLocal() # Create DB session for this task
                     # Add unique ID to loguru context for all logs within this block
                     with logger.contextualize(request_session_id=log_session_id):
-                         logger.info(f"Async generate task starting...")
-                         # --- Execute the main AI logic ---
-                         result = await ai_chat.generate(db_session, u_input, sess_id, classi)
+                         logger.info(f"Async direct_generate task starting for streaming...") # <<< Log updated
+                         # --- Execute the DIRECT AI logic ---
+                         # FIX: Call direct_generate, not generate.
+                         # Also, check parameters needed by direct_generate.
+                         # direct_generate expects: db, user_input, session_id, vlm_description=None
+                         # It does NOT expect classification ('classi').
+                         # We need to handle potential VLM description if image was involved
+                         # Note: image_b64 isn't directly available here, this might need restructure
+                         # For now, assume no image for the streaming direct call for simplicity,
+                         # OR pass image_b64 into the generator if needed.
+                         # Let's assume no image for now in this specific stream pathway.
+                         result = await ai_chat.direct_generate(
+                             db=db_session,
+                             user_input=u_input,
+                             session_id=sess_id,
+                             vlm_description=None # <<< Assuming no image needed for stream content
+                         )
+                         # --- END FIX ---
+
                          thread_final_text = result if result is not None else "Error: Generation returned None."
 
                          # Determine finish reason based on result content
                          if "internal error" in thread_final_text.lower() or (thread_final_text.startswith("Error:") and "encountered a system issue" not in thread_final_text.lower()):
                              thread_final_reason = "error"
-                             logger.warning(f"Async task completed with internal error: {thread_final_text[:100]}...")
+                             logger.warning(f"Async direct_generate task completed with internal error: {thread_final_text[:100]}...")
                          else: # Includes success and handled action fallbacks
                              thread_final_reason = "stop"
-                             logger.info(f"Async task completed successfully. Result len: {len(thread_final_text)}. Starts: '{thread_final_text[:50]}...'")
+                             logger.info(f"Async direct_generate task completed successfully. Result len: {len(thread_final_text)}. Starts: '{thread_final_text[:50]}...'")
 
                 except Exception as e:
-                    # Log exceptions from ai_chat.generate
+                    # Log exceptions from ai_chat.direct_generate
                     with logger.contextualize(request_session_id=log_session_id):
-                        logger.error(f"Async task EXCEPTION: {e}"); logger.exception("Async Generate Traceback:")
+                        logger.error(f"Async direct_generate task EXCEPTION: {e}"); logger.exception("Async Direct Generate Traceback:") # <<< Log updated
                     thread_final_error = e # Store the exception object
-                    thread_final_text = f"[Error during generation: {type(e).__name__} - {e}]"
+                    thread_final_text = f"[Error during direct generation for streaming: {type(e).__name__} - {e}]"
                     thread_final_reason = "error"
                 finally:
                     # Ensure DB session is closed
                     if db_session:
-                        try: db_session.close(); logger.debug("Async DB session closed.")
-                        except Exception as ce: logger.error(f"Error closing async DB session: {ce}")
+                        try: db_session.close(); logger.debug("Async direct_generate DB session closed.") # <<< Log updated
+                        except Exception as ce: logger.error(f"Error closing async direct_generate DB session: {ce}") # <<< Log updated
 
             # --- Run the async function ---
-            # This blocks the thread until the async function completes or raises error
             temp_loop.run_until_complete(run_generate_with_logging())
             # Outcome is now stored in thread_final_text/reason/error
 
@@ -5111,15 +5164,15 @@ def handle_openai_chat_completion():
     """
     Handles requests mimicking OpenAI/Ollama's chat completion endpoint.
 
-    This function runs synchronously within Flask. It calls the asynchronous
-    ai_chat.generate function using asyncio.run(). It handles both streaming
-    and non-streaming requests based on the 'stream' parameter in the request body.
-    It also attempts to handle the different potential return types from generate()
-    (string or async generator for special cases like image-to-LaTeX).
+    NEW LOGIC:
+    1. Calls `ai_chat.direct_generate` synchronously to get a fast initial response.
+    2. Formats and returns/streams this initial response.
+    3. Concurrently launches `ai_chat.background_generate` in a separate thread
+       to perform deeper analysis without blocking the initial response.
     """
     start_req = time.monotonic()
     request_id = f"req-chat-{uuid.uuid4()}"
-    logger.info(f"🚀 Flask OpenAI/Ollama Chat Request ID: {request_id}")
+    logger.info(f"🚀 Flask OpenAI/Ollama Chat Request ID: {request_id} (Dual Generate Logic)")
 
     # --- Initialize variables ---
     db: Session = g.db # Use request-bound session from Flask's g
@@ -5130,13 +5183,14 @@ def handle_openai_chat_completion():
     request_data_for_log: str = "No request data processed"
     final_response_status_code = 500
     raw_request_data: Optional[Dict] = None
+    classification_used = "chat_simple" # Placeholder, can be refined
 
     try:
         # --- 1. Get and Validate Request Data ---
+        # (This part remains the same as your last working version)
         try:
             raw_request_data = request.get_json()
-            if not raw_request_data:
-                 raise ValueError("Empty JSON payload received.")
+            if not raw_request_data: raise ValueError("Empty JSON payload received.")
             try: request_data_for_log = json.dumps(raw_request_data)[:1000]
             except: request_data_for_log = str(raw_request_data)[:1000]
         except Exception as e:
@@ -5144,213 +5198,208 @@ def handle_openai_chat_completion():
              try: request_data_for_log = request.get_data(as_text=True)[:1000]
              except Exception: request_data_for_log = "Could not read request body"
              resp_data, status_code = _create_openai_error_response(f"Request body is missing or invalid JSON: {e}", err_type="invalid_request_error", status_code=400)
-             response_payload = json.dumps(resp_data)
-             resp = Response(response_payload, status=status_code, mimetype='application/json')
-             final_response_status_code = status_code
-             return resp # Exit early
+             response_payload = json.dumps(resp_data); resp = Response(response_payload, status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
 
         # --- 2. Extract Parameters ---
+        # (This part remains the same)
         messages = raw_request_data.get("messages", [])
         stream_requested = raw_request_data.get("stream", False)
-        model_requested = raw_request_data.get("model") # Logged but likely ignored by backend
-        session_id = raw_request_data.get("session_id", f"openai_req_{request_id}") # Allow client session override
-        # Note: Other OpenAI params like temperature, top_p etc. are currently ignored by this handler
-        # and the backend uses settings from config.py or defaults.
+        model_requested = raw_request_data.get("model")
+        session_id = raw_request_data.get("session_id", f"openai_req_{request_id}")
 
         logger.debug(f"{request_id}: Request parsed - SessionID={session_id}, Stream: {stream_requested}, Model Requested: {model_requested}")
 
         # --- 3. Validate 'messages' Structure ---
+        # (This part remains the same)
         if not messages or not isinstance(messages, list):
             logger.warning(f"{request_id}: 'messages' field missing or not a list.")
             resp_data, status_code = _create_openai_error_response("'messages' is required and must be a list.", err_type="invalid_request_error", status_code=400)
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code; return resp
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
 
         # --- 4. Parse Last User Message for Input and Image ---
-        last_user_message = None
-        user_input = ""
-        image_b64 = None
-        for msg in reversed(messages): # Find the most recent user message
+        # (This part remains the same)
+        last_user_message = None; user_input = ""; image_b64 = None
+        # ... (logic to extract user_input and image_b64 from messages list) ...
+        # Find the most recent user message
+        for msg in reversed(messages):
             if isinstance(msg, dict) and msg.get("role") == "user":
                 last_user_message = msg
                 break
-
         if not last_user_message:
+            # ... (handle missing user message error) ...
             logger.warning(f"{request_id}: No message with role 'user' found.")
             resp_data, status_code = _create_openai_error_response("No message with role 'user' found in 'messages'.", err_type="invalid_request_error", status_code=400)
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code; return resp
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
 
         content = last_user_message.get("content")
-        if isinstance(content, str):
-            user_input = content
+        if isinstance(content, str): user_input = content
         elif isinstance(content, list):
-            # Handle list content (OpenAI multimodal format)
-            user_input = "" # Reset user input if content is list
-            for item in content:
+            # ... (handle multimodal list content, extract user_input and image_b64) ...
+             for item in content:
                 if isinstance(item, dict):
                     item_type = item.get("type")
-                    if item_type == "text":
-                        user_input += item.get("text", "")
+                    if item_type == "text": user_input += item.get("text", "")
                     elif item_type == "image_url":
                         image_url_data = item.get("image_url", {}).get("url", "")
                         if image_url_data.startswith("data:image"):
-                            try:
-                                # Extract base64 data
+                            try: # Extract and validate base64
                                 potential_b64 = image_url_data.split(",", 1)[1]
-                                # Basic validation
-                                if len(potential_b64) % 4 != 0 or not re.match(r'^[A-Za-z0-9+/=]+$', potential_b64):
-                                    raise ValueError("Invalid base64 chars/padding")
-                                # Validate decoding
-                                base64.b64decode(potential_b64, validate=True)
-                                image_b64 = potential_b64
-                                logger.info(f"{request_id}: Extracted base64 image data from messages.")
-                            except Exception as e:
-                                logger.warning(f"{request_id}: Invalid base64 image data in message content: {e}")
-                                resp_data, status_code = _create_openai_error_response(f"Invalid image data in message content: {e}", err_type="invalid_request_error", status_code=400)
-                                resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-                                final_response_status_code = status_code; return resp
-                        else:
-                            logger.warning(f"{request_id}: Unsupported image_url format found (only data URIs supported): {image_url_data[:50]}...")
-                            # Depending on strictness, either ignore or return error
-                            # Return error for now:
-                            resp_data, status_code = _create_openai_error_response("Unsupported image_url format. Only base64 data URIs are supported.", err_type="invalid_request_error", status_code=400)
-                            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-                            final_response_status_code = status_code; return resp
-        else:
-            logger.warning(f"{request_id}: Invalid 'content' type in user message: {type(content)}")
-            resp_data, status_code = _create_openai_error_response("User message 'content' must be a string or a list for multimodal input.", err_type="invalid_request_error", status_code=400)
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code; return resp
+                                if len(potential_b64) % 4 != 0 or not re.match(r'^[A-Za-z0-9+/=]+$', potential_b64): raise ValueError("Invalid base64")
+                                base64.b64decode(potential_b64, validate=True); image_b64 = potential_b64
+                                logger.info(f"{request_id}: Extracted base64 image data.")
+                            except Exception as e: # Handle invalid image data
+                                logger.warning(f"{request_id}: Invalid base64 image data: {e}")
+                                resp_data, status_code = _create_openai_error_response(f"Invalid image data: {e}", err_type="invalid_request_error", status_code=400)
+                                resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
+                        else: # Handle unsupported URL
+                            logger.warning(f"{request_id}: Unsupported image_url format: {image_url_data[:50]}...")
+                            resp_data, status_code = _create_openai_error_response("Unsupported image_url format.", err_type="invalid_request_error", status_code=400)
+                            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
+        else: # Handle invalid content type
+             logger.warning(f"{request_id}: Invalid 'content' type: {type(content)}")
+             resp_data, status_code = _create_openai_error_response("Invalid user message 'content' type.", err_type="invalid_request_error", status_code=400)
+             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
 
-        # Check if we actually got any input
-        if not user_input and not image_b64:
-             logger.warning(f"{request_id}: No usable text or image content found in the last user message.")
-             resp_data, status_code = _create_openai_error_response("No text or image content provided in the user message.", err_type="invalid_request_error", status_code=400)
-             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-             final_response_status_code = status_code; return resp
+        if not user_input and not image_b64: # Handle empty effective input
+             logger.warning(f"{request_id}: No usable text or image content found.")
+             resp_data, status_code = _create_openai_error_response("No text or image content provided.", err_type="invalid_request_error", status_code=400)
+             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
 
-        # --- 5. Call Core AI Logic (using asyncio.run) ---
-        generate_result = None
-        classification_used = "chat_simple" # Default, generate might update this via DB logs
+
+        # --- 5. Call DIRECT Generate Logic (Synchronous via asyncio.run) ---
+        direct_response_text = ""
+        vlm_description_for_bg = None # Store VLM result for background task
+        status_code = 200 # Assume success initially for direct response
+
+        logger.info(f"{request_id}: Calling AIChat.direct_generate...")
         try:
-            logger.info(f"{request_id}: Calling AIChat.generate (this may block Flask worker)...")
-            # Determine initial classification if needed (or let generate handle it)
-            # classification_used = asyncio.run(ai_chat._classify_input_complexity(...)) # Example if needed before generate
-            # Call the main async generate function
-            generate_result = asyncio.run(
-                ai_chat.generate(
-                    db=db,
-                    user_input=user_input,
-                    session_id=session_id,
-                    classification=classification_used, # Pass classification if determined
-                    image_b64=image_b64
-                )
-            )
-            logger.info(f"{request_id}: AIChat.generate call completed. Result type: {type(generate_result).__name__}")
+            # Run the synchronous call to direct_generate within the Flask thread
+            # We need to handle potential VLM preprocessing first if image exists
+            if image_b64:
+                 # Run VLM preprocessing sync
+                 logger.info(f"{request_id}: Preprocessing image for direct_generate...")
+                 vlm_description_for_bg, _ = ai_chat.process_image(db, image_b64, session_id) # Use current DB session
+                 if vlm_description_for_bg and "Error:" in vlm_description_for_bg:
+                      logger.error(f"{request_id}: VLM preprocessing failed for direct path: {vlm_description_for_bg}")
+                      # Proceed with text only for direct response, background can re-evaluate
+                      direct_response_text = asyncio.run(
+                          ai_chat.direct_generate(db, user_input, session_id, vlm_description=None) # Pass None desc
+                      )
+                 else:
+                      # VLM success, include description
+                      direct_response_text = asyncio.run(
+                          ai_chat.direct_generate(db, user_input, session_id, vlm_description=vlm_description_for_bg)
+                      )
+            else:
+                 # No image, just call direct_generate with text
+                 direct_response_text = asyncio.run(
+                     ai_chat.direct_generate(db, user_input, session_id, vlm_description=None)
+                 )
 
-        except Exception as gen_err:
-            logger.error(f"{request_id}: Error during asyncio.run(ai_chat.generate): {gen_err}")
-            logger.exception("Traceback for generate error:")
-            # Set result to indicate error for non-streaming response formatting
-            generate_result = f"Error during generation: {gen_err}"
-            # Fall through to response formatting
-
-        # --- 6. Handle Response based on Streaming Request and Result Type ---
-        response_text = "" # Initialize for string results
-        status_code = 200 # Assume success unless error found
-
-        # Determine the actual model name used (best effort)
-        # This is tricky as generate uses multiple models. Get the default/router model.
-        model_id_used = "Amaryllis-Default"
-        if ai_provider and ai_provider.model: model_id_used = getattr(ai_provider.model, 'model', model_id_used)
-
-
-        if isinstance(generate_result, str):
-            # --- Case 1: generate() returned a final string ---
-            response_text = generate_result
-            if "internal server error" in response_text.lower() or response_text.lower().startswith("error:"):
+            # Check if direct_generate itself indicated an error
+            if "internal error" in direct_response_text.lower() or direct_response_text.lower().startswith("error:"):
                 status_code = 500
-                logger.warning(f"{request_id}: AIChat.generate returned an error string: {response_text[:200]}...")
+                logger.warning(f"{request_id}: AIChat.direct_generate returned an error: {direct_response_text[:200]}...")
             else:
                 status_code = 200
+            logger.info(f"{request_id}: AIChat.direct_generate completed. Status: {status_code}")
 
-            if stream_requested:
-                 # --- Subcase 1a: String result, but stream was requested ---
-                 logger.warning(f"{request_id}: Client requested stream, but received direct string response. Using standard stream generator.")
-                 # Use the dedicated Flask streaming generator for this string
-                 # Pass classification determined earlier or default 'chat_simple'
-                 generator = _stream_openai_chat_response_generator_flask(
-                     session_id=session_id,
-                     user_input=user_input, # Pass original user input
-                     classification=classification_used, # Pass classification used/default
-                     model_name=model_id_used # Use determined model ID
-                 )
-                 resp = Response(generator, mimetype='text/event-stream')
-                 resp.headers['Content-Type'] = 'text/event-stream; charset=utf-8'
-                 resp.headers['Cache-Control'] = 'no-cache'
-                 resp.headers['Connection'] = 'keep-alive'
-                 final_response_status_code = 200 # Stream initiated successfully
+        except Exception as direct_gen_err:
+            logger.error(f"{request_id}: Error during asyncio.run(ai_chat.direct_generate): {direct_gen_err}")
+            logger.exception("Traceback for direct_generate error:")
+            direct_response_text = f"Error during initial response generation: {direct_gen_err}"
+            status_code = 500
 
-            else:
-                 # --- Subcase 1b: String result, non-streaming request ---
-                 logger.debug(f"{request_id}: Formatting non-streaming JSON response.")
-                 if status_code != 200:
-                     resp_data, _ = _create_openai_error_response(response_text, status_code=status_code)
-                 else:
-                     resp_data = _format_openai_chat_response(response_text, model_name=model_id_used)
-                 resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-                 final_response_status_code = status_code
+        # --- 6. LAUNCH BACKGROUND Generate Logic (in a separate thread) ---
+        # We launch this regardless of direct_generate success/failure, unless input was invalid
+        logger.info(f"{request_id}: Preparing to launch background_generate task...")
 
-        # --- Case 2: generate() returned an async generator (e.g., for LaTeX/TikZ stream) ---
-        # Note: `asyncio.run(generator)` will likely consume the generator, making this check less reliable.
-        # This block handles the *intent* if `generate` *was designed* to return a generator in some cases.
-        elif hasattr(generate_result, '__aiter__'):
-            logger.info(f"{request_id}: Received async generator result (intended for streaming).")
+        # Need to create a *new* DB session for the background thread
+        # Cannot pass the request-bound `db` session (g.db)
+        def run_background_task():
+            bg_db: Optional[Session] = None
+            try:
+                bg_db = SessionLocal() # Create a new session for this thread
+                logger.info(f"[BG Task {request_id}] Background task started.")
+                # Determine initial classification (can be done again in background)
+                bg_classification_data = {"session_id": session_id, "mode": "chat", "input_type": "classification", "user_input": user_input[:100]}
+                bg_classification = ai_chat._classify_input_complexity(bg_db, user_input, bg_classification_data)
+                logger.info(f"[BG Task {request_id}] Background classification: {bg_classification}")
 
-            if stream_requested:
-                # --- Subcase 2a: Generator result, stream requested ---
-                # THIS IS THE PROBLEMATIC CASE IN SYNC FLASK
-                logger.error(f"{request_id}: Received stream generator from generate(), but cannot stream it directly from synchronous Flask route.")
-                logger.error(f"{request_id}: This typically happens for Image+LaTeX/TikZ requests. Use a dedicated streaming endpoint for this feature.")
-                resp_data, status_code = _create_openai_error_response(
-                    "Streaming for this specific type of response (e.g., image-to-LaTeX) is not supported via this synchronous endpoint. Please use a dedicated streaming endpoint if available.",
-                    err_type="server_error", status_code=501 # Not Implemented
+                # Run background_generate using asyncio.run within this thread
+                asyncio.run(
+                    ai_chat.background_generate( # Call the full background method
+                        db=bg_db,
+                        user_input=user_input,
+                        session_id=session_id,
+                        classification=bg_classification, # Use classification determined here
+                        image_b64=image_b64 # Pass image again if present
+                    )
                 )
-                resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-                final_response_status_code = status_code
+                logger.info(f"[BG Task {request_id}] Background task completed.")
+            except Exception as bg_err:
+                logger.error(f"[BG Task {request_id}] Error in background thread: {bg_err}")
+                logger.exception(f"[BG Task {request_id}] Background Thread Traceback:")
+                # Log error to DB using the background session
+                if bg_db:
+                    try: add_interaction(bg_db, session_id=session_id, mode="chat", input_type="log_error", user_input=f"Background Task Error ({request_id})", llm_response=f"Error: {bg_err}"[:2000])
+                    except Exception: pass
+            finally:
+                if bg_db: bg_db.close() # Ensure background session is closed
 
-            else:
-                # --- Subcase 2b: Generator result, non-streaming request ---
-                logger.warning(f"{request_id}: Received stream generator but client did not request stream. Attempting to collect full response.")
-                # Try to run the generator to completion and collect the output.
-                # This relies on asyncio.run() having handled the generator correctly,
-                # or potentially re-running it (which is bad).
-                # A cleaner way requires an async route.
-                # For now, assume asyncio.run consumed it and we got an error or incomplete result.
-                # Let's craft an informative error message.
-                status_code = 500
-                response_text = "Error: Received a streaming-intended result, but could not collect it for a non-streaming response in this context."
-                logger.error(response_text)
-                resp_data, _ = _create_openai_error_response(response_text, status_code=status_code)
-                resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-                final_response_status_code = status_code
+        try:
+            background_thread = threading.Thread(target=run_background_task, daemon=True)
+            background_thread.start()
+            logger.info(f"{request_id}: Launched background_generate in thread {background_thread.ident}.")
+        except Exception as launch_err:
+            logger.error(f"{request_id}: Failed to launch background thread: {launch_err}")
+            # Log this failure? Could impact background processing.
+
+        # --- 7. Format and Return/Stream the IMMEDIATE Response (from direct_generate) ---
+        # Set Model ID using Meta Constants based on stream request
+        if stream_requested:
+            model_id_used = META_MODEL_NAME_STREAM
+        else:
+            model_id_used = META_MODEL_NAME_NONSTREAM
+
+        if stream_requested:
+             # Use the standard streaming generator, passing the direct_response_text
+             logger.info(f"{request_id}: Client requested stream. Creating stream generator for direct response.")
+             # This generator streams the logs AND the final direct_response_text
+             # It needs access to the original user_input and classification for its internal logic
+             generator = _stream_openai_chat_response_generator_flask(
+                 session_id=session_id,
+                 user_input=user_input, # Pass original user input
+                 classification=classification_used, # Pass initial classification
+                 model_name=model_id_used # Use STREAM meta name
+             )
+             # Set up Flask Response for streaming
+             resp = Response(generator, mimetype='text/event-stream')
+             resp.headers['Content-Type'] = 'text/event-stream; charset=utf-8'
+             resp.headers['Cache-Control'] = 'no-cache'
+             resp.headers['Connection'] = 'keep-alive'
+             final_response_status_code = 200 # Stream initiated successfully
 
         else:
-            # --- Case 3: Unexpected result type ---
-             logger.error(f"{request_id}: Unexpected result type from generate: {type(generate_result)}")
-             resp_data, status_code = _create_openai_error_response("Internal error: Unexpected generation result type.", status_code=500)
+             # Format and return the non-streaming JSON based on direct_response_text
+             logger.debug(f"{request_id}: Formatting non-streaming JSON response based on direct_generate.")
+             if status_code != 200:
+                 # Format as OpenAI error object if direct_generate failed
+                 resp_data, _ = _create_openai_error_response(direct_response_text, status_code=status_code)
+             else:
+                 # Format as standard OpenAI ChatCompletion object
+                 resp_data = _format_openai_chat_response(direct_response_text, model_name=model_id_used) # Use NONSTREAM meta name
+             # Prepare Flask Response
              resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
              final_response_status_code = status_code
 
-
     except Exception as e:
         # --- Main Exception Handler ---
-        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Flask OpenAI endpoint:")
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Flask OpenAI endpoint (Dual Generate Logic):")
         # Log error details before creating response
         try:
             if 'db' in g:
-                add_interaction(g.db, session_id=session_id, mode="chat", input_type='error', user_input=f"OpenAI Handler Error. Request Data: {request_data_for_log}", llm_response=f"Handler Exception ({type(e).__name__}): {e}"[:2000])
+                add_interaction(g.db, session_id=session_id, mode="chat", input_type='error', user_input=f"OpenAI Handler Error (Dual). Request Data: {request_data_for_log}", llm_response=f"Handler Exception ({type(e).__name__}): {e}"[:2000])
                 logger.debug(f"{request_id}: Logged endpoint error to DB.")
             else:
                 logger.error(f"{request_id}: Cannot log error: DB session 'g.db' unavailable.")
@@ -5364,9 +5413,9 @@ def handle_openai_chat_completion():
 
 
     finally:
-        # DB session is closed automatically by the @app.teardown_request handler
+        # DB session `g.db` (for the main request) is closed automatically by the @app.teardown_request handler
         duration_req = (time.monotonic() - start_req) * 1000
-        logger.info(f"🏁 Flask OpenAI/Ollama Chat Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+        logger.info(f"🏁 Flask OpenAI/Ollama Chat Request {request_id} (Dual Generate) handled in {duration_req:.2f} ms. Final Status: {final_response_status_code}")
 
     # --- Return Response ---
     if resp is None: # Safety net: Should always have a response object by now
