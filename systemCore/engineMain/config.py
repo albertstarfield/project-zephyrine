@@ -57,12 +57,12 @@ LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "True").lower() == "true"
 # --- Mapping logical roles to GGUF filenames within LLAMA_CPP_GGUF_DIR ---
 LLAMA_CPP_MODEL_MAP = {
     "router": os.getenv("LLAMA_CPP_MODEL_ROUTER_FILE", "deepscaler.gguf"), # Adelaide Zephyrine Charlotte Persona
-    "vlm": os.getenv("LLAMA_CPP_MODEL_VLM_FILE", "gemma3-4b-it-qat.gguf"), # Use LatexMind as VLM for now
+    "vlm": os.getenv("LLAMA_CPP_MODEL_VLM_FILE", "Qwen2.5-VL-7B-Instruct-q4_k_m.gguf"), # Use LatexMind as VLM for now
     "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf"),
     "math": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen2-math-1.5b-instruct-q5_K_M.gguf"),
     "code": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "qwen2.5-coder-3b-instruct-q5_K_M.gguf"),
     "general": os.getenv("LLAMA_CPP_MODEL_GENERAL_FILE", "deepscaler.gguf"), # Use router as general
-    "general_fast": os.getenv("LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "qwen3-0.6b-q4_K_M.gguf"),
+    "general_fast": os.getenv("LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "Qwen2.5-1.5B-Instruct-iq3_m.gguf"),
     "translator": os.getenv("LLAMA_CPP_MODEL_TRANSLATOR_FILE", "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf"), # Assuming download renamed it
     # --- Embedding Model ---
     "embeddings": os.getenv("LLAMA_CPP_EMBEDDINGS_FILE", "mxbai-embed-large-v1.gguf") # Example name
@@ -75,6 +75,20 @@ STABLE_DIFFUSION_CPP_MODEL_PATH = os.getenv("STABLE_DIFFUSION_CPP_MODEL_PATH", N
 # --- END NEW ---
 
 # --- Prompts ---
+
+PROMPT_VLM_INITIAL_ANALYSIS = """Describe the content of this image, focusing on any text, formulas, or diagrams present."""
+
+PROMPT_LATEX_REFINEMENT = """Given the following initial analysis of an image:
+--- Initial Analysis ---
+{initial_analysis}
+--- End Initial Analysis ---
+
+Refine this analysis and generate the following based *only* on the image provided:
+1. LaTeX code block (```latex ... ```) for any mathematical content.
+2. TikZ code block (```tikz ... ```) for any diagrams/figures suitable for TikZ.
+3. A concise explanation of the mathematical content or figure.
+Output MUST include the code blocks if applicable. If no math/diagrams, state that clearly.
+"""
 
 PROMPT_ROUTER = """Analyze the user's query, conversation history, and context (including file search results) to determine the best specialized model to handle the request.
 
@@ -221,6 +235,18 @@ Input Text:
 Extracted JSON Object:
 """
 
+PROMPT_GENERATE_FILE_SEARCH_QUERY = """Generate a concise search query suitable for searching a local file index (file paths and contents).
+Based on the user's query and recent conversation history below, extract the most relevant keywords, filenames, entities, or concepts.
+
+Output ONLY the essential search query terms, separated by spaces. Be brief and direct.
+Do NOT include explanations, reasoning (like <think> tags), or any conversational text.
+
+User Query: {input}
+Recent History:
+{recent_direct_history}
+
+Search Query Terms:"""
+
 PROMPT_COMPLEXITY_CLASSIFICATION = """Analyze the following user query and the recent conversation context. Classify the query into ONE of the following categories based on how it should be processed:
 1.  `chat_simple`: Straightforward question/statement, direct answer needed.
 2.  `chat_complex`: Requires deeper thought/analysis (ToT simulation), but still conversational.
@@ -352,7 +378,10 @@ Generate Corrected AppleScript:
 
 
 
-
+# --- Define VLM_TARGET_EXTENSIONS if not in config.py ---
+# (Alternatively, define this constant directly in config.py and import it)
+VLM_TARGET_EXTENSIONS = {'.pdf'}
+# ---
 
 
 
