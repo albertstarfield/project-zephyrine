@@ -316,6 +316,240 @@ def start_file_indexer():
     else:
         logger.warning("🤔 File indexer thread already running.")
 
+# === NEW: Global Self-Reflection Thread Management ===
+_reflector_thread: Optional[threading.Thread] = None
+_reflector_stop_event = threading.Event()
+_reflector_lock = threading.Lock() # Lock to prevent concurrent reflection cycles if one runs long
+
+def run_self_reflection_loop():
+    """The main loop for the self-reflection background thread."""
+    global ai_provider, ai_chat # Need access to these instances
+    thread_name = threading.current_thread().name
+    logger.info(f"✅ {thread_name} started.")
+
+    if not ai_provider or not ai_chat:
+        logger.error(f"🛑 {thread_name}: AIProvider or AIChat not initialized. Cannot run reflection.")
+        return
+
+    # Get the model for topic identification
+    topic_model = ai_provider.get_model(SELF_REFLECTION_MODEL)
+    if not topic_model:
+        logger.error(f"🛑 {thread_name}: Model '{SELF_REFLECTION_MODEL}' for topic identification not found. Stopping.")
+        return
+
+    def _extract_json_from_llm_output(raw_text: str) -> str:
+        """Attempts to find and extract a JSON object from raw LLM text."""
+        if not isinstance(raw_text, str): return "{}" # Return empty JSON if not string
+
+        # 1. Look for ```json ... ``` block first
+        json_match = re.search(r"```json\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
+        if json_match:
+            logger.debug("Extractor found JSON block using ```json")
+            return json_match.group(1)
+
+        # 2. If no block, find the first '{' and last '}'
+        start_brace = raw_text.find('{')
+        end_brace = raw_text.rfind('}')
+
+        if start_brace != -1 and end_brace != -1 and end_brace > start_brace:
+            potential_json = raw_text[start_brace:end_brace+1]
+            # Basic validation: Does it look like JSON? (Not perfect)
+            if '"reflection_topics"' in potential_json:
+                 logger.debug("Extractor found JSON using first/last braces.")
+                 return potential_json
+            else:
+                 logger.warning(f"Extractor: Braces found, but content doesn't look like expected JSON: {potential_json[:100]}...")
+
+        # 3. Fallback: Return original text or empty JSON if no JSON found
+        logger.warning(f"Extractor: No valid JSON structure found in raw output: {raw_text[:100]}...")
+        # Returning the raw text might still cause the JsonOutputParser to fail,
+        # returning an empty JSON string is safer downstream.
+        return "{}" # Or consider returning the raw_text and let JsonOutputParser fail loudly
+
+    topic_chain = (
+        ChatPromptTemplate.from_template(PROMPT_SELF_REFLECTION_TOPICS)
+        | topic_model
+        | StrOutputParser() # Get raw string output first
+        | RunnableLambda(_extract_json_from_llm_output) # Try to extract JSON
+        | JsonOutputParser() # Parse the potentially cleaned string
+    )
+
+    while not _reflector_stop_event.is_set():
+        cycle_start_time = time.monotonic()
+        logger.info(f"🤔 {thread_name}: Starting self-reflection cycle...")
+
+        # --- Attempt to acquire lock to prevent overlapping runs ---
+        if not _reflector_lock.acquire(blocking=False):
+             logger.warning(f"{thread_name}: Previous reflection cycle still running? Skipping this cycle.")
+             # Wait before trying again (shorter interval than main sleep)
+             _reflector_stop_event.wait(timeout=60) # Wait 1 minute
+             continue # Skip to next iteration
+
+        db: Optional[Session] = None # Initialize session variable for this cycle
+        try:
+            # --- Check if Server is Busy (Yield to user requests) ---
+            wait_start_time = time.monotonic()
+            while server_is_busy_event.is_set():
+                 if _reflector_stop_event.is_set(): break # Exit if stopped while waiting
+                 logger.info(f"🚦 {thread_name}: Server is busy, pausing reflection...")
+                 # Wait with timeout checks
+                 if _reflector_stop_event.wait(timeout=5.0): break # Check stop event every 5s
+            wait_duration = time.monotonic() - wait_start_time
+            if wait_duration > 1: logger.info(f"🟢 {thread_name}: Server free, resuming reflection after {wait_duration:.1f}s wait.")
+            if _reflector_stop_event.is_set(): break # Exit loop if stopped
+
+            # --- Get Global History ---
+            logger.debug(f"{thread_name}: Fetching global history ({SELF_REFLECTION_HISTORY_COUNT} items)...")
+            db = SessionLocal() # Get session for this cycle's reads
+            # Fetch history in the thread (it's synchronous)
+            # >>> REMOVE include_logs=False from this call <<<
+            global_history = get_global_recent_interactions(db, limit=SELF_REFLECTION_HISTORY_COUNT)
+            if not global_history:
+                logger.info(f"{thread_name}: No global history found to analyze. Skipping topic generation.")
+                db.close(); db=None # Close session
+                _reflector_lock.release() # Release lock before waiting
+                # (rest of the waiting logic...)
+                continue # Go to wait phase
+
+            # Format history for the LLM prompt
+            # Use a simple formatting function or reuse one from AIChat if appropriate
+            # Let's use _format_direct_history for brevity
+            history_summary = ai_chat._format_direct_history(global_history)
+            logger.debug(f"{thread_name}: History summary generated (length: {len(history_summary)}).")
+
+            # --- Identify Topics (LLM Call) ---
+            logger.info(f"{thread_name}: Identifying reflection topics via LLM '{SELF_REFLECTION_MODEL}'...")
+            reflection_topics = []
+            try:
+                prompt_input = {
+                    "max_topics": SELF_REFLECTION_MAX_TOPICS,
+                    "history_summary": history_summary
+                }
+                # Run synchronous Langchain call in this thread
+                # Need a dummy interaction_data for timing helper if used, or call directly
+                llm_response = topic_chain.invoke(prompt_input)
+
+                if isinstance(llm_response, dict) and "reflection_topics" in llm_response and isinstance(llm_response["reflection_topics"], list):
+                    reflection_topics = llm_response["reflection_topics"]
+                    # Limit number of topics just in case LLM ignores instruction
+                    reflection_topics = reflection_topics[:SELF_REFLECTION_MAX_TOPICS]
+                    logger.info(f"{thread_name}: Identified {len(reflection_topics)} topic(s) for reflection: {reflection_topics}")
+                else:
+                     logger.warning(f"{thread_name}: LLM response for topics was not a valid JSON list. Response: {llm_response}")
+
+            except Exception as topic_err:
+                 logger.error(f"{thread_name}: Error identifying reflection topics: {topic_err}")
+                 logger.exception(f"{thread_name} Topic ID Traceback:")
+
+            # Close the DB session used for history fetching
+            if db: db.close(); db=None
+
+            # --- Trigger Background Generation for Each Topic ---
+            if reflection_topics:
+                logger.info(f"{thread_name}: Triggering background generation for identified topics...")
+                for i, topic in enumerate(reflection_topics):
+                    if _reflector_stop_event.is_set(): break # Check stop event between topics
+
+                    # Check if server is busy again before each trigger
+                    if server_is_busy_event.is_set():
+                        logger.warning(f"{thread_name}: Server became busy. Pausing reflection triggers.")
+                        # Optional: Wait a bit before checking again or break the topic loop
+                        _reflector_stop_event.wait(timeout=10)
+                        if server_is_busy_event.is_set():
+                             logger.warning(f"{thread_name}: Server still busy. Aborting remaining topic triggers for this cycle.")
+                             break # Stop processing topics for this cycle
+
+                    logger.info(f"{thread_name}: --> Triggering reflection task {i+1}/{len(reflection_topics)} on topic: '{topic[:80]}...'")
+                    reflection_session_id = f"reflection_{uuid.uuid4()}"
+                    trigger_db: Optional[Session] = None
+                    try:
+                        # Need a *new* DB session for the background_generate call itself
+                        trigger_db = SessionLocal()
+                        # Use asyncio.run because we are in a synchronous thread calling an async function
+                        # Note: background_generate handles its own logging internally
+                        asyncio.run(
+                            ai_chat.background_generate(
+                                db=trigger_db, # Pass the session
+                                user_input=f"[Self-Reflection Topic]: {topic}", # Frame the input
+                                session_id=reflection_session_id,
+                                classification="chat_complex", # Trigger deep thought
+                                image_b64=None # No image for reflection
+                            )
+                        )
+                        logger.info(f"{thread_name}: --> Background task for topic {i+1} launched.")
+                        # Add a small delay between launching tasks?
+                        time.sleep(2.0)
+
+                    except Exception as trigger_err:
+                        logger.error(f"{thread_name}: Failed to trigger background_generate for topic '{topic[:50]}...': {trigger_err}")
+                        logger.exception(f"{thread_name} Trigger Traceback:")
+                    finally:
+                        if trigger_db: trigger_db.close() # Close the session for this trigger
+
+            # --- End of Cycle ---
+            cycle_duration = time.monotonic() - cycle_start_time
+            logger.info(f"{thread_name}: Self-reflection cycle finished in {cycle_duration:.2f}s.")
+
+        except Exception as cycle_err:
+            logger.error(f"💥 {thread_name}: Unhandled error in reflection cycle: {cycle_err}")
+            logger.exception(f"{thread_name} Cycle Traceback:")
+            if db: # Ensure session is closed even on error
+                try: db.close()
+                except: pass
+        finally:
+            # --- Release Lock ---
+            try: _reflector_lock.release()
+            except threading.ThreadError: logger.warning(f"{thread_name}: Lock was not held on release?")
+            # --- Wait for Next Cycle ---
+            wait_time = max(60, SELF_REFLECTION_INTERVAL_MINUTES * 60) # Ensure at least 1 min wait
+            logger.info(f"{thread_name}: Waiting {wait_time / 60:.1f} minutes for next reflection cycle...")
+            # Use wait with timeout for responsiveness to stop event
+            stopped = _reflector_stop_event.wait(timeout=wait_time)
+            if stopped:
+                logger.info(f"{thread_name}: Stop signal received during wait.")
+                break # Exit outer while loop
+
+    logger.info(f"🛑 {thread_name}: Exiting.")
+
+def start_self_reflector():
+    """Starts the background self-reflection thread."""
+    global _reflector_thread
+    if not ENABLE_SELF_REFLECTION:
+        logger.info("🤔 Self-reflection thread disabled via config.")
+        return
+
+    if _reflector_thread is None or not _reflector_thread.is_alive():
+        logger.info("🚀 Starting background self-reflection service...")
+        try:
+            _reflector_stop_event.clear() # Ensure stop event is not set
+            _reflector_thread = threading.Thread(
+                target=run_self_reflection_loop,
+                name="SelfReflectorThread",
+                daemon=True
+            )
+            _reflector_thread.start()
+            logger.success("✅ Self-reflection thread started successfully.")
+        except Exception as e:
+            logger.critical(f"🔥🔥 Failed to start SelfReflector thread: {e}")
+            logger.exception("Reflector Startup Traceback:")
+    else:
+        logger.warning("🤔 Self-reflection thread already running.")
+
+def stop_self_reflector():
+    """Signals the self-reflection thread to stop."""
+    global _reflector_thread
+    if not ENABLE_SELF_REFLECTION: return # Don't try to stop if disabled
+
+    if _reflector_thread and _reflector_thread.is_alive():
+        logger.info("Signaling self-reflection thread to stop...")
+        _reflector_stop_event.set()
+        # Optional: Wait for thread to finish (might take time if in sleep)
+        # _reflector_thread.join(timeout=10)
+        # if _reflector_thread.is_alive(): logger.warning("Self-reflection thread did not stop within timeout.")
+        logger.info("Stop signal sent to self-reflection thread.")
+    else:
+        logger.info("Self-reflection thread not running or already stopped.")
+
 def stop_file_indexer():
     """Signals the file indexer thread to stop."""
     global _indexer_thread
@@ -332,6 +566,8 @@ def stop_file_indexer():
 
 # Register the stop function to run when the application exits
 atexit.register(stop_file_indexer)
+# Register the stop function for application exit
+atexit.register(stop_self_reflector)
 
 
 # --- Flask App Setup ---
@@ -5619,6 +5855,7 @@ if __name__ != "__main__":
     # --- Start the file indexer ---
     # The start_file_indexer function now handles logging and errors internally
     start_file_indexer()
+    start_self_reflector() # <<< ADD THIS LINE
 
 # This block prevents direct execution and provides instructions
 else:

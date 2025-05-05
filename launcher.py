@@ -21,24 +21,7 @@ except ImportError:
     TIKTOKEN_AVAILABLE = False
 # --- End License Acceptance Imports ---
 
-try:
-    import colorama
-    colorama.init()
-    COLOR_RESET = colorama.Style.RESET_ALL
-    COLOR_ENGINE = colorama.Fore.CYAN + colorama.Style.BRIGHT
-    COLOR_BACKEND = colorama.Fore.MAGENTA + colorama.Style.BRIGHT
-    COLOR_FRONTEND = colorama.Fore.GREEN + colorama.Style.BRIGHT
-    COLOR_SYSTEM = colorama.Fore.YELLOW + colorama.Style.BRIGHT
-    COLOR_ERROR = colorama.Fore.RED + colorama.Style.BRIGHT
-except ImportError:
-    print("Warning: colorama not found. Logs will not be colored.")
-    print("Install it using: pip install colorama")
-    COLOR_RESET = ""
-    COLOR_ENGINE = ""
-    COLOR_BACKEND = ""
-    COLOR_FRONTEND = ""
-    COLOR_SYSTEM = ""
-    COLOR_ERROR = ""
+
 
 # --- Configuration ---
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
