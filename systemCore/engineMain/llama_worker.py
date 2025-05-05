@@ -5,6 +5,7 @@ import json
 import time
 import traceback
 import argparse
+import shlex
 
 # --- Try importing llama_cpp ---
 # Assume it's installed in the same environment launcher.py uses

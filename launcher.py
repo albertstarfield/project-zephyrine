@@ -9,6 +9,8 @@ import atexit
 import shutil
 import platform
 from datetime import datetime
+import shlex       # <<< --- ADD THIS LINE --- >>>
+
 
 # --- License Acceptance Imports ---
 import curses # For terminal UI
@@ -487,7 +489,7 @@ if __name__ == "__main__":
         else: print_warning(f"Unknown backend '{llama_backend}'. CPU only."); cmake_args_list = []
         if cmake_args_list: build_env['CMAKE_ARGS'] = " ".join(cmake_args_list)
         print_system(f"Running pip install from '{LLAMA_CPP_PYTHON_CLONE_PATH}' with build flags...")
-        pip_install_command = [ PIP_EXECUTABLE, "install", ".", "--upgrade", "--force-reinstall", "--no-cache-dir" ] # More aggressive rebuild flags
+        pip_install_command = [ PIP_EXECUTABLE, "install", ".", "--upgrade", "--no-cache-dir" ] # More aggressive rebuild flags
         if not run_command(pip_install_command, LLAMA_CPP_PYTHON_CLONE_PATH, "PIP-LLAMA", COLOR_SYSTEM, env_override=build_env):
             print_error("Failed install custom llama-cpp-python. Exiting."); sys.exit(1)
         print_system("Custom llama-cpp-python build installed.")
