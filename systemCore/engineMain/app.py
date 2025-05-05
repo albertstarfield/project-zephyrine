@@ -4132,28 +4132,48 @@ class AIChat:
             final_db_data_to_save['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
 
             try:
-                if interaction_to_update: # Update existing record
-                    logger.info(f"{log_prefix}: Updating original interaction {update_interaction_id} with reflection result.")
-                    # --- Append reflection result to original response ---
-                    original_response = interaction_to_update.llm_response or ""
-                    reflection_result = final_db_data_to_save['llm_response']
-                    timestamp_now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
-                    combined_response = (
-                        f"{original_response}\n\n"
-                        f"--- Reflection ({timestamp_now} on Input ID {interaction_to_update.id}) ---\n"
-                        f"{reflection_result}"
-                        f"\n--- End Reflection ---"
-                    )
-                    # Update the fields on the loaded object
-                    interaction_to_update.llm_response = combined_response[:Interaction.llm_response.type.length] # Truncate if needed
-                    interaction_to_update.reflection_completed = True # Ensure marked complete
-                    interaction_to_update.last_modified_db = datetime.datetime.now(datetime.timezone.utc) # Add timestamp for modification
-                    # Add other fields if needed (e.g., reflection_session_id ?)
+                # --- MODIFICATION START ---
+                if interaction_to_update: # This is a reflection task completing
+                    # 1. Mark the original interaction as completed WITHOUT changing its response
+                    logger.info(f"{log_prefix}: Marking original interaction {update_interaction_id} as reflection_completed.")
+                    interaction_to_update.reflection_completed = True
+                    interaction_to_update.last_modified_db = datetime.datetime.now(datetime.timezone.utc) # Update modification time
+                    # Commit this change first
+                    try:
+                        db.commit()
+                        logger.success(f"{log_prefix}: Successfully marked original interaction {update_interaction_id} complete.")
+                    except Exception as upd_err:
+                         logger.error(f"{log_prefix}: Failed to mark original interaction {update_interaction_id} complete: {upd_err}")
+                         db.rollback()
+                         # If marking fails, we probably shouldn't log the result as a new interaction yet,
+                         # as the original might get picked up again. We'll skip creating the new record.
+                         raise upd_err # Re-raise to prevent creating the new record below
 
-                    db.commit() # Commit changes to the existing record
-                    logger.success(f"{log_prefix}: Successfully updated interaction {update_interaction_id}.")
+                    # 2. Create a NEW interaction record containing the reflection result
+                    logger.info(f"{log_prefix}: Creating new interaction record for reflection result (original ID: {update_interaction_id}).")
+                    reflection_result_text = final_db_data_to_save.get('llm_response', "[Reflection processing failed or returned empty]")
 
-                elif not is_reflection_task: # Create NEW record (standard background generate)
+                    # Use session_id from the current task (which should match original)
+                    current_session_id = final_db_data_to_save.get('session_id', interaction_to_update.session_id)
+
+                    new_interaction_data = {
+                        "session_id": current_session_id,
+                        "mode": "chat",
+                        "input_type": "reflection_result", # New type to identify these
+                        "user_input": f"[Self-Reflection Result for Interaction ID {update_interaction_id}]", # Reference original
+                        "llm_response": reflection_result_text,
+                        "execution_time_ms": final_db_data_to_save.get('execution_time_ms', 0),
+                        "classification": "reflection", # Optional: classify the result itself
+                        # Ensure defaults for a normal interaction apply
+                        "reflection_completed": False, # This NEW record has not been reflected upon
+                        "tot_delivered": False,
+                        "assistant_action_executed": False,
+                        # Ensure timestamp is set by add_interaction's default
+                    }
+                    # Use the existing synchronous add_interaction helper
+                    add_interaction(db, **new_interaction_data) # This handles filtering keys and commit/rollback internally
+
+                elif not is_reflection_task: # Create NEW record (standard background generate, not a reflection update)
                     logger.debug(f"{log_prefix}: Saving new interaction record...")
                     valid_keys = {c.name for c in Interaction.__table__.columns}
                     db_kwargs = {k: v for k, v in final_db_data_to_save.items() if k in valid_keys}
