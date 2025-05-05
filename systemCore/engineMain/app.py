@@ -3602,13 +3602,23 @@ class AIChat:
 
         # Simplified prompt - maybe use a subset of PROMPT_CHAT or a new one
         # Using PROMPT_CHAT for now, but only providing limited context keys
-        direct_prompt_template = ChatPromptTemplate.from_messages(
-            [
-                # Simplified system prompt might be better here
-                ("system", f"You are Amaryllis, an AI assistant. Provide a concise, direct answer based on the history and query. Target ~{ANSWER_SIZE_WORDS} words."),
-                ("user", "Recent History:\n{recent_direct_history}\n\nUser Query:\n{input}")
-            ]
-        )
+        try:
+            # Use ChatPromptTemplate.from_template with the string from config
+            direct_prompt_template = ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE)
+        except NameError: # Catch if PROMPT_DIRECT_GENERATE wasn't imported/defined
+             logger.error(f"{direct_req_id}: PROMPT_DIRECT_GENERATE not found in config! Using fallback prompt.")
+             # Fallback to a simple hardcoded prompt
+             direct_prompt_template = ChatPromptTemplate.from_messages([
+                 ("system", "Provide a direct answer."),
+                 ("user", "History:\n{recent_direct_history}\n\nQuery:\n{input}")
+             ])
+        except Exception as prompt_err:
+             logger.error(f"{direct_req_id}: Error creating prompt template: {prompt_err}. Using fallback.")
+             # Fallback
+             direct_prompt_template = ChatPromptTemplate.from_messages([
+                 ("system", "Provide a direct answer."),
+                 ("user", "History:\n{recent_direct_history}\n\nQuery:\n{input}")
+             ])
 
         direct_chain = direct_prompt_template | fast_model | StrOutputParser()
 
