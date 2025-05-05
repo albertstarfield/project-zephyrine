@@ -93,6 +93,7 @@ systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3.zip
 **.idea**
 **venv**
 **env
+.license_accepted_v1
 
 # Amaryllis generated files/folders
 RuntimeNotebook.md
@@ -105,3 +106,4 @@ LiteratureReviewPool/
 *.zst
 **__pycache__**
 **alembic**
+**.db**

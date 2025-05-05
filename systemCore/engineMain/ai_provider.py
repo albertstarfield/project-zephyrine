@@ -106,7 +106,7 @@ class LlamaCppChatWrapper(SimpleChatModel):
         (Extracted formatting logic from original _stream method)
         """
         formatted_messages = []
-        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role) # Needed for VLM check
+        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role, task_type="chat") # Needed for VLM check
 
         for msg in messages:
             role = "user" # Default
@@ -173,7 +173,7 @@ class LlamaCppChatWrapper(SimpleChatModel):
         Returns the full response text at once.
         """
         logger.debug(f"LlamaCppChatWrapper: Executing non-streaming '_call' for role '{self.model_role}'.")
-        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role)
+        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role, task_type="chat")
         if not llm_instance:
             err_msg = f"LLAMA_CPP_ERROR (_call): Model for role '{self.model_role}' could not be loaded."
             logger.error(err_msg)
@@ -238,7 +238,7 @@ class LlamaCppChatWrapper(SimpleChatModel):
     ) -> Iterator[ChatGenerationChunk]:
         """Streaming generation (kept functional, uses AIMessageChunk)."""
         logger.debug(f"LlamaCppChatWrapper: Executing streaming '_stream' for role '{self.model_role}'.") # Log differentiate
-        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role)
+        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role, task_type="chat")
         if not llm_instance:
             err_msg = f"LLAMA_CPP_ERROR (_stream): Model for role '{self.model_role}' could not be loaded."
             logger.error(err_msg)
@@ -300,7 +300,7 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
 
     def embed_documents(self, texts: List[str]) -> List[List[float]]:
         """Embed multiple documents."""
-        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role)
+        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role, task_type="embedding")
         if not llm_instance:
             logger.error(f"LLAMA_CPP_ERROR: Embedding model for role '{self.model_role}' could not be loaded.")
             # Return dummy embeddings of correct shape but indicate error?
@@ -319,7 +319,7 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
 
     def embed_query(self, text: str) -> List[float]:
         """Embed a single query."""
-        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role)
+        llm_instance = self.ai_provider._get_loaded_llama_instance(self.model_role, task_type="embedding")
         if not llm_instance:
             logger.error(f"LLAMA_CPP_ERROR: Embedding model for role '{self.model_role}' could not be loaded.")
             raise RuntimeError(f"Llama.cpp embedding model ('{self.model_role}') failed to load.")
@@ -351,17 +351,17 @@ class AIProvider:
         # --- llama.cpp specific state ---
         self._loaded_gguf_path: Optional[str] = None
         self._loaded_llama_instance: Optional[llama_cpp.Llama] = None
-        # <<< Initialize the lock ONLY if provider is llama_cpp >>>
+        # --->>> NEW: Track last task type <<<---
+        self._last_task_type: Optional[str] = None # Stores "chat" or "embedding"
+        # --->>> END NEW <<<---
         self._llama_model_access_lock = threading.Lock() if LLAMA_CPP_AVAILABLE and self.provider_name == "llama_cpp" else None
-        # <<< End Lock Init >>>
         self._llama_model_map: Dict[str, str] = {}
         self._llama_gguf_dir: Optional[str] = None
 
+
         logger.info(f"🤖 Initializing AI Provider: {self.provider_name}")
-        if self.provider_name == "llama_cpp" and self._llama_model_access_lock:
-             logger.info("   🔑 Initialized threading.Lock for llama.cpp access.")
-        elif self.provider_name == "llama_cpp":
-             logger.error("   ❌ Failed to initialize threading.Lock for llama.cpp (LLAMA_CPP_AVAILABLE might be False).")
+        if self.provider_name == "llama_cpp" and self._llama_model_access_lock: logger.info("   🔑 Initialized threading.Lock for llama.cpp access.")
+        elif self.provider_name == "llama_cpp": logger.error("   ❌ Failed to initialize threading.Lock for llama.cpp")
 
         self._validate_config()
         self.setup_provider()
@@ -369,131 +369,141 @@ class AIProvider:
 
     def _validate_config(self):
         """Basic checks for required config based on provider."""
-        if self.provider_name == "fireworks" and not FIREWORKS_API_KEY:
-            logger.error("🔥 PROVIDER=fireworks requires FIREWORKS_API_KEY in config or .env")
-            # Consider exiting or disabling provider
+        if self.provider_name == "fireworks" and not FIREWORKS_API_KEY: logger.error("🔥 PROVIDER=fireworks requires FIREWORKS_API_KEY"); # Exit?
         if self.provider_name == "llama_cpp":
-            if not LLAMA_CPP_AVAILABLE:
-                 logger.error("❌ PROVIDER=llama_cpp selected but llama-cpp-python is not installed.")
-                 sys.exit("Missing llama-cpp-python dependency.")
-            if not os.path.isdir(LLAMA_CPP_GGUF_DIR):
-                 logger.error(f"❌ PROVIDER=llama_cpp requires GGUF directory at: {LLAMA_CPP_GGUF_DIR}")
-                 sys.exit(f"Missing GGUF directory: {LLAMA_CPP_GGUF_DIR}")
-            # Check if model files in map actually exist (optional, adds startup time)
-            # for role, fname in LLAMA_CPP_MODEL_MAP.items():
-            #     fpath = os.path.join(LLAMA_CPP_GGUF_DIR, fname)
-            #     if not os.path.isfile(fpath):
-            #          logger.warning(f"⚠️ Llama.cpp model file for role '{role}' not found: {fpath}")
+            if not LLAMA_CPP_AVAILABLE: logger.error("❌ PROVIDER=llama_cpp but llama-cpp-python not installed."); sys.exit("Missing llama-cpp-python dependency.")
+            if not os.path.isdir(LLAMA_CPP_GGUF_DIR): logger.error(f"❌ PROVIDER=llama_cpp requires GGUF directory: {LLAMA_CPP_GGUF_DIR}"); sys.exit(f"Missing GGUF directory: {LLAMA_CPP_GGUF_DIR}")
+            # --->>> NEW: Check for distinct embedding model <<<---
+            embedding_file = LLAMA_CPP_MODEL_MAP.get("embeddings")
+            if not embedding_file:
+                logger.error("❌ PROVIDER=llama_cpp requires a distinct 'embeddings' entry in LLAMA_CPP_MODEL_MAP.")
+                sys.exit("Missing embedding model configuration for llama.cpp")
+            # Check if embedding file is reused for a chat role
+            for role, fname in LLAMA_CPP_MODEL_MAP.items():
+                if role != "embeddings" and fname == embedding_file:
+                    logger.error(f"❌ PROVIDER=llama_cpp: Embedding model '{embedding_file}' CANNOT be reused for chat role '{role}'. Use different GGUF files.")
+                    sys.exit("Embedding model file reused for chat role.")
+            # --->>> END NEW <<<---
 
-    def _load_llama_model(self, required_gguf_path: str) -> Optional[llama_cpp.Llama]:
+    def _load_llama_model(self, required_gguf_path: str, task_type: str) -> Optional[llama_cpp.Llama]:
         """
         Loads or returns the cached llama_cpp.Llama instance.
-        Handles unloading previous model if necessary. Thread-safe via lock.
+        Handles unloading previous model if path OR task_type changes. Thread-safe.
         """
-        # Check necessary conditions first (outside lock)
-        if not LLAMA_CPP_AVAILABLE:
-            logger.error("_load_llama_model: llama.cpp library not available.")
-            return None
-        if not self._llama_model_access_lock:
-            logger.error("_load_llama_model: Access lock not initialized (should not happen if provider is llama_cpp).")
+        if not LLAMA_CPP_AVAILABLE or not self._llama_model_access_lock:
+            logger.error("_load_llama_model: Preconditions not met (Lib available? Lock init?).")
             return None
 
-        # The core logic MUST be protected by the lock
         with self._llama_model_access_lock:
-            logger.trace(f"Acquired lock for potential load/switch: {os.path.basename(required_gguf_path)}")
+            logger.trace(f"Acquired lock for load/switch: Requesting '{os.path.basename(required_gguf_path)}' for task '{task_type}'")
 
-            # 1. Check cache
-            if self._loaded_llama_instance and self._loaded_gguf_path == required_gguf_path:
-                logger.debug(f"Using cached llama.cpp instance: {os.path.basename(required_gguf_path)}")
-                # Instance already loaded, return it (it's safe to access self._loaded... inside lock)
-                instance_to_return = self._loaded_llama_instance
+            # --- Determine if Reload is Needed ---
+            needs_reload = False
+            if not self._loaded_llama_instance:
+                needs_reload = True # First load
+                logger.debug("No model loaded, proceeding to load.")
+            elif self._loaded_gguf_path != required_gguf_path:
+                needs_reload = True # Different model file requested
+                logger.info(f"Switching model from '{os.path.basename(self._loaded_gguf_path)}' to '{os.path.basename(required_gguf_path)}'.")
+            elif self._last_task_type != task_type:
+                needs_reload = True # Same model file, but different task type (e.g., chat after embed)
+                logger.warning(f"Forcing reload of '{os.path.basename(required_gguf_path)}' due to task type switch: '{self._last_task_type}' -> '{task_type}'.")
             else:
-                # Needs loading or switching
-                instance_to_return = None # Default to None if load fails
+                # Paths and task types match, use cached instance
+                logger.debug(f"Using cached llama.cpp instance: '{os.path.basename(required_gguf_path)}' for task '{task_type}'.")
+                instance_to_return = self._loaded_llama_instance
 
-                # 2. Unload if necessary
+            # --- Perform Reload if Needed ---
+            if needs_reload:
+                instance_to_return = None # Default return for this branch
+
+                # 1. Unload if necessary
                 if self._loaded_llama_instance:
-                    logger.warning(f"Unloading previous llama.cpp model: {os.path.basename(self._loaded_gguf_path or 'Unknown')}")
+                    logger.info(f"Unloading previous llama.cpp model: {os.path.basename(self._loaded_gguf_path or 'Unknown')}")
                     try:
-                        # Try explicit deletion to potentially trigger __del__ and release resources
-                        del self._loaded_llama_instance
+                        del self._loaded_llama_instance # Attempt explicit deletion
+                        self._loaded_llama_instance = None
+                        self._loaded_gguf_path = None
+                        self._last_task_type = None
+                        gc.collect() # Hint garbage collector
+                        logger.info("Previous llama.cpp model unloaded.")
+                        # Optional: Add small delay IF experiencing driver issues after unload
+                        # time.sleep(0.2)
                     except Exception as del_err:
                          logger.error(f"Error during explicit deletion of Llama instance: {del_err}")
-                    self._loaded_llama_instance = None
-                    self._loaded_gguf_path = None
-                    gc.collect() # Hint garbage collector
-                    logger.info("Previous llama.cpp model unloaded.")
-                    # Optional short sleep if needed for GPU memory release
-                    # time.sleep(0.5)
+                         # Attempt to continue with load anyway, but log the issue
 
-                # 3. Load new model
-                logger.info(f"Loading llama.cpp model: {os.path.basename(required_gguf_path)}...")
+                # 2. Load new model
+                logger.info(f"Loading llama.cpp model: '{os.path.basename(required_gguf_path)}' for task '{task_type}'...")
                 logger.info(f"  >> Path: {required_gguf_path}")
+                # ... (log GPU layers, context size etc.) ...
                 logger.info(f"  >> GPU Layers: {LLAMA_CPP_N_GPU_LAYERS}")
                 logger.info(f"  >> Context Size: {LLAMA_CPP_N_CTX}")
 
+
                 if not os.path.isfile(required_gguf_path):
                      logger.error(f"LLAMA_CPP_ERROR: Model file not found: {required_gguf_path}")
-                     # instance_to_return remains None
                 else:
                      load_start_time = time.monotonic()
                      try:
-                         # Find the role for logging/embedding check
-                         role_for_path = None
+                         # >>> MODIFIED: Determine embedding/chat_format from task_type <<<
+                         is_embedding_task = (task_type == "embedding")
+                         role_for_path = "unknown" # Find role for logging
                          for r, f in self._llama_model_map.items():
                              if os.path.join(self._llama_gguf_dir or "", f) == required_gguf_path:
-                                 role_for_path = r
-                                 break
+                                 role_for_path = r; break
 
-                         logger.info(f"Initializing Llama for role '{role_for_path}' (auto-detecting multimodal)...")
-                         chat_format_to_use = "chatml" # Explicitly set based on previous findings
-                         logger.info(f"  >> Explicitly setting chat_format='{chat_format_to_use}'")
+                         logger.info(f"Initializing Llama for role '{role_for_path}', task '{task_type}' (embedding={is_embedding_task})...")
+                         chat_format_to_use = "chatml" if not is_embedding_task else None
+                         if chat_format_to_use: logger.info(f"  >> Setting chat_format='{chat_format_to_use}'")
 
                          new_instance = llama_cpp.Llama(
                              model_path=required_gguf_path,
                              n_gpu_layers=LLAMA_CPP_N_GPU_LAYERS,
                              n_ctx=LLAMA_CPP_N_CTX,
-                             embedding=(role_for_path == "embeddings"),
+                             embedding=is_embedding_task, # <<< MODIFIED
                              verbose=LLAMA_CPP_VERBOSE,
-                             chat_format=chat_format_to_use, # Use explicit format
+                             chat_format=chat_format_to_use, # <<< MODIFIED
                          )
-                         self._loaded_llama_instance = new_instance # Assign to instance variable
+                         # >>> END MODIFIED <<<
+                         self._loaded_llama_instance = new_instance
                          self._loaded_gguf_path = required_gguf_path
-                         instance_to_return = new_instance # Set return value
+                         # >>> MODIFIED: Store task type <<<
+                         self._last_task_type = task_type
+                         instance_to_return = new_instance
                          load_duration = time.monotonic() - load_start_time
-                         logger.success(f"✅ Loaded '{os.path.basename(required_gguf_path)}' in {load_duration:.2f}s.")
+                         logger.success(f"✅ Loaded '{os.path.basename(required_gguf_path)}' ({task_type}) in {load_duration:.2f}s.")
                      except Exception as e:
-                         logger.error(f"LLAMA_CPP_ERROR: Failed to load model {required_gguf_path}: {e}")
+                         logger.error(f"LLAMA_CPP_ERROR: Failed to load model {required_gguf_path} for task {task_type}: {e}")
                          logger.exception("Llama.cpp loading traceback:")
-                         self._loaded_llama_instance = None # Ensure state is clean on error
+                         self._loaded_llama_instance = None # Ensure state is clean
                          self._loaded_gguf_path = None
-                         instance_to_return = None # Ensure None is returned
+                         self._last_task_type = None
 
-            logger.trace(f"Releasing lock after load/switch check for: {os.path.basename(required_gguf_path)}")
-        # Lock released here automatically by 'with' statement
+            logger.trace(f"Releasing lock after load/switch check for task '{task_type}'")
 
         return instance_to_return # Return the instance determined inside the lock
 
-    def _get_loaded_llama_instance(self, model_role: str) -> Optional[llama_cpp.Llama]:
+    def _get_loaded_llama_instance(self, model_role: str, task_type: str) -> Optional[llama_cpp.Llama]:
         """
-        Ensures the correct llama.cpp model for the role is loaded via _load_llama_model
-        (which handles locking internally) and returns it.
+        Ensures the correct llama.cpp model is loaded via _load_llama_model
+        (passing the required task_type) and returns it.
         """
-        if self.provider_name != "llama_cpp":
-            logger.error("Attempted to get llama.cpp instance when provider is not llama_cpp.")
-            return None
-        if not self._llama_gguf_dir:
-            logger.error("Llama.cpp GGUF directory not set.")
-            return None
+        if self.provider_name != "llama_cpp": logger.error("Attempted llama.cpp instance outside llama_cpp provider."); return None
+        if not self._llama_gguf_dir: logger.error("Llama.cpp GGUF directory not set."); return None
+        # --->>> NEW: Validate task_type <<<---
+        if task_type not in ["chat", "embedding"]:
+             logger.error(f"Invalid task_type '{task_type}' passed. Must be 'chat' or 'embedding'.")
+             return None
 
         gguf_filename = self._llama_model_map.get(model_role)
         if not gguf_filename:
-            logger.error(f"No GGUF file configured for llama.cpp role: '{model_role}'")
+            logger.error(f"No GGUF file configured for role: '{model_role}'")
             return None
 
         required_path = os.path.join(self._llama_gguf_dir, gguf_filename)
-        # _load_llama_model handles the caching, loading, unloading, and locking
-        return self._load_llama_model(required_path)
+        # --->>> Pass task_type to the loading function <<<---
+        return self._load_llama_model(required_path, task_type)
 
     def setup_provider(self):
         """Sets up the AI models based on the configured PROVIDER."""
@@ -669,6 +679,7 @@ class AIProvider:
                     logger.error(f"Error during explicit deletion of Llama instance: {del_err}")
                 self._loaded_llama_instance = None
                 self._loaded_gguf_path = None
+                self._last_task_type = None
                 gc.collect()
                 logger.info("llama.cpp model unloaded via explicit call.")
             else:
