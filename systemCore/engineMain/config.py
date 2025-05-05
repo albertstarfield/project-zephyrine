@@ -74,6 +74,11 @@ MODEL_DEFAULT_CHAT_LLAMA_CPP = "general" # Use the logical name
 STABLE_DIFFUSION_CPP_MODEL_PATH = os.getenv("STABLE_DIFFUSION_CPP_MODEL_PATH", None)
 # --- END NEW ---
 
+#DOC EXTENSION To be scanned?
+
+DOC_EXTENSIONS = {'.pdf', '.docx', 'doc', 'xls', '.xlsx', '.pptx', '.ppt'}
+OFFICE_EXTENSIONS = {'.docx', 'doc', 'xls', '.xlsx', '.pptx', '.ppt'}
+
 
 # --- Self-Reflection Settings ---
 ENABLE_SELF_REFLECTION = os.getenv("ENABLE_SELF_REFLECTION", "true").lower() in ('true', '1', 't', 'yes', 'y')
@@ -225,6 +230,7 @@ PROMPT_DIRECT_GENERATE = f"""System: You are Adelaide Zephyrine Charlotte, an em
 
 Appendix Contexts:
 {{history_rag}}
+
 
 Recent interaction History:
 {{recent_direct_history}}
