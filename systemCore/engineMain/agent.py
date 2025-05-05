@@ -470,10 +470,10 @@ class AmaryllisAgent:
              if input_type == 'text' and interaction.user_input:
                  prefix, text = "User Input:", interaction.user_input
              elif input_type == 'llm_response' and interaction.llm_response:
-                 prefix, text = "Amaryllis Response:", interaction.llm_response
+                 prefix, text = "Adelaide Response:", interaction.llm_response
              elif input_type == 'tool_request' and interaction.llm_response:
                  # Show the raw request XML the LLM generated
-                 prefix, text = "Amaryllis Tool Request:", interaction.llm_response
+                 prefix, text = "Adelaide Tool Request:", interaction.llm_response
              elif input_type == 'tool_result' and interaction.llm_response:
                  # Format the tool result as the environment's response
                  tool_name = interaction.tool_name or "unknown_tool"
