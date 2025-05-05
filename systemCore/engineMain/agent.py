@@ -240,7 +240,7 @@ class AgentTools:
 
 
 class AmaryllisAgent:
-    """Manages the state and execution loop for the Agent persona (Amaryllis)."""
+    """Manages the state and execution loop for the Agent persona (Adelaide)."""
     def __init__(self, provider: Any, cwd: str, supports_computer_use: bool = True):
         self.provider = provider
         self.cwd = cwd
@@ -268,7 +268,7 @@ class AmaryllisAgent:
             logger.info(f"📖 Read agent prompt from: {AGENT_PROMPT_FILE_PATH}")
         except Exception as e:
             logger.critical(f"❌ Failed reading agent prompt: {e}")
-            raw_agent_system_prompt = "You are Amaryllis, a helpful AI agent. Respond to the user's requests."
+            raw_agent_system_prompt = "You are Adelaide, a helpful AI agent. Respond to the user's requests."
 
         def osName(): return sys.platform
         def getShell(): return os.environ.get("SHELL", "/bin/sh")
