@@ -352,6 +352,13 @@ class AIProvider:
             logger.info(f"{worker_log_prefix}: Lock acquired. Starting worker process.")
             worker_process = None
             try:
+                # --- Determine Context Size Based on Role --- <<< MODIFICATION START >>>
+                if model_role == "embeddings":
+                    n_ctx_to_use = 512 # Specific override for embedding model
+                    logger.info(f"{worker_log_prefix}: Using specific context size {n_ctx_to_use} for embedding model role.")
+                else:
+                    n_ctx_to_use = LLAMA_CPP_N_CTX # Use configured default for chat models
+                    logger.debug(f"{worker_log_prefix}: Using configured context size {n_ctx_to_use} for role '{model_role}'.")
                 # --- Prepare Worker Command ---
                 worker_script_path = os.path.join(os.path.dirname(__file__), "llama_worker.py")
                 command = [

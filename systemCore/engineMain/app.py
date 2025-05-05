@@ -322,188 +322,180 @@ _reflector_stop_event = threading.Event()
 _reflector_lock = threading.Lock() # Lock to prevent concurrent reflection cycles if one runs long
 
 def run_self_reflection_loop():
-    """The main loop for the self-reflection background thread."""
+    """
+    The main loop for the self-reflection background thread.
+    Periodically queries for past interactions marked for reflection,
+    triggers background generation tasks for them, and marks them as completed.
+    """
     global ai_provider, ai_chat # Need access to these instances
     thread_name = threading.current_thread().name
-    logger.info(f"✅ {thread_name} started.")
+    logger.info(f"✅ {thread_name} started (Interaction-based Reflection).")
 
     if not ai_provider or not ai_chat:
         logger.error(f"🛑 {thread_name}: AIProvider or AIChat not initialized. Cannot run reflection.")
         return
 
-    # Get the model for topic identification
-    topic_model = ai_provider.get_model(SELF_REFLECTION_MODEL)
-    if not topic_model:
-        logger.error(f"🛑 {thread_name}: Model '{SELF_REFLECTION_MODEL}' for topic identification not found. Stopping.")
-        return
-
-    def _extract_json_from_llm_output(raw_text: str) -> str:
-        """Attempts to find and extract a JSON object from raw LLM text."""
-        if not isinstance(raw_text, str): return "{}" # Return empty JSON if not string
-
-        # 1. Look for ```json ... ``` block first
-        json_match = re.search(r"```json\s*(\{.*?\})\s*```", raw_text, re.DOTALL)
-        if json_match:
-            logger.debug("Extractor found JSON block using ```json")
-            return json_match.group(1)
-
-        # 2. If no block, find the first '{' and last '}'
-        start_brace = raw_text.find('{')
-        end_brace = raw_text.rfind('}')
-
-        if start_brace != -1 and end_brace != -1 and end_brace > start_brace:
-            potential_json = raw_text[start_brace:end_brace+1]
-            # Basic validation: Does it look like JSON? (Not perfect)
-            if '"reflection_topics"' in potential_json:
-                 logger.debug("Extractor found JSON using first/last braces.")
-                 return potential_json
-            else:
-                 logger.warning(f"Extractor: Braces found, but content doesn't look like expected JSON: {potential_json[:100]}...")
-
-        # 3. Fallback: Return original text or empty JSON if no JSON found
-        logger.warning(f"Extractor: No valid JSON structure found in raw output: {raw_text[:100]}...")
-        # Returning the raw text might still cause the JsonOutputParser to fail,
-        # returning an empty JSON string is safer downstream.
-        return "{}" # Or consider returning the raw_text and let JsonOutputParser fail loudly
-
-    topic_chain = (
-        ChatPromptTemplate.from_template(PROMPT_SELF_REFLECTION_TOPICS)
-        | topic_model
-        | StrOutputParser() # Get raw string output first
-        | RunnableLambda(_extract_json_from_llm_output) # Try to extract JSON
-        | JsonOutputParser() # Parse the potentially cleaned string
-    )
+    # Define constants for the query/loop
+    REFLECTION_BATCH_SIZE = int(os.getenv("REFLECTION_BATCH_SIZE", 5)) # How many interactions to process per cycle wake-up
+    MAX_REFLECTION_AGE_DAYS = int(os.getenv("MAX_REFLECTION_AGE_DAYS", 7)) # Don't reflect on very old interactions (optional)
 
     while not _reflector_stop_event.is_set():
         cycle_start_time = time.monotonic()
-        logger.info(f"🤔 {thread_name}: Starting self-reflection cycle...")
+        interactions_processed_this_cycle = 0
+        logger.info(f"🤔 {thread_name}: Starting interaction reflection cycle...")
 
-        # --- Attempt to acquire lock to prevent overlapping runs ---
+        # --- Attempt to acquire lock ---
         if not _reflector_lock.acquire(blocking=False):
-             logger.warning(f"{thread_name}: Previous reflection cycle still running? Skipping this cycle.")
-             # Wait before trying again (shorter interval than main sleep)
-             _reflector_stop_event.wait(timeout=60) # Wait 1 minute
-             continue # Skip to next iteration
+             logger.warning(f"{thread_name}: Previous reflection cycle still running? Skipping.")
+             _reflector_stop_event.wait(timeout=60)
+             continue
 
-        db: Optional[Session] = None # Initialize session variable for this cycle
+        db: Optional[Session] = None
         try:
-            # --- Check if Server is Busy (Yield to user requests) ---
+            # --- Wait if Server Busy ---
             wait_start_time = time.monotonic()
             while server_is_busy_event.is_set():
-                 if _reflector_stop_event.is_set(): break # Exit if stopped while waiting
-                 logger.info(f"🚦 {thread_name}: Server is busy, pausing reflection...")
-                 # Wait with timeout checks
-                 if _reflector_stop_event.wait(timeout=5.0): break # Check stop event every 5s
+                 if _reflector_stop_event.is_set(): break
+                 logger.info(f"🚦 {thread_name}: Server busy, pausing reflection...")
+                 if _reflector_stop_event.wait(timeout=5.0): break
             wait_duration = time.monotonic() - wait_start_time
-            if wait_duration > 1: logger.info(f"🟢 {thread_name}: Server free, resuming reflection after {wait_duration:.1f}s wait.")
-            if _reflector_stop_event.is_set(): break # Exit loop if stopped
+            if wait_duration > 1: logger.info(f"🟢 {thread_name}: Server free after {wait_duration:.1f}s wait.")
+            if _reflector_stop_event.is_set(): break
 
-            # --- Get Global History ---
-            logger.debug(f"{thread_name}: Fetching global history ({SELF_REFLECTION_HISTORY_COUNT} items)...")
-            db = SessionLocal() # Get session for this cycle's reads
-            # Fetch history in the thread (it's synchronous)
-            # >>> REMOVE include_logs=False from this call <<<
-            global_history = get_global_recent_interactions(db, limit=SELF_REFLECTION_HISTORY_COUNT)
-            if not global_history:
-                logger.info(f"{thread_name}: No global history found to analyze. Skipping topic generation.")
-                db.close(); db=None # Close session
-                _reflector_lock.release() # Release lock before waiting
-                # (rest of the waiting logic...)
-                continue # Go to wait phase
-
-            # Format history for the LLM prompt
-            # Use a simple formatting function or reuse one from AIChat if appropriate
-            # Let's use _format_direct_history for brevity
-            history_summary = ai_chat._format_direct_history(global_history)
-            logger.debug(f"{thread_name}: History summary generated (length: {len(history_summary)}).")
-
-            # --- Identify Topics (LLM Call) ---
-            logger.info(f"{thread_name}: Identifying reflection topics via LLM '{SELF_REFLECTION_MODEL}'...")
-            reflection_topics = []
+            # --- Fetch Interactions Needing Reflection ---
+            db = SessionLocal()
+            interactions_to_reflect = []
             try:
-                prompt_input = {
-                    "max_topics": SELF_REFLECTION_MAX_TOPICS,
-                    "history_summary": history_summary
-                }
-                # Run synchronous Langchain call in this thread
-                # Need a dummy interaction_data for timing helper if used, or call directly
-                llm_response = topic_chain.invoke(prompt_input)
+                logger.debug(f"{thread_name}: Querying DB for interactions to reflect (Batch size: {REFLECTION_BATCH_SIZE})...")
+                query = db.query(Interaction).filter(
+                    Interaction.reflection_completed == False,
+                    # Optional: Filter for specific modes or types if desired
+                    Interaction.mode == 'chat', # Example: Only reflect on chat interactions
+                    Interaction.input_type == 'text', # Example: Only reflect on user text inputs
+                    # Optional: Add age limit
+                    # Interaction.timestamp >= datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=MAX_REFLECTION_AGE_DAYS)
+                ).order_by(
+                    Interaction.timestamp.asc() # Process older unreflected ones first
+                ).limit(REFLECTION_BATCH_SIZE)
 
-                if isinstance(llm_response, dict) and "reflection_topics" in llm_response and isinstance(llm_response["reflection_topics"], list):
-                    reflection_topics = llm_response["reflection_topics"]
-                    # Limit number of topics just in case LLM ignores instruction
-                    reflection_topics = reflection_topics[:SELF_REFLECTION_MAX_TOPICS]
-                    logger.info(f"{thread_name}: Identified {len(reflection_topics)} topic(s) for reflection: {reflection_topics}")
+                interactions_to_reflect = query.all()
+
+                if not interactions_to_reflect:
+                    logger.info(f"{thread_name}: No interactions found needing reflection in this batch.")
                 else:
-                     logger.warning(f"{thread_name}: LLM response for topics was not a valid JSON list. Response: {llm_response}")
+                    logger.info(f"{thread_name}: Found {len(interactions_to_reflect)} interaction(s) to reflect upon.")
 
-            except Exception as topic_err:
-                 logger.error(f"{thread_name}: Error identifying reflection topics: {topic_err}")
-                 logger.exception(f"{thread_name} Topic ID Traceback:")
+            except Exception as query_err:
+                 logger.error(f"{thread_name}: Error querying interactions for reflection: {query_err}")
+                 # Continue to wait phase, maybe DB will recover
 
-            # Close the DB session used for history fetching
-            if db: db.close(); db=None
+            # --- Process Each Interaction ---
+            if interactions_to_reflect:
+                for interaction in interactions_to_reflect:
+                    if _reflector_stop_event.is_set():
+                        logger.info(f"{thread_name}: Stop signal received during batch processing.")
+                        break
 
-            # --- Trigger Background Generation for Each Topic ---
-            if reflection_topics:
-                logger.info(f"{thread_name}: Triggering background generation for identified topics...")
-                for i, topic in enumerate(reflection_topics):
-                    if _reflector_stop_event.is_set(): break # Check stop event between topics
-
-                    # Check if server is busy again before each trigger
+                    # Check server busy again before each trigger
                     if server_is_busy_event.is_set():
-                        logger.warning(f"{thread_name}: Server became busy. Pausing reflection triggers.")
-                        # Optional: Wait a bit before checking again or break the topic loop
-                        _reflector_stop_event.wait(timeout=10)
+                        logger.warning(f"{thread_name}: Server became busy during batch. Pausing reflection triggers.")
+                        _reflector_stop_event.wait(timeout=10) # Wait a bit
                         if server_is_busy_event.is_set():
-                             logger.warning(f"{thread_name}: Server still busy. Aborting remaining topic triggers for this cycle.")
-                             break # Stop processing topics for this cycle
+                             logger.warning(f"{thread_name}: Server still busy. Aborting remaining batch.")
+                             break # Stop processing this batch
 
-                    logger.info(f"{thread_name}: --> Triggering reflection task {i+1}/{len(reflection_topics)} on topic: '{topic[:80]}...'")
+                    original_input = interaction.user_input or "[Original input missing]"
+                    original_id = interaction.id
+                    logger.info(f"{thread_name}: --> Triggering reflection task for Interaction ID {original_id} - Input: '{original_input[:60]}...'")
+
                     reflection_session_id = f"reflection_{uuid.uuid4()}"
-                    trigger_db: Optional[Session] = None
+                    trigger_db: Optional[Session] = None # Use separate session for the async task
+                    task_launched = False
                     try:
-                        # Need a *new* DB session for the background_generate call itself
                         trigger_db = SessionLocal()
-                        # Use asyncio.run because we are in a synchronous thread calling an async function
-                        # Note: background_generate handles its own logging internally
+                        # Use asyncio.run to call the async background_generate
+                        # Frame the input clearly for the reflection context
+                        reflection_input = f"[Self-Reflection on Interaction ID {original_id}]: {original_input}"
+
+                        # Note: Passing context from the *original* interaction is complex here.
+                        # The background_generate will fetch its own context based on the reflection_session_id.
+                        # This means the reflection is on the *content* of the old interaction,
+                        # not necessarily with the exact *context* it originally had. This might be okay.
                         asyncio.run(
                             ai_chat.background_generate(
-                                db=trigger_db, # Pass the session
-                                user_input=f"[Self-Reflection Topic]: {topic}", # Frame the input
-                                session_id=reflection_session_id,
-                                classification="chat_complex", # Trigger deep thought
-                                image_b64=None # No image for reflection
+                                db=trigger_db,
+                                user_input=reflection_input,
+                                session_id=reflection_session_id, # Log under reflection session
+                                classification="chat_complex",
+                                image_b64=None,
+                                update_interaction_id=original_id # Pass the ID to update
                             )
                         )
-                        logger.info(f"{thread_name}: --> Background task for topic {i+1} launched.")
-                        # Add a small delay between launching tasks?
-                        time.sleep(2.0)
+                        logger.info(f"{thread_name}: --> Background reflection task for ID {original_id} launched (Session: {reflection_session_id}).")
+                        task_launched = True
+                        interactions_processed_this_cycle += 1
 
                     except Exception as trigger_err:
-                        logger.error(f"{thread_name}: Failed to trigger background_generate for topic '{topic[:50]}...': {trigger_err}")
+                        logger.error(f"{thread_name}: Failed to trigger background_generate for interaction ID {original_id}: {trigger_err}")
                         logger.exception(f"{thread_name} Trigger Traceback:")
+                        # Do not mark as completed if launch failed
                     finally:
-                        if trigger_db: trigger_db.close() # Close the session for this trigger
+                        if trigger_db:
+                            trigger_db.close()
 
-            # --- End of Cycle ---
-            cycle_duration = time.monotonic() - cycle_start_time
-            logger.info(f"{thread_name}: Self-reflection cycle finished in {cycle_duration:.2f}s.")
+                    # --- Mark Original Interaction as Reflected (if task launched) ---
+                    if task_launched:
+                        try:
+                            logger.debug(f"{thread_name}: Marking interaction {original_id} as reflection_completed.")
+                            # Use the main loop's DB session (db) which should still be open
+                            stmt = update(Interaction).where(Interaction.id == original_id).values(reflection_completed=True)
+                            db.execute(stmt)
+                            db.commit()
+                            logger.info(f"{thread_name}: Interaction {original_id} marked complete.")
+                        except Exception as update_err:
+                            logger.error(f"{thread_name}: Failed to mark interaction {original_id} as reflected: {update_err}")
+                            db.rollback() # Rollback failed update
+                            # If marking fails, it might get picked up again next cycle, which is acceptable fallback.
+                    else:
+                         # Optional: Add a delay even if launch failed to prevent rapid retries on persistent errors
+                         time.sleep(5)
+
+                    # Small delay between processing interactions in a batch
+                    time.sleep(random.uniform(0.5, 1.5))
+
+            # --- End of Interaction Processing ---
 
         except Exception as cycle_err:
             logger.error(f"💥 {thread_name}: Unhandled error in reflection cycle: {cycle_err}")
             logger.exception(f"{thread_name} Cycle Traceback:")
-            if db: # Ensure session is closed even on error
-                try: db.close()
-                except: pass
+            if db: # Rollback any potential partial changes in the main session
+                try:
+                    db.rollback()
+                except Exception as rb_err:
+                    logger.error(f"{thread_name}: Error during rollback: {rb_err}")
+
         finally:
+            # --- Close DB Session for the Cycle ---
+            if db:
+                try:
+                    db.close()
+                    logger.debug(f"{thread_name}: DB session closed for cycle.")
+                except Exception as close_err:
+                    logger.error(f"{thread_name}: Error closing DB session: {close_err}")
+
             # --- Release Lock ---
-            try: _reflector_lock.release()
-            except threading.ThreadError: logger.warning(f"{thread_name}: Lock was not held on release?")
+            try:
+                _reflector_lock.release()
+            except (threading.ThreadError, RuntimeError):
+                logger.warning(f"{thread_name}: Lock was not held or already released at end of cycle?")
+
+            # --- Log Cycle Finish ---
+            cycle_duration = time.monotonic() - cycle_start_time
+            logger.info(f"{thread_name}: Self-reflection cycle finished in {cycle_duration:.2f}s. Processed: {interactions_processed_this_cycle} interaction(s).")
+
             # --- Wait for Next Cycle ---
-            wait_time = max(60, SELF_REFLECTION_INTERVAL_MINUTES * 60) # Ensure at least 1 min wait
+            wait_time = max(60, SELF_REFLECTION_INTERVAL_MINUTES * 60)
             logger.info(f"{thread_name}: Waiting {wait_time / 60:.1f} minutes for next reflection cycle...")
-            # Use wait with timeout for responsiveness to stop event
             stopped = _reflector_stop_event.wait(timeout=wait_time)
             if stopped:
                 logger.info(f"{thread_name}: Stop signal received during wait.")
@@ -3674,7 +3666,9 @@ class AIChat:
         return final_response
 
     # --- generate (Main Async Method - V15 version) ---
-    async def background_generate(self, db: Session, user_input: str, session_id: str = None, classification: str = "chat_simple", image_b64: Optional[str] = None):
+    async def background_generate(self, db: Session, user_input: str, session_id: str = None,
+                                 classification: str = "chat_simple", image_b64: Optional[str] = None,
+                                 update_interaction_id: Optional[int] = None):
         """
         Handles text/image-based generation, including RAG (History, URL, File Index),
         Assistant Action execution, ToT integration, Multi-LLM Routing, Translation,
@@ -3682,11 +3676,15 @@ class AIChat:
         """
         # Unique ID for tracking this specific generation request in logs
         request_id = f"gen-{uuid.uuid4()}"
+        is_reflection_task = update_interaction_id is not None # Check if this is a reflection update
+        # --- DEFINE log_prefix EARLY ---
+        log_prefix = f"🔄 REFLECT {request_id}" if is_reflection_task else f"💬 BGEN {request_id}"
+        # ---
         # Ensure session_id exists, generate one if not provided
         if not session_id:
-            session_id = f"session_{int(time.time())}"
+            session_id = f"session_{int(time.time())}" if not is_reflection_task else f"reflection_for_{update_interaction_id}"
             logger.warning(f"{request_id} No session_id provided, generated: {session_id}")
-        self.current_session_id = session_id # Set instance variable for helpers
+        self.current_session_id = session_id
 
         logger.info(f"💬 {request_id} Async Chat generate START --> Session: {session_id}, Initial Classification: '{classification}', Input: '{user_input[:50]}...', Image: {'Yes' if image_b64 else 'No'}")
         request_start_time = time.monotonic()
@@ -3719,6 +3717,10 @@ class AIChat:
         action_details: Optional[Dict[str, Any]] = None
         action_type_detected = "no_action" # Track detected action type
 
+        final_db_data_to_save = interaction_data.copy()
+        # Will hold the ORM object if updating
+        interaction_to_update: Optional[Interaction] = None
+
         # --- Input Validation ---
         if not user_input and not image_b64:
             logger.warning(f"{request_id} Empty input (no text or image).")
@@ -3728,6 +3730,25 @@ class AIChat:
             except Exception as log_err:
                  logger.error(f"Failed to log empty request: {log_err}")
             return "Please provide input (text or image)."
+
+        # --- Load existing interaction if updating ---
+        if is_reflection_task:
+            try:
+                interaction_to_update = db.query(Interaction).filter(Interaction.id == update_interaction_id).first()
+                if interaction_to_update:
+                    logger.info(f"{log_prefix}: Found original interaction {update_interaction_id} to update.")
+                    # Optionally, pre-populate final_db_data_to_save with some original values if needed?
+                    # For now, we'll overwrite/append llm_response later.
+                else:
+                    logger.error(f"{log_prefix}: CRITICAL - Cannot find original interaction {update_interaction_id} to update. Aborting reflection task for this ID.")
+                    # Log this failure clearly
+                    add_interaction(db, session_id=session_id, mode="chat", input_type="error",
+                                    user_input=f"[Reflection Aborted - Missing Original ID {update_interaction_id}]",
+                                    llm_response=f"Could not find interaction {update_interaction_id} for reflection update.")
+                    return # Exit the function gracefully
+            except Exception as load_err:
+                 logger.error(f"{log_prefix}: Error loading interaction {update_interaction_id} for update: {load_err}")
+                 return # Exit if we can't load the target
 
         # --- Main Processing Block ---
         try:
@@ -4065,60 +4086,56 @@ class AIChat:
 
         # --- Top-Level Exception Handling ---
         except Exception as e:
-            logger.error(f"❌❌ {request_id} UNHANDLED exception during async chat generate: {e}")
-            logger.exception("Unhandled Generate Traceback:")
-            error_response = f"Internal server error processing chat request: {type(e).__name__}"
+            logger.error(f"❌❌ {log_prefix} UNHANDLED exception: {e}")
+            logger.exception(f"{log_prefix} Traceback:")
+            final_response = f"Error during processing: {type(e).__name__}"
+            final_db_data_to_save['llm_response'] = final_response[:4000] # Store error in response field
+            final_db_data_to_save['input_type'] = 'error' # Mark as error state
 
-            # Attempt to log/update the error interaction using the main request's db session 'db'
-            try:
-                interaction_id_for_error = saved_interaction.id if saved_interaction else None
-                logger.error(f"Attempting to log error state for interaction ID: {interaction_id_for_error} / session: {session_id}")
-
-                # Update interaction_data dict with error info
-                interaction_data['llm_response'] = f"Generate Error: {e}"[:4000]
-                interaction_data['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
-                interaction_data['input_type'] = 'error'
-
-                # If we have the saved_interaction object, update it
-                if saved_interaction:
-                     logger.debug(f"Updating existing interaction {saved_interaction.id} with error state.")
-                     saved_interaction.input_type = 'error'
-                     saved_interaction.llm_response = interaction_data['llm_response']
-                     saved_interaction.execution_time_ms = interaction_data['execution_time_ms']
-                     # Optionally clear other fields if error overrides them
-                     saved_interaction.assistant_action_result = f"Error during processing: {e}"[:1000]
-                     db.commit()
-                     logger.info(f"Updated interaction {saved_interaction.id} to reflect error state.")
-                else:
-                     # If initial save failed, try to save a *new* error record
-                     logger.debug(f"{request_id} Saving new error interaction record...")
-                     # --- Set ALL defaults before saving error record ---
-                     interaction_data.setdefault('classification', 'chat'); interaction_data.setdefault('classification_reason', 'N/A due to error');
-                     interaction_data.setdefault('rag_history_ids', None); interaction_data.setdefault('rag_source_url', None);
-                     interaction_data.setdefault('requires_deep_thought', False); interaction_data.setdefault('deep_thought_reason', None);
-                     interaction_data.setdefault('tot_analysis_requested', False); interaction_data.setdefault('tot_result', None);
-                     interaction_data.setdefault('tot_delivered', False); interaction_data.setdefault('emotion_context_analysis', None);
-                     interaction_data.setdefault('image_description', None); interaction_data.setdefault('assistant_action_analysis_json', None);
-                     interaction_data.setdefault('assistant_action_type', None); interaction_data.setdefault('assistant_action_params', None);
-                     interaction_data.setdefault('assistant_action_executed', False); interaction_data.setdefault('assistant_action_result', f"Error: {e}");
-                     interaction_data.setdefault('image_data', None);
-                     # --- End Set Defaults ---
-                     valid_keys = {c.name for c in Interaction.__table__.columns}
-                     db_kwargs = {k: v for k, v in interaction_data.items() if k in valid_keys}
-                     await asyncio.to_thread(add_interaction, db, **db_kwargs)
-
-            except Exception as db_log_err:
-                logger.error(f"❌ {request_id} Failed to log chat error interaction to DB: {db_log_err}")
-                try: db.rollback() # Rollback logging attempt if possible
-                except: pass
-
-            # Return the user-friendly error message
-            return error_response
         finally:
-            # Code here runs whether generate succeeds or fails, but before returning
-            # Can be used for final cleanup specific to the generate call if needed
-            # e.g., closing resources specific to this request (though DB session is handled by caller)
-            pass
+            # --- Final Save/Update ---
+            final_db_data_to_save['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
+
+            try:
+                if interaction_to_update: # Update existing record
+                    logger.info(f"{log_prefix}: Updating original interaction {update_interaction_id} with reflection result.")
+                    # --- Append reflection result to original response ---
+                    original_response = interaction_to_update.llm_response or ""
+                    reflection_result = final_db_data_to_save['llm_response']
+                    timestamp_now = datetime.datetime.now(datetime.timezone.utc).strftime('%Y-%m-%d %H:%M:%S UTC')
+                    combined_response = (
+                        f"{original_response}\n\n"
+                        f"--- Reflection ({timestamp_now} on Input ID {interaction_to_update.id}) ---\n"
+                        f"{reflection_result}"
+                        f"\n--- End Reflection ---"
+                    )
+                    # Update the fields on the loaded object
+                    interaction_to_update.llm_response = combined_response[:Interaction.llm_response.type.length] # Truncate if needed
+                    interaction_to_update.reflection_completed = True # Ensure marked complete
+                    interaction_to_update.last_modified_db = datetime.datetime.now(datetime.timezone.utc) # Add timestamp for modification
+                    # Add other fields if needed (e.g., reflection_session_id ?)
+
+                    db.commit() # Commit changes to the existing record
+                    logger.success(f"{log_prefix}: Successfully updated interaction {update_interaction_id}.")
+
+                elif not is_reflection_task: # Create NEW record (standard background generate)
+                    logger.debug(f"{log_prefix}: Saving new interaction record...")
+                    valid_keys = {c.name for c in Interaction.__table__.columns}
+                    db_kwargs = {k: v for k, v in final_db_data_to_save.items() if k in valid_keys}
+                    await asyncio.to_thread(add_interaction, db, **db_kwargs) # Use await? No, add_interaction is sync
+                    logger.info(f"{log_prefix}: Saved new interaction record.")
+
+                else:
+                     # This case means is_reflection_task was True, but interaction_to_update was None
+                     # Error should have been logged earlier, but log again for safety.
+                     logger.error(f"{log_prefix}: Final Save Error - Reflection task missing target interaction {update_interaction_id}.")
+
+            except Exception as final_save_err:
+                 logger.error(f"❌ {log_prefix}: Failed final DB save/update: {final_save_err}")
+                 try: db.rollback()
+                 except: pass
+
+            logger.info(f"{log_prefix} END. Final Status: {'Error' if final_db_data_to_save.get('input_type') == 'error' else 'Success'}. Duration: {final_db_data_to_save['execution_time_ms']:.2f}ms")
 
 
     # --- reset Method ---
@@ -5630,17 +5647,19 @@ def handle_openai_chat_completion():
              final_response_status_code = status_code
 
     except Exception as e:
-        # --- Main Exception Handler ---
-        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Flask OpenAI endpoint (Dual Generate Logic):")
-        # Log error details before creating response
-        try:
-            if 'db' in g:
-                add_interaction(g.db, session_id=session_id, mode="chat", input_type='error', user_input=f"OpenAI Handler Error (Dual). Request Data: {request_data_for_log}", llm_response=f"Handler Exception ({type(e).__name__}): {e}"[:2000])
-                logger.debug(f"{request_id}: Logged endpoint error to DB.")
-            else:
-                logger.error(f"{request_id}: Cannot log error: DB session 'g.db' unavailable.")
-        except Exception as db_err:
-            logger.error(f"{request_id}: ❌ Failed log error to DB during exception handling: {db_err}")
+        # Use request_id for logging here, as log_prefix doesn't exist in this scope
+        logger.error(f"[BG Task {request_id}] Error in background thread: {bg_err}") # Use request_id
+        logger.exception(f"[BG Task {request_id}] Background Thread Traceback:") # Use request_id
+        # Log error to DB using the background session
+        if bg_db:
+            try:
+                # Use request_id in the log message saved to the DB
+                add_interaction(bg_db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input=f"Background Task Error ({request_id})", # Use request_id
+                                llm_response=f"Error: {bg_err}"[:2000])
+            except Exception as db_log_err:
+                # Use request_id when logging the failure to log to DB
+                logger.error(f"Failed to log background task error for request {request_id} to DB: {db_log_err}") # Use request_id
 
         # Create error response
         resp_data, status_code = _create_openai_error_response(f"Internal server error: {e}", status_code=500)

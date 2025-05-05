@@ -9,19 +9,19 @@ logger.info("Attempting to load environment variables from .env file...")
 
 # --- General Settings ---
 PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "fireworks"
-MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 5))
-ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 30)) # Target for *quick* answers
+MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20))
+ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 1024)) # Target for *quick* answers (token generation? I forgot)
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", 8192)) # Default token limit for LLM calls
 CHUNCK_SIZE = int(os.getenv("CHUNCK_SIZE", 1024)) # For URL Chroma store
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200)) # For URL Chroma store
 RAG_HISTORY_COUNT = MEMORY_SIZE
-DEEP_THOUGHT_RETRY_ATTEMPTS = int(os.getenv("DEEP_THOUGHT_RETRY_ATTEMPTS", 3))
+DEEP_THOUGHT_RETRY_ATTEMPTS = int(os.getenv("DEEP_THOUGHT_RETRY_ATTEMPTS", 10))
 RESPONSE_TIMEOUT_MS = 15000 # Timeout for potential multi-step process
 # Similarity threshold for reusing previous ToT results (requires numpy/embeddings)
 TOT_SIMILARITY_THRESHOLD = float(os.getenv("TOT_SIMILARITY_THRESHOLD", 0.4))
 # Fuzzy search threshold for history RAG (0-100, higher is stricter) - Requires thefuzz
 FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 25))
-MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 2)) # Unused
+MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1)) # Unused
 # --- Agent Settings ---
 AGENT_MAX_SCRIPT_RETRIES = 3 # Max attempts to generate/fix AppleScript per action
 
@@ -77,10 +77,11 @@ STABLE_DIFFUSION_CPP_MODEL_PATH = os.getenv("STABLE_DIFFUSION_CPP_MODEL_PATH", N
 
 # --- Self-Reflection Settings ---
 ENABLE_SELF_REFLECTION = os.getenv("ENABLE_SELF_REFLECTION", "true").lower() in ('true', '1', 't', 'yes', 'y')
-SELF_REFLECTION_INTERVAL_MINUTES = int(os.getenv("SELF_REFLECTION_INTERVAL_MINUTES", 60 * 4)) # Default: 4 hours
+SELF_REFLECTION_INTERVAL_MINUTES = int(os.getenv("SELF_REFLECTION_INTERVAL_MINUTES", 1)) # Default: 1 minutes interval cycles
 SELF_REFLECTION_HISTORY_COUNT = int(os.getenv("SELF_REFLECTION_HISTORY_COUNT", 100)) # How many global interactions to analyze
 SELF_REFLECTION_MAX_TOPICS = int(os.getenv("SELF_REFLECTION_MAX_TOPICS", 2)) # Max topics to generate per cycle
 SELF_REFLECTION_MODEL = os.getenv("SELF_REFLECTION_MODEL", "router") # Which model identifies topics (router or general_fast?)
+SELF_REFLECTION_FIXER_MODEL = os.getenv("SELF_REFLECTION_FIXER_MODEL", "code") # Model to fix broken JSON
 
 # --- New Prompt ---
 
@@ -98,6 +99,16 @@ Refine this analysis and generate the following based *only* on the image provid
 2. TikZ code block (```tikz ... ```) for any diagrams/figures suitable for TikZ.
 3. A concise explanation of the mathematical content or figure.
 Output MUST include the code blocks if applicable. If no math/diagrams, state that clearly.
+"""
+
+# --- New Prompt for Fixing JSON ---
+PROMPT_FIX_JSON = """The following text was supposed to be a JSON object matching the structure {{"reflection_topics": ["topic1", "topic2", ...]}}, but it is invalid.
+Please analyze the text, correct any syntax errors, remove any extraneous text or chat tokens (like <|im_start|>), and output ONLY the corrected, valid JSON object.
+Do not add explanations or apologies. Output ONLY the JSON.
+
+Invalid Text:
+{{{invalid_text}}}
+Corrected JSON Output:
 """
 
 PROMPT_ROUTER = """Analyze the user's query, conversation history, and context (including file search results) to determine the best specialized model to handle the request.
