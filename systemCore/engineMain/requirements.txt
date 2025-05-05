@@ -55,6 +55,7 @@ zstandard # For database compression
 llama-cpp-python
 #Additional Imagination Pipeline
 stable-diffusion-cpp-python
+chromadb
 
 
 #hispeed calculator

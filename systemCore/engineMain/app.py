@@ -3574,72 +3574,102 @@ class AIChat:
     # app.py -> Inside AIChat class
     async def direct_generate(self, db: Session, user_input: str, session_id: str, vlm_description: Optional[str] = None) -> str:
         """
-        Handles the fast-path direct response generation. Minimal RAG, fast LLM, no correction.
+        Handles the fast-path direct response generation. Includes Direct History
+        and History RAG. Uses PROMPT_DIRECT_GENERATE from config.py.
         """
         direct_req_id = f"dgen-{uuid.uuid4()}"
-        logger.info(f"⚡️ {direct_req_id} Direct Generate START --> Session: {session_id}")
+        logger.info(f"⚡️ {direct_req_id} Direct Generate START --> Session: {session_id} (with History RAG)")
         direct_start_time = time.monotonic()
 
         # Use the fast LLM
         fast_model = self.provider.get_model("general_fast")
         if not fast_model:
-            logger.error(f"{direct_req_id}: Fast model 'general_fast' not available! Cannot run direct pipeline.")
-            # Maybe log to DB?
-            return "Error: Cannot generate quick response." # Or fallback to old method?
+            logger.error(f"{direct_req_id}: Fast model 'general_fast' not available!")
+            add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                            user_input="Direct Generate Failed", llm_response="Fast model unavailable.")
+            return "Error: Cannot generate quick response."
 
-        # Prepare input
-        input_for_fast_llm = user_input
+        # Prepare input for the LLM prompt (including potential VLM description)
+        input_for_llm = user_input
         if vlm_description:
-            input_for_fast_llm = f"[Image Description: {vlm_description}]\n\nUser Query: {user_input or '(Query related to image)'}"
+            input_for_llm = f"[Image Description: {vlm_description}]\n\nUser Query: {user_input or '(Query related to image)'}"
+        else:
+             input_for_llm = user_input
 
-        # Minimal Context (Example: Just direct history)
+        # --- Fetch Context Concurrently (Direct History + History RAG) ---
+        history_rag_str = "No relevant history snippets found."
+        recent_direct_history_str = "No recent direct history available."
         try:
-            temp_global_history = await asyncio.to_thread(get_global_recent_interactions, db, limit=3) # Limit history further?
+            logger.debug(f"{direct_req_id}: Fetching direct history and setting up history RAG...")
+            # --- Setup History RAG ---
+            # _get_rag_retriever is sync, run in thread
+            # It only needs user_input for the retrieval query part
+            _, history_retriever, _ = await asyncio.to_thread(
+                self._get_rag_retriever, db, input_for_llm # Pass input used for LLM query
+            )
+
+            # --- Retrieve History RAG Docs (if retriever exists) ---
+            history_docs = []
+            if history_retriever:
+                 try:
+                     # retrieval is sync, run in thread
+                     history_docs = await asyncio.to_thread(
+                         history_retriever.invoke, input_for_llm
+                     )
+                     logger.debug(f"{direct_req_id}: Retrieved {len(history_docs)} history RAG docs.")
+                     history_rag_str = self._format_docs(history_docs, source_type="History RAG")
+                 except Exception as rag_err:
+                     logger.warning(f"{direct_req_id}: Error retrieving history RAG docs: {rag_err}")
+                     history_rag_str = "Error retrieving history snippets."
+            else:
+                 logger.debug(f"{direct_req_id}: History RAG retriever not available or no history.")
+
+            # --- Fetch Direct History ---
+            # Use asyncio.to_thread for DB call
+            temp_global_history = await asyncio.to_thread(get_global_recent_interactions, db, limit=3) # Keep limit small
             recent_direct_history_str = self._format_direct_history(temp_global_history)
-        except Exception as hist_err:
-            logger.warning(f"{direct_req_id}: Failed to get direct history for fast path: {hist_err}")
-            recent_direct_history_str = "No history available."
 
-        # Simplified prompt - maybe use a subset of PROMPT_CHAT or a new one
-        # Using PROMPT_CHAT for now, but only providing limited context keys
+        except Exception as context_err:
+            logger.error(f"{direct_req_id}: Error fetching context for direct path: {context_err}")
+            # Use default "not found" strings defined above
+
+        # --- Setup Prompt and Chain ---
         try:
-            # Use ChatPromptTemplate.from_template with the string from config
             direct_prompt_template = ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE)
-        except NameError: # Catch if PROMPT_DIRECT_GENERATE wasn't imported/defined
-             logger.error(f"{direct_req_id}: PROMPT_DIRECT_GENERATE not found in config! Using fallback prompt.")
-             # Fallback to a simple hardcoded prompt
-             direct_prompt_template = ChatPromptTemplate.from_messages([
-                 ("system", "Provide a direct answer."),
-                 ("user", "History:\n{recent_direct_history}\n\nQuery:\n{input}")
-             ])
         except Exception as prompt_err:
              logger.error(f"{direct_req_id}: Error creating prompt template: {prompt_err}. Using fallback.")
-             # Fallback
+             # Fallback prompt MUST also include the history_rag placeholder if we fetched it
              direct_prompt_template = ChatPromptTemplate.from_messages([
-                 ("system", "Provide a direct answer."),
-                 ("user", "History:\n{recent_direct_history}\n\nQuery:\n{input}")
+                 ("system", "Provide a direct answer using history."),
+                 ("user", "History RAG:\n{history_rag}\n\nRecent Direct:\n{recent_direct_history}\n\nQuery:\n{input}")
              ])
 
         direct_chain = direct_prompt_template | fast_model | StrOutputParser()
 
+        # --- Call LLM ---
         direct_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
         raw_response = "[Direct generation failed]"
-
         try:
-            logger.debug(f"{direct_req_id}: Calling fast model...")
+            logger.debug(f"{direct_req_id}: Calling fast model with history RAG...")
+            # Prepare inputs matching the placeholders in PROMPT_DIRECT_GENERATE
+            prompt_inputs = {
+                "input": input_for_llm,
+                "recent_direct_history": recent_direct_history_str,
+                "history_rag": history_rag_str # <<< ADDED HISTORY RAG CONTEXT HERE
+            }
+            # Run sync chain invoke in thread
             raw_response = await asyncio.to_thread(
                 self._call_llm_with_timing,
                 direct_chain,
-                {"input": input_for_fast_llm, "recent_direct_history": recent_direct_history_str},
+                prompt_inputs,
                 direct_timing_data
             )
             logger.info(f"{direct_req_id}: Fast model call complete. Raw length: {len(raw_response)}")
-            final_response = self._cleanup_llm_output(raw_response) # Clean the raw output
+            final_response = self._cleanup_llm_output(raw_response)
 
         except Exception as e:
             logger.error(f"❌ {direct_req_id}: Error during direct LLM call: {e}")
             final_response = f"[Error generating direct response: {e}]"
-            # Log error to DB
             try:
                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
                                 user_input="Direct Generate Failed", llm_response=final_response)
@@ -3648,30 +3678,25 @@ class AIChat:
         direct_duration = (time.monotonic() - direct_start_time) * 1000
         logger.info(f"⚡️ {direct_req_id} Direct Generate END. Duration: {direct_duration:.2f}ms. Resp len: {len(final_response)}")
 
-        # Log this interaction (important for the background task to potentially find/update)
-        # Store the 'fast' response here. The background task can update it later if needed.
+        # Log interaction (Store the direct response)
         try:
             interaction_data = {
                 "session_id": session_id, "mode": "chat",
                 "input_type": "image+text" if vlm_description else "text",
                 "user_input": user_input,
-                "llm_response": final_response, # Store the direct response
+                "llm_response": final_response,
                 "execution_time_ms": direct_duration,
                 "image_description": vlm_description,
-                # Mark this as a direct response if needed
-                "classification": "direct_response",
-                # Initialize fields the background task might update
+                "classification": "direct_response", # Mark as direct
+                # Add rag history ids if available from _get_rag_retriever? (Optional)
+                # "rag_history_ids": history_ids_used,
                 "tot_delivered": False, "assistant_action_executed": False,
             }
             valid_keys = {c.name for c in Interaction.__table__.columns}
             db_kwargs = {k: v for k, v in interaction_data.items() if k in valid_keys}
-            # Use await? No, add_interaction is sync
-            # Saved interaction needed? Maybe not for direct response itself, but useful if background updates it.
-            # Let's assume add_interaction is sufficient for now.
-            asyncio.to_thread(add_interaction, db, **db_kwargs)
+            add_interaction(db, **db_kwargs) # Use sync add_interaction
         except Exception as log_err:
             logger.error(f"❌ {direct_req_id}: Failed to log direct interaction: {log_err}")
-
 
         return final_response
 
