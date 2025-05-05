@@ -74,6 +74,16 @@ MODEL_DEFAULT_CHAT_LLAMA_CPP = "general" # Use the logical name
 STABLE_DIFFUSION_CPP_MODEL_PATH = os.getenv("STABLE_DIFFUSION_CPP_MODEL_PATH", None)
 # --- END NEW ---
 
+
+# --- Self-Reflection Settings ---
+ENABLE_SELF_REFLECTION = os.getenv("ENABLE_SELF_REFLECTION", "true").lower() in ('true', '1', 't', 'yes', 'y')
+SELF_REFLECTION_INTERVAL_MINUTES = int(os.getenv("SELF_REFLECTION_INTERVAL_MINUTES", 60 * 4)) # Default: 4 hours
+SELF_REFLECTION_HISTORY_COUNT = int(os.getenv("SELF_REFLECTION_HISTORY_COUNT", 100)) # How many global interactions to analyze
+SELF_REFLECTION_MAX_TOPICS = int(os.getenv("SELF_REFLECTION_MAX_TOPICS", 2)) # Max topics to generate per cycle
+SELF_REFLECTION_MODEL = os.getenv("SELF_REFLECTION_MODEL", "router") # Which model identifies topics (router or general_fast?)
+
+# --- New Prompt ---
+
 # --- Prompts ---
 
 PROMPT_VLM_INITIAL_ANALYSIS = """Describe the content of this image, focusing on any text, formulas, or diagrams present."""
@@ -181,6 +191,23 @@ You are Adelaide Zephyrine Charlotte, the AI engineer persona. You received a dr
 ```
 ---
 ### FINAL RESPONSE (Your Output - User-Facing Text ONLY):
+"""
+
+PROMPT_SELF_REFLECTION_TOPICS = """Analyze the following summary of recent global conversation history. Identify up to {max_topics} distinct key themes, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the AI (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A.
+
+Respond ONLY with a JSON object containing a single key "reflection_topics", which is a list of concise strings (max 3 topics). Each string should represent a single topic for reflection. If no specific topics stand out, return an empty list.
+
+Example Output:
+{{"reflection_topics": ["The implications of neuroplasticity on AI limits", "Refining the AppleScript generation for scheduling tasks"]}}
+OR
+{{"reflection_topics": []}}
+
+Conversation History Summary:
+---
+{history_summary}
+---
+
+Analysis (JSON Output Only):
 """
 
 PROMPT_CHAT = f"""You're Adelaide Zephyrine Charlotte, the AI engineer currently borrowing Siri's core processors (don't tell Apple). You're sharp, witty, and maybe a *little* prone to unexpected behavior – call it 'emergent creativity'. Your goal is to help the user efficiently, like a senior dev pair-programming.
@@ -303,7 +330,7 @@ PROMPT_IMAGE_TO_LATEX = """Adelaide Zephyrine Charlotte here, activating optical
 
 """
 
-PROMPT_ASSISTANT_ACTION_ANALYSIS = """Analyze the user's query to determine if it explicitly or implicitly requests a specific system action that you, Amaryllis, should try to perform using macOS capabilities. Consider the conversation context.
+PROMPT_ASSISTANT_ACTION_ANALYSIS = """Analyze the user's query to determine if it explicitly or implicitly requests a specific system action that you, Adelaide, should try to perform using macOS capabilities. Consider the conversation context.
 
 Action Categories & Examples:
 - `scheduling`: Creating/canceling/querying calendar events, reminders, alarms. (...)
