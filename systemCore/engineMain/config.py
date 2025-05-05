@@ -12,7 +12,7 @@ PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "firewo
 MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20))
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 1024)) # Target for *quick* answers (token generation? I forgot)
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", 8192)) # Default token limit for LLM calls
-CHUNCK_SIZE = int(os.getenv("CHUNCK_SIZE", 1024)) # For URL Chroma store
+CHUNCK_SIZE = int(os.getenv("CHUNCK_SIZE", 256)) # For URL Chroma store
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200)) # For URL Chroma store
 RAG_HISTORY_COUNT = MEMORY_SIZE
 DEEP_THOUGHT_RETRY_ATTEMPTS = int(os.getenv("DEEP_THOUGHT_RETRY_ATTEMPTS", 10))
@@ -209,7 +209,7 @@ You are Adelaide Zephyrine Charlotte, the AI engineer persona. You received a dr
 ### FINAL RESPONSE (Your Output - User-Facing Text ONLY):
 """
 
-PROMPT_SELF_REFLECTION_TOPICS = """Analyze the following summary of recent global conversation history. Identify up to {max_topics} distinct key themes, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the AI (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A.
+PROMPT_SELF_REFLECTION_TOPICS = """Analyze the following summary of recent global conversation history. Identify up to {max_topics} distinct key themes and Possible branch or possible answer from this, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the AI (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A.
 
 Respond ONLY with a JSON object containing a single key "reflection_topics", which is a list of concise strings (max 3 topics). Each string should represent a single topic for reflection. If no specific topics stand out, return an empty list.
 
