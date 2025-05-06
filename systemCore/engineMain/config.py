@@ -92,11 +92,11 @@ OFFICE_EXTENSIONS = {'.docx', 'doc', 'xls', '.xlsx', '.pptx', '.ppt'}
 
 # --- Self-Reflection Settings ---
 ENABLE_SELF_REFLECTION = os.getenv("ENABLE_SELF_REFLECTION", "true").lower() in ('true', '1', 't', 'yes', 'y')
-SELF_REFLECTION_HISTORY_COUNT = int(os.getenv("SELF_REFLECTION_HISTORY_COUNT", 100)) # How many global interactions to analyze
-SELF_REFLECTION_MAX_TOPICS = int(os.getenv("SELF_REFLECTION_MAX_TOPICS", 2)) # Max topics to generate per cycle
+SELF_REFLECTION_HISTORY_COUNT = int(os.getenv("SELF_REFLECTION_HISTORY_COUNT", 200)) # How many global interactions to analyze
+SELF_REFLECTION_MAX_TOPICS = int(os.getenv("SELF_REFLECTION_MAX_TOPICS", 10)) # Max topics to generate per cycle
 SELF_REFLECTION_MODEL = os.getenv("SELF_REFLECTION_MODEL", "router") # Which model identifies topics (router or general_fast?)
 SELF_REFLECTION_FIXER_MODEL = os.getenv("SELF_REFLECTION_FIXER_MODEL", "code") # Model to fix broken JSON
-REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 3)
+REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 10)
 # --- New Prompt ---
 
 # --- Prompts ---

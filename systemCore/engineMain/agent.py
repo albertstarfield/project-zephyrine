@@ -11,7 +11,7 @@ import subprocess # For executing commands
 import shlex # For safely splitting command strings
 from loguru import logger
 from sqlalchemy.orm import Session
-from typing import Dict, Any, List, Optional, Tuple
+from typing import Dict, Any, List, Optional, Tuple, Union
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser
