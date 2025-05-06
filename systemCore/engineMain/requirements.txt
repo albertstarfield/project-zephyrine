@@ -1,66 +1,134 @@
-# Generated requirements for Amaryllis/Adelaide Project
+################################################################################
+#                            Project Zephyrine                                 #
+#                       Main Application Requirements                          #
+#                                                                              #
+#  To install: pip install -r requirements.txt                                 #
+#  Consider using a virtual environment.                                       #
+################################################################################
 
-colorama
+# --- Core Web Framework & ASGI/WSGI Server ---
+Flask>=2.0                  # Core web framework
+hypercorn>=0.14             # ASGI server (primary choice for app.py)
+# uvicorn>=0.15             # Alternative ASGI server (optional)
+werkzeug                    # Flask dependency (usually installed with Flask)
 
+# --- AI & Language Model Libraries ---
+# Core Langchain
+langchain-core>=0.1         # Base Langchain functionalities
+langchain-community>=0.0.20 # Community integrations (vector stores, tools, etc.)
 
-# --- Web Framework & Server ---
-Flask
-hypercorn
-uvicorn # Alternative ASGI server, optional if only using hypercorn
-werkzeug # Flask dependency
+# LLM Provider Integrations
+langchain-ollama>=0.0.2     # For Ollama provider
+langchain-fireworks>=0.0.1  # For Fireworks AI provider
+llama-cpp-python            # For local GGUF model execution via llama.cpp
+                            # Note: Custom build might be handled by launcher.py
 
-# --- Core AI & Langchain ---
-langchain-core
-langchain-community
-langchain-ollama # For Ollama integration
-langchain-fireworks # For Fireworks integration
+# Vector Store
+chromadb>=0.4               # For RAG capabilities and local vector storage
 
-# --- Database & ORM ---
-SQLAlchemy
-alembic # For database migrations
-# Note: psycopg2-binary and pgvector removed as SQLite is used
+# --- Database & Migrations ---
+SQLAlchemy>=1.4             # Object-Relational Mapper (ORM)
+alembic>=1.7                # For database schema migrations (SQLite)
 
-# --- Web Scraping & Parsing ---
-requests
-beautifulsoup4
-selenium
-webdriver-manager # For automated chromedriver handling
-lxml # Often used by BeautifulSoup
+# --- Web Interaction, Scraping & Parsing ---
+requests>=2.25              # HTTP library for making requests
+beautifulsoup4>=4.9         # For parsing HTML and XML
+selenium>=4.0               # Browser automation for web scraping
+webdriver-manager>=3.5      # Automated management of WebDriver binaries (e.g., chromedriver)
+lxml>=4.6                   # Efficient XML and HTML parsing (often used by BeautifulSoup)
 
-# --- Data Handling & Utilities ---
-python-dotenv # For .env file loading
-loguru # Logging
-Pillow # Image handling (direct use + pdf2image dependency)
-numpy # Common ML dependency, potentially used by embedding libs
+# --- Data Handling, Utilities & Logging ---
+python-dotenv>=0.19         # For loading environment variables from .env files
+loguru>=0.5                 # Powerful and easy-to-use logging library
+Pillow>=8.0                 # Python Imaging Library (Fork) for image manipulation
+numpy>=1.20                 # Fundamental package for numerical computation (common AI/ML dependency)
+python-Levenshtein>=0.12    # Improves performance of fuzzywuzzy/thefuzz (C implementation)
+thefuzz>=0.19               # For fuzzy string matching (e.g., RAG fallback)
+zstandard>=0.15             # For Zstandard compression (used for database archiving)
 
-# --- Fuzzy Search ---
-thefuzz
-python-Levenshtein # Performance enhancer for thefuzz
+# --- Document Processing & Text Extraction ---
+pypdf>=3.0                  # For PDF text extraction and manipulation (replaces PyPDF2)
+python-docx>=0.8            # For reading and writing Microsoft Word (.docx) files
+openpyxl>=3.0               # For reading and writing Excel 2010 xlsx/xlsm/xltx/xltm files
+python-pptx>=0.6            # For creating and updating PowerPoint (.pptx) files
+pdf2image>=1.16             # Converts PDF pages to PIL Image objects
+                            # Requires Poppler utilities to be installed on the system:
+                            #   - Linux: sudo apt-get install poppler-utils
+                            #   - macOS: brew install poppler
+                            #   - Windows: Download Poppler binaries and add to PATH
 
-# --- Document Indexing & Processing ---
-pypdf # PDF text extraction
-python-docx # DOCX text extraction
-openpyxl # XLSX text extraction
-python-pptx # PPTX text extraction
-pdf2image # For converting PDF pages to images (requires poppler)
+# --- Text-to-Speech & Speech-to-Text Related (from original list) ---
+# Note: These seem extensive and might be for a specific TTS/STT pipeline.
+# Verify if all are strictly needed for the current core functionality.
+txtsplit                    # Text splitting utility (often for TTS)
+torch                       # PyTorch, deep learning framework (heavy dependency if only for TTS/STT)
+torchaudio                  # PyTorch library for audio
+cached_path                 # Utility for downloading and caching files
+transformers                # Hugging Face Transformers (models for NLP, Speech, Vision)
+num2words                   # Convert numbers to words
+unidic-lite                 # Small Japanese dictionary for MeCab
+unidic                      # Full Japanese dictionary for MeCab
+mecab-python3               # Japanese morphological analyzer
+pykakasi                    # Japanese Kana-Kanji-Romaji converter
+fugashi                     # Cython wrapper for MeCab + UniDic
+g2p_en                      # English Grapheme-to-Phoneme converter
+anyascii                    # Unicode to ASCII transliteration
+jamo                        # Korean Jamo (syllable) decomposition/composition
+gruut[de,es,fr]             # Multilingual grapheme-to-phoneme (pre-built for de, es, fr)
+g2pkk                       # Korean Grapheme-to-Phoneme converter
+librosa                     # Python library for audio and music analysis
+pydub                       # Manipulate audio with a simple and easy high-level interface
+eng_to_ipa                  # English to IPA (International Phonetic Alphabet)
+inflect                     # Correctly generate plurals, singular nouns, ordinals, indefinite articles
+unidecode                   # ASCII transliterations of Unicode text
+pypinyin                    # Convert Chinese hanzi to pinyin
+cn2an                       # Convert Chinese numbers to Arabic numbers and vice versa
+jieba                       # Chinese text segmentation
+pedalboard
 
-# --- Compression ---
-zstandard # For database compression
+# --- Development & UI Tools (from original list) ---
+gradio                      # For creating quick UIs for ML models (if used for testing/demos)
+langid                      # Language identification
+tqdm                        # Fast, extensible progress bar for loops
+tensorboard                 # TensorFlow's visualization toolkit (often with PyTorch too)
+# colorama                  # Removed as launcher.py was modified to not use it directly
 
-# --- Standard library packages used but not listed here: ---
-# asyncio, base64, contextlib, datetime, difflib, hashlib, io, json,
-# mimetypes, operator, os, random, re, shlex, shutil, subprocess,
-# sys, tempfile, threading, time, typing, urllib.parse, uuid
-#Standard LLM VLM loader
-llama-cpp-python
-#Additional Imagination Pipeline
-stable-diffusion-cpp-python
-chromadb
+# --- High-Performance Computing & Scientific Libraries ---
+# These are often for specific numerical tasks or model optimization.
+numba                       # JIT compiler for Python numerical functions
+# numpy                     # Already listed under Data Handling
+matplotlib                  # Plotting library (for visualization, if needed)
+scikit-learn                # Machine learning library (broad set of tools)
 
+# --- Image Generation (Optional) ---
+# stable-diffusion-cpp-python # Python bindings for stable-diffusion.cpp
+                              # Requires manual setup of stable-diffusion.cpp and its models.
 
-#hispeed calculator
-numba
-numpy
-matplotlib
-scikit-learn
-
+################################################################################
+#                            Notes & Considerations                            #
+#                                                                              #
+# 1. Virtual Environment: It is STRONGLY recommended to install these in a     #
+#    Python virtual environment to avoid conflicts with system packages.       #
+#    (e.g., `python -m venv venv` then `source venv/bin/activate`)             #
+#                                                                              #
+# 2. llama-cpp-python: This file lists the standard PyPI package. Your         #
+#    `launcher.py` script handles a custom build from a specific fork. Ensure #
+#    the launcher logic is up-to-date if the fork changes.                     #
+#                                                                              #
+# 3. Poppler (for pdf2image): This is a system dependency. See notes above.    #
+#                                                                              #
+# 4. TTS/STT Dependencies: The large block of TTS/STT related packages seems   #
+#    quite specific. If they are not core to the LLM/agent functionality,     #
+#    consider moving them to an optional requirements file (e.g.,              #
+#    `requirements_speech.txt`) to keep the core setup lighter.                #
+#                                                                              #
+# 5. Torch/Transformers: These are heavy dependencies. Ensure they are         #
+#    actually required by a component you are actively using. If only for a   #
+#    small utility or optional feature, evaluate if lighter alternatives exist #
+#    or if they can be made optional.                                          #
+#                                                                              #
+# 6. Pinning Versions: For production or reproducible environments, consider   #
+#    pinning package versions (e.g., `Flask==2.3.2`). You can generate a      #
+#    pinned list from your working environment using `pip freeze >             #
+#    requirements_pinned.txt`.                                                #
+################################################################################
