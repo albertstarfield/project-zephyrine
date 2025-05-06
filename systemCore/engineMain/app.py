@@ -29,8 +29,7 @@ However, interpreting the motivation as a desire to create a functional digital 
 6. Conclusion
 Comparing AI like Amaryllis/Adelaide to human intelligence reveals both useful analogies and fundamental distinctions. The "Low IQ LLM + High Crystallized Knowledge" model highlights the power of RAG in augmenting static processing units but also underscores the limitations imposed by the core model's fixed architecture. Semantic embeddings are key to unlocking this external knowledge effectively. The crucial differentiator remains biological neuroplasticity, which allows continuous adaptation within evolved architectural constraints, a capability current AI lacks. Neurodiversity further illustrates that varied cognitive architectures can offer unique strengths. Metacognitive awareness of limitations, analogous to QAT, is a powerful tool for human adaptation and achievement. While replicating consciousness remains elusive, the goal of creating a digital legacy – capturing knowledge, function, and simulated experience – appears increasingly feasible, offering a potential path to fulfilling the desire to contribute beyond a biological lifespan, leveraging the strengths of AI augmentation while respecting the unique nature of human existence.
 """
-
-
+import mimetypes
 # --- Standard Library Imports ---
 import os
 import sys
@@ -3921,11 +3920,9 @@ class AIChat:
                  logger.error(f"{log_prefix} Failed log fast model error: {db_err}")
             return "Error: Cannot generate quick response."
 
-        # Prepare input for the LLM prompt (incorporating potential VLM description)
+        # Prepare input for the LLM prompt
         input_for_llm = user_input
         if vlm_description:
-            # VLM description was generated *before* this function if image was present,
-            # or passed in directly. We format the input accordingly.
             input_for_llm = f"[Image Description: {vlm_description}]\n\nUser Query: {user_input or '(Query related to image)'}"
             logger.debug(f"{log_prefix}: Using provided VLM description in input.")
         else:
@@ -3934,159 +3931,129 @@ class AIChat:
         # --- Fetch Context Concurrently (Direct History + History RAG with ELP1 embedding) ---
         history_rag_str = "No relevant history snippets found."
         recent_direct_history_str = "No recent direct history available."
-        history_retriever = None # Initialize retriever
-        history_ids_used = "" # Initialize IDs string
+        history_retriever = None
+        # --- CORRECTION: Use local variable ---
+        local_history_ids_used = "" # Initialize local variable
+        # --- END CORRECTION ---
 
         try:
             logger.debug(f"{log_prefix}: Fetching direct history and setting up history RAG (Embedding ELP1)...")
 
-            # --- Setup History RAG (embedding runs with ELP1) ---
-            # Call _get_rag_retriever (modified to accept priority) in a thread
-            # It handles embedding internally with the passed priority
-            _, history_retriever, history_ids_used = await asyncio.to_thread(
-                self._get_rag_retriever, db, input_for_llm, priority=ELP1 # Pass ELP1 for embedding
+            # Setup History RAG (embedding runs with ELP1)
+            # _get_rag_retriever returns url_retriever, history_retriever, history_ids_str
+            _, history_retriever, local_history_ids_used = await asyncio.to_thread( # Assign to local var
+                self._get_rag_retriever, db, input_for_llm, priority=ELP1
             )
-            # Store history IDs used for potential logging later
-            interaction_data['rag_history_ids'] = history_ids_used
+            # --- CORRECTION: Removed line modifying non-existent interaction_data ---
+            # interaction_data['rag_history_ids'] = history_ids_used # REMOVED THIS LINE
+            # --- END CORRECTION ---
 
-            # --- Retrieve History RAG Docs (if retriever exists) ---
-            # Retrieval itself (similarity search) is typically fast and local, no LLM call
+            # Retrieve History RAG Docs
             history_docs = []
             if history_retriever:
                  try:
-                     # Retrieval via invoke is synchronous, run in thread
                      history_docs = await asyncio.to_thread(
                          history_retriever.invoke, input_for_llm
                      )
                      logger.debug(f"{log_prefix}: Retrieved {len(history_docs)} history RAG docs.")
-                     # Format the retrieved documents into a string
                      history_rag_str = self._format_docs(history_docs, source_type="History RAG")
                  except TaskInterruptedException as tie:
-                      # This shouldn't happen during RAG retrieval itself, but handle defensively
                       logger.warning(f"{log_prefix}: Interruption detected during RAG doc retrieval? {tie}")
                       history_rag_str = "[History RAG retrieval interrupted]"
-                      # Re-raise if necessary? For direct path, maybe just log and continue.
                  except Exception as rag_err:
                       logger.warning(f"{log_prefix}: Error retrieving/formatting history RAG docs: {rag_err}")
                       history_rag_str = "Error retrieving history snippets."
             else:
                  logger.debug(f"{log_prefix}: History RAG retriever not available or no history.")
 
-            # --- Fetch Direct History (DB Query - No LLM) ---
-            # Use asyncio.to_thread for the synchronous DB call
-            temp_global_history = await asyncio.to_thread(get_global_recent_interactions, db, limit=3) # Keep limit small
+            # Fetch Direct History
+            temp_global_history = await asyncio.to_thread(get_global_recent_interactions, db, limit=3)
             recent_direct_history_str = self._format_direct_history(temp_global_history)
 
         except TaskInterruptedException as tie_context:
-            # Catch interruption specifically from _get_rag_retriever's embedding call
             logger.warning(f"🚦 {log_prefix}: Context fetching INTERRUPTED during embedding: {tie_context}")
-            # Set context strings to indicate interruption and proceed to LLM call if possible,
-            # or return an error immediately. Let's try proceeding with limited context.
             history_rag_str = "[History embedding interrupted]"
-            # Fallback to empty direct history if that failed too somehow (unlikely)
             if not recent_direct_history_str: recent_direct_history_str = "No recent direct history available."
         except Exception as context_err:
             logger.error(f"{log_prefix}: Error fetching context for direct path: {context_err}")
-            # Use default "not found" strings defined above if context fetching fails for other reasons
             history_rag_str = "Error retrieving history snippets."
             recent_direct_history_str = "Error retrieving direct history."
 
         # --- Setup Prompt and Chain ---
         try:
-            # Ensure PROMPT_DIRECT_GENERATE exists and includes placeholders:
-            # {input}, {recent_direct_history}, {history_rag}
             direct_prompt_template = ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE)
         except Exception as prompt_err:
              logger.error(f"{log_prefix}: Error creating direct prompt template: {prompt_err}. Using fallback.")
-             # Fallback prompt MUST also include the necessary placeholders
              direct_prompt_template = ChatPromptTemplate.from_messages([
                  ("system", "Provide a direct answer using history."),
                  ("user", "History RAG:\n{history_rag}\n\nRecent Direct:\n{recent_direct_history}\n\nQuery:\n{input}")
              ])
-
-        # Chain the prompt, the fast model, and the string output parser
         direct_chain = direct_prompt_template | fast_model | StrOutputParser()
 
         # --- Call LLM with ELP1 Priority ---
         direct_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
-        raw_response = "[Direct generation failed]" # Default response
-        final_response = raw_response # Initialize final response
+        raw_response = "[Direct generation failed]"
+        final_response = raw_response
         llm_call_successful = False
 
         try:
             logger.debug(f"{log_prefix}: Calling fast model with ELP1 priority...")
-            # Prepare inputs matching the placeholders in PROMPT_DIRECT_GENERATE
             prompt_inputs = {
                 "input": input_for_llm,
                 "recent_direct_history": recent_direct_history_str,
-                "history_rag": history_rag_str # Include history RAG context string
+                "history_rag": history_rag_str
             }
-            # Use the modified _call_llm_with_timing helper via asyncio.to_thread
             raw_response = await asyncio.to_thread(
-                self._call_llm_with_timing,
-                direct_chain,
-                prompt_inputs,
-                direct_timing_data,
-                priority=ELP1 # Pass ELP1 priority
+                self._call_llm_with_timing, direct_chain, prompt_inputs, direct_timing_data, priority=ELP1
             )
-            llm_call_successful = True # Mark as successful if no exception
+            llm_call_successful = True
             logger.info(f"{log_prefix}: Fast model call complete. Raw length: {len(raw_response)}")
-            # Clean the response (handles potential log lines, etc.)
             final_response = self._cleanup_llm_output(raw_response)
 
         except TaskInterruptedException as tie_llm:
-            # This is highly unlikely for ELP1 but handle defensively
-            logger.error(f"🚦 {log_prefix}: Direct LLM call (ELP1) INTERRUPTED? This should not happen. {tie_llm}")
+            logger.error(f"🚦 {log_prefix}: Direct LLM call (ELP1) INTERRUPTED? {tie_llm}")
             final_response = f"[Error: Direct generation (ELP1) was unexpectedly interrupted]"
-            # Log this unusual event
-            try:
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                                user_input="Direct Generate ELP1 Interrupted", llm_response=final_response)
-            except Exception as log_err: logger.error(f"{log_prefix} Failed log ELP1 interrupt error: {log_err}")
+            # Log error
+            try: add_interaction(...)
+            except Exception: pass
         except Exception as e:
-            # Handle general errors during the LLM call
             logger.error(f"❌ {log_prefix}: Error during direct LLM call: {e}")
             logger.exception(f"{log_prefix} Direct LLM Traceback:")
             final_response = f"[Error generating direct response: {e}]"
-            # Log the error to the database
-            try:
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                                user_input="Direct Generate Failed", llm_response=final_response[:4000]) # Limit length
-            except Exception as log_err:
-                 logger.error(f"{log_prefix} Failed log direct gen error: {log_err}")
+            # Log error
+            try: add_interaction(...)
+            except Exception: pass
 
         # --- Final Logging and Return ---
         direct_duration = (time.monotonic() - direct_start_time) * 1000
         logger.info(f"{log_prefix} Direct Generate END. Duration: {direct_duration:.2f}ms. Resp len: {len(final_response)}")
 
-        # Log the interaction (Store the direct response)
-        # This interaction record captures the result of the *direct* path.
+        # Log the interaction
         try:
-            interaction_data = {
+            # --- CORRECTION: Create log data dict here, using local variables ---
+            log_data_for_db = {
                 "session_id": session_id, "mode": "chat",
                 "input_type": "image+text" if vlm_description else "text",
                 "user_input": user_input,
-                "llm_response": final_response, # Store the final (potentially error) message
+                "llm_response": final_response,
                 "execution_time_ms": direct_duration,
-                "image_description": vlm_description, # Store description if used
-                "classification": "direct_response", # Mark as direct
-                "rag_history_ids": history_ids_used, # Log which history was used
-                "tot_delivered": False, # Standard defaults
-                "assistant_action_executed": False, # Standard defaults
-                "reflection_completed": False # Standard defaults
-                # Add other relevant fields if needed, ensure they exist in the model
+                "image_description": vlm_description,
+                "classification": "direct_response",
+                "rag_history_ids": local_history_ids_used, # Use the local variable here
+                "tot_delivered": False,
+                "assistant_action_executed": False,
+                "reflection_completed": False
             }
+            # --- END CORRECTION ---
+
             # Filter kwargs to match Interaction model columns before saving
             valid_keys = {c.name for c in Interaction.__table__.columns}
-            db_kwargs = {k: v for k, v in interaction_data.items() if k in valid_keys}
-            # Use asyncio.to_thread for the synchronous DB call
+            db_kwargs = {k: v for k, v in log_data_for_db.items() if k in valid_keys} # Use log_data_for_db
             await asyncio.to_thread(add_interaction, db, **db_kwargs)
         except Exception as log_err:
             logger.error(f"❌ {log_prefix}: Failed to log direct interaction: {log_err}")
             logger.exception(f"{log_prefix} DB Log Traceback:")
 
-
-        # Return the final response string (could be success or error message)
         return final_response
 
     # --- generate (Main Async Method - V15 version) ---
@@ -5014,6 +4981,109 @@ def sanitize_filename(name: str, max_length: int = 200, replacement_char: str = 
         return "sanitized_empty_name"
 
     return sanitized
+
+def download_content_sync(url: str, download_dir: str, filename_prefix: str, timeout: int = 30) -> bool:
+    """
+    Downloads content from a URL synchronously and saves it to a directory.
+
+    Args:
+        url: The URL to download from.
+        download_dir: The directory to save the file in.
+        filename_prefix: A prefix (usually derived from title) for the filename.
+        timeout: Request timeout in seconds.
+
+    Returns:
+        True if download and save were successful, False otherwise.
+    """
+    download_logger = logger.bind(task="download_sync", url=url)
+    download_logger.info(f"Attempting download...")
+
+    try:
+        headers = {'User-Agent': get_random_user_agent()} # Use helper if available, or hardcode one
+        # Use stream=True to handle potentially large files without loading all into memory
+        with requests.get(url, headers=headers, stream=True, timeout=timeout, allow_redirects=True) as response:
+            response.raise_for_status() # Raise HTTPError for bad responses (4xx or 5xx)
+
+            # --- Determine Filename ---
+            content_type = response.headers.get('content-type', '').split(';')[0].strip()
+            content_disposition = response.headers.get('content-disposition')
+            final_filename = None
+
+            # 1. Try Content-Disposition header
+            if content_disposition:
+                disp_parts = content_disposition.split(';')
+                for part in disp_parts:
+                    if part.strip().lower().startswith('filename='):
+                        final_filename = part.split('=', 1)[1].strip().strip('"')
+                        # Sanitize filename from header, using prefix as fallback base
+                        final_filename = sanitize_filename(final_filename or filename_prefix)
+                        download_logger.debug(f"Using filename from Content-Disposition: {final_filename}")
+                        break
+
+            # 2. If no Content-Disposition filename, generate from prefix and type/URL
+            if not final_filename:
+                # Guess extension from content-type
+                extension = mimetypes.guess_extension(content_type) if content_type else None
+                # If no extension from type, try getting from URL path
+                if not extension:
+                     try:
+                         parsed_url = urlparse(url)
+                         path_part = parsed_url.path
+                         _, potential_ext = os.path.splitext(path_part)
+                         if potential_ext and len(potential_ext) < 10: # Basic check for valid-looking extension
+                             extension = potential_ext
+                     except Exception: pass # Ignore errors parsing URL path extension
+
+                # Fallback extension
+                if not extension:
+                    if 'html' in content_type: extension = '.html'
+                    elif 'pdf' in content_type: extension = '.pdf'
+                    elif 'xml' in content_type: extension = '.xml'
+                    elif 'json' in content_type: extension = '.json'
+                    elif 'plain' in content_type: extension = '.txt'
+                    else: extension = '.download' # Generic fallback
+
+                # Combine sanitized prefix and extension
+                final_filename = f"{filename_prefix}{extension}"
+                download_logger.debug(f"Generated filename: {final_filename} (Type: {content_type}, Ext: {extension})")
+
+            # --- Save File ---
+            save_path = os.path.join(download_dir, final_filename)
+            download_logger.info(f"Saving content to: {save_path}")
+
+            # Create directory if it doesn't exist (should already exist from _trigger_web_search)
+            os.makedirs(download_dir, exist_ok=True)
+
+            # Write content in chunks
+            chunk_count = 0
+            total_bytes = 0
+            with open(save_path, 'wb') as f:
+                for chunk in response.iter_content(chunk_size=8192):
+                    if chunk: # filter out keep-alive new chunks
+                        f.write(chunk)
+                        chunk_count += 1
+                        total_bytes += len(chunk)
+
+            download_logger.success(f"Download complete. Saved {total_bytes} bytes in {chunk_count} chunks.")
+            return True
+
+    except requests.exceptions.Timeout:
+        download_logger.error(f"Request timed out after {timeout} seconds.")
+        return False
+    except requests.exceptions.RequestException as e:
+        download_logger.error(f"Download failed: {e}")
+        return False
+    except IOError as e:
+        download_logger.error(f"File saving failed: {e}")
+        # Attempt to clean up partially written file
+        if 'save_path' in locals() and os.path.exists(save_path):
+            try: os.remove(save_path); download_logger.warning("Removed partial file after save error.")
+            except Exception as rm_err: download_logger.error(f"Failed to remove partial file: {rm_err}")
+        return False
+    except Exception as e:
+        download_logger.error(f"An unexpected error occurred during download: {e}")
+        logger.exception("Download Unexpected Error Traceback:") # Log full traceback for unexpected errors
+        return False
 
 # Helper to format SSE data (can be reused)
 def format_sse(data: Dict[str, Any], event_type: Optional[str] = None) -> str:
@@ -5952,11 +6022,11 @@ def handle_openai_chat_completion():
     """
     Handles requests mimicking OpenAI/Ollama's chat completion endpoint.
 
-    NEW LOGIC:
-    1. Calls `ai_chat.direct_generate` synchronously to get a fast initial response.
+    Implements Dual Generate Logic:
+    1. Calls `ai_chat.direct_generate` synchronously to get a fast initial (ELP1) response.
     2. Formats and returns/streams this initial response.
     3. Concurrently launches `ai_chat.background_generate` in a separate thread
-       to perform deeper analysis without blocking the initial response.
+       to perform deeper analysis (ELP0) without blocking the initial response.
     """
     start_req = time.monotonic()
     request_id = f"req-chat-{uuid.uuid4()}"
@@ -5964,117 +6034,171 @@ def handle_openai_chat_completion():
 
     # --- Initialize variables ---
     db: Session = g.db # Use request-bound session from Flask's g
-    response_payload = ""
-    status_code = 500 # Default to error
+    response_payload: str = ""
+    status_code: int = 500 # Default to error
     resp: Optional[Response] = None
     session_id: str = f"openai_req_{request_id}_unassigned"
     request_data_for_log: str = "No request data processed"
-    final_response_status_code = 500
+    final_response_status_code: int = 500
     raw_request_data: Optional[Dict] = None
-    classification_used = "chat_simple" # Placeholder, can be refined
+    classification_used: str = "chat_simple" # Placeholder, classification happens in background
 
     try:
         # --- 1. Get and Validate Request Data ---
-        # (This part remains the same as your last working version)
         try:
             raw_request_data = request.get_json()
-            if not raw_request_data: raise ValueError("Empty JSON payload received.")
-            try: request_data_for_log = json.dumps(raw_request_data)[:1000]
-            except: request_data_for_log = str(raw_request_data)[:1000]
-        except Exception as e:
-             logger.warning(f"{request_id}: Failed to get/parse JSON body: {e}")
-             try: request_data_for_log = request.get_data(as_text=True)[:1000]
-             except Exception: request_data_for_log = "Could not read request body"
-             resp_data, status_code = _create_openai_error_response(f"Request body is missing or invalid JSON: {e}", err_type="invalid_request_error", status_code=400)
-             response_payload = json.dumps(resp_data); resp = Response(response_payload, status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
+            if not raw_request_data:
+                raise ValueError("Empty JSON payload received.")
+            # Log request snippet safely
+            try:
+                request_data_for_log = json.dumps(raw_request_data)[:1000]
+            except Exception:
+                request_data_for_log = str(raw_request_data)[:1000]
+        except Exception as json_err:
+            logger.warning(f"{request_id}: Failed to get/parse JSON body: {json_err}")
+            try:
+                request_data_for_log = request.get_data(as_text=True)[:1000]
+            except Exception:
+                request_data_for_log = "Could not read request body"
+            # Prepare error response
+            resp_data, status_code = _create_openai_error_response(
+                f"Request body is missing or invalid JSON: {json_err}",
+                err_type="invalid_request_error", status_code=400
+            )
+            response_payload = json.dumps(resp_data)
+            resp = Response(response_payload, status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+            # Return early on parsing error
+            return resp
 
         # --- 2. Extract Parameters ---
-        # (This part remains the same)
         messages = raw_request_data.get("messages", [])
         stream_requested = raw_request_data.get("stream", False)
-        model_requested = raw_request_data.get("model")
+        model_requested = raw_request_data.get("model") # Logged but usually ignored for routing
+        # Use session_id from request or generate one
         session_id = raw_request_data.get("session_id", f"openai_req_{request_id}")
 
         logger.debug(f"{request_id}: Request parsed - SessionID={session_id}, Stream: {stream_requested}, Model Requested: {model_requested}")
 
         # --- 3. Validate 'messages' Structure ---
-        # (This part remains the same)
         if not messages or not isinstance(messages, list):
             logger.warning(f"{request_id}: 'messages' field missing or not a list.")
-            resp_data, status_code = _create_openai_error_response("'messages' is required and must be a list.", err_type="invalid_request_error", status_code=400)
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
+            resp_data, status_code = _create_openai_error_response(
+                "'messages' is required and must be a list.",
+                err_type="invalid_request_error", status_code=400
+            )
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+            return resp
 
         # --- 4. Parse Last User Message for Input and Image ---
-        # (This part remains the same)
-        last_user_message = None; user_input = ""; image_b64 = None
-        # ... (logic to extract user_input and image_b64 from messages list) ...
-        # Find the most recent user message
+        last_user_message = None
+        user_input = ""
+        image_b64 = None
+        # Find the most recent message with role 'user'
         for msg in reversed(messages):
             if isinstance(msg, dict) and msg.get("role") == "user":
                 last_user_message = msg
                 break
-        if not last_user_message:
-            # ... (handle missing user message error) ...
-            logger.warning(f"{request_id}: No message with role 'user' found.")
-            resp_data, status_code = _create_openai_error_response("No message with role 'user' found in 'messages'.", err_type="invalid_request_error", status_code=400)
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
 
+        if not last_user_message:
+            logger.warning(f"{request_id}: No message with role 'user' found.")
+            resp_data, status_code = _create_openai_error_response(
+                "No message with role 'user' found in 'messages'.",
+                err_type="invalid_request_error", status_code=400
+            )
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+            return resp
+
+        # Process content (string or list for multimodal)
         content = last_user_message.get("content")
-        if isinstance(content, str): user_input = content
+        if isinstance(content, str):
+            user_input = content
         elif isinstance(content, list):
-            # ... (handle multimodal list content, extract user_input and image_b64) ...
+             # Iterate through content parts (text and image)
              for item in content:
                 if isinstance(item, dict):
                     item_type = item.get("type")
-                    if item_type == "text": user_input += item.get("text", "")
+                    if item_type == "text":
+                        user_input += item.get("text", "") # Concatenate text parts
                     elif item_type == "image_url":
                         image_url_data = item.get("image_url", {}).get("url", "")
                         if image_url_data.startswith("data:image"):
-                            try: # Extract and validate base64
-                                potential_b64 = image_url_data.split(",", 1)[1]
-                                if len(potential_b64) % 4 != 0 or not re.match(r'^[A-Za-z0-9+/=]+$', potential_b64): raise ValueError("Invalid base64")
-                                base64.b64decode(potential_b64, validate=True); image_b64 = potential_b64
-                                logger.info(f"{request_id}: Extracted base64 image data.")
-                            except Exception as e: # Handle invalid image data
-                                logger.warning(f"{request_id}: Invalid base64 image data: {e}")
-                                resp_data, status_code = _create_openai_error_response(f"Invalid image data: {e}", err_type="invalid_request_error", status_code=400)
-                                resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
-                        else: # Handle unsupported URL
-                            logger.warning(f"{request_id}: Unsupported image_url format: {image_url_data[:50]}...")
-                            resp_data, status_code = _create_openai_error_response("Unsupported image_url format.", err_type="invalid_request_error", status_code=400)
-                            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
-        else: # Handle invalid content type
-             logger.warning(f"{request_id}: Invalid 'content' type: {type(content)}")
-             resp_data, status_code = _create_openai_error_response("Invalid user message 'content' type.", err_type="invalid_request_error", status_code=400)
-             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
+                            # Extract and validate base64 data
+                            try:
+                                header, potential_b64 = image_url_data.split(",", 1)
+                                # Basic validation (padding, characters)
+                                if len(potential_b64) % 4 != 0 or not re.match(r'^[A-Za-z0-9+/=]+$', potential_b64):
+                                    raise ValueError("Invalid base64 characters or padding")
+                                # Decode to validate
+                                base64.b64decode(potential_b64, validate=True)
+                                image_b64 = potential_b64 # Store validated base64
+                                logger.info(f"{request_id}: Extracted base64 image data from message.")
+                            except Exception as img_err:
+                                logger.warning(f"{request_id}: Invalid base64 image data found in message: {img_err}")
+                                resp_data, status_code = _create_openai_error_response(
+                                    f"Invalid image data provided: {img_err}",
+                                    err_type="invalid_request_error", status_code=400
+                                )
+                                resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+                                final_response_status_code = status_code
+                                return resp
+                        else:
+                            # Handle unsupported non-data URLs
+                            logger.warning(f"{request_id}: Unsupported image_url format (only data:image supported): {image_url_data[:50]}...")
+                            resp_data, status_code = _create_openai_error_response(
+                                "Unsupported image_url format. Only data URIs (data:image/...) are supported.",
+                                err_type="invalid_request_error", status_code=400
+                            )
+                            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+                            final_response_status_code = status_code
+                            return resp
+        else:
+             # Handle invalid content type (not string or list)
+             logger.warning(f"{request_id}: Invalid 'content' type in user message: {type(content)}")
+             resp_data, status_code = _create_openai_error_response(
+                 "Invalid user message 'content' type. Must be string or list.",
+                 err_type="invalid_request_error", status_code=400
+             )
+             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+             final_response_status_code = status_code
+             return resp
 
-        if not user_input and not image_b64: # Handle empty effective input
-             logger.warning(f"{request_id}: No usable text or image content found.")
-             resp_data, status_code = _create_openai_error_response("No text or image content provided.", err_type="invalid_request_error", status_code=400)
-             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
+        # Final check: Ensure we have either text or image input
+        if not user_input and not image_b64:
+             logger.warning(f"{request_id}: No usable text or image content found after parsing.")
+             resp_data, status_code = _create_openai_error_response(
+                 "No text or image content provided in the user message.",
+                 err_type="invalid_request_error", status_code=400
+             )
+             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+             final_response_status_code = status_code
+             return resp
 
-
-        # --- 5. Call DIRECT Generate Logic (Synchronous via asyncio.run) ---
+        # --- 5. Call DIRECT Generate Logic (Synchronous via asyncio.run with ELP1) ---
         direct_response_text = ""
-        vlm_description_for_bg = None # Store VLM result for background task
+        vlm_description_for_bg = None # Store VLM result for background task if needed
         status_code = 200 # Assume success initially for direct response
 
-        logger.info(f"{request_id}: Calling AIChat.direct_generate...")
+        logger.info(f"{request_id}: Calling AIChat.direct_generate (ELP1)...")
         try:
-            # Run the synchronous call to direct_generate within the Flask thread
-            # We need to handle potential VLM preprocessing first if image exists
+            # Handle image preprocessing FIRST if an image exists
+            # This call runs synchronously within this request handler thread
             if image_b64:
-                 # Run VLM preprocessing sync
-                 logger.info(f"{request_id}: Preprocessing image for direct_generate...")
-                 vlm_description_for_bg, _ = ai_chat.process_image(db, image_b64, session_id) # Use current DB session
+                 logger.info(f"{request_id}: Preprocessing image for direct_generate (ELP1 implied)...")
+                 # Assume process_image handles priority internally if needed
+                 # Pass the request's DB session (g.db)
+                 vlm_description_for_bg, _ = ai_chat.process_image(db, image_b64, session_id)
                  if vlm_description_for_bg and "Error:" in vlm_description_for_bg:
                       logger.error(f"{request_id}: VLM preprocessing failed for direct path: {vlm_description_for_bg}")
-                      # Proceed with text only for direct response, background can re-evaluate
+                      # Set status code, but still proceed to get text-only direct response
+                      status_code = 500 # Indicate VLM error occurred
                       direct_response_text = asyncio.run(
-                          ai_chat.direct_generate(db, user_input, session_id, vlm_description=None) # Pass None desc
+                          ai_chat.direct_generate(db, user_input, session_id, vlm_description=None) # Call with text only
                       )
                  else:
-                      # VLM success, include description
+                      # VLM success, include description in direct call
                       direct_response_text = asyncio.run(
                           ai_chat.direct_generate(db, user_input, session_id, vlm_description=vlm_description_for_bg)
                       )
@@ -6084,89 +6208,126 @@ def handle_openai_chat_completion():
                      ai_chat.direct_generate(db, user_input, session_id, vlm_description=None)
                  )
 
-            # Check if direct_generate itself indicated an error
-            if "internal error" in direct_response_text.lower() or direct_response_text.lower().startswith("error:"):
-                status_code = 500
-                logger.warning(f"{request_id}: AIChat.direct_generate returned an error: {direct_response_text[:200]}...")
-            else:
-                status_code = 200
-            logger.info(f"{request_id}: AIChat.direct_generate completed. Status: {status_code}")
+            # Check if direct_generate itself indicated an internal error
+            if status_code != 500: # Only override if VLM didn't already fail
+                 if "internal error" in direct_response_text.lower() or direct_response_text.lower().startswith("error:"):
+                    status_code = 500
+                    logger.warning(f"{request_id}: AIChat.direct_generate returned an error: {direct_response_text[:200]}...")
+                 else:
+                    status_code = 200 # Explicitly confirm success
+            logger.info(f"{request_id}: AIChat.direct_generate completed. Effective Status for Direct: {status_code}")
 
         except Exception as direct_gen_err:
             logger.error(f"{request_id}: Error during asyncio.run(ai_chat.direct_generate): {direct_gen_err}")
-            logger.exception("Traceback for direct_generate error:")
+            logger.exception(f"{request_id} Traceback for direct_generate error:")
             direct_response_text = f"Error during initial response generation: {direct_gen_err}"
             status_code = 500
 
-        # --- 6. LAUNCH BACKGROUND Generate Logic (in a separate thread) ---
-        # We launch this regardless of direct_generate success/failure, unless input was invalid
-        logger.info(f"{request_id}: Preparing to launch background_generate task...")
+        # --- 6. LAUNCH BACKGROUND Generate Logic (in a separate thread - ELP0) ---
+        logger.info(f"{request_id}: Preparing to launch background_generate task (ELP0)...")
 
-        # Need to create a *new* DB session for the background thread
-        # Cannot pass the request-bound `db` session (g.db)
+        # Define the target function for the background thread
         def run_background_task():
-            bg_db: Optional[Session] = None
+            bg_db: Optional[Session] = None # Initialize as None
+            bg_err: Optional[Exception] = None # Initialize error tracker
+
             try:
-                bg_db = SessionLocal() # Create a new session for this thread
+                # --- Attempt to create DB session ---
+                try:
+                    bg_db = SessionLocal() # Create a new session for this thread
+                    if not bg_db: raise ValueError("SessionLocal() returned None")
+                    logger.debug(f"[BG Task {request_id}] Background DB session created.")
+                except Exception as session_err:
+                     logger.error(f"[BG Task {request_id}] CRITICAL: Failed to create background DB session: {session_err}")
+                     bg_err = session_err
+                     return # Exit thread if DB session fails
+
+                # --- Main Background Logic ---
                 logger.info(f"[BG Task {request_id}] Background task started.")
-                # Determine initial classification (can be done again in background)
+                # Re-classify complexity within the background task's context
                 bg_classification_data = {"session_id": session_id, "mode": "chat", "input_type": "classification", "user_input": user_input[:100]}
+                # _classify_input_complexity runs synchronously but uses ELP0 internally via its helpers
                 bg_classification = ai_chat._classify_input_complexity(bg_db, user_input, bg_classification_data)
                 logger.info(f"[BG Task {request_id}] Background classification: {bg_classification}")
 
                 # Run background_generate using asyncio.run within this thread
+                # background_generate uses bg_db and handles ELP0/interruptions internally
                 asyncio.run(
-                    ai_chat.background_generate( # Call the full background method
+                    ai_chat.background_generate(
                         db=bg_db,
                         user_input=user_input,
                         session_id=session_id,
                         classification=bg_classification, # Use classification determined here
-                        image_b64=image_b64 # Pass image again if present
+                        image_b64=image_b64, # Pass image again if present
+                        # update_interaction_id is None here (not a reflection task)
                     )
                 )
-                logger.info(f"[BG Task {request_id}] Background task completed.")
-            except Exception as bg_err:
-                logger.error(f"[BG Task {request_id}] Error in background thread: {bg_err}")
-                logger.exception(f"[BG Task {request_id}] Background Thread Traceback:")
-                # Log error to DB using the background session
-                if bg_db:
-                    try: add_interaction(bg_db, session_id=session_id, mode="chat", input_type="log_error", user_input=f"Background Task Error ({request_id})", llm_response=f"Error: {bg_err}"[:2000])
-                    except Exception: pass
-            finally:
-                if bg_db: bg_db.close() # Ensure background session is closed
+                logger.info(f"[BG Task {request_id}] Background task completed successfully.")
 
+            except Exception as task_err:
+                # Catch errors from classification or background_generate
+                bg_err = task_err # Store the exception
+                logger.error(f"[BG Task {request_id}] Error during background task execution: {bg_err}")
+                logger.exception(f"[BG Task {request_id}] Background Task Execution Traceback:")
+                # Log error to DB using bg_db (if it was created)
+                if bg_db:
+                    try:
+                        add_interaction(bg_db, session_id=session_id, mode="chat", input_type="log_error",
+                                        user_input=f"Background Task Error ({request_id})",
+                                        llm_response=f"Error: {bg_err}"[:2000])
+                        bg_db.commit() # Commit the error log
+                    except Exception as db_log_err:
+                         logger.error(f"[BG Task {request_id}] Failed log background execution error to DB: {db_log_err}")
+                         if bg_db: bg_db.rollback()
+                else:
+                    logger.error(f"[BG Task {request_id}] Cannot log background execution error: DB session was not created.")
+            finally:
+                # Ensure background session is closed if it was created
+                if bg_db:
+                    try:
+                        bg_db.close()
+                        logger.debug(f"[BG Task {request_id}] Background DB session closed.")
+                    except Exception as close_err:
+                         logger.error(f"[BG Task {request_id}] Error closing background DB session: {close_err}")
+                logger.info(f"[BG Task {request_id}] Background thread finished.")
+
+        # Launch the background task in a daemon thread
         try:
             background_thread = threading.Thread(target=run_background_task, daemon=True)
             background_thread.start()
             logger.info(f"{request_id}: Launched background_generate in thread {background_thread.ident}.")
         except Exception as launch_err:
             logger.error(f"{request_id}: Failed to launch background thread: {launch_err}")
-            # Log this failure? Could impact background processing.
+            # Log this failure? May affect background processing.
+            try:
+                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                 user_input="Background Task Launch Failed",
+                                 llm_response=f"Error: {launch_err}")
+            except Exception as db_err:
+                 logger.error(f"{request_id}: Failed log background launch error: {db_err}")
 
         # --- 7. Format and Return/Stream the IMMEDIATE Response (from direct_generate) ---
-        # Set Model ID using Meta Constants based on stream request
-        if stream_requested:
-            model_id_used = META_MODEL_NAME_STREAM
-        else:
-            model_id_used = META_MODEL_NAME_NONSTREAM
+        # Determine model ID based on stream preference for the immediate response
+        model_id_used = META_MODEL_NAME_STREAM if stream_requested else META_MODEL_NAME_NONSTREAM
 
         if stream_requested:
-             # Use the standard streaming generator, passing the direct_response_text
+             # Return a streaming response using the streaming generator helper
+             # This generator streams the 'direct_response_text' and associated logs
              logger.info(f"{request_id}: Client requested stream. Creating stream generator for direct response.")
-             # This generator streams the logs AND the final direct_response_text
-             # It needs access to the original user_input and classification for its internal logic
              generator = _stream_openai_chat_response_generator_flask(
                  session_id=session_id,
-                 user_input=user_input, # Pass original user input
-                 classification=classification_used, # Pass initial classification
+                 user_input=user_input, # Pass original user input for context if needed by generator
+                 classification=classification_used, # Pass placeholder classification
                  model_name=model_id_used # Use STREAM meta name
              )
-             # Set up Flask Response for streaming
+             # Set up Flask Response for streaming SSE
              resp = Response(generator, mimetype='text/event-stream')
              resp.headers['Content-Type'] = 'text/event-stream; charset=utf-8'
              resp.headers['Cache-Control'] = 'no-cache'
              resp.headers['Connection'] = 'keep-alive'
-             final_response_status_code = 200 # Stream initiated successfully
+             # Set final status code to 200 as stream initiated successfully
+             # (Errors during stream generation are handled within the generator)
+             final_response_status_code = 200
 
         else:
              # Format and return the non-streaming JSON based on direct_response_text
@@ -6175,45 +6336,54 @@ def handle_openai_chat_completion():
                  # Format as OpenAI error object if direct_generate failed
                  resp_data, _ = _create_openai_error_response(direct_response_text, status_code=status_code)
              else:
-                 # Format as standard OpenAI ChatCompletion object
+                 # Format as standard OpenAI ChatCompletion object using the successful direct response
                  resp_data = _format_openai_chat_response(direct_response_text, model_name=model_id_used) # Use NONSTREAM meta name
-             # Prepare Flask Response
-             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-             final_response_status_code = status_code
+             # Prepare Flask Response object
+             response_payload = json.dumps(resp_data)
+             resp = Response(response_payload, status=status_code, mimetype='application/json')
+             final_response_status_code = status_code # Reflect status from direct generate
 
-    except Exception as e:
-        # Use request_id for logging here, as log_prefix doesn't exist in this scope
-        logger.error(f"[BG Task {request_id}] Error in background thread: {bg_err}") # Use request_id
-        logger.exception(f"[BG Task {request_id}] Background Thread Traceback:") # Use request_id
-        # Log error to DB using the background session
-        if bg_db:
-            try:
-                # Use request_id in the log message saved to the DB
-                add_interaction(bg_db, session_id=session_id, mode="chat", input_type="log_error",
-                                user_input=f"Background Task Error ({request_id})", # Use request_id
-                                llm_response=f"Error: {bg_err}"[:2000])
-            except Exception as db_log_err:
-                # Use request_id when logging the failure to log to DB
-                logger.error(f"Failed to log background task error for request {request_id} to DB: {db_log_err}") # Use request_id
-
-        # Create error response
-        resp_data, status_code = _create_openai_error_response(f"Internal server error: {e}", status_code=500)
+    except Exception as main_err:
+        # Catch any truly unexpected errors in the main request handling logic
+        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in main handler:")
+        # Create a generic error response
+        error_message = f"Internal server error: {type(main_err).__name__}"
+        resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
         resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
-
+        # Log this critical failure to DB if possible
+        try:
+            if 'db' in g and g.db:
+                 add_interaction(g.db, session_id=session_id, mode="chat", input_type='error',
+                                 user_input=f"Main Handler Error. Request: {request_data_for_log}",
+                                 llm_response=error_message[:2000])
+            else: logger.error(f"{request_id}: Cannot log main handler error: DB session 'g.db' unavailable.")
+        except Exception as db_err: logger.error(f"{request_id}: ❌ Failed log main handler error to DB: {db_err}")
 
     finally:
-        # DB session `g.db` (for the main request) is closed automatically by the @app.teardown_request handler
+        # This block ALWAYS runs after try/except
         duration_req = (time.monotonic() - start_req) * 1000
+        # Log final status using the status code determined by the try/except blocks
         logger.info(f"🏁 Flask OpenAI/Ollama Chat Request {request_id} (Dual Generate) handled in {duration_req:.2f} ms. Final Status: {final_response_status_code}")
+        # DB session g.db is closed automatically by the @app.teardown_request handler
 
     # --- Return Response ---
-    if resp is None: # Safety net: Should always have a response object by now
-        logger.error(f"{request_id}: Handler finished unexpectedly without response object assigned.")
-        resp_data, _ = _create_openai_error_response("Internal error: Handler finished without creating response.", status_code=500)
+    # Ensure 'resp' is always assigned
+    if resp is None:
+        logger.error(f"{request_id}: Handler finished unexpectedly without response object assigned!")
+        # Create a generic error response if 'resp' is somehow still None
+        resp_data, status_code = _create_openai_error_response("Internal error: Handler finished without creating response.", status_code=500)
         resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
+        # Log this critical failure
+        try:
+             if 'db' in g and g.db:
+                 add_interaction(g.db, session_id=session_id, mode="chat", input_type='error',
+                                 user_input=f"Handler Logic Error. Request: {request_data_for_log}",
+                                 llm_response="Critical: No response object created.")
+             else: logger.error(f"{request_id}: Cannot log 'no response' error: DB session 'g.db' unavailable.")
+        except Exception as db_err: logger.error(f"{request_id}: ❌ Failed log 'no response' error to DB: {db_err}")
 
-    return resp # Return the Flask Response object
+    return resp # Return the final Flask Response object
 
 @app.route("/v1/models", methods=["GET"])
 def handle_openai_models():

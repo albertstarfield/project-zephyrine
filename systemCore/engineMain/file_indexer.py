@@ -1,5 +1,6 @@
 # file_indexer.py
 import os
+import re
 import sys
 import time
 import threading
