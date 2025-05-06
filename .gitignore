@@ -94,6 +94,8 @@ systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3.zip
 **venv**
 **env
 .license_accepted_v1
+.melo_tts_installed_v1
+.custom_llama_cpp_installed_v1
 
 # Amaryllis generated files/folders
 RuntimeNotebook.md
