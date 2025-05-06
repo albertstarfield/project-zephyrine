@@ -6477,6 +6477,106 @@ def handle_ollama_tags():
     logger.info(f"🏁 /api/tags request handled in {duration_req:.2f} ms. Status: {status_code}")
     return response
 
+# === NEW: OpenAI Compatible TTS Endpoint (Stub) ===
+@app.route("/v1/audio/speech", methods=["POST"])
+def handle_openai_tts():
+    """
+    Handles requests mimicking OpenAI's Text-to-Speech endpoint.
+    Currently a STUB - Acknowledges request but does not generate audio.
+    """
+    start_req = time.monotonic()
+    request_id = f"req-tts-{uuid.uuid4()}"
+    logger.info(f"🚀 Flask OpenAI-Style TTS Request ID: {request_id} (STUB)")
+
+    # --- Get Request Data ---
+    raw_request_data: Optional[Dict] = None
+    input_text: Optional[str] = None
+    model_requested: Optional[str] = None
+    voice_requested: Optional[str] = None
+    response_format_requested: Optional[str] = None
+    speed_requested: Optional[float] = None
+
+    try:
+        raw_request_data = request.get_json()
+        if not raw_request_data:
+            raise ValueError("Empty JSON payload received.")
+
+        input_text = raw_request_data.get("input")
+        model_requested = raw_request_data.get("model") # e.g., "tts-1", "tts-1-hd"
+        voice_requested = raw_request_data.get("voice") # e.g., "alloy", "echo", "fable", "onyx", "nova", "shimmer"
+        response_format_requested = raw_request_data.get("response_format", "mp3") # mp3, opus, aac, flac
+        speed_requested = raw_request_data.get("speed", 1.0) # 0.25 to 4.0
+
+        if not input_text or not isinstance(input_text, str):
+            raise ValueError("'input' field is required and must be a string.")
+        if not model_requested or not isinstance(model_requested, str):
+            raise ValueError("'model' field is required and must be a string.")
+        if not voice_requested or not isinstance(voice_requested, str):
+            raise ValueError("'voice' field is required and must be a string.")
+
+        logger.debug(
+            f"{request_id}: TTS Request Parsed - Input: '{input_text[:50]}...', "
+            f"Model: {model_requested}, Voice: {voice_requested}, "
+            f"Format: {response_format_requested}, Speed: {speed_requested}"
+        )
+
+        # --- STUB IMPLEMENTATION ---
+        # Here, you would normally call your TTS engine.
+        # For now, we'll just return a success message or a placeholder error.
+
+        # Placeholder: Acknowledge supported formats for the stub
+        supported_formats = ["mp3", "opus", "aac", "flac"]
+        if response_format_requested.lower() not in supported_formats:
+            logger.warning(f"{request_id}: Unsupported response_format: {response_format_requested}")
+            resp_data, status_code = _create_openai_error_response(
+                f"Unsupported response_format: '{response_format_requested}'. Supported formats are: {', '.join(supported_formats)}.",
+                err_type="invalid_request_error", status_code=400
+            )
+            response_payload = json.dumps(resp_data)
+            resp = Response(response_payload, status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+            # Log duration and return
+            duration_req = (time.monotonic() - start_req) * 1000
+            logger.info(f"🏁 OpenAI-Style TTS Request {request_id} STUB handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+            return resp
+
+        # STUB: Simulate successful audio generation but return an error that it's a stub
+        # In a real implementation, you would return the audio data with the correct MIME type.
+        logger.warning(f"{request_id}: TTS generation is a STUB. Returning error message.")
+        resp_data, status_code = _create_openai_error_response(
+            "TTS endpoint is currently a stub and does not generate audio.",
+            err_type="server_error", code="stub_not_implemented", status_code=501 # 501 Not Implemented
+        )
+        response_payload = json.dumps(resp_data)
+        resp = Response(response_payload, status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+        # --- END STUB ---
+
+    except ValueError as ve: # Catch our explicit ValueErrors for bad input
+        logger.warning(f"{request_id}: Invalid TTS request: {ve}")
+        resp_data, status_code = _create_openai_error_response(
+            str(ve), err_type="invalid_request_error", status_code=400
+        )
+        response_payload = json.dumps(resp_data)
+        resp = Response(response_payload, status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in TTS endpoint STUB:")
+        error_message = f"Internal server error in TTS stub: {type(e).__name__}"
+        resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
+        response_payload = json.dumps(resp_data)
+        resp = Response(response_payload, status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+
+    finally:
+        # Log duration
+        duration_req = (time.monotonic() - start_req) * 1000
+        logger.info(f"🏁 OpenAI-Style TTS Request {request_id} STUB handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+        # DB session g.db is closed by teardown_request
+
+    return resp
+
+
 # --- NEW: Dummy Handlers for Pretending this is Ollama Model Management ---
 
 @app.route("/api/pull", methods=["POST"])
