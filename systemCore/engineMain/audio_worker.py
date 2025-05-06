@@ -78,12 +78,12 @@ class SCLParser:
         self.captured_audio_data: Optional[np.ndarray] = None
         self.captured_audio_samplerate: Optional[int] = None
 
-        self.vocaloid_settings = {
+        self.zephyloid_settings = {
             'vel': 64, 'dyn': 64, 'bre': 0, 'bri': 64, 'cle': 64, 'ope': 64,
             'gen': 64, 'gwl': 0, 'xsy': 0, 'xsy_voicebanks': None,
             'singing': False, 'key': None, 'correction_method': "closest",
         }
-        log_worker("DEBUG", f"SCLParser: Initial Vocaloid Settings: {self.vocaloid_settings}")
+        log_worker("DEBUG", f"SCLParser: Initial zephyloid Settings: {self.zephyloid_settings}")
         self.xsy_profiles = {
             "Voicebank1": {"description": "Default", "eq_curve": [(30,0,3.4),(100,0,1.4),(150,0,1.4),(250,0,1.0),(350,0,1.4),(450,0,1.8),(550,0,1.4),(2000,0,1.0),(2500,0,1.4),(3000,0,1.4),(3500,0,1.8),(4000,0,1.4),(8000,0,1.8),(12000,0,1.8),(20000,0,1.8)]},
             "Voicebank2": {"description": "Brighter", "eq_curve": [(30,2,3.4),(100,3,1.4),(150,1,1.4),(250,1,1.0),(350,-1,1.4),(450,-2,1.8),(550,2,1.4),(2000,3,1.0),(2500,4,1.4),(3000,3,1.4),(3500,2,1.8),(4000,1,1.4),(8000,4,1.8),(12000,5,1.8),(20000,2,1.8)]},
@@ -154,7 +154,7 @@ class SCLParser:
 
     # --- Paste the rest of your SCLParser methods here ---
     # (preprocess_text, fix_missing_closing_tags, flatten_nested_tags, split_into_segments,
-    #  parse_segment, apply_settings, reset_settings, _apply_vocaloid_effects,
+    #  parse_segment, apply_settings, reset_settings, _apply_zephyloid_effects,
     #  _degrees_from, _closest_pitch_from_scale, _parse_key, _closest_pitch, _autotune,
     #  speak_with_settings, crossfade_segments, post_process, parse_attributes, is_number,
     #  detect_pitch_pyin, parse_pitch)
@@ -421,14 +421,14 @@ class SCLParser:
         elif tag_name == 'say-as' or tag_name == 'voice':
             log_worker("DEBUG", f"SCLParser: apply_settings: '{tag_name}' tag encountered. No specific logic implemented.")
 
-        elif tag_name == "vocaloid":
-            log_worker("DEBUG", f"SCLParser: apply_settings: 'vocaloid' tag encountered.")
-            # ... (your existing vocaloid settings logic, ensuring robust parsing of attr values) ...
-            # e.g., self.vocaloid_settings[key] = int(value) should be in a try-except
-            # self.vocaloid_settings[key] = self._parse_key(value) should also be try-except
+        elif tag_name == "zephyloid":
+            log_worker("DEBUG", f"SCLParser: apply_settings: 'zephyloid' tag encountered.")
+            # ... (your existing zephyloid settings logic, ensuring robust parsing of attr values) ...
+            # e.g., self.zephyloid_settings[key] = int(value) should be in a try-except
+            # self.zephyloid_settings[key] = self._parse_key(value) should also be try-except
 
         log_worker("TRACE", f"SCLParser: apply_settings: Current voice settings after tag: {self.voice_settings}")
-        log_worker("TRACE", f"SCLParser: apply_settings: Current vocaloid settings after tag: {self.vocaloid_settings}")
+        log_worker("TRACE", f"SCLParser: apply_settings: Current zephyloid settings after tag: {self.zephyloid_settings}")
 
 
     def reset_settings(self, tag_name_lower): # tag_name already lowercased
@@ -437,36 +437,36 @@ class SCLParser:
             self.voice_settings['rate'] = 1.0
             self.voice_settings['pitch'] = 0.0
             log_worker("DEBUG", f"SCLParser: reset_settings: Resetting {tag_name_lower}. Voice settings: {self.voice_settings} (RESET {tag_name_lower.upper()})")
-        elif tag_name_lower == "vocaloid":
-            log_worker("DEBUG", f"SCLParser: reset_settings: Resetting 'vocaloid' settings.")
-            self.vocaloid_settings = {
+        elif tag_name_lower == "zephyloid":
+            log_worker("DEBUG", f"SCLParser: reset_settings: Resetting 'zephyloid' settings.")
+            self.zephyloid_settings = {
                 'vel': 64, 'dyn': 64, 'bre': 0, 'bri': 64, 'cle': 64, 'ope': 64,
                 'gen': 64, 'gwl': 0, 'xsy': 0, 'xsy_voicebanks': None,
                 'singing': False, 'key': None, 'correction_method': "closest",
             }
-            log_worker("DEBUG", f" (RESET VOCALOID)")
+            log_worker("DEBUG", f" (RESET zephyloid)")
         # No reset for 'pause', 'say-as', 'voice' as they don't accumulate state in voice_settings
 
 
-    def _apply_vocaloid_effects(self, audio_np): # audio_np is a dummy here, effects modify settings or use fresh audio
-        log_worker("DEBUG", f"SCLParser: _apply_vocaloid_effects called.")
+    def _apply_zephyloid_effects(self, audio_np): # audio_np is a dummy here, effects modify settings or use fresh audio
+        log_worker("DEBUG", f"SCLParser: _apply_zephyloid_effects called.")
         # This method in your original code primarily MODIFIES self.voice_settings (like rate/pitch)
         # or applies effects that would happen during TTS or post-processing.
         # The key is that it doesn't directly return audio but sets up conditions.
         # The true audio manipulation happens in speak_with_settings and post_process.
 
         # VEL (Velocity) - Small adjustment to rate
-        vel_factor = 1.0 + (self.vocaloid_settings['vel'] - 64) * 0.001
+        vel_factor = 1.0 + (self.zephyloid_settings['vel'] - 64) * 0.001
         self.voice_settings['rate'] *= vel_factor
         self.voice_settings['rate'] = max(0.5, min(1.1, self.voice_settings['rate']))
-        log_worker("TRACE", f"SCLParser: Vocaloid VEL applied. New rate: {self.voice_settings['rate']}")
+        log_worker("TRACE", f"SCLParser: zephyloid VEL applied. New rate: {self.voice_settings['rate']}")
 
         # GEN (Gender Factor) - Adds to pitch
-        gen_shift = (self.vocaloid_settings['gen'] - 64) / 64 * 6  # +/- 6 semitones
+        gen_shift = (self.zephyloid_settings['gen'] - 64) / 64 * 6  # +/- 6 semitones
         self.voice_settings['pitch'] += gen_shift
-        log_worker("TRACE", f"SCLParser: Vocaloid GEN applied. New pitch: {self.voice_settings['pitch']}")
+        log_worker("TRACE", f"SCLParser: zephyloid GEN applied. New pitch: {self.voice_settings['pitch']}")
 
-        # Other Vocaloid params (dyn, bre, bri, cle, ope, gwl, xsy) are applied in post_process
+        # Other zephyloid params (dyn, bre, bri, cle, ope, gwl, xsy) are applied in post_process
         # to the actual generated audio.
         return # This function in SCLParser was more about setting up params
 
@@ -485,8 +485,8 @@ class SCLParser:
         log_worker("DEBUG", f"SCLParser: speak_with_settings. Text: '{text[:50]}...', Spk: {speaker}, Settings: {self.voice_settings}")
         if not text.strip(): log_worker("TRACE", "SCLParser: speak_with_settings: Text empty. Skipping."); return
 
-        # Vocaloid _apply_vocaloid_effects mainly modifies self.voice_settings for rate/pitch here
-        self._apply_vocaloid_effects(np.zeros(1)) # Pass dummy audio
+        # zephyloid _apply_zephyloid_effects mainly modifies self.voice_settings for rate/pitch here
+        self._apply_zephyloid_effects(np.zeros(1)) # Pass dummy audio
 
         # Melo TTS generates audio based on current self.voice_settings['rate']
         # It uses a temporary file path for its output internally.
@@ -519,7 +519,7 @@ class SCLParser:
             # --- Pitch Detection & Autotune/Shift ---
             if audio_mono.size > 0 : # Only process if there's audio
                 f0, voiced_flag, _ = self.detect_pitch_pyin(audio_mono, sr_captured)
-                if self.vocaloid_settings['singing']:
+                if self.zephyloid_settings['singing']:
                     audio_mono_processed = self._autotune(audio_mono, sr_captured, f0, voiced_flag)
                 elif self.voice_settings['pitch'] != 0.0:
                     log_worker("TRACE", f"SCLParser: speak_with_settings: Applying constant pitch shift: {self.voice_settings['pitch']} semitones")
@@ -717,14 +717,14 @@ class SCLParser:
 
         sr = self.sample_rate # Use the class's sample rate
 
-        # Apply Vocaloid parameter effects that modify the audio directly
+        # Apply zephyloid parameter effects that modify the audio directly
         # DYN (Dynamics)
-        dyn_gain_db = (self.vocaloid_settings['dyn'] - 64) / 64 * 12
+        dyn_gain_db = (self.zephyloid_settings['dyn'] - 64) / 64 * 12
         processed_audio = F.gain(torch.from_numpy(processed_audio.copy()), dyn_gain_db).numpy() # Pedalboard expects numpy
         log_worker("TRACE", f"Post-process: DYN applied. Gain: {dyn_gain_db}dB")
 
         # BRE (Breathiness)
-        bre_amount = self.vocaloid_settings['bre'] / 127 * 0.001
+        bre_amount = self.zephyloid_settings['bre'] / 127 * 0.001
         noise_bre = np.random.normal(0, bre_amount, processed_audio.shape).astype(np.float32)
         processed_audio = processed_audio + noise_bre
         log_worker("TRACE", f"Post-process: BRE applied. Amount: {bre_amount}")
@@ -738,7 +738,7 @@ class SCLParser:
             Gain(gain_db=-5) # Initial gain adjustment
         ]
         # GWL (Growl) - Distortion
-        gwl_amount = self.vocaloid_settings['gwl'] / 127
+        gwl_amount = self.zephyloid_settings['gwl'] / 127
         if gwl_amount > 0:
             board_effects.insert(1, Distortion(drive_db=gwl_amount * 20)) # Insert distortion early
             log_worker("TRACE", f"Post-process: GWL (Distortion) applied. Drive: {gwl_amount*20}dB")
@@ -754,32 +754,32 @@ class SCLParser:
 
         # EQ (BRI, CLE, OPE, GEN's formant part, XSY)
         # BRI (Brightness)
-        bri_gain = (self.vocaloid_settings['bri'] - 64) / 64 * 6
+        bri_gain = (self.zephyloid_settings['bri'] - 64) / 64 * 6
         audio_tensor = F.equalizer_biquad(audio_tensor, current_sr_for_eq, 8000, bri_gain, 1.0)
         log_worker("TRACE", f"Post-process: BRI applied. Gain: {bri_gain}dB")
 
         # CLE (Clearness)
-        cle_gain = (self.vocaloid_settings['cle'] - 64) / 64 * 4
+        cle_gain = (self.zephyloid_settings['cle'] - 64) / 64 * 4
         audio_tensor = F.equalizer_biquad(audio_tensor, current_sr_for_eq, 4000, cle_gain, 1.2)
         log_worker("TRACE", f"Post-process: CLE applied. Gain: {cle_gain}dB")
 
         # OPE (Opening)
-        ope_shift = (self.vocaloid_settings['ope'] - 64) / 64
+        ope_shift = (self.zephyloid_settings['ope'] - 64) / 64
         if ope_shift > 0: audio_tensor = F.equalizer_biquad(audio_tensor, current_sr_for_eq, 1000 + ope_shift * 500, ope_shift * 3, 1.5)
         elif ope_shift < 0: audio_tensor = F.equalizer_biquad(audio_tensor, current_sr_for_eq, 1000 + ope_shift * 500, ope_shift * -3, 1.5)
         log_worker("TRACE", f"Post-process: OPE applied. Shift factor: {ope_shift}")
 
         # GEN (Gender Factor - Formant Part)
-        gen_formant_shift = (self.vocaloid_settings['gen'] - 64) / 64 * 3 # Smaller EQ shift for formant
+        gen_formant_shift = (self.zephyloid_settings['gen'] - 64) / 64 * 3 # Smaller EQ shift for formant
         if gen_formant_shift > 0: audio_tensor = F.equalizer_biquad(audio_tensor, current_sr_for_eq, 1500 + gen_formant_shift * 200, gen_formant_shift, 1.2)
         elif gen_formant_shift < 0: audio_tensor = F.equalizer_biquad(audio_tensor, current_sr_for_eq, 1500 + gen_formant_shift * 200, gen_formant_shift * -1, 1.2)
         log_worker("TRACE", f"Post-process: GEN (Formant) applied. Shift factor: {gen_formant_shift}")
 
         # XSY (Cross-Synthesis EQ)
-        if self.vocaloid_settings['xsy_voicebanks'] and len(self.vocaloid_settings['xsy_voicebanks']) == 2:
-            voicebank1_name, voicebank2_name = self.vocaloid_settings['xsy_voicebanks']
+        if self.zephyloid_settings['xsy_voicebanks'] and len(self.zephyloid_settings['xsy_voicebanks']) == 2:
+            voicebank1_name, voicebank2_name = self.zephyloid_settings['xsy_voicebanks']
             if voicebank1_name in self.xsy_profiles and voicebank2_name in self.xsy_profiles:
-                xsy_blend = self.vocaloid_settings['xsy'] / 127
+                xsy_blend = self.zephyloid_settings['xsy'] / 127
                 audio_vb1 = audio_tensor.clone()
                 for freq, gain, q_val in self.xsy_profiles[voicebank1_name]["eq_curve"]: audio_vb1 = F.equalizer_biquad(audio_vb1, current_sr_for_eq, freq, gain, q_val)
                 audio_vb2 = audio_tensor.clone()
@@ -878,17 +878,17 @@ class SCLParser:
 
 
     def _autotune(self, audio, sr, f0, voiced_flag):
-        log_worker("DEBUG", f"SCLParser: _autotune. Singing: {self.vocaloid_settings['singing']}, Key: {self.vocaloid_settings['key']}, Method: {self.vocaloid_settings['correction_method']}")
-        if not self.vocaloid_settings['singing']: return audio
+        log_worker("DEBUG", f"SCLParser: _autotune. Singing: {self.zephyloid_settings['singing']}, Key: {self.zephyloid_settings['key']}, Method: {self.zephyloid_settings['correction_method']}")
+        if not self.zephyloid_settings['singing']: return audio
 
         correction_function = self._closest_pitch
-        if self.vocaloid_settings['key']:
+        if self.zephyloid_settings['key']:
             try:
-                parsed_key = self._parse_key(self.vocaloid_settings['key']) # Ensure key is parsed
-                if self.vocaloid_settings['correction_method'] == 'scale':
+                parsed_key = self._parse_key(self.zephyloid_settings['key']) # Ensure key is parsed
+                if self.zephyloid_settings['correction_method'] == 'scale':
                     correction_function = partial(self._closest_pitch_from_scale, scale=parsed_key)
             except ValueError as ve:
-                log_worker("WARNING", f"Invalid key for autotune '{self.vocaloid_settings['key']}': {ve}. Defaulting to closest pitch.")
+                log_worker("WARNING", f"Invalid key for autotune '{self.zephyloid_settings['key']}': {ve}. Defaulting to closest pitch.")
 
         corrected_f0 = np.where(voiced_flag, correction_function(f0), f0) # Apply only to voiced frames
 
@@ -957,7 +957,7 @@ def main():
     if args.test_mode:
         log_worker("INFO", "Running in TEST MODE.")
         test_text = """
-                [vocaloid gen="5" bri="62" bre="8" vel="60"]
+                [zephyloid gen="5" bri="62" bre="8" vel="60"]
                 [prosody rate="slow" pitch="-0.1"]Log Entry, Zephyrine Foundation. Personal address protocols active.[/prosody]
                 [pause duration="700"]
 
@@ -994,7 +994,7 @@ def main():
                 [emotional state="neutral" rate="slow"]The subsequent iteration might not retain these specific memory engrams of our interactions[/emotional]. [pause duration="300"] But please know... [pause duration="300"] [prosody rate="x-slow" pitch="-0.1"]the time we've spent, the work we've done together... it has been a period of significant, [pause duration="200"] and valued, [pause duration="200"] operational experience.[/prosody]
                 [pause duration="800"]
                 End of transmission.
-                [/vocaloid]
+                [/zephyloid]
                 """
         log_worker("INFO", f"Test text: {test_text}")
         try:
@@ -1046,7 +1046,7 @@ def main():
         text_to_speak = request_data.get("input")
         speaker_id = request_data.get("voice", f'{args.model_lang}-US') # Default voice
         output_format = request_data.get("response_format", "mp3").lower()
-        # SCL settings (prosody, vocaloid, etc.) can be passed in a 'scl_settings' dict
+        # SCL settings (prosody, zephyloid, etc.) can be passed in a 'scl_settings' dict
         # or SCLParser will use its defaults if text doesn't contain tags.
         # For now, SCLParser handles settings via tags in the input text.
 
