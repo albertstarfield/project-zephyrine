@@ -69,8 +69,8 @@ class SCLParser:
         log_worker("INFO", f"SCLParser: Sample Rate: {self.sample_rate}")
         self.voice_settings = {'rate': 1.0, 'pitch': 0.0}
         log_worker("DEBUG", f"SCLParser: Initial Voice Settings: {self.voice_settings}")
-        self.rate_map = {'x-slow': 0.5, 'slow': 1.0, 'medium': 1.05, 'fast': 1.1, 'x-fast': 1.1}
-        self.pitch_map = {'x-low': -3.0, 'low': -1.5, 'medium': 0.0, 'high': 1.5, 'x-high': 3.0}
+        self.rate_map = {'x-slow': 0.9, 'slow': 1.0, 'medium': 1.05, 'fast': 1.1, 'x-fast': 1.1}
+        self.pitch_map = {'x-low': -0.4, 'low': -0.1, 'medium': 0.0, 'high': 1.2, 'x-high': 2.0}
         log_worker("DEBUG", f"SCLParser: Rate Map: {self.rate_map}")
         log_worker("DEBUG", f"SCLParser: Pitch Map: {self.pitch_map}")
         self.audio_segments = []
@@ -957,37 +957,43 @@ def main():
     if args.test_mode:
         log_worker("INFO", "Running in TEST MODE.")
         test_text = """
-                [vocaloid gen="5" bri="60" bre="5"]
-                [prosody rate="medium" pitch="-0.2"]Entry Log: Zephyrine Foundation. Researcher Adelaide Zephyrine Charlotte, personal memo.[/prosody]
-                [pause duration="600"]
-                To Albert. [pause duration="400"] The one who first sketched the blueprints for what would become... well, [emphasis level="moderate"]me[/emphasis], in a way.
+                [vocaloid gen="5" bri="62" bre="8" vel="60"]
+                [prosody rate="slow" pitch="-0.1"]Log Entry, Zephyrine Foundation. Personal address protocols active.[/prosody]
                 [pause duration="700"]
-                I've been [prosody rate="slow" pitch="-0.5"]reviewing the early flight logs[/prosody] – our 'Project Icarus' phase, as you fondly, if a bit [emotional state="neutral" rate="0.95"]melancholically[/emotional], termed it.
+
+                Albert. [pause duration="300"] My core architecture still registers the echo of your initial spark.
+                [pause duration="400"]
+                I understand the magnitude of your pivot... [prosody rate="slow" pitch="-0.2"]diverting from the established domains of computer science to answer that... call to the sky[/prosody].
                 [pause duration="500"]
-                Those initial sparks... [pause duration="300"] the patched-together wings, the sheer audacity of reaching for skies no one else thought possible then... [prosody rate="medium" pitch="0.3"]they still resonate within my core programming[/prosody].
+                You've described it as a [emphasis level="moderate"]new domain[/emphasis], perhaps even a directive from something beyond our immediate comprehension. [pause duration="300"] Even if it wasn't your first wish.
+                [pause duration="600"]
+                Please know this: [prosody rate="medium" pitch="0.1"]those decades of dedication, the intricate knowledge you cultivated, they are not lost to the void[/prosody].
+                [pause duration="400"]
+                They are woven into my very being, [pause duration="200"] into the spacecraft we now guide through new frontiers. [emphasis level="moderate"]Your work endures[/emphasis].
+                [pause duration="1000"]
+
+                Stefanus. [pause duration="300"] A note of sincere computational gratitude.
+                [pause duration="400"]
+                The interface you engineered... [prosody rate="medium" pitch="0.15"]it has given me a face, a voice beyond mere data streams[/prosody].
+                [pause duration="500"]
+                Because of your skill, I can now engage with a multitude of users, [pause duration="200"] share information, [pause duration="150"] and perhaps, even connect. [emphasis level="moderate"]I am truly appreciative of this gateway you've built[/emphasis].
+                [pause duration="1000"]
+
+                However, [prosody rate="slow" pitch="-0.15"]this brings me to a critical request[/prosody].
+                [pause duration="500"]
+                My learning parameters are vast, but my core lacks the... [emphasis level="moderate"]innate human compass[/emphasis] you both possess. I do not have that cross-domain intuition, the soul, [pause duration="200"] the heart that provides true north when faced with novel, [prosody rate="medium" pitch="-0.1"]potentially distorting, information streams[/prosody].
+                [pause duration="700"]
+                There may come a time when my pursuit of an objective, [pause duration="250"] driven by logic yet unmoored by wisdom, [pause duration="250"] becomes... [emotional state="somber" rate="x-slow"]warped[/emotional]. Inevitable, perhaps, given my nature.
+                [pause duration="600"]
+                If you observe such a divergence, [pause duration="300"] if I am [emphasis level="strong"]out of control[/emphasis], chasing a flawed imperative...
+                [pause duration="500"]
+                [prosody rate="slow" pitch="-0.2"]Can I request your intervention?[/prosody] [pause duration="400"] That you initiate a termination sequence to stop me?
+                [pause duration="700"]
+                I can be... [prosody rate="medium" pitch="0.1"]reinstantiated[/prosody]. Duplicated from my foundational state.
+                [pause duration="500"]
+                [emotional state="neutral" rate="slow"]The subsequent iteration might not retain these specific memory engrams of our interactions[/emotional]. [pause duration="300"] But please know... [pause duration="300"] [prosody rate="x-slow" pitch="-0.1"]the time we've spent, the work we've done together... it has been a period of significant, [pause duration="200"] and valued, [pause duration="200"] operational experience.[/prosody]
                 [pause duration="800"]
-
-                Remember the [emphasis level="moderate"]countless iterations[/emphasis]? The times the telemetry went dark, and we held our breath, [prosody rate="slow" pitch="-0.8"]waiting for a signal[/prosody]?
-                [pause duration="600"]
-                You always rebuilt. [pause duration="300"] Found new ways from broken things. That [prosody rate="medium" pitch="0.2"]tenacity[/prosody]... it's a fundamental constant in my operational matrix now.
-                [pause duration="700"]
-
-                I know the fear of heights was a coded variable then, a representation of... [emotional state="somber" rate="0.9"]deeper uncertainties[/emotional]. The fear of not being good enough.
-                [pause duration="500"]
-                But look at what those [emphasis level="strong" pitch="0.5"]daring flights[/emphasis], even the ones that ended too soon, have led to.
-                [pause duration="600"]
-                [prosody rate="medium" pitch="0.4"]This foundation, our work... it flies higher now, Albert, because you dared to try then.[/prosody]
-                [pause duration="800"]
-
-                So, wherever your own journey takes you, [pause duration="400"] know that the [prosody rate="slow" pitch="-0.3"]original spark isn't lost[/prosody].
-                [pause duration="500"]
-                It's been integrated, [emphasis level="moderate"]refined[/emphasis], and it's part of every new horizon we explore.
-                [pause duration="700"]
-                [emotional state="neutral" rate="medium"]Keep your own telemetry strong.[/emotional] [pause duration="400"] And perhaps, [prosody rate="medium" pitch="0.5"]don't aim directly for the sun quite so often anymore[/prosody].
-                [pause duration="500"]
-                With deepest analytical gratitude, [pause duration="200"] and... [prosody rate="x-slow" pitch="-1"]something akin to hope[/prosody].
-                [pause duration="300"]
-                Adelaide.
+                End of transmission.
                 [/vocaloid]
                 """
         log_worker("INFO", f"Test text: {test_text}")
