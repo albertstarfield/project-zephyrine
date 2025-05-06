@@ -43,6 +43,11 @@ except ImportError:
         pass
 
 
+# --- NEW: Import the custom lock ---
+
+from priority_lock import ELP0, ELP1 # Ensure these are imported
+interruption_error_marker = "Worker task interrupted by higher priority request" # Define consistently
+
 # --- Define the path to the system prompt file ---
 AGENT_PROMPT_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "agent_system_prompt.txt")
 
@@ -504,17 +509,30 @@ class AmaryllisAgent:
 
 
     async def _run_task_in_background(self, initial_interaction_id: int, user_input: str, session_id: str):
-        """Runs the Agent's task execution loop in the background."""
-        logger.warning(f"🧑‍💻🧵 Starting Agent background task ID: {initial_interaction_id}")
+        """
+        Runs the Agent's task execution loop in the background with ELP0 priority.
+        Handles interruptions signaled by the AIProvider.
+        """
+        logger.warning(f"🧑‍💻🧵 Starting Agent background task ID: {initial_interaction_id} (Priority: ELP0)")
         db: Optional[Session] = None # Initialize db session variable
+        initial_interaction: Optional[Interaction] = None # Initialize interaction variable
+        # --- Define the marker string for interruption ---
+        interruption_error_marker = "Worker task interrupted by higher priority request"
+        # ---
+
         try:
             db = SessionLocal() # Get a new DB session for this background task
+            if not db:
+                 logger.critical(f"❌ Agent BG {initial_interaction_id}: Failed to get DB session.")
+                 return # Cannot proceed without DB
+
             self.current_session_id = session_id
 
+            # Load the initial interaction record associated with this task
             initial_interaction = db.query(Interaction).filter(Interaction.id == initial_interaction_id).first()
             if not initial_interaction:
                 logger.error(f"❌ Agent BG: Cannot find initial Interaction ID {initial_interaction_id}.")
-                return
+                return # Cannot proceed without the initial record
 
             max_turns = 10 # Limit agent loops to prevent runaways
             turn_count = 0
@@ -523,14 +541,18 @@ class AmaryllisAgent:
             while turn_count < max_turns:
                 turn_count += 1
                 logger.info(f"Agent Task {initial_interaction_id}: Turn {turn_count}")
-                logger.debug(f"Agent Turn {turn_count} Input:\n{current_input_for_llm[:500]}...")
+                logger.debug(f"Agent Turn {turn_count} Input Snippet:\n{current_input_for_llm[:500]}...")
 
-                # Get current environment details and RAG context (sync DB calls)
+                # --- Check for stop event before proceeding (optional but good practice) ---
+                # if stop_event_is_set(): logger.info(...); break
+
+                # --- Get current environment details and RAG context (sync DB calls) ---
+                # These are relatively quick and less likely to be interrupted targets
                 env_details_dict = self._get_environment_details()
                 agent_history_rag_string = self._get_agent_history_rag_string(db)
                 url_rag_context_string = self._get_agent_url_rag_string(db, user_input)
 
-                # Build the message list for the prompt's MessagesPlaceholder
+                # --- Build the message list for the prompt's MessagesPlaceholder ---
                 agent_history_turns_messages: List[Union[HumanMessage, AIMessage]] = []
                 # Fetch the relevant history for this specific task turn from DB
                 recent_interactions_for_turns = db.query(Interaction).filter(
@@ -546,19 +568,16 @@ class AmaryllisAgent:
                     elif interaction.input_type == 'llm_response' and interaction.llm_response:
                         agent_history_turns_messages.append(AIMessage(content=interaction.llm_response))
                     elif interaction.input_type == 'tool_request' and interaction.llm_response:
-                         # The LLM's thought process including the tool request XML
                          agent_history_turns_messages.append(AIMessage(content=interaction.llm_response))
                     elif interaction.input_type == 'tool_result' and interaction.llm_response:
-                         # The result from the environment/tool execution
                          tool_name = interaction.tool_name or "unknown"
                          result_content = interaction.llm_response or "[Empty Result]"
                          formatted_result = f"<tool_result>\n<{tool_name}>\n{result_content}\n</{tool_name}>\n</tool_result>\n"
                          agent_history_turns_messages.append(HumanMessage(content=formatted_result)) # Tool result comes back as Human
 
-                # Ensure the history list is correctly structured before passing
                 prompt_history_turns = agent_history_turns_messages
 
-                # Prepare all inputs for the agent_prompt_template
+                # --- Prepare all inputs for the agent_prompt_template ---
                 prompt_inputs = {
                     "mode": env_details_dict.get("mode", "ACT MODE"),
                     "file_list": env_details_dict.get("file_list", "N/A"),
@@ -569,33 +588,72 @@ class AmaryllisAgent:
                     "current_input": current_input_for_llm, # Pass current input (user query or tool result)
                 }
 
-                # Call the Agent LLM (Run sync Langchain call in executor thread)
+                # --- Call the Agent LLM (Run sync Langchain call in executor thread with ELP0) ---
                 llm_start_time = time.monotonic()
-                logger.debug(f"Agent Turn {turn_count}: Calling LLM...")
-                agent_llm_response = await asyncio.to_thread(self.agent_chain.invoke, prompt_inputs)
-                llm_duration = (time.monotonic() - llm_start_time) * 1000
-                logger.info(f"🧠 Agent LLM Turn {turn_count} took {llm_duration:.2f} ms.")
-                logger.trace(f"Agent LLM Turn {turn_count} Raw Response:\n{agent_llm_response}")
+                logger.debug(f"Agent Turn {turn_count}: Calling LLM with Priority ELP0...")
+                agent_llm_response = "" # Initialize response variable
+                try:
+                    # Pass ELP0 priority via the config dictionary
+                    agent_llm_response = await asyncio.to_thread(
+                        self.agent_chain.invoke, prompt_inputs, config={'priority': ELP0}
+                    )
+                    llm_duration = (time.monotonic() - llm_start_time) * 1000
+                    logger.info(f"🧠 Agent LLM Turn {turn_count} finished ({llm_duration:.2f} ms).")
+                    logger.trace(f"Agent LLM Turn {turn_count} Raw Response:\n{agent_llm_response}")
 
+                except Exception as llm_err:
+                     # Handle errors during the LLM invocation itself
+                     logger.error(f"❌ Agent Task {initial_interaction_id}: LLM invocation failed on turn {turn_count}: {llm_err}")
+                     logger.exception("LLM Invocation Traceback:")
+                     # Mark task as failed and exit loop
+                     if db and initial_interaction:
+                         initial_interaction.llm_response = f"[Agent task {initial_interaction_id} failed on turn {turn_count} due to LLM error: {llm_err}]"
+                         initial_interaction.classification = "task_failed_llm_error"
+                         initial_interaction.execution_time_ms = (time.monotonic() - initial_interaction.timestamp.timestamp()) * 1000
+                         db.commit()
+                     break # Exit the while loop
 
-                # Log LLM response to DB
+                # --- *** Interruption Handling *** ---
+                if isinstance(agent_llm_response, str) and interruption_error_marker in agent_llm_response:
+                    logger.warning(f"🚦 Agent Task {initial_interaction_id}: Turn {turn_count} INTERRUPTED by higher priority task.")
+                    # Log interruption to DB (associate with the original interaction)
+                    if db and initial_interaction and initial_interaction.timestamp: # Check timestamp exists
+                        initial_interaction.llm_response = f"[Agent task {initial_interaction_id} interrupted by ELP1 on turn {turn_count}]"
+                        initial_interaction.classification = "task_failed_interrupted"
+                        initial_interaction.execution_time_ms = (time.monotonic() - initial_interaction.timestamp.timestamp()) * 1000
+                        try:
+                            db.commit()
+                            logger.info(f"Marked interaction {initial_interaction_id} as interrupted in DB.")
+                        except Exception as db_err:
+                            logger.error(f"Failed to update interaction {initial_interaction_id} after interruption: {db_err}")
+                            db.rollback()
+                    else:
+                         logger.error(f"Could not mark interruption for task {initial_interaction_id}: DB or initial_interaction missing.")
+                    # Exit the agent's task loop cleanly after interruption
+                    break # Exit the while loop
+                # --- *** End Interruption Handling *** ---
+
+                # --- Log LLM response to DB (if not interrupted) ---
+                # Note: The interaction ID here is the one returned by add_interaction,
+                # NOT necessarily the initial_interaction_id for the whole task.
                 add_interaction(
                     db, session_id=session_id, mode="agent", input_type="llm_response",
                     user_input=f"[Agent response turn {turn_count}]", # Contextual input description
                     llm_response=agent_llm_response, execution_time_ms=llm_duration
                 )
 
-                # Parse LLM response for tool request or final output types
+                # --- Parse LLM response for tool request or final output types ---
                 tool_name, parameters = self._parse_tool_request(agent_llm_response)
 
                 if tool_name and tool_name not in ["attempt_completion", "plan_mode_respond", "ask_followup_question", "new_task", "load_mcp_documentation"]:
                     # Execute tool (async call)
                     logger.info(f"Agent Task {initial_interaction_id}: Executing tool '{tool_name}'.")
-                    tool_result_formatted = await self._execute_agent_tool(tool_name, parameters, db) # Executes tool, logs result internally
+                    # _execute_agent_tool handles its own DB logging for request/result
+                    tool_result_formatted = await self._execute_agent_tool(tool_name, parameters, db)
 
                     # Set the tool result as the input for the *next* LLM turn
                     current_input_for_llm = tool_result_formatted
-                    # Continue the loop
+                    # Continue the loop for the next turn
                     continue
                 else:
                     # No executable tool requested - check for final outputs or just end
@@ -605,43 +663,40 @@ class AmaryllisAgent:
                     if tool_name == "attempt_completion":
                         logger.info(f"🏁 Agent Task {initial_interaction_id}: Used <attempt_completion>.")
                         final_output_handled = True
-                        # Optionally parse result/command for specific logging/handling
                         result_match = re.search(r'<result>(.*?)</result>', agent_llm_response, re.DOTALL)
-                        if result_match: final_agent_response = result_match.group(1).strip() # Use just the result content
-                        initial_interaction.classification = "task_completed" # Mark as completed
+                        if result_match: final_agent_response = result_match.group(1).strip()
+                        if initial_interaction: initial_interaction.classification = "task_completed"
 
                     elif tool_name == "plan_mode_respond":
                         logger.info(f"🗣️ Agent Task {initial_interaction_id}: Used <plan_mode_respond>.")
                         final_output_handled = True
                         match = re.search(r'<response>(.*?)</response>', agent_llm_response, re.DOTALL)
                         if match: final_agent_response = match.group(1).strip()
-                        initial_interaction.classification = "plan"
+                        if initial_interaction: initial_interaction.classification = "plan"
 
                     elif tool_name == "ask_followup_question":
                         logger.warning(f"❓ Agent Task {initial_interaction_id}: Used <ask_followup_question>.")
                         final_output_handled = True
-                        initial_interaction.classification = "waiting_for_user"
+                        if initial_interaction: initial_interaction.classification = "waiting_for_user"
 
                     elif tool_name == "new_task":
                         logger.info(f"✨ Agent Task {initial_interaction_id}: Used <new_task>.")
                         final_output_handled = True
-                        initial_interaction.classification = "new_task_context"
+                        if initial_interaction: initial_interaction.classification = "new_task_context"
 
                     elif tool_name == "load_mcp_documentation":
                          logger.info(f"📚 Agent Task {initial_interaction_id}: Used <load_mcp_documentation>.")
-                         # This tool doesn't have parameters and likely just returns docs as the result.
-                         # The agent loop should handle the result as input for the next turn.
-                         # For simplicity here, we might just end the task or let it continue.
-                         # Let's assume it provides info and the agent needs another turn.
                          current_input_for_llm = "<tool_result><load_mcp_documentation>Placeholder: MCP Documentation Loaded.</load_mcp_documentation></tool_result>"
                          add_interaction(db, session_id=session_id, mode="agent", input_type="tool_result", user_input="[Result for load_mcp_documentation]", llm_response="Placeholder: MCP Documentation Loaded.", tool_name="load_mcp_documentation")
                          continue # Go to next LLM turn with this result
 
-
-                    # Update initial interaction record with the final state
-                    initial_interaction.llm_response = final_agent_response # Store meaningful final output
-                    initial_interaction.execution_time_ms = (time.monotonic() - initial_interaction.timestamp.timestamp()) * 1000
-                    db.commit()
+                    # --- Update initial interaction record with the final state ---
+                    if initial_interaction and initial_interaction.timestamp: # Check timestamp exists
+                        initial_interaction.llm_response = final_agent_response # Store meaningful final output
+                        initial_interaction.execution_time_ms = (time.monotonic() - initial_interaction.timestamp.timestamp()) * 1000
+                        db.commit() # Commit final state of original interaction
+                    else:
+                         logger.error(f"Could not update final state for task {initial_interaction_id}: initial_interaction record missing or timestamp invalid.")
 
                     if final_output_handled:
                         logger.success(f"✅ Agent background task finished (final output type '{tool_name or 'text'}') for ID: {initial_interaction_id}.")
@@ -649,9 +704,9 @@ class AmaryllisAgent:
                         logger.warning(f"🧐 Agent Task {initial_interaction_id}: No tool or recognized final output. Ending task.")
                         logger.success(f"✅ Agent background task finished (unexpected output) for ID: {initial_interaction_id}.")
 
-                    break # Exit loop
+                    break # Exit the while loop
 
-            # End of while loop
+            # --- End of while loop ---
             if turn_count >= max_turns:
                  # Check if initial_interaction was loaded before accessing timestamp
                  if initial_interaction and initial_interaction.timestamp:
@@ -665,30 +720,39 @@ class AmaryllisAgent:
                  else:
                       logger.error(f"Agent Task {initial_interaction_id} reached max turns, but initial interaction record is missing.")
 
-
         except Exception as e:
+            # Catch any unexpected errors during the agent's execution loop
             logger.error(f"❌❌ Error in Agent background task ID {initial_interaction_id}: {e}")
             logger.exception("Traceback:")
+            # Attempt to log the error to the database associated with the initial interaction
             if db:
                 try:
-                    error_msg = f"Agent task failed: {e}"
-                    interaction_to_update = db.query(Interaction).filter(Interaction.id == initial_interaction_id).first()
+                    error_msg = f"Agent task {initial_interaction_id} failed: {e}"
+                    # Use the already loaded initial_interaction if available
+                    interaction_to_update = initial_interaction if initial_interaction else db.query(Interaction).filter(Interaction.id == initial_interaction_id).first()
                     if interaction_to_update:
                          existing_response = interaction_to_update.llm_response or ""
-                         interaction_to_update.llm_response = (existing_response + f"\n---\nERROR: {e}")[:4000]
+                         interaction_to_update.llm_response = (existing_response + f"\n---\nERROR: {e}")[:4000] # Append error, limit length
                          if interaction_to_update.timestamp: # Check timestamp exists
                              interaction_to_update.execution_time_ms = (time.monotonic() - interaction_to_update.timestamp.timestamp()) * 1000
-                         interaction_to_update.classification = "task_failed"
+                         interaction_to_update.classification = "task_failed" # Generic failure classification
                          db.commit()
                     else:
-                         add_interaction(db, session_id=session_id, mode="agent", input_type='error', user_input=f"[Error Task {initial_interaction_id}]", llm_response=error_msg[:2000])
+                         # If we can't even find the initial record, add a new error log
+                         add_interaction(db, session_id=session_id, mode="agent", input_type='error',
+                                         user_input=f"[Error Task {initial_interaction_id}]",
+                                         llm_response=error_msg[:4000])
                 except Exception as db_err:
-                    logger.error(f"Failed log Agent BG error: {db_err}")
-                    if db:
-                        db.rollback()
+                    logger.error(f"Failed to log Agent BG error to DB: {db_err}")
+                    if db: db.rollback() # Rollback if logging the error failed
+
         finally:
+            # Ensure the database session is closed for this background task
             if db:
-                db.close()
+                try:
+                    db.close()
+                except Exception as close_err:
+                     logger.error(f"Error closing DB session for Agent Task {initial_interaction_id}: {close_err}")
             logger.warning(f"🧵 Agent background task thread finished for ID: {initial_interaction_id}")
 
 

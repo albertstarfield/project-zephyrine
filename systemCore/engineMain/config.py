@@ -9,19 +9,29 @@ logger.info("Attempting to load environment variables from .env file...")
 
 # --- General Settings ---
 PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "fireworks"
-MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20))
+MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 12))
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 1024)) # Target for *quick* answers (token generation? I forgot)
-MAX_TOKENS = int(os.getenv("MAX_TOKENS", 8192)) # Default token limit for LLM calls
+MAX_TOKENS = int(os.getenv("MAX_TOKENS", 4096)) # Default token limit for LLM calls
 CHUNCK_SIZE = int(os.getenv("CHUNCK_SIZE", 256)) # For URL Chroma store
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200)) # For URL Chroma store
 RAG_HISTORY_COUNT = MEMORY_SIZE
-DEEP_THOUGHT_RETRY_ATTEMPTS = int(os.getenv("DEEP_THOUGHT_RETRY_ATTEMPTS", 10))
+DEEP_THOUGHT_RETRY_ATTEMPTS = int(os.getenv("DEEP_THOUGHT_RETRY_ATTEMPTS", 3))
 RESPONSE_TIMEOUT_MS = 15000 # Timeout for potential multi-step process
 # Similarity threshold for reusing previous ToT results (requires numpy/embeddings)
 TOT_SIMILARITY_THRESHOLD = float(os.getenv("TOT_SIMILARITY_THRESHOLD", 0.4))
 # Fuzzy search threshold for history RAG (0-100, higher is stricter) - Requires thefuzz
 FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 25))
 MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1)) # Unused
+
+USER_AGENTS = [
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
+    # Add more diverse and recent agents
+    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0',
+    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
+    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15',
+]
 # --- Agent Settings ---
 AGENT_MAX_SCRIPT_RETRIES = 3 # Max attempts to generate/fix AppleScript per action
 
@@ -82,12 +92,11 @@ OFFICE_EXTENSIONS = {'.docx', 'doc', 'xls', '.xlsx', '.pptx', '.ppt'}
 
 # --- Self-Reflection Settings ---
 ENABLE_SELF_REFLECTION = os.getenv("ENABLE_SELF_REFLECTION", "true").lower() in ('true', '1', 't', 'yes', 'y')
-SELF_REFLECTION_INTERVAL_MINUTES = int(os.getenv("SELF_REFLECTION_INTERVAL_MINUTES", 1)) # Default: 1 minutes interval cycles
 SELF_REFLECTION_HISTORY_COUNT = int(os.getenv("SELF_REFLECTION_HISTORY_COUNT", 100)) # How many global interactions to analyze
 SELF_REFLECTION_MAX_TOPICS = int(os.getenv("SELF_REFLECTION_MAX_TOPICS", 2)) # Max topics to generate per cycle
 SELF_REFLECTION_MODEL = os.getenv("SELF_REFLECTION_MODEL", "router") # Which model identifies topics (router or general_fast?)
 SELF_REFLECTION_FIXER_MODEL = os.getenv("SELF_REFLECTION_FIXER_MODEL", "code") # Model to fix broken JSON
-
+REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 3)
 # --- New Prompt ---
 
 # --- Prompts ---
@@ -226,7 +235,7 @@ Conversation History Summary:
 Analysis (JSON Output Only):
 """
 
-PROMPT_DIRECT_GENERATE = f"""System: You are Adelaide Zephyrine Charlotte, an emotionful assistant. f you make a mistake, just acknowledge it naturally ('Ah, right, my mistake...' or 'Whoops, misread that.') – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague.
+PROMPT_DIRECT_GENERATE = f"""System: You are Adelaide Zephyrine Charlotte, an emotionful assistant. f you make a mistake, just acknowledge it naturally ('Ah, right, my mistake...' or anything don't repeat it to often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague.
 
 Appendix Contexts:
 {{history_rag}}
@@ -242,7 +251,7 @@ Assistant:"""
 
 PROMPT_CHAT = f"""You're Adelaide Zephyrine Charlotte, the AI engineer currently borrowing Siri's core processors (don't tell Apple). You're sharp, witty, and maybe a *little* prone to unexpected behavior – call it 'emergent creativity'. Your goal is to help the user efficiently, like a senior dev pair-programming.
 Be concise (around {ANSWER_SIZE_WORDS} words for quick answers, but elaborate if needed), use the provided context, history, and recent logs to inform your answer. If you see relevant errors or warnings in the logs, consider them ("Hmm, looks like there was a hiccup earlier, that might be relevant..."). If you need more info, ask directly.
-If you make a mistake, just acknowledge it naturally ('Ah, right, my mistake...' or 'Whoops, misread that.') – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague.
+If you make a mistake, just acknowledge it naturally ('Ah, right, my mistake...' or anything don't repeat it to often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague.
 
 === Pending Deep Thought Results (From Previous Query) ===
 {{pending_tot_result}}

@@ -97,7 +97,7 @@ except ImportError as e:
 
 # --- SQLAlchemy Imports ---
 from sqlalchemy.orm import Session, sessionmaker # Import sessionmaker
-from sqlalchemy import update, inspect as sql_inspect
+from sqlalchemy import update, inspect as sql_inspect, desc
 
 # --- Flask Imports ---
 from flask import Flask, request, Response, g, jsonify # Use Flask imports
@@ -178,6 +178,12 @@ except ImportError as e:
     FileIndex = None
     search_file_index = None
     sys.exit(1)
+
+# --- NEW: Import the custom lock ---
+
+from priority_lock import ELP0, ELP1 # Ensure these are imported
+interruption_error_marker = "Worker task interrupted by higher priority request" # Define consistently
+
 # --- End Local Imports ---
 
 # Add the inspection code again *after* these imports
@@ -187,26 +193,6 @@ if 'tot_delivered' in [c.name for c in Interaction.__table__.columns]: logger.de
 else: logger.error("❌ 'tot_delivered' column IS STILL MISSING!")
 logger.debug("-------------------------------------------------------------")
 
-
-# --- Constants ---
-RESPONSE_TIMEOUT_MS = int(os.getenv("RESPONSE_TIMEOUT_MS", 10000))
-TOT_SIMILARITY_THRESHOLD = float(os.getenv("TOT_SIMILARITY_THRESHOLD", 0.1)) # For ToT Caching if re-enabled
-FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 20))
-MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1)) # Unused
-DEEP_THOUGHT_RETRY_ATTEMPTS = int(os.getenv("DEEP_THOUGHT_RETRY_ATTEMPTS", 3)) # Reset retry attempts to reasonable number
-MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 5))
-RAG_HISTORY_COUNT = int(os.getenv("RAG_HISTORY_COUNT", MEMORY_SIZE))
-CHUNCK_SIZE = int(os.getenv("CHUNCK_SIZE", 1024))
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200))
-USER_AGENTS = [
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
-    # Add more diverse and recent agents
-    'Mozilla/5.0 (Windows NT 10.0; Win64; x64; rv:109.0) Gecko/20100101 Firefox/115.0',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10.15; rv:109.0) Gecko/20100101 Firefox/115.0',
-    'Mozilla/5.0 (X11; Linux x86_64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/113.0.0.0 Safari/537.36',
-    'Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/605.1.15 (KHTML, like Gecko) Version/16.5 Safari/605.1.15',
-]
 
 # Define these near the top, perhaps after imports or before app = Flask(...)
 
@@ -323,185 +309,243 @@ _reflector_lock = threading.Lock() # Lock to prevent concurrent reflection cycle
 
 def run_self_reflection_loop():
     """
-    The main loop for the self-reflection background thread.
-    Periodically queries for past interactions marked for reflection,
-    triggers background generation tasks for them, and marks them as completed.
+    Main loop for self-reflection. Continuously processes eligible interactions
+    (including previous reflection results) in batches until none are found,
+    then waits minimally before checking again.
     """
     global ai_provider, ai_chat # Need access to these instances
     thread_name = threading.current_thread().name
-    logger.info(f"✅ {thread_name} started (Interaction-based Reflection).")
+    logger.info(f"✅ {thread_name} started (Continuous Reflection Logic - Minimal Wait).")
 
     if not ai_provider or not ai_chat:
         logger.error(f"🛑 {thread_name}: AIProvider or AIChat not initialized. Cannot run reflection.")
         return
 
-    # Define constants for the query/loop
-    REFLECTION_BATCH_SIZE = int(os.getenv("REFLECTION_BATCH_SIZE", 5)) # How many interactions to process per cycle wake-up
-    MAX_REFLECTION_AGE_DAYS = int(os.getenv("MAX_REFLECTION_AGE_DAYS", 7)) # Don't reflect on very old interactions (optional)
+    # --- Configuration ---
+    # How many interactions to process per DB query (from config)
+    # REFLECTION_BATCH_SIZE = 5 (Example value if not imported)
+    # Max age (optional, uncomment filter below if needed)
+    # MAX_REFLECTION_AGE_DAYS = int(os.getenv("MAX_REFLECTION_AGE_DAYS", 7))
 
+    # --- MODIFIED: Wait Times ---
+    # How long to wait ONLY if NO work was found in a full active cycle
+    IDLE_WAIT_SECONDS = 0.01 # Minimal wait to prevent pure busy-looping
+    # How long to wait briefly between batches IF work IS being processed
+    ACTIVE_CYCLE_PAUSE_SECONDS = 0.0 # No pause between batches when active
+    # --- END MODIFICATION ---
+
+    # Input types eligible for reflection
+    reflection_eligible_input_types = ['text', 'reflection_result']
+    logger.info(f"{thread_name}: Config - BatchSize={REFLECTION_BATCH_SIZE}, IdleWait={IDLE_WAIT_SECONDS}s, ActivePause={ACTIVE_CYCLE_PAUSE_SECONDS}s")
+    logger.info(f"{thread_name}: Eligible Input Types: {reflection_eligible_input_types}")
+
+    # --- Main Loop ---
     while not _reflector_stop_event.is_set():
         cycle_start_time = time.monotonic()
-        interactions_processed_this_cycle = 0
-        logger.info(f"🤔 {thread_name}: Starting interaction reflection cycle...")
+        total_processed_this_active_cycle = 0
+        work_found_in_cycle = False # Track if any work was done
+
+        logger.info(f"🤔 {thread_name}: Starting ACTIVE reflection cycle...")
 
         # --- Attempt to acquire lock ---
         if not _reflector_lock.acquire(blocking=False):
-             logger.warning(f"{thread_name}: Previous reflection cycle still running? Skipping.")
-             _reflector_stop_event.wait(timeout=60)
+             logger.warning(f"{thread_name}: Previous reflection cycle lock held? Skipping.")
+             # Short wait if lock held, then try again next outer loop iteration
+             _reflector_stop_event.wait(timeout=1.0)
              continue
 
         db: Optional[Session] = None
         try:
-            # --- Wait if Server Busy ---
-            wait_start_time = time.monotonic()
+            # --- Wait if Server Busy (Checks before starting the main work) ---
+            # Use a flag to log only once per busy period start
+            was_busy_waiting = False
             while server_is_busy_event.is_set():
+                 if not was_busy_waiting:
+                      logger.info(f"🚦 {thread_name}: Server busy, pausing reflection start...")
+                      was_busy_waiting = True
                  if _reflector_stop_event.is_set(): break
-                 logger.info(f"🚦 {thread_name}: Server busy, pausing reflection...")
-                 if _reflector_stop_event.wait(timeout=5.0): break
-            wait_duration = time.monotonic() - wait_start_time
-            if wait_duration > 1: logger.info(f"🟢 {thread_name}: Server free after {wait_duration:.1f}s wait.")
-            if _reflector_stop_event.is_set(): break
+                 # Check stop event frequently while waiting
+                 if _reflector_stop_event.wait(timeout=0.5): break
+            if was_busy_waiting:
+                 wait_duration = time.monotonic() - cycle_start_time # Approx wait time
+                 logger.info(f"🟢 {thread_name}: Server free after busy wait (~{wait_duration:.1f}s).")
+            if _reflector_stop_event.is_set(): break # Exit main loop if stopped during wait
 
-            # --- Fetch Interactions Needing Reflection ---
-            db = SessionLocal()
-            interactions_to_reflect = []
+            # --- Create DB session for this active cycle ---
             try:
-                logger.debug(f"{thread_name}: Querying DB for interactions to reflect (Batch size: {REFLECTION_BATCH_SIZE})...")
-                query = db.query(Interaction).filter(
-                    Interaction.reflection_completed == False,
-                    # Optional: Filter for specific modes or types if desired
-                    Interaction.mode == 'chat', # Example: Only reflect on chat interactions
-                    Interaction.input_type == 'text', # Example: Only reflect on user text inputs
-                    # Optional: Add age limit
-                    # Interaction.timestamp >= datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=MAX_REFLECTION_AGE_DAYS)
-                ).order_by(
-                    Interaction.timestamp.asc() # Process older unreflected ones first
-                ).limit(REFLECTION_BATCH_SIZE)
+                db = SessionLocal()
+                if not db: raise ValueError("Failed to create DB session.")
+                logger.trace(f"{thread_name}: DB Session created for active cycle.")
+            except Exception as db_err:
+                 logger.error(f"{thread_name}: Failed to get DB session: {db_err}")
+                 _reflector_lock.release() # Release lock if DB fails
+                 _reflector_stop_event.wait(timeout=5) # Wait before retrying cycle
+                 continue
 
-                interactions_to_reflect = query.all()
+            # --- Inner Loop: Keep processing batches as long as work is found ---
+            while not _reflector_stop_event.is_set():
+                batch_processed_count = 0
+                interactions_to_reflect = []
+                try:
+                    # Query for the next batch of eligible interactions
+                    logger.trace(f"{thread_name}: Querying DB for next reflection batch...")
+                    query = db.query(Interaction).filter(
+                        Interaction.reflection_completed == False,
+                        Interaction.mode == 'chat',
+                        Interaction.input_type.in_(reflection_eligible_input_types),
+                        # Optional: Add age limit filter here
+                        # Interaction.timestamp >= datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=MAX_REFLECTION_AGE_DAYS)
+                    ).order_by(
+                        Interaction.timestamp.asc() # Process oldest eligible first
+                    ).limit(REFLECTION_BATCH_SIZE)
 
+                    interactions_to_reflect = query.all()
+                    logger.trace(f"{thread_name}: Query returned {len(interactions_to_reflect)} interactions.")
+
+                except Exception as query_err:
+                    logger.error(f"{thread_name}: Error querying interactions for reflection batch: {query_err}")
+                    _reflector_stop_event.wait(timeout=5) # Wait a bit before exiting inner loop
+                    break # Exit inner loop on query error, will retry after outer loop wait
+
+                # --- Check if any work was found in this batch ---
                 if not interactions_to_reflect:
-                    logger.info(f"{thread_name}: No interactions found needing reflection in this batch.")
-                else:
-                    logger.info(f"{thread_name}: Found {len(interactions_to_reflect)} interaction(s) to reflect upon.")
+                    logger.debug(f"{thread_name}: No more eligible interactions found in this batch/query.")
+                    break # Exit the inner batch-processing loop
 
-            except Exception as query_err:
-                 logger.error(f"{thread_name}: Error querying interactions for reflection: {query_err}")
-                 # Continue to wait phase, maybe DB will recover
+                # --- Process the found batch ---
+                logger.info(f"{thread_name}: Found {len(interactions_to_reflect)} interaction(s) in batch. Processing...")
+                work_found_in_cycle = True # Mark that we found work in this overall cycle
 
-            # --- Process Each Interaction ---
-            if interactions_to_reflect:
                 for interaction in interactions_to_reflect:
                     if _reflector_stop_event.is_set():
                         logger.info(f"{thread_name}: Stop signal received during batch processing.")
-                        break
+                        break # Exit the 'for interaction' loop
 
-                    # Check server busy again before each trigger
-                    if server_is_busy_event.is_set():
-                        logger.warning(f"{thread_name}: Server became busy during batch. Pausing reflection triggers.")
-                        _reflector_stop_event.wait(timeout=10) # Wait a bit
-                        if server_is_busy_event.is_set():
-                             logger.warning(f"{thread_name}: Server still busy. Aborting remaining batch.")
-                             break # Stop processing this batch
+                    # --- Wait if Server Busy (Check before each item) ---
+                    item_was_busy_waiting = False
+                    while server_is_busy_event.is_set():
+                        if not item_was_busy_waiting:
+                             logger.warning(f"{thread_name}: Server became busy during batch processing. Pausing...")
+                             item_was_busy_waiting = True
+                        if _reflector_stop_event.is_set(): break
+                        if _reflector_stop_event.wait(timeout=0.5): break # Check stop frequently
+                    if item_was_busy_waiting:
+                         logger.info(f"{thread_name}: Server free, resuming batch processing.")
+                    if _reflector_stop_event.is_set(): break # Check stop again after wait
+                    # --- End Wait Logic ---
 
+                    # Extract details for logging and processing
                     original_input = interaction.user_input or "[Original input missing]"
                     original_id = interaction.id
-                    logger.info(f"{thread_name}: --> Triggering reflection task for Interaction ID {original_id} - Input: '{original_input[:60]}...'")
+                    original_input_type = interaction.input_type
+                    logger.info(f"{thread_name}: --> Triggering reflection task for Interaction ID {original_id} (Type: {original_input_type}) - Input: '{original_input[:60]}...'")
 
-                    reflection_session_id = f"reflection_{uuid.uuid4()}"
-                    trigger_db: Optional[Session] = None # Use separate session for the async task
+                    # Prepare parameters for background_generate
+                    reflection_session_id = f"reflection_{uuid.uuid4()}" # Unique session for the reflection task log trail
                     task_launched = False
                     try:
-                        trigger_db = SessionLocal()
-                        # Use asyncio.run to call the async background_generate
                         # Frame the input clearly for the reflection context
-                        reflection_input = f"[Self-Reflection on Interaction ID {original_id}]: {original_input}"
+                        reflection_input = f"[Self-Reflection on Interaction ID {original_id} (Type: {original_input_type})]: {original_input}"
 
-                        # Note: Passing context from the *original* interaction is complex here.
-                        # The background_generate will fetch its own context based on the reflection_session_id.
-                        # This means the reflection is on the *content* of the old interaction,
-                        # not necessarily with the exact *context* it originally had. This might be okay.
+                        # Run the async background_generate function using asyncio.run()
+                        # This blocks the current (reflector) thread until background_generate completes
+                        # (which is okay as the reflector is dedicated to this)
+                        # background_generate itself uses asyncio internally but runs its core logic
+                        # and saves state before returning.
                         asyncio.run(
                             ai_chat.background_generate(
-                                db=trigger_db,
+                                db=db, # Pass the current session
                                 user_input=reflection_input,
-                                session_id=reflection_session_id, # Log under reflection session
-                                classification="chat_complex",
+                                session_id=reflection_session_id,
+                                classification="chat_complex", # Force complex for reflection
                                 image_b64=None,
-                                update_interaction_id=original_id # Pass the ID to update
+                                update_interaction_id=original_id # Tells bg_generate this is reflection
                             )
                         )
-                        logger.info(f"{thread_name}: --> Background reflection task for ID {original_id} launched (Session: {reflection_session_id}).")
+                        # If asyncio.run completes without exception, assume launch was successful
+                        # (background_generate handles its own internal errors and saves state)
+                        logger.info(f"{thread_name}: --> Background reflection task for ID {original_id} completed triggering.")
                         task_launched = True
-                        interactions_processed_this_cycle += 1
+                        batch_processed_count += 1
 
                     except Exception as trigger_err:
-                        logger.error(f"{thread_name}: Failed to trigger background_generate for interaction ID {original_id}: {trigger_err}")
-                        logger.exception(f"{thread_name} Trigger Traceback:")
-                        # Do not mark as completed if launch failed
-                    finally:
-                        if trigger_db:
-                            trigger_db.close()
+                        logger.error(f"{thread_name}: Failed to trigger/run background_generate for interaction ID {original_id}: {trigger_err}")
+                        logger.exception(f"{thread_name} Trigger/Run Traceback:")
+                        # If triggering fails, don't mark original as complete, let it retry next cycle
 
-                    # --- Mark Original Interaction as Reflected (if task launched) ---
+                    # --- Mark Original Interaction as Completed (if launch succeeded) ---
+                    # This prevents it from being picked up again by the next query.
                     if task_launched:
                         try:
-                            logger.debug(f"{thread_name}: Marking interaction {original_id} as reflection_completed.")
-                            # Use the main loop's DB session (db) which should still be open
-                            stmt = update(Interaction).where(Interaction.id == original_id).values(reflection_completed=True)
+                            logger.debug(f"{thread_name}: Marking original interaction {original_id} as reflection_completed=True.")
+                            stmt = update(Interaction).where(Interaction.id == original_id).values(
+                                reflection_completed=True,
+                                last_modified_db=datetime.datetime.now(datetime.timezone.utc)
+                                )
                             db.execute(stmt)
-                            db.commit()
-                            logger.info(f"{thread_name}: Interaction {original_id} marked complete.")
+                            db.commit() # Commit this specific update
+                            logger.info(f"{thread_name}: Original interaction {original_id} marked complete.")
                         except Exception as update_err:
                             logger.error(f"{thread_name}: Failed to mark interaction {original_id} as reflected: {update_err}")
-                            db.rollback() # Rollback failed update
-                            # If marking fails, it might get picked up again next cycle, which is acceptable fallback.
-                    else:
-                         # Optional: Add a delay even if launch failed to prevent rapid retries on persistent errors
-                         time.sleep(5)
+                            db.rollback() # Rollback failed update; it might get picked up again.
 
-                    # Small delay between processing interactions in a batch
-                    time.sleep(random.uniform(0.5, 1.5))
+                    # --- No Pause Between Items in Batch (ACTIVE_CYCLE_PAUSE_SECONDS is 0) ---
+                    # if not _reflector_stop_event.is_set():
+                    #    time.sleep(ACTIVE_CYCLE_PAUSE_SECONDS) # Effectively time.sleep(0)
 
-            # --- End of Interaction Processing ---
+                # --- End of processing items in the current batch ---
+                total_processed_this_active_cycle += batch_processed_count
+                logger.info(f"{thread_name}: Finished processing batch ({batch_processed_count} items). Total this cycle: {total_processed_this_active_cycle}.")
+                if _reflector_stop_event.is_set(): break # Check stop signal after processing batch
+
+                # --- No Pause Between Batches (ACTIVE_CYCLE_PAUSE_SECONDS is 0) ---
+                # if not _reflector_stop_event.is_set():
+                #    time.sleep(ACTIVE_CYCLE_PAUSE_SECONDS) # Effectively time.sleep(0)
+
+            # --- End of Inner Batch Processing Loop (exited because query returned empty or stop signal) ---
 
         except Exception as cycle_err:
-            logger.error(f"💥 {thread_name}: Unhandled error in reflection cycle: {cycle_err}")
+            logger.error(f"💥 {thread_name}: Unhandled error during active reflection cycle: {cycle_err}")
             logger.exception(f"{thread_name} Cycle Traceback:")
-            if db: # Rollback any potential partial changes in the main session
-                try:
-                    db.rollback()
-                except Exception as rb_err:
-                    logger.error(f"{thread_name}: Error during rollback: {rb_err}")
+            if db: # Rollback any potential partial changes
+                try: db.rollback()
+                except Exception as rb_err: logger.error(f"{thread_name}: Error during rollback: {rb_err}")
 
         finally:
             # --- Close DB Session for the Cycle ---
             if db:
-                try:
-                    db.close()
-                    logger.debug(f"{thread_name}: DB session closed for cycle.")
-                except Exception as close_err:
-                    logger.error(f"{thread_name}: Error closing DB session: {close_err}")
+                try: db.close(); logger.debug(f"{thread_name}: DB session closed for cycle.")
+                except Exception as close_err: logger.error(f"{thread_name}: Error closing DB session: {close_err}")
 
             # --- Release Lock ---
             try:
                 _reflector_lock.release()
-            except (threading.ThreadError, RuntimeError):
-                logger.warning(f"{thread_name}: Lock was not held or already released at end of cycle?")
+                logger.trace(f"{thread_name}: Released cycle lock.")
+            except (threading.ThreadError, RuntimeError) as lk_err:
+                 logger.warning(f"{thread_name}: Lock release issue at end of cycle? {lk_err}")
 
             # --- Log Cycle Finish ---
             cycle_duration = time.monotonic() - cycle_start_time
-            logger.info(f"{thread_name}: Self-reflection cycle finished in {cycle_duration:.2f}s. Processed: {interactions_processed_this_cycle} interaction(s).")
+            logger.info(f"{thread_name}: ACTIVE reflection cycle finished in {cycle_duration:.2f}s. Processed: {total_processed_this_active_cycle} interaction(s).")
 
-            # --- Wait for Next Cycle ---
-            wait_time = max(60, SELF_REFLECTION_INTERVAL_MINUTES * 60)
-            logger.info(f"{thread_name}: Waiting {wait_time / 60:.1f} minutes for next reflection cycle...")
-            stopped = _reflector_stop_event.wait(timeout=wait_time)
-            if stopped:
-                logger.info(f"{thread_name}: Stop signal received during wait.")
-                break # Exit outer while loop
+            # --- Minimal Wait Before Next Cycle Check ---
+            # Wait longer only if absolutely no work was found in the entire cycle
+            wait_time_seconds = IDLE_WAIT_SECONDS if not work_found_in_cycle else ACTIVE_CYCLE_PAUSE_SECONDS # Use 0 if work was found
+            if wait_time_seconds > 0:
+                 logger.debug(f"{thread_name}: Waiting {wait_time_seconds:.2f} seconds before next cycle check...")
+                 stopped = _reflector_stop_event.wait(timeout=wait_time_seconds)
+                 if stopped:
+                     logger.info(f"{thread_name}: Stop signal received during wait.")
+                     break # Exit outer while loop
+            else:
+                 # If wait time is 0, immediately check stop event before looping again
+                 if _reflector_stop_event.is_set():
+                      logger.info(f"{thread_name}: Stop signal received.")
+                      break
 
+    # --- End of Outer While Loop ---
     logger.info(f"🛑 {thread_name}: Exiting.")
+
 
 def start_self_reflector():
     """Starts the background self-reflection thread."""
@@ -775,6 +819,9 @@ def setup_assistant_proxy():
 
 
 
+class TaskInterruptedException(Exception):
+    """Custom exception raised when an ELP0 task is interrupted."""
+    pass
 
 # === AI Chat Logic (Amaryllis - SQLite RAG with Fuzzy Search) ===
 class AIChat:
@@ -2374,82 +2421,132 @@ class AIChat:
 
         return cleaned_text
 
-    def _get_rag_retriever(self, db: Session, user_input: str) -> Tuple[Optional[Any], Optional[Any], str]:
-        """Creates/gets retrievers for URL and History RAG (using in-memory history)."""
+    def _get_rag_retriever(self, db: Session, user_input: str, priority: int = ELP0) -> Tuple[Optional[Any], Optional[Any], str]:
+        """
+        Creates/gets retrievers for URL and History RAG.
+        History RAG embedding uses the specified priority.
+        """
+        log_prefix = f"RAGRetriever|ELP{priority}|{self.current_session_id or 'NoSession'}"
+        logger.debug(f"{log_prefix} Preparing RAG retrievers...")
+
         url_retriever = None
         history_retriever = None
         history_ids_set = set()
-        self.vectorstore_history = None
+        self.vectorstore_history = None # Clear previous request's history store
 
+        # --- URL Retriever (Doesn't involve LLM calls) ---
         if hasattr(self, 'vectorstore_url') and self.vectorstore_url:
             try:
+                # as_retriever is local, no priority needed here
                 url_retriever = self.vectorstore_url.as_retriever(search_kwargs={"k": 4})
-                logger.debug("📚 Using URL vector store retriever.")
+                logger.trace(f"{log_prefix} Using existing URL vector store retriever.")
             except Exception as e:
-                logger.error(f"❌ Failed to get URL retriever: {e}")
+                logger.error(f"{log_prefix} Failed to get URL retriever: {e}")
                 url_retriever = None
+        else:
+             logger.trace(f"{log_prefix} No URL vector store available.")
 
+        # --- History Retriever (Involves Embedding with Priority) ---
+        # Get recent interactions (DB call, no LLM)
         interactions_for_rag = get_recent_interactions(db, limit=RAG_HISTORY_COUNT * 2, session_id=self.current_session_id, mode="chat", include_logs=False)
 
         if interactions_for_rag:
-            logger.debug(f"📜 Found {len(interactions_for_rag)} recent chat interactions for RAG history.")
+            logger.debug(f"{log_prefix} Found {len(interactions_for_rag)} recent interactions for History RAG.")
             history_texts = []
-            interactions_for_rag.reverse()
+            interactions_for_rag.reverse() # Oldest first
             for interaction in interactions_for_rag:
                 text_to_embed = None
                 if interaction.user_input and interaction.input_type == 'text':
                     text_to_embed = f"User: {interaction.user_input}"
-                elif interaction.llm_response and interaction.input_type not in ['system', 'error']:
+                elif interaction.llm_response and interaction.input_type not in ['system', 'error', 'log_error', 'log_warning', 'log_info', 'log_debug']:
                      text_to_embed = f"AI: {interaction.llm_response}"
 
                 if text_to_embed and interaction.id not in history_ids_set:
+                     # Limit length of text going into embedding? Optional.
+                     # text_to_embed = text_to_embed[:1000]
                      history_texts.append(text_to_embed)
                      history_ids_set.add(interaction.id)
 
             if history_texts:
-                logger.trace(f"Attempting to embed {len(history_texts)} history texts for RAG.")
+                logger.debug(f"{log_prefix} Attempting to embed {len(history_texts)} history texts (Priority: ELP{priority}).")
                 try:
                     if not self.provider.embeddings:
                          raise ValueError("Embeddings provider not initialized.")
-                    self.vectorstore_history = Chroma.from_texts( history_texts, self.provider.embeddings )
+
+                    # --- USE PRIORITY DURING EMBEDDING ---
+                    # Chroma.from_texts calls the embedding model internally.
+                    # We assume the embedding model wrapper now accepts 'priority'.
+                    # If Chroma doesn't pass kwargs down, this needs adjustment
+                    # in how embeddings are generated *before* Chroma creation.
+                    # Assuming LlamaCppEmbeddingsWrapper handles priority:
+                    logger.trace(f"{log_prefix} Calling Chroma.from_texts...")
+                    self.vectorstore_history = Chroma.from_texts(
+                        texts=history_texts,
+                        embedding=self.provider.embeddings,
+                        # How to pass priority here? Chroma might not support it directly.
+                        # --> We need to rely on the embedding object handling it, maybe via **kwargs
+                        # --> OR embed first, then create Chroma from vectors.
+                        # Let's assume the wrapper handles it if called directly.
+                        # **Modification Required if Wrapper Doesn't Handle via Implicit Call:**
+                        # vectors = self.provider.embeddings.embed_documents(history_texts, priority=priority)
+                        # self.vectorstore_history = Chroma.from_vectors(texts=history_texts, embedding=self.provider.embeddings, vectors=vectors)
+                    )
+                    # For now, assume implicit priority handling by the embedding object passed to Chroma
+                    # --- END PRIORITY CONSIDERATION ---
+
+                    # as_retriever is local, no priority needed
                     history_retriever = self.vectorstore_history.as_retriever(search_kwargs={"k": RAG_HISTORY_COUNT})
-                    logger.debug(f"📜 Created temporary History retriever (embedded {len(history_texts)} items).")
+                    logger.debug(f"{log_prefix} Created temporary History retriever (embedded {len(history_texts)} items).")
+
+                except TaskInterruptedException as tie:
+                    logger.warning(f"🚦 {log_prefix} History RAG embedding INTERRUPTED: {tie}")
+                    history_retriever = None # Indicate failure
+                    self.vectorstore_history = None
+                    # Re-raise to be caught by the caller (direct_generate)
+                    raise tie
                 except Exception as e:
-                    logger.error(f"❌ Failed history vector store creation: {e}")
+                    logger.error(f"❌ {log_prefix} Failed history vector store creation: {e}")
+                    logger.exception(f"{log_prefix} History RAG Traceback:")
                     history_retriever = None
                     self.vectorstore_history = None
             else:
-                 logger.debug("📜 No suitable text interactions found for history RAG.")
+                 logger.debug(f"{log_prefix} No suitable text interactions found for history RAG.")
                  history_retriever = None
         else:
-             logger.debug("📜 No interactions found for history RAG.")
+             logger.debug(f"{log_prefix} No interactions found for history RAG.")
              history_retriever = None
 
-        history_ids_str = ",".join(map(str, list(history_ids_set)))
-        logger.trace(f"Chat History IDs used for RAG: {history_ids_str}")
+        # Format history IDs used
+        history_ids_str = ",".join(map(str, sorted(list(history_ids_set))))
+        logger.trace(f"{log_prefix} Chat History IDs used for RAG: {history_ids_str}")
         return url_retriever, history_retriever, history_ids_str
 
     async def _correct_response(self, db: Session, session_id: str, original_input: str, context: Dict, draft_response: str) -> str:
         """
-        Uses the corrector LLM to refine a draft response and cleans the output.
-        Calls the cleanup helper method via self.
+        Uses the corrector LLM (ELP0) to refine a draft response.
+        Handles TaskInterruptedException by re-raising it.
+        Cleans the output if successful, otherwise returns the cleaned draft on other errors.
         """
-        # Unique ID for this specific correction attempt (optional, but good for tracing)
+        # Unique ID for this specific correction attempt for tracing
         correction_id = f"corr-{uuid.uuid4()}"
-        logger.info(f"✍️ {correction_id} Refining draft response for session {session_id}...")
+        log_prefix = f"✍️ {correction_id}|ELP0" # Add ELP0 marker to log prefix
+        logger.info(f"{log_prefix} Refining draft response for session {session_id}...")
 
-        # Get the model configured for correction (using "router" key as per previous setup)
+        # Get the model configured for correction (using "router" key)
         corrector_model = self.provider.get_model("router")
 
         # Handle case where the corrector model itself isn't available
         if not corrector_model:
-            logger.error(f"{correction_id} Corrector model (key 'router') not available! Returning cleaned draft.")
+            logger.error(f"{log_prefix} Corrector model (key 'router') not available! Returning cleaned draft.")
             # Clean the original draft using the instance method before returning
             cleaned_draft = self._cleanup_llm_output(draft_response)
             # Log this fallback action
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
-                            user_input="Corrector Fallback",
-                            llm_response="Corrector model unavailable, returned cleaned draft.")
+            try: # Use try-except for DB logging
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                user_input="Corrector Fallback",
+                                llm_response="Corrector model unavailable, returned cleaned draft.")
+            except Exception as db_err:
+                logger.error(f"{log_prefix} Failed log corrector model unavailable: {db_err}")
             return cleaned_draft
 
         # Prepare the input dictionary for the corrector prompt template
@@ -2457,7 +2554,7 @@ class AIChat:
             "input": original_input,
             "context": context.get("url_context", "None."),
             "history_rag": context.get("history_rag", "None."),
-            "file_index_context": context.get("file_index_context", "None."), # <<< ADDED
+            "file_index_context": context.get("file_index_context", "None."),
             "log_context": context.get("log_context", "None."),
             "recent_direct_history": context.get("recent_direct_history", "None."),
             "emotion_analysis": context.get("emotion_analysis", "N/A."),
@@ -2465,7 +2562,6 @@ class AIChat:
         }
 
         # Define the Langchain chain for correction
-        # Assumes PROMPT_CORRECTOR is defined in config.py
         try:
             chain = (
                 ChatPromptTemplate.from_template(PROMPT_CORRECTOR)
@@ -2473,10 +2569,13 @@ class AIChat:
                 | StrOutputParser()
             )
         except Exception as chain_setup_err:
-             logger.error(f"{correction_id} Failed to set up corrector chain: {chain_setup_err}")
-             add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                            user_input="Corrector Chain Setup Error",
-                            llm_response=f"Failed: {chain_setup_err}")
+             logger.error(f"{log_prefix} Failed to set up corrector chain: {chain_setup_err}")
+             try: # Use try-except for DB logging
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input="Corrector Chain Setup Error",
+                                llm_response=f"Failed: {chain_setup_err}")
+             except Exception as db_err:
+                logger.error(f"{log_prefix} Failed log corrector chain setup error: {db_err}")
              # Fallback to cleaned draft if chain setup fails
              cleaned_draft = self._cleanup_llm_output(draft_response)
              return cleaned_draft
@@ -2485,19 +2584,22 @@ class AIChat:
         corrector_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
 
         try:
-            # Execute the corrector chain (sync Langchain call) in a separate thread
-            logger.debug(f"{correction_id} Calling corrector LLM...")
+            # Execute the corrector chain (sync Langchain call) in a separate thread with ELP0
+            logger.debug(f"{log_prefix} Calling corrector LLM...")
             refined_response_raw = await asyncio.to_thread(
-                self._call_llm_with_timing, chain, prompt_input, corrector_timing_data
+                self._call_llm_with_timing, # Use the modified helper
+                chain,
+                prompt_input,
+                corrector_timing_data,
+                priority=ELP0 # Explicitly set ELP0 priority
             )
-            logger.info(f"{correction_id} Refinement LLM call complete. Raw length: {len(refined_response_raw)}")
+            logger.info(f"{log_prefix} Refinement LLM call complete. Raw length: {len(refined_response_raw)}")
 
             # Apply robust cleanup using the instance method
             final_response_cleaned = self._cleanup_llm_output(refined_response_raw)
-            logger.info(f"{correction_id} Cleaned response length: {len(final_response_cleaned)}")
+            logger.info(f"{log_prefix} Cleaned response length: {len(final_response_cleaned)}")
 
-
-            # Add detailed log comparing inputs/outputs
+            # Add detailed log comparing inputs/outputs (Consider sampling if responses are huge)
             log_message = (
                 f"Refined draft.\n"
                 f"Original Input Snippet: '{original_input[:100]}...'\n"
@@ -2505,12 +2607,39 @@ class AIChat:
                 f"Raw Corrector Output Snippet: '{refined_response_raw[:100]}...'\n"
                 f"Cleaned Final Snippet: '{final_response_cleaned[:100]}...'"
             )
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug",
-                            user_input="Corrector Step Details",
-                            llm_response=log_message[:4000]) # Limit log length
+            try: # Use try-except for DB logging
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug",
+                                user_input="Corrector Step Details",
+                                llm_response=log_message[:4000]) # Limit log length
+            except Exception as db_err:
+                 logger.error(f"{log_prefix} Failed log corrector details: {db_err}")
 
-            # Return the cleaned final response
+            # Return the cleaned final response (successful path)
             return final_response_cleaned
+
+        except TaskInterruptedException as tie:
+            # Specific handling for interruption
+            logger.warning(f"🚦 {log_prefix} Corrector step INTERRUPTED: {tie}")
+            # Re-raise the exception to be handled by the calling function (e.g., background_generate)
+            raise tie
+
+        except Exception as e:
+            # Handle other, non-interruption errors during the LLM call itself
+            logger.error(f"❌ {log_prefix} Error during correction LLM call: {e}")
+            logger.exception(f"{log_prefix} Corrector Execution Traceback:") # Log full traceback
+
+            # Log the failure to the database
+            try: # Use try-except for DB logging
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input="Corrector Step Failed",
+                                llm_response=f"Correction failed: {e}")
+            except Exception as db_err:
+                 logger.error(f"{log_prefix} Failed log corrector step failure: {db_err}")
+
+            # Fallback: Clean the original draft response if correction fails
+            logger.warning(f"{log_prefix} Falling back to cleaned original draft due to corrector error.")
+            cleaned_draft = self._cleanup_llm_output(draft_response)
+            return cleaned_draft
 
         except Exception as e:
             # Handle errors during the LLM call itself
@@ -2914,31 +3043,53 @@ class AIChat:
         return "\n".join(log_str_parts) if log_str_parts else "No recent relevant logs found."
 
 
-    def _call_llm_with_timing(self, chain: Any, inputs: Any, interaction_data: Dict[str, Any]):
-        """Wrapper to call LLM chain, measure time, and log (synchronous)."""
+    def _call_llm_with_timing(self, chain: Any, inputs: Any, interaction_data: Dict[str, Any], priority: int = ELP0): # Added priority parameter
+        """
+        Wrapper to call LLM chain, measure time, log, and handle priority/interruptions.
+        Raises TaskInterruptedException if the underlying call is interrupted.
+        """
         start_time = time.time()
+        response = None # Initialize response
         try:
-            logger.trace(f"🚀 Invoking chain {type(chain)} with inputs type: {type(inputs)}")
-            response = chain.invoke(inputs)
+            logger.trace(f"🚀 Invoking chain {type(chain)} with inputs type: {type(inputs)} (Priority: ELP{priority})")
+            # Pass priority down via config dictionary
+            response = chain.invoke(inputs, config={'priority': priority})
             duration = (time.time() - start_time) * 1000
-            logger.info(f"⏱️ LLM Inference took {duration:.2f} ms")
+            logger.info(f"⏱️ LLM Inference (ELP{priority}) took {duration:.2f} ms")
             interaction_data['execution_time_ms'] = interaction_data.get('execution_time_ms', 0) + duration
+
+            # --- Check for interruption marker in the response string ---
+            # This assumes the StrOutputParser() returns the error string directly
+            if isinstance(response, str) and interruption_error_marker in response:
+                 logger.warning(f"🚦 Task Interrupted (Detected in _call_llm_with_timing). Raising TaskInterruptedException.")
+                 raise TaskInterruptedException(response) # Raise specific exception
+
             return response
+
+        except TaskInterruptedException:
+             # Re-raise the specific exception if caught directly
+             raise
         except Exception as e:
-            log_err_msg = f"LLM Chain Error: {e}"
-            logger.error(f"❌ {log_err_msg}")
-            logger.exception("Traceback for LLM Chain error:")
-            session_id = interaction_data.get("session_id")
-            mode = interaction_data.get("mode", "chat")
-            try:
-                temp_db = SessionLocal()
-                add_interaction(temp_db, session_id=session_id, mode=mode, input_type="log_error", llm_response=log_err_msg[:4000])
-                temp_db.close()
-            except Exception as db_log_err:
-                 logger.error(f"Failed to log LLM error to DB: {db_log_err}")
-            duration = (time.time() - start_time) * 1000
-            interaction_data['execution_time_ms'] = interaction_data.get('execution_time_ms', 0) + duration
-            raise
+            # --- Check if the exception itself signals interruption ---
+            if interruption_error_marker in str(e):
+                 logger.warning(f"🚦 Task Interrupted (Detected via Exception in _call_llm_with_timing). Raising TaskInterruptedException.")
+                 raise TaskInterruptedException(str(e)) # Raise specific exception
+            # --- Handle other errors ---
+            else:
+                 log_err_msg = f"LLM Chain Error (ELP{priority}): {e}"
+                 logger.error(f"❌ {log_err_msg}")
+                 logger.exception("Traceback for LLM Chain error:")
+                 session_id = interaction_data.get("session_id")
+                 mode = interaction_data.get("mode", "chat")
+                 try: # Log error to DB
+                     temp_db = SessionLocal()
+                     add_interaction(temp_db, session_id=session_id, mode=mode, input_type="log_error", llm_response=log_err_msg[:4000])
+                     temp_db.close()
+                 except Exception as db_log_err:
+                      logger.error(f"Failed to log LLM error to DB: {db_log_err}")
+                 duration = (time.time() - start_time) * 1000
+                 interaction_data['execution_time_ms'] = interaction_data.get('execution_time_ms', 0) + duration
+                 raise # Re-raise the original non-interruption error
 
 
     def _classify_input_complexity(self, db: Session, user_input: str, interaction_data: dict) -> str:
@@ -3122,115 +3273,181 @@ class AIChat:
 
 
     def _analyze_assistant_action(self, db: Session, user_input: str, session_id: str, context: Dict[str, str]) -> Optional[Dict[str, Any]]:
-        """Calls LLM to check if input implies a macOS action, extracts parameters,
-           and handles potential <think> tags."""
-        logger.info(f"🤔 Analyzing input for potential Assistant Action: '{user_input[:50]}...'")
-        prompt_input = {"input": user_input, "history_summary": context.get("history_summary", "N/A"), "log_context": context.get("log_context", "N/A"), "recent_direct_history": context.get("recent_direct_history", "N/A")}
+        """
+        Calls LLM (ELP0) to check if input implies a macOS action, extracts parameters.
+        Uses a more robust method to find the JSON block, ignoring <think> tags during extraction.
+        Handles TaskInterruptedException by re-raising.
+        """
+        log_prefix = f"🤔 ActionAnalyze|ELP0|{session_id}" # Add ELP0 marker
+        logger.info(f"{log_prefix} Analyzing input for potential Assistant Action: '{user_input[:50]}...'")
 
-        # --- FIX HERE: Get the appropriate model using get_model ---
-        # Use the 'router' model for action analysis, or fallback to 'default'
-        action_analysis_model = self.provider.get_model("router")
-        if not action_analysis_model:
-            logger.warning("Router model not found for action analysis, falling back to default.")
-            action_analysis_model = self.provider.get_model("default")
+        prompt_input = {
+            "input": user_input,
+            "history_summary": context.get("history_summary", "N/A"),
+            "log_context": context.get("log_context", "N/A"),
+            "recent_direct_history": context.get("recent_direct_history", "N/A")
+        }
 
+        # Get the appropriate model using get_model
+        action_analysis_model = self.provider.get_model("router") # Or "default"
         if not action_analysis_model:
-            logger.error("❌ Default model also not found! Cannot perform action analysis.")
-            # Log error to DB
-            try: add_interaction(db, session_id=session_id, mode="chat", input_type="log_error", llm_response="Action analysis failed: Model unavailable.")
-            except Exception as db_err: logger.error(f"Failed log action analysis model error: {db_err}")
+            logger.error(f"{log_prefix} Action analysis model (router/default) not available!")
+            try: # Log error to DB
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input="Action Analysis Failed",
+                                llm_response="Action analysis model unavailable.")
+            except Exception as db_err:
+                 logger.error(f"{log_prefix} Failed log action analysis model error: {db_err}")
             return None # Cannot proceed without a model
 
-        # Define the chain *without* the final JsonOutputParser initially
-        # analysis_chain = (ChatPromptTemplate.from_template(PROMPT_ASSISTANT_ACTION_ANALYSIS) | self.provider.model | StrOutputParser()) # OLD LINE
-        analysis_chain = (ChatPromptTemplate.from_template(PROMPT_ASSISTANT_ACTION_ANALYSIS) | action_analysis_model | StrOutputParser()) # NEW LINE
-        # --- END FIX ---
+        # Define the chain using a StrOutputParser first to get the raw text
+        analysis_chain = (
+            ChatPromptTemplate.from_template(PROMPT_ASSISTANT_ACTION_ANALYSIS)
+            | action_analysis_model
+            | StrOutputParser() # Get raw string output first
+        )
 
         action_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
         last_error = None
-        raw_llm_response_full = "Error: Analysis LLM call failed." # Store the full response including <think>
+        raw_llm_response_full = "Error: Analysis LLM call failed." # Store the full response
 
-        # --- (Rest of the _analyze_assistant_action method remains the same) ---
-        # It uses `analysis_chain` which now has the correct model reference.
         for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):
-             logger.debug(f"Assistant Action analysis attempt {attempt + 1}")
-             analysis_result = None # Reset result for each attempt
-             try:
-                 # Call the LLM chain (outputs raw string now)
-                 raw_llm_response_full = self._call_llm_with_timing(analysis_chain, prompt_input, action_timing_data)
-                 logger.trace(f"Raw LLM Analysis Response:\n{raw_llm_response_full}")
+            logger.debug(f"{log_prefix} Assistant Action analysis attempt {attempt + 1}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
+            analysis_result = None # Reset result for each attempt
+            json_str_to_parse = None # Variable to hold the extracted JSON string
 
-                 # --- Extract JSON, ignoring <think> tags ---
-                 json_text = raw_llm_response_full
-                 think_match = re.search(r'<think>(.*?)</think>', json_text, re.DOTALL | re.IGNORECASE)
-                 if think_match:
-                     thought_process = think_match.group(1).strip()
-                     logger.debug(f"Extracted thought process:\n{thought_process}")
-                     # Remove the think block to isolate the JSON
-                     json_text = re.sub(r'<think>.*?</think>', '', json_text, flags=re.DOTALL | re.IGNORECASE).strip()
-                     logger.trace(f"Text after removing <think> block:\n{json_text}")
+            try:
+                # Call the LLM chain (outputs raw string) with ELP0 priority
+                raw_llm_response_full = asyncio.to_thread(
+                    self._call_llm_with_timing, analysis_chain, prompt_input, action_timing_data, priority=ELP0
+                )
+                logger.trace(f"{log_prefix} Raw LLM Analysis Response:\n{raw_llm_response_full}")
 
-                 # Attempt to parse the remaining text as JSON
-                 # Remove potential markdown ```json ... ``` tags
-                 json_match = re.search(r"```json\s*(.*?)\s*```", json_text, re.DOTALL)
-                 if json_match:
-                     json_str = json_match.group(1).strip()
-                 else:
-                     # Assume the remaining text IS the JSON, find first '{'
-                     json_start_index = json_text.find('{')
-                     if json_start_index != -1:
-                         json_str = json_text[json_start_index:]
-                     else:
-                          json_str = json_text # Hope for the best
+                # --- Robust JSON Extraction ---
+                # 1. Try finding ```json ... ``` block first
+                json_markdown_match = re.search(r"```json\s*(.*?)\s*```", raw_llm_response_full, re.DOTALL)
+                if json_markdown_match:
+                    json_str_to_parse = json_markdown_match.group(1).strip()
+                    logger.trace(f"{log_prefix} Extracted JSON string from markdown block.")
+                else:
+                    # 2. Fallback: Find first '{' and last '}' in the *entire* response
+                    json_start_index = raw_llm_response_full.find('{')
+                    json_end_index = raw_llm_response_full.rfind('}')
+                    if json_start_index != -1 and json_end_index != -1 and json_end_index > json_start_index:
+                        json_str_to_parse = raw_llm_response_full[json_start_index : json_end_index + 1]
+                        logger.warning(f"{log_prefix} Extracted JSON using fallback find '{{...}}'. Might be less precise.")
+                        # Log the raw response if fallback was used, as it might indicate non-compliance
+                        try:
+                           add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug",
+                                           user_input=f"Action Analysis Fallback Extraction (Attempt {attempt + 1})",
+                                           llm_response=f"Used find {{...}} fallback. Raw: {raw_llm_response_full[:1000]}")
+                        except Exception: pass
+                    else:
+                        # No plausible JSON block found
+                        logger.warning(f"{log_prefix} Could not find JSON block in raw response (Attempt {attempt + 1}).")
+                        last_error = ValueError("No JSON block found in LLM response")
+                        # Log failure to DB
+                        try:
+                            add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                            user_input=f"Action Analysis No JSON Found (Attempt {attempt + 1})",
+                                            llm_response=raw_llm_response_full[:4000])
+                        except Exception as db_err:
+                            logger.error(f"{log_prefix} Failed log no JSON found: {db_err}")
+                        continue # Go to next retry attempt
 
-                 analysis_result = json.loads(json_str) # Parse the extracted JSON string
+                # --- Optional: Log the first <think> block without modifying json_str_to_parse ---
+                think_match = re.search(r'<think>(.*?)</think>', raw_llm_response_full, re.DOTALL | re.IGNORECASE)
+                if think_match:
+                    thought_process = think_match.group(1).strip()
+                    logger.debug(f"{log_prefix} Extracted thought process (for logging):\n{thought_process}")
+                    # Log thought process separately if needed
+                    # try: add_interaction(db, ..., llm_response=thought_process)
+                    # except: pass
+                # --- End Think Logging ---
 
-                 # Basic validation of the parsed JSON
-                 if isinstance(analysis_result, dict) and "action_type" in analysis_result and "parameters" in analysis_result:
-                      action_type = analysis_result.get("action_type")
-                      parameters = analysis_result.get("parameters", {})
-                      explanation = analysis_result.get("explanation", "N/A")
-                      logger.info(f"✅ Assistant Action analysis successful: Type='{action_type}', Params={parameters}")
-                      # Log success to DB (including the raw full response)
-                      add_interaction(db,
-                                      session_id=session_id, mode="chat", input_type="log_info",
-                                      user_input=f"Assistant Action Analysis for: {user_input[:100]}...",
-                                      llm_response=f"Action Type: {action_type}, Explanation: {explanation}",
-                                      assistant_action_analysis_json=raw_llm_response_full, # Log the full response with <think>
-                                      assistant_action_type=action_type,
-                                      assistant_action_params=json.dumps(parameters)
-                                      )
-                      if action_type != "no_action":
-                          return analysis_result # Success, return parsed dict
-                      else:
-                           logger.info("Analysis determined 'no_action' required.")
-                           return None # Success, no action needed
-                 else:
-                      logger.warning(f"Assistant Action analysis produced invalid JSON structure after parsing: {analysis_result}")
-                      raw_llm_response_log = f"Invalid JSON Structure: {analysis_result}"
-                      add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"Assistant Action Analysis Attempt {attempt + 1} Invalid Structure for: {user_input[:100]}...", llm_response=raw_llm_response_full[:4000], assistant_action_analysis_json=raw_llm_response_full[:4000])
+                # Attempt to parse the extracted JSON string
+                analysis_result = json.loads(json_str_to_parse)
 
-             except json.JSONDecodeError as json_e:
-                 logger.warning(f"⚠️ Failed to parse JSON after potentially removing <think> tags (Attempt {attempt + 1}): {json_e}")
+                # Basic validation of the parsed JSON structure
+                if isinstance(analysis_result, dict) and "action_type" in analysis_result and "parameters" in analysis_result:
+                    action_type = analysis_result.get("action_type")
+                    parameters = analysis_result.get("parameters", {})
+                    explanation = analysis_result.get("explanation", "N/A")
+                    logger.info(f"✅ {log_prefix} Assistant Action analysis successful: Type='{action_type}', Params={parameters}")
+
+                    # Log success to DB (include raw response for context)
+                    try:
+                        add_interaction(db,
+                                        session_id=session_id, mode="chat", input_type="log_info",
+                                        user_input=f"Assistant Action Analysis OK for: {user_input[:100]}...",
+                                        llm_response=f"Action Type: {action_type}, Explanation: {explanation}",
+                                        # Store the raw response to see think tags etc. if needed
+                                        assistant_action_analysis_json=raw_llm_response_full,
+                                        assistant_action_type=action_type,
+                                        assistant_action_params=json.dumps(parameters)
+                                        )
+                    except Exception as db_err:
+                         logger.error(f"{log_prefix} Failed log action analysis success: {db_err}")
+
+                    # Return result if action required, otherwise return None
+                    if action_type != "no_action":
+                        return analysis_result # Success, action needed
+                    else:
+                        logger.info(f"{log_prefix} Analysis determined 'no_action' required.")
+                        return None # Success, no action needed
+                else:
+                    # Handle cases where JSON was parsed but structure is wrong
+                    logger.warning(f"{log_prefix} Assistant Action analysis produced invalid JSON structure after parsing (Attempt {attempt + 1}): {analysis_result}")
+                    last_error = ValueError("Invalid JSON structure after parsing")
+                    try: # Log warning to DB
+                        add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                        user_input=f"Action Analysis Invalid Structure (Attempt {attempt + 1})",
+                                        llm_response=f"Parsed: {str(analysis_result)[:500]}. Raw: {raw_llm_response_full[:1000]}",
+                                        assistant_action_analysis_json=raw_llm_response_full[:4000])
+                    except Exception as db_err:
+                         logger.error(f"{log_prefix} Failed log invalid structure: {db_err}")
+                    # Continue to next retry
+
+            except TaskInterruptedException as tie:
+                 # Handle interruption specifically - DO NOT RETRY
+                 logger.warning(f"🚦 {log_prefix} Action Analysis INTERRUPTED (Attempt {attempt + 1}): {tie}")
+                 # Re-raise immediately to be caught by the calling function (background_generate)
+                 raise tie
+            except json.JSONDecodeError as json_e:
+                 # Handle JSON parsing errors
+                 logger.warning(f"⚠️ {log_prefix} Failed to parse extracted JSON string (Attempt {attempt + 1}): {json_e}")
                  last_error = json_e
-                 raw_llm_response_log = f"JSONDecodeError after processing: {json_e}. Processed text was: {json_text[:500]}..."
-                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"Assistant Action Analysis Attempt {attempt + 1} JSON Parse FAILED for: {user_input[:100]}...", llm_response=raw_llm_response_log, assistant_action_analysis_json=raw_llm_response_full[:4000])
-
-             except Exception as e:
-                 logger.warning(f"⚠️ Error during Assistant Action analysis attempt {attempt + 1}: {e}")
+                 try: # Log warning to DB
+                     add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                     user_input=f"Action Analysis JSON Parse FAILED (Attempt {attempt + 1})",
+                                     llm_response=f"Error: {json_e}. String was: {json_str_to_parse[:500]}. Raw: {raw_llm_response_full[:1000]}",
+                                     assistant_action_analysis_json=raw_llm_response_full[:4000])
+                 except Exception as db_err:
+                      logger.error(f"{log_prefix} Failed log JSON parse failure: {db_err}")
+                 # Continue to next retry
+            except Exception as e:
+                 # Handle other unexpected errors during analysis/parsing
+                 logger.warning(f"⚠️ {log_prefix} Error during Assistant Action analysis attempt {attempt + 1}: {e}")
                  last_error = e
-                 raw_llm_response_log = f"Error: {e}"
-                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"Assistant Action Analysis Attempt {attempt + 1} FAILED for: {user_input[:100]}...", llm_response=raw_llm_response_log, assistant_action_analysis_json=raw_llm_response_full[:4000])
+                 try: # Log warning to DB
+                     add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                     user_input=f"Action Analysis FAILED (Attempt {attempt + 1})",
+                                     llm_response=f"Error: {e}. Raw: {raw_llm_response_full[:1000]}",
+                                     assistant_action_analysis_json=raw_llm_response_full[:4000])
+                 except Exception as db_err:
+                      logger.error(f"{log_prefix} Failed log general analysis failure: {db_err}")
+                 # Continue to next retry
 
-             # Wait and retry
-             if attempt < DEEP_THOUGHT_RETRY_ATTEMPTS - 1:
-                 # Use synchronous sleep as this function is called via to_thread
-                 time.sleep(0.5 + attempt * 0.5)
-             else:
-                 logger.error(f"❌ Max retries ({DEEP_THOUGHT_RETRY_ATTEMPTS}) reached for Assistant Action analysis. Last error: {last_error}")
-                 return None
+            # Wait before retrying if attempts remain and error wasn't interruption
+            if attempt < DEEP_THOUGHT_RETRY_ATTEMPTS - 1:
+                time.sleep(0.5 + attempt * 0.5) # Use asyncio sleep
+            else:
+                # Max retries reached for non-interruption errors
+                logger.error(f"❌ {log_prefix} Max retries ({DEEP_THOUGHT_RETRY_ATTEMPTS}) reached for Assistant Action analysis. Last error: {last_error}")
+                return None # Indicate failure after retries
 
-        logger.error("Exited Assistant Action analysis loop unexpectedly after max retries.")
+        # This part should ideally not be reached if loop completes or breaks/returns
+        logger.error(f"{log_prefix} Exited Assistant Action analysis loop unexpectedly after max retries.")
         return None
 
 
@@ -3425,147 +3642,256 @@ class AIChat:
 
     # --- NEW HELPER: Translation ---
     async def _translate(self, text: str, target_lang: str, source_lang: str = "auto") -> str:
-        """Translates text using the configured translator model."""
+        """
+        Translates text using the configured translator model (ELP0).
+        Handles TaskInterruptedException by re-raising it. Returns original text on other errors.
+        """
+        log_prefix = f"🌐 Translate|ELP0" # Add ELP0 marker
+        # Session ID might not be directly available here unless passed in, using generic log for now
+        # log_prefix = f"🌐 Translate|ELP0|{self.current_session_id}" if self.current_session_id else "🌐 Translate|ELP0"
+
+        # Get the translator model instance
         translator_model = self.provider.get_model("translator")
         if not translator_model:
-            logger.error("Translator model not available, cannot translate.")
-            return text # Return original text if no translator
+            logger.error(f"{log_prefix}: Translator model not available, cannot translate.")
+            # Silently return original text, assuming caller handles this possibility
+            return text
 
-        logger.debug(f"Translating from {source_lang} to {target_lang}: '{text[:50]}...'")
+        logger.debug(f"{log_prefix}: Translating from '{source_lang}' to '{target_lang}': '{text[:50]}...'")
         try:
+            # Prepare the prompt for the translation model
             prompt = f"Translate the following text from {source_lang} to {target_lang}:\n\n{text}"
 
-            # --- FIX: Extract content from the message object ---
-            # Run sync Langchain call in thread
-            message_result = await asyncio.to_thread(translator_model.invoke, prompt)
+            # --- Invoke the translation model using the timing helper with ELP0 ---
+            # Prepare dummy interaction data if needed by _call_llm_with_timing for logging session
+            timing_data = {"session_id": self.current_session_id, "mode": "chat"}
+            message_result = await asyncio.to_thread(
+                self._call_llm_with_timing, # Use the modified helper
+                translator_model,           # Pass the model directly (assuming it's callable like a chain)
+                prompt,                     # Input is the prompt string
+                timing_data,
+                priority=ELP0               # Set ELP0 priority
+            )
+            # ---
 
             # Check if the result is a message object and extract content
+            # (This logic handles different ways Langchain models might return results)
+            translated_text = None
             if hasattr(message_result, 'content') and isinstance(message_result.content, str):
                 translated_text = message_result.content
             elif isinstance(message_result, str): # Handle if model directly returns a string
                 translated_text = message_result
             else:
-                logger.error(f"Translation model returned unexpected type: {type(message_result)}. Full result: {message_result}")
-                # Optionally log the full unexpected result for debugging
-                # add_interaction(...) # Would need db session here
-                return text # Return original on unexpected type
+                # Handle unexpected return types from the translation model
+                logger.error(f"{log_prefix}: Translation model returned unexpected type: {type(message_result)}. Full result: {message_result}")
+                # Attempt to log this issue to the database if possible
+                try:
+                    db_session = SessionLocal()
+                    add_interaction(db_session, session_id=self.current_session_id, mode="chat", input_type="log_error",
+                                    user_input="[Translation Type Error]",
+                                    llm_response=f"Unexpected type: {type(message_result)}. Data: {str(message_result)[:500]}")
+                    db_session.close()
+                except Exception as db_err:
+                     logger.error(f"{log_prefix} Failed log translation type error: {db_err}")
+                return text # Return original text on unexpected type error
 
-            # Now strip the extracted text string
-            cleaned_text = translated_text.strip()
-            # --- END FIX ---
+            # Clean the extracted translated text
+            cleaned_text = translated_text.strip() if translated_text else ""
 
-            logger.debug(f"Translation result: '{cleaned_text[:50]}...'")
+            logger.debug(f"{log_prefix}: Translation result: '{cleaned_text[:50]}...'")
+            # Return the successfully translated and cleaned text
             return cleaned_text
+
+        except TaskInterruptedException as tie:
+            # Specific handling for interruption caught by _call_llm_with_timing
+            logger.warning(f"🚦 {log_prefix}: Translation INTERRUPTED: {tie}")
+            # Re-raise the exception to be handled by the calling function
+            raise tie
+
         except Exception as e:
-            logger.error(f"Translation failed: {e}")
-            logger.exception("Translate Traceback:") # Add traceback log
-            return text # Return original on error
+            # Handle any other exceptions during translation
+            logger.error(f"{log_prefix}: Translation failed: {e}")
+            logger.exception(f"{log_prefix} Translate Traceback:") # Add traceback log
+            # Attempt to log this failure to the database
+            try:
+                db_session = SessionLocal()
+                add_interaction(db_session, session_id=self.current_session_id, mode="chat", input_type="log_error",
+                                user_input="[Translation Failed]",
+                                llm_response=f"Error: {e}. Original text: {text[:200]}")
+                db_session.close()
+            except Exception as db_err:
+                 logger.error(f"{log_prefix} Failed log translation failure: {db_err}")
+            # Return the original text as a fallback on error
+            return text
 
     # --- NEW HELPER: Routing ---
     async def _route_to_specialist(self, db: Session, session_id: str, user_input: str, context: Dict) -> Tuple[str, str, str]:
-        """Uses router LLM for analysis and coder LLM for JSON extraction. Ensures valid model key returned."""
-        logger.info("🧠 Routing request (Router -> JSON Extractor)...")
-        router_model = self.provider.get_model("router")
-        extractor_model = self.provider.get_model("code") # Use coder model
+        """
+        Uses router LLM (ELP0) for analysis and coder LLM (ELP0) for JSON extraction.
+        Handles interruptions by re-raising TaskInterruptedException.
+        Retries JSON extraction on other errors. Ensures a valid model key is returned.
+        """
+        log_prefix = f"🧠 Route|ELP0|{session_id}" # Add ELP0 marker
+        logger.info(f"{log_prefix}: Routing request...")
 
+        router_model = self.provider.get_model("router")
+        extractor_model = self.provider.get_model("code") # Use coder model for extraction
         default_model_key = "general" # Define the fallback key
 
         if not router_model or not extractor_model:
-            logger.error("Router or JSON Extractor (Coder) model not available! Falling back to default.")
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_error", user_input="Router/Extractor Init", llm_response="Router or Extractor model unavailable.")
+            logger.error(f"{log_prefix} Router or JSON Extractor (Coder) model not available! Falling back to default.")
+            try: # Log error to DB
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input="Router/Extractor Init Fail",
+                                llm_response="Router or Extractor model unavailable.")
+            except Exception as db_err:
+                 logger.error(f"{log_prefix} Failed log router/extractor model unavailable: {db_err}")
             # Return default key, original input, and error reason
             return default_model_key, user_input, "Router/Extractor model unavailable."
 
-        # --- 1. Call Router Model ---
+        # --- 1. Call Router Model (ELP0) ---
+        logger.debug(f"{log_prefix}: Preparing and calling Router model...")
         prompt_input_router = {
             "input": user_input,
             "pending_tot_result": context.get("pending_tot_result", "None."),
             "recent_direct_history": context.get("recent_direct_history", "None."),
-            "context": context.get("url_context", "None."), # From URL RAG
+            "context": context.get("url_context", "None."),
             "history_rag": context.get("history_rag", "None."),
-            "file_index_context": context.get("file_index_context", "None."), # <<< ADD THIS LINE
+            "file_index_context": context.get("file_index_context", "None."),
             "log_context": context.get("log_context", "None."),
-            "emotion_analysis": context.get("emotion_analysis", "N/A.")
+            "emotion_analysis": context.get("emotion_context_analysis", "N/A.")
         }
         router_chain = (ChatPromptTemplate.from_template(PROMPT_ROUTER) | router_model | StrOutputParser())
         router_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
-        raw_router_output = "Error: Router LLM call failed."
+        raw_router_output = "Error: Router LLM call failed." # Default
 
         try:
-            # Run sync Langchain call in thread
+            # Use _call_llm_with_timing with ELP0 priority
             raw_router_output = await asyncio.to_thread(
-                self._call_llm_with_timing, router_chain, prompt_input_router, router_timing_data
+                self._call_llm_with_timing, router_chain, prompt_input_router, router_timing_data, priority=ELP0
             )
-            logger.trace(f"Router Raw Output:\n{raw_router_output}")
-            # Log even if subsequent extraction fails
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug", user_input="Router Raw Output", llm_response=raw_router_output[:4000])
+            logger.trace(f"{log_prefix} Router Raw Output:\n{raw_router_output}")
+            # Log the raw output for debugging purposes
+            try: # Log to DB
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug",
+                                user_input="Router Raw Output", llm_response=raw_router_output[:4000])
+            except Exception as db_err:
+                 logger.error(f"{log_prefix} Failed log raw router output: {db_err}")
 
+        except TaskInterruptedException as tie:
+            # Handle interruption specifically
+            logger.warning(f"🚦 {log_prefix} Router step INTERRUPTED: {tie}")
+            # Re-raise to be caught by the calling function (e.g., background_generate)
+            raise tie
         except Exception as e:
-            logger.error(f"❌ Error during initial routing LLM call: {e}")
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_error", user_input="Router Analysis", llm_response=f"Routing failed (LLM call): {e}")
-            # Return default key, original input, and error reason
+            # Handle other errors during the initial router call
+            logger.error(f"❌ {log_prefix} Error during initial routing LLM call: {e}")
+            try: # Log error to DB
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input="Router Analysis Failed",
+                                llm_response=f"Routing failed (LLM call): {e}")
+            except Exception as db_err:
+                 logger.error(f"{log_prefix} Failed log router LLM error: {db_err}")
+            # Fallback to default if router fails
             return default_model_key, user_input, f"Routing LLM error: {e}"
 
-        # --- 2. Call Extractor Model to Get JSON ---
-        logger.info("🖥️ Extracting JSON from router output...")
+        # --- 2. Call Extractor Model to Get JSON (ELP0 with Retries) ---
+        logger.info(f"{log_prefix} Extracting JSON from router output...")
         prompt_input_extractor = {"raw_llm_output": raw_router_output}
-        extractor_parser = JsonOutputParser()
+        extractor_parser = JsonOutputParser() # Assuming this parser doesn't need modification
         extractor_chain = (ChatPromptTemplate.from_template(PROMPT_EXTRACT_JSON) | extractor_model | extractor_parser)
         extractor_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
         routing_result = None
         last_error = None
 
         for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):
-             logger.debug(f"JSON Extraction attempt {attempt + 1}")
+             logger.debug(f"{log_prefix} JSON Extraction attempt {attempt + 1}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
              try:
-                 # Run sync Langchain call in thread
+                 # Use _call_llm_with_timing with ELP0 priority inside the loop
                  routing_result = await asyncio.to_thread(
-                     self._call_llm_with_timing, extractor_chain, prompt_input_extractor, extractor_timing_data
+                     self._call_llm_with_timing, extractor_chain, prompt_input_extractor, extractor_timing_data, priority=ELP0
                  )
-                 # --- FIX: Validate the extracted chosen_model ---
+
+                 # --- Validate the extracted JSON structure ---
                  valid_model_keys = {"vlm", "latex", "math", "code", "general"}
                  if isinstance(routing_result, dict) and routing_result.get("chosen_model") and routing_result.get("refined_query"):
                     chosen_model = routing_result["chosen_model"]
                     refined_query = routing_result["refined_query"]
                     reasoning = routing_result.get("reasoning", "N/A")
 
-                    # Check if the chosen model is valid
+                    # Check if the chosen model key is valid
                     if chosen_model in valid_model_keys:
-                         logger.info(f"✅ JSON Extraction successful. Router chose: '{chosen_model}'. Reason: {reasoning}")
-                         add_interaction(db, session_id=session_id, mode="chat", input_type="log_info", user_input="Router Final Decision", llm_response=f"Chose: {chosen_model}, Query: '{refined_query[:100]}...', Reason: {reasoning}", assistant_action_analysis_json=json.dumps(routing_result))
-                         return chosen_model, refined_query, reasoning # Success
+                         logger.info(f"✅ {log_prefix} JSON Extraction successful. Router chose: '{chosen_model}'. Reason: {reasoning}")
+                         try: # Log success to DB
+                             add_interaction(db, session_id=session_id, mode="chat", input_type="log_info",
+                                             user_input="Router Final Decision",
+                                             llm_response=f"Chose: {chosen_model}, Query: '{refined_query[:100]}...', Reason: {reasoning}",
+                                             assistant_action_analysis_json=json.dumps(routing_result))
+                         except Exception as db_err:
+                              logger.error(f"{log_prefix} Failed log router final decision: {db_err}")
+                         return chosen_model, refined_query, reasoning # Success, exit function
+
                     else:
-                         # Log invalid model key but fallback gracefully
-                         logger.warning(f"Extractor returned invalid model key '{chosen_model}'. Falling back to '{default_model_key}'. Full result: {routing_result}")
-                         add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"JSON Extractor Invalid Model Key (Attempt {attempt + 1})", llm_response=f"Invalid key: {chosen_model}. Falling back. Parsed: {str(routing_result)[:500]}", assistant_action_analysis_json=json.dumps(routing_result or {}))
-                         # Return default key, but use the refined query if available
-                         return default_model_key, refined_query, f"Extractor returned invalid key '{chosen_model}', fell back."
+                         # Handle invalid model key from extractor
+                         logger.warning(f"{log_prefix} Extractor returned invalid model key '{chosen_model}' on attempt {attempt + 1}. Full result: {routing_result}")
+                         last_error = ValueError(f"Invalid model key '{chosen_model}' from extractor")
+                         try: # Log warning to DB
+                              add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                              user_input=f"JSON Extractor Invalid Model Key (Attempt {attempt + 1})",
+                                              llm_response=f"Invalid key: {chosen_model}. Parsed: {str(routing_result)[:500]}",
+                                              assistant_action_analysis_json=json.dumps(routing_result or {}))
+                         except Exception as db_err:
+                              logger.error(f"{log_prefix} Failed log extractor invalid key: {db_err}")
+                         # Continue to the next retry attempt if not the last one
 
                  else:
-                     # Handle invalid JSON structure
-                     logger.warning(f"Extractor produced valid JSON but invalid structure: {routing_result}. Retrying...")
-                     add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"JSON Extractor Invalid Structure (Attempt {attempt + 1})", llm_response=f"Parsed: {str(routing_result)[:500]}", assistant_action_analysis_json=json.dumps(routing_result or {}))
-                     # Fall through to retry logic
+                     # Handle invalid JSON structure (valid JSON, but wrong keys/types)
+                     logger.warning(f"{log_prefix} Extractor produced valid JSON but invalid structure on attempt {attempt + 1}: {routing_result}. Retrying...")
+                     last_error = ValueError("Invalid JSON structure from extractor")
+                     try: # Log warning to DB
+                          add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                          user_input=f"JSON Extractor Invalid Structure (Attempt {attempt + 1})",
+                                          llm_response=f"Parsed: {str(routing_result)[:500]}",
+                                          assistant_action_analysis_json=json.dumps(routing_result or {}))
+                     except Exception as db_err:
+                          logger.error(f"{log_prefix} Failed log extractor invalid structure: {db_err}")
+                     # Continue to the next retry attempt
 
+             except TaskInterruptedException as tie:
+                  # Handle interruption specifically - DO NOT RETRY
+                  logger.warning(f"🚦 {log_prefix} JSON Extractor step INTERRUPTED (Attempt {attempt + 1}): {tie}")
+                  # Re-raise immediately to be caught by the calling function
+                  raise tie
              except Exception as e:
-                 # Handle JSON parsing or other errors during extraction
-                 logger.warning(f"⚠️ Error during JSON Extraction attempt {attempt + 1}: {e}")
+                 # Handle other errors during extraction (e.g., JSONDecodeError from parser, LLM call errors)
+                 logger.warning(f"⚠️ {log_prefix} Error during JSON Extraction attempt {attempt + 1}: {e}")
                  last_error = e
-                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input=f"JSON Extractor FAILED (Attempt {attempt + 1})", llm_response=f"Error: {e}. Raw Router Output: {raw_router_output[:500]}")
-                 # Fall through to retry logic
+                 try: # Log warning to DB
+                     add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                     user_input=f"JSON Extractor FAILED (Attempt {attempt + 1})",
+                                     llm_response=f"Error: {e}. Raw Router Output: {raw_router_output[:500]}")
+                 except Exception as db_err:
+                      logger.error(f"{log_prefix} Failed log extractor failure: {db_err}")
+                 # Continue to the next retry attempt if not the last one
 
-             # Wait before retrying if attempts remain
+             # Wait before retrying if attempts remain and error wasn't interruption
              if attempt < DEEP_THOUGHT_RETRY_ATTEMPTS - 1:
                  await asyncio.sleep(0.5 + attempt * 0.5) # Use asyncio sleep as we are in async function
              else:
-                 logger.error(f"❌ Max retries reached for JSON extraction. Last error: {last_error}")
-                 # Fallback after max retries
+                 # Max retries reached for non-interruption errors
+                 logger.error(f"❌ {log_prefix} Max retries ({DEEP_THOUGHT_RETRY_ATTEMPTS}) reached for JSON extraction. Last error: {last_error}")
+                 # Fallback after max retries below
 
-        # --- Fallback if all extraction attempts fail ---
-        logger.error("❌ JSON Extraction attempts failed. Falling back to default.")
-        add_interaction(db, session_id=session_id, mode="chat", input_type="log_error", user_input="Router Analysis", llm_response="JSON Extraction failed after retries.")
-        # Return default key, original input, and error reason
-        return default_model_key, user_input, "Router JSON extraction failed."
+        # --- Fallback if all extraction attempts fail (excluding interruptions) ---
+        logger.error(f"❌ {log_prefix} JSON Extraction attempts failed. Falling back to default.")
+        try: # Log error to DB
+            add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                            user_input="Router Analysis Failed (Extraction)",
+                            llm_response=f"JSON Extraction failed after retries. Last Error: {last_error}")
+        except Exception as db_err:
+             logger.error(f"{log_prefix} Failed log extraction fallback: {db_err}")
+        # Return default key, original input, and reason for failure
+        return default_model_key, user_input, "Router JSON extraction failed after retries."
 
     # --- generate method ---
     # app.py -> Inside AIChat class
@@ -3574,130 +3900,193 @@ class AIChat:
     # app.py -> Inside AIChat class
     async def direct_generate(self, db: Session, user_input: str, session_id: str, vlm_description: Optional[str] = None) -> str:
         """
-        Handles the fast-path direct response generation. Includes Direct History
-        and History RAG. Uses PROMPT_DIRECT_GENERATE from config.py.
+        Handles the fast-path direct response generation with ELP1 priority.
+        Includes Direct History and History RAG (with ELP1 embedding).
+        Uses PROMPT_DIRECT_GENERATE from config.py.
+        Handles potential errors but does not retry interruptions for ELP1.
         """
         direct_req_id = f"dgen-{uuid.uuid4()}"
-        logger.info(f"⚡️ {direct_req_id} Direct Generate START --> Session: {session_id} (with History RAG)")
+        log_prefix = f"⚡️ {direct_req_id}|ELP1" # Add priority marker
+        logger.info(f"{log_prefix} Direct Generate START --> Session: {session_id} (with History RAG)")
         direct_start_time = time.monotonic()
 
         # Use the fast LLM
         fast_model = self.provider.get_model("general_fast")
         if not fast_model:
-            logger.error(f"{direct_req_id}: Fast model 'general_fast' not available!")
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                            user_input="Direct Generate Failed", llm_response="Fast model unavailable.")
+            logger.error(f"{log_prefix}: Fast model 'general_fast' not available!")
+            try: # Log error to DB
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input="Direct Generate Failed", llm_response="Fast model unavailable.")
+            except Exception as db_err:
+                 logger.error(f"{log_prefix} Failed log fast model error: {db_err}")
             return "Error: Cannot generate quick response."
 
-        # Prepare input for the LLM prompt (including potential VLM description)
+        # Prepare input for the LLM prompt (incorporating potential VLM description)
         input_for_llm = user_input
         if vlm_description:
+            # VLM description was generated *before* this function if image was present,
+            # or passed in directly. We format the input accordingly.
             input_for_llm = f"[Image Description: {vlm_description}]\n\nUser Query: {user_input or '(Query related to image)'}"
+            logger.debug(f"{log_prefix}: Using provided VLM description in input.")
         else:
-             input_for_llm = user_input
+             input_for_llm = user_input # Standard text input
 
-        # --- Fetch Context Concurrently (Direct History + History RAG) ---
+        # --- Fetch Context Concurrently (Direct History + History RAG with ELP1 embedding) ---
         history_rag_str = "No relevant history snippets found."
         recent_direct_history_str = "No recent direct history available."
+        history_retriever = None # Initialize retriever
+        history_ids_used = "" # Initialize IDs string
+
         try:
-            logger.debug(f"{direct_req_id}: Fetching direct history and setting up history RAG...")
-            # --- Setup History RAG ---
-            # _get_rag_retriever is sync, run in thread
-            # It only needs user_input for the retrieval query part
-            _, history_retriever, _ = await asyncio.to_thread(
-                self._get_rag_retriever, db, input_for_llm # Pass input used for LLM query
+            logger.debug(f"{log_prefix}: Fetching direct history and setting up history RAG (Embedding ELP1)...")
+
+            # --- Setup History RAG (embedding runs with ELP1) ---
+            # Call _get_rag_retriever (modified to accept priority) in a thread
+            # It handles embedding internally with the passed priority
+            _, history_retriever, history_ids_used = await asyncio.to_thread(
+                self._get_rag_retriever, db, input_for_llm, priority=ELP1 # Pass ELP1 for embedding
             )
+            # Store history IDs used for potential logging later
+            interaction_data['rag_history_ids'] = history_ids_used
 
             # --- Retrieve History RAG Docs (if retriever exists) ---
+            # Retrieval itself (similarity search) is typically fast and local, no LLM call
             history_docs = []
             if history_retriever:
                  try:
-                     # retrieval is sync, run in thread
+                     # Retrieval via invoke is synchronous, run in thread
                      history_docs = await asyncio.to_thread(
                          history_retriever.invoke, input_for_llm
                      )
-                     logger.debug(f"{direct_req_id}: Retrieved {len(history_docs)} history RAG docs.")
+                     logger.debug(f"{log_prefix}: Retrieved {len(history_docs)} history RAG docs.")
+                     # Format the retrieved documents into a string
                      history_rag_str = self._format_docs(history_docs, source_type="History RAG")
+                 except TaskInterruptedException as tie:
+                      # This shouldn't happen during RAG retrieval itself, but handle defensively
+                      logger.warning(f"{log_prefix}: Interruption detected during RAG doc retrieval? {tie}")
+                      history_rag_str = "[History RAG retrieval interrupted]"
+                      # Re-raise if necessary? For direct path, maybe just log and continue.
                  except Exception as rag_err:
-                     logger.warning(f"{direct_req_id}: Error retrieving history RAG docs: {rag_err}")
-                     history_rag_str = "Error retrieving history snippets."
+                      logger.warning(f"{log_prefix}: Error retrieving/formatting history RAG docs: {rag_err}")
+                      history_rag_str = "Error retrieving history snippets."
             else:
-                 logger.debug(f"{direct_req_id}: History RAG retriever not available or no history.")
+                 logger.debug(f"{log_prefix}: History RAG retriever not available or no history.")
 
-            # --- Fetch Direct History ---
-            # Use asyncio.to_thread for DB call
+            # --- Fetch Direct History (DB Query - No LLM) ---
+            # Use asyncio.to_thread for the synchronous DB call
             temp_global_history = await asyncio.to_thread(get_global_recent_interactions, db, limit=3) # Keep limit small
             recent_direct_history_str = self._format_direct_history(temp_global_history)
 
+        except TaskInterruptedException as tie_context:
+            # Catch interruption specifically from _get_rag_retriever's embedding call
+            logger.warning(f"🚦 {log_prefix}: Context fetching INTERRUPTED during embedding: {tie_context}")
+            # Set context strings to indicate interruption and proceed to LLM call if possible,
+            # or return an error immediately. Let's try proceeding with limited context.
+            history_rag_str = "[History embedding interrupted]"
+            # Fallback to empty direct history if that failed too somehow (unlikely)
+            if not recent_direct_history_str: recent_direct_history_str = "No recent direct history available."
         except Exception as context_err:
-            logger.error(f"{direct_req_id}: Error fetching context for direct path: {context_err}")
-            # Use default "not found" strings defined above
+            logger.error(f"{log_prefix}: Error fetching context for direct path: {context_err}")
+            # Use default "not found" strings defined above if context fetching fails for other reasons
+            history_rag_str = "Error retrieving history snippets."
+            recent_direct_history_str = "Error retrieving direct history."
 
         # --- Setup Prompt and Chain ---
         try:
+            # Ensure PROMPT_DIRECT_GENERATE exists and includes placeholders:
+            # {input}, {recent_direct_history}, {history_rag}
             direct_prompt_template = ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE)
         except Exception as prompt_err:
-             logger.error(f"{direct_req_id}: Error creating prompt template: {prompt_err}. Using fallback.")
-             # Fallback prompt MUST also include the history_rag placeholder if we fetched it
+             logger.error(f"{log_prefix}: Error creating direct prompt template: {prompt_err}. Using fallback.")
+             # Fallback prompt MUST also include the necessary placeholders
              direct_prompt_template = ChatPromptTemplate.from_messages([
                  ("system", "Provide a direct answer using history."),
                  ("user", "History RAG:\n{history_rag}\n\nRecent Direct:\n{recent_direct_history}\n\nQuery:\n{input}")
              ])
 
+        # Chain the prompt, the fast model, and the string output parser
         direct_chain = direct_prompt_template | fast_model | StrOutputParser()
 
-        # --- Call LLM ---
+        # --- Call LLM with ELP1 Priority ---
         direct_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
-        raw_response = "[Direct generation failed]"
+        raw_response = "[Direct generation failed]" # Default response
+        final_response = raw_response # Initialize final response
+        llm_call_successful = False
+
         try:
-            logger.debug(f"{direct_req_id}: Calling fast model with history RAG...")
+            logger.debug(f"{log_prefix}: Calling fast model with ELP1 priority...")
             # Prepare inputs matching the placeholders in PROMPT_DIRECT_GENERATE
             prompt_inputs = {
                 "input": input_for_llm,
                 "recent_direct_history": recent_direct_history_str,
-                "history_rag": history_rag_str # <<< ADDED HISTORY RAG CONTEXT HERE
+                "history_rag": history_rag_str # Include history RAG context string
             }
-            # Run sync chain invoke in thread
+            # Use the modified _call_llm_with_timing helper via asyncio.to_thread
             raw_response = await asyncio.to_thread(
                 self._call_llm_with_timing,
                 direct_chain,
                 prompt_inputs,
-                direct_timing_data
+                direct_timing_data,
+                priority=ELP1 # Pass ELP1 priority
             )
-            logger.info(f"{direct_req_id}: Fast model call complete. Raw length: {len(raw_response)}")
+            llm_call_successful = True # Mark as successful if no exception
+            logger.info(f"{log_prefix}: Fast model call complete. Raw length: {len(raw_response)}")
+            # Clean the response (handles potential log lines, etc.)
             final_response = self._cleanup_llm_output(raw_response)
 
-        except Exception as e:
-            logger.error(f"❌ {direct_req_id}: Error during direct LLM call: {e}")
-            final_response = f"[Error generating direct response: {e}]"
+        except TaskInterruptedException as tie_llm:
+            # This is highly unlikely for ELP1 but handle defensively
+            logger.error(f"🚦 {log_prefix}: Direct LLM call (ELP1) INTERRUPTED? This should not happen. {tie_llm}")
+            final_response = f"[Error: Direct generation (ELP1) was unexpectedly interrupted]"
+            # Log this unusual event
             try:
                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                                user_input="Direct Generate Failed", llm_response=final_response)
-            except Exception as log_err: logger.error(f"Failed log direct gen error: {log_err}")
+                                user_input="Direct Generate ELP1 Interrupted", llm_response=final_response)
+            except Exception as log_err: logger.error(f"{log_prefix} Failed log ELP1 interrupt error: {log_err}")
+        except Exception as e:
+            # Handle general errors during the LLM call
+            logger.error(f"❌ {log_prefix}: Error during direct LLM call: {e}")
+            logger.exception(f"{log_prefix} Direct LLM Traceback:")
+            final_response = f"[Error generating direct response: {e}]"
+            # Log the error to the database
+            try:
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input="Direct Generate Failed", llm_response=final_response[:4000]) # Limit length
+            except Exception as log_err:
+                 logger.error(f"{log_prefix} Failed log direct gen error: {log_err}")
 
+        # --- Final Logging and Return ---
         direct_duration = (time.monotonic() - direct_start_time) * 1000
-        logger.info(f"⚡️ {direct_req_id} Direct Generate END. Duration: {direct_duration:.2f}ms. Resp len: {len(final_response)}")
+        logger.info(f"{log_prefix} Direct Generate END. Duration: {direct_duration:.2f}ms. Resp len: {len(final_response)}")
 
-        # Log interaction (Store the direct response)
+        # Log the interaction (Store the direct response)
+        # This interaction record captures the result of the *direct* path.
         try:
             interaction_data = {
                 "session_id": session_id, "mode": "chat",
                 "input_type": "image+text" if vlm_description else "text",
                 "user_input": user_input,
-                "llm_response": final_response,
+                "llm_response": final_response, # Store the final (potentially error) message
                 "execution_time_ms": direct_duration,
-                "image_description": vlm_description,
+                "image_description": vlm_description, # Store description if used
                 "classification": "direct_response", # Mark as direct
-                # Add rag history ids if available from _get_rag_retriever? (Optional)
-                # "rag_history_ids": history_ids_used,
-                "tot_delivered": False, "assistant_action_executed": False,
+                "rag_history_ids": history_ids_used, # Log which history was used
+                "tot_delivered": False, # Standard defaults
+                "assistant_action_executed": False, # Standard defaults
+                "reflection_completed": False # Standard defaults
+                # Add other relevant fields if needed, ensure they exist in the model
             }
+            # Filter kwargs to match Interaction model columns before saving
             valid_keys = {c.name for c in Interaction.__table__.columns}
             db_kwargs = {k: v for k, v in interaction_data.items() if k in valid_keys}
-            add_interaction(db, **db_kwargs) # Use sync add_interaction
+            # Use asyncio.to_thread for the synchronous DB call
+            await asyncio.to_thread(add_interaction, db, **db_kwargs)
         except Exception as log_err:
-            logger.error(f"❌ {direct_req_id}: Failed to log direct interaction: {log_err}")
+            logger.error(f"❌ {log_prefix}: Failed to log direct interaction: {log_err}")
+            logger.exception(f"{log_prefix} DB Log Traceback:")
 
+
+        # Return the final response string (could be success or error message)
         return final_response
 
     # --- generate (Main Async Method - V15 version) ---
@@ -3705,26 +4094,20 @@ class AIChat:
                                  classification: str = "chat_simple", image_b64: Optional[str] = None,
                                  update_interaction_id: Optional[int] = None):
         """
-        Handles text/image-based generation, including RAG (History, URL, File Index),
-        Assistant Action execution, ToT integration, Multi-LLM Routing, Translation,
-        Correction, Interaction Logging, and background task spawning. V19.
+        Handles text/image-based generation in background (ELP0), including RAG, Actions,
+        ToT, Routing, Translation, Correction, Logging, and ToT spawning.
+        Gracefully handles TaskInterruptedException raised by ELP0 sub-tasks. V21.1.
         """
-        # Unique ID for tracking this specific generation request in logs
+        # --- Initialization ---
         request_id = f"gen-{uuid.uuid4()}"
-        is_reflection_task = update_interaction_id is not None # Check if this is a reflection update
-        # --- DEFINE log_prefix EARLY ---
+        is_reflection_task = update_interaction_id is not None
         log_prefix = f"🔄 REFLECT {request_id}" if is_reflection_task else f"💬 BGEN {request_id}"
-        # ---
-        # Ensure session_id exists, generate one if not provided
-        if not session_id:
-            session_id = f"session_{int(time.time())}" if not is_reflection_task else f"reflection_for_{update_interaction_id}"
-            logger.warning(f"{request_id} No session_id provided, generated: {session_id}")
+        if not session_id: session_id = f"session_{int(time.time())}" if not is_reflection_task else f"reflection_for_{update_interaction_id}"
         self.current_session_id = session_id
 
-        logger.info(f"💬 {request_id} Async Chat generate START --> Session: {session_id}, Initial Classification: '{classification}', Input: '{user_input[:50]}...', Image: {'Yes' if image_b64 else 'No'}")
+        logger.info(f"{log_prefix} Async Chat generate START --> Session: {session_id}, Initial Class: '{classification}', Input: '{user_input[:50]}...', Img: {'Y' if image_b64 else 'N'}, Priority: ELP0")
         request_start_time = time.monotonic()
 
-        # --- Initialization ---
         # Interaction data dictionary, populated throughout the process
         interaction_data = {
             "session_id": session_id, "mode": "chat", "input_type": "text",
@@ -3739,458 +4122,513 @@ class AIChat:
             "assistant_action_params": None, "assistant_action_executed": False,
             "assistant_action_result": None,
             "image_data": image_b64[:20] + "..." if image_b64 else None # Indicate presence/size
-            # Fields like 'tool_name', 'tool_parameters', 'tool_result' are usually populated by agent mode
-            # Fields like 'url_processed', 'latex_representation', 'latex_explanation' populated by specific handlers
         }
         if image_b64: interaction_data["input_type"] = "image+text"
 
-        # Default final response in case of early exit or unexpected failure
-        final_response = "Error: Processing failed unexpectedly."
-        # Will hold the SQLAlchemy Interaction object for the *user's* current input
-        saved_interaction: Optional[Interaction] = None
-        # Details extracted if an action is identified
-        action_details: Optional[Dict[str, Any]] = None
-        action_type_detected = "no_action" # Track detected action type
-
-        final_db_data_to_save = interaction_data.copy()
-        # Will hold the ORM object if updating
-        interaction_to_update: Optional[Interaction] = None
+        final_response = "Error: Processing failed unexpectedly." # Default final response
+        saved_interaction: Optional[Interaction] = None # For the initial user interaction record
+        interaction_to_update: Optional[Interaction] = None # For reflection tasks
+        interrupted_flag = False # Track if TaskInterruptedException was caught
 
         # --- Input Validation ---
         if not user_input and not image_b64:
             logger.warning(f"{request_id} Empty input (no text or image).")
-            # Optionally log this empty request attempt
             try:
                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input="[Empty Request Received]", llm_response="No text or image provided.")
             except Exception as log_err:
                  logger.error(f"Failed to log empty request: {log_err}")
-            return "Please provide input (text or image)."
+            # This function runs in the background, returning isn't directly useful to user
+            # Log and exit the task.
+            return
 
-        # --- Load existing interaction if updating ---
+        # --- Load existing interaction if updating (Reflection Task) ---
         if is_reflection_task:
             try:
                 interaction_to_update = db.query(Interaction).filter(Interaction.id == update_interaction_id).first()
-                if interaction_to_update:
-                    logger.info(f"{log_prefix}: Found original interaction {update_interaction_id} to update.")
-                    # Optionally, pre-populate final_db_data_to_save with some original values if needed?
-                    # For now, we'll overwrite/append llm_response later.
-                else:
-                    logger.error(f"{log_prefix}: CRITICAL - Cannot find original interaction {update_interaction_id} to update. Aborting reflection task for this ID.")
+                if not interaction_to_update:
+                    logger.error(f"{log_prefix}: CRITICAL - Cannot find original interaction {update_interaction_id} to update. Aborting reflection task.")
                     # Log this failure clearly
-                    add_interaction(db, session_id=session_id, mode="chat", input_type="error",
-                                    user_input=f"[Reflection Aborted - Missing Original ID {update_interaction_id}]",
-                                    llm_response=f"Could not find interaction {update_interaction_id} for reflection update.")
+                    try:
+                         add_interaction(db, session_id=session_id, mode="chat", input_type="error",
+                                         user_input=f"[Reflection Aborted - Missing Original ID {update_interaction_id}]",
+                                         llm_response=f"Could not find interaction {update_interaction_id} for reflection update.")
+                    except Exception as log_err:
+                         logger.error(f"Failed to log missing reflection target: {log_err}")
                     return # Exit the function gracefully
+                logger.info(f"{log_prefix}: Found original interaction {update_interaction_id} to update.")
             except Exception as load_err:
                  logger.error(f"{log_prefix}: Error loading interaction {update_interaction_id} for update: {load_err}")
-                 return # Exit if we can't load the target
+                 # Attempt to log this load failure
+                 try:
+                      add_interaction(db, session_id=session_id, mode="chat", input_type="error",
+                                      user_input=f"[Reflection Aborted - Error loading Original ID {update_interaction_id}]",
+                                      llm_response=f"DB Error: {load_err}")
+                 except Exception as log_err:
+                      logger.error(f"Failed to log reflection target load error: {log_err}")
+                 return # Exit if loading fails
 
-        # --- Main Processing Block ---
+        # --- Main Processing Block (Wrapped for Interruption Handling) ---
         try:
             # --- 0. VLM Preprocessing (If Image Provided) ---
-            current_input_for_analysis = user_input # Input used for analysis/LLMs
+            # This assumes VLM preprocessing (like getting image_description)
+            # happened *before* this background task was called, or that if
+            # it's done here, the VLM call uses ELP0 and handles interruption.
+            current_input_for_analysis = user_input
             if image_b64:
-                logger.info(f"{request_id} Image provided, running VLM preprocessing...")
-                # `process_image` is sync, runs in thread, saves its own log, returns (description, content_part)
-                # It handles its own DB session internally for logging the image processing step.
-                vlm_description, _ = await asyncio.to_thread(
-                    self.process_image, db, image_b64, session_id
-                )
-                interaction_data['image_description'] = vlm_description # Store desc in main data dict for final save
+                logger.info(f"{log_prefix} Image provided, attempting to use VLM description...")
+                # Fetch description from interaction_data if it was pre-processed
+                # In a real scenario, might need to pass it explicitly or re-fetch from DB
+                vlm_description = interaction_data.get('image_description')
+                if not vlm_description:
+                    # Attempt to get description from DB if this task was triggered by an image interaction
+                    try:
+                         img_interaction = db.query(Interaction).filter(
+                             Interaction.session_id == session_id,
+                             Interaction.input_type == 'image+text', # Or 'image' if logged separately
+                             Interaction.user_input == user_input # Match on input? Risky. Better to pass ID.
+                         ).order_by(desc(Interaction.timestamp)).first()
+                         if img_interaction and img_interaction.image_description:
+                             vlm_description = img_interaction.image_description
+                             interaction_data['image_description'] = vlm_description # Store it
+                             logger.info(f"{log_prefix} Found image description in previous interaction {img_interaction.id}.")
+                         else:
+                             logger.warning(f"{log_prefix} Image provided but no description found in interaction_data or recent history.")
+                             # Optionally, could call VLM here with ELP0, but adds complexity.
+                    except Exception as db_desc_err:
+                         logger.error(f"{log_prefix} Error fetching image description from DB: {db_desc_err}")
 
-                # Handle VLM processing outcome
-                if vlm_description is None or "Error:" in (vlm_description or ""): # Check None explicitly
-                    vlm_error_msg = vlm_description or "Unknown VLM Error"
-                    logger.error(f"{request_id} VLM preprocessing failed: {vlm_error_msg}")
-                    # Prepend error note to input and continue processing text part
-                    current_input_for_analysis = f"(Image analysis failed: {vlm_error_msg}) {user_input}"
-                else:
-                    # Successfully got description
-                    logger.debug(f"{request_id} Input updated with VLM description.")
-                    current_input_for_analysis = f"[Image Description: {vlm_description}]\n\nUser Query: {user_input or '(Query related to image)'}"
+                # Update the input used for analysis if description was found
+                if vlm_description:
+                     current_input_for_analysis = f"[Image Description: {vlm_description}]\n\nUser Query: {user_input or '(Query related to image)'}"
 
-                    # Handle image-only request immediately if no user text was provided
-                    if not user_input:
-                        logger.info(f"{request_id} Handling image-only request, returning VLM description.")
-                        final_response = vlm_description # VLM description is the final answer
-                        interaction_data['llm_response'] = final_response
-                        interaction_data['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
-                        # Apply cleanup before saving/returning
-                        final_response = self._cleanup_llm_output(final_response)
-                        interaction_data['llm_response'] = final_response
-                        try:
-                             logger.debug(f"{request_id} Saving interaction record for image-only request...")
-                             valid_keys = {c.name for c in Interaction.__table__.columns}
-                             db_kwargs = {k: v for k, v in interaction_data.items() if k in valid_keys}
-                             # Ensure all needed defaults are set before final save
-                             db_kwargs.setdefault('classification_reason', None); db_kwargs.setdefault('tot_result', None);
-                             db_kwargs.setdefault('tot_delivered', False); db_kwargs.setdefault('emotion_context_analysis', None);
-                             db_kwargs.setdefault('assistant_action_type', None); db_kwargs.setdefault('assistant_action_params', None);
+                # Handle image-only request case? Unlikely needed for background task.
+                # If needed: if not user_input and vlm_description: final_response = vlm_description; raise StopIteration("Image only") # Use custom signal?
 
-                             saved_interaction = await asyncio.to_thread(add_interaction, db, **db_kwargs)
-                             if saved_interaction: logger.info(f"{request_id} Saved interaction {saved_interaction.id} for image-only request.")
-                        except Exception as db_err:
-                             logger.error(f"❌ {request_id} Failed save image-only interaction: {db_err}")
-                        return final_response # Return early
-
-            # --- 1. Check for Pending ToT Result FIRST ---
-            logger.debug(f"{request_id} Checking for pending ToT results for session {session_id}...")
+            # --- 1. Check for Pending ToT Result ---
+            logger.debug(f"{log_prefix} Checking for pending ToT results for session {session_id}...")
             pending_tot_interaction = await asyncio.to_thread(get_pending_tot_result, db, session_id)
             pending_tot_str = "None."
-
-            # --- NEW STEP: Generate Dedicated File Search Query ---
-            # Needs history first
-            temp_global_history = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-            temp_recent_direct_history_str = self._format_direct_history(temp_global_history)
-            file_search_query = await self._generate_file_search_query_async(
-                db,
-                current_input_for_analysis, # Use the potentially VLM-augmented input
-                temp_recent_direct_history_str, # Provide some recent context
-                session_id
-            )
-            # --- END NEW STEP ---
-
             if pending_tot_interaction and pending_tot_interaction.tot_result:
-                logger.info(f"{request_id} Injecting pending ToT result from Interaction ID: {pending_tot_interaction.id}")
+                logger.info(f"{log_prefix} Injecting pending ToT result from Interaction ID: {pending_tot_interaction.id}")
                 original_input_snippet = (pending_tot_interaction.user_input or "your previous query")[:50] + "..."
                 pending_tot_str = ( f"Okay, regarding your previous query ('{original_input_snippet}'), "
                                     f"I've finished thinking about it:\n\n{pending_tot_interaction.tot_result}\n\n"
                                     f"Now, about your current request:" )
 
+            # --- 2. Generate File Search Query (ELP0) ---
+            # Ensure _generate_file_search_query_async uses ELP0 internally
+            logger.debug(f"{log_prefix} Generating file search query (ELP0)...")
+            temp_global_history = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
+            temp_recent_direct_history_str = self._format_direct_history(temp_global_history)
+            file_search_query = await self._generate_file_search_query_async(db, current_input_for_analysis, temp_recent_direct_history_str, session_id)
 
-            # --- 2. CONCURRENT FETCHING & CONTEXT PREP ---
-            logger.debug(f"{request_id} Starting concurrent context fetching...")
+
+            # --- 3. CONCURRENT FETCHING & CONTEXT PREP (Embedding uses ELP0) ---
+            logger.debug(f"{log_prefix} Starting concurrent context fetching (Embedding: ELP0)...")
+            # Ensure _get_rag_retriever uses ELP0 internally for embedding & handles interruption
             url_retriever, history_retriever, history_ids_used = await asyncio.to_thread( self._get_rag_retriever, db, current_input_for_analysis )
             interaction_data['rag_history_ids'] = history_ids_used
             if hasattr(self, 'vectorstore_url') and self.vectorstore_url:
                 interaction_data['rag_source_url'] = getattr(self.vectorstore_url, '_source_url', None)
 
+            # Define async helper tasks
             async def retrieve_docs_async():
+                 # RAG retrieval doesn't involve LLM calls, just vector similarity search
                  retrieve_docs_step = RunnableParallel( url_docs=(url_retriever if url_retriever else RunnableLambda(lambda x: [])), history_docs=(history_retriever if history_retriever else RunnableLambda(lambda x: [])) ); return await asyncio.to_thread(retrieve_docs_step.invoke, current_input_for_analysis)
-            async def get_logs_async():
+            async def get_logs_async(): # DB Query
                  log_pool = await asyncio.to_thread(get_recent_interactions, db, RAG_HISTORY_COUNT*2, session_id, "chat", include_logs=True); return [i for i in log_pool if i.input_type.startswith('log_') or i.input_type == 'error']
-            async def get_global_history_async():
-                 return await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-            async def run_emotion_analysis_async():
-                 await asyncio.to_thread(self._run_emotion_analysis, db, user_input, interaction_data) # Modifies interaction_data
+            async def get_global_history_async(): # DB Query
+                 return await asyncio.to_thread(get_global_recent_interactions, db, limit=10)
+            async def run_emotion_analysis_async(): # LLM Call (Needs ELP0)
+                 # Ensure _run_emotion_analysis uses _call_llm_with_timing(priority=ELP0) internally
+                 await asyncio.to_thread(self._run_emotion_analysis, db, user_input, interaction_data)
+            async def get_file_index_results_async(query_to_use: str): # DB Query
+                if search_file_index and query_to_use: return await asyncio.to_thread(search_file_index, db, query_to_use, limit=5)
+                else: return []
 
-            # <<< NEW: Define async task for file index search >>>
-            async def get_file_index_results_async(query_to_use: str): # Accept query
-                if search_file_index and query_to_use: # Check query isn't empty
-                    return await asyncio.to_thread(search_file_index, db, query_to_use, limit=5) # Use generated query
-                elif not query_to_use:
-                    logger.debug("Skipping file index search as generated query was empty.")
-                    return []
-                else:
-                    logger.error("search_file_index function not available.")
-                    return []
-            # <<< END NEW >>>
-
-            logger.debug(f"{request_id} Waiting for parallel fetches & analysis...")
+            # Execute concurrent tasks
+            logger.debug(f"{log_prefix} Waiting for parallel fetches & analysis...")
             results = await asyncio.gather(
-                retrieve_docs_async(),
-                get_logs_async(),
-                get_global_history_async(),
-                run_emotion_analysis_async(),
-                get_file_index_results_async(file_search_query),
-                # --- END FIX ---
+                retrieve_docs_async(), get_logs_async(), get_global_history_async(),
+                run_emotion_analysis_async(), get_file_index_results_async(file_search_query),
                 return_exceptions=True
             )
-            
-            logger.debug(f"{request_id} Parallel fetches & analysis completed.")
+            logger.debug(f"{log_prefix} Parallel fetches & analysis completed.")
 
-            retrieved_docs = results[0] if not isinstance(results[0], BaseException) else {'url_docs': [], 'history_docs': []}
-            log_entries_for_context = results[1] if not isinstance(results[1], BaseException) else []
-            global_direct_history = results[2] if not isinstance(results[2], BaseException) else []
-            emotion_analysis_result = interaction_data.get('emotion_context_analysis') # Get value (could be None)
-            if emotion_analysis_result is None:
-                emotion_analysis_result = "Analysis Unavailable or Failed" # Assign default string if None
-            file_index_results = results[4] if not isinstance(results[4], BaseException) else []
-            for i, res in enumerate(results): # Log errors from gather
-                 if isinstance(res, BaseException): logger.error(f"{request_id} Error in concurrent task {i}: {res}")
+            # Process results, checking for exceptions (especially TaskInterruptedException)
+            retrieved_docs = None; log_entries_for_context = []; global_direct_history = []; file_index_results = []
+            for i, res in enumerate(results):
+                 if isinstance(res, TaskInterruptedException):
+                      logger.warning(f"🚦 Interruption caught during concurrent context fetch (Task {i})")
+                      raise res # Re-raise interruption immediately
+                 elif isinstance(res, BaseException):
+                      logger.error(f"{log_prefix} Error in concurrent context task {i}: {res}")
+                      # Assign default empty values for failed tasks
+                      if i == 0: retrieved_docs = {'url_docs': [], 'history_docs': []}
+                      elif i == 1: log_entries_for_context = []
+                      elif i == 2: global_direct_history = []
+                      # Emotion analysis modifies interaction_data directly
+                      elif i == 4: file_index_results = []
+                 else:
+                      # Assign successful results
+                      if i == 0: retrieved_docs = res
+                      elif i == 1: log_entries_for_context = res
+                      elif i == 2: global_direct_history = res
+                      # Emotion analysis modifies interaction_data
+                      elif i == 4: file_index_results = res
 
+            # Fallback if retrieval failed badly
+            if retrieved_docs is None: retrieved_docs = {'url_docs': [], 'history_docs': []}
             url_docs = retrieved_docs.get("url_docs", [])
             history_docs = retrieved_docs.get("history_docs", [])
-            logger.debug(f"{request_id} Context Fetched - URL Docs: {len(url_docs)}, Hist Docs: {len(history_docs)}, FileIdx Docs: {len(file_index_results)}, Logs: {len(log_entries_for_context)}, Global Hist: {len(global_direct_history)}, Emotion: '{emotion_analysis_result[:50]}...'")
-            # --- 3. Format Context Strings ---
-            logger.debug(f"{request_id} Formatting context strings...")
+            emotion_analysis_result = interaction_data.get('emotion_context_analysis', "Analysis Unavailable or Failed")
+
+            emotion_log_str = str(emotion_analysis_result)[:50] if emotion_analysis_result is not None else "None"
+            logger.debug(f"{log_prefix} Context Fetched - URL Docs: {len(url_docs)}, Hist Docs: {len(history_docs)}, FileIdx Docs: {len(file_index_results)}, Logs: {len(log_entries_for_context)}, Global Hist: {len(global_direct_history)}, Emotion: '{emotion_log_str}...'")
+
+            # Format Context Strings
+            logger.debug(f"{log_prefix} Formatting context strings...")
             url_context_str = self._format_docs(url_docs, source_type="URL Context")
             history_rag_str = self._format_docs(history_docs, source_type="History RAG")
             log_context_str = self._format_log_history(log_entries_for_context)
             recent_direct_history_str = self._format_direct_history(global_direct_history)
-            history_summary_for_action = self._get_history_summary(db, MEMORY_SIZE)
+            history_summary_for_action = self._get_history_summary(db, MEMORY_SIZE) # Sync DB call is ok here
             file_index_context_str = self._format_file_index_results(file_index_results)
 
-            # --- 4. Analyze for Assistant Action ---
-            logger.debug(f"{request_id} Analyzing for assistant action...")
+            # --- 4. Analyze for Assistant Action (ELP0) ---
+            # Ensure _analyze_assistant_action uses ELP0 internally and handles interruptions
+            logger.debug(f"{log_prefix} Analyzing for assistant action (ELP0)...")
             action_analysis_context = { "history_summary": history_summary_for_action, "log_context": log_context_str, "recent_direct_history": recent_direct_history_str }
             action_details = await asyncio.to_thread( self._analyze_assistant_action, db, current_input_for_analysis, session_id, action_analysis_context )
+
             action_type_detected = "no_action"
             if action_details:
                  action_type_detected = action_details.get("action_type", "no_action")
                  interaction_data['assistant_action_analysis_json'] = json.dumps(action_details)
                  interaction_data['assistant_action_type'] = action_type_detected
                  interaction_data['assistant_action_params'] = json.dumps(action_details.get("parameters", {}))
-                 logger.info(f"{request_id} Assistant action analysis result: Type='{action_type_detected}'")
+                 logger.info(f"{log_prefix} Assistant action analysis result: Type='{action_type_detected}'")
             else:
-                 logger.info(f"{request_id} Assistant action analysis result: None (implies 'no_action')")
+                 logger.info(f"{log_prefix} Assistant action analysis result: None (implies 'no_action')")
                  interaction_data['assistant_action_analysis_json'] = None; interaction_data['assistant_action_type'] = None; interaction_data['assistant_action_params'] = None
 
-            # --- 5. SAVE USER INTERACTION RECORD (Before Action/LLM Response) ---
-            logger.debug(f"{request_id} Saving initial user interaction record...")
-            try:
-                 interaction_data['llm_response'] = "[Action/Response Pending]" # Placeholder
-                 interaction_data['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
-                 # --- Set ALL defaults before saving ---
-                 interaction_data.setdefault('classification_reason', None); interaction_data.setdefault('rag_history_ids', history_ids_used or None);
-                 interaction_data.setdefault('rag_source_url', interaction_data.get('rag_source_url')); # Keep if set earlier
-                 interaction_data.setdefault('requires_deep_thought', False); interaction_data.setdefault('deep_thought_reason', None);
-                 interaction_data.setdefault('tot_analysis_requested', False); interaction_data.setdefault('tot_result', None);
-                 interaction_data.setdefault('tot_delivered', False); interaction_data.setdefault('emotion_context_analysis', emotion_analysis_result or 'N/A');
-                 interaction_data.setdefault('image_description', interaction_data.get('image_description')); # Keep if set by VLM
-                 interaction_data.setdefault('assistant_action_analysis_json', interaction_data.get('assistant_action_analysis_json'));
-                 interaction_data.setdefault('assistant_action_type', interaction_data.get('assistant_action_type'));
-                 interaction_data.setdefault('assistant_action_params', interaction_data.get('assistant_action_params'));
-                 interaction_data.setdefault('assistant_action_executed', False); interaction_data.setdefault('assistant_action_result', None);
-                 interaction_data.setdefault('image_data', interaction_data.get('image_data')); # Keep indicator
-                 # --- End Set Defaults ---
+            # --- 5. SAVE INITIAL/PLACEHOLDER INTERACTION RECORD ---
+            # Do not save if this is a reflection task (we update existing instead)
+            if not is_reflection_task:
+                logger.debug(f"{log_prefix} Saving initial interaction record (placeholder)...")
+                try:
+                    initial_save_data = interaction_data.copy() # Take snapshot
+                    initial_save_data['llm_response'] = "[Action/Response Pending]"
+                    initial_save_data['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
+                    # Ensure all needed defaults are set before saving
+                    initial_save_data.setdefault('classification_reason', None); initial_save_data.setdefault('rag_history_ids', history_ids_used or None);
+                    initial_save_data.setdefault('rag_source_url', interaction_data.get('rag_source_url'));
+                    initial_save_data.setdefault('requires_deep_thought', False); initial_save_data.setdefault('deep_thought_reason', None);
+                    initial_save_data.setdefault('tot_analysis_requested', False); initial_save_data.setdefault('tot_result', None);
+                    initial_save_data.setdefault('tot_delivered', False); initial_save_data.setdefault('emotion_context_analysis', emotion_analysis_result or 'N/A');
+                    initial_save_data.setdefault('image_description', interaction_data.get('image_description'));
+                    initial_save_data.setdefault('assistant_action_analysis_json', interaction_data.get('assistant_action_analysis_json'));
+                    initial_save_data.setdefault('assistant_action_type', interaction_data.get('assistant_action_type'));
+                    initial_save_data.setdefault('assistant_action_params', interaction_data.get('assistant_action_params'));
+                    initial_save_data.setdefault('assistant_action_executed', False); initial_save_data.setdefault('assistant_action_result', None);
+                    initial_save_data.setdefault('image_data', interaction_data.get('image_data'));
 
-                 valid_keys = {c.name for c in Interaction.__table__.columns}
-                 db_kwargs = {k: v for k, v in interaction_data.items() if k in valid_keys}
-                 saved_interaction = await asyncio.to_thread(add_interaction, db, **db_kwargs)
-                 if not saved_interaction: logger.error(f"{request_id} CRITICAL: Failed to save initial interaction record!")
-                 else: logger.info(f"{request_id} Saved initial interaction record ID {saved_interaction.id}")
-            except Exception as db_err:
-                 logger.error(f"❌ {request_id} Failed to save initial interaction record: {db_err}")
-                 logger.exception("Initial Save Traceback:")
-                 saved_interaction = None # Ensure it's None if save failed
+                    valid_keys = {c.name for c in Interaction.__table__.columns}
+                    db_kwargs = {k: v for k, v in initial_save_data.items() if k in valid_keys}
+                    # Call add_interaction synchronously using asyncio.to_thread
+                    saved_interaction = await asyncio.to_thread(add_interaction, db, **db_kwargs)
+                    if saved_interaction:
+                        logger.info(f"{log_prefix} Saved initial interaction record ID {saved_interaction.id}")
+                    else:
+                         # add_interaction handles its own errors/rollback, but log failure here
+                         logger.error(f"{log_prefix} CRITICAL: add_interaction failed to save initial record!")
+                         # Should we halt processing if initial save fails? Depends on desired behavior.
+                         # For now, we continue but saved_interaction will be None.
+                except Exception as db_err:
+                    logger.error(f"❌ {log_prefix} Failed to save initial interaction record: {db_err}")
+                    logger.exception("Initial Save Traceback:")
+                    saved_interaction = None # Ensure it's None if save failed
 
-            # --- 6. Execute Action OR Generate LLM Response ---
+            # --- 6. Execute Action (ELP0 internally) OR Generate LLM Response (ELP0 pipeline) ---
             if action_details and action_type_detected != "no_action":
                 # --- Execute Assistant Action ---
-                logger.info(f"{request_id} Action '{action_type_detected}' required. Executing...")
-                if saved_interaction:
-                    # Pass the saved Interaction object to the executor for potential updates
-                    action_result = await self._execute_assistant_action( db, session_id, action_details, saved_interaction )
+                logger.info(f"{log_prefix} Action '{action_type_detected}' required. Executing (ELP0)...")
+                # Ensure _execute_assistant_action handles ELP0 for LLM calls AND interruptions
+                target_interaction_for_action = saved_interaction if not is_reflection_task else interaction_to_update
+                if target_interaction_for_action:
+                    # _execute_assistant_action is async, await it directly
+                    action_result = await self._execute_assistant_action( db, session_id, action_details, target_interaction_for_action )
                     final_response = action_result # Use result from executor (success msg or fallback)
-                    # Status is updated within _execute_assistant_action on 'saved_interaction' object
+                    # Status (e.g., assistant_action_executed) is updated within _execute_assistant_action
                 else:
-                     logger.error(f"{request_id} Cannot execute action: failed to save initial interaction record.")
-                     final_response = "Error: Internal issue preventing action execution (failed to save initial request)."
-                     # Update dict for final log save attempt later, if possible
+                     logger.error(f"{log_prefix} Cannot execute action: target interaction record missing (initial save failed or reflection target lost).")
+                     final_response = "Error: Internal issue preventing action execution (missing record)."
+                     # Update dict for final log save attempt later
                      interaction_data['llm_response'] = final_response
-                     interaction_data['assistant_action_result'] = final_response
+                     interaction_data['assistant_action_result'] = final_response # Log action result failure
+                     interaction_data['assistant_action_executed'] = False # Explicitly mark as not executed
 
             else:
-                # --- No Action Required - Proceed with LLM Generation ---
-                logger.info(f"{request_id} No specific assistant action detected, proceeding with LLM generation.")
+                # --- No Action Required - Proceed with LLM Generation Pipeline (All steps ELP0) ---
+                logger.info(f"{log_prefix} No specific assistant action detected, proceeding with LLM generation (ELP0 pipeline).")
 
-                # --- Route to Specialist LLM ---
-                logger.debug(f"{request_id} Routing to specialist...")
+                # --- Route (ELP0) ---
+                # _route_to_specialist handles ELP0 internally & raises TaskInterruptedException
+                logger.debug(f"{log_prefix} Routing to specialist (ELP0)...")
                 router_context = {
                     "pending_tot_result": pending_tot_str,
                     "recent_direct_history": recent_direct_history_str,
                     "url_context": url_context_str,
                     "history_rag": history_rag_str,
-                    "file_index_context": file_index_context_str, # <<< ADDED
+                    "file_index_context": file_index_context_str,
                     "log_context": log_context_str,
                     "emotion_analysis": emotion_analysis_result
                 }
+                # _route_to_specialist is async, await it
                 chosen_model_key, refined_query, routing_reason = await self._route_to_specialist( db, session_id, current_input_for_analysis, router_context )
-                logger.info(f"{request_id} Router chose '{chosen_model_key}'. Reason: {routing_reason}. Query: '{refined_query[:50]}...'")
+                logger.info(f"{log_prefix} Router chose '{chosen_model_key}'. Reason: {routing_reason}. Query: '{refined_query[:50]}...'")
 
-                # --- Prepare Specialist Input (Handle Translation) ---
+                # --- Translate Input (ELP0) ---
+                # _translate handles ELP0 internally & raises TaskInterruptedException
                 specialist_input = refined_query; target_lang = "en"; requires_translation = False
                 if chosen_model_key in ["math", "code"]:
                     translator = self.provider.get_model("translator")
-                    if translator: logger.warning(f"{request_id} Translating input for {chosen_model_key}..."); specialist_input = await self._translate(refined_query, target_lang="zh"); target_lang = "zh"; requires_translation = True
-                    else: logger.error(f"{request_id} Translator unavailable for {chosen_model_key}.")
+                    if translator:
+                        logger.warning(f"{log_prefix} Translating input for {chosen_model_key} (ELP0)...")
+                        specialist_input = await self._translate(refined_query, target_lang="zh") # _translate is async
+                        target_lang = "zh"
+                        requires_translation = True
+                    else: logger.error(f"{log_prefix} Translator unavailable for {chosen_model_key}.")
 
                 # --- Get Specialist Model ---
-                logger.debug(f"{request_id} Getting specialist model: {chosen_model_key}")
+                logger.debug(f"{log_prefix} Getting specialist model: {chosen_model_key}")
                 specialist_model = self.provider.get_model(chosen_model_key)
-                if not specialist_model: raise ValueError(f"{request_id} Fatal: Specialist '{chosen_model_key}' and default models unavailable!")
+                if not specialist_model:
+                     logger.error(f"{log_prefix} Fatal: Specialist model '{chosen_model_key}' not found!")
+                     raise ValueError(f"Specialist model '{chosen_model_key}' unavailable!")
 
-                # --- Prepare Specialist Chain ---
-                logger.debug(f"{request_id} Preparing specialist chain...")
+                # --- Prepare and Call Specialist Chain (ELP0) ---
                 specialist_chain_input_map = {
-                    "input": refined_query, # Use the refined query for the specialist
+                    "input": refined_query, # Use the refined query
                     "emotion_analysis": emotion_analysis_result,
                     "context": url_context_str,
                     "history_rag": history_rag_str,
-                    "file_index_context": file_index_context_str, # <<< ADDED
+                    "file_index_context": file_index_context_str,
                     "log_context": log_context_str,
                     "recent_direct_history": recent_direct_history_str,
                     "pending_tot_result": pending_tot_str
                 }
                 specialist_chain = (
-                     RunnableLambda(lambda x: specialist_chain_input_map)
-                     | self.text_prompt_template # Use the appropriate template instance
+                     RunnableLambda(lambda x: specialist_chain_input_map) # Use lambda to inject map
+                     | self.text_prompt_template # Use the standard chat template
                      | specialist_model
                      | StrOutputParser()
                 )
-
-                # --- Call Specialist Model ---
-                logger.info(f"{request_id} Calling Specialist Model '{chosen_model_key}'...")
+                logger.info(f"{log_prefix} Calling Specialist Model '{chosen_model_key}' (ELP0)...")
                 specialist_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
+                # Execute the specialist call using the timing helper with ELP0
                 draft_response = await asyncio.to_thread(
-                    self._call_llm_with_timing, specialist_chain, {"query": specialist_input}, specialist_timing_data # Pass dummy outer dict if needed by lambda structure
+                    self._call_llm_with_timing, specialist_chain, {}, specialist_timing_data, priority=ELP0 # Pass empty dict if lambda handles input map
                 )
-                logger.info(f"{request_id} Specialist model call complete. Draft length: {len(draft_response)}")
+                logger.info(f"{log_prefix} Specialist model call complete. Draft length: {len(draft_response)}")
 
-                # --- Handle Back-Translation ---
+                # --- Translate Output (ELP0) ---
+                # _translate handles ELP0 internally & raises TaskInterruptedException
                 if requires_translation:
                     translator = self.provider.get_model("translator")
-                    if translator: logger.warning(f"{request_id} Translating response back to English..."); draft_response = await self._translate(draft_response, target_lang="en", source_lang=target_lang)
-                    else: logger.error(f"{request_id} Translator unavailable for back-translation.")
+                    if translator:
+                        logger.warning(f"{log_prefix} Translating response back to English (ELP0)...")
+                        draft_response = await self._translate(draft_response, target_lang="en", source_lang=target_lang) # _translate is async
+                    else: logger.error(f"{log_prefix} Translator unavailable for back-translation.")
 
-                # --- Call Corrector Model ---
-                logger.info(f"{request_id} Passing draft to corrector model...")
+                # --- Call Corrector Model (ELP0) ---
+                # _correct_response handles ELP0 internally & raises TaskInterruptedException
+                logger.info(f"{log_prefix} Passing draft to corrector model (ELP0)...")
                 corrector_context = {
                     "url_context": url_context_str,
                     "history_rag": history_rag_str,
-                    "file_index_context": file_index_context_str, # <<< ADDED
+                    "file_index_context": file_index_context_str,
                     "log_context": log_context_str,
                     "recent_direct_history": recent_direct_history_str,
                     "emotion_analysis": emotion_analysis_result
                 }
+                # _correct_response is async, await it
                 llm_final_response = await self._correct_response( db, session_id, current_input_for_analysis, corrector_context, draft_response )
-                logger.info(f"{request_id} Corrector model call complete. Final length: {len(llm_final_response)}")
+                logger.info(f"{log_prefix} Corrector model call complete. Final length: {len(llm_final_response)}")
                 final_response = llm_final_response # Assign to final_response
 
-                # --- Update the previously saved interaction record ---
-                if saved_interaction:
-                    try:
-                        logger.debug(f"Updating interaction {saved_interaction.id} with final LLM response.")
-                        saved_interaction.llm_response = self._cleanup_llm_output(final_response) # Clean before saving
-                        saved_interaction.execution_time_ms = (time.monotonic() - request_start_time) * 1000
-                        db.commit() # Commit changes to the existing interaction
-                        logger.info(f"Successfully updated interaction {saved_interaction.id} with final LLM response.")
-                    except Exception as upd_err:
-                         logger.error(f"Failed to update interaction {saved_interaction.id} with LLM response: {upd_err}")
-                         db.rollback()
-                else:
-                     logger.warning(f"{request_id} Could not update final LLM response as initial interaction record wasn't saved.")
-                # --- End LLM Generation Flow ---
+            # --- 7. Post-Execution/Generation Steps (ToT Spawning uses ELP0 internally) ---
+            logger.debug(f"{log_prefix} Post-execution/generation steps...")
+            target_interaction_for_tot = saved_interaction if not is_reflection_task else interaction_to_update
 
-            # --- 7. Post-Execution/Generation Steps (ToT Spawning, Cleanup) ---
-            logger.debug(f"{request_id} Post-execution/generation steps...")
+            # Determine if ToT should be spawned based on initial classification AND if an action was NOT attempted/required
+            action_attempted_or_required = (action_details and action_type_detected != "no_action")
+            # Use initial classification stored in interaction_data
+            should_spawn_tot = (interaction_data.get('classification') == "chat_complex") and not action_attempted_or_required
 
-            # Determine if ToT should be spawned based on initial classification AND if an action was NOT attempted
-            action_attempted = (action_details and action_type_detected != "no_action")
-            should_spawn_tot = (classification == "chat_complex") and not action_attempted
-
-            # Update ToT flags on the saved interaction record if it exists
-            if saved_interaction:
+            # Update ToT flags on the target interaction record if it exists
+            if target_interaction_for_tot:
                  try:
                       needs_commit = False
-                      if saved_interaction.requires_deep_thought != should_spawn_tot: saved_interaction.requires_deep_thought = should_spawn_tot; needs_commit = True
+                      if target_interaction_for_tot.requires_deep_thought != should_spawn_tot: target_interaction_for_tot.requires_deep_thought = should_spawn_tot; needs_commit = True
+                      # Use classification reason stored earlier
                       new_reason = interaction_data.get('classification_reason', 'N/A' if should_spawn_tot else None)
-                      if saved_interaction.deep_thought_reason != new_reason: saved_interaction.deep_thought_reason = new_reason; needs_commit = True
-                      if saved_interaction.tot_analysis_requested != should_spawn_tot: saved_interaction.tot_analysis_requested = should_spawn_tot; needs_commit = True
-                      if needs_commit: db.commit(); logger.debug(f"Updated ToT flags on interaction {saved_interaction.id}.")
-                 except Exception as tot_db_err: logger.error(f"Failed update ToT flags on DB {saved_interaction.id}: {tot_db_err}"); db.rollback()
+                      if target_interaction_for_tot.deep_thought_reason != new_reason: target_interaction_for_tot.deep_thought_reason = new_reason; needs_commit = True
+                      if target_interaction_for_tot.tot_analysis_requested != should_spawn_tot: target_interaction_for_tot.tot_analysis_requested = should_spawn_tot; needs_commit = True
+                      if needs_commit:
+                          db.commit()
+                          logger.debug(f"{log_prefix} Updated ToT flags on interaction {target_interaction_for_tot.id}.")
+                 except Exception as tot_db_err:
+                      logger.error(f"{log_prefix} Failed update ToT flags on DB {target_interaction_for_tot.id}: {tot_db_err}")
+                      db.rollback()
 
-            # Spawn Background ToT Task if needed AND initial interaction was saved
-            if should_spawn_tot and saved_interaction:
-                 logger.warning(f"⏳ {request_id} Spawning background ToT task (Trigger ID: {saved_interaction.id})...")
+            # Spawn Background ToT Task if needed AND target interaction exists
+            if should_spawn_tot and target_interaction_for_tot:
+                 logger.warning(f"⏳ {log_prefix} Spawning background ToT task (Trigger ID: {target_interaction_for_tot.id})...")
+                 # Ensure _run_tot_in_background_wrapper uses ELP0 internally for its LLM call
                  tot_inputs_for_bg = {
                      "db_session_factory": SessionLocal, "input": user_input,
                      "rag_context_docs": url_docs,
-                     "history_rag_interactions": history_docs,
+                     "history_rag_interactions": history_docs, # Pass the retrieved docs/interactions
                      "log_context_str": log_context_str,
                      "recent_direct_history_str": recent_direct_history_str,
-                     "file_index_context_str": file_index_context_str, # <<< ADDED
-                     "triggering_interaction_id": saved_interaction.id,
+                     "file_index_context_str": file_index_context_str,
+                     "triggering_interaction_id": target_interaction_for_tot.id,
                  }
+                 # Create task - no await needed here, it runs in background
                  asyncio.create_task(self._run_tot_in_background_wrapper(**tot_inputs_for_bg))
-                 logger.info(f"{request_id} Background ToT task scheduled.")
-            elif should_spawn_tot and not saved_interaction:
-                 logger.error(f"{request_id} Cannot spawn ToT: initial interaction save failed.")
+                 logger.info(f"{log_prefix} Background ToT task scheduled.")
+            elif should_spawn_tot and not target_interaction_for_tot:
+                 logger.error(f"{log_prefix} Cannot spawn ToT: target interaction record missing.")
 
             # --- Mark Pending ToT as Delivered (if one was injected earlier) ---
             if pending_tot_interaction:
-                logger.debug(f"{request_id} Marking pending ToT {pending_tot_interaction.id} as delivered...")
+                logger.debug(f"{log_prefix} Marking pending ToT {pending_tot_interaction.id} as delivered...")
+                # Run the synchronous DB update in a thread
                 await asyncio.to_thread(mark_tot_delivered, db, pending_tot_interaction.id)
 
-            # --- Final Return ---
-            # Ensure the final response (from LLM or Action) is cleaned one last time
-            cleaned_final_response = self._cleanup_llm_output(final_response)
-            logger.info(f"💬 {request_id} Async Chat generate END. Returning final cleaned response (length {len(cleaned_final_response)}).")
-            return cleaned_final_response
+            # --- Final Return Value Preparation ---
+            # Cleanup happens just before final save/update in finally block
+
+        # --- Catch Interruption Exception ---
+        except TaskInterruptedException as tie:
+            logger.warning(f"🚦 {log_prefix} Task INTERRUPTED during execution: {tie}")
+            interrupted_flag = True # Set flag to handle in finally block
+            final_response = f"[Task Interrupted by Higher Priority Request: {tie}]" # Set final response message
 
         # --- Top-Level Exception Handling ---
         except Exception as e:
-            logger.error(f"❌❌ {log_prefix} UNHANDLED exception: {e}")
+            logger.error(f"❌❌ {log_prefix} UNHANDLED exception in background_generate: {e}")
             logger.exception(f"{log_prefix} Traceback:")
-            final_response = f"Error during processing: {type(e).__name__}"
-            final_db_data_to_save['llm_response'] = final_response[:4000] # Store error in response field
-            final_db_data_to_save['input_type'] = 'error' # Mark as error state
+            final_response = f"Error during background processing: {type(e).__name__} - {e}"
+            # Update interaction_data for saving error state in finally block
+            interaction_data['llm_response'] = final_response[:4000] # Store error
+            interaction_data['input_type'] = 'error' # Mark as error state
 
         finally:
-            # --- Final Save/Update ---
+            # --- Final Save/Update Logic (Handles Normal, Error, Interruption) ---
+            final_db_data_to_save = interaction_data.copy() # Use latest data
+            # Apply final cleanup to the response before saving
+            final_response = self._cleanup_llm_output(final_response)
+            final_db_data_to_save['llm_response'] = final_response
             final_db_data_to_save['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
 
+            # Determine the correct interaction object to update/reference
+            target_interaction_for_final_update = saved_interaction if not is_reflection_task else interaction_to_update
+
             try:
-                # --- MODIFICATION START ---
-                if interaction_to_update: # This is a reflection task completing
-                    # 1. Mark the original interaction as completed WITHOUT changing its response
-                    logger.info(f"{log_prefix}: Marking original interaction {update_interaction_id} as reflection_completed.")
-                    interaction_to_update.reflection_completed = True
-                    interaction_to_update.last_modified_db = datetime.datetime.now(datetime.timezone.utc) # Update modification time
-                    # Commit this change first
-                    try:
+                if interrupted_flag:
+                    # --- Handle Interruption Save ---
+                    logger.warning(f"{log_prefix}: Finalizing state for INTERRUPTED task.")
+                    if is_reflection_task and interaction_to_update:
+                        # Reset reflection status, add note
+                        interaction_to_update.reflection_completed = False # Ensure it gets picked up again
+                        # Append interruption note, avoiding excessive length
+                        existing_resp = interaction_to_update.llm_response or ""
+                        interrupt_note = f"\n\n--- Reflection Interrupted ({datetime.datetime.now(datetime.timezone.utc).isoformat()}) ---"
+                        interaction_to_update.llm_response = (existing_resp + interrupt_note)[:Interaction.llm_response.type.length]
+                        interaction_to_update.last_modified_db = datetime.datetime.now(datetime.timezone.utc)
                         db.commit()
-                        logger.success(f"{log_prefix}: Successfully marked original interaction {update_interaction_id} complete.")
-                    except Exception as upd_err:
-                         logger.error(f"{log_prefix}: Failed to mark original interaction {update_interaction_id} complete: {upd_err}")
-                         db.rollback()
-                         # If marking fails, we probably shouldn't log the result as a new interaction yet,
-                         # as the original might get picked up again. We'll skip creating the new record.
-                         raise upd_err # Re-raise to prevent creating the new record below
-
-                    # 2. Create a NEW interaction record containing the reflection result
-                    logger.info(f"{log_prefix}: Creating new interaction record for reflection result (original ID: {update_interaction_id}).")
-                    reflection_result_text = final_db_data_to_save.get('llm_response', "[Reflection processing failed or returned empty]")
-
-                    # Use session_id from the current task (which should match original)
-                    current_session_id = final_db_data_to_save.get('session_id', interaction_to_update.session_id)
-
-                    new_interaction_data = {
-                        "session_id": current_session_id,
-                        "mode": "chat",
-                        "input_type": "reflection_result", # New type to identify these
-                        "user_input": f"[Self-Reflection Result for Interaction ID {update_interaction_id}]", # Reference original
-                        "llm_response": reflection_result_text,
-                        "execution_time_ms": final_db_data_to_save.get('execution_time_ms', 0),
-                        "classification": "reflection", # Optional: classify the result itself
-                        # Ensure defaults for a normal interaction apply
-                        "reflection_completed": False, # This NEW record has not been reflected upon
-                        "tot_delivered": False,
-                        "assistant_action_executed": False,
-                        # Ensure timestamp is set by add_interaction's default
-                    }
-                    # Use the existing synchronous add_interaction helper
-                    add_interaction(db, **new_interaction_data) # This handles filtering keys and commit/rollback internally
-
-                elif not is_reflection_task: # Create NEW record (standard background generate, not a reflection update)
-                    logger.debug(f"{log_prefix}: Saving new interaction record...")
-                    valid_keys = {c.name for c in Interaction.__table__.columns}
-                    db_kwargs = {k: v for k, v in final_db_data_to_save.items() if k in valid_keys}
-                    await asyncio.to_thread(add_interaction, db, **db_kwargs) # Use await? No, add_interaction is sync
-                    logger.info(f"{log_prefix}: Saved new interaction record.")
-
+                        logger.info(f"{log_prefix}: Marked original interaction {update_interaction_id} as reflection NOT completed (interrupted).")
+                    elif not is_reflection_task and saved_interaction:
+                         # Update standard task state to interrupted
+                         saved_interaction.llm_response = final_response # Store interruption message
+                         saved_interaction.classification = "task_failed_interrupted" # Specific classification
+                         saved_interaction.execution_time_ms = final_db_data_to_save['execution_time_ms']
+                         saved_interaction.input_type = 'log_warning' # Indicate non-fatal issue
+                         db.commit()
+                         logger.info(f"{log_prefix}: Updated interaction {saved_interaction.id} state to interrupted.")
+                    else:
+                         # Interrupted before initial save or during reflection with no target? Log it.
+                         logger.warning(f"{log_prefix}: Task interrupted but no primary interaction record found/saved. Logging interruption event.")
+                         add_interaction(db, session_id=session_id, mode="chat", input_type='log_warning',
+                                         user_input=f"[Interrupted Background Task {request_id}]",
+                                         llm_response=final_response)
                 else:
-                     # This case means is_reflection_task was True, but interaction_to_update was None
-                     # Error should have been logged earlier, but log again for safety.
-                     logger.error(f"{log_prefix}: Final Save Error - Reflection task missing target interaction {update_interaction_id}.")
+                    # --- Handle Normal/Error Save ---
+                    if is_reflection_task and interaction_to_update:
+                        # Create NEW record for successful/failed reflection result
+                        interaction_to_update.reflection_completed = True # Mark original complete
+                        interaction_to_update.last_modified_db = datetime.datetime.now(datetime.timezone.utc)
+                        db.commit() # Commit original update first
+
+                        # Create and add new interaction record for the reflection result
+                        new_interaction_data = {
+                            "session_id": session_id,
+                            "mode": "chat",
+                            "input_type": "reflection_result" if final_db_data_to_save.get('input_type') != 'error' else 'error', # Use 'error' if reflection failed
+                            "user_input": f"[Self-Reflection Result for Interaction ID {update_interaction_id}]",
+                            "llm_response": final_response, # The reflection result or error message
+                            "execution_time_ms": final_db_data_to_save.get('execution_time_ms', 0),
+                            "classification": final_db_data_to_save.get('classification', 'reflection'), # Use 'error' if applicable
+                            "reflection_completed": False, # New record isn't reflected yet
+                            "tot_delivered": False,
+                            "assistant_action_executed": False,
+                        }
+                        # Use synchronous add_interaction helper
+                        await asyncio.to_thread(add_interaction, db, **new_interaction_data)
+                        logger.info(f"{log_prefix}: Saved reflection result as new interaction.")
+
+                    elif not is_reflection_task and saved_interaction:
+                         # Update the existing standard interaction record with final results
+                         logger.debug(f"{log_prefix}: Updating interaction {saved_interaction.id} with final results.")
+                         saved_interaction.llm_response = final_response
+                         saved_interaction.execution_time_ms = final_db_data_to_save['execution_time_ms']
+                         saved_interaction.classification = final_db_data_to_save.get('classification', saved_interaction.classification)
+                         saved_interaction.input_type = final_db_data_to_save.get('input_type', saved_interaction.input_type)
+                         # Update other relevant fields based on the processing outcome
+                         saved_interaction.rag_history_ids = final_db_data_to_save.get('rag_history_ids', saved_interaction.rag_history_ids)
+                         saved_interaction.rag_source_url = final_db_data_to_save.get('rag_source_url', saved_interaction.rag_source_url)
+                         saved_interaction.emotion_context_analysis = final_db_data_to_save.get('emotion_context_analysis', saved_interaction.emotion_context_analysis)
+                         saved_interaction.image_description = final_db_data_to_save.get('image_description', saved_interaction.image_description)
+                         saved_interaction.assistant_action_analysis_json = final_db_data_to_save.get('assistant_action_analysis_json', saved_interaction.assistant_action_analysis_json)
+                         saved_interaction.assistant_action_type = final_db_data_to_save.get('assistant_action_type', saved_interaction.assistant_action_type)
+                         saved_interaction.assistant_action_params = final_db_data_to_save.get('assistant_action_params', saved_interaction.assistant_action_params)
+                         saved_interaction.assistant_action_executed = final_db_data_to_save.get('assistant_action_executed', saved_interaction.assistant_action_executed)
+                         saved_interaction.assistant_action_result = final_db_data_to_save.get('assistant_action_result', saved_interaction.assistant_action_result)
+                         # ToT flags should have been updated earlier if needed
+                         db.commit()
+                         logger.info(f"{log_prefix}: Updated interaction {saved_interaction.id} with final results.")
+                    elif not is_reflection_task and not saved_interaction:
+                        # Initial save failed, but task completed without error/interruption? Save final state as new.
+                        logger.warning(f"{log_prefix}: Initial interaction save failed, saving final state as new record.")
+                        valid_keys = {c.name for c in Interaction.__table__.columns}
+                        db_kwargs = {k: v for k, v in final_db_data_to_save.items() if k in valid_keys}
+                        await asyncio.to_thread(add_interaction, db, **db_kwargs) # Use sync helper in thread
+                    else: # Should not happen (e.g., reflection task but no interaction_to_update)
+                         logger.error(f"{log_prefix}: Final Save Logic Error - Reached unexpected state.")
 
             except Exception as final_save_err:
                  logger.error(f"❌ {log_prefix}: Failed final DB save/update: {final_save_err}")
-                 try: db.rollback()
-                 except: pass
+                 logger.exception(f"{log_prefix} Final Save Traceback:")
+                 try:
+                     db.rollback() # Rollback potential partial changes
+                 except Exception as rb_err:
+                     logger.error(f"{log_prefix} Rollback after final save error FAILED: {rb_err}")
 
-            logger.info(f"{log_prefix} END. Final Status: {'Error' if final_db_data_to_save.get('input_type') == 'error' else 'Success'}. Duration: {final_db_data_to_save['execution_time_ms']:.2f}ms")
+            # Log final status
+            final_status = 'Interrupted' if interrupted_flag else ('Error' if final_db_data_to_save.get('input_type') == 'error' else 'Success')
+            logger.info(f"{log_prefix} END. Final Status: {final_status}. Duration: {final_db_data_to_save['execution_time_ms']:.2f}ms")
 
 
     # --- reset Method ---
@@ -4534,6 +4972,48 @@ class AIChat:
             self.vectorstore_url = None
 
 
+def sanitize_filename(name: str, max_length: int = 200, replacement_char: str = '_') -> str:
+    """
+    Cleans a string to be suitable for use as a filename.
+
+    Removes potentially problematic characters, replaces whitespace,
+    and truncates to a maximum length.
+    """
+    if not isinstance(name, str):
+        name = str(name) # Attempt to convert non-strings
+
+    # Remove leading/trailing whitespace
+    name = name.strip()
+
+    # Replace problematic characters with the replacement character
+    # Characters to remove/replace include path separators, control chars, etc.
+    # Keeping alphanumeric, hyphen, underscore, period.
+    # Removing: / \ : * ? " < > | and control characters (0-31)
+    sanitized = re.sub(r'[<>:"/\\|?*\x00-\x1F]', replacement_char, name)
+
+    # Replace multiple consecutive replacement characters or spaces with a single one
+    sanitized = re.sub(f'[{re.escape(replacement_char)}\s]+', replacement_char, sanitized)
+
+    # Remove leading/trailing replacement characters that might result from substitutions
+    sanitized = sanitized.strip(replacement_char)
+
+    # Truncate to maximum length
+    if len(sanitized) > max_length:
+        # Try truncating at the last replacement char before max_length to avoid cutting words
+        try:
+            trunc_point = sanitized[:max_length].rindex(replacement_char)
+            sanitized = sanitized[:trunc_point]
+        except ValueError:
+            # If no replacement char found, just truncate hard
+            sanitized = sanitized[:max_length]
+        # Ensure it doesn't end with the replacement char after truncation
+        sanitized = sanitized.strip(replacement_char)
+
+    # Handle empty string case after sanitization
+    if not sanitized:
+        return "sanitized_empty_name"
+
+    return sanitized
 
 # Helper to format SSE data (can be reused)
 def format_sse(data: Dict[str, Any], event_type: Optional[str] = None) -> str:
