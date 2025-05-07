@@ -52,6 +52,67 @@ HYPERCORN_EXECUTABLE = os.path.join(VENV_BIN_DIR, "hypercorn.exe" if IS_WINDOWS 
 NPM_CMD = 'npm.cmd' if IS_WINDOWS else 'npm'
 GIT_CMD = 'git.exe' if IS_WINDOWS else 'git'
 
+# --- NEW: Static Model Pool Configuration ---
+STATIC_MODEL_POOL_DIR_NAME = "staticModelPool"
+STATIC_MODEL_POOL_PATH = os.path.join(ENGINE_MAIN_DIR, STATIC_MODEL_POOL_DIR_NAME)
+MODELS_TO_DOWNLOAD = [
+    {
+        "filename": "ui-tars.gguf",
+        "url": "https://huggingface.co/mradermacher/UI-TARS-1.5-7B-i1-GGUF/resolve/main/UI-TARS-1.5-7B.i1-IQ3_XXS.gguf?download=true",
+        "description": "UI-TARS Model (Small UI Interaction)"
+    },
+    {
+        "filename": "deepscaler.gguf",
+        "url": "https://huggingface.co/bartowski/agentica-org_DeepScaleR-1.5B-Preview-GGUF/resolve/main/agentica-org_DeepScaleR-1.5B-Preview-f16.gguf?download=true",
+        "description": "DeepScaleR Model (Agent/Router)"
+    },
+    {
+        "filename": "flux1-schnell-q2_k.gguf",
+        "url": "https://huggingface.co/lllyasviel/FLUX.1-schnell-gguf/resolve/08fc03e0dc5c1466c60fb7e108974ded1124c515/flux1-schnell-Q2_K.gguf?download=true",
+        "description": "FLUX.1 Schnell Model (Image Gen related)"
+    },
+    {
+        "filename": "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf",
+        "url": "https://huggingface.co/mradermacher/LatexMind-2B-Codec-i1-GGUF/resolve/main/LatexMind-2B-Codec.i1-IQ4_XS.gguf?download=true",
+        "description": "LatexMind Model (LaTeX/VLM)"
+    },
+    {
+        "filename": "mxbai-embed-large-v1.gguf", # Note: URL provides -f16 variant, filename kept generic
+        "url": "https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/resolve/7130e2d16051fdf3e0157e841f8b5a8d0d5e63ef/gguf/mxbai-embed-large-v1-f16.gguf?download=true",
+        "description": "MXBAI Embeddings Model"
+    },
+    {
+        "filename": "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf", # Note: URL uses Q5_K_M
+        "url": "https://huggingface.co/mradermacher/NanoTranslator-immersive_translate-0.5B-GGUF/resolve/main/NanoTranslator-immersive_translate-0.5B.Q5_K_M.gguf?download=true",
+        "description": "NanoTranslator Model"
+    },
+    {
+        "filename": "qwen2-math-1.5b-instruct-q5_K_M.gguf",
+        "url": "https://huggingface.co/lmstudio-community/Qwen2-Math-1.5B-Instruct-GGUF/resolve/main/Qwen2-Math-1.5B-Instruct-Q5_K_M.gguf?download=true",
+        "description": "Qwen2 Math Model"
+    },
+    {
+        "filename": "Qwen2.5-1.5B-Instruct-iq3_m.gguf", # Note: URL uses Q3_K_M
+        "url": "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q3_K_M.gguf?download=true",
+        "description": "Qwen2.5 Instruct Model (Fast General)"
+    },
+    {
+        "filename": "qwen2.5-coder-3b-instruct-q5_K_M.gguf",
+        "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-3B-Instruct-Q5_K_M.gguf?download=true",
+        "description": "Qwen2.5 Coder Model"
+    },
+    {
+        "filename": "Qwen2.5-VL-7B-Instruct-q4_k_m.gguf", # Note: URL links to Qwen2-VL
+        "url": "https://huggingface.co/bartowski/Qwen2-VL-7B-Instruct-GGUF/resolve/main/Qwen2-VL-7B-Instruct-Q4_K_M.gguf?download=true",
+        "description": "Qwen2.5 VL Model"
+    },
+    {
+        "filename": "whisper-large-v3-q8_0.gguf",
+        "url": "https://huggingface.co/vonjack/whisper-large-v3-gguf/resolve/main/whisper-large-v3-q8_0.gguf?download=true",
+        "description": "Whisper Large v3 Model (ASR)"
+    }
+]
+
 # Llama.cpp Fork Configuration
 LLAMA_CPP_PYTHON_REPO_URL = "https://github.com/abetlen/llama-cpp-python.git"
 LLAMA_CPP_PYTHON_CLONE_DIR_NAME = "llama-cpp-python_build"
@@ -248,6 +309,55 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
     return accepted, time_taken
 
 
+import requests  # Make sure requests is imported
+from tqdm import tqdm  # For progress bar, ensure it's in requirements.txt
+
+
+def download_file_with_progress(url, destination_path, file_description):
+    """Downloads a file from a URL to a destination path with a progress bar."""
+    print_system(f"Downloading {file_description} from {url} to {destination_path}...")
+    try:
+        response = requests.get(url, stream=True, timeout=(10, 300))  # (connect_timeout, read_timeout)
+        response.raise_for_status()  # Raise an exception for bad status codes
+
+        total_size_in_bytes = int(response.headers.get('content-length', 0))
+        block_size = 1024  # 1 Kibibyte
+
+        # Ensure parent directory for destination_path exists
+        os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+
+        progress_bar = tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True, desc=file_description)
+        with open(destination_path, 'wb') as file:
+            for data in response.iter_content(block_size):
+                progress_bar.update(len(data))
+                file.write(data)
+        progress_bar.close()
+
+        if total_size_in_bytes != 0 and progress_bar.n != total_size_in_bytes:
+            print_error(
+                f"Download ERROR for {file_description}: Size mismatch (expected {total_size_in_bytes}, got {progress_bar.n}). File might be corrupted.")
+            # Optionally remove the corrupted file: os.remove(destination_path)
+            return False
+
+        print_system(f"Successfully downloaded {file_description}.")
+        return True
+    except requests.exceptions.RequestException as e:
+        print_error(f"Failed to download {file_description}: {e}")
+        if os.path.exists(destination_path):  # Clean up partial download
+            try:
+                os.remove(destination_path)
+            except Exception as rm_err:
+                print_warning(f"Could not remove partial download {destination_path}: {rm_err}")
+        return False
+    except Exception as e:
+        print_error(f"An unexpected error occurred during download of {file_description}: {e}")
+        if os.path.exists(destination_path):  # Clean up partial download
+            try:
+                os.remove(destination_path)
+            except Exception as rm_err:
+                print_warning(f"Could not remove partial download {destination_path}: {rm_err}")
+        return False
+
 # --- Main Execution Logic ---
 if __name__ == "__main__":
     print_system("--- Project Zephyrine Launcher ---")
@@ -299,42 +409,119 @@ if __name__ == "__main__":
     req_path = os.path.join(ENGINE_MAIN_DIR, "requirements.txt")
     if not os.path.exists(req_path): print_error(f"requirements.txt not found at {req_path}"); sys.exit(1)
     if not run_command([PIP_EXECUTABLE, "install", "-r", req_path], ENGINE_MAIN_DIR, "PIP"):
-         print_error("Failed to install Python dependencies. Exiting."); sys.exit(1)
+        print_error("Failed to install Python dependencies. Exiting.");
+        sys.exit(1)
     print_system("Standard Python dependencies checked/installed.")
 
-    # --- NEW: MeloTTS Installation ---
+    # --- NEW: Static Model Pool Setup ---
+    print_system(f"--- Checking/Populating Static Model Pool at {STATIC_MODEL_POOL_PATH} ---")
+    if not os.path.isdir(STATIC_MODEL_POOL_PATH):
+        print_system(f"Static model pool directory not found. Creating: {STATIC_MODEL_POOL_PATH}")
+        try:
+            os.makedirs(STATIC_MODEL_POOL_PATH, exist_ok=True)
+            print_system("Static model pool directory created.")
+        except OSError as e:
+            print_error(f"Failed to create static model pool directory: {e}");
+            sys.exit(1)
+
+    all_models_present = True
+    for model_info in MODELS_TO_DOWNLOAD:
+        model_dest_path = os.path.join(STATIC_MODEL_POOL_PATH, model_info["filename"])
+        if not os.path.exists(model_dest_path):
+            print_warning(f"Model '{model_info['filename']}' not found in pool.")
+            if not download_file_with_progress(model_info["url"], model_dest_path, model_info["description"]):
+                print_error(
+                    f"Failed to download '{model_info['filename']}'. Please check the URL and your internet connection.")
+                all_models_present = False
+                # Decide whether to exit or continue if a model download fails
+                # For now, let's continue and report all missing/failed downloads
+            else:
+                print_system(f"Model '{model_info['filename']}' downloaded successfully.")
+        else:
+            print_system(f"Model '{model_info['filename']}' already present in pool.")
+            # Optional: Add size/hash verification for existing files here if desired
+
+    if not all_models_present:
+        print_error("One or more models could not be downloaded. Application might not function correctly.")
+        # Optionally, exit here: sys.exit(1)
+    else:
+        print_system("All required models checked/downloaded for the static pool.")
+    # --- END NEW ---
+
     if not os.path.exists(MELO_TTS_INSTALLED_FLAG_FILE):
-        print_system(f"--- Installing MeloTTS from {MELO_TTS_PATH} ---")
+        print_system(f"--- Installing MeloTTS from {MELO_TTS_PATH} & Performing Initial Test ---")
         if not os.path.isdir(MELO_TTS_PATH):
             print_error(f"MeloTTS directory not found at: {MELO_TTS_PATH}")
-            print_error("Please ensure MeloTTS is cloned or placed there.")
+            print_error("Please ensure MeloTTS is cloned or placed there (e.g., as a submodule).")
             sys.exit(1)
 
         # Step 1: pip install -e . (editable install from the MeloTTS directory)
         if not run_command([PIP_EXECUTABLE, "install", "-e", "."], MELO_TTS_PATH, "PIP-MELO"):
-            print_error("Failed to install MeloTTS (editable). Exiting."); sys.exit(1)
+            print_error("Failed to install MeloTTS (editable). Exiting.");
+            sys.exit(1)
         print_system("MeloTTS (editable) installed successfully.")
 
         # Step 2: python -m unidic download
         print_system("Downloading unidic dictionary for MeloTTS...")
-        # Note: Using PYTHON_EXECUTABLE from venv to ensure it uses the correct Python
         if not run_command([PYTHON_EXECUTABLE, "-m", "unidic", "download"], MELO_TTS_PATH, "UNIDIC"):
-            print_warning("Failed to download unidic dictionary automatically. You might need to run it manually.")
-            print_warning(f"  Command: cd \"{MELO_TTS_PATH}\" && \"{PYTHON_EXECUTABLE}\" -m unidic download")
-            # Decide if this is a fatal error or just a warning. For now, warning.
+            print_warning(
+                "Failed to download unidic dictionary automatically. MeloTTS might not work correctly for Japanese.")
+            # Decide if this is fatal. For now, continue.
         else:
             print_system("unidic dictionary downloaded successfully.")
 
-        # Create flag file on successful completion
+        # --- NEW: Run audio_worker.py in --test-mode to trigger MeloTTS model downloads ---
+        print_system("--- Running MeloTTS Initial Test (triggers internal model download) ---")
+        audio_worker_script = os.path.join(ENGINE_MAIN_DIR, "audio_worker.py")  # Path to the worker
+        if not os.path.exists(audio_worker_script):
+            print_error(f"audio_worker.py not found at {audio_worker_script} for initial test.")
+            # This would be a critical setup error
+            sys.exit(1)
+
+        # Define a temporary directory for the test output if worker needs it
+        # (audio_worker.py's --temp-dir defaults to "." if not specified)
+        test_mode_temp_dir = os.path.join(ROOT_DIR, "temp_audio_test_files")
+        os.makedirs(test_mode_temp_dir, exist_ok=True)
+        test_output_filename = "initial_melo_test_output.mp3"
+
+        test_command = [
+            PYTHON_EXECUTABLE,
+            audio_worker_script,
+            "--test-mode",
+            "--model-lang", "EN",  # Test with English first, as it's common
+            "--device", "auto",  # Let MeloTTS pick the device
+            "--output-file", test_output_filename,
+            "--temp-dir", test_mode_temp_dir
+        ]
+        # Run the command. run_command already prints output and checks return code.
+        # We don't need to capture output here unless we want to parse its JSON for success.
+        if not run_command(test_command, ENGINE_MAIN_DIR, "MELO-TEST"):  # cwd might be ROOT_DIR or ENGINE_MAIN_DIR
+            print_warning(
+                "MeloTTS initial test mode run failed. This might indicate an issue with MeloTTS setup or its model downloads.")
+            print_warning("The application might still proceed, but TTS functionality could be impaired.")
+            # Optionally, make this a fatal error: sys.exit(1)
+        else:
+            print_system("MeloTTS initial test mode run completed. Check for generated audio if desired.")
+            # Optionally, clean up the test output file:
+            generated_test_file = os.path.join(test_mode_temp_dir, test_output_filename)
+            if os.path.exists(generated_test_file):
+                try:
+                    # os.remove(generated_test_file) # Uncomment to delete
+                    print_system(f"Test audio file generated at: {generated_test_file} (can be deleted manually)")
+                except Exception as e:
+                    print_warning(f"Could not remove test audio file {generated_test_file}: {e}")
+        # --- END NEW ---
+
+        # Create flag file on successful completion of all MeloTTS setup steps
         try:
             with open(MELO_TTS_INSTALLED_FLAG_FILE, 'w') as f:
-                f.write(f"MeloTTS installed on: {datetime.now().isoformat()}\n")
-            print_system("MeloTTS installation flag created.")
+                f.write(f"MeloTTS installed and initially tested on: {datetime.now().isoformat()}\n")
+            print_system("MeloTTS installation and initial test flag created.")
         except Exception as flag_err:
             print_error(f"Could not create MeloTTS installation flag file: {flag_err}")
     else:
-        print_system("MeloTTS previously installed (flag file found). Skipping installation.")
-    # --- END NEW ---
+        print_system("MeloTTS previously installed and tested (flag file found). Skipping.")
+    # --- END MeloTTS Installation & Initial Test ---
 
 
     # --- Custom llama-cpp-python Installation ---
