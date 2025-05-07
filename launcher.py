@@ -59,11 +59,13 @@ PIP_EXECUTABLE = os.path.join(VENV_BIN_DIR, "pip.exe" if IS_WINDOWS else "pip")
 HYPERCORN_EXECUTABLE = os.path.join(VENV_BIN_DIR, "hypercorn.exe" if IS_WINDOWS else "hypercorn")
 NPM_CMD = 'npm.cmd' if IS_WINDOWS else 'npm'
 GIT_CMD = 'git.exe' if IS_WINDOWS else 'git'
+CMAKE_CMD = 'cmake.exe' if IS_WINDOWS else 'cmake' # Assume cmake is in PATH or use full path if needed
 
 # --- NEW: Static Model Pool Configuration ---
 STATIC_MODEL_POOL_DIR_NAME = "staticModelPool"
 STATIC_MODEL_POOL_PATH = os.path.join(ENGINE_MAIN_DIR, STATIC_MODEL_POOL_DIR_NAME)
 MODELS_TO_DOWNLOAD = [
+    # --- General LLM & Utility Models ---
     {
         "filename": "ui-tars.gguf",
         "url": "https://huggingface.co/mradermacher/UI-TARS-1.5-7B-i1-GGUF/resolve/main/UI-TARS-1.5-7B.i1-IQ3_XXS.gguf?download=true",
@@ -75,22 +77,17 @@ MODELS_TO_DOWNLOAD = [
         "description": "DeepScaleR Model (Agent/Router)"
     },
     {
-        "filename": "flux1-schnell-q2_k.gguf",
-        "url": "https://huggingface.co/lllyasviel/FLUX.1-schnell-gguf/resolve/08fc03e0dc5c1466c60fb7e108974ded1124c515/flux1-schnell-Q2_K.gguf?download=true",
-        "description": "FLUX.1 Schnell Model (Image Gen related)"
-    },
-    {
         "filename": "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf",
         "url": "https://huggingface.co/mradermacher/LatexMind-2B-Codec-i1-GGUF/resolve/main/LatexMind-2B-Codec.i1-IQ4_XS.gguf?download=true",
         "description": "LatexMind Model (LaTeX/VLM)"
     },
     {
-        "filename": "mxbai-embed-large-v1.gguf", # Note: URL provides -f16 variant, filename kept generic
-        "url": "https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/resolve/7130e2d16051fdf3e0157e841f8b5a8d0d5e63ef/gguf/mxbai-embed-large-v1-f16.gguf?download=true",
+        "filename": "mxbai-embed-large-v1.gguf",
+        "url": "https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/resolve/main/mxbai-embed-large-v1.gguf?download=true",
         "description": "MXBAI Embeddings Model"
     },
     {
-        "filename": "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf", # Note: URL uses Q5_K_M
+        "filename": "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf",
         "url": "https://huggingface.co/mradermacher/NanoTranslator-immersive_translate-0.5B-GGUF/resolve/main/NanoTranslator-immersive_translate-0.5B.Q5_K_M.gguf?download=true",
         "description": "NanoTranslator Model"
     },
@@ -100,7 +97,7 @@ MODELS_TO_DOWNLOAD = [
         "description": "Qwen2 Math Model"
     },
     {
-        "filename": "Qwen2.5-1.5B-Instruct-iq3_m.gguf", # Note: URL uses Q3_K_M
+        "filename": "Qwen2.5-1.5B-Instruct-iq3_m.gguf",
         "url": "https://huggingface.co/bartowski/Qwen2.5-1.5B-Instruct-GGUF/resolve/main/Qwen2.5-1.5B-Instruct-Q3_K_M.gguf?download=true",
         "description": "Qwen2.5 Instruct Model (Fast General)"
     },
@@ -110,15 +107,38 @@ MODELS_TO_DOWNLOAD = [
         "description": "Qwen2.5 Coder Model"
     },
     {
-        "filename": "Qwen2.5-VL-7B-Instruct-q4_k_m.gguf", # Note: URL links to Qwen2-VL
+        "filename": "Qwen2.5-VL-7B-Instruct-q4_k_m.gguf",
         "url": "https://huggingface.co/bartowski/Qwen2-VL-7B-Instruct-GGUF/resolve/main/Qwen2-VL-7B-Instruct-Q4_K_M.gguf?download=true",
         "description": "Qwen2.5 VL Model"
     },
     {
         "filename": "whisper-large-v3-q8_0.gguf",
-        "url": "https://huggingface.co/vonjack/whisper-large-v3-gguf/resolve/main/whisper-large-v3-q8_0.gguf?download=true",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/models/ggml-large-v3-q8_0.bin?download=true", # Check if this is actually gguf or bin
         "description": "Whisper Large v3 Model (ASR)"
+    },
+
+    # --- FLUX Image Generation Models (Using Green-Sky GGUF conversions) ---
+    {
+        "filename": "flux1-schnell.gguf", # Main diffusion model
+        "url": "https://huggingface.co/Green-Sky/flux.1-schnell-GGUF/resolve/main/flux1-schnell-q2_k.gguf?download=true",
+        "description": "FLUX.1 Schnell GGUF (Main Q2_K)"
+    },
+    {
+        "filename": "flux1-ae.gguf", # VAE
+        "url": "https://huggingface.co/Green-Sky/flux.1-schnell-GGUF/resolve/main/ae-f16.gguf?download=true",
+        "description": "FLUX.1 VAE GGUF (FP16)"
+    },
+    {
+        "filename": "flux1-clip_l.gguf", # CLIP L Text Encoder
+        "url": "https://huggingface.co/Green-Sky/flux.1-schnell-GGUF/resolve/main/clip_l-q8_0.gguf?download=true",
+        "description": "FLUX.1 CLIP L GGUF (Q8_0)"
+    },
+    {
+        "filename": "flux1-t5xxl.gguf", # T5 XXL Text Encoder
+        "url": "https://huggingface.co/Green-Sky/flux.1-schnell-GGUF/resolve/main/t5xxl_q2_k.gguf?download=true",
+        "description": "FLUX.1 T5 XXL GGUF (Q2_K)"
     }
+    # --- END FLUX Models ---
 ]
 
 # Llama.cpp Fork Configuration
@@ -128,6 +148,13 @@ LLAMA_CPP_PYTHON_CLONE_PATH = os.path.join(ROOT_DIR, LLAMA_CPP_PYTHON_CLONE_DIR_
 LLAMA_CPP_SUBMODULE_PATH = "vendor/llama.cpp" # Relative within the clone path
 # --- NEW: Custom Llama.cpp Installation Flag ---
 CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".custom_llama_cpp_installed_v1")
+# --- END NEW ---
+
+# --- NEW: Stable Diffusion cpp python Configuration ---
+STABLE_DIFFUSION_CPP_PYTHON_REPO_URL = "https://github.com/william-murray1204/stable-diffusion-cpp-python.git"
+STABLE_DIFFUSION_CPP_PYTHON_CLONE_DIR_NAME = "stable-diffusion-cpp-python_build"
+STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH = os.path.join(ROOT_DIR, STABLE_DIFFUSION_CPP_PYTHON_CLONE_DIR_NAME)
+CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".custom_sd_cpp_python_installed_v1")
 # --- END NEW ---
 
 # Global list to keep track of running subprocesses
@@ -988,6 +1015,203 @@ if __name__ == "__main__":
     else:
         print_system(f"PROVIDER is set to '{provider_env}'. Skipping custom llama-cpp-python build. Standard version will be used if listed in requirements.")
     # --- End Custom Llama.cpp Installation ---
+    if not os.path.exists(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE):
+        print_system(f"--- Custom stable-diffusion-cpp-python Installation ---")
+
+        # --- Prerequisites Check ---
+        if not shutil.which(GIT_CMD):
+            print_error(f"'{GIT_CMD}' command not found. Git is required for this installation.")
+            print_error("Please install Git (https://git-scm.com/downloads) and ensure it's in your PATH.")
+            sys.exit(1)
+        if not shutil.which(CMAKE_CMD):
+            print_error(f"'{CMAKE_CMD}' command not found. CMake is required for this installation.")
+            print_error("Please install CMake (https://cmake.org/download/) and ensure it's in your PATH.")
+            sys.exit(1)
+
+        # --- Optional: Check CMake Version ---
+        try:
+            cmake_ver_proc = subprocess.run([CMAKE_CMD, "--version"], capture_output=True, text=True, check=True, timeout=5)
+            cmake_ver_line = cmake_ver_proc.stdout.splitlines()[0]
+            cmake_version = cmake_ver_line.split()[-1]
+            print_system(f"Found CMake version: {cmake_version}")
+            major, minor = map(int, cmake_version.split('.')[:2])  # Check major.minor
+            if major < 3 or (major == 3 and minor < 13):
+                print_warning(
+                    f"CMake version {cmake_version} might be too old (>= 3.13 often recommended for C++17+ projects). Build may fail.")
+        except Exception as cmake_err:
+            print_warning(f"Could not verify CMake version: {cmake_err}. Attempting build anyway.")
+
+        # --- Uninstall any existing standard package ---
+        print_system("Attempting to uninstall any existing standard 'stable-diffusion-cpp-python' package...")
+        run_command([PIP_EXECUTABLE, "uninstall", "stable-diffusion-cpp-python", "-y"], ROOT_DIR, "PIP-UNINSTALL-SD",
+                    check=False)
+
+        # --- Clean and Clone Repository ---
+        if os.path.exists(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH):
+            print_system(f"Cleaning existing build directory: {STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH}")
+            try:
+                shutil.rmtree(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH)
+            except Exception as e:
+                print_error(
+                    f"Failed to remove existing SD build directory '{STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH}': {e}.")
+                print_error("Please remove it manually and retry. Exiting.")
+                sys.exit(1)
+
+        print_system(f"Cloning '{STABLE_DIFFUSION_CPP_PYTHON_REPO_URL}' into '{STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH}'...")
+        # Use --recursive to ensure the stable-diffusion.cpp submodule is cloned immediately
+        if not run_command([GIT_CMD, "clone", "--recursive", STABLE_DIFFUSION_CPP_PYTHON_REPO_URL,
+                            STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH], ROOT_DIR, "GIT-CLONE-SD"):
+            print_error(
+                "Failed to clone stable-diffusion-cpp-python repository. Check URL and network connection. Exiting.");
+            sys.exit(1)
+
+        # --- Define Paths for Submodule and Build Directory ---
+        # Define the path to the C++ submodule *within* the cloned Python binding repo
+        # ** Verify this subdirectory name is correct in the cloned william-murray1204 repo **
+        sd_cpp_submodule_path = os.path.join(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH, "vendor", "stable-diffusion.cpp")
+        if not os.path.isdir(sd_cpp_submodule_path):
+            print_error(
+                f"Could not find the expected 'stable-diffusion.cpp' submodule directory at: {sd_cpp_submodule_path}")
+            print_error("The repository structure might have changed, or the submodule clone failed.")
+            sys.exit(1)
+
+        # Define the path for the C++ build directory *inside* the submodule
+        sd_cpp_build_path = os.path.join(sd_cpp_submodule_path, "build")
+        print_system(f"Creating C++ build directory at: {sd_cpp_build_path}")
+        os.makedirs(sd_cpp_build_path, exist_ok=True)
+
+        # --- Build stable-diffusion.cpp C++ library FIRST ---
+        print_system("--- Configuring stable-diffusion.cpp C++ library build ---")
+        cmake_args_sd_cpp = []
+        # Determine backend based on environment/platform
+        sd_backend = os.getenv("SD_CPP_BACKEND", "").lower()
+        print_system(f"Selected stable-diffusion.cpp backend (SD_CPP_BACKEND): '{sd_backend or 'auto/default'}'")
+
+        # Backend Flag Selection (ensure these flags match stable-diffusion.cpp's CMakeLists.txt)
+        if sd_backend == "cuda" or (not sd_backend and sys.platform in ["linux", "win32"] and shutil.which('nvcc')):
+            print_system("Configuring for CUDA backend.")
+            cmake_args_sd_cpp.append("-DSD_CUDA=ON")
+        elif sd_backend == "hipblas" or (not sd_backend and sys.platform == "linux" and os.path.isdir("/opt/rocm")):
+            print_system("Configuring for HIPBLAS/ROCm backend.")
+            cmake_args_sd_cpp.append("-DSD_HIPBLAS=ON")
+            cmake_args_sd_cpp.insert(0, "-G Ninja")  # Use Ninja generator for ROCm
+            amd_targets = os.getenv("AMDGPU_TARGETS")
+            if amd_targets:
+                cmake_args_sd_cpp.append(f"-DAMDGPU_TARGETS={amd_targets}")
+            else:
+                print_warning("AMDGPU_TARGETS environment variable not set for ROCm build.")
+        elif sd_backend == "metal" or (not sd_backend and sys.platform == "darwin"):
+            print_system("Configuring for Metal backend.")
+            cmake_args_sd_cpp.append("-DSD_METAL=ON")
+        elif sd_backend == "openblas":
+            print_system("Configuring for OpenBLAS backend.")
+            # Check stable-diffusion.cpp CMakeLists for the correct OpenBLAS flag (might be GGML_ or SD_)
+            cmake_args_sd_cpp.append("-DGGML_OPENBLAS=ON")  # Assuming it uses GGML flag
+        elif sd_backend == "vulkan":
+            print_system("Configuring for Vulkan backend.")
+            cmake_args_sd_cpp.append("-DSD_VULKAN=ON")
+        elif sd_backend == "sycl":
+            print_system("Configuring for SYCL backend.")
+            cmake_args_sd_cpp.append("-DSD_SYCL=ON")
+        elif sd_backend == "musa":
+            print_system("Configuring for MUSA backend.")
+            cmake_args_sd_cpp.append("-DSD_MUSA=ON")
+        else:
+            if sd_backend and sd_backend != "cpu": print_warning(
+                f"SD_CPP_BACKEND='{sd_backend}' unrecognized. Building for CPU.")
+            print_system("Configuring for CPU backend.")
+            # No specific backend flag needed for CPU usually
+
+        # Add Flash Attention if requested (check flag name in sd.cpp CMakeLists)
+        sd_flash_attn = os.getenv("SD_FLASH_ATTENTION", "OFF").upper()
+        if sd_flash_attn == "ON":
+            print_system("Enabling Flash Attention for stable-diffusion.cpp build.")
+            cmake_args_sd_cpp.append("-DSD_FLASH_ATTN=ON")
+
+        # Add CMake Policy Version Minimum to help older CMake versions
+        cmake_args_sd_cpp.append("-DCMAKE_POLICY_VERSION_MINIMUM=3.13")
+
+        # Run CMake configure command inside the build directory
+        cmake_configure_command = [CMAKE_CMD, ".."] + cmake_args_sd_cpp  # ".." points from build/ to submodule root
+        if not run_command(cmake_configure_command, sd_cpp_build_path, "CMAKE-SD-LIB-CFG"):
+            print_error("CMake configuration failed for stable-diffusion.cpp library. Check logs. Exiting.");
+            sys.exit(1)
+
+        # Run CMake build command inside the build directory
+        print_system("--- Building stable-diffusion.cpp C++ library ---")
+        cmake_build_command = [CMAKE_CMD, "--build", "."]
+        if platform.system() == "Windows":  # MSVC generator needs --config
+            cmake_build_command.extend(["--config", "Release"])
+        # Add parallel build flag if desired, e.g. cmake_build_command.extend(["--", "-j", str(os.cpu_count())])
+        if not run_command(cmake_build_command, sd_cpp_build_path, "CMAKE-BUILD-SD-LIB"):
+            print_error("Build failed for stable-diffusion.cpp library. Check compiler logs. Exiting.");
+            sys.exit(1)
+        print_system("Stable-diffusion.cpp C++ library built successfully.")
+
+        # --- Install Python Bindings ---
+        print_system(f"--- Installing stable-diffusion-cpp-python bindings ---")
+        print_system(f"Running pip install from '{STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH}'...")
+
+        # Prepare environment variables for the pip install step
+        pip_build_env = os.environ.copy()
+        pip_build_env['FORCE_CMAKE'] = '1'  # Hint for scikit-build
+
+        # Set CC/CXX specifically for certain backends if needed by setup.py/pip build
+        if sd_backend == "hipblas" and sys.platform == "linux":
+            print_system("Setting CC=clang, CXX=clang++ for ROCm pip build environment.")
+            pip_build_env['CC'] = 'clang'
+            pip_build_env['CXX'] = 'clang++'
+        elif sd_backend == "sycl":
+            print_system("Setting CC=icx, CXX=icpx for SYCL pip build environment.")
+            pip_build_env['CC'] = 'icx'
+            pip_build_env['CXX'] = 'icpx'
+        elif sd_backend == "musa":
+            print_system("Setting CC/CXX to MUSA compilers for MUSA pip build environment.")
+            musa_clang = "/usr/local/musa/bin/clang"  # Verify these paths
+            musa_clang_pp = "/usr/local/musa/bin/clang++"
+            if not os.path.exists(musa_clang) or not os.path.exists(musa_clang_pp):
+                print_error(f"MUSA compilers not found at: {musa_clang}, {musa_clang_pp}")
+                sys.exit(1)
+            pip_build_env['CC'] = musa_clang
+            pip_build_env['CXX'] = musa_clang_pp
+
+        # Pass the *same* CMake arguments used for the library build to the pip install
+        # via the CMAKE_ARGS environment variable. setup.py should pick this up.
+        pip_cmake_args_str = " ".join(cmake_args_sd_cpp)
+        if pip_cmake_args_str:
+            pip_build_env['CMAKE_ARGS'] = pip_cmake_args_str
+            print_system(f"Setting CMAKE_ARGS for pip install: {pip_cmake_args_str}")
+
+        pip_install_sd_command = [
+            PIP_EXECUTABLE,
+            "install",
+            ".",  # Install from current directory (root of the cloned python binding repo)
+            "--upgrade",
+            "--no-cache-dir",  # Ensure fresh build
+            "--verbose"  # Show detailed build output
+        ]
+
+        # Run pip install from the root of the stable-diffusion-cpp-python clone
+        if not run_command(pip_install_sd_command, STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH, "PIP-SD-BINDINGS",
+                           env_override=pip_build_env):
+            print_error("Failed to install stable-diffusion-cpp-python bindings.")
+            print_error("Check pip build logs above. Ensure C++ library built correctly and setup.py can find it.")
+            sys.exit(1)
+        print_system("Custom stable-diffusion-cpp-python bindings installed successfully.")
+
+        # --- Create Flag File ---
+        try:
+            with open(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
+                f.write(
+                    f"Custom Stable Diffusion CPP Python (backend: {sd_backend or 'cpu'}) installed on: {datetime.now().isoformat()}\n")
+            print_system("Custom stable-diffusion-cpp-python installation flag created.")
+        except IOError as flag_err:
+            # Not fatal, but setup will re-run next time
+            print_error(
+                f"Could not create custom stable-diffusion-cpp-python installation flag file '{CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE}': {flag_err}")
+    else:  # Flag file exists
+        print_system("Custom stable-diffusion-cpp-python previously installed (flag file found). Skipping build.")
+    # --- END Custom stable-diffusion-cpp-python Installation ---
 
 # ... (rest of the script: Node dependencies, service starts, monitoring loop, etc.) ...
 
