@@ -358,7 +358,7 @@ def run_self_reflection_loop():
     # --- END MODIFICATION ---
 
     # Input types eligible for reflection
-    reflection_eligible_input_types = ['text', 'reflection_result']
+    reflection_eligible_input_types = ['text', 'reflection_result', 'log_error', 'log_warning', '']
     logger.info(f"{thread_name}: Config - BatchSize={REFLECTION_BATCH_SIZE}, IdleWait={IDLE_WAIT_SECONDS}s, ActivePause={ACTIVE_CYCLE_PAUSE_SECONDS}s")
     logger.info(f"{thread_name}: Eligible Input Types: {reflection_eligible_input_types}")
 
@@ -468,7 +468,7 @@ def run_self_reflection_loop():
                     task_launched = False
                     try:
                         # Frame the input clearly for the reflection context
-                        reflection_input = f"[Self-Reflection on Interaction ID {original_id} (Type: {original_input_type})]: {original_input}"
+                        reflection_input = f"[Self-Reflection on Interaction ID {original_id} (Type: {original_input_type})] Make new Ideas or critically assessed this idea with new idea what if and then verify the answer and what can be done: {original_input}"
 
                         # Run the async background_generate function using asyncio.run()
                         # This blocks the current (reflector) thread until background_generate completes
