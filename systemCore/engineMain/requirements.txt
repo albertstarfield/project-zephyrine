@@ -89,7 +89,7 @@ pypinyin                    # Convert Chinese hanzi to pinyin
 cn2an                       # Convert Chinese numbers to Arabic numbers and vice versa
 jieba                       # Chinese text segmentation
 pedalboard
-whisper-cpp-python
+#whisper-cpp-python
 
 # --- Development & UI Tools (from original list) ---
 gradio                      # For creating quick UIs for ML models (if used for testing/demos)
