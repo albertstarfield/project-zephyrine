@@ -49,7 +49,7 @@ def main():
                         help="Number of threads for CPU operations (0 for auto/default, positive for specific count).")
 
     parser.add_argument("--test-mode", action="store_true", help="Run in test mode with fixed parameters.")
-    parser.add_argument("--test-prompt", default="a goofy doraemon blue smile cat holding a sign says 'Hello'",
+    parser.add_argument("--test-prompt", default="a realistic RTX goofy doraemon blue smile cat holding a sign says 'Hello'",
                         help="Prompt for test mode.")
     parser.add_argument("--test-output-file", default="zephyImagination_test_image.png",
                         help="Output filename for test mode image.")

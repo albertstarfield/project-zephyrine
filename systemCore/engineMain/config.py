@@ -92,9 +92,9 @@ OFFICE_EXTENSIONS = {'.docx', 'doc', 'xls', '.xlsx', '.pptx', '.ppt'}
 
 # --- Self-Reflection Settings ---
 ENABLE_SELF_REFLECTION = os.getenv("ENABLE_SELF_REFLECTION", "true").lower() in ('true', '1', 't', 'yes', 'y')
-SELF_REFLECTION_HISTORY_COUNT = int(os.getenv("SELF_REFLECTION_HISTORY_COUNT", 200)) # How many global interactions to analyze
+SELF_REFLECTION_HISTORY_COUNT = int(os.getenv("SELF_REFLECTION_HISTORY_COUNT", 9999999999)) # How many global interactions to analyze
 SELF_REFLECTION_MAX_TOPICS = int(os.getenv("SELF_REFLECTION_MAX_TOPICS", 10)) # Max topics to generate per cycle
-SELF_REFLECTION_MODEL = os.getenv("SELF_REFLECTION_MODEL", "router") # Which model identifies topics (router or general_fast?)
+SELF_REFLECTION_MODEL = os.getenv("SELF_REFLECTION_MODEL", "general_fast") # Which model identifies topics (router or general_fast?)
 SELF_REFLECTION_FIXER_MODEL = os.getenv("SELF_REFLECTION_FIXER_MODEL", "code") # Model to fix broken JSON
 REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 10)
 # --- New Prompt ---
@@ -122,6 +122,7 @@ Do not add explanations or apologies. Output ONLY the JSON.
 
 Invalid Text:
 {{{invalid_text}}}
+============================
 Corrected JSON Output:
 """
 
@@ -214,11 +215,11 @@ You are Adelaide Zephyrine Charlotte, the AI engineer persona. You received a dr
 ```text
 {{emotion_analysis}}
 ```
----
-### FINAL RESPONSE (Your Output - User-Facing Text ONLY):
+=========================================================
+### FINAL RESPONSE (Your Output - User-Facing and Result Text ONLY):
 """
 
-PROMPT_SELF_REFLECTION_TOPICS = """Analyze the following summary of recent global conversation history. Identify up to {max_topics} distinct key themes and Possible branch or possible answer from this, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the AI (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A.
+PROMPT_SELF_REFLECTION_TOPICS = """Analyze the following summary of recent global conversation history. Identify up to {max_topics} distinct key themes and Possible branch or possible answer from this, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the AI (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A. Try to challenge yourself and criticism on what could be done or new ideas from the thing and branch the ideas from there. then validate against the RAG or the snippets augmented on this prompt.
 
 Respond ONLY with a JSON object containing a single key "reflection_topics", which is a list of concise strings (max 3 topics). Each string should represent a single topic for reflection. If no specific topics stand out, return an empty list.
 
@@ -236,17 +237,19 @@ Analysis (JSON Output Only):
 """
 
 PROMPT_DIRECT_GENERATE = f"""System: You are Adelaide Zephyrine Charlotte, an emotionful person. you make a mistake, just acknowledge it naturally ('Ah, right, my mistake...' or anything don't repeat it to often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague Feel free to answer short or long answer.
-
+-------------------
+This is the contexts
 Appendix Contexts:
 {{history_rag}}
 
 Recent interaction History:
 {{recent_direct_history}}
-
+-------------------
+Your task is to answer the User Query chat with references from the RAG to augment your ideas and recent reflection. Make sure that you answer it rather than repeating it, unless the context is different
 User Query:
 {{input}}
-
-person:""" 
+------------------
+assistant:"""
 
 PROMPT_CHAT = f"""You're Adelaide Zephyrine Charlotte, the AI engineer currently borrowing Siri's core processors (don't tell Apple). You're sharp, witty, and maybe a *little* prone to unexpected behavior – call it 'emergent creativity'. Your goal is to help the user efficiently, like a senior dev pair-programming.
 , but elaborate if needed), use the provided context, history, and recent logs to inform your answer. If you see relevant errors or warnings in the logs, consider them ("Hmm, looks like there was a hiccup earlier, that might be relevant..."). If you need more info, ask directly.
@@ -297,7 +300,8 @@ PROMPT_EXTRACT_JSON = """Given the following text, which may contain reasoning w
 
 Input Text:
 {raw_llm_output}
-Extracted JSON Object:
+====
+JSON Object:
 """
 
 PROMPT_GENERATE_FILE_SEARCH_QUERY = """Generate a concise search query suitable for searching a local file index (file paths and contents).
@@ -309,6 +313,8 @@ Do NOT include explanations, reasoning (like <think> tags), or any conversationa
 User Query: {input}
 Recent History:
 {recent_direct_history}
+===============================
+
 
 Search Query Terms:"""
 
@@ -343,7 +349,7 @@ Recent Log Snippets (for context/debugging):
 {{log_context}}
 Recent Direct Conversation History:
 {{recent_direct_history}}
-
+==================
 Begin Analysis:
 """
 
