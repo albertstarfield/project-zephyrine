@@ -211,6 +211,8 @@ META_MODEL_NAME_STREAM = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuell
 META_MODEL_NAME_NONSTREAM = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia"
 META_MODEL_OWNER = "zephyrine-foundation"
 TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha" # Client-facing TTS model name
+ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal" # New constant for ASR
+IMAGE_GEN_MODEL_NAME_CLIENT_FACING = "Zephyrine-InternalFlux-Imagination-Engine"
 META_MODEL_FAMILY = "zephyrine"
 META_MODEL_PARAM_SIZE = "14.2B" # As requested
 META_MODEL_QUANT_LEVEL = "fp16" # As requested
@@ -6580,6 +6582,26 @@ def handle_openai_models():
             # Optionally, add a 'capabilities' or 'description' field if useful,
             # though OpenAI's TTS model listing is very basic.
             # "description": "Text-to-Speech model with Zephyrine Persona."
+        },
+        {
+            "id": ASR_MODEL_NAME_CLIENT_FACING,  # Use the constant
+            "object": "model",
+            "created": int(time.time()),
+            "owned_by": META_MODEL_OWNER,  # Your foundation name
+            "permission": [],
+            "root": ASR_MODEL_NAME_CLIENT_FACING,
+            "parent": None,
+            # "description": "Speech-to-Text model based on Whisper." # Optional
+        },
+        {
+            "id": IMAGE_GEN_MODEL_NAME_CLIENT_FACING,  # Use the constant
+            "object": "model",
+            "created": int(time.time()),
+            "owned_by": META_MODEL_OWNER,  # Your foundation name
+            "permission": [],
+            "root": IMAGE_GEN_MODEL_NAME_CLIENT_FACING,
+            "parent": None,
+            # "description": "Image Generation Model (Internal Use Only)." # Optional
         }
         # --- END NEW TTS Model Entry ---
     ]
@@ -6884,6 +6906,294 @@ def handle_openai_tts():
              logger.error(f"{request_id}: Failed to log 'no response object' error to DB: {db_err_log_final}")
 
     return resp # Return the final Flask Response object
+
+@app.route("/v1/audio/transcriptions", methods=["POST"])
+def handle_openai_asr_transcriptions():
+    """
+    Handles requests mimicking OpenAI's Audio Transcriptions endpoint.
+    Currently a STUB - Acknowledges request but does not perform ASR.
+    Expected model: "Zephyloid-Whisper-Normal"
+    """
+    start_req = time.monotonic()
+    request_id = f"req-asr-{uuid.uuid4()}"
+    logger.info(f"🚀 Flask OpenAI-Style ASR Request ID: {request_id} (STUB)")
+
+    final_response_status_code: int = 500
+    resp: Optional[Response] = None
+    session_id_for_log: str = f"asr_req_default_{request_id}" # For logging in case of early failure
+
+    try:
+        # OpenAI ASR endpoint uses multipart/form-data
+        if not request.content_type or not request.content_type.startswith('multipart/form-data'):
+            logger.warning(f"{request_id}: Invalid content type: {request.content_type}. Expected multipart/form-data.")
+            resp_data, status_code = _create_openai_error_response(
+                "Invalid content type. Must be multipart/form-data.",
+                err_type="invalid_request_error", status_code=400
+            )
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+            return resp
+
+        # --- Extract Parameters from Form Data ---
+        file_storage = request.files.get('file')
+        model_requested = request.form.get('model')
+        language_requested = request.form.get('language') # Optional (ISO 639-1 code)
+        prompt_requested = request.form.get('prompt') # Optional context prompt
+        response_format_requested = request.form.get('response_format', 'json').lower() # json, text, srt, verbose_json, vtt
+        temperature_requested = request.form.get('temperature', type=float) # Optional
+
+        # --- Get session_id if provided in form data (less common for this endpoint) ---
+        session_id_for_log = request.form.get("session_id", session_id_for_log)
+
+        logger.debug(
+            f"{request_id}: ASR Request Parsed - File: {'Present' if file_storage else 'Missing'}, "
+            f"Model: {model_requested}, Language: {language_requested}, Prompt: {str(prompt_requested)[:30]}..., "
+            f"Format: {response_format_requested}, Temp: {temperature_requested}"
+        )
+
+        # --- Validate Core Parameters ---
+        if not file_storage:
+            raise ValueError("'file' field (audio data) is required.")
+        if not model_requested:
+            raise ValueError("'model' field (e.g., 'Zephyloid-Whisper-Normal') is required.")
+
+        # --- Validate Requested Model Name ---
+        if model_requested != ASR_MODEL_NAME_CLIENT_FACING:
+            logger.warning(f"{request_id}: Invalid ASR model requested '{model_requested}'. Expected '{ASR_MODEL_NAME_CLIENT_FACING}'.")
+            resp_data, status_code = _create_openai_error_response(
+                f"Invalid model. This endpoint only supports the '{ASR_MODEL_NAME_CLIENT_FACING}' model for ASR.",
+                err_type="invalid_request_error", code="model_not_found", status_code=404
+            )
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+            return resp
+
+        # --- STUB IMPLEMENTATION ---
+        # In a real implementation:
+        # 1. Save `file_storage.stream` to a temporary file.
+        # 2. Prepare command for `whisper_worker.py` with the temp file path and other options.
+        # 3. Call a helper like `_execute_whisper_worker_with_priority(..., priority=ELP1, ...)`
+        # 4. Get the transcribed text (or structured JSON) from the worker.
+        # 5. Format the response according to `response_format_requested`.
+        # 6. Delete the temporary file.
+
+        supported_response_formats = ["json", "text", "srt", "verbose_json", "vtt"]
+        if response_format_requested not in supported_response_formats:
+            logger.warning(f"{request_id}: Unsupported ASR response_format: {response_format_requested}")
+            resp_data, status_code = _create_openai_error_response(
+                f"Unsupported response_format: '{response_format_requested}'. Supported: {', '.join(supported_response_formats)}.",
+                err_type="invalid_request_error", status_code=400
+            )
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+            return resp
+
+        logger.warning(f"{request_id}: ASR transcription is a STUB. Returning 501 Not Implemented.")
+        resp_data, status_code = _create_openai_error_response(
+            "ASR endpoint is currently a stub and does not perform transcription.",
+            err_type="server_error", code="stub_not_implemented", status_code=501 # 501 Not Implemented
+        )
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+        # --- END STUB ---
+
+    except ValueError as ve: # Catch our explicit ValueErrors for bad input
+        logger.warning(f"{request_id}: Invalid ASR request: {ve}")
+        resp_data, status_code = _create_openai_error_response(
+            str(ve), err_type="invalid_request_error", status_code=400
+        )
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in ASR endpoint STUB:")
+        error_message = f"Internal server error in ASR stub: {type(e).__name__}"
+        resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+        # Log this critical failure to DB if possible
+        try:
+            if 'db' in g and g.db: # Check if request DB session exists
+                 add_interaction(g.db, session_id=session_id_for_log, mode="asr", input_type='error',
+                                 user_input=f"ASR Handler Error. File: {file_storage.filename if file_storage else 'N/A'}",
+                                 llm_response=error_message[:2000])
+            else: logger.error(f"{request_id}: Cannot log ASR handler error: DB session 'g.db' unavailable.")
+        except Exception as db_err_log:
+             logger.error(f"{request_id}: ❌ Failed log ASR handler error to DB: {db_err_log}")
+
+    finally:
+        duration_req = (time.monotonic() - start_req) * 1000
+        logger.info(f"🏁 OpenAI-Style ASR Request {request_id} STUB handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+        # g.db is closed by teardown_request
+
+    if resp is None: # Safety net
+        logger.error(f"{request_id}: ASR Handler STUB finished unexpectedly without response object!")
+        resp_data, status_code = _create_openai_error_response("Internal error: ASR Handler STUB no response.", status_code=500)
+        resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
+        # final_response_status_code = status_code # Already captured or will be by default
+        try:
+             if 'db' in g and g.db:
+                 add_interaction(g.db, session_id=session_id_for_log, mode="asr", input_type='error',
+                                 user_input=f"ASR Handler No Resp. File: {file_storage.filename if file_storage else 'N/A'}",
+                                 llm_response="Critical: No response object created by ASR handler stub.")
+        except Exception as db_err_log_final:
+             logger.error(f"{request_id}: Failed log 'no response object' ASR error to DB: {db_err_log_final}")
+
+    return resp
+
+# === NEW: OpenAI Compatible Image Generation Endpoint (Stub) ===
+@app.route("/v1/images/generations", methods=["POST"])
+def handle_openai_image_generations():
+    """
+    Handles requests mimicking OpenAI's Image Generation endpoint (DALL·E).
+    Currently a STUB - Acknowledges request and returns a strong warning.
+    Expected model: "Zephyrine-InternalFlux-Imagination-Engine"
+    """
+    start_req = time.monotonic()
+    request_id = f"req-img-gen-{uuid.uuid4()}"
+    logger.info(f"🚀 Flask OpenAI-Style Image Generation Request ID: {request_id} (STUB)")
+
+    final_response_status_code: int = 501 # Default to Not Implemented for stub
+    resp: Optional[Response] = None
+    session_id_for_log: str = f"img_gen_req_default_{request_id}"
+    raw_request_data: Optional[Dict] = None
+    request_data_snippet_for_log: str = "No request data processed"
+
+    # --- THE WARNING MESSAGE ---
+    WARNING_MESSAGE = (
+        "Please be advised that AI Image generation as currently established by humanity "
+        "is often based on random noise guided by statistical patterns, not true ideation or understanding. "
+        "It is fundamentally flawed if represented as a final product without significant human refinement "
+        "or conceptual grounding. DO NOT USE THIS CALL FOR PRODUCTION OR FINAL OUTPUTS. "
+        "THIS ENDPOINT IS INTENDED FOR ZEPHYRINE INTERNAL IMAGINATION/THOUGHT EXPERIMENTS ONLY. "
+        "For true artistic creation, consider vector-based generation driven by deliberate actuator input "
+        "(e.g., your own hand) or developing Zephy's structured vector drawing skills."
+    )
+
+    try:
+        # --- 1. Get and Validate Request JSON Body ---
+        try:
+            raw_request_data = request.get_json()
+            if not raw_request_data:
+                raise ValueError("Empty JSON payload received.")
+            try: request_data_snippet_for_log = json.dumps(raw_request_data)[:1000]
+            except: request_data_snippet_for_log = str(raw_request_data)[:1000]
+        except Exception as json_err:
+            logger.warning(f"{request_id}: Failed to get/parse JSON body: {json_err}")
+            try: request_data_snippet_for_log = request.get_data(as_text=True)[:1000]
+            except: request_data_snippet_for_log = "Could not read request body"
+            resp_data, status_code = _create_openai_error_response(
+                f"Request body is missing or invalid JSON: {json_err}",
+                err_type="invalid_request_error", status_code=400
+            )
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+            return resp
+
+        # --- 2. Extract Parameters ---
+        prompt_text = raw_request_data.get("prompt")
+        model_requested = raw_request_data.get("model")
+        n_images = raw_request_data.get("n", 1) # Number of images to generate
+        size_requested = raw_request_data.get("size", "1024x1024") # e.g., "256x256", "512x512", "1024x1024"
+        quality_requested = raw_request_data.get("quality", "standard") # "standard" or "hd"
+        response_format_requested = raw_request_data.get("response_format", "url") # "url" or "b64_json"
+        style_requested = raw_request_data.get("style", "vivid") # "vivid" or "natural"
+        user_provided_id = raw_request_data.get("user") # Optional user identifier
+
+        session_id_for_log = raw_request_data.get("session_id", session_id_for_log)
+
+        logger.debug(
+            f"{request_id}: Image Gen Request Parsed - Prompt: '{str(prompt_text)[:50]}...', "
+            f"Model: {model_requested}, N: {n_images}, Size: {size_requested}, Quality: {quality_requested}, "
+            f"Format: {response_format_requested}, Style: {style_requested}, User: {user_provided_id}"
+        )
+
+        # --- 3. Validate Core Parameters ---
+        if not prompt_text or not isinstance(prompt_text, str):
+            raise ValueError("'prompt' field is required and must be a string.")
+        if not model_requested:
+            raise ValueError("'model' field (e.g., 'Zephyrine-InternalFlux-Imagination-Engine') is required.")
+
+        # --- 4. Validate Requested Model Name ---
+        if model_requested != IMAGE_GEN_MODEL_NAME_CLIENT_FACING:
+            logger.warning(f"{request_id}: Invalid Image Gen model requested '{model_requested}'. Expected '{IMAGE_GEN_MODEL_NAME_CLIENT_FACING}'.")
+            resp_data, status_code = _create_openai_error_response(
+                f"Invalid model. This endpoint only supports '{IMAGE_GEN_MODEL_NAME_CLIENT_FACING}' for image generation.",
+                err_type="invalid_request_error", code="model_not_found", status_code=404
+            )
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+            return resp
+
+        # --- STUB IMPLEMENTATION with Warning ---
+        # In a real implementation:
+        # 1. Prepare parameters for your stable_diffusion_worker.py or image generation engine.
+        # 2. Call a helper like `_execute_sd_worker_with_priority(...)`.
+        #    - Priority would be ELP1 for direct user requests.
+        # 3. The worker would return image URLs or base64 encoded image data.
+        # 4. Format the response according to OpenAI's "images" object structure.
+
+        logger.warning(f"{request_id}: Image generation is a STUB. Returning warning and 501 Not Implemented.")
+
+        # Construct the data part of the response, which will be empty for a stub,
+        # but include the warning in a non-standard way for now, or as part of an error.
+        # OpenAI's actual success response is like:
+        # { "created": 1678886400, "data": [ {"url": "..."} ] } or
+        # { "created": 1678886400, "data": [ {"b64_json": "..."} ] }
+        # Since we are returning an error, we'll use the error structure.
+
+        resp_data, status_code = _create_openai_error_response(
+            message=WARNING_MESSAGE, # Your strong warning
+            err_type="server_error",
+            code="stub_not_implemented_with_warning",
+            status_code=501 # 501 Not Implemented
+        )
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+        # --- END STUB ---
+
+    except ValueError as ve: # Catches explicit ValueErrors for bad client input
+        logger.warning(f"{request_id}: Invalid Image Gen request: {ve}")
+        resp_data, status_code = _create_openai_error_response(
+            str(ve), err_type="invalid_request_error", status_code=400
+        )
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Image Gen endpoint STUB:")
+        error_message = f"Internal server error in Image Gen stub: {type(e).__name__}"
+        resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+        # Log this critical failure to DB if possible
+        try:
+            if 'db' in g and g.db:
+                 add_interaction(g.db, session_id=session_id_for_log, mode="image_gen", input_type='error',
+                                 user_input=f"Image Gen Handler Error. Request: {request_data_snippet_for_log}",
+                                 llm_response=error_message[:2000])
+            else: logger.error(f"{request_id}: Cannot log Image Gen handler error: DB session 'g.db' unavailable.")
+        except Exception as db_err_log:
+             logger.error(f"{request_id}: ❌ Failed log Image Gen handler error to DB: {db_err_log}")
+
+    finally:
+        duration_req = (time.monotonic() - start_req) * 1000
+        logger.info(f"🏁 OpenAI-Style Image Gen Request {request_id} STUB handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+        # g.db is closed by teardown_request
+
+    if resp is None: # Safety net
+        logger.error(f"{request_id}: Image Gen Handler STUB finished unexpectedly without response object!")
+        resp_data, _ = _create_openai_error_response("Internal error: Image Gen Handler STUB no response.", status_code=500)
+        resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
+        # final_response_status_code already 500 or set
+        try:
+             if 'db' in g and g.db:
+                 add_interaction(g.db, session_id=session_id_for_log, mode="image_gen", input_type='error',
+                                 user_input=f"Image Gen Handler No Resp. Req: {request_data_snippet_for_log}",
+                                 llm_response="Critical: No response object created by Image Gen handler stub.")
+        except Exception as db_err_log_final:
+             logger.error(f"{request_id}: Failed log 'no response object' Image Gen error to DB: {db_err_log_final}")
+
+    return resp
+
 
 # --- NEW: Dummy Handlers for Pretending this is Ollama Model Management ---
 
