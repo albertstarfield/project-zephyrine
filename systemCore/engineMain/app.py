@@ -180,7 +180,19 @@ except ImportError as e:
 
 # --- NEW: Import the custom lock ---
 
-from priority_lock import ELP0, ELP1 # Ensure these are imported
+try:
+    from priority_lock import PriorityQuotaLock, ELP0, ELP1
+    logger.info("✅ Successfully imported PriorityQuotaLock, ELP0, ELP1.")
+except ImportError as e:
+    logger.error(f"❌ Failed to import from priority_lock.py: {e}")
+    logger.warning("    Falling back to standard threading.Lock for priority lock (NO PRIORITY/QUOTA).")
+    # Define fallbacks so the rest of the code doesn't crash immediately
+    import threading
+    PriorityQuotaLock = threading.Lock # type: ignore
+    ELP0 = 0
+    ELP1 = 1
+    # You might want to sys.exit(1) here if priority locking is critical
+    sys.exit(1)
 interruption_error_marker = "Worker task interrupted by higher priority request" # Define consistently
 
 # --- End Local Imports ---
@@ -198,6 +210,7 @@ logger.debug("-------------------------------------------------------------")
 META_MODEL_NAME_STREAM = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream"
 META_MODEL_NAME_NONSTREAM = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia"
 META_MODEL_OWNER = "zephyrine-foundation"
+TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha" # Client-facing TTS model name
 META_MODEL_FAMILY = "zephyrine"
 META_MODEL_PARAM_SIZE = "14.2B" # As requested
 META_MODEL_QUANT_LEVEL = "fp16" # As requested
@@ -251,6 +264,15 @@ except Exception as e:
     logger.critical(f"🔥🔥 DATABASE INITIALIZATION FAILED: {e}")
     logger.exception("DB Init Traceback:") # Log full traceback
     sys.exit(1)
+
+
+# --- Determine Python Executable ---
+# This will be the Python interpreter that is currently running app.py
+# When launched via launcher.py, this will be the venv Python.
+APP_PYTHON_EXECUTABLE = sys.executable
+logger.info(f"🐍 app.py is running with Python: {APP_PYTHON_EXECUTABLE}")
+PYTHON_EXECUTABLE = APP_PYTHON_EXECUTABLE
+# ---
 
 # === Global Indexer Thread Management ===
 
@@ -5590,6 +5612,142 @@ def _format_legacy_completion_response(response_text: str, model_name: str = MET
         }
     }
 
+
+def _execute_audio_worker_with_priority(
+    worker_command: list[str],
+    request_data: Dict[str, Any],
+    priority: int, # ELP0 or ELP1
+    worker_cwd: str,
+    timeout: int = 120 # Timeout for the worker process
+) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
+    """
+    Executes the audio_worker.py script with specified priority,
+    sends request_data via stdin, and returns parsed JSON response or error.
+
+    Args:
+        worker_command: List representing the command and its arguments.
+        request_data: Dictionary to be sent as JSON to the worker.
+        priority: ELP0 or ELP1 for acquiring the shared resource lock.
+        worker_cwd: The working directory for the worker script.
+        timeout: Timeout for the worker process in seconds.
+
+    Returns:
+        A tuple: (parsed_json_response, error_message_string).
+                 One of them will be None.
+    """
+    # --- Access the global priority lock (from ai_provider or a global var) ---
+    # This assumes ai_provider and its lock are initialized and accessible.
+    # If not, this part needs to be adapted.
+    shared_priority_lock: Optional[PriorityQuotaLock] = getattr(ai_provider, '_priority_quota_lock', None)
+    # ---
+
+    request_id = request_data.get("request_id", "audio-worker-unknown") # Get request_id if passed
+    log_prefix = f"AudioExec|ELP{priority}|{request_id}"
+    logger.debug(f"{log_prefix}: Attempting to execute audio worker.")
+
+    if not shared_priority_lock:
+        logger.error(f"{log_prefix}: Shared PriorityQuotaLock not available/initialized! Cannot run audio worker with priority.")
+        return None, "Shared resource lock not available."
+
+    lock_acquired = False
+    worker_process = None
+    start_lock_wait = time.monotonic()
+    logger.debug(f"{log_prefix}: Acquiring shared resource lock (Priority: ELP{priority})...")
+
+    # Acquire the lock. Audio worker doesn't typically have a process to register
+    # for interruption in the same way as the llama_worker (it's shorter lived per request).
+    # If audio worker *did* have long-running internal processes that ELP1 should kill,
+    # then set_holder_process would be needed for ELP0 audio tasks.
+    # For TTS, we assume the worker itself is the unit to be managed by communicate timeout.
+    lock_acquired = shared_priority_lock.acquire(priority=priority, timeout=None) # No specific timeout for lock acquire itself
+    lock_wait_duration = time.monotonic() - start_lock_wait
+
+    if lock_acquired:
+        logger.info(f"{log_prefix}: Lock acquired (waited {lock_wait_duration:.2f}s). Starting audio worker.")
+        try:
+            start_time = time.monotonic()
+            worker_process = subprocess.Popen(
+                worker_command,
+                stdin=subprocess.PIPE,
+                stdout=subprocess.PIPE,
+                stderr=subprocess.PIPE,
+                text=True,
+                encoding='utf-8',
+                errors='replace',
+                cwd=worker_cwd
+            )
+
+            # If this ELP0 audio task could be long and needs to be interruptible by ELP1 LLM calls:
+            # if priority == ELP0:
+            # shared_priority_lock.set_holder_process(worker_process) # Then lock needs to know this proc
+
+            input_json = json.dumps(request_data)
+            logger.debug(f"{log_prefix}: Sending input JSON (len={len(input_json)}) to audio worker stdin...")
+            stdout_data, stderr_data = "", ""
+
+            try:
+                stdout_data, stderr_data = worker_process.communicate(input=input_json, timeout=timeout)
+                logger.debug(f"{log_prefix}: Audio worker communicate() finished.")
+            except subprocess.TimeoutExpired:
+                logger.error(f"{log_prefix}: Audio worker process timed out after {timeout}s.")
+                worker_process.kill()
+                stdout_data, stderr_data = worker_process.communicate() # Try to get final output
+                logger.error(f"{log_prefix}: Worker timed out. Stderr: {stderr_data.strip()}")
+                return None, "Audio worker process timed out."
+            except BrokenPipeError: # This could happen if ELP0 audio worker was interrupted by ELP1 LLM
+                logger.warning(f"{log_prefix}: Broken pipe with audio worker. Likely interrupted.")
+                worker_process.wait(timeout=0.5) # Ensure state update
+                return None, "Audio worker task interrupted by higher priority request."
+            except Exception as comm_err:
+                 logger.error(f"{log_prefix}: Error communicating with audio worker: {comm_err}")
+                 if worker_process and worker_process.poll() is None:
+                      try: worker_process.kill(); worker_process.communicate()
+                      except: pass
+                 return None, f"Communication error with audio worker: {comm_err}"
+
+            exit_code = worker_process.returncode
+            duration = time.monotonic() - start_time
+            logger.info(f"{log_prefix}: Audio worker finished. Exit Code: {exit_code}, Duration: {duration:.2f}s")
+
+            if stderr_data:
+                log_level = "ERROR" if exit_code != 0 else "DEBUG"
+                logger.log(log_level, f"{log_prefix}: Audio Worker STDERR:\n-------\n{stderr_data.strip()}\n-------")
+
+            if exit_code == 0:
+                if not stdout_data:
+                    logger.error(f"{log_prefix}: Audio worker exited cleanly but no stdout.")
+                    return None, "Audio worker produced no output."
+                try:
+                    parsed_json = json.loads(stdout_data)
+                    logger.debug(f"{log_prefix}: Parsed audio worker JSON response successfully.")
+                    # Check for internal error reported by the worker
+                    if isinstance(parsed_json, dict) and "error" in parsed_json:
+                        logger.error(f"{log_prefix}: Audio worker reported internal error: {parsed_json['error']}")
+                        return None, f"Audio worker error: {parsed_json['error']}"
+                    return parsed_json, None # Success
+                except json.JSONDecodeError as json_err:
+                    logger.error(f"{log_prefix}: Failed to decode audio worker stdout JSON: {json_err}")
+                    logger.error(f"{log_prefix}: Raw stdout from worker:\n{stdout_data[:1000]}...")
+                    return None, f"Failed to decode audio worker response: {json_err}"
+            else:
+                err_msg = f"Audio worker process failed (exit code {exit_code})."
+                logger.error(f"{log_prefix}: {err_msg}")
+                return None, err_msg
+
+        except Exception as e:
+            logger.error(f"{log_prefix}: Unexpected error managing audio worker: {e}")
+            logger.exception(f"{log_prefix} Audio Worker Management Traceback:")
+            if worker_process and worker_process.poll() is None:
+                try: worker_process.kill(); worker_process.communicate()
+                except: pass
+            return None, f"Error managing audio worker: {e}"
+        finally:
+            logger.info(f"{log_prefix}: Releasing shared resource lock.")
+            shared_priority_lock.release()
+    else:
+        logger.error(f"{log_prefix}: FAILED to acquire shared resource lock for audio worker.")
+        return None, "Failed to acquire execution lock for audio worker."
+
 # --- End Helpers ---
 
 
@@ -6387,33 +6545,45 @@ def handle_openai_chat_completion():
 
 @app.route("/v1/models", methods=["GET"])
 def handle_openai_models():
-    """Handles requests mimicking OpenAI's models endpoint (Flask), using global constants."""
+    """
+    Handles requests mimicking OpenAI's models endpoint.
+    Lists available models, including chat and TTS.
+    """
     logger.info("Received request for /v1/models")
     start_req = time.monotonic()
     status_code = 200
-    # --- Use global constants ---
+
     model_list = [
         {
-            "id": META_MODEL_NAME_STREAM, # Use Constant
+            "id": META_MODEL_NAME_STREAM,
             "object": "model",
-            "created": int(time.time()),
-            "owned_by": META_MODEL_OWNER, # Use Constant
-            "permission": [],
-            "root": META_MODEL_NAME_STREAM, # Use Constant
-            "parent": None,
+            "created": int(time.time()), # Placeholder timestamp
+            "owned_by": META_MODEL_OWNER,
+            "permission": [], "root": META_MODEL_NAME_STREAM, "parent": None,
         },
         {
-            "id": META_MODEL_NAME_NONSTREAM, # Use Constant
+            "id": META_MODEL_NAME_NONSTREAM,
             "object": "model",
             "created": int(time.time()),
-            "owned_by": META_MODEL_OWNER, # Use Constant
-            "permission": [],
-            "root": META_MODEL_NAME_NONSTREAM, # Use Constant
-            "parent": None,
+            "owned_by": META_MODEL_OWNER,
+            "permission": [], "root": META_MODEL_NAME_NONSTREAM, "parent": None,
         },
-        # Add more meta-models here if needed by referencing constants
+        # --- NEW: Add TTS Model Entry ---
+        {
+            "id": TTS_MODEL_NAME_CLIENT_FACING, # Use the constant
+            "object": "model", # Standard object type
+            "created": int(time.time()), # Placeholder timestamp
+            "owned_by": META_MODEL_OWNER, # Your foundation name
+            "permission": [], # Standard permissions array
+            "root": TTS_MODEL_NAME_CLIENT_FACING, # Root is itself
+            "parent": None, # No parent model
+            # Optionally, add a 'capabilities' or 'description' field if useful,
+            # though OpenAI's TTS model listing is very basic.
+            # "description": "Text-to-Speech model with Zephyrine Persona."
+        }
+        # --- END NEW TTS Model Entry ---
     ]
-    # --- End use global constants ---
+
     response_body = {
         "object": "list",
         "data": model_list,
@@ -6482,100 +6652,238 @@ def handle_ollama_tags():
 def handle_openai_tts():
     """
     Handles requests mimicking OpenAI's Text-to-Speech endpoint.
-    Currently a STUB - Acknowledges request but does not generate audio.
+    Expects model "Zephyloid-Alpha", uses audio_worker.py with ELP1 priority.
     """
     start_req = time.monotonic()
-    request_id = f"req-tts-{uuid.uuid4()}"
-    logger.info(f"🚀 Flask OpenAI-Style TTS Request ID: {request_id} (STUB)")
+    request_id = f"req-tts-{uuid.uuid4()}" # Unique ID for this TTS request
+    logger.info(f"🚀 Flask OpenAI-Style TTS Request ID: {request_id} (Worker ELP1)")
 
-    # --- Get Request Data ---
+    # --- Initialize variables ---
+    db: Session = g.db # Use request-bound session from Flask's g, set by @app.before_request
+    session_id: str = f"tts_req_default_{request_id}" # Default if not parsed
     raw_request_data: Optional[Dict] = None
     input_text: Optional[str] = None
     model_requested: Optional[str] = None
     voice_requested: Optional[str] = None
-    response_format_requested: Optional[str] = None
-    speed_requested: Optional[float] = None
+    response_format_requested: Optional[str] = "mp3" # Default format
+
+    final_response_status_code: int = 500 # For logging actual outcome
+    resp: Optional[Response] = None
+    request_data_snippet_for_log: str = "No request data processed"
 
     try:
-        raw_request_data = request.get_json()
-        if not raw_request_data:
-            raise ValueError("Empty JSON payload received.")
+        # --- 1. Get and Validate Request JSON Body ---
+        try:
+            raw_request_data = request.get_json()
+            if not raw_request_data:
+                raise ValueError("Empty JSON payload received.")
+            # Safely create a snippet for logging, even if full dump fails
+            try: request_data_snippet_for_log = json.dumps(raw_request_data)[:1000]
+            except: request_data_snippet_for_log = str(raw_request_data)[:1000]
+        except Exception as json_err:
+            logger.warning(f"{request_id}: Failed to get/parse JSON body: {json_err}")
+            try: request_data_snippet_for_log = request.get_data(as_text=True)[:1000]
+            except: request_data_snippet_for_log = "Could not read request body"
 
+            resp_data, status_code = _create_openai_error_response(
+                f"Request body is missing or invalid JSON: {json_err}",
+                err_type="invalid_request_error", status_code=400
+            )
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+            # Return early on critical parsing error
+            return resp
+
+        # --- 2. Extract Expected Parameters ---
         input_text = raw_request_data.get("input")
-        model_requested = raw_request_data.get("model") # e.g., "tts-1", "tts-1-hd"
-        voice_requested = raw_request_data.get("voice") # e.g., "alloy", "echo", "fable", "onyx", "nova", "shimmer"
-        response_format_requested = raw_request_data.get("response_format", "mp3") # mp3, opus, aac, flac
-        speed_requested = raw_request_data.get("speed", 1.0) # 0.25 to 4.0
+        model_requested = raw_request_data.get("model")
+        voice_requested = raw_request_data.get("voice")
+        # Update session_id if provided in the request, else keep default
+        session_id = raw_request_data.get("session_id", session_id)
+        response_format_requested = raw_request_data.get("response_format", "mp3").lower()
+        # speed = raw_request_data.get("speed", 1.0) # SCLParser handles speed via tags in input_text
 
+        logger.debug(
+            f"{request_id}: TTS Request Parsed - SessionID: {session_id}, Input: '{str(input_text)[:50]}...', "
+            f"Client Model Req: {model_requested}, Internal Voice/Speaker: {voice_requested}, "
+            f"Format: {response_format_requested}"
+        )
+
+        # --- 3. Validate Core Parameters ---
         if not input_text or not isinstance(input_text, str):
             raise ValueError("'input' field is required and must be a string.")
         if not model_requested or not isinstance(model_requested, str):
-            raise ValueError("'model' field is required and must be a string.")
+            # This is the client-facing model name, e.g., "Zephyloid-Alpha"
+            raise ValueError("'model' field (e.g., 'Zephyloid-Alpha') is required.")
         if not voice_requested or not isinstance(voice_requested, str):
-            raise ValueError("'voice' field is required and must be a string.")
+            # This will be the actual MeloTTS speaker ID like "EN-US"
+            raise ValueError("'voice' field (MeloTTS speaker ID, e.g., EN-US) is required.")
 
-        logger.debug(
-            f"{request_id}: TTS Request Parsed - Input: '{input_text[:50]}...', "
-            f"Model: {model_requested}, Voice: {voice_requested}, "
-            f"Format: {response_format_requested}, Speed: {speed_requested}"
-        )
-
-        # --- STUB IMPLEMENTATION ---
-        # Here, you would normally call your TTS engine.
-        # For now, we'll just return a success message or a placeholder error.
-
-        # Placeholder: Acknowledge supported formats for the stub
-        supported_formats = ["mp3", "opus", "aac", "flac"]
-        if response_format_requested.lower() not in supported_formats:
-            logger.warning(f"{request_id}: Unsupported response_format: {response_format_requested}")
+        # --- 4. Validate Requested Model Name ---
+        if model_requested != TTS_MODEL_NAME_CLIENT_FACING:
+            logger.warning(f"{request_id}: Invalid TTS model requested '{model_requested}'. Expected '{TTS_MODEL_NAME_CLIENT_FACING}'.")
             resp_data, status_code = _create_openai_error_response(
-                f"Unsupported response_format: '{response_format_requested}'. Supported formats are: {', '.join(supported_formats)}.",
-                err_type="invalid_request_error", status_code=400
+                f"Invalid model. This endpoint only supports the '{TTS_MODEL_NAME_CLIENT_FACING}' model for TTS.",
+                err_type="invalid_request_error", code="model_not_found", status_code=404
             )
-            response_payload = json.dumps(resp_data)
-            resp = Response(response_payload, status=status_code, mimetype='application/json')
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
             final_response_status_code = status_code
-            # Log duration and return
-            duration_req = (time.monotonic() - start_req) * 1000
-            logger.info(f"🏁 OpenAI-Style TTS Request {request_id} STUB handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+            # Log duration before early return for invalid model
+            # (This specific logging moved to finally block for consistency)
             return resp
 
-        # STUB: Simulate successful audio generation but return an error that it's a stub
-        # In a real implementation, you would return the audio data with the correct MIME type.
-        logger.warning(f"{request_id}: TTS generation is a STUB. Returning error message.")
-        resp_data, status_code = _create_openai_error_response(
-            "TTS endpoint is currently a stub and does not generate audio.",
-            err_type="server_error", code="stub_not_implemented", status_code=501 # 501 Not Implemented
-        )
-        response_payload = json.dumps(resp_data)
-        resp = Response(response_payload, status=status_code, mimetype='application/json')
-        final_response_status_code = status_code
-        # --- END STUB ---
+        # --- 5. Determine Internal Melo Language from Voice Parameter ---
+        melo_language = "EN" # Default language
+        try:
+            lang_part = voice_requested.split('-')[0].upper()
+            # Define supported languages by your MeloTTS setup in audio_worker.py
+            supported_melo_langs = ["EN", "ZH", "JP", "ES", "FR", "KR", "DE"] # Example
+            if lang_part in supported_melo_langs:
+                melo_language = lang_part
+            else:
+                logger.warning(f"{request_id}: Could not infer a supported language from voice '{voice_requested}'. Defaulting to {melo_language}.")
+        except Exception: # Catch potential errors like voice_requested not being a string or empty
+            logger.warning(f"{request_id}: Error parsing language from voice '{voice_requested}'. Defaulting to {melo_language}.")
+        logger.debug(f"{request_id}: Using Internal Melo Language: {melo_language} (for voice: {voice_requested})")
 
-    except ValueError as ve: # Catch our explicit ValueErrors for bad input
-        logger.warning(f"{request_id}: Invalid TTS request: {ve}")
+        # --- 6. Prepare and Execute Audio Worker ---
+        audio_worker_script = os.path.join(SCRIPT_DIR, "audio_worker.py")
+        if not os.path.exists(audio_worker_script):
+            logger.error(f"{request_id}: audio_worker.py not found at {audio_worker_script}")
+            # This is a server configuration error
+            raise FileNotFoundError(f"Audio worker script missing at {audio_worker_script}")
+
+        # Define a temporary directory for any files the worker might create (e.g., for MP3 conversion)
+        temp_audio_dir = os.path.join(SCRIPT_DIR, "temp_audio_worker_files")
+        os.makedirs(temp_audio_dir, exist_ok=True)
+
+        worker_command = [
+            APP_PYTHON_EXECUTABLE, # Path to python in venv
+            audio_worker_script,
+            "--model-lang", melo_language,
+            "--device", "auto", # Or could be configurable via app config
+            "--temp-dir", temp_audio_dir
+            # Worker will use defaults for output-file if not in test mode
+        ]
+
+        worker_request_data = {
+            "input": input_text,
+            "voice": voice_requested, # The SCLParser/MeloTTS speaker ID
+            "response_format": response_format_requested,
+            "request_id": request_id # Pass request_id for better worker logging continuity
+            # SCL settings are embedded in the input_text itself by the client
+        }
+
+        logger.info(f"{request_id}: Executing audio worker with ELP1 priority...")
+        # Call the helper function to execute the worker
+        parsed_response_from_worker, error_string_from_worker = _execute_audio_worker_with_priority(
+            worker_command=worker_command,
+            request_data=worker_request_data,
+            priority=ELP1, # CRITICAL: Use ELP1 for user-facing TTS
+            worker_cwd=SCRIPT_DIR, # Worker can run from the app's directory
+            timeout=60 # Adjust timeout as needed for TTS generation (e.g., 60 seconds)
+        )
+
+        # --- 7. Process Worker Response ---
+        if error_string_from_worker:
+            # An error occurred during worker execution or communication
+            logger.error(f"{request_id}: Audio worker execution failed: {error_string_from_worker}")
+            resp_data, status_code = _create_openai_error_response(
+                f"Audio generation failed: {error_string_from_worker}",
+                err_type="server_error", status_code=500
+            )
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+        elif parsed_response_from_worker and "result" in parsed_response_from_worker and "audio_base64" in parsed_response_from_worker["result"]:
+            # Successful response from worker
+            audio_info = parsed_response_from_worker["result"]
+            audio_b64_data = audio_info["audio_base64"]
+            actual_audio_format = audio_info.get("format", "mp3") # Get the format worker actually produced
+            response_mime_type = audio_info.get("mime_type", f"audio/{actual_audio_format}")
+
+            logger.info(f"{request_id}: Audio successfully generated by worker. Format: {actual_audio_format}, Length (b64): {len(audio_b64_data)}")
+            try:
+                audio_bytes = base64.b64decode(audio_b64_data)
+                # Return the raw audio bytes with the correct MIME type
+                resp = Response(audio_bytes, status=200, mimetype=response_mime_type)
+                final_response_status_code = 200
+            except Exception as decode_err:
+                logger.error(f"{request_id}: Failed to decode base64 audio from worker: {decode_err}")
+                resp_data, status_code = _create_openai_error_response(
+                    "Failed to decode audio data received from worker.",
+                    err_type="server_error", status_code=500
+                )
+                resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+                final_response_status_code = status_code
+        else:
+            # Worker returned a response, but it was invalid or incomplete
+            logger.error(f"{request_id}: Audio worker returned invalid or incomplete response: {parsed_response_from_worker}")
+            resp_data, status_code = _create_openai_error_response(
+                "Audio worker returned an invalid response structure.",
+                err_type="server_error", status_code=500
+            )
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+
+    except ValueError as ve: # Catches our explicit ValueErrors for bad client input
+        logger.warning(f"{request_id}: Invalid TTS request parameters: {ve}")
         resp_data, status_code = _create_openai_error_response(
             str(ve), err_type="invalid_request_error", status_code=400
         )
-        response_payload = json.dumps(resp_data)
-        resp = Response(response_payload, status=status_code, mimetype='application/json')
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
-    except Exception as e:
-        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in TTS endpoint STUB:")
-        error_message = f"Internal server error in TTS stub: {type(e).__name__}"
+    except FileNotFoundError as fnf_err: # For missing worker script
+        logger.error(f"{request_id}: Server configuration error: {fnf_err}")
+        resp_data, status_code = _create_openai_error_response(
+            f"Server configuration error: {fnf_err}",
+            err_type="server_error", status_code=500
+        )
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+    except Exception as main_handler_err: # Catches other unexpected errors in this handler
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in TTS endpoint main handler:")
+        error_message = f"Internal server error in TTS endpoint: {type(main_handler_err).__name__}"
         resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
-        response_payload = json.dumps(resp_data)
-        resp = Response(response_payload, status=status_code, mimetype='application/json')
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
+        # Log this critical failure to DB if possible
+        try:
+            if 'db' in g and g.db: # Check if request DB session exists
+                 add_interaction(g.db, session_id=session_id, mode="tts", input_type='error',
+                                 user_input=f"TTS Handler Error. Request: {request_data_snippet_for_log}",
+                                 llm_response=error_message[:2000])
+            else: logger.error(f"{request_id}: Cannot log TTS handler error: DB session 'g.db' unavailable.")
+        except Exception as db_err_log:
+             logger.error(f"{request_id}: ❌ Failed log TTS handler error to DB: {db_err_log}")
 
     finally:
-        # Log duration
+        # This block ALWAYS runs after try/except
         duration_req = (time.monotonic() - start_req) * 1000
-        logger.info(f"🏁 OpenAI-Style TTS Request {request_id} STUB handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
-        # DB session g.db is closed by teardown_request
+        # Log final status using the status code determined by the try/except blocks
+        logger.info(f"🏁 OpenAI-Style TTS Request {request_id} handled in {duration_req:.2f} ms. Final Status: {final_response_status_code}")
+        # Flask's g.db is closed automatically by the @app.teardown_request handler
 
-    return resp
+    # --- Return Response ---
+    # Ensure 'resp' is always assigned before returning
+    if resp is None:
+        logger.error(f"{request_id}: TTS Handler logic flaw - response object 'resp' was not assigned!")
+        # Create a generic error response if 'resp' is somehow still None
+        resp_data, status_code = _create_openai_error_response(
+            "Internal error: TTS Handler failed to produce a response object.",
+            err_type="server_error", status_code=500
+        )
+        resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
+        final_response_status_code = status_code # Update for final log if it changed here
+        # Log this critical internal failure if possible
+        try:
+             if 'db' in g and g.db:
+                 add_interaction(g.db, session_id=session_id, mode="tts", input_type='error',
+                                 user_input=f"TTS Handler No Resp Object. Req: {request_data_snippet_for_log}",
+                                 llm_response="Critical: No response object created by handler.")
+        except Exception as db_err_log_final:
+             logger.error(f"{request_id}: Failed to log 'no response object' error to DB: {db_err_log_final}")
 
+    return resp # Return the final Flask Response object
 
 # --- NEW: Dummy Handlers for Pretending this is Ollama Model Management ---
 
