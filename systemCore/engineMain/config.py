@@ -72,7 +72,7 @@ LLAMA_CPP_MODEL_MAP = {
     "math": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen2-math-1.5b-instruct-q5_K_M.gguf"),
     "code": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "qwen2.5-coder-3b-instruct-q5_K_M.gguf"),
     "general": os.getenv("LLAMA_CPP_MODEL_GENERAL_FILE", "deepscaler.gguf"), # Use router as general
-    "general_fast": os.getenv("LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "Qwen2.5-1.5B-Instruct-iq3_m.gguf"),
+    "general_fast": os.getenv("LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "Qwen2.5-DirectLowLatency.gguf"),
     "translator": os.getenv("LLAMA_CPP_MODEL_TRANSLATOR_FILE", "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf"), # Assuming download renamed it
     # --- Embedding Model ---
     "embeddings": os.getenv("LLAMA_CPP_EMBEDDINGS_FILE", "mxbai-embed-large-v1.gguf") # Example name
