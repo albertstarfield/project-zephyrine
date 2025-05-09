@@ -112,3 +112,10 @@ LiteratureReviewPool/
 **.db**
 .custom_sd_cpp_python_installed_v1
 zephyimagination_test_image.png
+temp_melo_audio_test_files
+.custom_llama_cpp_installed_v1_conda
+.custom_sd_cpp_python_installed_v1_conda
+**logs**
+.conda_executable_path_cache.txt
+**temp_melo_audio_test_files**
+**zephyrineCondaVenv**
