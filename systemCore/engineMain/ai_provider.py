@@ -4,15 +4,16 @@ import sys
 import time
 import threading
 import gc # For garbage collection
-from typing import Dict, Any, Optional, List, Iterator
+from typing import Dict, Any, Optional, List, Iterator, Tuple
 from loguru import logger
 import json        # Added for worker communication
 import subprocess  # Added for worker management
 import shlex       # <<< --- ADD THIS LINE --- >>>
+import asyncio
 
 # --- NEW: Import the custom lock ---
 
-from priority_lock import ELP0, ELP1 # Ensure these are imported
+from priority_lock import ELP0, ELP1, PriorityQuotaLock #
 interruption_error_marker = "Worker task interrupted by higher priority request" # Define consistently
 
 
@@ -401,37 +402,49 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
 # === AI Provider Class ===
 class AIProvider:
     def __init__(self, provider_name):
-        # ... (Initialization as before, REMOVE _loaded_*, _last_task_type ) ...
+        # ... (other initialization lines) ...
         self.provider_name = provider_name.lower()
-        self.models: Dict[str, Any] = {} # Will store WRAPPERS now
-        self.embeddings: Optional[Embeddings] = None # Will store WRAPPER
+        self.models: Dict[str, Any] = {}
+        self.embeddings: Optional[Embeddings] = None
         self.EMBEDDINGS_MODEL_NAME: Optional[str] = None
-        self.image_generator: Any = None
+        # self.image_generator: Any = None # This will be implicitly handled by calling the worker
 
         # --- llama.cpp specific state ---
-        # REMOVED: self._loaded_gguf_path, self._loaded_llama_instance, self._last_task_type
         self._llama_model_access_lock = threading.Lock() if LLAMA_CPP_AVAILABLE and self.provider_name == "llama_cpp" else None
         if LLAMA_CPP_AVAILABLE and self.provider_name == "llama_cpp":
-             # Ensure PriorityQuotaLock didn't fallback to threading.Lock due to import error
              if PriorityQuotaLock is not threading.Lock:
                  self._priority_quota_lock = PriorityQuotaLock()
-                 logger.info("   🔑 Initialized PriorityQuotaLock for llama.cpp WORKER access.")
+                 logger.info("   🔑 Initialized PriorityQuotaLock for worker access (Llama & Imagination).")
              else:
                   logger.error("   ❌ PriorityQuotaLock import failed, falling back to standard Lock (no priority).")
-                  self._priority_quota_lock = threading.Lock() # Use standard lock as fallback
-        # --- End lock replacement ---
+                  self._priority_quota_lock = threading.Lock()
+        elif self.provider_name != "llama_cpp": # If not llama_cpp, still might need a lock for image gen
+            if PriorityQuotaLock is not threading.Lock:
+                self._priority_quota_lock = PriorityQuotaLock()
+                logger.info("   🔑 Initialized PriorityQuotaLock for Imagination Worker access.")
+            else:
+                logger.error("   ❌ PriorityQuotaLock import failed, falling back to standard Lock for Imagination Worker.")
+                self._priority_quota_lock = threading.Lock()
+
         self._llama_model_map: Dict[str, str] = {}
         self._llama_gguf_dir: Optional[str] = None
-        # Store python executable path for worker
-        self._python_executable = sys.executable # Assumes provider runs in same env as worker needs
+        self._python_executable = sys.executable
+
+        # --- NEW: For Imagination Worker ---
+        self._imagination_worker_script_path: Optional[str] = None
+        # --- END NEW ---
 
         logger.info(f"🤖 Initializing AI Provider: {self.provider_name} (Worker Process Mode)")
-        # ... (rest of init: lock logging, validation, setup) ...
-        if self.provider_name == "llama_cpp" and self._llama_model_access_lock: logger.info("   🔑 Initialized threading.Lock for llama.cpp WORKER access.")
-        elif self.provider_name == "llama_cpp": logger.error("   ❌ Failed to initialize threading.Lock for llama.cpp WORKER access.")
+        # Log lock status
+        if self._priority_quota_lock and isinstance(self._priority_quota_lock, PriorityQuotaLock): logger.info("   🔑 PriorityQuotaLock is active.")
+        elif self._priority_quota_lock: logger.warning("   🔑 Using standard threading.Lock (no priority/quota).")
+        else: logger.error("   ❌ Lock for worker access NOT initialized!")
+
         self._validate_config()
-        self.setup_provider()
-        self._setup_image_generator()
+        self.setup_provider() # Sets up LLM/Embedding models
+        # VVVVVVVVVV THIS IS THE LINE TO CHANGE VVVVVVVVVV
+        self._setup_image_generator_config() # Renamed: Validates image gen worker config
+        # ^^^^^^^^^^ THIS IS THE LINE TO CHANGE ^^^^^^^^^^
 
     def _validate_config(self):
         # (Validation remains largely the same, ensuring distinct embedding model etc.)
@@ -450,8 +463,31 @@ class AIProvider:
                 logger.error(f"❌ Llama.cpp worker script not found at: {worker_script_path}")
                 sys.exit("Missing llama_worker.py")
 
+        global STABLE_DIFFUSION_WORKER_CONFIGURED  # To update global status
+        self._imagination_worker_script_path = os.path.join(os.path.dirname(__file__), IMAGE_WORKER_SCRIPT_NAME)
+        if not os.path.isfile(self._imagination_worker_script_path):
+            logger.warning(
+                f"⚠️ Imagination worker script '{IMAGE_WORKER_SCRIPT_NAME}' not found at: {self._imagination_worker_script_path}. Image generation will be disabled.")
+            STABLE_DIFFUSION_WORKER_CONFIGURED = False
+            return  # Cannot proceed with image gen validation if script is missing
 
-    # <<< --- REMOVE _load_llama_model and _get_loaded_llama_instance --- >>>
+        if not os.path.isdir(IMAGE_GEN_MODEL_DIR):
+            logger.warning(
+                f"⚠️ Imagination model directory not found: '{IMAGE_GEN_MODEL_DIR}'. Image generation will be disabled.")
+            STABLE_DIFFUSION_WORKER_CONFIGURED = False
+            return
+
+        # Check for at least the main diffusion model file
+        main_diffusion_path = os.path.join(IMAGE_GEN_MODEL_DIR, IMAGE_GEN_DIFFUSION_MODEL_NAME)
+        if not os.path.isfile(main_diffusion_path):
+            logger.warning(
+                f"⚠️ Main imagination diffusion model '{IMAGE_GEN_DIFFUSION_MODEL_NAME}' not found in '{IMAGE_GEN_MODEL_DIR}'. Image generation will be disabled.")
+            STABLE_DIFFUSION_WORKER_CONFIGURED = False
+            return
+
+        logger.info(f"✅ Imagination worker script and model directory appear configured.")
+        STABLE_DIFFUSION_WORKER_CONFIGURED = True
+
 
     # <<< --- NEW: Worker Execution Method --- >>>
     def _execute_in_worker(self, model_role: str, task_type: str, request_data: Dict[str, Any], priority: int = ELP0) -> Optional[Dict[str, Any]]:
@@ -650,6 +686,319 @@ class AIProvider:
              provider_logger.error(f"{worker_log_prefix}: FAILED to acquire worker lock.")
              return {"error": "Failed to acquire execution lock for worker."}
 
+    async def _execute_imagination_worker(
+            self,
+            prompt: str,
+            image_base64: Optional[str] = None,
+            priority: int = ELP0
+    ) -> Optional[Dict[str, Any]]:  # Returns the full JSON response from worker or error dict
+        """
+        Executes imagination_worker.py, sends request, gets response.
+        Protected by the PRIORITY QUOTA lock. ELP1 can interrupt ELP0.
+        Handles noisy stdout from the worker by attempting to extract the last valid JSON object.
+        """
+        provider_logger = getattr(self, 'logger', logger)
+        task_name = "img2img" if image_base64 else "txt2img"
+        worker_log_prefix = f"IMG_WORKER_MGR(ELP{priority}|{task_name})"
+        provider_logger.debug(f"{worker_log_prefix}: Attempting to execute task in Imagination Worker.")
+
+        if not STABLE_DIFFUSION_WORKER_CONFIGURED:  # Global flag set by _validate_config
+            provider_logger.error(f"{worker_log_prefix}: Imagination worker not configured (script/models missing).")
+            return {"error": "Imagination worker is not configured on the server."}
+
+        if not self._priority_quota_lock:
+            provider_logger.error(f"{worker_log_prefix}: Priority Lock not initialized!")
+            return {"error": "Provider's shared resource lock not initialized"}
+
+        # Variables for the blocking_lock_and_execute closure
+        # These are effectively "captured" by the nested function.
+        # `start_lock_wait` is defined just before calling asyncio.to_thread.
+        # `lock_acquired` and `worker_process` are managed within blocking_lock_and_execute.
+
+        def blocking_lock_and_execute() -> Optional[Dict[str, Any]]:
+            # This function runs in a separate thread via asyncio.to_thread.
+            # It handles lock acquisition, subprocess execution, and parsing worker output.
+            # It should not use `await` and should return a dictionary (success or error).
+
+            # Local variables for this threaded function's execution context
+            current_lock_acquired = False
+            current_worker_process: Optional[subprocess.Popen] = None
+            # `task_name`, `prompt`, `image_base64`, `priority` are from the outer scope (closure)
+            # `_python_executable`, `_imagination_worker_script_path` are instance vars (self.)
+            # Config constants like IMAGE_GEN_MODEL_DIR are global from config.py
+
+            # Acquire the shared priority lock
+            # `start_lock_wait` is captured from the outer scope of _execute_imagination_worker
+            current_lock_acquired = self._priority_quota_lock.acquire(priority=priority, timeout=None)
+            lock_wait_duration = time.monotonic() - start_lock_wait
+
+            if current_lock_acquired:
+                provider_logger.info(
+                    f"{worker_log_prefix}: Lock acquired (waited {lock_wait_duration:.2f}s). Starting worker process.")
+                try:
+                    # Prepare the command to execute the imagination worker script
+                    command = [
+                        self._python_executable,
+                        self._imagination_worker_script_path,
+                        "--model-dir", IMAGE_GEN_MODEL_DIR,
+                        "--diffusion-model-name", IMAGE_GEN_DIFFUSION_MODEL_NAME,
+                        "--clip-l-name", IMAGE_GEN_CLIP_L_NAME,
+                        "--t5xxl-name", IMAGE_GEN_T5XXL_NAME,
+                        "--vae-name", IMAGE_GEN_VAE_NAME,
+                        "--w-device", IMAGE_GEN_DEVICE,
+                        "--rng-type", IMAGE_GEN_RNG_TYPE,
+                        "--n-threads", str(IMAGE_GEN_N_THREADS),
+                    ]
+                    provider_logger.debug(
+                        f"{worker_log_prefix}: Worker command: {' '.join(shlex.quote(c) for c in command)}")
+
+                    # Prepare the JSON request data to be sent to the worker's stdin
+                    request_data_for_worker = {
+                        "task_type": task_name,
+                        "prompt": prompt,
+                        "negative_prompt": IMAGE_GEN_DEFAULT_NEGATIVE_PROMPT,
+                        "n": 1,
+                        # Worker is designed to produce one image per call; looping handled by generate_image_async
+                        "size": IMAGE_GEN_DEFAULT_SIZE,
+                        "cfg_scale": IMAGE_GEN_DEFAULT_CFG_SCALE,
+                        "sample_steps": IMAGE_GEN_DEFAULT_SAMPLE_STEPS,
+                        "sample_method": IMAGE_GEN_DEFAULT_SAMPLE_METHOD,
+                        "seed": IMAGE_GEN_DEFAULT_SEED,
+                        "response_format": IMAGE_GEN_RESPONSE_FORMAT,
+                    }
+                    if image_base64:
+                        request_data_for_worker["input_image_b64"] = image_base64
+                        request_data_for_worker["task_type"] = "img2img"  # Ensure task_type is correct
+                        provider_logger.info(f"{worker_log_prefix}: img2img task with input image.")
+
+                    # Record start time for worker execution
+                    start_time_worker_exec = time.monotonic()
+
+                    # Start the worker subprocess
+                    current_worker_process = subprocess.Popen(
+                        command,
+                        stdin=subprocess.PIPE,
+                        stdout=subprocess.PIPE,
+                        stderr=subprocess.PIPE,
+                        text=True,  # For text-mode communication (JSON)
+                        encoding='utf-8',  # Specify encoding
+                        errors='replace',  # Handle potential encoding errors in output
+                        cwd=os.path.dirname(__file__)  # Run worker from AIProvider's directory
+                    )
+
+                    # If it's a background priority task, register its process with the lock
+                    if priority == ELP0:
+                        self._priority_quota_lock.set_holder_process(current_worker_process)
+
+                    # Convert request data to JSON and send to worker
+                    input_json_to_worker = json.dumps(request_data_for_worker)
+                    provider_logger.debug(
+                        f"{worker_log_prefix}: Sending input JSON (len={len(input_json_to_worker)}) to worker stdin...")
+
+                    stdout_data_raw, stderr_data_raw = "", ""
+                    communication_error_obj = None
+                    # Timeout for the worker process (e.g., 5 minutes, adjust as needed)
+                    worker_process_timeout = IMAGE_GEN_WORKER_TIMEOUT  # Use a config constant
+
+                    # Communicate with the worker: send input, get output/error
+                    try:
+                        stdout_data_raw, stderr_data_raw = current_worker_process.communicate(
+                            input=input_json_to_worker, timeout=worker_process_timeout
+                        )
+                        provider_logger.debug(f"{worker_log_prefix}: Worker communicate() finished.")
+                    except subprocess.TimeoutExpired:
+                        provider_logger.error(
+                            f"{worker_log_prefix}: Worker process timed out after {worker_process_timeout}s.")
+                        current_worker_process.kill()
+                        try:
+                            stdout_data_raw, stderr_data_raw = current_worker_process.communicate()
+                        except Exception:
+                            pass  # Best effort to get final output
+                        communication_error_obj = TimeoutError("Imagination worker process timed out")
+                    except BrokenPipeError:
+                        provider_logger.warning(
+                            f"{worker_log_prefix}: Broken pipe during communicate(). Likely interrupted by ELP1 request.")
+                        if current_worker_process.poll() is None:
+                            try:
+                                current_worker_process.wait(timeout=1.0)
+                            except subprocess.TimeoutExpired:
+                                current_worker_process.kill()
+                        try:
+                            stdout_data_final_bp, stderr_data_final_bp = current_worker_process.communicate()
+                            stdout_data_raw += stdout_data_final_bp  # Append any remaining output
+                            stderr_data_raw += stderr_data_final_bp
+                        except Exception:
+                            pass
+                        communication_error_obj = BrokenPipeError(interruption_error_marker)
+                    except Exception as general_comm_err:
+                        provider_logger.error(
+                            f"{worker_log_prefix}: Error communicating with worker: {general_comm_err}")
+                        if current_worker_process and current_worker_process.poll() is None:
+                            try:
+                                current_worker_process.kill(); current_worker_process.communicate()
+                            except Exception:
+                                pass
+                        communication_error_obj = general_comm_err
+
+                    # If communication failed, release lock and return error
+                    if communication_error_obj:
+                        self._priority_quota_lock.release()
+                        if isinstance(communication_error_obj, BrokenPipeError):
+                            return {"error": interruption_error_marker}
+                        return {"error": f"Communication error with Imagination Worker: {communication_error_obj}"}
+
+                    # Process finished, get exit code and log duration
+                    exit_code_from_worker = current_worker_process.returncode
+                    execution_duration = time.monotonic() - start_time_worker_exec
+                    provider_logger.info(
+                        f"{worker_log_prefix}: Worker process finished. Exit Code: {exit_code_from_worker}, Duration: {execution_duration:.2f}s")
+
+                    # Log stderr from the worker
+                    if stderr_data_raw:
+                        stderr_log_level = "ERROR" if exit_code_from_worker != 0 else "DEBUG"
+                        provider_logger.log(stderr_log_level,
+                                            f"{worker_log_prefix}: Worker STDERR:\n-------\n{stderr_data_raw.strip()}\n-------")
+
+                    # Handle worker outcome based on exit code
+                    if exit_code_from_worker == 0:  # Worker exited cleanly
+                        if not stdout_data_raw:  # Check if there's any stdout
+                            provider_logger.error(f"{worker_log_prefix}: Worker exited cleanly but produced no stdout.")
+                            return {"error": "Imagination worker produced no output."}
+
+                        # Attempt to extract and parse JSON from worker's stdout
+                        json_string_extracted = None
+                        provider_logger.trace(
+                            f"{worker_log_prefix}: Attempting to extract JSON from stdout (len {len(stdout_data_raw)}). Preview (first/last 250 chars):")
+                        provider_logger.trace(f"STDOUT_START>>>\n{stdout_data_raw[:250]}\n<<<STDOUT_START_END")
+                        provider_logger.trace(f"STDOUT_END>>>\n{stdout_data_raw[-250:]}\n<<<STDOUT_END_END")
+
+                        # JSON Extraction Strategy using JSONDecoder.raw_decode
+                        decoder = json.JSONDecoder()
+                        search_start_index = 0
+                        while search_start_index < len(stdout_data_raw):
+                            # Find the next potential start of a JSON object
+                            first_brace_in_remaining = stdout_data_raw.find('{', search_start_index)
+                            if first_brace_in_remaining == -1:
+                                break  # No more opening braces
+
+                            substring_to_test = stdout_data_raw[first_brace_in_remaining:]
+                            try:
+                                obj, end_idx_relative_to_substring = decoder.raw_decode(substring_to_test)
+                                # Successfully decoded a JSON object
+                                current_extracted_json_str = substring_to_test[:end_idx_relative_to_substring]
+
+                                # Check if this object has the expected top-level keys for success or a worker error
+                                if isinstance(obj, dict) and (("created" in obj and "data" in obj) or "error" in obj):
+                                    json_string_extracted = current_extracted_json_str  # This is likely our target
+                                    provider_logger.debug(
+                                        f"{worker_log_prefix}: Found potential main/error JSON payload using raw_decode: {json_string_extracted[:100]}...")
+                                    # Keep this one, as it's the last valid full JSON found by iterating forward
+                                # else: it's some other JSON, ignore and let loop continue to find later JSON
+
+                                # Advance search_start_index to look for more JSON objects after this one
+                                search_start_index = first_brace_in_remaining + end_idx_relative_to_substring
+
+                            except json.JSONDecodeError:
+                                # This substring is not the start of a valid JSON object.
+                                # Advance past the brace that failed.
+                                search_start_index = first_brace_in_remaining + 1
+
+                        # Fallback: if iterative raw_decode didn't pinpoint the main structure, try last line
+                        if not json_string_extracted:
+                            provider_logger.warning(
+                                f"{worker_log_prefix}: Iterative JSON search (raw_decode) did not identify a primary payload. Trying last-line fallback.")
+                            stdout_lines = stdout_data_raw.strip().split('\n')
+                            if stdout_lines:
+                                last_line = stdout_lines[-1].strip()
+                                if last_line.startswith('{') and last_line.endswith('}'):
+                                    try:
+                                        json.loads(last_line)  # Validate
+                                        json_string_extracted = last_line
+                                        provider_logger.debug(
+                                            f"{worker_log_prefix}: Fallback: Used last line as JSON: {json_string_extracted[:100]}...")
+                                    except json.JSONDecodeError:
+                                        provider_logger.warning(
+                                            f"{worker_log_prefix}: Fallback: Last line failed JSON parse: {last_line[:100]}...")
+
+                        # Final check and parse of the extracted string
+                        if not json_string_extracted:
+                            provider_logger.error(
+                                f"{worker_log_prefix}: All strategies failed. Could not find valid JSON payload in worker stdout.")
+                            provider_logger.debug(
+                                f"{worker_log_prefix}: Full stdout from worker was:\n{stdout_data_raw}")
+                            return {"error": "Imagination worker stdout did not contain a valid JSON payload."}
+
+                        try:
+                            final_parsed_json = json.loads(json_string_extracted)
+                            provider_logger.debug(
+                                f"{worker_log_prefix}: Successfully parsed final extracted JSON string. Top-level keys: {list(final_parsed_json.keys()) if isinstance(final_parsed_json, dict) else 'Not a dict'}")
+
+                            # Validate structure of the successfully parsed JSON
+                            if isinstance(final_parsed_json, dict) and ((
+                                                                                "created" in final_parsed_json and "data" in final_parsed_json) or "error" in final_parsed_json):
+                                if "error" in final_parsed_json:
+                                    provider_logger.warning(
+                                        f"{worker_log_prefix}: Worker's JSON payload contains an error: {final_parsed_json['error']}")
+                                else:
+                                    provider_logger.info(
+                                        f"{worker_log_prefix}: Extracted JSON appears to be the correct main payload.")
+                                return final_parsed_json  # Return the parsed JSON (could be success or worker-reported error)
+                            else:
+                                provider_logger.error(
+                                    f"{worker_log_prefix}: Extracted JSON is valid but NOT the expected main success payload or a known error structure. Content: {str(final_parsed_json)[:200]}")
+                                return {
+                                    "error": f"Extracted valid JSON from worker, but it's not the expected top-level structure. Got keys: {list(final_parsed_json.keys()) if isinstance(final_parsed_json, dict) else 'Not a dict'}"}
+
+                        except json.JSONDecodeError as json_err_final_attempt:
+                            provider_logger.error(
+                                f"{worker_log_prefix}: CRITICAL: Final attempt to decode extracted JSON string FAILED: {json_err_final_attempt}")
+                            provider_logger.error(
+                                f"{worker_log_prefix}: String that failed final parse: {json_string_extracted[:1000]}...")
+                            provider_logger.debug(
+                                f"{worker_log_prefix}: Original full stdout from worker was:\n{stdout_data_raw}")
+                            return {
+                                "error": f"Failed to decode Imagination worker response (final attempt after extraction): {json_err_final_attempt}"}
+
+                    else:  # Worker exited with a non-zero code (crashed)
+                        crash_message = f"Imagination worker process crashed or failed (exit code {exit_code_from_worker})."
+                        if stdout_data_raw:
+                            provider_logger.error(
+                                f"{worker_log_prefix}: Worker STDOUT on crash:\n-------\n{stdout_data_raw.strip()}\n-------")
+                        if stderr_data_raw and (
+                                "error" in stderr_data_raw.lower() or "traceback" in stderr_data_raw.lower() or "assertion" in stderr_data_raw.lower()):
+                            crash_message += " Check worker stderr for details."
+                        elif not stderr_data_raw and stdout_data_raw:  # If stderr empty but stdout has content with error indicators
+                            if "error" in stdout_data_raw.lower() or "traceback" in stdout_data_raw.lower() or "assertion" in stdout_data_raw.lower():
+                                crash_message += " Check worker stdout for potential error messages."
+                        return {"error": crash_message}
+
+                except Exception as e_outer_manage:  # Catch errors in managing the worker process
+                    provider_logger.error(
+                        f"{worker_log_prefix}: Unexpected error managing worker process: {e_outer_manage}")
+                    provider_logger.exception(f"{worker_log_prefix}: Worker Management Traceback")
+                    if current_worker_process and current_worker_process.poll() is None:
+                        try:
+                            current_worker_process.kill(); current_worker_process.communicate()
+                        except Exception:
+                            pass
+                    return {"error": f"Error managing Imagination worker process: {e_outer_manage}"}
+                finally:
+                    provider_logger.debug(f"{worker_log_prefix}: Releasing worker execution lock.")
+                    self._priority_quota_lock.release()
+            else:  # Lock acquisition failed
+                provider_logger.error(f"{worker_log_prefix}: FAILED to acquire worker lock.")
+                return {"error": "Failed to acquire execution lock for Imagination worker."}
+
+            # This path should not be normally reached if lock acquisition fails, due to the return above.
+            # Added for completeness in case of unexpected flow.
+            return {"error": "Reached unexpected point in blocking_lock_and_execute after lock check."}
+
+        # `start_lock_wait` needs to be defined in this scope for the closure
+        start_lock_wait = time.monotonic()
+
+        worker_response = await asyncio.to_thread(blocking_lock_and_execute)
+        return worker_response
+
     # <<< --- END NEW Worker Execution Method --- >>>
 
     def _load_llama_model(self, required_gguf_path: str, task_type: str) -> Optional[llama_cpp.Llama]:
@@ -779,49 +1128,11 @@ class AIProvider:
 
         try:
             if self.provider_name == "ollama":
-                if not ChatOllama or not OllamaEmbeddings: raise ImportError("Ollama components not loaded")
-                logger.info(f"🔌 Configuring Ollama connection to: {OLLAMA_BASE_URL}")
-                self.EMBEDDINGS_MODEL_NAME = OLLAMA_EMBEDDINGS_MODEL
-                self.embeddings = OllamaEmbeddings(model=self.EMBEDDINGS_MODEL_NAME, base_url=OLLAMA_BASE_URL)
-
-                # Map logical roles to Ollama model names
-                model_name_map = {
-                    "router": OLLAMA_MODEL_ROUTER, "vlm": OLLAMA_MODEL_VLM, "latex": OLLAMA_MODEL_LATEX,
-                    "math": OLLAMA_MODEL_MATH, "code": OLLAMA_MODEL_CODE, "general": OLLAMA_MODEL_DEFAULT_CHAT,
-                    "translator": OLLAMA_MODEL_TRANSLATOR, "general_fast": OLLAMA_MODEL_GENERAL_FAST,
-                    "default": OLLAMA_MODEL_DEFAULT_CHAT # Explicit default mapping
-                }
-                common_params = {"temperature": 1.2} # Default temp
-                if MAX_TOKENS: common_params["max_tokens"] = MAX_TOKENS
-
-                for role, ollama_name in model_name_map.items():
-                    if not ollama_name: logger.warning(f"Ollama model name for role '{role}' not configured."); continue
-                    try:
-                        logger.debug(f"  Loading Ollama model '{ollama_name}' for role '{role}'...")
-                        self.models[role] = ChatOllama(model=ollama_name, base_url=OLLAMA_BASE_URL, **common_params)
-                        logger.info(f"  ✅ Loaded Ollama model '{role}': {ollama_name}")
-                    except Exception as model_load_err:
-                        logger.error(f"  ❌ Failed to load Ollama model '{ollama_name}' for role '{role}': {model_load_err}")
-
+                logger.error(f"OLLAMA IS NO LONGER SUPPORTED!")
+                sys.exit(1)
             elif self.provider_name == "fireworks":
-                if not ChatFireworks or not FireworksEmbeddings: raise ImportError("Fireworks components not loaded")
-                self.EMBEDDINGS_MODEL_NAME = FIREWORKS_EMBEDDINGS_MODEL
-                self.embeddings = FireworksEmbeddings(model=self.EMBEDDINGS_MODEL_NAME, fireworks_api_key=FIREWORKS_API_KEY)
-
-                fireworks_common_params = {"temperature": 1.2} # Default temp
-                if MAX_TOKENS: fireworks_common_params["max_tokens"] = MAX_TOKENS
-
-                # Map logical roles to Fireworks model names (add mappings as needed)
-                if FIREWORKS_CHAT:
-                     logger.debug(f"  Loading Fireworks model '{FIREWORKS_CHAT}' for roles default/router/general...")
-                     fw_chat_model = ChatFireworks(model=FIREWORKS_CHAT, fireworks_api_key=FIREWORKS_API_KEY, **fireworks_common_params)
-                     self.models["default"] = fw_chat_model
-                     self.models["router"] = fw_chat_model
-                     self.models["general"] = fw_chat_model
-                if FIREWORKS_VISUAL_CHAT:
-                     logger.debug(f"  Loading Fireworks VLM model '{FIREWORKS_VISUAL_CHAT}' for role vlm...")
-                     self.models["vlm"] = ChatFireworks(model=FIREWORKS_VISUAL_CHAT, fireworks_api_key=FIREWORKS_API_KEY, **fireworks_common_params)
-                # Add other roles (latex, math, code, etc.) if specific Fireworks models are defined in config
+                logger.error(f"EXTERNAL ENGINE FIREWORK IS NO LONGER SUPPORTED!")
+                sys.exit(1)
 
             elif self.provider_name == "llama_cpp":
                 if not LLAMA_CPP_AVAILABLE: raise ImportError("llama-cpp-python is not installed or failed to import.")
@@ -905,23 +1216,138 @@ class AIProvider:
         """Returns the configured embeddings instance."""
         return self.embeddings
 
-    def _setup_image_generator(self):
-        """Placeholder for initializing Stable Diffusion."""
-        if self.provider_name == "llama_cpp" and STABLE_DIFFUSION_AVAILABLE and STABLE_DIFFUSION_CPP_MODEL_PATH:
-             logger.info(f"Placeholder: Would initialize Stable Diffusion from: {STABLE_DIFFUSION_CPP_MODEL_PATH}")
-             # Add loading logic here when stable-diffusion-cpp bindings are integrated
-             # self.image_generator = StableDiffusionCpp(...)
-             self.image_generator = None # Keep as None for now
-             logger.warning("Stable Diffusion integration is currently a placeholder.")
+    def _setup_image_generator_config(self):  # Renamed from _setup_image_generator
+        """Validates configuration for the imagination worker."""
+        global STABLE_DIFFUSION_WORKER_CONFIGURED  # Use global status
+        if STABLE_DIFFUSION_WORKER_CONFIGURED:
+            logger.info("✅ Image Generation Worker appears configured (script/models validated).")
         else:
-             logger.debug("Stable Diffusion not configured or dependencies missing.")
-             self.image_generator = None
+            logger.warning(
+                "⚠️ Image Generation Worker is NOT configured or validation failed. Image generation unavailable.")
+        # No actual instance loading here, worker script handles it.
+
+    async def generate_image_async(
+            self,
+            prompt: str,
+            image_base64: Optional[str] = None,
+            priority: int = ELP0
+    ) -> Tuple[Optional[List[Dict[str, Optional[str]]]], Optional[str]]:
+        """
+        Public method to generate an image using the imagination worker.
+        Returns a list of image data dicts (each dict like {"b64_json": ..., "b64_avif": ...})
+        or an error message in the second part of the tuple.
+        """
+        provider_logger = getattr(self, 'logger', logger)
+        if not STABLE_DIFFUSION_WORKER_CONFIGURED:
+            msg = "Image generation is not available because the worker is not configured."
+            provider_logger.error(msg)
+            return [], msg  # Return empty list for images and the error message
+
+        provider_logger.info(
+            f"🖼️ Requesting image generation (ELP{priority}). Prompt: '{prompt[:50]}...' ImageInput: {'Yes' if image_base64 else 'No'}")
+        start_time = time.monotonic()  # Start time for the entire async operation
+
+        try:
+            worker_response = await self._execute_imagination_worker(prompt, image_base64, priority)
+
+            duration = time.monotonic() - start_time  # Total duration
+            provider_logger.debug(
+                f"Imagination worker execution (via _execute_imagination_worker) completed in {duration:.2f}s")
+
+            if not worker_response:
+                provider_logger.error(
+                    "Imagination worker (via _execute_imagination_worker) returned None (unexpected).")
+                return [], "Imagination worker execution failed to return a response."
+
+            # Detailed logging of what _execute_imagination_worker returned
+            provider_logger.critical(
+                f"generate_image_async: ENTERING CHECKS. worker_response type: {type(worker_response)}")
+            if isinstance(worker_response, dict):
+                provider_logger.critical(
+                    f"generate_image_async: worker_response IS a dict. Top-level keys: {list(worker_response.keys())}")
+                if "created" in worker_response:
+                    provider_logger.critical(f"  Key 'created' FOUND. Value: {worker_response.get('created')}")
+                else:
+                    provider_logger.critical(f"  Key 'created' NOT FOUND.")
+                if "data" in worker_response:
+                    provider_logger.critical(f"  Key 'data' FOUND. Type of value: {type(worker_response.get('data'))}")
+                    if isinstance(worker_response.get("data"), list):
+                        provider_logger.critical(
+                            f"  Value for 'data' IS a list. Length: {len(worker_response.get('data'))}")
+                        if len(worker_response.get("data", [])) > 0:
+                            first_item = worker_response["data"][0]
+                            provider_logger.critical(f"    First item in 'data' list type: {type(first_item)}")
+                            if isinstance(first_item, dict):
+                                provider_logger.critical(f"    First item keys: {list(first_item.keys())}")
+                                provider_logger.critical(
+                                    f"    First item content (b64_json preview): {str(first_item.get('b64_json'))[:50]}...")
+                            else:
+                                provider_logger.critical(
+                                    f"    First item in 'data' list is not a dict: {str(first_item)[:100]}")
+                        else:
+                            provider_logger.critical(f"  'data' list is EMPTY.")
+                    else:
+                        provider_logger.critical(f"  Value for 'data' IS NOT a list.")
+                else:
+                    provider_logger.critical(f"  Key 'data' NOT FOUND in worker_response.")
+                provider_logger.critical(
+                    f"generate_image_async: Full worker_response (str, first 500 chars): {str(worker_response)[:500]}")
+            else:
+                provider_logger.critical(
+                    f"generate_image_async: worker_response is NOT a dict. Content: {str(worker_response)[:500]}")
+
+            # Check if the worker_response itself is an error dictionary from _execute_imagination_worker
+            if isinstance(worker_response, dict) and "error" in worker_response:
+                error_msg = worker_response["error"]
+                if interruption_error_marker in error_msg:  # Check for our specific interruption marker
+                    provider_logger.warning(
+                        f"🚦 Image generation task (ELP{priority}) INTERRUPTED as reported by worker execution: {error_msg}")
+                    raise TaskInterruptedException(error_msg)  # Propagate as specific exception
+                provider_logger.error(f"Imagination worker execution reported error at top level: {error_msg}")
+                return [], f"Image generation failed: {error_msg}"  # Return empty list and error message
+
+            # Now, process the expected success structure: {"created": ..., "data": [image_item_dict, ...]}
+            if isinstance(worker_response, dict) and "data" in worker_response and isinstance(
+                    worker_response.get("data"), list):
+                image_data_dicts_from_data_key = []  # To store valid image items
+                for item_from_worker_data in worker_response["data"]:  # item_from_worker_data should be a dict
+                    if isinstance(item_from_worker_data,
+                                  dict) and "b64_json" in item_from_worker_data:  # Check for essential PNG data
+                        image_data_dicts_from_data_key.append(item_from_worker_data)  # Add the whole dict
+
+                # Check if we actually extracted any valid image data dicts
+                if image_data_dicts_from_data_key:
+                    provider_logger.success(
+                        f"✅ Successfully extracted {len(image_data_dicts_from_data_key)} image data dict(s) from worker_response['data'].")
+                    return image_data_dicts_from_data_key, None  # Success: return list of dicts, no error
+                else:
+                    provider_logger.warning(
+                        "Imagination worker's 'data' list was empty or contained no valid image items (with b64_json).")
+                    return [], "Image generation worker's 'data' list was empty or invalid."
+            else:
+                # This means worker_response was not an error dict, but also not the expected success structure
+                provider_logger.error(
+                    f"Imagination worker returned unexpected JSON structure (missing 'data' list or not a dict): {str(worker_response)[:200]}...")
+                return [], "Image generation worker returned an invalid response structure."
+
+        except TaskInterruptedException as tie:
+            provider_logger.warning(f"🚦 Image generation task (ELP{priority}) was interrupted: {tie}")
+            return [], str(tie)  # Return empty list and the interruption message
+        except Exception as e:  # Catch any other unexpected errors within generate_image_async
+            provider_logger.error(f"Unhandled exception during image generation: {e}")
+            provider_logger.exception("Image Generation Traceback:")  # Log full traceback
+            return [], f"An unexpected error occurred during image generation: {e}"
+    # --- END NEW public method ---
 
     def get_image_generator(self) -> Optional[Any]:
-        """Returns the image generator instance (Placeholder)."""
-        if self.image_generator is None:
-            logger.warning("Image generator requested but not available/initialized.")
-        return self.image_generator
+        """Returns an indicator if image generation is configured, not an instance."""
+        if STABLE_DIFFUSION_WORKER_CONFIGURED:
+            # Could return self or a simple status object/boolean
+            # For now, let's just log and return a truthy value if app.py expects something.
+            logger.debug("Image generator (worker) is configured.")
+            return True # Indicate available
+        logger.warning("Image generator (worker) is not configured.")
+        return None
 
     def unload_llama_model_if_needed(self):
         """Explicitly unload the currently loaded llama.cpp model (if any), acquiring the lock."""

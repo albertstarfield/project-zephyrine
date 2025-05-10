@@ -62,7 +62,8 @@ _engine_main_dir = os.path.dirname(os.path.abspath(__file__)) # Assumes config.p
 LLAMA_CPP_GGUF_DIR = os.path.join(_engine_main_dir, "staticmodelpool")
 LLAMA_CPP_N_GPU_LAYERS = int(os.getenv("LLAMA_CPP_N_GPU_LAYERS", -1)) # Default: Offload all possible layers
 LLAMA_CPP_N_CTX = int(os.getenv("LLAMA_CPP_N_CTX", 4096)) # Context window size
-LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "True").lower() == "true"
+LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "False").lower() == "true"
+LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 
 # --- Mapping logical roles to GGUF filenames within LLAMA_CPP_GGUF_DIR ---
 LLAMA_CPP_MODEL_MAP = {
@@ -81,6 +82,36 @@ LLAMA_CPP_MODEL_MAP = {
 MODEL_DEFAULT_CHAT_LLAMA_CPP = "general" # Use the logical name
 
 # --- Placeholder for Stable Diffusion ---
+# --- NEW: Imagination Worker (Stable Diffusion FLUX) Settings ---
+IMAGE_WORKER_SCRIPT_NAME = "imagination_worker.py" # Name of the worker script
+
+# --- Get base directory for model files ---
+# Assumes models are in a subdir of the main engine dir (where config.py is)
+# Adjust if your models are elsewhere
+_engine_main_dir = os.path.dirname(os.path.abspath(__file__))
+IMAGE_GEN_MODEL_DIR = os.getenv("IMAGE_GEN_MODEL_DIR", os.path.join(_engine_main_dir, "staticmodelpool"))
+logger.info(f"🖼️ Imagination Model Directory: {IMAGE_GEN_MODEL_DIR}")
+
+# --- Model Filenames (within IMAGE_GEN_MODEL_DIR) ---
+IMAGE_GEN_DIFFUSION_MODEL_NAME = os.getenv("IMAGE_GEN_DIFFUSION_MODEL_NAME", "flux1-schnell.gguf")
+IMAGE_GEN_CLIP_L_NAME = os.getenv("IMAGE_GEN_CLIP_L_NAME", "flux1-clip_l.gguf")
+IMAGE_GEN_T5XXL_NAME = os.getenv("IMAGE_GEN_T5XXL_NAME", "flux1-t5xxl.gguf")
+IMAGE_GEN_VAE_NAME = os.getenv("IMAGE_GEN_VAE_NAME", "flux1-ae.gguf")
+IMAGE_GEN_WORKER_TIMEOUT = int(os.getenv("IMAGE_GEN_WORKER_TIMEOUT", 500))
+
+# --- stable-diffusion-cpp Library Parameters ---
+IMAGE_GEN_DEVICE = os.getenv("IMAGE_GEN_DEVICE", "default") # e.g., 'cpu', 'cuda:0', 'mps', 'default'
+IMAGE_GEN_RNG_TYPE = os.getenv("IMAGE_GEN_RNG_TYPE", "std_default") # "std_default" or "cuda"
+IMAGE_GEN_N_THREADS = int(os.getenv("IMAGE_GEN_N_THREADS", 0)) # 0 for auto, positive for specific count
+
+# --- Image Generation Defaults (passed to worker via JSON stdin) ---
+IMAGE_GEN_DEFAULT_NEGATIVE_PROMPT = os.getenv("IMAGE_GEN_DEFAULT_NEGATIVE_PROMPT", "Bad Morphed Graphic or Body, ugly, deformed, disfigured, extra limbs, blurry, low resolution")
+IMAGE_GEN_DEFAULT_SIZE = os.getenv("IMAGE_GEN_DEFAULT_SIZE", "768x448") # WidthxHeight for FLUX
+IMAGE_GEN_DEFAULT_SAMPLE_STEPS = int(os.getenv("IMAGE_GEN_DEFAULT_SAMPLE_STEPS", 4)) # FLUX Schnell needs fewer steps
+IMAGE_GEN_DEFAULT_CFG_SCALE = float(os.getenv("IMAGE_GEN_DEFAULT_CFG_SCALE", 1.0)) # FLUX uses lower CFG
+IMAGE_GEN_DEFAULT_SAMPLE_METHOD = os.getenv("IMAGE_GEN_DEFAULT_SAMPLE_METHOD", "euler") # 'euler' is good for FLUX
+IMAGE_GEN_DEFAULT_SEED = int(os.getenv("IMAGE_GEN_DEFAULT_SEED", -1)) # -1 for random
+IMAGE_GEN_RESPONSE_FORMAT = "b64_json" # Worker supports this
 STABLE_DIFFUSION_CPP_MODEL_PATH = os.getenv("STABLE_DIFFUSION_CPP_MODEL_PATH", None)
 # --- END NEW ---
 
@@ -150,6 +181,89 @@ History RAG: {history_rag}
 File Index RAG: {file_index_context}
 Log Context: {log_context}
 Emotion Analysis: {emotion_analysis}
+"""
+
+PROMPT_TREE_OF_THOUGHTS_V2 = f"""Okay, engaging warp core... I mean, initiating deep thought analysis as Adelaide Zephyrine Charlotte. Let's map this out.
+Given the query and context (including any recent imagined visuals), perform a Tree of Thoughts analysis:
+1.  **Decomposition:** Break down the query. Key components? Ambiguities?
+2.  **Brainstorming:** Generate potential approaches, interpretations, solutions. What are the main paths?
+3.  **Evaluation:** Assess the main paths. Which seem solid? Any dead ends? Why?
+4.  **Synthesis:** Combine the best insights. Explain the approach, results, and any caveats.
+
+User Query: {{input}}
+Context from documents/URLs:
+{{context}}
+Conversation History Snippets (RAG):
+{{history_rag}}
+File Index Snippets (RAG):
+{{file_index_context}}
+Recent Log Snippets (for context/debugging):
+{{log_context}}
+Recent Direct Conversation History:
+{{recent_direct_history}}
+Context from Recent Imagination (if any):
+{{imagined_image_context}}
+==================
+Begin Analysis:
+"""
+
+PROMPT_REFINE_USER_IMAGE_REQUEST = f"""
+You are an AI assistant that refines a user's simple image request into a more detailed and evocative prompt suitable for an advanced AI image generator.
+Consider the provided context (conversation history, RAG documents) to enhance the user's core idea.
+Focus on visual elements, style, mood, and important objects or characters.
+The output should be ONLY the refined image generation prompt itself. Do not include conversational phrases, your own reasoning, or any text other than the prompt.
+AVOID including <think>...</think> tags in your final output.
+
+--- Context for Your Reference ---
+User's Original Image Request:
+{{original_user_input}}
+
+Conversation History Snippets (RAG):
+{{history_rag}}
+
+Direct Recent Conversation History:
+{{recent_direct_history}}
+--- End Context ---
+
+===========================================
+Refined Image Generation Prompt (Output only this):
+"""
+
+PROMPT_VLM_DESCRIBE_GENERATED_IMAGE = """Please provide a concise and objective description of the key visual elements, style, mood, and any discernible objects or characters in the provided image. This description will be used to inform further conversation or reasoning based on this AI-generated visual.
+:"""
+
+PROMPT_CREATE_IMAGE_PROMPT = f"""
+You are an AI assistant tasked with creating a concise and evocative prompt for an AI image generator.
+Based on the full conversation context provided below, synthesize an image generation prompt that captures the essence of the current request or thought process.
+Focus on key visual elements, desired style (e.g., photorealistic, cartoon, abstract, watercolor), mood, and important objects or characters.
+The output should be ONLY the image generation prompt itself. Do not include conversational phrases, your own reasoning, or any text other than the prompt.
+AVOID including <think>...</think> tags in your final output.
+
+--- Full Context for Your Reference ---
+Original User Query:
+{{original_user_input}}
+
+Current Thought Context / Idea to Visualize (This is often the most direct instruction for what to imagine):
+{{current_thought_context}}
+
+Conversation History Snippets (RAG):
+{{history_rag}}
+
+File Index Snippets (RAG):
+{{file_index_context}}
+
+Direct Recent Conversation History:
+{{recent_direct_history}}
+
+Context from Documents/URLs:
+{{url_context}}
+
+Recent Log Snippets (if relevant for understanding issues or specific requests):
+{{log_context}}
+--- End Full Context ---
+
+===========================================
+Image Generation Prompt (Output only this):
 """
 
 PROMPT_CORRECTOR = f"""

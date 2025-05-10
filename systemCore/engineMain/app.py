@@ -352,7 +352,7 @@ def run_self_reflection_loop():
 
     # --- MODIFIED: Wait Times ---
     # How long to wait ONLY if NO work was found in a full active cycle
-    IDLE_WAIT_SECONDS = 0.01 # Minimal wait to prevent pure busy-looping
+    IDLE_WAIT_SECONDS = 5 # Minimal wait to prevent pure busy-looping
     # How long to wait briefly between batches IF work IS being processed
     ACTIVE_CYCLE_PAUSE_SECONDS = 0.0 # No pause between batches when active
     # --- END MODIFICATION ---
@@ -882,6 +882,309 @@ class AIChat:
         self.emotion_analysis_prompt = ChatPromptTemplate.from_template(PROMPT_EMOTION_ANALYSIS)
         self.image_latex_prompt = ChatPromptTemplate.from_template(PROMPT_IMAGE_TO_LATEX)
         logger.debug("AIChat prompt templates setup complete.")
+
+    async def _refine_direct_image_prompt_async(
+            self,
+            db: Session,
+            session_id: str,
+            user_image_request: str,  # The prompt from the /v1/images/generations request
+            history_rag_str: str,
+            recent_direct_history_str: str,
+            priority: int = ELP1  # Default to ELP1 for user-facing requests
+    ) -> Optional[str]:
+        """
+        Uses an LLM to refine a user's direct image request into a more detailed image generation prompt,
+        considering some conversational context. Runs with the specified priority.
+        Strips <think> tags programmatically.
+        """
+        req_id = f"refineimgprompt-{uuid.uuid4()}"
+        log_prefix = f"🖌️ {req_id}|ELP{priority}"  # Include priority in log
+        logger.info(
+            f"{log_prefix} Refining direct image request for session {session_id}: '{user_image_request[:100]}...'")
+
+        # Use a general-purpose model for this creative task
+        refiner_model = self.provider.get_model("general")  # Or "router"
+        if not refiner_model:
+            logger.error(f"{log_prefix} Model for image prompt refinement ('general') not available.")
+            try:
+                add_interaction(db, session_id=session_id, mode="image_gen", input_type="log_error",
+                                user_input="[ImgPromptRefine Failed - Model Unavailable]",
+                                llm_response="Image prompt refinement model not configured.")
+            except Exception as db_err:
+                logger.error(f"Failed log img prompt refine model error: {db_err}")
+            return user_image_request  # Fallback to original request if model unavailable
+
+        prompt_inputs = {
+            "original_user_input": user_image_request,
+            "history_rag": history_rag_str,
+            "recent_direct_history": recent_direct_history_str,
+        }
+
+        chain = (
+                ChatPromptTemplate.from_template(PROMPT_REFINE_USER_IMAGE_REQUEST)  # Use the new prompt
+                | refiner_model
+                | StrOutputParser()
+        )
+        timing_data = {"session_id": session_id, "mode": "image_gen", "execution_time_ms": 0}
+        refined_prompt_raw = None
+
+        try:
+            refined_prompt_raw = await asyncio.to_thread(
+                self._call_llm_with_timing, chain, prompt_inputs, timing_data, priority=priority
+            )
+            logger.trace(
+                f"{log_prefix}: LLM Raw Output for Image Prompt:\n```\n{refined_prompt_raw}\n```")  # Log full raw output
+
+            if not refined_prompt_raw:
+                logger.warning(f"{log_prefix}: LLM returned empty image prompt string.")
+                return user_image_request
+
+            # Step 1: Remove <think> tags
+            prompt_after_think_removal = re.sub(r'<think>.*?</think>', '', refined_prompt_raw,
+                                                flags=re.DOTALL | re.IGNORECASE)
+            logger.trace(f"{log_prefix}: After <think> removal:\n```\n{prompt_after_think_removal}\n```")
+
+            # Step 2: Remove preambles
+            cleaned_prompt_intermediate = prompt_after_think_removal
+            preambles = [
+                r"^(image generation prompt:|here is the prompt:|sure, here's an image prompt:|okay, based on the context, here's an image prompt:|refined image prompt:)\s*",
+                r"^(Okay, I've generated an image prompt based on.*)\n*"
+            ]
+            for i, preamble_pattern in enumerate(preambles):
+                before_preamble_strip = cleaned_prompt_intermediate
+                cleaned_prompt_intermediate = re.sub(preamble_pattern, "", cleaned_prompt_intermediate,
+                                                     flags=re.IGNORECASE | re.MULTILINE).strip()
+                if before_preamble_strip != cleaned_prompt_intermediate:
+                    logger.trace(
+                        f"{log_prefix}: After preamble strip {i + 1} ('{preamble_pattern}'):\n```\n{cleaned_prompt_intermediate}\n```")
+
+            # Step 3: Remove "Image Generation Prompt:" line
+            before_header_strip = cleaned_prompt_intermediate
+            cleaned_prompt_intermediate = re.sub(r"^\s*Image Generation Prompt:\s*\n?", "", cleaned_prompt_intermediate,
+                                                 flags=re.MULTILINE | re.IGNORECASE).strip()
+            if before_header_strip != cleaned_prompt_intermediate:
+                logger.trace(
+                    f"{log_prefix}: After 'Image Generation Prompt:' header strip:\n```\n{cleaned_prompt_intermediate}\n```")
+
+            # Step 4: Trim whitespace (already done by .strip() in preamble loop, but good for final)
+            cleaned_prompt_intermediate = cleaned_prompt_intermediate.strip()
+            # logger.trace(f"{log_prefix}: After final strip:\n```\n{cleaned_prompt_intermediate}\n```")
+
+            # Step 5: Remove surrounding quotes
+            before_quote_strip = cleaned_prompt_intermediate
+            cleaned_prompt_intermediate = re.sub(r'^["\'](.*?)["\']$', r'\1', cleaned_prompt_intermediate)
+            if before_quote_strip != cleaned_prompt_intermediate:
+                logger.trace(f"{log_prefix}: After surrounding quote strip:\n```\n{cleaned_prompt_intermediate}\n```")
+
+            # Step 6: Remove "Output only this:"
+            before_output_only_strip = cleaned_prompt_intermediate
+            cleaned_prompt = re.sub(r"\(Output only this\):?", "", cleaned_prompt_intermediate,
+                                    flags=re.IGNORECASE).strip()
+            if before_output_only_strip != cleaned_prompt:
+                logger.trace(f"{log_prefix}: After '(Output only this):' strip:\n```\n{cleaned_prompt}\n```")
+
+            if not cleaned_prompt:
+                logger.warning(f"{log_prefix} LLM generated an empty image prompt after all cleaning steps.")
+                # Log the raw and intermediate steps if this happens
+                logger.debug(
+                    f"{log_prefix} DEBUG: Raw='{refined_prompt_raw}', AfterThink='{prompt_after_think_removal}'")
+                return user_image_request
+
+            logger.info(f"{log_prefix} Final Refined Image Prompt: '{cleaned_prompt}'")
+
+        except TaskInterruptedException as tie:
+            logger.warning(f"🚦 {log_prefix} Image prompt refinement INTERRUPTED: {tie}")
+            raise tie  # Propagate for the endpoint to handle
+        except Exception as e:
+            logger.error(f"❌ {log_prefix} Error refining direct image prompt: {e}")
+            logger.exception(f"{log_prefix} ImgPromptRefine Traceback:")
+            try:
+                add_interaction(db, session_id=session_id, mode="image_gen", input_type="log_error",
+                                user_input="[ImgPromptRefine Failed]",
+                                llm_response=f"Error: {e}. Raw: {str(refined_prompt_raw)[:200]}")
+            except Exception:
+                pass
+            return user_image_request  # Fallback to original on error
+
+    async def _generate_image_generation_prompt_async(
+        self,
+        db: Session,
+        session_id: str,
+        original_user_input: str,
+        current_thought_context: str, # Specific idea/ToT output to visualize
+        history_rag_str: str,
+        file_index_context_str: str,
+        recent_direct_history_str: str,
+        url_context_str: str,
+        log_context_str: str
+    ) -> Optional[str]:
+        """
+        Uses an LLM (e.g., 'general' or 'router') to generate a concise, creative
+        image generation prompt based on comprehensive context. Strips <think> tags.
+        Called with ELP0 priority.
+        """
+        req_id = f"imgpromptgen-{uuid.uuid4()}"
+        log_prefix = f"🎨 {req_id}|ELP0"
+        logger.info(f"{log_prefix} Generating image prompt for session {session_id} with rich context.")
+
+        prompt_gen_model = self.provider.get_model("general") # Or "router"
+        if not prompt_gen_model:
+            logger.error(f"{log_prefix} Model for image prompt generation ('general') not available.")
+            try:
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input="[ImgPromptGen Failed - Model Unavailable]",
+                                llm_response="Image prompt generation model not configured.")
+            except Exception as db_err: logger.error(f"Failed log img prompt gen model error: {db_err}")
+            return None
+
+        # Prepare the input dictionary for the prompt template
+        prompt_inputs = {
+            "original_user_input": original_user_input,
+            "current_thought_context": current_thought_context,
+            "history_rag": history_rag_str,
+            "file_index_context": file_index_context_str,
+            "recent_direct_history": recent_direct_history_str,
+            "url_context": url_context_str,
+            "log_context": log_context_str
+        }
+
+        chain = (
+            ChatPromptTemplate.from_template(PROMPT_CREATE_IMAGE_PROMPT) # Uses the updated prompt from config
+            | prompt_gen_model
+            | StrOutputParser()
+        )
+        timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
+        generated_prompt_raw = None
+
+        try:
+            # Call LLM with ELP0 priority
+            generated_prompt_raw = await asyncio.to_thread(
+                self._call_llm_with_timing, chain, prompt_inputs, timing_data, priority=ELP0
+            )
+
+            if not generated_prompt_raw:
+                logger.warning(f"{log_prefix} LLM returned empty image generation prompt string.")
+                return None
+
+            # --- Programmatic <think> tag removal and cleaning ---
+            # 1. Remove <think> tags (case-insensitive, multiline)
+            cleaned_prompt = re.sub(r'<think>.*?</think>', '', generated_prompt_raw, flags=re.DOTALL | re.IGNORECASE)
+            # 2. Remove common LLM preamble/postamble
+            preambles = [
+                r"^(image generation prompt:|here is the prompt:|sure, here's an image prompt:|okay, based on the context, here's an image prompt:)\s*",
+                r"^(Okay, I've generated an image prompt based on.*)\n*"
+            ]
+            for preamble_pattern in preambles:
+                cleaned_prompt = re.sub(preamble_pattern, "", cleaned_prompt, flags=re.IGNORECASE | re.MULTILINE).strip()
+            # 3. Remove any "Image Generation Prompt:" line if it somehow survived or was re-added by the model
+            cleaned_prompt = re.sub(r"^\s*Image Generation Prompt:\s*\n?", "", cleaned_prompt, flags=re.MULTILINE | re.IGNORECASE).strip()
+            # 4. Trim whitespace
+            cleaned_prompt = cleaned_prompt.strip()
+            # 5. Remove surrounding quotes if the model added them
+            cleaned_prompt = re.sub(r'^["\'](.*?)["\']$', r'\1', cleaned_prompt)
+            # 6. Remove any remaining "Output only this:" type instructions if they leak
+            cleaned_prompt = re.sub(r"\(Output only this\):?", "", cleaned_prompt, flags=re.IGNORECASE).strip()
+
+
+            if not cleaned_prompt:
+                logger.warning(f"{log_prefix} LLM generated an empty image prompt after cleaning.")
+                try: add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input="[ImgPromptGen Empty]", llm_response=f"Raw: {generated_prompt_raw[:200]}")
+                except Exception: pass
+                return None
+
+            logger.info(f"{log_prefix} Generated image prompt: '{cleaned_prompt}' (Raw len: {len(generated_prompt_raw)}, Cleaned len: {len(cleaned_prompt)})")
+            try: add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug", user_input="[ImgPromptGen Success]", llm_response=f"Prompt: '{cleaned_prompt}'. Raw: {generated_prompt_raw[:200]}")
+            except Exception: pass
+            return cleaned_prompt
+
+        except TaskInterruptedException as tie:
+            logger.warning(f"🚦 {log_prefix} Image prompt generation INTERRUPTED: {tie}")
+            raise tie
+        except Exception as e:
+            logger.error(f"❌ {log_prefix} Error generating image prompt: {e}")
+            logger.exception(f"{log_prefix} ImgPromptGen Traceback:")
+            try: add_interaction(db, session_id=session_id, mode="chat", input_type="log_error", user_input="[ImgPromptGen Failed]", llm_response=f"Error: {e}. Raw: {str(generated_prompt_raw)[:200]}")
+            except Exception: pass
+            return None
+
+    # --- NEW HELPER: Describe Image with VLM (ELP0) ---
+        # app.py -> AIChat class
+
+    async def _describe_generated_image_async(self, db: Session, session_id: str, image_b64: str) -> Optional[str]:
+        """
+        Sends a base64 image (assumed PNG or similar VLM-compatible) to the VLM
+        to get a textual description. Called with ELP0 priority.
+        Uses PROMPT_VLM_DESCRIBE_GENERATED_IMAGE.
+        """
+        req_id = f"imgdesc-{uuid.uuid4()}"
+        log_prefix = f"🖼️ {req_id}|ELP0"
+        logger.info(f"{log_prefix} Requesting VLM description for generated image (session {session_id}).")
+
+        vlm_model = self.provider.get_model("vlm")
+        if not vlm_model:
+            logger.error(f"{log_prefix} VLM model not available for image description.")
+            try:
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input="[ImgDesc Failed - VLM Unavailable]",
+                                llm_response="VLM model for description not configured.")
+            except Exception as db_log_err:
+                logger.error(f"Failed to log VLM unavailable error: {db_log_err}")
+            return None
+
+        try:
+            image_uri = f"data:image/png;base64,{image_b64}" # Assumes PNG from imagination_worker
+            image_content_part = {"type": "image_url", "image_url": {"url": image_uri}}
+
+            # Use the correctly named prompt from config.py
+            messages = [HumanMessage(content=[image_content_part, {"type": "text", "text": PROMPT_VLM_DESCRIBE_GENERATED_IMAGE}])]
+            chain = vlm_model | StrOutputParser()
+            timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
+
+            description = await asyncio.to_thread(
+                self._call_llm_with_timing, chain, messages, timing_data, priority=ELP0
+            )
+
+            if not description:
+                logger.warning(f"{log_prefix} VLM returned empty description for generated image.")
+                try:
+                    add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                    user_input="[ImgDesc VLM Empty Response]",
+                                    llm_response="VLM returned an empty description for the generated image.")
+                except Exception as db_log_err:
+                    logger.error(f"Failed to log VLM empty response: {db_log_err}")
+                return None
+
+            cleaned_description = description.strip()
+            logger.info(f"{log_prefix} VLM description received (first 100 chars): '{cleaned_description[:100]}...'")
+
+            try:
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug",
+                                user_input="[ImgDesc Success]",
+                                llm_response=f"VLM Desc (generated img): {cleaned_description[:200]}")
+            except Exception as db_log_err:
+                 logger.error(f"Failed to log ImgDesc success: {db_log_err}")
+
+            return cleaned_description
+
+        except TaskInterruptedException as tie:
+            logger.warning(f"🚦 {log_prefix} VLM image description INTERRUPTED: {tie}")
+            try:
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                user_input="[ImgDesc Interrupted]",
+                                llm_response=f"VLM image description task was interrupted: {tie}")
+            except Exception as db_log_err:
+                logger.error(f"Failed to log ImgDesc interruption: {db_log_err}")
+            raise tie
+        except Exception as e:
+            logger.error(f"❌ {log_prefix} Error getting VLM description for generated image: {e}")
+            logger.exception(f"{log_prefix} ImgDesc Traceback:")
+            try:
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input="[ImgDesc Failed - VLM Error]",
+                                llm_response=f"Error during VLM description of generated image: {e}")
+            except Exception as db_log_err:
+                logger.error(f"Failed to log VLM error: {db_log_err}")
+            return None
 
     async def _generate_file_search_query_async(self, db: Session, user_input_for_analysis: str, recent_direct_history_str: str, session_id: str) -> str:
         """
@@ -4082,162 +4385,178 @@ class AIChat:
 
     # --- generate (Main Async Method - V15 version) ---
     async def background_generate(self, db: Session, user_input: str, session_id: str = None,
-                                 classification: str = "chat_simple", image_b64: Optional[str] = None,
-                                 update_interaction_id: Optional[int] = None):
-        """
-        Handles text/image-based generation in background (ELP0), including RAG, Actions,
-        ToT, Routing, Translation, Correction, Logging, and ToT spawning.
-        Gracefully handles TaskInterruptedException raised by ELP0 sub-tasks. V21.1.
-        """
-        # --- Initialization ---
+                                  classification: str = "chat_simple", image_b64: Optional[str] = None,
+                                  update_interaction_id: Optional[int] = None):
+        # --- Initialization (largely as before) ---
         request_id = f"gen-{uuid.uuid4()}"
         is_reflection_task = update_interaction_id is not None
         log_prefix = f"🔄 REFLECT {request_id}" if is_reflection_task else f"💬 BGEN {request_id}"
-        if not session_id: session_id = f"session_{int(time.time())}" if not is_reflection_task else f"reflection_for_{update_interaction_id}"
+        if not session_id:
+            session_id = f"session_{int(time.time())}" if not is_reflection_task else f"reflection_for_{update_interaction_id}"
         self.current_session_id = session_id
 
-        logger.info(f"{log_prefix} Async Chat generate START --> Session: {session_id}, Initial Class: '{classification}', Input: '{user_input[:50]}...', Img: {'Y' if image_b64 else 'N'}, Priority: ELP0")
+        logger.info(
+            f"{log_prefix} Async Chat generate START --> Session: {session_id}, Initial Class: '{classification}', Input: '{user_input[:50]}...', Img: {'Y' if image_b64 else 'N'}, Priority: ELP0")
         request_start_time = time.monotonic()
 
-        # Interaction data dictionary, populated throughout the process
         interaction_data = {
             "session_id": session_id, "mode": "chat", "input_type": "text",
-            "user_input": user_input, "llm_response": "[Processing...]", # Placeholder until final response
+            "user_input": user_input, "llm_response": "[Processing...]",
             "execution_time_ms": 0,
             "classification": classification, "classification_reason": None,
             "rag_history_ids": None, "rag_source_url": None,
             "requires_deep_thought": False, "deep_thought_reason": None,
             "tot_analysis_requested": False, "tot_result": None, "tot_delivered": False,
             "emotion_context_analysis": None, "image_description": None,
+            # This might be populated by VLM for user image
             "assistant_action_analysis_json": None, "assistant_action_type": None,
             "assistant_action_params": None, "assistant_action_executed": False,
             "assistant_action_result": None,
-            "image_data": image_b64[:20] + "..." if image_b64 else None # Indicate presence/size
+            "image_data": image_b64[:20] + "..." if image_b64 else None,
+            # --- NEW: Fields for imagined image ---
+            "imagined_image_prompt": None,
+            "imagined_image_b64": None,  # Store first b64 if multiple generated for logging
+            "imagined_image_vlm_description": None,
+            # --- END NEW ---
         }
         if image_b64: interaction_data["input_type"] = "image+text"
 
-        final_response = "Error: Processing failed unexpectedly." # Default final response
-        saved_interaction: Optional[Interaction] = None # For the initial user interaction record
-        interaction_to_update: Optional[Interaction] = None # For reflection tasks
-        interrupted_flag = False # Track if TaskInterruptedException was caught
+        final_response = "Error: Processing failed unexpectedly."
+        saved_interaction: Optional[Interaction] = None
+        interaction_to_update: Optional[Interaction] = None
+        interrupted_flag = False
 
-        # --- Input Validation ---
         if not user_input and not image_b64:
             logger.warning(f"{request_id} Empty input (no text or image).")
             try:
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning", user_input="[Empty Request Received]", llm_response="No text or image provided.")
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                user_input="[Empty Request Received]", llm_response="No text or image provided.")
             except Exception as log_err:
-                 logger.error(f"Failed to log empty request: {log_err}")
-            # This function runs in the background, returning isn't directly useful to user
-            # Log and exit the task.
+                logger.error(f"Failed to log empty request: {log_err}")
             return
 
-        # --- Load existing interaction if updating (Reflection Task) ---
         if is_reflection_task:
             try:
-                interaction_to_update = db.query(Interaction).filter(Interaction.id == update_interaction_id).first()
+                interaction_to_update = db.query(Interaction).filter(
+                    Interaction.id == update_interaction_id).first()
                 if not interaction_to_update:
-                    logger.error(f"{log_prefix}: CRITICAL - Cannot find original interaction {update_interaction_id} to update. Aborting reflection task.")
-                    # Log this failure clearly
+                    logger.error(
+                        f"{log_prefix}: CRITICAL - Cannot find original interaction {update_interaction_id} to update. Aborting reflection task.")
                     try:
-                         add_interaction(db, session_id=session_id, mode="chat", input_type="error",
-                                         user_input=f"[Reflection Aborted - Missing Original ID {update_interaction_id}]",
-                                         llm_response=f"Could not find interaction {update_interaction_id} for reflection update.")
+                        add_interaction(db, session_id=session_id, mode="chat", input_type="error",
+                                        user_input=f"[Reflection Aborted - Missing Original ID {update_interaction_id}]",
+                                        llm_response=f"Could not find interaction {update_interaction_id} for reflection update.")
                     except Exception as log_err:
-                         logger.error(f"Failed to log missing reflection target: {log_err}")
-                    return # Exit the function gracefully
+                        logger.error(f"Failed to log missing reflection target: {log_err}")
+                    return
                 logger.info(f"{log_prefix}: Found original interaction {update_interaction_id} to update.")
             except Exception as load_err:
-                 logger.error(f"{log_prefix}: Error loading interaction {update_interaction_id} for update: {load_err}")
-                 # Attempt to log this load failure
-                 try:
-                      add_interaction(db, session_id=session_id, mode="chat", input_type="error",
-                                      user_input=f"[Reflection Aborted - Error loading Original ID {update_interaction_id}]",
-                                      llm_response=f"DB Error: {load_err}")
-                 except Exception as log_err:
-                      logger.error(f"Failed to log reflection target load error: {log_err}")
-                 return # Exit if loading fails
+                logger.error(
+                    f"{log_prefix}: Error loading interaction {update_interaction_id} for update: {load_err}")
+                try:
+                    add_interaction(db, session_id=session_id, mode="chat", input_type="error",
+                                    user_input=f"[Reflection Aborted - Error loading Original ID {update_interaction_id}]",
+                                    llm_response=f"DB Error: {load_err}")
+                except Exception as log_err:
+                    logger.error(f"Failed to log reflection target load error: {log_err}")
+                return
 
         # --- Main Processing Block (Wrapped for Interruption Handling) ---
         try:
-            # --- 0. VLM Preprocessing (If Image Provided) ---
-            # This assumes VLM preprocessing (like getting image_description)
-            # happened *before* this background task was called, or that if
-            # it's done here, the VLM call uses ELP0 and handles interruption.
+            # --- 0. VLM Preprocessing (If User Provided Image) ---
             current_input_for_analysis = user_input
-            if image_b64:
-                logger.info(f"{log_prefix} Image provided, attempting to use VLM description...")
-                # Fetch description from interaction_data if it was pre-processed
-                # In a real scenario, might need to pass it explicitly or re-fetch from DB
-                vlm_description = interaction_data.get('image_description')
-                if not vlm_description:
-                    # Attempt to get description from DB if this task was triggered by an image interaction
+            if image_b64:  # User-provided image
+                logger.info(f"{log_prefix} User image provided, attempting to get VLM description...")
+                # Use the existing process_image logic. It runs with ELP1 if called directly.
+                # Here, we are in background (ELP0), so we need an ELP0 VLM call.
+                # Let's assume process_image can be adapted or we make a new ELP0 helper.
+                # For now, let's create a simplified ELP0 VLM call for description here.
+                # This is similar to _describe_generated_image_async but for the *user's* image.
+                user_vlm_model = self.provider.get_model("vlm")
+                if user_vlm_model:
                     try:
-                         img_interaction = db.query(Interaction).filter(
-                             Interaction.session_id == session_id,
-                             Interaction.input_type == 'image+text', # Or 'image' if logged separately
-                             Interaction.user_input == user_input # Match on input? Risky. Better to pass ID.
-                         ).order_by(desc(Interaction.timestamp)).first()
-                         if img_interaction and img_interaction.image_description:
-                             vlm_description = img_interaction.image_description
-                             interaction_data['image_description'] = vlm_description # Store it
-                             logger.info(f"{log_prefix} Found image description in previous interaction {img_interaction.id}.")
-                         else:
-                             logger.warning(f"{log_prefix} Image provided but no description found in interaction_data or recent history.")
-                             # Optionally, could call VLM here with ELP0, but adds complexity.
-                    except Exception as db_desc_err:
-                         logger.error(f"{log_prefix} Error fetching image description from DB: {db_desc_err}")
+                        user_image_uri = f"data:image/png;base64,{image_b64}"  # Assume PNG
+                        user_image_content_part = {"type": "image_url", "image_url": {"url": user_image_uri}}
+                        user_vlm_prompt = "Describe this image concisely, focusing on key elements relevant to a conversation."
+                        user_vlm_messages = [HumanMessage(
+                            content=[user_image_content_part, {"type": "text", "text": user_vlm_prompt}])]
+                        user_vlm_chain = user_vlm_model | StrOutputParser()
+                        user_vlm_timing_data = {"session_id": session_id, "mode": "chat"}
 
-                # Update the input used for analysis if description was found
-                if vlm_description:
-                     current_input_for_analysis = f"[Image Description: {vlm_description}]\n\nUser Query: {user_input or '(Query related to image)'}"
-
-                # Handle image-only request case? Unlikely needed for background task.
-                # If needed: if not user_input and vlm_description: final_response = vlm_description; raise StopIteration("Image only") # Use custom signal?
+                        # Call with ELP0 priority
+                        vlm_desc_user_img = await asyncio.to_thread(
+                            self._call_llm_with_timing, user_vlm_chain, user_vlm_messages, user_vlm_timing_data,
+                            priority=ELP0
+                        )
+                        interaction_data['image_description'] = vlm_desc_user_img
+                        current_input_for_analysis = f"[Image Description (User Provided): {vlm_desc_user_img}]\n\nUser Query: {user_input or '(Query related to image)'}"
+                        logger.info(f"{log_prefix} VLM description for user image obtained.")
+                    except TaskInterruptedException:
+                        raise  # Propagate interruption
+                    except Exception as vlm_user_err:
+                        logger.error(f"{log_prefix} Failed to get VLM description for user image: {vlm_user_err}")
+                        interaction_data['image_description'] = f"[VLM Error: {vlm_user_err}]"
+                        # Continue with text-only input if VLM fails
+                else:
+                    logger.warning(f"{log_prefix} VLM model not available for user image description.")
+                    interaction_data['image_description'] = "[VLM Model Unavailable]"
 
             # --- 1. Check for Pending ToT Result ---
             logger.debug(f"{log_prefix} Checking for pending ToT results for session {session_id}...")
             pending_tot_interaction = await asyncio.to_thread(get_pending_tot_result, db, session_id)
             pending_tot_str = "None."
             if pending_tot_interaction and pending_tot_interaction.tot_result:
-                logger.info(f"{log_prefix} Injecting pending ToT result from Interaction ID: {pending_tot_interaction.id}")
+                logger.info(
+                    f"{log_prefix} Injecting pending ToT result from Interaction ID: {pending_tot_interaction.id}")
                 original_input_snippet = (pending_tot_interaction.user_input or "your previous query")[:50] + "..."
-                pending_tot_str = ( f"Okay, regarding your previous query ('{original_input_snippet}'), "
-                                    f"I've finished thinking about it:\n\n{pending_tot_interaction.tot_result}\n\n"
-                                    f"Now, about your current request:" )
+                pending_tot_str = (f"Okay, regarding your previous query ('{original_input_snippet}'), "
+                                   f"I've finished thinking about it:\n\n{pending_tot_interaction.tot_result}\n\n"
+                                   f"Now, about your current request:")
 
             # --- 2. Generate File Search Query (ELP0) ---
-            # Ensure _generate_file_search_query_async uses ELP0 internally
             logger.debug(f"{log_prefix} Generating file search query (ELP0)...")
-            temp_global_history = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-            temp_recent_direct_history_str = self._format_direct_history(temp_global_history)
-            file_search_query = await self._generate_file_search_query_async(db, current_input_for_analysis, temp_recent_direct_history_str, session_id)
-
+            temp_global_history_for_file_query = await asyncio.to_thread(get_global_recent_interactions, db,
+                                                                         limit=5)
+            temp_recent_direct_history_str_for_file_query = self._format_direct_history(
+                temp_global_history_for_file_query)
+            file_search_query = await self._generate_file_search_query_async(db, current_input_for_analysis,
+                                                                             temp_recent_direct_history_str_for_file_query,
+                                                                             session_id)
 
             # --- 3. CONCURRENT FETCHING & CONTEXT PREP (Embedding uses ELP0) ---
             logger.debug(f"{log_prefix} Starting concurrent context fetching (Embedding: ELP0)...")
-            # Ensure _get_rag_retriever uses ELP0 internally for embedding & handles interruption
-            url_retriever, history_retriever, history_ids_used = await asyncio.to_thread( self._get_rag_retriever, db, current_input_for_analysis )
+            url_retriever, history_retriever, history_ids_used = await asyncio.to_thread(self._get_rag_retriever,
+                                                                                         db,
+                                                                                         current_input_for_analysis,
+                                                                                         priority=ELP0)  # <<< Pass ELP0
             interaction_data['rag_history_ids'] = history_ids_used
             if hasattr(self, 'vectorstore_url') and self.vectorstore_url:
                 interaction_data['rag_source_url'] = getattr(self.vectorstore_url, '_source_url', None)
 
-            # Define async helper tasks
             async def retrieve_docs_async():
-                 # RAG retrieval doesn't involve LLM calls, just vector similarity search
-                 retrieve_docs_step = RunnableParallel( url_docs=(url_retriever if url_retriever else RunnableLambda(lambda x: [])), history_docs=(history_retriever if history_retriever else RunnableLambda(lambda x: [])) ); return await asyncio.to_thread(retrieve_docs_step.invoke, current_input_for_analysis)
-            async def get_logs_async(): # DB Query
-                 log_pool = await asyncio.to_thread(get_recent_interactions, db, RAG_HISTORY_COUNT*2, session_id, "chat", include_logs=True); return [i for i in log_pool if i.input_type.startswith('log_') or i.input_type == 'error']
-            async def get_global_history_async(): # DB Query
-                 return await asyncio.to_thread(get_global_recent_interactions, db, limit=10)
-            async def run_emotion_analysis_async(): # LLM Call (Needs ELP0)
-                 # Ensure _run_emotion_analysis uses _call_llm_with_timing(priority=ELP0) internally
-                 await asyncio.to_thread(self._run_emotion_analysis, db, user_input, interaction_data)
-            async def get_file_index_results_async(query_to_use: str): # DB Query
-                if search_file_index and query_to_use: return await asyncio.to_thread(search_file_index, db, query_to_use, limit=5)
-                else: return []
+                retrieve_docs_step = RunnableParallel(
+                    url_docs=(url_retriever if url_retriever else RunnableLambda(lambda x: [])),
+                    history_docs=(history_retriever if history_retriever else RunnableLambda(lambda x: [])));
+                return await asyncio.to_thread(retrieve_docs_step.invoke, current_input_for_analysis)
 
-            # Execute concurrent tasks
+            async def get_logs_async():
+                log_pool = await asyncio.to_thread(get_recent_interactions, db, RAG_HISTORY_COUNT * 2, session_id,
+                                                   "chat", include_logs=True);
+                return [i for i in log_pool if i.input_type.startswith('log_') or i.input_type == 'error']
+
+            async def get_global_history_async():
+                return await asyncio.to_thread(get_global_recent_interactions, db, limit=10)
+
+            async def run_emotion_analysis_async():
+                await asyncio.to_thread(self._run_emotion_analysis, db, user_input,
+                                        interaction_data)  # Uses ELP0 internally
+
+            async def get_file_index_results_async(query_to_use: str):
+                if search_file_index and query_to_use:
+                    return await asyncio.to_thread(search_file_index, db, query_to_use, limit=5)
+                else:
+                    return []
+
             logger.debug(f"{log_prefix} Waiting for parallel fetches & analysis...")
             results = await asyncio.gather(
                 retrieve_docs_async(), get_logs_async(), get_global_history_async(),
@@ -4246,126 +4565,214 @@ class AIChat:
             )
             logger.debug(f"{log_prefix} Parallel fetches & analysis completed.")
 
-            # Process results, checking for exceptions (especially TaskInterruptedException)
-            retrieved_docs = None; log_entries_for_context = []; global_direct_history = []; file_index_results = []
+            retrieved_docs = None;
+            log_entries_for_context = [];
+            global_direct_history = [];
+            file_index_results = []
             for i, res in enumerate(results):
-                 if isinstance(res, TaskInterruptedException):
-                      logger.warning(f"🚦 Interruption caught during concurrent context fetch (Task {i})")
-                      raise res # Re-raise interruption immediately
-                 elif isinstance(res, BaseException):
-                      logger.error(f"{log_prefix} Error in concurrent context task {i}: {res}")
-                      # Assign default empty values for failed tasks
-                      if i == 0: retrieved_docs = {'url_docs': [], 'history_docs': []}
-                      elif i == 1: log_entries_for_context = []
-                      elif i == 2: global_direct_history = []
-                      # Emotion analysis modifies interaction_data directly
-                      elif i == 4: file_index_results = []
-                 else:
-                      # Assign successful results
-                      if i == 0: retrieved_docs = res
-                      elif i == 1: log_entries_for_context = res
-                      elif i == 2: global_direct_history = res
-                      # Emotion analysis modifies interaction_data
-                      elif i == 4: file_index_results = res
+                if isinstance(res, TaskInterruptedException):
+                    logger.warning(f"🚦 Interruption caught during concurrent context fetch (Task {i})")
+                    raise res
+                elif isinstance(res, BaseException):
+                    logger.error(f"{log_prefix} Error in concurrent context task {i}: {res}")
+                    if i == 0:
+                        retrieved_docs = {'url_docs': [], 'history_docs': []}
+                    elif i == 1:
+                        log_entries_for_context = []
+                    elif i == 2:
+                        global_direct_history = []
+                    elif i == 4:
+                        file_index_results = []
+                else:
+                    if i == 0:
+                        retrieved_docs = res
+                    elif i == 1:
+                        log_entries_for_context = res
+                    elif i == 2:
+                        global_direct_history = res
+                    elif i == 4:
+                        file_index_results = res
 
-            # Fallback if retrieval failed badly
             if retrieved_docs is None: retrieved_docs = {'url_docs': [], 'history_docs': []}
             url_docs = retrieved_docs.get("url_docs", [])
             history_docs = retrieved_docs.get("history_docs", [])
-            emotion_analysis_result = interaction_data.get('emotion_context_analysis', "Analysis Unavailable or Failed")
-
+            emotion_analysis_result = interaction_data.get('emotion_context_analysis',
+                                                           "Analysis Unavailable or Failed")
             emotion_log_str = str(emotion_analysis_result)[:50] if emotion_analysis_result is not None else "None"
-            logger.debug(f"{log_prefix} Context Fetched - URL Docs: {len(url_docs)}, Hist Docs: {len(history_docs)}, FileIdx Docs: {len(file_index_results)}, Logs: {len(log_entries_for_context)}, Global Hist: {len(global_direct_history)}, Emotion: '{emotion_log_str}...'")
+            logger.debug(
+                f"{log_prefix} Context Fetched - URL Docs: {len(url_docs)}, Hist Docs: {len(history_docs)}, FileIdx Docs: {len(file_index_results)}, Logs: {len(log_entries_for_context)}, Global Hist: {len(global_direct_history)}, Emotion: '{emotion_log_str}...'")
 
-            # Format Context Strings
-            logger.debug(f"{log_prefix} Formatting context strings...")
             url_context_str = self._format_docs(url_docs, source_type="URL Context")
             history_rag_str = self._format_docs(history_docs, source_type="History RAG")
             log_context_str = self._format_log_history(log_entries_for_context)
             recent_direct_history_str = self._format_direct_history(global_direct_history)
-            history_summary_for_action = self._get_history_summary(db, MEMORY_SIZE) # Sync DB call is ok here
+            history_summary_for_action = self._get_history_summary(db, MEMORY_SIZE)
             file_index_context_str = self._format_file_index_results(file_index_results)
 
             # --- 4. Analyze for Assistant Action (ELP0) ---
-            # Ensure _analyze_assistant_action uses ELP0 internally and handles interruptions
             logger.debug(f"{log_prefix} Analyzing for assistant action (ELP0)...")
-            action_analysis_context = { "history_summary": history_summary_for_action, "log_context": log_context_str, "recent_direct_history": recent_direct_history_str }
-            action_details = await asyncio.to_thread( self._analyze_assistant_action, db, current_input_for_analysis, session_id, action_analysis_context )
-
+            action_analysis_context = {"history_summary": history_summary_for_action,
+                                       "log_context": log_context_str,
+                                       "recent_direct_history": recent_direct_history_str}
+            action_details = await asyncio.to_thread(self._analyze_assistant_action, db, current_input_for_analysis,
+                                                     session_id, action_analysis_context)
             action_type_detected = "no_action"
             if action_details:
-                 action_type_detected = action_details.get("action_type", "no_action")
-                 interaction_data['assistant_action_analysis_json'] = json.dumps(action_details)
-                 interaction_data['assistant_action_type'] = action_type_detected
-                 interaction_data['assistant_action_params'] = json.dumps(action_details.get("parameters", {}))
-                 logger.info(f"{log_prefix} Assistant action analysis result: Type='{action_type_detected}'")
+                action_type_detected = action_details.get("action_type", "no_action")
+                interaction_data['assistant_action_analysis_json'] = json.dumps(action_details)
+                interaction_data['assistant_action_type'] = action_type_detected
+                interaction_data['assistant_action_params'] = json.dumps(action_details.get("parameters", {}))
+                logger.info(f"{log_prefix} Assistant action analysis result: Type='{action_type_detected}'")
             else:
-                 logger.info(f"{log_prefix} Assistant action analysis result: None (implies 'no_action')")
-                 interaction_data['assistant_action_analysis_json'] = None; interaction_data['assistant_action_type'] = None; interaction_data['assistant_action_params'] = None
+                logger.info(f"{log_prefix} Assistant action analysis result: None (implies 'no_action')")
+                interaction_data['assistant_action_analysis_json'] = None;
+                interaction_data['assistant_action_type'] = None;
+                interaction_data['assistant_action_params'] = None
 
             # --- 5. SAVE INITIAL/PLACEHOLDER INTERACTION RECORD ---
-            # Do not save if this is a reflection task (we update existing instead)
             if not is_reflection_task:
                 logger.debug(f"{log_prefix} Saving initial interaction record (placeholder)...")
                 try:
-                    initial_save_data = interaction_data.copy() # Take snapshot
+                    initial_save_data = interaction_data.copy()
                     initial_save_data['llm_response'] = "[Action/Response Pending]"
                     initial_save_data['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
-                    # Ensure all needed defaults are set before saving
-                    initial_save_data.setdefault('classification_reason', None); initial_save_data.setdefault('rag_history_ids', history_ids_used or None);
+                    # Ensure all defaults are set before saving
+                    initial_save_data.setdefault('classification_reason', None);
+                    initial_save_data.setdefault('rag_history_ids', history_ids_used or None);
                     initial_save_data.setdefault('rag_source_url', interaction_data.get('rag_source_url'));
-                    initial_save_data.setdefault('requires_deep_thought', False); initial_save_data.setdefault('deep_thought_reason', None);
-                    initial_save_data.setdefault('tot_analysis_requested', False); initial_save_data.setdefault('tot_result', None);
-                    initial_save_data.setdefault('tot_delivered', False); initial_save_data.setdefault('emotion_context_analysis', emotion_analysis_result or 'N/A');
-                    initial_save_data.setdefault('image_description', interaction_data.get('image_description'));
-                    initial_save_data.setdefault('assistant_action_analysis_json', interaction_data.get('assistant_action_analysis_json'));
-                    initial_save_data.setdefault('assistant_action_type', interaction_data.get('assistant_action_type'));
-                    initial_save_data.setdefault('assistant_action_params', interaction_data.get('assistant_action_params'));
-                    initial_save_data.setdefault('assistant_action_executed', False); initial_save_data.setdefault('assistant_action_result', None);
+                    initial_save_data.setdefault('requires_deep_thought', False);
+                    initial_save_data.setdefault('deep_thought_reason', None);
+                    initial_save_data.setdefault('tot_analysis_requested', False);
+                    initial_save_data.setdefault('tot_result', None);
+                    initial_save_data.setdefault('tot_delivered', False);
+                    initial_save_data.setdefault('emotion_context_analysis', emotion_analysis_result or 'N/A');
+                    initial_save_data.setdefault('image_description',
+                                                 interaction_data.get('image_description'));  # User image desc
+                    initial_save_data.setdefault('assistant_action_analysis_json',
+                                                 interaction_data.get('assistant_action_analysis_json'));
+                    initial_save_data.setdefault('assistant_action_type',
+                                                 interaction_data.get('assistant_action_type'));
+                    initial_save_data.setdefault('assistant_action_params',
+                                                 interaction_data.get('assistant_action_params'));
+                    initial_save_data.setdefault('assistant_action_executed', False);
+                    initial_save_data.setdefault('assistant_action_result', None);
                     initial_save_data.setdefault('image_data', interaction_data.get('image_data'));
+                    # Ensure new imagination fields are None initially
+                    initial_save_data.setdefault('imagined_image_prompt', None)
+                    initial_save_data.setdefault('imagined_image_b64', None)
+                    initial_save_data.setdefault('imagined_image_vlm_description', None)
 
                     valid_keys = {c.name for c in Interaction.__table__.columns}
                     db_kwargs = {k: v for k, v in initial_save_data.items() if k in valid_keys}
-                    # Call add_interaction synchronously using asyncio.to_thread
                     saved_interaction = await asyncio.to_thread(add_interaction, db, **db_kwargs)
                     if saved_interaction:
                         logger.info(f"{log_prefix} Saved initial interaction record ID {saved_interaction.id}")
                     else:
-                         # add_interaction handles its own errors/rollback, but log failure here
-                         logger.error(f"{log_prefix} CRITICAL: add_interaction failed to save initial record!")
-                         # Should we halt processing if initial save fails? Depends on desired behavior.
-                         # For now, we continue but saved_interaction will be None.
+                        logger.error(f"{log_prefix} CRITICAL: add_interaction failed to save initial record!")
                 except Exception as db_err:
                     logger.error(f"❌ {log_prefix} Failed to save initial interaction record: {db_err}")
                     logger.exception("Initial Save Traceback:")
-                    saved_interaction = None # Ensure it's None if save failed
+                    saved_interaction = None
 
-            # --- 6. Execute Action (ELP0 internally) OR Generate LLM Response (ELP0 pipeline) ---
-            if action_details and action_type_detected != "no_action":
-                # --- Execute Assistant Action ---
+            # --- 6. Execute Action (ELP0) OR Generate LLM Response (ELP0 pipeline) ---
+            # --- MODIFIED: Integration of "imagination" decision ---
+            imagined_image_description_for_context = None
+
+            if action_details and action_type_detected == "imagine":
+                logger.info(f"{log_prefix} 'imagine' action detected. Starting imagination sequence (ELP0)...")
+                interaction_data['assistant_action_executed'] = True
+
+                # Get the "idea_to_visualize" from action parameters, or default to current_input_for_analysis
+                # This 'current_thought_context' is what the image prompt generator will focus on.
+                current_thought_context_for_imagine = action_details.get("parameters", {}).get(
+                    "idea_to_visualize",
+                    f"The user's current query ('{user_input[:100]}...') and the ongoing conversation flow."
+                    # Fallback context
+                )
+                logger.info(
+                    f"{log_prefix} Specific context for image prompt generation: '{current_thought_context_for_imagine[:100]}...'")
+
+                # Call the updated helper with all relevant context strings
+                generated_img_prompt = await self._generate_image_generation_prompt_async(
+                    db=db,
+                    session_id=session_id,
+                    original_user_input=user_input,  # The very original user input for this turn
+                    current_thought_context=current_thought_context_for_imagine,
+                    history_rag_str=history_rag_str,
+                    file_index_context_str=file_index_context_str,
+                    recent_direct_history_str=recent_direct_history_str,
+                    url_context_str=url_context_str,
+                    log_context_str=log_context_str
+                )
+                interaction_data['imagined_image_prompt'] = generated_img_prompt
+
+                if generated_img_prompt:
+                    logger.info(
+                        f"{log_prefix} Calling image generation worker with prompt: '{generated_img_prompt}' (ELP0)")
+                    b64_images_list, img_gen_error = await self.provider.generate_image_async(
+                        prompt=generated_img_prompt, priority=ELP0
+                    )
+
+                    if img_gen_error:
+                        logger.error(f"{log_prefix} Image generation failed: {img_gen_error}")
+                        final_response = f"I tried to imagine that, but there was an issue: {img_gen_error}"
+                        interaction_data['assistant_action_result'] = final_response
+                        if interruption_error_marker in img_gen_error:
+                            raise TaskInterruptedException(img_gen_error)
+                    elif b64_images_list:
+                        logger.success(
+                            f"{log_prefix} Image generation successful. Received {len(b64_images_list)} image(s).")
+                        first_image_b64 = b64_images_list[0]
+                        interaction_data['imagined_image_b64'] = first_image_b64
+
+                        logger.info(f"{log_prefix} Requesting VLM description for the generated image (ELP0)...")
+                        vlm_desc_of_imagined_img = await self._describe_generated_image_async(db, session_id,
+                                                                                              first_image_b64)
+
+                        if vlm_desc_of_imagined_img:
+                            logger.success(
+                                f"{log_prefix} VLM description of imagined image: '{vlm_desc_of_imagined_img[:100]}...'")
+                            interaction_data['imagined_image_vlm_description'] = vlm_desc_of_imagined_img
+                            imagined_image_description_for_context = vlm_desc_of_imagined_img
+                            final_response = f"I've imagined that for you. Here's what I came up with (described): {vlm_desc_of_imagined_img}"
+                            interaction_data['assistant_action_result'] = "Imagination and VLM description successful."
+                        else:
+                            logger.warning(f"{log_prefix} VLM failed to describe the generated image.")
+                            final_response = "I generated an image, but I'm having trouble describing it right now."
+                            interaction_data['assistant_action_result'] = "VLM description of imagined image failed."
+                    else:
+                        logger.warning(f"{log_prefix} Image generation worker returned no images and no error.")
+                        final_response = "I tried to imagine that, but couldn't produce an image this time."
+                        interaction_data['assistant_action_result'] = "Image generation yielded no image."
+                else:
+                    logger.warning(f"{log_prefix} Failed to generate a prompt for image generation.")
+                    final_response = "I wanted to imagine that, but I couldn't quite form the right idea for a picture."
+                    interaction_data['assistant_action_result'] = "Image prompt generation failed."
+
+            elif action_details and action_type_detected != "no_action":  # Existing other actions
+                # ... (as before) ...
                 logger.info(f"{log_prefix} Action '{action_type_detected}' required. Executing (ELP0)...")
-                # Ensure _execute_assistant_action handles ELP0 for LLM calls AND interruptions
                 target_interaction_for_action = saved_interaction if not is_reflection_task else interaction_to_update
                 if target_interaction_for_action:
-                    # _execute_assistant_action is async, await it directly
-                    action_result = await self._execute_assistant_action( db, session_id, action_details, target_interaction_for_action )
-                    final_response = action_result # Use result from executor (success msg or fallback)
-                    # Status (e.g., assistant_action_executed) is updated within _execute_assistant_action
+                    action_result = await self._execute_assistant_action(db, session_id, action_details,
+                                                                         target_interaction_for_action)
+                    final_response = action_result
                 else:
-                     logger.error(f"{log_prefix} Cannot execute action: target interaction record missing (initial save failed or reflection target lost).")
-                     final_response = "Error: Internal issue preventing action execution (missing record)."
-                     # Update dict for final log save attempt later
-                     interaction_data['llm_response'] = final_response
-                     interaction_data['assistant_action_result'] = final_response # Log action result failure
-                     interaction_data['assistant_action_executed'] = False # Explicitly mark as not executed
+                    logger.error(f"{log_prefix} Cannot execute action: target interaction record missing.")
+                    final_response = "Error: Internal issue preventing action execution (missing record)."
+                    interaction_data['llm_response'] = final_response
+                    interaction_data['assistant_action_result'] = final_response
+                    interaction_data['assistant_action_executed'] = False
+            else:  # No action, standard LLM pipeline
+                logger.info(
+                    f"{log_prefix} No specific assistant action detected, proceeding with LLM generation (ELP0 pipeline).")
 
-            else:
-                # --- No Action Required - Proceed with LLM Generation Pipeline (All steps ELP0) ---
-                logger.info(f"{log_prefix} No specific assistant action detected, proceeding with LLM generation (ELP0 pipeline).")
+                current_imagined_context_str = "None."
+                if imagined_image_description_for_context:  # This would be set if the "imagine" block ran successfully
+                    current_imagined_context_str = f"Context from recent imagination: {imagined_image_description_for_context}"
+                    logger.info(f"{log_prefix} Adding imagined image description to router context.")
+                # If "imagine" was NOT chosen, imagined_image_description_for_context remains None, so current_imagined_context_str is "None."
 
-                # --- Route (ELP0) ---
-                # _route_to_specialist handles ELP0 internally & raises TaskInterruptedException
-                logger.debug(f"{log_prefix} Routing to specialist (ELP0)...")
                 router_context = {
                     "pending_tot_result": pending_tot_str,
                     "recent_direct_history": recent_direct_history_str,
@@ -4373,254 +4780,426 @@ class AIChat:
                     "history_rag": history_rag_str,
                     "file_index_context": file_index_context_str,
                     "log_context": log_context_str,
-                    "emotion_analysis": emotion_analysis_result
+                    "emotion_analysis": emotion_analysis_result,
+                    "imagined_image_vlm_description": current_imagined_context_str  # Pass this
                 }
-                # _route_to_specialist is async, await it
-                chosen_model_key, refined_query, routing_reason = await self._route_to_specialist( db, session_id, current_input_for_analysis, router_context )
-                logger.info(f"{log_prefix} Router chose '{chosen_model_key}'. Reason: {routing_reason}. Query: '{refined_query[:50]}...'")
+
+                logger.debug(f"{log_prefix} Routing to specialist (ELP0)...")
+                chosen_model_key, refined_query, routing_reason = await self._route_to_specialist(db, session_id,
+                                                                                                  current_input_for_analysis,
+                                                                                                  router_context)
+                logger.info(
+                    f"{log_prefix} Router chose '{chosen_model_key}'. Reason: {routing_reason}. Query: '{refined_query[:50]}...'")
 
                 # --- Translate Input (ELP0) ---
-                # _translate handles ELP0 internally & raises TaskInterruptedException
-                specialist_input = refined_query; target_lang = "en"; requires_translation = False
+                specialist_input = refined_query;
+                target_lang_for_specialist = "en";
+                requires_translation = False
                 if chosen_model_key in ["math", "code"]:
                     translator = self.provider.get_model("translator")
                     if translator:
                         logger.warning(f"{log_prefix} Translating input for {chosen_model_key} (ELP0)...")
-                        specialist_input = await self._translate(refined_query, target_lang="zh") # _translate is async
-                        target_lang = "zh"
+                        specialist_input = await self._translate(refined_query,
+                                                                 target_lang="zh")  # Target language for these models
+                        target_lang_for_specialist = "zh"
                         requires_translation = True
-                    else: logger.error(f"{log_prefix} Translator unavailable for {chosen_model_key}.")
+                    else:
+                        logger.error(f"{log_prefix} Translator unavailable for {chosen_model_key}.")
 
                 # --- Get Specialist Model ---
                 logger.debug(f"{log_prefix} Getting specialist model: {chosen_model_key}")
                 specialist_model = self.provider.get_model(chosen_model_key)
                 if not specialist_model:
-                     logger.error(f"{log_prefix} Fatal: Specialist model '{chosen_model_key}' not found!")
-                     raise ValueError(f"Specialist model '{chosen_model_key}' unavailable!")
+                    logger.error(f"{log_prefix} Fatal: Specialist model '{chosen_model_key}' not found!")
+                    raise ValueError(f"Specialist model '{chosen_model_key}' unavailable!")
 
                 # --- Prepare and Call Specialist Chain (ELP0) ---
+                # ADD imagined image description to specialist context too
                 specialist_chain_input_map = {
-                    "input": refined_query, # Use the refined query
+                    "input": specialist_input,  # Use the (potentially translated) refined query
                     "emotion_analysis": emotion_analysis_result,
                     "context": url_context_str,
                     "history_rag": history_rag_str,
                     "file_index_context": file_index_context_str,
                     "log_context": log_context_str,
                     "recent_direct_history": recent_direct_history_str,
-                    "pending_tot_result": pending_tot_str
+                    "pending_tot_result": pending_tot_str,
+                    "imagined_image_vlm_description": current_imagined_context_str  # Add new context piece
                 }
                 specialist_chain = (
-                     RunnableLambda(lambda x: specialist_chain_input_map) # Use lambda to inject map
-                     | self.text_prompt_template # Use the standard chat template
-                     | specialist_model
-                     | StrOutputParser()
+                        RunnableLambda(lambda x: specialist_chain_input_map)
+                        | self.text_prompt_template
+                        | specialist_model
+                        | StrOutputParser()
                 )
                 logger.info(f"{log_prefix} Calling Specialist Model '{chosen_model_key}' (ELP0)...")
                 specialist_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
-                # Execute the specialist call using the timing helper with ELP0
                 draft_response = await asyncio.to_thread(
-                    self._call_llm_with_timing, specialist_chain, {}, specialist_timing_data, priority=ELP0 # Pass empty dict if lambda handles input map
+                    self._call_llm_with_timing, specialist_chain, {}, specialist_timing_data, priority=ELP0
                 )
                 logger.info(f"{log_prefix} Specialist model call complete. Draft length: {len(draft_response)}")
 
                 # --- Translate Output (ELP0) ---
-                # _translate handles ELP0 internally & raises TaskInterruptedException
                 if requires_translation:
                     translator = self.provider.get_model("translator")
                     if translator:
                         logger.warning(f"{log_prefix} Translating response back to English (ELP0)...")
-                        draft_response = await self._translate(draft_response, target_lang="en", source_lang=target_lang) # _translate is async
-                    else: logger.error(f"{log_prefix} Translator unavailable for back-translation.")
+                        draft_response = await self._translate(draft_response, target_lang="en",
+                                                               source_lang=target_lang_for_specialist)
+                    else:
+                        logger.error(f"{log_prefix} Translator unavailable for back-translation.")
 
                 # --- Call Corrector Model (ELP0) ---
-                # _correct_response handles ELP0 internally & raises TaskInterruptedException
                 logger.info(f"{log_prefix} Passing draft to corrector model (ELP0)...")
+                # ADD imagined image description to corrector context
                 corrector_context = {
-                    "url_context": url_context_str,
-                    "history_rag": history_rag_str,
-                    "file_index_context": file_index_context_str,
-                    "log_context": log_context_str,
-                    "recent_direct_history": recent_direct_history_str,
-                    "emotion_analysis": emotion_analysis_result
+                    "url_context": url_context_str, "history_rag": history_rag_str,
+                    "file_index_context": file_index_context_str, "log_context": log_context_str,
+                    "recent_direct_history": recent_direct_history_str, "emotion_analysis": emotion_analysis_result,
+                    "imagined_image_vlm_description": current_imagined_context_str  # Add new context piece
                 }
-                # _correct_response is async, await it
-                llm_final_response = await self._correct_response( db, session_id, current_input_for_analysis, corrector_context, draft_response )
+                llm_final_response = await self._correct_response(db, session_id, current_input_for_analysis,
+                                                                  corrector_context, draft_response)
                 logger.info(f"{log_prefix} Corrector model call complete. Final length: {len(llm_final_response)}")
-                final_response = llm_final_response # Assign to final_response
+                final_response = llm_final_response
 
             # --- 7. Post-Execution/Generation Steps (ToT Spawning uses ELP0 internally) ---
             logger.debug(f"{log_prefix} Post-execution/generation steps...")
             target_interaction_for_tot = saved_interaction if not is_reflection_task else interaction_to_update
 
-            # Determine if ToT should be spawned based on initial classification AND if an action was NOT attempted/required
-            action_attempted_or_required = (action_details and action_type_detected != "no_action")
-            # Use initial classification stored in interaction_data
-            should_spawn_tot = (interaction_data.get('classification') == "chat_complex") and not action_attempted_or_required
+            # Determine if ToT should be spawned based on initial classification
+            # AND if an action (including "imagine") was NOT attempted/required.
+            # The 'imagine' action now sets final_response directly, so it bypasses the main LLM generation.
+            # We want ToT to potentially spawn even after an 'imagine' action if the classification was 'chat_complex'.
+            # This means ToT spawning should be based on initial classification, *independent* of whether 'imagine' or other actions ran.
+            should_spawn_tot = (interaction_data.get('classification') == "chat_complex")
 
-            # Update ToT flags on the target interaction record if it exists
             if target_interaction_for_tot:
-                 try:
-                      needs_commit = False
-                      if target_interaction_for_tot.requires_deep_thought != should_spawn_tot: target_interaction_for_tot.requires_deep_thought = should_spawn_tot; needs_commit = True
-                      # Use classification reason stored earlier
-                      new_reason = interaction_data.get('classification_reason', 'N/A' if should_spawn_tot else None)
-                      if target_interaction_for_tot.deep_thought_reason != new_reason: target_interaction_for_tot.deep_thought_reason = new_reason; needs_commit = True
-                      if target_interaction_for_tot.tot_analysis_requested != should_spawn_tot: target_interaction_for_tot.tot_analysis_requested = should_spawn_tot; needs_commit = True
-                      if needs_commit:
-                          db.commit()
-                          logger.debug(f"{log_prefix} Updated ToT flags on interaction {target_interaction_for_tot.id}.")
-                 except Exception as tot_db_err:
-                      logger.error(f"{log_prefix} Failed update ToT flags on DB {target_interaction_for_tot.id}: {tot_db_err}")
-                      db.rollback()
+                try:
+                    needs_commit = False
+                    if target_interaction_for_tot.requires_deep_thought != should_spawn_tot: target_interaction_for_tot.requires_deep_thought = should_spawn_tot; needs_commit = True
+                    new_reason = interaction_data.get('classification_reason', 'N/A' if should_spawn_tot else None)
+                    if target_interaction_for_tot.deep_thought_reason != new_reason: target_interaction_for_tot.deep_thought_reason = new_reason; needs_commit = True
+                    if target_interaction_for_tot.tot_analysis_requested != should_spawn_tot: target_interaction_for_tot.tot_analysis_requested = should_spawn_tot; needs_commit = True
+                    if needs_commit:
+                        db.commit()
+                        logger.debug(
+                            f"{log_prefix} Updated ToT flags on interaction {target_interaction_for_tot.id}.")
+                except Exception as tot_db_err:
+                    logger.error(
+                        f"{log_prefix} Failed update ToT flags on DB {target_interaction_for_tot.id}: {tot_db_err}")
+                    db.rollback()
 
-            # Spawn Background ToT Task if needed AND target interaction exists
             if should_spawn_tot and target_interaction_for_tot:
-                 logger.warning(f"⏳ {log_prefix} Spawning background ToT task (Trigger ID: {target_interaction_for_tot.id})...")
-                 # Ensure _run_tot_in_background_wrapper uses ELP0 internally for its LLM call
-                 tot_inputs_for_bg = {
-                     "db_session_factory": SessionLocal, "input": user_input,
-                     "rag_context_docs": url_docs,
-                     "history_rag_interactions": history_docs, # Pass the retrieved docs/interactions
-                     "log_context_str": log_context_str,
-                     "recent_direct_history_str": recent_direct_history_str,
-                     "file_index_context_str": file_index_context_str,
-                     "triggering_interaction_id": target_interaction_for_tot.id,
-                 }
-                 # Create task - no await needed here, it runs in background
-                 asyncio.create_task(self._run_tot_in_background_wrapper(**tot_inputs_for_bg))
-                 logger.info(f"{log_prefix} Background ToT task scheduled.")
-            elif should_spawn_tot and not target_interaction_for_tot:
-                 logger.error(f"{log_prefix} Cannot spawn ToT: target interaction record missing.")
+                logger.warning(
+                    f"⏳ {log_prefix} Spawning background ToT task (Trigger ID: {target_interaction_for_tot.id})...")
+                # ADD imagined image description to ToT context as well
+                current_imagined_context_for_tot = "None."
+                if interaction_data.get('imagined_image_vlm_description'):
+                    current_imagined_context_for_tot = f"Context from recent imagination: {interaction_data['imagined_image_vlm_description']}"
 
-            # --- Mark Pending ToT as Delivered (if one was injected earlier) ---
+                tot_inputs_for_bg = {
+                    "db_session_factory": SessionLocal, "input": user_input,
+                    "rag_context_docs": url_docs, "history_rag_interactions": history_docs,
+                    "log_context_str": log_context_str, "recent_direct_history_str": recent_direct_history_str,
+                    "file_index_context_str": file_index_context_str,
+                    "triggering_interaction_id": target_interaction_for_tot.id,
+                    "imagined_image_context_str": current_imagined_context_for_tot,  # Pass to wrapper
+                }
+                asyncio.create_task(
+                    self._run_tot_in_background_wrapper_v2(**tot_inputs_for_bg))  # Assuming a v2 wrapper
+                logger.info(f"{log_prefix} Background ToT task scheduled.")
+            elif should_spawn_tot and not target_interaction_for_tot:
+                logger.error(f"{log_prefix} Cannot spawn ToT: target interaction record missing.")
+
             if pending_tot_interaction:
                 logger.debug(f"{log_prefix} Marking pending ToT {pending_tot_interaction.id} as delivered...")
-                # Run the synchronous DB update in a thread
                 await asyncio.to_thread(mark_tot_delivered, db, pending_tot_interaction.id)
 
-            # --- Final Return Value Preparation ---
-            # Cleanup happens just before final save/update in finally block
-
-        # --- Catch Interruption Exception ---
         except TaskInterruptedException as tie:
             logger.warning(f"🚦 {log_prefix} Task INTERRUPTED during execution: {tie}")
-            interrupted_flag = True # Set flag to handle in finally block
-            final_response = f"[Task Interrupted by Higher Priority Request: {tie}]" # Set final response message
-
-        # --- Top-Level Exception Handling ---
+            interrupted_flag = True
+            final_response = f"[Task Interrupted by Higher Priority Request: {tie}]"
         except Exception as e:
             logger.error(f"❌❌ {log_prefix} UNHANDLED exception in background_generate: {e}")
             logger.exception(f"{log_prefix} Traceback:")
             final_response = f"Error during background processing: {type(e).__name__} - {e}"
-            # Update interaction_data for saving error state in finally block
-            interaction_data['llm_response'] = final_response[:4000] # Store error
-            interaction_data['input_type'] = 'error' # Mark as error state
+            interaction_data['llm_response'] = final_response[:4000]
+            interaction_data['input_type'] = 'error'
 
         finally:
-            # --- Final Save/Update Logic (Handles Normal, Error, Interruption) ---
-            final_db_data_to_save = interaction_data.copy() # Use latest data
-            # Apply final cleanup to the response before saving
+            final_db_data_to_save = interaction_data.copy()
             final_response = self._cleanup_llm_output(final_response)
             final_db_data_to_save['llm_response'] = final_response
             final_db_data_to_save['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
 
-            # Determine the correct interaction object to update/reference
+            # --- Save imagined image data to the record if available ---
+            if interaction_data.get('imagined_image_prompt'):
+                final_db_data_to_save['imagined_image_prompt'] = interaction_data['imagined_image_prompt']
+            if interaction_data.get('imagined_image_b64'):  # Store only first b64 for logging
+                final_db_data_to_save['imagined_image_b64'] = interaction_data['imagined_image_b64'][
+                                                              :100] + "..."  # Truncate
+            if interaction_data.get('imagined_image_vlm_description'):
+                final_db_data_to_save['imagined_image_vlm_description'] = interaction_data[
+                    'imagined_image_vlm_description']
+            # --- End save imagined image data ---
+
             target_interaction_for_final_update = saved_interaction if not is_reflection_task else interaction_to_update
 
             try:
                 if interrupted_flag:
-                    # --- Handle Interruption Save ---
                     logger.warning(f"{log_prefix}: Finalizing state for INTERRUPTED task.")
                     if is_reflection_task and interaction_to_update:
-                        # Reset reflection status, add note
-                        interaction_to_update.reflection_completed = False # Ensure it gets picked up again
-                        # Append interruption note, avoiding excessive length
+                        interaction_to_update.reflection_completed = False
                         existing_resp = interaction_to_update.llm_response or ""
                         interrupt_note = f"\n\n--- Reflection Interrupted ({datetime.datetime.now(datetime.timezone.utc).isoformat()}) ---"
-                        interaction_to_update.llm_response = (existing_resp + interrupt_note)[:Interaction.llm_response.type.length]
+                        interaction_to_update.llm_response = (existing_resp + interrupt_note)[
+                                                             :Interaction.llm_response.type.length]
                         interaction_to_update.last_modified_db = datetime.datetime.now(datetime.timezone.utc)
                         db.commit()
-                        logger.info(f"{log_prefix}: Marked original interaction {update_interaction_id} as reflection NOT completed (interrupted).")
+                        logger.info(
+                            f"{log_prefix}: Marked original interaction {update_interaction_id} as reflection NOT completed (interrupted).")
                     elif not is_reflection_task and saved_interaction:
-                         # Update standard task state to interrupted
-                         saved_interaction.llm_response = final_response # Store interruption message
-                         saved_interaction.classification = "task_failed_interrupted" # Specific classification
-                         saved_interaction.execution_time_ms = final_db_data_to_save['execution_time_ms']
-                         saved_interaction.input_type = 'log_warning' # Indicate non-fatal issue
-                         db.commit()
-                         logger.info(f"{log_prefix}: Updated interaction {saved_interaction.id} state to interrupted.")
+                        saved_interaction.llm_response = final_response
+                        saved_interaction.classification = "task_failed_interrupted"
+                        saved_interaction.execution_time_ms = final_db_data_to_save['execution_time_ms']
+                        saved_interaction.input_type = 'log_warning'
+                        # Persist imagination fields even if interrupted after they were populated
+                        if 'imagined_image_prompt' in final_db_data_to_save: saved_interaction.imagined_image_prompt = \
+                        final_db_data_to_save['imagined_image_prompt']
+                        if 'imagined_image_b64' in final_db_data_to_save: saved_interaction.imagined_image_b64 = \
+                        final_db_data_to_save['imagined_image_b64']
+                        if 'imagined_image_vlm_description' in final_db_data_to_save: saved_interaction.imagined_image_vlm_description = \
+                        final_db_data_to_save['imagined_image_vlm_description']
+                        db.commit()
+                        logger.info(
+                            f"{log_prefix}: Updated interaction {saved_interaction.id} state to interrupted.")
                     else:
-                         # Interrupted before initial save or during reflection with no target? Log it.
-                         logger.warning(f"{log_prefix}: Task interrupted but no primary interaction record found/saved. Logging interruption event.")
-                         add_interaction(db, session_id=session_id, mode="chat", input_type='log_warning',
-                                         user_input=f"[Interrupted Background Task {request_id}]",
-                                         llm_response=final_response)
+                        logger.warning(
+                            f"{log_prefix}: Task interrupted but no primary interaction record. Logging interruption event.")
+                        add_interaction(db, session_id=session_id, mode="chat", input_type='log_warning',
+                                        user_input=f"[Interrupted Background Task {request_id}]",
+                                        llm_response=final_response)
                 else:
-                    # --- Handle Normal/Error Save ---
                     if is_reflection_task and interaction_to_update:
-                        # Create NEW record for successful/failed reflection result
-                        interaction_to_update.reflection_completed = True # Mark original complete
+                        interaction_to_update.reflection_completed = True
                         interaction_to_update.last_modified_db = datetime.datetime.now(datetime.timezone.utc)
-                        db.commit() # Commit original update first
-
-                        # Create and add new interaction record for the reflection result
+                        db.commit()
                         new_interaction_data = {
-                            "session_id": session_id,
-                            "mode": "chat",
-                            "input_type": "reflection_result" if final_db_data_to_save.get('input_type') != 'error' else 'error', # Use 'error' if reflection failed
+                            "session_id": session_id, "mode": "chat",
+                            "input_type": "reflection_result" if final_db_data_to_save.get(
+                                'input_type') != 'error' else 'error',
                             "user_input": f"[Self-Reflection Result for Interaction ID {update_interaction_id}]",
-                            "llm_response": final_response, # The reflection result or error message
+                            "llm_response": final_response,
                             "execution_time_ms": final_db_data_to_save.get('execution_time_ms', 0),
-                            "classification": final_db_data_to_save.get('classification', 'reflection'), # Use 'error' if applicable
-                            "reflection_completed": False, # New record isn't reflected yet
-                            "tot_delivered": False,
+                            "classification": final_db_data_to_save.get('classification', 'reflection'),
+                            "reflection_completed": False, "tot_delivered": False,
                             "assistant_action_executed": False,
+                            # Add imagination fields to reflection result if they were generated
+                            "imagined_image_prompt": final_db_data_to_save.get('imagined_image_prompt'),
+                            "imagined_image_b64": final_db_data_to_save.get('imagined_image_b64'),
+                            "imagined_image_vlm_description": final_db_data_to_save.get(
+                                'imagined_image_vlm_description'),
                         }
-                        # Use synchronous add_interaction helper
                         await asyncio.to_thread(add_interaction, db, **new_interaction_data)
                         logger.info(f"{log_prefix}: Saved reflection result as new interaction.")
-
                     elif not is_reflection_task and saved_interaction:
-                         # Update the existing standard interaction record with final results
-                         logger.debug(f"{log_prefix}: Updating interaction {saved_interaction.id} with final results.")
-                         saved_interaction.llm_response = final_response
-                         saved_interaction.execution_time_ms = final_db_data_to_save['execution_time_ms']
-                         saved_interaction.classification = final_db_data_to_save.get('classification', saved_interaction.classification)
-                         saved_interaction.input_type = final_db_data_to_save.get('input_type', saved_interaction.input_type)
-                         # Update other relevant fields based on the processing outcome
-                         saved_interaction.rag_history_ids = final_db_data_to_save.get('rag_history_ids', saved_interaction.rag_history_ids)
-                         saved_interaction.rag_source_url = final_db_data_to_save.get('rag_source_url', saved_interaction.rag_source_url)
-                         saved_interaction.emotion_context_analysis = final_db_data_to_save.get('emotion_context_analysis', saved_interaction.emotion_context_analysis)
-                         saved_interaction.image_description = final_db_data_to_save.get('image_description', saved_interaction.image_description)
-                         saved_interaction.assistant_action_analysis_json = final_db_data_to_save.get('assistant_action_analysis_json', saved_interaction.assistant_action_analysis_json)
-                         saved_interaction.assistant_action_type = final_db_data_to_save.get('assistant_action_type', saved_interaction.assistant_action_type)
-                         saved_interaction.assistant_action_params = final_db_data_to_save.get('assistant_action_params', saved_interaction.assistant_action_params)
-                         saved_interaction.assistant_action_executed = final_db_data_to_save.get('assistant_action_executed', saved_interaction.assistant_action_executed)
-                         saved_interaction.assistant_action_result = final_db_data_to_save.get('assistant_action_result', saved_interaction.assistant_action_result)
-                         # ToT flags should have been updated earlier if needed
-                         db.commit()
-                         logger.info(f"{log_prefix}: Updated interaction {saved_interaction.id} with final results.")
+                        logger.debug(
+                            f"{log_prefix}: Updating interaction {saved_interaction.id} with final results.")
+                        saved_interaction.llm_response = final_response
+                        saved_interaction.execution_time_ms = final_db_data_to_save['execution_time_ms']
+                        saved_interaction.classification = final_db_data_to_save.get('classification',
+                                                                                     saved_interaction.classification)
+                        saved_interaction.input_type = final_db_data_to_save.get('input_type',
+                                                                                 saved_interaction.input_type)
+                        saved_interaction.rag_history_ids = final_db_data_to_save.get('rag_history_ids',
+                                                                                      saved_interaction.rag_history_ids)
+                        saved_interaction.rag_source_url = final_db_data_to_save.get('rag_source_url',
+                                                                                     saved_interaction.rag_source_url)
+                        saved_interaction.emotion_context_analysis = final_db_data_to_save.get(
+                            'emotion_context_analysis', saved_interaction.emotion_context_analysis)
+                        saved_interaction.image_description = final_db_data_to_save.get('image_description',
+                                                                                        saved_interaction.image_description)
+                        saved_interaction.assistant_action_analysis_json = final_db_data_to_save.get(
+                            'assistant_action_analysis_json', saved_interaction.assistant_action_analysis_json)
+                        saved_interaction.assistant_action_type = final_db_data_to_save.get('assistant_action_type',
+                                                                                            saved_interaction.assistant_action_type)
+                        saved_interaction.assistant_action_params = final_db_data_to_save.get(
+                            'assistant_action_params', saved_interaction.assistant_action_params)
+                        saved_interaction.assistant_action_executed = final_db_data_to_save.get(
+                            'assistant_action_executed', saved_interaction.assistant_action_executed)
+                        saved_interaction.assistant_action_result = final_db_data_to_save.get(
+                            'assistant_action_result', saved_interaction.assistant_action_result)
+                        # Save imagination fields
+                        if 'imagined_image_prompt' in final_db_data_to_save: saved_interaction.imagined_image_prompt = \
+                        final_db_data_to_save['imagined_image_prompt']
+                        if 'imagined_image_b64' in final_db_data_to_save: saved_interaction.imagined_image_b64 = \
+                        final_db_data_to_save['imagined_image_b64']
+                        if 'imagined_image_vlm_description' in final_db_data_to_save: saved_interaction.imagined_image_vlm_description = \
+                        final_db_data_to_save['imagined_image_vlm_description']
+
+                        db.commit()
+                        logger.info(f"{log_prefix}: Updated interaction {saved_interaction.id} with final results.")
                     elif not is_reflection_task and not saved_interaction:
-                        # Initial save failed, but task completed without error/interruption? Save final state as new.
-                        logger.warning(f"{log_prefix}: Initial interaction save failed, saving final state as new record.")
+                        logger.warning(
+                            f"{log_prefix}: Initial interaction save failed, saving final state as new record.")
                         valid_keys = {c.name for c in Interaction.__table__.columns}
                         db_kwargs = {k: v for k, v in final_db_data_to_save.items() if k in valid_keys}
-                        await asyncio.to_thread(add_interaction, db, **db_kwargs) # Use sync helper in thread
-                    else: # Should not happen (e.g., reflection task but no interaction_to_update)
-                         logger.error(f"{log_prefix}: Final Save Logic Error - Reached unexpected state.")
-
+                        await asyncio.to_thread(add_interaction, db, **db_kwargs)
+                    else:
+                        logger.error(f"{log_prefix}: Final Save Logic Error - Reached unexpected state.")
             except Exception as final_save_err:
-                 logger.error(f"❌ {log_prefix}: Failed final DB save/update: {final_save_err}")
-                 logger.exception(f"{log_prefix} Final Save Traceback:")
-                 try:
-                     db.rollback() # Rollback potential partial changes
-                 except Exception as rb_err:
-                     logger.error(f"{log_prefix} Rollback after final save error FAILED: {rb_err}")
+                logger.error(f"❌ {log_prefix}: Failed final DB save/update: {final_save_err}")
+                logger.exception(f"{log_prefix} Final Save Traceback:")
+                try:
+                    db.rollback()
+                except Exception as rb_err:
+                    logger.error(f"{log_prefix} Rollback after final save error FAILED: {rb_err}")
 
-            # Log final status
-            final_status = 'Interrupted' if interrupted_flag else ('Error' if final_db_data_to_save.get('input_type') == 'error' else 'Success')
-            logger.info(f"{log_prefix} END. Final Status: {final_status}. Duration: {final_db_data_to_save['execution_time_ms']:.2f}ms")
+            final_status = 'Interrupted' if interrupted_flag else (
+                'Error' if final_db_data_to_save.get('input_type') == 'error' else 'Success')
+            logger.info(
+                f"{log_prefix} END. Final Status: {final_status}. Duration: {final_db_data_to_save['execution_time_ms']:.2f}ms")
 
+    async def _run_tot_in_background_wrapper_v2(self, db_session_factory: Any, input: str,
+                                                rag_context_docs: List[Any],
+                                                history_rag_interactions: List[Interaction], log_context_str: str,
+                                                recent_direct_history_str: str, file_index_context_str: str,
+                                                triggering_interaction_id: int,
+                                                imagined_image_context_str: str):  # Added imagined_image_context_str
+        """Async wrapper to run synchronous ToT logic with its own DB session. V2 passes imagined context."""
+        logger.info(f"BG ToT Wrapper V2: Starting for trigger ID {triggering_interaction_id}")
+        db = db_session_factory()
+        # Ensure interaction_data is correctly structured for _run_tree_of_thought
+        bg_interaction_data = {
+            'id': triggering_interaction_id,  # Placeholder, _run_tree_of_thought might not use it
+            'execution_time_ms': 0,
+            'session_id': self.current_session_id,  # Assuming self.current_session_id is accessible
+            'mode': 'chat',
+            # Add other fields if _call_llm_with_timing or other helpers inside _run_tree_of_thought need them
+        }
+        try:
+            await asyncio.to_thread(
+                self._run_tree_of_thought_v2,  # Call a V2 of ToT
+                db=db,
+                input=input,
+                rag_context_docs=rag_context_docs,
+                history_rag_interactions=history_rag_interactions,
+                log_context_str=log_context_str,
+                recent_direct_history_str=recent_direct_history_str,
+                file_index_context_str=file_index_context_str,
+                imagined_image_context_str=imagined_image_context_str,  # Pass new context
+                interaction_data=bg_interaction_data,
+                triggering_interaction_id=triggering_interaction_id
+            )
+            logger.info(f"BG ToT Wrapper V2: Finished successfully for trigger ID {triggering_interaction_id}")
+        except Exception as e:
+            logger.error(f"BG ToT Wrapper V2: Error running ToT for trigger ID {triggering_interaction_id}: {e}")
+            logger.exception("BG ToT Wrapper V2 Traceback:")
+        finally:
+            if db:
+                db.close()
+
+    def _run_tree_of_thought_v2(self, db: Session, input: str, rag_context_docs: List[Any],
+                                history_rag_interactions: List[Interaction], log_context_str: str,
+                                recent_direct_history_str: str, file_index_context_str: str,
+                                imagined_image_context_str: str, interaction_data: Dict[str, Any],
+                                triggering_interaction_id: int) -> str:
+        """Runs Tree of Thoughts simulation (synchronous), includes direct history, logs, and imagined context."""
+        user_input = input
+        logger.warning(
+            f"🌳 Running ToT V2 for input: '{user_input[:50]}...' (Trigger ID: {triggering_interaction_id})")
+        interaction_data['tot_analysis_requested'] = True  # This dict is local to this call, not the main one
+        rag_context_str = self._format_docs(rag_context_docs, source_type="URL")
+        history_rag_str = self._format_interaction_list_to_string(history_rag_interactions)
+
+        # Use a modified ToT prompt that includes the imagined image context
+
+        # Ensure the model for ToT is ELP0 compatible if it's a worker-based one.
+        # For this example, assuming self.provider.model is okay or the wrapper handles ELP0.
+        tot_model = self.provider.get_model("general")  # Or a dedicated ToT model if configured
+        if not tot_model:
+            logger.error("ToT model ('general') not available for ToT V2 execution.")
+            # Log error to DB via add_interaction
+            add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat", input_type="log_error",
+                            user_input=f"[ToT V2 Failed - Model Unavailable ID: {triggering_interaction_id}]",
+                            llm_response="ToT model unavailable.")
+            # Update original interaction
+            if triggering_interaction_id:
+                trigger_interaction = db.query(Interaction).filter(
+                    Interaction.id == triggering_interaction_id).first()
+                if trigger_interaction: trigger_interaction.tot_result = "Error: ToT model unavailable."; trigger_interaction.tot_delivered = False; db.commit()
+            return "Error during deep analysis: Model unavailable."
+
+        chain = (ChatPromptTemplate.from_template(PROMPT_TREE_OF_THOUGHTS_V2) | tot_model | StrOutputParser())
+        tot_result = "Error during ToT analysis (V2)."
+        try:
+            # _call_llm_with_timing will handle ELP0 priority if the model is a wrapper
+            # that passes config={'priority': ELP0}
+            llm_result = self._call_llm_with_timing(
+                chain,
+                {
+                    "input": user_input,
+                    "context": rag_context_str,
+                    "history_rag": history_rag_str,
+                    "file_index_context": file_index_context_str,
+                    "log_context": log_context_str,
+                    "recent_direct_history": recent_direct_history_str,
+                    "imagined_image_context": imagined_image_context_str  # New context
+                },
+                interaction_data,  # Pass the local interaction_data for timing
+                priority=ELP0  # Explicitly set ELP0 for the ToT LLM call
+            )
+            tot_result = llm_result
+            logger.info(f"🌳 ToT analysis V2 LLM call complete for Trigger ID: {triggering_interaction_id}.")
+
+            if triggering_interaction_id:
+                logger.debug(
+                    f"Attempting to save ToT V2 result to original interaction ID: {triggering_interaction_id}")
+                trigger_interaction = db.query(Interaction).filter(
+                    Interaction.id == triggering_interaction_id).first()
+                if trigger_interaction:
+                    trigger_interaction.tot_result = tot_result
+                    trigger_interaction.tot_analysis_requested = True  # Should be already set
+                    trigger_interaction.tot_delivered = False  # Mark as not yet delivered
+                    db.commit()
+                    logger.success(
+                        f"✅ Saved ToT V2 result to Interaction ID {triggering_interaction_id} (undelivered).")
+                else:
+                    logger.error(
+                        f"❌ Could not find original interaction {triggering_interaction_id} to save ToT V2 result.")
+                    add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat",
+                                    input_type="log_warning",
+                                    llm_response=f"Orphaned ToT V2 Result for input '{user_input[:50]}...': {tot_result[:200]}...")
+            else:
+                logger.warning("No triggering interaction ID provided to save ToT V2 result.")
+            return tot_result
+        except TaskInterruptedException as tie:
+            logger.warning(f"🚦 ToT V2 for Trigger ID {triggering_interaction_id} INTERRUPTED: {tie}")
+            # Don't save "interrupted" as ToT result, let it be re-queued if original still pending
+            if triggering_interaction_id:
+                trigger_interaction = db.query(Interaction).filter(
+                    Interaction.id == triggering_interaction_id).first()
+                if trigger_interaction:
+                    # Reset to pending if it was in flight, or leave as is if already had a result
+                    if trigger_interaction.tot_result is None or "Error" in trigger_interaction.tot_result:  # Only if no successful prior result
+                        trigger_interaction.tot_result = "[ToT Analysis Interrupted]"
+                        trigger_interaction.tot_delivered = False  # Ensure it can be picked up
+                    db.commit()
+            raise tie  # Re-raise to be handled by the wrapper
+        except Exception as e:
+            err_msg = f"Error during ToT V2 generation (Trigger ID: {triggering_interaction_id}): {e}"
+            logger.error(f"❌ {err_msg}")
+            add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat", input_type="log_error",
+                            llm_response=err_msg)
+            if triggering_interaction_id:
+                trigger_interaction = db.query(Interaction).filter(
+                    Interaction.id == triggering_interaction_id).first()
+                if trigger_interaction:
+                    trigger_interaction.tot_result = err_msg
+                    trigger_interaction.tot_delivered = False
+                    db.commit()
+            return "Error during deep analysis (V2)."
 
     # --- reset Method ---
     def reset(self, db: Session, session_id: str = None):
@@ -5789,7 +6368,7 @@ async def handle_interaction():
 
     try:
         # Use Quart's await request.get_json()
-        request_data = await request.get_json()
+        request_data = request.get_json()
         if not request_data:
             logger.warning("⚠️ Empty JSON payload.")
             # Use Quart's jsonify or Response
@@ -7042,156 +7621,247 @@ def handle_openai_asr_transcriptions():
 
 # === NEW: OpenAI Compatible Image Generation Endpoint (Stub) ===
 @app.route("/v1/images/generations", methods=["POST"])
-def handle_openai_image_generations():
-    """
-    Handles requests mimicking OpenAI's Image Generation endpoint (DALL·E).
-    Currently a STUB - Acknowledges request and returns a strong warning.
-    Expected model: "Zephyrine-InternalFlux-Imagination-Engine"
-    """
+async def handle_openai_image_generations():  # Route is async
     start_req = time.monotonic()
     request_id = f"req-img-gen-{uuid.uuid4()}"
-    logger.info(f"🚀 Flask OpenAI-Style Image Generation Request ID: {request_id} (STUB)")
+    logger.info(f"🚀 OpenAI-Style Image Generation Request ID: {request_id} (ELP1 Priority)")
 
-    final_response_status_code: int = 501 # Default to Not Implemented for stub
+    db: Session = g.db
+    final_response_status_code: int = 500
     resp: Optional[Response] = None
     session_id_for_log: str = f"img_gen_req_default_{request_id}"
     raw_request_data: Optional[Dict] = None
     request_data_snippet_for_log: str = "No request data processed"
 
-    # --- THE WARNING MESSAGE ---
-    WARNING_MESSAGE = (
-        "Please be advised that AI Image generation as currently established by humanity "
-        "is often based on random noise guided by statistical patterns, not true ideation or understanding. "
-        "It is fundamentally flawed if represented as a final product without significant human refinement "
-        "or conceptual grounding. DO NOT USE THIS CALL FOR PRODUCTION OR FINAL OUTPUTS. "
-        "THIS ENDPOINT IS INTENDED FOR ZEPHYRINE INTERNAL IMAGINATION/THOUGHT EXPERIMENTS ONLY. "
-        "For true artistic creation, consider vector-based generation driven by deliberate actuator input "
-        "(e.g., your own hand) or developing Zephy's structured vector drawing skills."
-    )
-
     try:
-        # --- 1. Get and Validate Request JSON Body ---
         try:
             raw_request_data = request.get_json()
-            if not raw_request_data:
-                raise ValueError("Empty JSON payload received.")
-            try: request_data_snippet_for_log = json.dumps(raw_request_data)[:1000]
-            except: request_data_snippet_for_log = str(raw_request_data)[:1000]
+            if not raw_request_data: raise ValueError("Empty JSON payload received.")
+            try:
+                request_data_snippet_for_log = json.dumps(raw_request_data)[:1000]
+            except:
+                request_data_snippet_for_log = str(raw_request_data)[:1000]
         except Exception as json_err:
             logger.warning(f"{request_id}: Failed to get/parse JSON body: {json_err}")
-            try: request_data_snippet_for_log = request.get_data(as_text=True)[:1000]
-            except: request_data_snippet_for_log = "Could not read request body"
-            resp_data, status_code = _create_openai_error_response(
-                f"Request body is missing or invalid JSON: {json_err}",
-                err_type="invalid_request_error", status_code=400
-            )
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code
+            try:
+                request_data_snippet_for_log = request.get_data(as_text=True)[:1000]
+            except:
+                request_data_snippet_for_log = "Could not read request body"
+            resp_data, status_code_val = _create_openai_error_response(
+                f"Request body is missing or invalid JSON: {json_err}", err_type="invalid_request_error",
+                status_code=400)
+            resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json');
+            final_response_status_code = status_code_val;
             return resp
 
-        # --- 2. Extract Parameters ---
-        prompt_text = raw_request_data.get("prompt")
+        prompt_from_user = raw_request_data.get("prompt")
         model_requested = raw_request_data.get("model")
-        n_images = raw_request_data.get("n", 1) # Number of images to generate
-        size_requested = raw_request_data.get("size", "1024x1024") # e.g., "256x256", "512x512", "1024x1024"
-        quality_requested = raw_request_data.get("quality", "standard") # "standard" or "hd"
-        response_format_requested = raw_request_data.get("response_format", "url") # "url" or "b64_json"
-        style_requested = raw_request_data.get("style", "vivid") # "vivid" or "natural"
-        user_provided_id = raw_request_data.get("user") # Optional user identifier
+
+        # --- MODIFICATION FOR n_images ---
+        # Default to 2 images for this direct ELP1 endpoint if 'n' is not specified by the client.
+        # Client can still override by sending "n": 1 or "n": X.
+        n_images_requested_by_client = raw_request_data.get("n")
+        if n_images_requested_by_client is None:
+            n_images = 2  # Default to 2 for ELP1 direct generation
+            logger.info(
+                f"{request_id}: 'n' not specified by client, defaulting to {n_images} for ELP1 image generation.")
+        else:
+            try:
+                n_images = int(n_images_requested_by_client)
+                if n_images < 1:
+                    logger.warning(
+                        f"{request_id}: Client requested 'n={n_images_requested_by_client}', which is invalid. Defaulting to 1.")
+                    n_images = 1
+                # You might want to add a server-side cap on 'n' here, e.g., if n_images > MAX_IMAGES_PER_REQUEST: n_images = MAX_IMAGES_PER_REQUEST
+            except ValueError:
+                logger.warning(
+                    f"{request_id}: Client sent invalid value for 'n': '{n_images_requested_by_client}'. Defaulting to 2.")
+                n_images = 2
+        # --- END MODIFICATION FOR n_images ---
+
+        size_requested_str = raw_request_data.get("size", IMAGE_GEN_DEFAULT_SIZE)
+        response_format_requested = raw_request_data.get("response_format", "b64_json").lower()
+        quality_requested = raw_request_data.get("quality", "standard")
+        style_requested = raw_request_data.get("style", "vivid")
+        user_provided_id = raw_request_data.get("user")
 
         session_id_for_log = raw_request_data.get("session_id", session_id_for_log)
-
-        logger.debug(
-            f"{request_id}: Image Gen Request Parsed - Prompt: '{str(prompt_text)[:50]}...', "
-            f"Model: {model_requested}, N: {n_images}, Size: {size_requested}, Quality: {quality_requested}, "
-            f"Format: {response_format_requested}, Style: {style_requested}, User: {user_provided_id}"
-        )
-
-        # --- 3. Validate Core Parameters ---
-        if not prompt_text or not isinstance(prompt_text, str):
-            raise ValueError("'prompt' field is required and must be a string.")
-        if not model_requested:
-            raise ValueError("'model' field (e.g., 'Zephyrine-InternalFlux-Imagination-Engine') is required.")
-
-        # --- 4. Validate Requested Model Name ---
-        if model_requested != IMAGE_GEN_MODEL_NAME_CLIENT_FACING:
-            logger.warning(f"{request_id}: Invalid Image Gen model requested '{model_requested}'. Expected '{IMAGE_GEN_MODEL_NAME_CLIENT_FACING}'.")
-            resp_data, status_code = _create_openai_error_response(
-                f"Invalid model. This endpoint only supports '{IMAGE_GEN_MODEL_NAME_CLIENT_FACING}' for image generation.",
-                err_type="invalid_request_error", code="model_not_found", status_code=404
-            )
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code
+        if ai_chat:
+            ai_chat.current_session_id = session_id_for_log
+        else:
+            logger.error(f"{request_id}: ai_chat instance not available. Cannot set session ID for helpers.")
+            resp_data, status_code_val = _create_openai_error_response("Server AI component not ready.",
+                                                                       err_type="server_error", status_code=503)
+            resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json');
+            final_response_status_code = status_code_val;
             return resp
 
-        # --- STUB IMPLEMENTATION with Warning ---
-        # In a real implementation:
-        # 1. Prepare parameters for your stable_diffusion_worker.py or image generation engine.
-        # 2. Call a helper like `_execute_sd_worker_with_priority(...)`.
-        #    - Priority would be ELP1 for direct user requests.
-        # 3. The worker would return image URLs or base64 encoded image data.
-        # 4. Format the response according to OpenAI's "images" object structure.
-
-        logger.warning(f"{request_id}: Image generation is a STUB. Returning warning and 501 Not Implemented.")
-
-        # Construct the data part of the response, which will be empty for a stub,
-        # but include the warning in a non-standard way for now, or as part of an error.
-        # OpenAI's actual success response is like:
-        # { "created": 1678886400, "data": [ {"url": "..."} ] } or
-        # { "created": 1678886400, "data": [ {"b64_json": "..."} ] }
-        # Since we are returning an error, we'll use the error structure.
-
-        resp_data, status_code = _create_openai_error_response(
-            message=WARNING_MESSAGE, # Your strong warning
-            err_type="server_error",
-            code="stub_not_implemented_with_warning",
-            status_code=501 # 501 Not Implemented
+        logger.debug(
+            f"{request_id}: Image Gen Request Parsed - Prompt: '{str(prompt_from_user)[:50]}...', "
+            f"ModelReq: {model_requested}, N (final): {n_images}, Size: {size_requested_str}, RespFormat: {response_format_requested}, "  # Log final n_images
+            f"Quality: {quality_requested}, Style: {style_requested}, User: {user_provided_id}"
         )
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_response_status_code = status_code
-        # --- END STUB ---
 
-    except ValueError as ve: # Catches explicit ValueErrors for bad client input
-        logger.warning(f"{request_id}: Invalid Image Gen request: {ve}")
-        resp_data, status_code = _create_openai_error_response(
-            str(ve), err_type="invalid_request_error", status_code=400
+        if not prompt_from_user or not isinstance(prompt_from_user, str):
+            raise ValueError("'prompt' field is required and must be a string.")
+        if not model_requested or model_requested != IMAGE_GEN_MODEL_NAME_CLIENT_FACING:
+            logger.warning(
+                f"{request_id}: Invalid Image Gen model '{model_requested}'. Expected '{IMAGE_GEN_MODEL_NAME_CLIENT_FACING}'.")
+            resp_data, status_code_val = _create_openai_error_response(
+                f"Invalid model. This endpoint only supports the '{IMAGE_GEN_MODEL_NAME_CLIENT_FACING}' model for image generation.",
+                err_type="invalid_request_error", code="model_not_found", status_code=404)
+            resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json');
+            final_response_status_code = status_code_val;
+            return resp
+
+        if response_format_requested not in ["b64_json", "url"]:
+            logger.warning(
+                f"{request_id}: Invalid 'response_format': {response_format_requested}. Defaulting to 'b64_json'.")
+            response_format_requested = "b64_json"
+
+        logger.info(f"{request_id}: Refining user prompt for image generation (ELP1)...")
+        url_retriever_obj, history_retriever_obj, _ = await asyncio.to_thread(
+            ai_chat._get_rag_retriever, db, prompt_from_user, priority=ELP1
         )
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_response_status_code = status_code
-    except Exception as e:
-        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Image Gen endpoint STUB:")
-        error_message = f"Internal server error in Image Gen stub: {type(e).__name__}"
-        resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_response_status_code = status_code
-        # Log this critical failure to DB if possible
+        retrieved_history_docs_for_refine = []
+        if history_retriever_obj:
+            retrieved_history_docs_for_refine = await asyncio.to_thread(history_retriever_obj.invoke, prompt_from_user)
+        history_rag_str_for_refine = ai_chat._format_docs(retrieved_history_docs_for_refine, source_type="History RAG")
+        direct_hist_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=3)
+        recent_direct_history_str_for_refine = ai_chat._format_direct_history(direct_hist_interactions)
+
+        refined_prompt = await ai_chat._refine_direct_image_prompt_async(
+            db=db, session_id=session_id_for_log, user_image_request=prompt_from_user,
+            history_rag_str=history_rag_str_for_refine, recent_direct_history_str=recent_direct_history_str_for_refine,
+            priority=ELP1
+        )
+        if not refined_prompt:
+            logger.warning(f"{request_id}: Prompt refinement yielded empty or failed. Using original prompt.")
+            refined_prompt = prompt_from_user
+        elif refined_prompt == prompt_from_user:
+            logger.info(f"{request_id}: Prompt refinement did not change the prompt. Using original.")
+        else:
+            logger.info(f"{request_id}: Using refined prompt for generation: '{refined_prompt}'")
         try:
-            if 'db' in g and g.db:
-                 add_interaction(g.db, session_id=session_id_for_log, mode="image_gen", input_type='error',
-                                 user_input=f"Image Gen Handler Error. Request: {request_data_snippet_for_log}",
-                                 llm_response=error_message[:2000])
-            else: logger.error(f"{request_id}: Cannot log Image Gen handler error: DB session 'g.db' unavailable.")
-        except Exception as db_err_log:
-             logger.error(f"{request_id}: ❌ Failed log Image Gen handler error to DB: {db_err_log}")
+            add_interaction(db, session_id=session_id_for_log, mode="image_gen", input_type="text_prompt_to_worker",
+                            user_input=prompt_from_user, llm_response=refined_prompt)
+            db.commit()
+        except Exception as db_log_err:
+            logger.error(f"{request_id}: Failed to log refined prompt: {db_log_err}")
+            if db: db.rollback()
 
+        logger.info(
+            f"{request_id}: Requesting {n_images} image(s) from AIProvider with ELP1 priority. Refined Prompt: '{refined_prompt[:100]}...'")
+        all_generated_image_data_from_provider = []
+        error_occurred_during_generation_loop = False
+        final_error_message_from_loop = None
+
+        for i in range(n_images):  # Loop n_images times
+            if error_occurred_during_generation_loop: break
+            logger.info(f"{request_id}: Generating image {i + 1}/{n_images}...")
+            list_of_image_dicts, gen_error_msg = await ai_provider.generate_image_async(
+                prompt=refined_prompt, image_base64=None, priority=ELP1
+            )
+            if gen_error_msg:
+                logger.error(f"{request_id}: Image generation failed for image attempt {i + 1}: {gen_error_msg}")
+                final_error_message_from_loop = gen_error_msg
+                if interruption_error_marker in gen_error_msg: raise TaskInterruptedException(gen_error_msg)
+                error_occurred_during_generation_loop = True;
+                break
+            elif list_of_image_dicts and isinstance(list_of_image_dicts, list) and list_of_image_dicts:
+                all_generated_image_data_from_provider.append(list_of_image_dicts[0])
+                logger.info(f"{request_id}: Image {i + 1}/{n_images} data received from provider.")
+            else:
+                logger.warning(
+                    f"{request_id}: Image generation for image attempt {i + 1} returned no data and no error.")
+                final_error_message_from_loop = "Image generation worker returned no data for an image."
+                error_occurred_during_generation_loop = True;
+                break
+
+        if error_occurred_during_generation_loop or not all_generated_image_data_from_provider:
+            resp_data, status_code_val = _create_openai_error_response(
+                final_error_message_from_loop or "Image generation failed to produce any results.",
+                err_type="server_error", status_code=500)
+            resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json');
+            final_response_status_code = status_code_val;
+            return resp
+
+        response_data_items_for_client = []
+        for img_data_dict_from_worker in all_generated_image_data_from_provider:
+            png_b64_data = img_data_dict_from_worker.get("b64_json")
+            if png_b64_data:
+                if response_format_requested == "b64_json":
+                    response_data_items_for_client.append({"b64_json": png_b64_data})
+                elif response_format_requested == "url":
+                    logger.warning(f"{request_id}: Returning data URI for 'url' format request.")
+                    response_data_items_for_client.append(
+                        {"url": f"data:image/png;base64,{png_b64_data}"})  # Provide data URI
+            else:
+                logger.error(
+                    f"{request_id}: Worker returned image data item without 'b64_json' (PNG). Skipping item: {img_data_dict_from_worker}")
+
+        if not response_data_items_for_client:
+            logger.error(
+                f"{request_id}: No valid image data (PNG b64_json) found after processing worker response for {n_images} images.")
+            resp_data, status_code_val = _create_openai_error_response(
+                "Failed to obtain valid image data from generation worker.", err_type="server_error", status_code=500)
+            resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json');
+            final_response_status_code = status_code_val;
+            return resp
+
+        openai_response_body = {"created": int(time.time()), "data": response_data_items_for_client}
+        response_payload = json.dumps(openai_response_body)
+        resp = Response(response_payload, status=200, mimetype='application/json');
+        final_response_status_code = 200
+
+    except ValueError as ve:
+        logger.warning(f"{request_id}: Invalid Image Gen request: {ve}")
+        resp_data, status_code_val = _create_openai_error_response(str(ve), err_type="invalid_request_error",
+                                                                   status_code=400)
+        resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json');
+        final_response_status_code = status_code_val
+    except TaskInterruptedException as tie:
+        logger.warning(f"🚦 {request_id}: Image Generation request (ELP1) INTERRUPTED: {tie}")
+        resp_data, status_code_val = _create_openai_error_response(f"Image generation task was interrupted: {tie}",
+                                                                   err_type="server_error", code="task_interrupted",
+                                                                   status_code=503)
+        resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json');
+        final_response_status_code = status_code_val
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Image Gen endpoint:")
+        error_message = f"Internal server error in Image Gen endpoint: {type(e).__name__} - {str(e)}"
+        resp_data, status_code_val = _create_openai_error_response(error_message, err_type="server_error",
+                                                                   status_code=500)
+        resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json');
+        final_response_status_code = status_code_val
+        try:
+            if db:
+                add_interaction(db, session_id=session_id_for_log, mode="image_gen", input_type='error',
+                                user_input=f"Image Gen Handler Error. Request: {request_data_snippet_for_log}",
+                                llm_response=error_message[:2000]); db.commit()
+            else:
+                logger.error(f"{request_id}: Cannot log Image Gen handler error: DB session unavailable.")
+        except Exception as db_err_log:
+            logger.error(f"{request_id}: ❌ Failed log Image Gen handler error to DB: {db_err_log}")
+            if db: db.rollback()
     finally:
         duration_req = (time.monotonic() - start_req) * 1000
-        logger.info(f"🏁 OpenAI-Style Image Gen Request {request_id} STUB handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
-        # g.db is closed by teardown_request
+        logger.info(
+            f"🏁 OpenAI-Style Image Gen Request {request_id} handled in {duration_req:.2f} ms. Final HTTP Status: {final_response_status_code}")
 
-    if resp is None: # Safety net
-        logger.error(f"{request_id}: Image Gen Handler STUB finished unexpectedly without response object!")
-        resp_data, _ = _create_openai_error_response("Internal error: Image Gen Handler STUB no response.", status_code=500)
-        resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
-        # final_response_status_code already 500 or set
+    if resp is None:
+        logger.error(f"{request_id}: Image Gen Handler logic flaw - response object 'resp' was not assigned!")
+        resp_data, status_code_val = _create_openai_error_response(
+            "Internal error: Image Gen Handler failed to produce a response object.", err_type="server_error",
+            status_code=500)
+        resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
         try:
-             if 'db' in g and g.db:
-                 add_interaction(g.db, session_id=session_id_for_log, mode="image_gen", input_type='error',
-                                 user_input=f"Image Gen Handler No Resp. Req: {request_data_snippet_for_log}",
-                                 llm_response="Critical: No response object created by Image Gen handler stub.")
+            if db: add_interaction(db, session_id=session_id_for_log, mode="image_gen", input_type='error',
+                                   user_input=f"Image Gen Handler No Resp. Req: {request_data_snippet_for_log}",
+                                   llm_response="Critical: No response object created by Image Gen handler."); db.commit()
         except Exception as db_err_log_final:
-             logger.error(f"{request_id}: Failed log 'no response object' Image Gen error to DB: {db_err_log_final}")
-
+            logger.error(f"{request_id}: Failed to log 'no response object' Image Gen error to DB: {db_err_log_final}")
+            if db: db.rollback()
     return resp
 
 
