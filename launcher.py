@@ -129,6 +129,12 @@ MODELS_TO_DOWNLOAD = [
         "filename": "flux1-t5xxl.gguf",
         "url": "https://huggingface.co/Green-Sky/flux.1-schnell-GGUF/resolve/main/t5xxl_q2_k.gguf?download=true",
         "description": "FLUX.1 T5 XXL GGUF (Q2_K)"
+    },
+    #https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q5_0.gguf?download=true
+{
+        "filename": "sd-refinement.gguf",
+        "url": "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q5_0.gguf?download=true",
+        "description": "Stable Diffusion Refinement PostFlux"
     }
 ]
 
