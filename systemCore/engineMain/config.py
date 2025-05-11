@@ -113,6 +113,20 @@ IMAGE_GEN_DEFAULT_SAMPLE_METHOD = os.getenv("IMAGE_GEN_DEFAULT_SAMPLE_METHOD", "
 IMAGE_GEN_DEFAULT_SEED = int(os.getenv("IMAGE_GEN_DEFAULT_SEED", -1)) # -1 for random
 IMAGE_GEN_RESPONSE_FORMAT = "b64_json" # Worker supports this
 STABLE_DIFFUSION_CPP_MODEL_PATH = os.getenv("STABLE_DIFFUSION_CPP_MODEL_PATH", None)
+
+
+
+# Stage 2: Refinement Model Settings
+REFINEMENT_MODEL_ENABLED = os.getenv("REFINEMENT_MODEL_ENABLED", "true").lower() in ('true', '1', 't', 'yes', 'y')
+REFINEMENT_MODEL_NAME = os.getenv("REFINEMENT_MODEL_NAME", "sd-refinement.gguf") # Assumed to be in IMAGE_GEN_MODEL_DIR
+REFINEMENT_PROMPT_PREFIX = os.getenv("REFINEMENT_PROMPT_PREFIX", "Masterpiece, Amazing, 4k, cinematic, ")
+REFINEMENT_PROMPT_SUFFIX = os.getenv("REFINEMENT_PROMPT_SUFFIX", ", highly detailed, sharp focus, intricate details, best quality, award winning photography, ultra realistic")
+REFINEMENT_STRENGTH = float(os.getenv("REFINEMENT_STRENGTH", 0.30)) # How much the refiner changes the FLUX image
+REFINEMENT_CFG_SCALE = float(os.getenv("REFINEMENT_CFG_SCALE", 7.0)) # Typical SD 1.5/2.x CFG
+REFINEMENT_SAMPLE_METHOD = os.getenv("REFINEMENT_SAMPLE_METHOD", "dpmpp2mv2") # Changed from euler_a based on your comment
+REFINEMENT_ADD_NOISE_STRENGTH = float(os.getenv("REFINEMENT_ADD_NOISE_STRENGTH", 0.8)) # 0.0 = no noise, 1.0-5.0 for subtle noise
+
+
 # --- END NEW ---
 
 #DOC EXTENSION To be scanned?
