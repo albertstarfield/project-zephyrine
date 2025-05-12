@@ -96,18 +96,16 @@ gradio                      # For creating quick UIs for ML models (if used for 
 langid                      # Language identification
 tqdm                        # Fast, extensible progress bar for loops
 tensorboard                 # TensorFlow's visualization toolkit (often with PyTorch too)
-# colorama                  # Removed as launcher.py was modified to not use it directly
+colorama                  # Removed as launcher.py was modified to not use it directly
+tiktoken
 
 # --- High-Performance Computing & Scientific Libraries ---
 # These are often for specific numerical tasks or model optimization.
 numba                       # JIT compiler for Python numerical functions
-# numpy                     # Already listed under Data Handling
+numpy                     # Already listed under Data Handling
 matplotlib                  # Plotting library (for visualization, if needed)
 scikit-learn                # Machine learning library (broad set of tools)
 
-# --- Image Generation (Optional) ---
-# stable-diffusion-cpp-python # Python bindings for stable-diffusion.cpp
-                              # Requires manual setup of stable-diffusion.cpp and its models.
 
 ################################################################################
 #                            Notes & Considerations                            #
