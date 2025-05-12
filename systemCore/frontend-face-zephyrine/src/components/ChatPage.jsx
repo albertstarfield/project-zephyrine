@@ -294,79 +294,109 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
 
     let messagesForSending = [...messages]; // Copy current valid messages (exclude streaming)
 
-    // --- 1. Prepare User Message (if not regenerating) ---
+     // --- 1. Prepare User Message & Update UI Optimistically (if not regenerating) ---
     let userMessageId = null;
+    let currentUserMessageForPayload = null; // Store the message object to send
+
     if (!isRegeneration) {
-      setInputValue(""); // Clear input only for new messages
+      setInputValue("");
       const optimisticUserMessage = {
         sender: "user",
         content: contentToSend,
         chat_id: chatId,
-        user_id: user?.id, // Include user ID if available
+        user_id: user?.id,
         created_at: new Date().toISOString(),
-        id: `temp-user-${uuidv4()}`, // Optimistic temporary ID
+        id: `temp-user-${uuidv4()}`,
       };
       userMessageId = optimisticUserMessage.id;
-      // Add user message optimistically to UI
       messagesForSending = [...messagesForSending, optimisticUserMessage];
-      setMessages(messagesForSending); // Update UI immediately
-      setShowPlaceholder(false); // Hide placeholder on first send
+      setMessages(messagesForSending); // Update UI
+      setShowPlaceholder(false);
 
-      // NOTE: Backend will save the user message based on the history sent in the 'chat' payload.
-      // No separate "save_user_message" WS call needed here if backend handles it.
-      if (messages.length === 0) {
-        console.log("First user message, refreshing history later for title.");
-        // refreshHistory(); // Refresh potentially after first assistant response instead
-      }
-    } else {
-      // If regenerating, remove the last assistant message visually for context
-      const lastAssistantMsgIndex = messagesForSending.findLastIndex(
-        (msg) => msg.sender === "assistant"
-      );
-      if (lastAssistantMsgIndex > -1) {
-        messagesForSending.splice(lastAssistantMsgIndex, 1);
-        // No need to update main 'messages' state here yet,
-        // as we'll replace it upon receiving the regenerated response.
-        // setMessages(messagesForSending); // Don't update UI state yet
-      }
-    }
-
-    // --- 2. Send "chat" Message via WebSocket ---
-    try {
-      const messagePayload = {
-        // Send history *up to the point of the message being sent/regenerated*
-        // Exclude any temporary/loading messages for backend processing
-        messages: messagesForSending
-          .filter(m => !m.isLoading && !m.id?.startsWith('temp-')) // Filter out loading/temp
-          .slice(-20) // Limit history length sent to backend
-          .map((m) => ({ sender: m.sender, content: m.content })), // Only send needed fields
-        model: selectedModel || "default", // Ensure a model name is sent
-        chatId: chatId,
-        userId: user?.id, // Include the user ID
-        // Include the first user message content *only if* this is the very first user message
-        firstUserMessageContent:
-          messages.filter((m) => m.sender === "user").length === 0 && !isRegeneration
-            ? contentToSend
-            : undefined, // Backend uses presence of this field
+      // This is the actual message content we need to ensure is sent
+      currentUserMessageForPayload = {
+         sender: "user",
+         content: contentToSend
       };
 
-      // If regenerating, ensure the *last* message in the payload is the user message
-      if (isRegeneration) {
-          const lastUserMsg = messagesForSending.filter(m => !m.isLoading && !m.id?.startsWith('temp-')).findLast(m => m.sender === 'user');
-          if(lastUserMsg && messagePayload.messages[messagePayload.messages.length - 1]?.content !== lastUserMsg.content) {
-             // This logic might need refinement depending on exact history structure desired for regen
-             console.warn("Regeneration history payload might not end with the correct user message.");
+    } else {
+      // If regenerating, find the last user message to resend
+      const lastUserMsgIndex = messagesForSending.findLastIndex(
+        (msg) => msg.sender === "user" && !msg.isLoading && !msg.id?.startsWith('temp-') // Find last *real* user message
+      );
+       if (lastUserMsgIndex > -1) {
+           // Prepare history *up to* the message before the last assistant response
+           const lastAssistantMsgIndex = messagesForSending.findLastIndex(msg => msg.sender === 'assistant');
+           if (lastAssistantMsgIndex > -1 && lastAssistantMsgIndex > lastUserMsgIndex) {
+              messagesForSending = messagesForSending.slice(0, lastAssistantMsgIndex);
+           }
+           // The message to regenerate from is the last user message in the adjusted history
+           currentUserMessageForPayload = {
+              sender: "user",
+              content: messagesForSending[lastUserMsgIndex].content // Get content from the identified message
+           };
+       } else {
+          setError("Cannot regenerate: No previous user message found in history.");
+          return; // Stop if no user message context
+       }
+    }
+
+     // --- 2. Prepare Payload for Backend ---
+     // Get the history *excluding* the current message we are constructing
+     const historyForBackend = messages // Use original, confirmed messages state
+        .filter(m => !m.isLoading && !m.id?.startsWith('temp-')) // Filter out loading/temp
+        .slice(-20) // Limit history length
+        .map(m => ({ sender: m.sender, content: m.content })); // Format
+
+     // Ensure currentUserMessageForPayload is valid before proceeding
+     if (!currentUserMessageForPayload) {
+         console.error("Could not determine current user message for payload generation.");
+         setError("Internal error preparing message for assistant.");
+         return;
+     }
+
+     // Combine the valid history with the current user message (which might be new or for regen)
+     // Make sure not to duplicate the message if regenerating
+     let finalMessagesForPayload = [...historyForBackend];
+     // If regenerating, the history might already contain the message, avoid adding it twice
+     const lastHistoryMessage = historyForBackend[historyForBackend.length - 1];
+     if (!isRegeneration || !lastHistoryMessage || lastHistoryMessage.content !== currentUserMessageForPayload.content || lastHistoryMessage.sender !== 'user') {
+         finalMessagesForPayload.push(currentUserMessageForPayload);
+     }
+
+
+    // --- 3. Send "chat" Message via WebSocket ---
+    try {
+      const messagePayload = {
+        messages: finalMessagesForPayload, // Send the combined list
+        model: selectedModel || "default",
+        chatId: chatId,
+        userId: user?.id,
+        // Adjust firstUserMessageContent logic if needed, though backend might handle it better now
+        firstUserMessageContent:
+          messages.filter((m) => m.sender === "user" && !m.id?.startsWith('temp-')).length === 0 && !isRegeneration
+            ? contentToSend
+            : undefined,
+      };
+
+      // Check if the final payload is empty (shouldn't be now)
+      if (!messagePayload.messages || messagePayload.messages.length === 0) {
+          console.error("FATAL: Attempting to send empty messages payload!", messagePayload);
+          setError("Error: Cannot send an empty message list to the assistant.");
+          // Revert optimistic UI update if needed
+          if (!isRegeneration && userMessageId) {
+            setMessages(prev => prev.filter(m => m.id !== userMessageId));
           }
+          return; // Prevent sending
       }
 
-
-      console.log("Sending WS 'chat' message:", messagePayload);
+      console.log("Sending WS 'chat' message (Revised Payload):", JSON.stringify(messagePayload, null, 2));
       ws.current.send(JSON.stringify({ type: "chat", payload: messagePayload }));
-      setIsGenerating(true);
 
-      // --- 3. Prepare Streaming State ---
+      // --- 4. Prepare Streaming State --- (Rest of the function remains similar)
+      setIsGenerating(true);
       accumulatedContentRef.current = "";
-      currentAssistantMessageId.current = `temp-assistant-${uuidv4()}`; // New temp ID
+      currentAssistantMessageId.current = `temp-assistant-${uuidv4()}`;
       setStreamingAssistantMessage({
         id: currentAssistantMessageId.current,
         sender: "assistant",
@@ -381,7 +411,6 @@ function ChatPage({ systemInfo, user, refreshHistory, selectedModel }) {
       setError("Failed to communicate with the assistant.");
       setIsGenerating(false);
       setStreamingAssistantMessage(null);
-      // Revert optimistic user message if send failed?
        if (!isRegeneration && userMessageId) {
          setMessages(prev => prev.filter(m => m.id !== userMessageId));
        }
