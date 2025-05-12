@@ -81,6 +81,16 @@ LLAMA_CPP_MODEL_MAP = {
 # Define default chat model based on map
 MODEL_DEFAULT_CHAT_LLAMA_CPP = "general" # Use the logical name
 
+
+# --- NEW: Snapshot Configuration ---
+ENABLE_DB_SNAPSHOTS = os.getenv("ENABLE_DB_SNAPSHOTS", "true").lower() in ('true', '1', 't', 'yes', 'y')
+DB_SNAPSHOT_INTERVAL_MINUTES = int(os.getenv("DB_SNAPSHOT_INTERVAL_MINUTES", 1))
+DB_SNAPSHOT_DIR_NAME = "db_snapshots"
+# DB_SNAPSHOT_DIR is derived in database.py
+DB_SNAPSHOT_RETENTION_COUNT = int(os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 7)) # << SET TO 7 HERE or via .env
+DB_SNAPSHOT_FILENAME_PREFIX = "snapshot_"
+DB_SNAPSHOT_FILENAME_SUFFIX = ".db.zst"
+
 # --- Placeholder for Stable Diffusion ---
 # --- NEW: Imagination Worker (Stable Diffusion FLUX) Settings ---
 IMAGE_WORKER_SCRIPT_NAME = "imagination_worker.py" # Name of the worker script
@@ -191,11 +201,6 @@ Available Models:
 
 Consider the primary *task* implied by the user's input.
 
-Respond ONLY with a JSON object containing:
-- "chosen_model": (string) One of "vlm", "latex", "math", "code", "general".
-- "reasoning": (string) Brief explanation for your choice.
-- "refined_query": (string) The user's query, possibly slightly rephrased or clarified for the chosen specialist model (especially important for math/code). Keep the original language.
-
 User Query: {input}
 Pending ToT Result: {pending_tot_result}
 Direct History: {recent_direct_history}
@@ -204,6 +209,16 @@ History RAG: {history_rag}
 File Index RAG: {file_index_context}
 Log Context: {log_context}
 Emotion Analysis: {emotion_analysis}
+Imagined Image VLM Description (if any): {imagined_image_vlm_description} 
+{{"key": "value"}} # This is likely an error/typo in your original prompt or my previous suggestion. REMOVE THIS.
+
+---
+Instruction: Based on all the above, respond ONLY with a single, valid JSON object containing these exact keys:
+- "chosen_model": (string) One of "vlm", "latex", "math", "code", "general".
+- "reasoning": (string) Brief explanation for your choice.
+- "refined_query": (string) The user's query, possibly slightly rephrased or clarified for the chosen specialist model. Keep the original language.
+
+JSON Output:
 """
 
 PROMPT_TREE_OF_THOUGHTS_V2 = f"""Okay, engaging warp core... I mean, initiating deep thought analysis as Adelaide Zephyrine Charlotte. Let's map this out.

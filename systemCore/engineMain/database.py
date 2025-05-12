@@ -442,7 +442,7 @@ def _shutdown_hook():
 # --- NEW: Snapshot Management Helpers ---
 def _get_snapshot_files() -> List[str]:
     """Returns a sorted list of snapshot file paths (oldest first)."""
-    if not os.path.isdir(DB_SNAPSHOT_DIR):
+    if not os.path.isdir(DB_SNAPSHOT_DIR): # DB_SNAPSHOT_DIR is defined globally
         return []
     try:
         snapshot_files = [
@@ -450,18 +450,16 @@ def _get_snapshot_files() -> List[str]:
             for f in os.listdir(DB_SNAPSHOT_DIR)
             if f.startswith(DB_SNAPSHOT_FILENAME_PREFIX) and f.endswith(DB_SNAPSHOT_FILENAME_SUFFIX)
         ]
-
-        # Sort by timestamp embedded in filename (assuming YYYYMMDD_HHMMSS format after prefix)
         def get_timestamp_from_filename(filepath):
             filename = os.path.basename(filepath)
             try:
-                # snapshot_20231027_153000.db.zst
                 ts_part = filename[len(DB_SNAPSHOT_FILENAME_PREFIX):-len(DB_SNAPSHOT_FILENAME_SUFFIX)]
                 return datetime.datetime.strptime(ts_part, "%Y%m%d_%H%M%S")
             except ValueError:
-                return datetime.datetime.min  # Should not happen with correct naming
-
-        snapshot_files.sort(key=get_timestamp_from_filename)
+                # If filename format is unexpected, treat it as very old for sorting robustness
+                logger.warning(f"Could not parse timestamp from snapshot filename: {filename}")
+                return datetime.datetime.min
+        snapshot_files.sort(key=get_timestamp_from_filename) # Sorts oldest first
         return snapshot_files
     except Exception as e:
         logger.error(f"Error listing snapshot files: {e}")
@@ -470,19 +468,21 @@ def _get_snapshot_files() -> List[str]:
 
 def _prune_old_snapshots():
     """Deletes the oldest snapshots if the count exceeds retention."""
-    if not ENABLE_DB_SNAPSHOTS or DB_SNAPSHOT_RETENTION_COUNT <= 0:
+    if not ENABLE_DB_SNAPSHOTS or DB_SNAPSHOT_RETENTION_COUNT <= 0: # Check if pruning is enabled/valid
         return
     try:
-        snapshots = _get_snapshot_files()
+        snapshots = _get_snapshot_files() # Gets them sorted, oldest first
         if len(snapshots) > DB_SNAPSHOT_RETENTION_COUNT:
             num_to_delete = len(snapshots) - DB_SNAPSHOT_RETENTION_COUNT
-            logger.info(f"Pruning {num_to_delete} old snapshot(s) (retention: {DB_SNAPSHOT_RETENTION_COUNT})...")
+            logger.info(f"Pruning {num_to_delete} old snapshot(s) (retention limit: {DB_SNAPSHOT_RETENTION_COUNT})...")
+            # Delete the oldest ones from the beginning of the sorted list
             for i in range(num_to_delete):
+                snapshot_to_delete = snapshots[i]
                 try:
-                    os.remove(snapshots[i])
-                    logger.debug(f"  Deleted old snapshot: {os.path.basename(snapshots[i])}")
+                    os.remove(snapshot_to_delete)
+                    logger.debug(f"  Deleted old snapshot: {os.path.basename(snapshot_to_delete)}")
                 except Exception as e:
-                    logger.warning(f"  Failed to delete old snapshot {os.path.basename(snapshots[i])}: {e}")
+                    logger.warning(f"  Failed to delete old snapshot {os.path.basename(snapshot_to_delete)}: {e}")
     except Exception as e:
         logger.error(f"Error during snapshot pruning: {e}")
 
