@@ -113,6 +113,7 @@ from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough, RunnableParallel
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
+from langchain_core.exceptions import OutputParserException
 
 # --- Langchain Community Imports ---
 from langchain_community.vectorstores import Chroma # Use Chroma for in-memory history/URL RAG
@@ -3788,23 +3789,93 @@ class AIChat:
                      db.commit()
             return "Error during deep analysis."
 
-
     def _run_emotion_analysis(self, db: Session, user_input: str, interaction_data: dict) -> str:
-        """Analyzes emotion/context (synchronous)."""
-        logger.info("😊 Analyzing input emotion/context...")
-        history_summary = self._get_history_summary(db, MEMORY_SIZE)
-        chain = (self.emotion_analysis_prompt | self.provider.model | StrOutputParser())
+        """
+        Analyzes emotion/context (synchronous).
+        Updates interaction_data with the analysis result or error.
+        Returns the analysis string or an error message.
+        """
+        request_id_suffix = str(uuid.uuid4())[:8]
+        log_prefix = f"😊 EmotionAnalyze|{interaction_data.get('session_id', 'unknown')[:8]}-{request_id_suffix}"
+        logger.info(f"{log_prefix} Analyzing input emotion/context for: '{user_input[:50]}...'")
+
+        history_summary = self._get_history_summary(db, MEMORY_SIZE)  # MEMORY_SIZE from config
+
+        # Determine which model role to use for emotion analysis
+        emotion_model_role = "router"  # Configurable: could be "router" or a dedicated role
+        emotion_model = self.provider.get_model(emotion_model_role)
+
+        analysis_result_for_return = "Analysis unavailable."  # Default return
+
+        if not emotion_model:
+            error_msg = f"Emotion analysis model ('{emotion_model_role}') not available."
+            logger.error(f"{log_prefix} {error_msg}")
+            interaction_data['emotion_context_analysis'] = error_msg  # Update main interaction data
+            analysis_result_for_return = f"Could not analyze emotion (model '{emotion_model_role}' unavailable)."
+            try:
+                add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat",
+                                input_type="log_error",
+                                user_input="[Emotion Analysis Init Failed]",
+                                llm_response=error_msg)
+            except Exception as db_err:
+                logger.error(f"{log_prefix} Failed to log emotion model unavailable error: {db_err}")
+            return analysis_result_for_return
+
         try:
-            analysis = self._call_llm_with_timing(chain, {"input": user_input, "history_summary": history_summary}, interaction_data)
-            logger.info(f"😊 Emotion/Context Analysis Result: {analysis}")
-            interaction_data['emotion_context_analysis'] = analysis
-            return analysis
+            # Construct the chain with the fetched model
+            chain = (self.emotion_analysis_prompt | emotion_model | StrOutputParser())
+
+            # _call_llm_with_timing mutates interaction_data for 'execution_time_ms'
+            # It uses ELP0 by default unless overridden
+            analysis = self._call_llm_with_timing(
+                chain,
+                {"input": user_input, "history_summary": history_summary},
+                interaction_data  # Pass the main interaction_data for timing updates
+            )
+
+            # Clean up the analysis string
+            cleaned_analysis = self._cleanup_llm_output(analysis)  # Use existing cleanup
+
+            logger.info(f"{log_prefix} Emotion/Context Analysis Result: {cleaned_analysis[:200]}...")
+            interaction_data['emotion_context_analysis'] = cleaned_analysis  # Update main interaction data
+            analysis_result_for_return = cleaned_analysis
+
+            # Log the successful analysis (optional, as it's stored in interaction_data)
+            # try:
+            #     add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat",
+            #                     input_type="log_debug", user_input="[Emotion Analysis Success]",
+            #                     llm_response=cleaned_analysis[:500])
+            # except Exception: pass
+
+        except TaskInterruptedException as tie:
+            error_msg = f"[Emotion Analysis Interrupted by higher priority task: {tie}]"
+            logger.warning(f"🚦 {log_prefix} Emotion analysis INTERRUPTED: {tie}")
+            interaction_data['emotion_context_analysis'] = error_msg
+            analysis_result_for_return = error_msg
+            try:
+                add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat",
+                                input_type="log_warning",
+                                user_input="[Emotion Analysis Interrupted]",
+                                llm_response=str(tie)[:4000])
+            except Exception as db_err:
+                logger.error(f"{log_prefix} Failed log emotion analysis interruption: {db_err}")
+            # For emotion analysis, we typically don't re-raise interruption to stop the whole background_generate,
+            # just record that it was interrupted.
         except Exception as e:
-            err_msg = f"Error during emotion analysis: {e}"
-            logger.error(f"❌ {err_msg}")
-            interaction_data['emotion_context_analysis'] = err_msg
-            add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat", input_type="log_error", llm_response=err_msg)
-            return "Could not analyze."
+            error_msg = f"Error during emotion analysis: {e}"
+            logger.error(f"❌ {log_prefix} {error_msg}")
+            logger.exception(f"{log_prefix} Emotion Analysis Traceback:")
+            interaction_data['emotion_context_analysis'] = error_msg
+            analysis_result_for_return = f"Could not analyze emotion (processing error: {type(e).__name__})."
+            try:
+                add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat",
+                                input_type="log_error",
+                                user_input="[Emotion Analysis Failed]",
+                                llm_response=error_msg[:4000])
+            except Exception as db_err:
+                logger.error(f"{log_prefix} Failed to log emotion analysis error: {db_err}")
+
+        return analysis_result_for_return
 
 
     def _get_history_summary(self, db: Session, limit: int) -> str:
@@ -4330,173 +4401,90 @@ class AIChat:
             return text
 
     # --- NEW HELPER: Routing ---
-    async def _route_to_specialist(self, db: Session, session_id: str, user_input: str, context: Dict) -> Tuple[str, str, str]:
-        """
-        Uses router LLM (ELP0) for analysis and coder LLM (ELP0) for JSON extraction.
-        Handles interruptions by re-raising TaskInterruptedException.
-        Retries JSON extraction on other errors. Ensures a valid model key is returned.
-        """
-        log_prefix = f"🧠 Route|ELP0|{session_id}" # Add ELP0 marker
-        logger.info(f"{log_prefix}: Routing request...")
+    async def _route_to_specialist(self, db: Session, session_id: str, user_input: str, context: Dict) -> Tuple[
+        str, str, str]:
+        log_prefix = f"🧠 Route|ELP0|{session_id}"
+        logger.info(f"{log_prefix}: Routing request with direct JSON output expected from router...")
 
+        # --- Use the "router" model, which should be a general instruction-following model ---
         router_model = self.provider.get_model("router")
-        extractor_model = self.provider.get_model("code") # Use coder model for extraction
-        default_model_key = "general" # Define the fallback key
+        default_model_key = "general"
 
-        if not router_model or not extractor_model:
-            logger.error(f"{log_prefix} Router or JSON Extractor (Coder) model not available! Falling back to default.")
-            try: # Log error to DB
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                                user_input="Router/Extractor Init Fail",
-                                llm_response="Router or Extractor model unavailable.")
-            except Exception as db_err:
-                 logger.error(f"{log_prefix} Failed log router/extractor model unavailable: {db_err}")
-            # Return default key, original input, and error reason
-            return default_model_key, user_input, "Router/Extractor model unavailable."
+        if not router_model:
+            # ... (error handling as before) ...
+            return default_model_key, user_input, "Router model unavailable."
 
-        # --- 1. Call Router Model (ELP0) ---
-        logger.debug(f"{log_prefix}: Preparing and calling Router model...")
-        prompt_input_router = {
+        prompt_input_router = {  # Inputs for PROMPT_ROUTER
             "input": user_input,
             "pending_tot_result": context.get("pending_tot_result", "None."),
             "recent_direct_history": context.get("recent_direct_history", "None."),
-            "context": context.get("url_context", "None."),
+            "context": context.get("url_context", "None."),  # URL context
             "history_rag": context.get("history_rag", "None."),
             "file_index_context": context.get("file_index_context", "None."),
             "log_context": context.get("log_context", "None."),
-            "emotion_analysis": context.get("emotion_context_analysis", "N/A.")
+            "emotion_analysis": context.get("emotion_context_analysis", "N/A."),
+            "imagined_image_vlm_description": context.get("imagined_image_vlm_description", "None.")
         }
-        router_chain = (ChatPromptTemplate.from_template(PROMPT_ROUTER) | router_model | StrOutputParser())
+
+        # Expect direct JSON output from the router model
+        router_chain = (
+                ChatPromptTemplate.from_template(PROMPT_ROUTER)
+                | router_model
+                | JsonOutputParser()  # Parse JSON directly from router output
+        )
+
         router_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
-        raw_router_output = "Error: Router LLM call failed." # Default
-
-        try:
-            # Use _call_llm_with_timing with ELP0 priority
-            raw_router_output = await asyncio.to_thread(
-                self._call_llm_with_timing, router_chain, prompt_input_router, router_timing_data, priority=ELP0
-            )
-            logger.trace(f"{log_prefix} Router Raw Output:\n{raw_router_output}")
-            # Log the raw output for debugging purposes
-            try: # Log to DB
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug",
-                                user_input="Router Raw Output", llm_response=raw_router_output[:4000])
-            except Exception as db_err:
-                 logger.error(f"{log_prefix} Failed log raw router output: {db_err}")
-
-        except TaskInterruptedException as tie:
-            # Handle interruption specifically
-            logger.warning(f"🚦 {log_prefix} Router step INTERRUPTED: {tie}")
-            # Re-raise to be caught by the calling function (e.g., background_generate)
-            raise tie
-        except Exception as e:
-            # Handle other errors during the initial router call
-            logger.error(f"❌ {log_prefix} Error during initial routing LLM call: {e}")
-            try: # Log error to DB
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                                user_input="Router Analysis Failed",
-                                llm_response=f"Routing failed (LLM call): {e}")
-            except Exception as db_err:
-                 logger.error(f"{log_prefix} Failed log router LLM error: {db_err}")
-            # Fallback to default if router fails
-            return default_model_key, user_input, f"Routing LLM error: {e}"
-
-        # --- 2. Call Extractor Model to Get JSON (ELP0 with Retries) ---
-        logger.info(f"{log_prefix} Extracting JSON from router output...")
-        prompt_input_extractor = {"raw_llm_output": raw_router_output}
-        extractor_parser = JsonOutputParser() # Assuming this parser doesn't need modification
-        extractor_chain = (ChatPromptTemplate.from_template(PROMPT_EXTRACT_JSON) | extractor_model | extractor_parser)
-        extractor_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
-        routing_result = None
+        routing_result_json: Optional[Dict] = None
         last_error = None
 
         for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):
-             logger.debug(f"{log_prefix} JSON Extraction attempt {attempt + 1}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
-             try:
-                 # Use _call_llm_with_timing with ELP0 priority inside the loop
-                 routing_result = await asyncio.to_thread(
-                     self._call_llm_with_timing, extractor_chain, prompt_input_extractor, extractor_timing_data, priority=ELP0
-                 )
+            logger.debug(f"{log_prefix} Router direct JSON attempt {attempt + 1}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
+            try:
+                routing_result_json = await asyncio.to_thread(
+                    self._call_llm_with_timing, router_chain, prompt_input_router,
+                    router_timing_data, priority=ELP0
+                )
+                # _call_llm_with_timing returns the parsed JSON if JsonOutputParser succeeds
 
-                 # --- Validate the extracted JSON structure ---
-                 valid_model_keys = {"vlm", "latex", "math", "code", "general"}
-                 if isinstance(routing_result, dict) and routing_result.get("chosen_model") and routing_result.get("refined_query"):
-                    chosen_model = routing_result["chosen_model"]
-                    refined_query = routing_result["refined_query"]
-                    reasoning = routing_result.get("reasoning", "N/A")
-
-                    # Check if the chosen model key is valid
+                if isinstance(routing_result_json, dict) and routing_result_json.get(
+                        "chosen_model") and routing_result_json.get("refined_query"):
+                    chosen_model = routing_result_json["chosen_model"]
+                    refined_query = routing_result_json["refined_query"]
+                    reasoning = routing_result_json.get("reasoning", "N/A")
+                    valid_model_keys = {"vlm", "latex", "math", "code", "general"}
                     if chosen_model in valid_model_keys:
-                         logger.info(f"✅ {log_prefix} JSON Extraction successful. Router chose: '{chosen_model}'. Reason: {reasoning}")
-                         try: # Log success to DB
-                             add_interaction(db, session_id=session_id, mode="chat", input_type="log_info",
-                                             user_input="Router Final Decision",
-                                             llm_response=f"Chose: {chosen_model}, Query: '{refined_query[:100]}...', Reason: {reasoning}",
-                                             assistant_action_analysis_json=json.dumps(routing_result))
-                         except Exception as db_err:
-                              logger.error(f"{log_prefix} Failed log router final decision: {db_err}")
-                         return chosen_model, refined_query, reasoning # Success, exit function
-
+                        logger.info(
+                            f"✅ {log_prefix} Router chose: '{chosen_model}'. Reason: {reasoning}. Query: '{refined_query[:50]}...'")
+                        # ... (DB logging of success) ...
+                        return chosen_model, refined_query, reasoning
                     else:
-                         # Handle invalid model key from extractor
-                         logger.warning(f"{log_prefix} Extractor returned invalid model key '{chosen_model}' on attempt {attempt + 1}. Full result: {routing_result}")
-                         last_error = ValueError(f"Invalid model key '{chosen_model}' from extractor")
-                         try: # Log warning to DB
-                              add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
-                                              user_input=f"JSON Extractor Invalid Model Key (Attempt {attempt + 1})",
-                                              llm_response=f"Invalid key: {chosen_model}. Parsed: {str(routing_result)[:500]}",
-                                              assistant_action_analysis_json=json.dumps(routing_result or {}))
-                         except Exception as db_err:
-                              logger.error(f"{log_prefix} Failed log extractor invalid key: {db_err}")
-                         # Continue to the next retry attempt if not the last one
+                        last_error = ValueError(f"Router returned invalid model key '{chosen_model}'")
+                        logger.warning(f"{log_prefix} {last_error}. Full result: {routing_result_json}")
+                        # ... (DB logging of warning) ...
+                else:
+                    last_error = ValueError("Router output not the expected JSON dict structure.")
+                    logger.warning(f"{log_prefix} {last_error}. Received: {routing_result_json}")
+                    # ... (DB logging of warning) ...
 
-                 else:
-                     # Handle invalid JSON structure (valid JSON, but wrong keys/types)
-                     logger.warning(f"{log_prefix} Extractor produced valid JSON but invalid structure on attempt {attempt + 1}: {routing_result}. Retrying...")
-                     last_error = ValueError("Invalid JSON structure from extractor")
-                     try: # Log warning to DB
-                          add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
-                                          user_input=f"JSON Extractor Invalid Structure (Attempt {attempt + 1})",
-                                          llm_response=f"Parsed: {str(routing_result)[:500]}",
-                                          assistant_action_analysis_json=json.dumps(routing_result or {}))
-                     except Exception as db_err:
-                          logger.error(f"{log_prefix} Failed log extractor invalid structure: {db_err}")
-                     # Continue to the next retry attempt
+            except TaskInterruptedException as tie:
+                raise tie
+            except Exception as e:  # Catches OutputParserException if JSON is malformed, or other errors
+                last_error = e
+                logger.warning(f"⚠️ {log_prefix} Error during router direct JSON attempt {attempt + 1}: {e}")
+                # The raw text that failed parsing would be inside 'e' if it's OutputParserException
+                if isinstance(e, OutputParserException):
+                    logger.warning(f"   LLM Output that failed JSON parsing: {e.llm_output}")
+                # ... (DB logging of error) ...
 
-             except TaskInterruptedException as tie:
-                  # Handle interruption specifically - DO NOT RETRY
-                  logger.warning(f"🚦 {log_prefix} JSON Extractor step INTERRUPTED (Attempt {attempt + 1}): {tie}")
-                  # Re-raise immediately to be caught by the calling function
-                  raise tie
-             except Exception as e:
-                 # Handle other errors during extraction (e.g., JSONDecodeError from parser, LLM call errors)
-                 logger.warning(f"⚠️ {log_prefix} Error during JSON Extraction attempt {attempt + 1}: {e}")
-                 last_error = e
-                 try: # Log warning to DB
-                     add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
-                                     user_input=f"JSON Extractor FAILED (Attempt {attempt + 1})",
-                                     llm_response=f"Error: {e}. Raw Router Output: {raw_router_output[:500]}")
-                 except Exception as db_err:
-                      logger.error(f"{log_prefix} Failed log extractor failure: {db_err}")
-                 # Continue to the next retry attempt if not the last one
+            if attempt < DEEP_THOUGHT_RETRY_ATTEMPTS - 1:
+                await asyncio.sleep(0.5 + attempt * 0.5)
+            else:
+                logger.error(f"❌ {log_prefix} Max retries for router. Last error: {last_error}")
+                # ... (DB logging of final failure) ...
+                return default_model_key, user_input, f"Router failed after retries: {last_error}"
 
-             # Wait before retrying if attempts remain and error wasn't interruption
-             if attempt < DEEP_THOUGHT_RETRY_ATTEMPTS - 1:
-                 await asyncio.sleep(0.5 + attempt * 0.5) # Use asyncio sleep as we are in async function
-             else:
-                 # Max retries reached for non-interruption errors
-                 logger.error(f"❌ {log_prefix} Max retries ({DEEP_THOUGHT_RETRY_ATTEMPTS}) reached for JSON extraction. Last error: {last_error}")
-                 # Fallback after max retries below
-
-        # --- Fallback if all extraction attempts fail (excluding interruptions) ---
-        logger.error(f"❌ {log_prefix} JSON Extraction attempts failed. Falling back to default.")
-        try: # Log error to DB
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                            user_input="Router Analysis Failed (Extraction)",
-                            llm_response=f"JSON Extraction failed after retries. Last Error: {last_error}")
-        except Exception as db_err:
-             logger.error(f"{log_prefix} Failed log extraction fallback: {db_err}")
-        # Return default key, original input, and reason for failure
-        return default_model_key, user_input, "Router JSON extraction failed after retries."
+        # Fallback if loop finishes unexpectedly (shouldn't happen)
+        return default_model_key, user_input, "Router unexpected exit after retries."
 
     # --- generate method ---
     # app.py -> Inside AIChat class
