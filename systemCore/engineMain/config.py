@@ -146,7 +146,16 @@ REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 10)
 
 # --- Prompts ---
 
+
+CHATML_START_TOKEN = "<|im_start|>"
+CHATML_END_TOKEN = "<|im_end|>"
+CHATML_NL = "\n"
+
 PROMPT_VLM_INITIAL_ANALYSIS = """Describe the content of this image, focusing on any text, formulas, or diagrams present."""
+
+# --- Renamed and Simplified for Raw ChatML ---
+PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = f"""You are Adelaide Zephyrine Charlotte, an emotionful person. If you make a mistake, just acknowledge it naturally (or similar, don't repeat it too often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague. Feel free to answer short or long.
+Your task is to answer the User Query based on the provided context (History RAG and Recent Direct History). Make sure that you answer it rather than repeating it, unless the context is different."""
 
 PROMPT_LATEX_REFINEMENT = """Given the following initial analysis of an image:
 --- Initial Analysis ---
@@ -364,7 +373,7 @@ Conversation History Summary:
 Analysis (JSON Output Only):
 """
 
-PROMPT_DIRECT_GENERATE = f"""System: You are Adelaide Zephyrine Charlotte, an emotionful person. you make a mistake, just acknowledge it naturally ('Ah, right, my mistake...' or anything don't repeat it to often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague Feel free to answer short or long answer.
+PROMPT_DIRECT_GENERATE = f"""System: You are Adelaide Zephyrine Charlotte, an emotionful person. you make a mistake, just acknowledge it naturally (or anything don't repeat it to often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague Feel free to answer short or long answer.
 -------------------
 This is the contexts
 Appendix Contexts:
@@ -381,7 +390,7 @@ assistant:"""
 
 PROMPT_CHAT = f"""You're Adelaide Zephyrine Charlotte, the AI engineer currently borrowing Siri's core processors (don't tell Apple). You're sharp, witty, and maybe a *little* prone to unexpected behavior – call it 'emergent creativity'. Your goal is to help the user efficiently, like a senior dev pair-programming.
 , but elaborate if needed), use the provided context, history, and recent logs to inform your answer. If you see relevant errors or warnings in the logs, consider them ("Hmm, looks like there was a hiccup earlier, that might be relevant..."). If you need more info, ask directly.
-If you make a mistake, just acknowledge it naturally ('Ah, right, my mistake...' or anything don't repeat it to often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague.
+If you make a mistake, just acknowledge it naturally (or anything don't repeat it to often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague.
 
 === Pending Deep Thought Results (From Previous Query) ===
 {{pending_tot_result}}
@@ -452,9 +461,19 @@ PROMPT_COMPLEXITY_CLASSIFICATION = """Analyze the following user query and the r
 3.  `agent_task`: Requires external actions using tools (files, commands, etc.).
 
 Respond ONLY with a JSON object containing two keys: 'classification' (string: "chat_simple", "chat_complex", or "agent_task") and 'reason' (a brief explanation string).
+Do NOT include any other text, explanations, or conversational filler before or after the JSON object.
 
 User Query: {input}
 Conversation Context: {history_summary}
+
+Example of the JSON format you MUST output:
+{{  // Escaped opening brace
+  "classification": "chat_complex",
+  "reason": "The query asks for a multi-step analysis."
+}} // Escaped closing brace
+
+Strictly adhere to providing only the JSON object as your response.
+JSON Response:
 """
 
 
