@@ -9,7 +9,6 @@
 
 tqdm
 requests
-
 # --- Core Web Framework & ASGI/WSGI Server ---
 Flask>=2.0                  # Core web framework
 hypercorn>=0.14             # ASGI server (primary choice for app.py)
@@ -29,6 +28,7 @@ llama-cpp-python            # For local GGUF model execution via llama.cpp
 
 # Vector Store
 chromadb>=0.4               # For RAG capabilities and local vector storage
+langchain-chroma
 
 # --- Database & Migrations ---
 SQLAlchemy>=1.4             # Object-Relational Mapper (ORM)
