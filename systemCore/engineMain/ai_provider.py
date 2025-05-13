@@ -538,24 +538,19 @@ class AIProvider:
 
 
     # <<< --- NEW: Worker Execution Method --- >>>
-    def _execute_in_worker(self, model_role: str, task_type: str, request_data: Dict[str, Any], priority: int = ELP0) -> Optional[Dict[str, Any]]:
-        """
-        Starts llama_worker.py, sends request, gets response. Handles crashes.
-        Protected by the PRIORITY QUOTA lock. ELP1 can interrupt ELP0.
-        """
-        # Use specific logger from the instance if available, otherwise default logger
-        provider_logger = getattr(self, 'logger', logger) # Use self.logger if it exists
+    def _execute_in_worker(self, model_role: str, task_type: str, request_data: Dict[str, Any], priority: int = ELP0) -> \
+    Optional[Dict[str, Any]]:
+        provider_logger = getattr(self, 'logger', logger)
         worker_log_prefix = f"WORKER_MGR(ELP{priority}|{model_role}/{task_type})"
         provider_logger.debug(f"{worker_log_prefix}: Attempting to execute task in worker.")
 
-        if not self._priority_quota_lock: # Check if the lock instance exists
-             provider_logger.error(f"{worker_log_prefix}: Priority Lock not initialized!")
-             return {"error": "Provider lock not initialized"}
+        if not self._priority_quota_lock:
+            provider_logger.error(f"{worker_log_prefix}: Priority Lock not initialized!")
+            return {"error": "Provider lock not initialized"}
         if self.provider_name != "llama_cpp":
-             provider_logger.error(f"{worker_log_prefix}: Attempted worker execution outside llama_cpp provider.")
-             return {"error": "Worker execution only for llama_cpp provider"}
+            provider_logger.error(f"{worker_log_prefix}: Attempted worker execution outside llama_cpp provider.")
+            return {"error": "Worker execution only for llama_cpp provider"}
 
-        # --- Get Model Path ---
         gguf_filename = self._llama_model_map.get(model_role)
         if not gguf_filename:
             provider_logger.error(f"{worker_log_prefix}: No GGUF file configured for role '{model_role}'")
@@ -565,174 +560,141 @@ class AIProvider:
             provider_logger.error(f"{worker_log_prefix}: Model file not found: {model_path}")
             return {"error": f"Model file not found: {os.path.basename(model_path)}"}
 
-        # --- Acquire Priority Lock ---
         lock_acquired = False
-        worker_process = None # Define worker_process before the try block
+        worker_process = None
         start_lock_wait = time.monotonic()
         provider_logger.debug(f"{worker_log_prefix}: Acquiring worker execution lock (Priority: ELP{priority})...")
-
-        # Use a timeout for acquisition? For now, no timeout.
         lock_acquired = self._priority_quota_lock.acquire(priority=priority, timeout=None)
         lock_wait_duration = time.monotonic() - start_lock_wait
 
         if lock_acquired:
-            provider_logger.info(f"{worker_log_prefix}: Lock acquired (waited {lock_wait_duration:.2f}s). Starting worker process.")
+            provider_logger.info(
+                f"{worker_log_prefix}: Lock acquired (waited {lock_wait_duration:.2f}s). Starting worker process.")
             try:
-                # --- Determine Context Size Based on Role ---
-                if model_role == "embeddings":
-                    n_ctx_to_use = 512 # Specific override for embedding model
-                    provider_logger.info(f"{worker_log_prefix}: Using specific context size {n_ctx_to_use} for embedding model role.")
-                else:
-                    n_ctx_to_use = LLAMA_CPP_N_CTX # Use configured default for chat models
-                    provider_logger.debug(f"{worker_log_prefix}: Using configured context size {n_ctx_to_use} for role '{model_role}'.")
-
-                # --- Prepare Worker Command ---
                 worker_script_path = os.path.join(os.path.dirname(__file__), "llama_worker.py")
                 command = [
-                    self._python_executable, # Use Python from the provider's env
+                    self._python_executable,
                     worker_script_path,
                     "--model-path", model_path,
                     "--task-type", task_type,
                     "--n-gpu-layers", str(LLAMA_CPP_N_GPU_LAYERS),
-                    "--n-ctx", str(n_ctx_to_use), # Use determined context size
                 ]
+
+                # === MODIFIED n_ctx LOGIC ===
+                if task_type == "embedding":
+                    # Embeddings always get a fixed n_ctx (e.g., 512, or LLAMA_CPP_N_CTX if that was intended for override)
+                    # Let's assume a small fixed value is best for embeddings unless an override is in LLAMA_CPP_MODEL_MAP for the embedding model specifically.
+                    embedding_n_ctx = self._llama_model_map.get(f"{model_role}_n_ctx",
+                                                                512)  # Check for specific override like "embeddings_n_ctx"
+                    command.extend(["--n-ctx", str(embedding_n_ctx)])
+                    provider_logger.info(
+                        f"{worker_log_prefix}: Passing fixed --n-ctx {embedding_n_ctx} for embeddings.")
+                elif LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:  # Check if config.py has an explicit override value
+                    # LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT needs to be defined in config.py, e.g. can be os.getenv("LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT", None)
+                    # If it's set (e.g. to 4096 from config), pass it to the worker as an override.
+                    # The worker will use this if --n-ctx is provided.
+                    command.extend(["--n-ctx", str(LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT)])
+                    provider_logger.info(
+                        f"{worker_log_prefix}: Passing --n-ctx override {LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT} for {task_type} based on config.")
+                else:
+                    # For chat/raw_text_completion, if no override, DO NOT pass --n-ctx.
+                    # The worker will calculate it dynamically.
+                    provider_logger.info(
+                        f"{worker_log_prefix}: Not passing --n-ctx for {task_type}. Worker will calculate dynamically.")
+                # === END MODIFIED n_ctx LOGIC ===
+
                 if LLAMA_CPP_VERBOSE: command.append("--verbose")
-                # Add chat format only for chat tasks
-                if task_type == "chat":
-                    chat_fmt = LLAMA_CPP_MODEL_MAP.get(f"{model_role}_chat_format", "chatml") # Get specific format or default
+                if task_type == "chat":  # Chat format is only relevant for chat tasks
+                    chat_fmt = self._llama_model_map.get(f"{model_role}_chat_format", "chatml")
                     if chat_fmt: command.extend(["--chat-format", chat_fmt])
 
-                provider_logger.debug(f"{worker_log_prefix}: Worker command: {' '.join(shlex.quote(c) for c in command)}")
-
-                # --- Start Worker Process ---
+                provider_logger.debug(
+                    f"{worker_log_prefix}: Worker command: {' '.join(shlex.quote(c) for c in command)}")
                 start_time = time.monotonic()
                 worker_process = subprocess.Popen(
-                    command,
-                    stdin=subprocess.PIPE,
-                    stdout=subprocess.PIPE,
-                    stderr=subprocess.PIPE,
-                    text=True, # Use text mode for JSON communication
-                    encoding='utf-8',
-                    errors='replace'
+                    command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+                    text=True, encoding='utf-8', errors='replace'
                 )
+                if priority == ELP0: self._priority_quota_lock.set_holder_process(worker_process)
 
-                # --- Associate Process with Lock (if ELP0) ---
-                if priority == ELP0:
-                    self._priority_quota_lock.set_holder_process(worker_process)
-                # --- End Association ---
-
-                # --- Send Request Data to Worker ---
                 input_json = json.dumps(request_data)
-                provider_logger.debug(f"{worker_log_prefix}: Sending input JSON (len={len(input_json)}) to worker stdin...")
+                provider_logger.debug(
+                    f"{worker_log_prefix}: Sending input JSON (len={len(input_json)}) to worker stdin...")
                 stdout_data, stderr_data = "", ""
-                comm_exception = None
-                try:
-                    # Communicate with the worker process
-                    stdout_data, stderr_data = worker_process.communicate(input=input_json, timeout=300) # 5 min timeout
-                    provider_logger.debug(f"{worker_log_prefix}: Worker communicate() finished.")
-                except subprocess.TimeoutExpired as timeout_err:
-                    provider_logger.error(f"{worker_log_prefix}: Worker process timed out after 300s.")
-                    worker_process.kill() # Ensure it's killed
-                    stdout_data, stderr_data = worker_process.communicate() # Try to get final output
-                    provider_logger.error(f"{worker_log_prefix}: Worker timed out. Stderr: {stderr_data.strip()}")
-                    comm_exception = timeout_err # Store exception
-                    # Return error directly without needing finally block for this case
-                    self._priority_quota_lock.release() # Need to release lock here on early exit
-                    return {"error": "Worker process timed out"}
-                except BrokenPipeError as bpe:
-                    provider_logger.warning(f"{worker_log_prefix}: Broken pipe during communicate(). Likely interrupted by ELP1 request.")
-                    # Worker was killed by the lock interrupt logic.
-                    try: worker_process.wait(timeout=1) # Ensure process object state updates
-                    except: pass
-                    # Try to get final output, might be empty/partial
-                    stdout_data, stderr_data = worker_process.communicate()
-                    comm_exception = bpe # Store exception
-                    # Return specific interruption error
-                    self._priority_quota_lock.release() # Need to release lock here on early exit
-                    return {"error": "Worker task interrupted by higher priority request."}
-                except Exception as comm_err:
-                     provider_logger.error(f"{worker_log_prefix}: Error communicating with worker: {comm_err}")
-                     # Attempt to kill if process exists
-                     if worker_process and worker_process.poll() is None:
-                          try:
-                              worker_process.kill(); worker_process.communicate()
-                          except Exception as kill_e:
-                              provider_logger.error(f"{worker_log_prefix}: Error killing worker after comm error: {kill_e}")
-                     comm_exception = comm_err # Store exception
-                     # Return error directly
-                     self._priority_quota_lock.release() # Need to release lock here on early exit
-                     return {"error": f"Communication error with worker: {comm_err}"}
 
-                # --- Check Worker Exit Code ---
-                # This section is reached only if communicate() finished without raising an exception handled above
+                try:
+                    # Use LLAMA_WORKER_TIMEOUT from config
+                    stdout_data, stderr_data = worker_process.communicate(input=input_json,
+                                                                          timeout=LLAMA_WORKER_TIMEOUT)
+                    provider_logger.debug(f"{worker_log_prefix}: Worker communicate() finished.")
+                except subprocess.TimeoutExpired:
+                    provider_logger.error(
+                        f"{worker_log_prefix}: Worker process timed out after {LLAMA_WORKER_TIMEOUT}s.")
+                    worker_process.kill();
+                    stdout_data, stderr_data = worker_process.communicate()
+                    self._priority_quota_lock.release()
+                    return {"error": "Worker process timed out"}
+                except BrokenPipeError:
+                    provider_logger.warning(f"{worker_log_prefix}: Broken pipe. Likely interrupted.")
+                    try:
+                        worker_process.wait(timeout=1)
+                    except:
+                        pass
+                    stdout_data, stderr_data = worker_process.communicate()  # Try to get any final output
+                    self._priority_quota_lock.release()
+                    return {"error": interruption_error_marker}  # Use the consistent marker
+                except Exception as comm_err:
+                    provider_logger.error(f"{worker_log_prefix}: Error communicating with worker: {comm_err}")
+                    if worker_process and worker_process.poll() is None:
+                        try:
+                            worker_process.kill(); worker_process.communicate()
+                        except:
+                            pass
+                    self._priority_quota_lock.release()
+                    return {"error": f"Communication error with worker: {comm_err}"}
+
                 exit_code = worker_process.returncode
                 duration = time.monotonic() - start_time
-                provider_logger.info(f"{worker_log_prefix}: Worker process finished. Exit Code: {exit_code}, Duration: {duration:.2f}s")
-
-                # Log stderr from worker (contains worker's own logs/errors)
+                provider_logger.info(
+                    f"{worker_log_prefix}: Worker process finished. Exit Code: {exit_code}, Duration: {duration:.2f}s")
                 if stderr_data:
                     log_level = "ERROR" if exit_code != 0 else "DEBUG"
-                    provider_logger.log(log_level, f"{worker_log_prefix}: Worker stderr:\n-------\n{stderr_data.strip()}\n-------")
+                    provider_logger.log(log_level,
+                                        f"{worker_log_prefix}: Worker stderr:\n-------\n{stderr_data.strip()}\n-------")
 
-                # --- Handle Outcome ---
-                if exit_code == 0: # Successfully exited with code 0
-                    provider_logger.debug(f"{worker_log_prefix}: Worker exited cleanly. Parsing stdout...")
+                if exit_code == 0:
                     if not stdout_data:
-                         provider_logger.error(f"{worker_log_prefix}: Worker exited cleanly but produced no stdout.")
-                         # Return error as no result was obtained
-                         # Lock released in finally block
-                         return {"error": "Worker produced no output."}
+                        provider_logger.error(f"{worker_log_prefix}: Worker exited cleanly but no stdout.")
+                        return {"error": "Worker produced no output."}
                     try:
                         result_json = json.loads(stdout_data)
                         provider_logger.debug(f"{worker_log_prefix}: Parsed worker result JSON successfully.")
-                        # Check if the worker itself reported an error internally
                         if isinstance(result_json, dict) and "error" in result_json:
-                            provider_logger.error(f"{worker_log_prefix}: Worker reported internal error: {result_json['error']}")
-                        # Return the parsed JSON (could be data or worker error)
-                        # Lock released in finally block
+                            provider_logger.error(
+                                f"{worker_log_prefix}: Worker reported internal error: {result_json['error']}")
                         return result_json
                     except json.JSONDecodeError as json_err:
                         provider_logger.error(f"{worker_log_prefix}: Failed to decode worker stdout JSON: {json_err}")
                         provider_logger.error(f"{worker_log_prefix}: Raw stdout from worker:\n{stdout_data[:1000]}...")
-                        # Return error indicating decode failure
-                        # Lock released in finally block
                         return {"error": f"Failed to decode worker response: {json_err}"}
-                else: # Non-zero exit code (crash or internal worker error)
-                    provider_logger.error(f"{worker_log_prefix}: Worker process exited with error code {exit_code}.")
-                    crash_reason = f"Worker process crashed or failed (exit code {exit_code}). Check worker stderr logs."
-                    # Add more specific reasons based on stderr if possible
-                    if stderr_data:
-                        if "Assertion" in stderr_data or "failed" in stderr_data.lower(): crash_reason += " Reason likely in stderr."
-                        elif "Segmentation fault" in stderr_data: crash_reason += " Likely segfault."
-                        elif "terminate called after throwing" in stderr_data: crash_reason += " C++ Exception."
-                    # Return crash error
-                    # Lock released in finally block
+                else:
+                    crash_reason = f"Worker process failed (exit code {exit_code}). Check worker stderr."
                     return {"error": crash_reason}
-
             except Exception as e:
-                # Catch unexpected errors in starting/managing the process itself
-                provider_logger.error(f"{worker_log_prefix}: Unexpected error managing worker process: {e}")
+                provider_logger.error(f"{worker_log_prefix}: Unexpected error managing worker: {e}")
                 provider_logger.exception(f"{worker_log_prefix}: Worker Management Traceback")
-                # Ensure process is terminated if it exists and is running
                 if worker_process and worker_process.poll() is None:
-                    provider_logger.warning(f"{worker_log_prefix}: Terminating worker due to manager error.")
                     try:
-                        worker_process.kill()
-                        worker_process.communicate() # Clean up pipes
-                    except Exception as kill_e:
-                         provider_logger.error(f"{worker_log_prefix}: Error killing worker after manager error: {kill_e}")
-                # Return manager error
-                # Lock released in finally block
+                        worker_process.kill(); worker_process.communicate()
+                    except:
+                        pass
                 return {"error": f"Error managing worker process: {e}"}
             finally:
-                # --- Release Priority Lock ---
-                # This ensures the lock is released even if errors occurred within the try block
                 provider_logger.info(f"{worker_log_prefix}: Releasing worker execution lock.")
                 self._priority_quota_lock.release()
         else:
-             # Lock acquisition failed
-             provider_logger.error(f"{worker_log_prefix}: FAILED to acquire worker lock.")
-             return {"error": "Failed to acquire execution lock for worker."}
+            provider_logger.error(f"{worker_log_prefix}: FAILED to acquire worker lock.")
+            return {"error": "Failed to acquire execution lock for worker."}
 
     async def _execute_imagination_worker(
             self,
