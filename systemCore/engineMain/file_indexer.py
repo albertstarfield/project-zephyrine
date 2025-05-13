@@ -16,6 +16,10 @@ from config import * # Ensure this includes the SQLite DATABASE_URL and all prom
 import base64
 from io import BytesIO
 from PIL import Image # Requires Pillow: pip install Pillow
+#from langchain_community.vectorstores import Chroma # Add Chroma import
+from langchain_chroma import Chroma
+
+
 
 
 
@@ -78,6 +82,10 @@ except ImportError:
 from priority_lock import ELP0, ELP1 # Ensure these are imported
 interruption_error_marker = "Worker task interrupted by higher priority request" # Define consistently
 
+# --- NEW: Module-level lock and event for initialization ---
+_file_index_vs_init_lock = threading.Lock()
+_file_index_vs_initialized_event = threading.Event() # To
+
 # --- Constants ---
 MAX_TEXT_FILE_SIZE_MB = 1
 MAX_TEXT_FILE_SIZE_BYTES = MAX_TEXT_FILE_SIZE_MB * 1024 * 1024
@@ -101,6 +109,8 @@ DOC_EXTENSIONS = {'.pdf', '.docx', '.xlsx', '.pptx'}
 
 # --- File types we want to embed ---
 EMBEDDABLE_EXTENSIONS = TEXT_EXTENSIONS.union(DOC_EXTENSIONS).union({'.csv'}) # Explicitly add csv here if not in TEXT_EXTENSIONS
+
+
 
 class FileIndexer:
     """Scans the filesystem, extracts text/metadata, and updates the database index."""
@@ -129,8 +139,6 @@ class FileIndexer:
         if not self.embedding_model: logger.warning("⚠️ Embeddings disabled.")
         if not self.vlm_model or not self.latex_model: logger.warning("⚠️ VLM->LaTeX processing disabled (one or both models missing).")
     # --- END MODIFICATION ---
-
-    
 
     def _wait_if_server_busy(self, check_interval=0.5, log_wait=True):
         """Checks the busy event and sleeps if set."""
@@ -1240,3 +1248,119 @@ class FileIndexer:
 
         logger.info(f"🛑 {self.thread_name} received stop signal and is exiting.")
     # --- END MODIFIED Run Method ---
+
+async def initialize_global_file_index_vectorstore(provider: AIProvider):  # Pass AIProvider instance
+    logger.info(">>> initialize_global_file_index_vectorstore CALLED <<<")  # Add this
+    logger.info(">>> initialize_global_file_index_vectorstore CALLED <<<")
+    if not provider:
+        logger.error("  INITIALIZE_VS_ERROR: Passed 'provider' is None!")
+        return
+    logger.info(f"  INITIALIZE_VS_INFO: Passed 'provider' type: {type(provider)}")
+    if not provider.embeddings:
+        logger.error("  INITIALIZE_VS_ERROR: Passed 'provider.embeddings' is None!")
+        return
+    logger.info(f"  INITIALIZE_VS_INFO: Passed 'provider.embeddings' type: {type(provider.embeddings)}")
+
+    global global_file_index_vectorstore  # Refer to the module-level global
+
+    # Prevent re-initialization or concurrent initialization
+    if _file_index_vs_initialized_event.is_set():
+        logger.info("Global FileIndex vector store already initialized. Skipping.")
+        return
+
+    with _file_index_vs_init_lock:
+        # Double-check after acquiring lock
+        if _file_index_vs_initialized_event.is_set():
+            logger.info("Global FileIndex vector store was initialized while waiting for lock. Skipping.")
+            return
+
+        if not provider or not provider.embeddings:  # Use passed provider
+            logger.error("Cannot init global file index VS: AIProvider or embeddings missing.")
+            return
+
+        db: Optional[Session] = None
+        try:
+            db = SessionLocal()
+            logger.info("Initializing GLOBAL FileIndex vector store from file_indexer.py...")
+            # Fetch records that have embeddings and content
+            indexed_files = db.query(FileIndex).filter(
+                FileIndex.embedding_json.isnot(None),
+                FileIndex.indexed_content.isnot(None),
+                FileIndex.index_status.in_(['indexed_text', 'success'])
+                # Or 'pending_vlm', 'pending_conversion' if text is already there
+            ).all()
+
+            if not indexed_files:
+                logger.warning("No files found in DB with embeddings and content for global vector store.")
+                _file_index_vs_initialized_event.set()  # Mark as "initialized" (even if empty) to prevent retries
+                return
+
+            texts_for_vs = []
+            embeddings_for_vs = []
+            metadatas_for_vs = []
+            ids_for_vs = []
+
+            for record in indexed_files:
+                try:
+                    vector = json.loads(record.embedding_json)
+                    # Ensure content is not excessively long.
+                    # The text stored in Chroma is what gets *returned* after a match.
+                    # Store enough for context, but perhaps not gigantic files verbatim.
+                    # For simplicity, using full indexed_content now. Consider truncation if memory becomes an issue.
+                    content_to_store = record.indexed_content
+
+                    texts_for_vs.append(content_to_store)
+                    embeddings_for_vs.append(vector)
+                    metadatas_for_vs.append({
+                        "source": record.file_path,
+                        "file_id": record.id,
+                        "file_name": record.file_name,
+                        "last_modified": str(record.last_modified_os),
+                        "index_status": record.index_status,
+                        "mime_type": record.mime_type
+                    })
+                    ids_for_vs.append(f"file_{record.id}")
+                except json.JSONDecodeError:
+                    logger.warning(f"Skipping FileIndex ID {record.id} for global VS: bad embedding JSON.")
+                except Exception as e:
+                    logger.warning(f"Skipping FileIndex ID {record.id} for global VS processing its data: {e}")
+
+            if texts_for_vs and embeddings_for_vs:
+                logger.info(
+                    f"Building global FileIndex Chroma store with {len(texts_for_vs)} items using pre-computed embeddings...")
+                global_file_index_vectorstore = Chroma.from_embeddings(
+                    text_embeddings=embeddings_for_vs,
+                    embedding=provider.embeddings,  # Use passed provider's embeddings
+                    documents=texts_for_vs,
+                    metadatas=metadatas_for_vs,
+                    ids=ids_for_vs,
+                    # persist_directory="./chroma_file_index_store" # Optional: for disk persistence
+                )
+                if global_file_index_vectorstore:
+                    logger.success(
+                        f"Global FileIndex VS created. Type: {type(global_file_index_vectorstore)}. Embedding function type: {type(global_file_index_vectorstore.embedding_function)}")
+                    if hasattr(global_file_index_vectorstore.embedding_function, 'embed_query'):
+                        logger.info("  Chroma VS embedding function HAS 'embed_query' method.")
+                    else:
+                        logger.error("  CRITICAL: Chroma VS embedding function LACKS 'embed_query' method!")
+                logger.success("Global FileIndex vector store initialized successfully.")
+            else:
+                logger.warning("No valid texts/embeddings to build global FileIndex vector store.")
+
+            _file_index_vs_initialized_event.set()  # Signal completion
+
+        except Exception as e:
+            logger.error(f"Failed to initialize global FileIndex vector store: {e}")
+            logger.exception("Global FileIndex VS Init Traceback:")
+            # Don't set the event on failure, so it might be retried or indicates a problem
+        finally:
+            if db:
+                db.close()
+
+def get_global_file_index_vectorstore() -> Optional[Chroma]:
+    """Returns the initialized global file index vector store, or None if not ready."""
+    if _file_index_vs_initialized_event.is_set():
+        return global_file_index_vectorstore
+    else:
+        logger.warning("Attempted to get global file index vector store before it was initialized.")
+        return None

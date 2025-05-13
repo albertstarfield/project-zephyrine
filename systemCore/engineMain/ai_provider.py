@@ -482,6 +482,14 @@ class AIProvider:
 
         self._validate_config()
         self.setup_provider() # Sets up LLM/Embedding models
+        if self.embeddings:
+            logger.info(f"AIProvider embeddings initialized. Type: {type(self.embeddings)}")
+            if hasattr(self.embeddings, 'embed_query') and hasattr(self.embeddings, 'embed_documents'):
+                logger.info("  AIProvider embeddings object HAS 'embed_query' and 'embed_documents' methods.")
+            else:
+                logger.error("  CRITICAL: AIProvider embeddings object LACKS required embedding methods!")
+        else:
+            logger.error("CRITICAL: AIProvider.embeddings is None after setup_provider!")
         # VVVVVVVVVV THIS IS THE LINE TO CHANGE VVVVVVVVVV
         self._setup_image_generator_config() # Renamed: Validates image gen worker config
         # ^^^^^^^^^^ THIS IS THE LINE TO CHANGE ^^^^^^^^^^
