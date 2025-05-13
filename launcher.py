@@ -1113,7 +1113,7 @@ if __name__ == "__main__":
 
     # --- Install Engine Dependencies (requirements.txt) ---
     print_system("--- Installing/Checking Python Dependencies (Engine) from requirements.txt ---")
-    engine_req_path = os.path.join(ENGINE_MAIN_DIR, "requirements.txt")
+    engine_req_path = os.path.join(ROOT_DIR, "requirements.txt") # Use the one in the project root
     if not os.path.exists(engine_req_path):
         print_error(f"Engine requirements.txt not found at {engine_req_path}")
         sys.exit(1)
