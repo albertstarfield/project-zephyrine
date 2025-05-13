@@ -338,26 +338,29 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
     def __init__(self, ai_provider: 'AIProvider'):
         super().__init__()
         self.ai_provider = ai_provider
-    
-    def embed_query(self, text: str, priority: int = ELP0) -> List[float]:
+
+    def embed_query(self, text: str, priority: int = ELP0) -> List[float]:  # Priority added
         """Embeds a single query using the specified priority."""
-        # Embed single query as a list of one by calling _embed_texts with priority
-        results = self._embed_texts([text], priority=priority)
-        if results:
-            # Return the first (and only) embedding vector
+        provider_logger = getattr(self.ai_provider, 'logger', logger)
+        log_prefix = f"EmbedWrapper.embed_query|ELP{priority}"
+        provider_logger.debug(f"{log_prefix}: Embedding single query: '{text[:50]}...'")
+
+        # _embed_texts is now responsible for calling the worker with priority
+        results = self._embed_texts([text], priority=priority)  # Pass priority here
+
+        if results and isinstance(results, list) and len(results) > 0 and isinstance(results[0], list):
             return results[0]
         else:
-            # This case should ideally be handled by exceptions in _embed_texts
-            # Use specific logger from the instance if available, otherwise default logger
-            provider_logger = getattr(self.ai_provider, 'logger', logger)
-            provider_logger.error("Embedding query returned empty list unexpectedly (should have raised error).")
+            provider_logger.error(f"{log_prefix}: _embed_texts did not return expected structure. Got: {type(results)}")
+            raise RuntimeError("LLAMA_CPP_PROVIDER_ERROR: Embedding query failed to produce valid vector list.")
 
-            raise RuntimeError("LLAMA_CPP_PROVIDER_ERROR: Embedding query failed unexpectedly")
-
-    def embed_documents(self, texts: List[str], priority: int = ELP0) -> List[List[float]]:
+    def embed_documents(self, texts: List[str], priority: int = ELP0) -> List[List[float]]:  # Priority added
         """Embeds a list of documents using the specified priority."""
-        # Directly call _embed_texts, passing the priority along
-        return self._embed_texts(texts, priority=priority)
+        provider_logger = getattr(self.ai_provider, 'logger', logger)
+        log_prefix = f"EmbedWrapper.embed_documents|ELP{priority}"
+        provider_logger.debug(f"{log_prefix}: Embedding {len(texts)} documents.")
+
+        return self._embed_texts(texts, priority=priority)  # Pass priority here
 
     def _embed_texts(self, texts: List[str], priority: int = ELP0) -> List[List[float]]:
         """
@@ -636,6 +639,8 @@ class AIProvider:
                     return {"error": "Worker process timed out"}
                 except BrokenPipeError:
                     provider_logger.warning(f"{worker_log_prefix}: Broken pipe. Likely interrupted.")
+                    provider_logger.warning(
+                        f"{worker_log_prefix}: Broken pipe during communicate(). Likely interrupted by ELP1 request.")
                     try:
                         worker_process.wait(timeout=1)
                     except:
