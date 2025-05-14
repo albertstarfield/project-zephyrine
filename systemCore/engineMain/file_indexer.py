@@ -1349,24 +1349,62 @@ async def initialize_global_file_index_vectorstore(provider: AIProvider):
                 logger.info(f"Processed {processed_count} records from DB for FileIndex VS.")
 
                 if texts_for_vs and embeddings_for_vs:
-                    logger.info(f"Building FileIndex Chroma store with {len(texts_for_vs)} items...")
+                    logger.info(
+                        f"Initializing and populating global FileIndex Chroma store with {len(texts_for_vs)} items using pre-computed embeddings...")
+
                     if not provider or not provider.embeddings:
-                        logger.error("Provider/embeddings not available in _locked_initialization_task for Chroma.")
+                        logger.error(
+                            "Provider or provider.embeddings not available in _locked_initialization_task for Chroma creation.")
                         return {"status": "error", "message": "Embeddings provider missing for Chroma."}
 
-                    global_file_index_vectorstore = Chroma.from_embeddings(
-                        text_embeddings=embeddings_for_vs, embedding=provider.embeddings,
-                        documents=texts_for_vs, metadatas=metadatas_for_vs, ids=ids_for_vs,
-                    )
-                    if global_file_index_vectorstore:
-                        logger.success(f"Global FileIndex VS created. Type: {type(global_file_index_vectorstore)}")
-                    else:
-                        logger.error("Chroma.from_embeddings returned None!"); return {"status": "error",
-                                                                                       "message": "Chroma creation None"}
+                    try:
+                        # 1. Initialize an empty Chroma vector store instance.
+                        #    The embedding_function is still needed for future similarity searches if a query string is provided.
+                        #    If you plan to ONLY search by vector, embedding_function might be optional for some Chroma versions,
+                        #    but it's safer to provide it.
+                        temp_chroma_store = Chroma(
+                            collection_name="global_file_index_persistent",  # Or another unique name
+                            embedding_function=provider.embeddings,
+                            # persist_directory="./chroma_file_index_store_global" # Optional: If you want it to persist to disk
+                            # and load from there on next startup.
+                            # If persisting, ensure directory exists.
+                        )
+                        logger.info("Empty Chroma store initialized. Adding embeddings...")
 
-                    _file_index_vs_initialized_event.set();
-                    logger.info(">>> SET _file_index_vs_initialized_event (VS created). <<<")
-                    return {"status": "success_created"}
+                        # 2. Add the pre-computed embeddings, texts, metadatas, and ids.
+                        # Ensure embeddings_for_vs is List[List[float]] and texts_for_vs is List[str]
+                        temp_chroma_store.add_embeddings(
+                            text_embeddings=embeddings_for_vs,  # Your list of vectors
+                            documents=texts_for_vs,  # Your list of corresponding text strings
+                            metadatas=metadatas_for_vs,  # Your list of metadata dicts
+                            ids=ids_for_vs  # Your list of unique string IDs
+                        )
+
+                        # Optional: If using persist_directory, call persist.
+                        # if temp_chroma_store._persist_directory: # Check if persist_directory was set
+                        #    logger.info(f"Persisting Chroma store to {temp_chroma_store._persist_directory}")
+                        #    temp_chroma_store.persist()
+
+                        global_file_index_vectorstore = temp_chroma_store  # Assign to global
+
+                        if global_file_index_vectorstore:
+                            logger.success(
+                                f"Global FileIndex VS populated with {len(texts_for_vs)} items. Type: {type(global_file_index_vectorstore)}")
+                        else:  # Should not happen if add_embeddings doesn't raise error
+                            logger.error("Chroma store population resulted in None unexpectedly!")
+                            _file_index_vs_initialized_event.set()  # Set event even if it's None to avoid retries
+                            return {"status": "error", "message": "Chroma population resulted in None"}
+
+                        _file_index_vs_initialized_event.set()
+                        logger.info(">>> SET _file_index_vs_initialized_event (VS created and populated). <<<")
+                        return {"status": "success_created"}
+
+                    except Exception as e_chroma_add:
+                        logger.warning("No valid texts/embeddings to build FileIndex VS from DB records.")
+                        global_file_index_vectorstore = None
+                        _file_index_vs_initialized_event.set()
+                        logger.info(">>> SET _file_index_vs_initialized_event (no valid data from DB). <<<")
+                        return {"status": "success_no_valid_data"}
                 else:
                     logger.warning("No valid texts/embeddings to build FileIndex VS from DB records.")
                     global_file_index_vectorstore = None
