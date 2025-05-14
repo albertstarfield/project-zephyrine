@@ -62,6 +62,7 @@ SQLITE_DB_PATH = os.path.join(_config_dir, SQLITE_DB_FILE)
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.abspath(SQLITE_DB_PATH)}")
 logger.info(f"Database URL set to: {DATABASE_URL}")
 
+
 # --- Model Names (Ensure these exist in Ollama) ---
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:8141") # Default to 8141
 MODEL_ROUTER = os.getenv("MODEL_ROUTER", "deepscaler:latest") # Router and Corrector

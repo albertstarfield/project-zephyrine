@@ -6,10 +6,11 @@ import time
 import threading
 import mimetypes
 import datetime
+import asyncio
 from sqlalchemy.orm import Session
 from loguru import logger
 import hashlib # <<< Import hashlib for MD5
-from typing import Optional, Tuple, List, Any # <<< ADD Optional and List HERE
+from typing import Optional, Tuple, List, Any, Dict  # <<< ADD Optional and List HERE
 import json
 from ai_provider import AIProvider
 from config import * # Ensure this includes the SQLite DATABASE_URL and all prompts/models
@@ -85,6 +86,7 @@ interruption_error_marker = "Worker task interrupted by higher priority request"
 # --- NEW: Module-level lock and event for initialization ---
 _file_index_vs_init_lock = threading.Lock()
 _file_index_vs_initialized_event = threading.Event() # To
+global_file_index_vectorstore: Optional[Chroma] = None
 
 # --- Constants ---
 MAX_TEXT_FILE_SIZE_MB = 1
@@ -1249,113 +1251,173 @@ class FileIndexer:
         logger.info(f"🛑 {self.thread_name} received stop signal and is exiting.")
     # --- END MODIFIED Run Method ---
 
-async def initialize_global_file_index_vectorstore(provider: AIProvider):  # Pass AIProvider instance
-    logger.info(">>> initialize_global_file_index_vectorstore CALLED <<<")  # Add this
-    logger.info(">>> initialize_global_file_index_vectorstore CALLED <<<")
+
+async def initialize_global_file_index_vectorstore(provider: AIProvider):
+    """
+    Initializes the global file index vector store by fetching embeddings from the DB.
+    This is an async function and expects DB/Chroma operations to be run in threads.
+    Sets an event upon completion (success or known empty state).
+    """
+    global global_file_index_vectorstore  # Reference the module-level global
+
+    logger.info(">>> Entered initialize_global_file_index_vectorstore (async version) <<<")
+
     if not provider:
-        logger.error("  INITIALIZE_VS_ERROR: Passed 'provider' is None!")
+        logger.error("  INIT_VS_ERROR: AIProvider instance is None! Cannot initialize file index vector store.")
         return
-    logger.info(f"  INITIALIZE_VS_INFO: Passed 'provider' type: {type(provider)}")
     if not provider.embeddings:
-        logger.error("  INITIALIZE_VS_ERROR: Passed 'provider.embeddings' is None!")
+        logger.error("  INIT_VS_ERROR: AIProvider.embeddings is None! Cannot initialize file index vector store.")
         return
-    logger.info(f"  INITIALIZE_VS_INFO: Passed 'provider.embeddings' type: {type(provider.embeddings)}")
+    logger.info(f"  INIT_VS_INFO: Using AIProvider embeddings of type: {type(provider.embeddings)}")
 
-    global global_file_index_vectorstore  # Refer to the module-level global
-
-    # Prevent re-initialization or concurrent initialization
     if _file_index_vs_initialized_event.is_set():
-        logger.info("Global FileIndex vector store already initialized. Skipping.")
+        logger.info(">>> SKIPPING FileIndex VS Init: _file_index_vs_initialized_event is ALREADY SET. <<<")
         return
 
-    with _file_index_vs_init_lock:
-        # Double-check after acquiring lock
-        if _file_index_vs_initialized_event.is_set():
-            logger.info("Global FileIndex vector store was initialized while waiting for lock. Skipping.")
-            return
+    # Acquire the synchronous lock. Since this outer function is async,
+    # acquiring a threading.Lock directly would block the event loop.
+    # This part of the logic is tricky: an async function trying to use a threading.Lock.
+    # Ideally, the lock itself should be an asyncio.Lock if the primary control flow is async.
+    # However, since it's protecting a global resource potentially accessed by sync threads too,
+    # we'll run the lock-protected part in a thread.
 
-        if not provider or not provider.embeddings:  # Use passed provider
-            logger.error("Cannot init global file index VS: AIProvider or embeddings missing.")
-            return
+    def _locked_initialization_task():  # <<< NEW AND CORRECT (now synchronous def)
+        # global global_file_index_vectorstore # Use global as fixed previously
+        # ... (the rest of the _locked_initialization_task logic remains the same)
+        # It will make blocking calls like db_session.query(...).all()
+        # and Chroma.from_embeddings(...)
+        # It should return a dictionary like {"status": "success_created", "data": ...} or {"status": "error", ...}
 
-        db: Optional[Session] = None
-        try:
-            db = SessionLocal()
-            logger.info("Initializing GLOBAL FileIndex vector store from file_indexer.py...")
-            # Fetch records that have embeddings and content
-            indexed_files = db.query(FileIndex).filter(
-                FileIndex.embedding_json.isnot(None),
-                FileIndex.indexed_content.isnot(None),
-                FileIndex.index_status.in_(['indexed_text', 'success'])
-                # Or 'pending_vlm', 'pending_conversion' if text is already there
-            ).all()
+        global global_file_index_vectorstore
 
-            if not indexed_files:
-                logger.warning("No files found in DB with embeddings and content for global vector store.")
-                _file_index_vs_initialized_event.set()  # Mark as "initialized" (even if empty) to prevent retries
-                return
-
-            texts_for_vs = []
-            embeddings_for_vs = []
-            metadatas_for_vs = []
-            ids_for_vs = []
-
-            for record in indexed_files:
-                try:
-                    vector = json.loads(record.embedding_json)
-                    # Ensure content is not excessively long.
-                    # The text stored in Chroma is what gets *returned* after a match.
-                    # Store enough for context, but perhaps not gigantic files verbatim.
-                    # For simplicity, using full indexed_content now. Consider truncation if memory becomes an issue.
-                    content_to_store = record.indexed_content
-
-                    texts_for_vs.append(content_to_store)
-                    embeddings_for_vs.append(vector)
-                    metadatas_for_vs.append({
-                        "source": record.file_path,
-                        "file_id": record.id,
-                        "file_name": record.file_name,
-                        "last_modified": str(record.last_modified_os),
-                        "index_status": record.index_status,
-                        "mime_type": record.mime_type
-                    })
-                    ids_for_vs.append(f"file_{record.id}")
-                except json.JSONDecodeError:
-                    logger.warning(f"Skipping FileIndex ID {record.id} for global VS: bad embedding JSON.")
-                except Exception as e:
-                    logger.warning(f"Skipping FileIndex ID {record.id} for global VS processing its data: {e}")
-
-            if texts_for_vs and embeddings_for_vs:
+        logger.info(
+            ">>> Attempting to acquire _file_index_vs_init_lock (from within _locked_initialization_task thread)... <<<")
+        with _file_index_vs_init_lock:
+            logger.info(">>> ACQUIRED _file_index_vs_init_lock. <<<")
+            if _file_index_vs_initialized_event.is_set():
                 logger.info(
-                    f"Building global FileIndex Chroma store with {len(texts_for_vs)} items using pre-computed embeddings...")
-                global_file_index_vectorstore = Chroma.from_embeddings(
-                    text_embeddings=embeddings_for_vs,
-                    embedding=provider.embeddings,  # Use passed provider's embeddings
-                    documents=texts_for_vs,
-                    metadatas=metadatas_for_vs,
-                    ids=ids_for_vs,
-                    # persist_directory="./chroma_file_index_store" # Optional: for disk persistence
-                )
-                if global_file_index_vectorstore:
-                    logger.success(
-                        f"Global FileIndex VS created. Type: {type(global_file_index_vectorstore)}. Embedding function type: {type(global_file_index_vectorstore.embedding_function)}")
-                    if hasattr(global_file_index_vectorstore.embedding_function, 'embed_query'):
-                        logger.info("  Chroma VS embedding function HAS 'embed_query' method.")
+                    ">>> SKIPPING (double check): _file_index_vs_initialized_event was set while waiting for lock. <<<")
+                return {"status": "skipped_already_initialized"}
+
+            db_session: Optional[Session] = None
+            try:
+                logger.info("Initializing GLOBAL FileIndex vector store from DB (within lock)...")
+                db_session = SessionLocal()  # type: ignore
+                if not db_session:
+                    logger.error("Failed to create DB session for FileIndex VS initialization.")
+                    return {"status": "error", "message": "DB session creation failed"}
+
+                indexed_files = db_session.query(FileIndex).filter(  # type: ignore
+                    FileIndex.embedding_json.isnot(None),  # type: ignore
+                    FileIndex.indexed_content.isnot(None),  # type: ignore
+                    FileIndex.index_status.in_(['indexed_text', 'success'])  # type: ignore
+                ).all()
+
+                if not indexed_files:
+                    logger.warning("No files found in DB with embeddings/content for global FileIndex vector store.")
+                    global_file_index_vectorstore = None
+                    _file_index_vs_initialized_event.set()
+                    logger.info(">>> SET _file_index_vs_initialized_event (DB empty). <<<")
+                    return {"status": "success_empty_db"}
+
+                texts_for_vs: List[str] = []
+                embeddings_for_vs: List[List[float]] = []
+                metadatas_for_vs: List[Dict[str, Any]] = []
+                ids_for_vs: List[str] = []
+                processed_count = 0
+
+                for record in indexed_files:
+                    try:
+                        vector = json.loads(record.embedding_json)  # type: ignore
+                        content_to_store = record.indexed_content or ""  # type: ignore
+                        texts_for_vs.append(content_to_store)
+                        embeddings_for_vs.append(vector)
+                        metadatas_for_vs.append({
+                            "source": record.file_path, "file_id": record.id, "file_name": record.file_name,
+                            # type: ignore
+                            "last_modified": str(record.last_modified_os) if record.last_modified_os else "N/A",
+                            # type: ignore
+                            "index_status": record.index_status, "mime_type": record.mime_type  # type: ignore
+                        })
+                        ids_for_vs.append(f"file_{record.id}")  # type: ignore
+                        processed_count += 1
+                    except json.JSONDecodeError:
+                        logger.warning(f"Skipping FileIndex ID {record.id} (VS): bad JSON.")  # type: ignore
+                    except Exception as e_rec:
+                        logger.warning(f"Skipping FileIndex ID {record.id} (VS) data error: {e_rec}")  # type: ignore
+
+                logger.info(f"Processed {processed_count} records from DB for FileIndex VS.")
+
+                if texts_for_vs and embeddings_for_vs:
+                    logger.info(f"Building FileIndex Chroma store with {len(texts_for_vs)} items...")
+                    if not provider or not provider.embeddings:
+                        logger.error("Provider/embeddings not available in _locked_initialization_task for Chroma.")
+                        return {"status": "error", "message": "Embeddings provider missing for Chroma."}
+
+                    global_file_index_vectorstore = Chroma.from_embeddings(
+                        text_embeddings=embeddings_for_vs, embedding=provider.embeddings,
+                        documents=texts_for_vs, metadatas=metadatas_for_vs, ids=ids_for_vs,
+                    )
+                    if global_file_index_vectorstore:
+                        logger.success(f"Global FileIndex VS created. Type: {type(global_file_index_vectorstore)}")
                     else:
-                        logger.error("  CRITICAL: Chroma VS embedding function LACKS 'embed_query' method!")
-                logger.success("Global FileIndex vector store initialized successfully.")
-            else:
-                logger.warning("No valid texts/embeddings to build global FileIndex vector store.")
+                        logger.error("Chroma.from_embeddings returned None!"); return {"status": "error",
+                                                                                       "message": "Chroma creation None"}
 
-            _file_index_vs_initialized_event.set()  # Signal completion
+                    _file_index_vs_initialized_event.set();
+                    logger.info(">>> SET _file_index_vs_initialized_event (VS created). <<<")
+                    return {"status": "success_created"}
+                else:
+                    logger.warning("No valid texts/embeddings to build FileIndex VS from DB records.")
+                    global_file_index_vectorstore = None
+                    _file_index_vs_initialized_event.set();
+                    logger.info(">>> SET _file_index_vs_initialized_event (no valid data). <<<")
+                    return {"status": "success_no_valid_data"}
+            except Exception as e_init:
+                logger.error(f"FAIL: FileIndex VS init (in lock): {e_init}");
+                logger.exception("Traceback (in lock):")
+                global_file_index_vectorstore = None
+                return {"status": "error", "message": str(e_init)}
+            finally:
+                if db_session:
+                    try:
+                        db_session.close()
+                    except Exception as e_close:
+                        logger.warning(f"Error closing DB session in FileIndex VS init: {e_close}")
+        logger.info(">>> Exiting _file_index_vs_init_lock context (_locked_initialization_task). <<<")
+        # This return should ideally not be hit if logic inside 'with lock' is correct
+        return {"status": "skipped_or_unknown_exit_from_locked_task"}
 
-        except Exception as e:
-            logger.error(f"Failed to initialize global FileIndex vector store: {e}")
-            logger.exception("Global FileIndex VS Init Traceback:")
-            # Don't set the event on failure, so it might be retried or indicates a problem
-        finally:
-            if db:
-                db.close()
+    # The call in initialize_global_file_index_vectorstore remains:
+    try:
+        # 'provider' is from the outer scope of initialize_global_file_index_vectorstore
+        result_dict = await asyncio.to_thread(_locked_initialization_task)
+        logger.info(
+            f"Locked initialization task for FileIndex VS completed with status: {result_dict.get('status')}")  # Now this should work
+        if result_dict.get("status") and "error" in result_dict["status"]:
+            logger.error(f"Error reported from locked_initialization_task: {result_dict.get('message')}")
+    except Exception as e_thread_task:
+        logger.error(f"Exception running _locked_initialization_task via to_thread: {e_thread_task}")
+        logger.exception("FileIndex VS _locked_initialization_task Thread Execution Traceback:")
+
+    logger.info(
+        f">>> EXITED initialize_global_file_index_vectorstore (async version). Event set: {_file_index_vs_initialized_event.is_set()} <<<")
+
+    # Run the locked part in a separate thread as it uses a threading.Lock
+    # and contains blocking I/O (DB query, potentially Chroma loading/creation).
+    try:
+        result_dict = await asyncio.to_thread(_locked_initialization_task)
+        logger.info(f"Locked initialization task for FileIndex VS completed with status: {result_dict.get('status')}")
+        if result_dict.get("status") and "error" in result_dict["status"]:  # type: ignore
+            logger.error(
+                f"Error reported from locked_initialization_task: {result_dict.get('message')}")  # type: ignore
+    except Exception as e_thread_task:
+        logger.error(f"Exception running _locked_initialization_task via to_thread: {e_thread_task}")
+        logger.exception("FileIndex VS _locked_initialization_task Thread Execution Traceback:")
+        # Event is likely not set here, indicating failure.
+
+    logger.info(
+        ">>> EXITED initialize_global_file_index_vectorstore (async version). Event set: {_file_index_vs_initialized_event.is_set()} <<<")
 
 def get_global_file_index_vectorstore() -> Optional[Chroma]:
     """Returns the initialized global file index vector store, or None if not ready."""
