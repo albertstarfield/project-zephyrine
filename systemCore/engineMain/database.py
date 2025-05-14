@@ -50,11 +50,11 @@ RUNTIME_DATABASE_URL = f"sqlite:///{os.path.abspath(RUNTIME_DB_PATH)}"
 
 # --- NEW: Snapshot Configuration ---
 ENABLE_DB_SNAPSHOTS = os.getenv("ENABLE_DB_SNAPSHOTS", "true").lower() in ('true', '1', 't', 'yes', 'y')
-DB_SNAPSHOT_INTERVAL_MINUTES = int(os.getenv("DB_SNAPSHOT_INTERVAL_MINUTES", 1))  # Default: 1 minute
+DB_SNAPSHOT_INTERVAL_MINUTES = int(os.getenv("DB_SNAPSHOT_INTERVAL_MINUTES", 10))  # Default: 1 minute
 DB_SNAPSHOT_DIR_NAME = "db_snapshots"
 DB_SNAPSHOT_DIR = os.path.join(APP_DIR, DB_SNAPSHOT_DIR_NAME)
 DB_SNAPSHOT_RETENTION_COUNT = int(
-    os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 60))  # Keep last 60 snapshots (e.g., 1 hour worth if 1-min interval)
+    os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 30))  # Keep last 60 snapshots (e.g., 1 hour worth if 1-min interval)
 DB_SNAPSHOT_FILENAME_PREFIX = "snapshot_"
 DB_SNAPSHOT_FILENAME_SUFFIX = ".db.zst"
 # --- END NEW: Snapshot Configuration ---

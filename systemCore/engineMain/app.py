@@ -8219,17 +8219,14 @@ async def startup_tasks():
         logger.info("Attempting to initialize global FileIndex vector store from app.py startup_tasks...")
         if ai_provider: # Check again, though it should be set if we reach here
             # init_file_vs_from_indexer is imported from file_indexer.py
-            await init_file_vs_from_indexer(ai_provider)
+            await init_file_vs_from_indexer(ai_provider) # <<< THIS CALLS initialize_global_file_index_vectorstore
         else:
             logger.error("CRITICAL in startup_tasks: AIProvider is None. Cannot initialize global file index vector store.")
-    # You can add other async startup tasks here if needed
-    if ENABLE_SELF_REFLECTION:  # Or a new specific flag for this store
+    if ENABLE_SELF_REFLECTION:
         logger.info("Attempting to initialize global Reflection vector store from app.py startup_tasks...")
         if ai_provider:
-            temp_db_session_for_init = SessionLocal()  # Create a session for init
+            temp_db_session_for_init = SessionLocal()
             try:
-                # This is a synchronous function, run in thread if it becomes heavy
-                # For now, assuming it's quick enough if loading from persisted Chroma
                 await asyncio.to_thread(initialize_global_reflection_vectorstore, ai_provider, temp_db_session_for_init)
             finally:
                 temp_db_session_for_init.close()
@@ -8239,40 +8236,105 @@ async def startup_tasks():
 # --- Main Execution Control ---
 
 if __name__ == "__main__":
-    # This block runs if app.py is executed directly
-    logger.error("This script should be run with an ASGI/WSGI server like Hypercorn or Gunicorn. To be Impostor of being ordinary Ollama")
+    # This block executes if app.py is run directly (e.g., python app.py)
+    # This is NOT the typical way to run a Flask/Quart app for production or development with Hypercorn.
+    # Hypercorn imports 'app' as a module.
+    logger.error("This script (app.py) is designed to be run with an ASGI/WSGI server like Hypercorn.")
     logger.error("Example: hypercorn app:app --bind 127.0.0.1:11434")
-    sys.exit(1)
+    logger.error(
+        "If you are trying to run standalone for testing limited functionality, some features might not work as expected, especially background tasks and full request handling.")
+
+    # Optionally, you could add some minimal direct execution logic here for specific tests,
+    # but it's generally better to test through the server.
+    # For instance, you could try to initialize just the DB and AI provider for basic checks:
+    # print("Attempting direct initialization for basic checks (not a full server run)...")
+    # try:
+    #     init_db() # Assuming this is globally defined
+    #     if ai_provider is None: # Check if it was initialized globally by module import
+    #          print("AI Provider not initialized globally. This path needs review for direct run.")
+    #     # You might try calling startup_tasks here for testing, but it's tricky without the server's loop context
+    #     # asyncio.run(startup_tasks()) # This might work depending on context
+    #     print("Basic initializations attempted. For full functionality, use Hypercorn.")
+    # except Exception as e:
+    #     print(f"Error during direct initialization attempt: {e}")
+
+    sys.exit(1)  # Exit because this isn't the intended way to run
 else:
-    # This block runs when app.py is imported as a module by Hypercorn/Gunicorn
-    logger.info("app.py imported as a module (e.g., by Hypercorn/Gunicorn). Performing startup initializations...")
+    # This block executes when app.py is imported as a module by a server (e.g., Hypercorn).
+    # This is the standard execution path.
+    logger.info("----------------------------------------------------------------------")
+    logger.info(">>> Zephyrine EngineMain (app.py) imported as a module by server... <<<")
+    logger.info("----------------------------------------------------------------------")
 
-    # --- Database Initialization (should happen before AIProvider if AIProvider needs DB) ---
-    # init_db() # Assuming this is already called before AIProvider instantiation if needed.
-    # If AIProvider doesn't need DB at init, order is less critical here.
-    # The current structure has init_db() called globally before AIProvider.
+    # Database initialization (init_db()) is assumed to have been called at the module level
+    # when 'database.py' was imported, or just before AIProvider if AIProvider needs it.
+    # If init_db() is idempotent, calling it again here might be safe but potentially redundant
+    # if already done by module-level execution.
+    # Let's assume init_db() was called when `from database import init_db` happened.
+    # The global `ai_provider`, `ai_chat`, `ai_agent` instances should also have been
+    # initialized at the module level by this point.
 
-    # --- Initialize Global FileIndex Vector Store ---
-    # This needs to happen AFTER ai_provider is successfully initialized.
-    logger.info("Running startup_tasks (includes global FileIndex vector store initialization)...")
+    if ai_provider is None or ai_chat is None or ai_agent is None:
+        logger.critical(
+            "🔥🔥 AI components (ai_provider, ai_chat, ai_agent) were not initialized at the module level. Startup cannot proceed correctly.")
+        # This would indicate a fundamental issue with the import order or global instantiation.
+        # Depending on severity, you might sys.exit(1) here.
+        # For now, we'll log and let it proceed to startup_tasks, which will also check.
+    else:
+        logger.success("✅ Core AI components (ai_provider, ai_chat, ai_agent) appear initialized globally.")
+
+    logger.info("🚀 Running asynchronous startup tasks (Vector Store Initializations)...")
+    startup_tasks_completed_successfully = False
     try:
-        asyncio.run(startup_tasks()) # <<<< THIS IS THE CRUCIAL CALL
-        logger.info("startup_tasks completed.")
+        # Ensure an asyncio event loop is available for run_until_complete.
+        # This is important because when a module is imported, there might not be
+        # a running asyncio event loop in the current thread's context yet,
+        # especially if the WSGI/ASGI server manages loops per worker/thread later.
+        try:
+            loop = asyncio.get_event_loop_policy().get_event_loop()
+            if loop.is_closed():  # If the default loop is closed for some reason
+                logger.warning("Default asyncio event loop was closed. Creating a new one for startup tasks.")
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
+        except RuntimeError:  # No current event loop in this thread
+            logger.info("No current asyncio event loop found for startup tasks. Creating a new one.")
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)  # Set it as the current loop for this thread context
+
+        # Run the startup_tasks coroutine to completion.
+        # This will block here until startup_tasks (and all its awaited calls) are done.
+        loop.run_until_complete(startup_tasks())
+        logger.success("✅ Asynchronous startup tasks (Vector Store Initializations) completed.")
+        startup_tasks_completed_successfully = True
+
     except Exception as su_err:
-        logger.error(f"🚨 Error during asyncio.run(startup_tasks): {su_err}")
-        logger.exception("Startup Tasks Traceback:")
-        # Decide if you want to exit if this critical setup fails
-        # sys.exit(1)
+        logger.error(f"🚨🚨 CRITICAL FAILURE during asyncio.run(startup_tasks): {su_err} 🚨🚨")
+        logger.exception("Startup Tasks Execution Traceback:")
+        # Depending on how critical these vector stores are, you might want to prevent
+        # the application from fully starting if they fail.
+        # For now, it will continue and log warnings when they are accessed.
+        # sys.exit("Critical startup tasks failed. Application cannot start.") # Uncomment to make it fatal
 
+    if startup_tasks_completed_successfully:
+        logger.info("🚀 Starting background services (File Indexer, Self Reflector)...")
+        if ENABLE_FILE_INDEXER:  # Check config before starting
+            start_file_indexer()
+        else:
+            logger.info("File Indexer is DISABLED by config. Not starting.")
 
-    # --- Start Background Threads ---
-    logger.info("Starting background services (File Indexer, Self Reflector)...")
-    start_file_indexer()
-    start_self_reflector()
+        if ENABLE_SELF_REFLECTION:  # Check config before starting
+            start_self_reflector()
+        else:
+            logger.info("Self Reflector is DISABLED by config. Not starting.")
+    else:
+        logger.error("Background services (File Indexer, Self Reflector) NOT started due to startup_tasks failure.")
 
-    logger.info("Assistant Proxy setup is no longer performed here.") # Updated message
-    logger.info("Impostoring as an Ordinary static noncapable non adaptive Ollama... at port 11434")
-    logger.info("✅ app.py module-level initializations complete. Ready for server.")
-
-    # The `app` (Flask instance) is now ready to be served by Hypercorn.
-    # The old `else` block for setup_assistant_proxy is removed as per your last code.
+    # setup_assistant_proxy() was previously here but commented out in your version.
+    # If needed, ensure it's called appropriately (e.g., only once, or on demand).
+    logger.info("--------------------------------------------------------------------")
+    logger.info("✅ Zephyrine EngineMain (app.py) module-level initializations complete.")
+    logger.info(f"   Mimicking Ollama endpoint at /api/...")
+    logger.info(f"   OpenAI compatible endpoints at /v1/...")
+    logger.info(f"   Custom endpoint at /")
+    logger.info(f"   Application (app) is ready to be served by Hypercorn/Gunicorn.")
+    logger.info("--------------------------------------------------------------------")
