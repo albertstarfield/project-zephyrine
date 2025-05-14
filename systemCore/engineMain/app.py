@@ -8214,24 +8214,46 @@ except Exception as e:
 
 # Define startup_tasks (as you had it)
 async def startup_tasks():
-    # This function now correctly uses the globally initialized ai_provider
-    if ENABLE_FILE_INDEXER: # Or your specific flag for enabling the global VS
-        logger.info("Attempting to initialize global FileIndex vector store from app.py startup_tasks...")
-        if ai_provider: # Check again, though it should be set if we reach here
-            # init_file_vs_from_indexer is imported from file_indexer.py
-            await init_file_vs_from_indexer(ai_provider) # <<< THIS CALLS initialize_global_file_index_vectorstore
+    logger.info("APP.PY: >>> Entered startup_tasks (async). <<<")
+    task_start_time = time.monotonic()
+
+    if ENABLE_FILE_INDEXER:
+        logger.info("APP.PY: startup_tasks: Attempting to initialize global FileIndex vector store...")
+        if ai_provider and ai_provider.embeddings:
+            init_vs_start_time = time.monotonic()
+            logger.info(
+                "APP.PY: startup_tasks: >>> CALLING await init_file_vs_from_indexer(ai_provider). This will block here. <<<")
+            await init_file_vs_from_indexer(ai_provider)  # This is initialize_global_file_index_vectorstore
+            init_vs_duration = time.monotonic() - init_vs_start_time
+            logger.info(
+                f"APP.PY: startup_tasks: >>> init_file_vs_from_indexer(ai_provider) HAS COMPLETED. Duration: {init_vs_duration:.2f}s <<<")
         else:
-            logger.error("CRITICAL in startup_tasks: AIProvider is None. Cannot initialize global file index vector store.")
+            logger.error("APP.PY: startup_tasks: CRITICAL - AIProvider or embeddings None. Cannot init FileIndex VS.")
+    else:
+        logger.info("APP.PY: startup_tasks: File Indexer and its Vector Store are DISABLED by config.")
+
     if ENABLE_SELF_REFLECTION:
-        logger.info("Attempting to initialize global Reflection vector store from app.py startup_tasks...")
-        if ai_provider:
-            temp_db_session_for_init = SessionLocal()
+        logger.info("APP.PY: startup_tasks: Attempting to initialize global Reflection vector store...")
+        if ai_provider and ai_provider.embeddings:
+            init_refl_vs_start_time = time.monotonic()
+            logger.info(
+                "APP.PY: startup_tasks: >>> CALLING await asyncio.to_thread(initialize_global_reflection_vectorstore, ...). This will block here. <<<")
+            temp_db_session_for_init = SessionLocal()  # type: ignore
             try:
                 await asyncio.to_thread(initialize_global_reflection_vectorstore, ai_provider, temp_db_session_for_init)
             finally:
                 temp_db_session_for_init.close()
+            init_refl_vs_duration = time.monotonic() - init_refl_vs_start_time
+            logger.info(
+                f"APP.PY: startup_tasks: >>> initialize_global_reflection_vectorstore HAS COMPLETED. Duration: {init_refl_vs_duration:.2f}s <<<")
         else:
-            logger.error("Cannot initialize global reflection vector store: AIProvider not available.")
+            logger.error("APP.PY: startup_tasks: CRITICAL - AIProvider or embeddings None. Cannot init Reflection VS.")
+    else:
+        logger.info("APP.PY: startup_tasks: Self Reflection and its Vector Store are DISABLED by config.")
+
+    task_duration = time.monotonic() - task_start_time
+    logger.info(f"APP.PY: >>> Exiting startup_tasks (async). Total Duration: {task_duration:.2f}s <<<")
+
 
 # --- Main Execution Control ---
 
@@ -8261,80 +8283,75 @@ if __name__ == "__main__":
     sys.exit(1)  # Exit because this isn't the intended way to run
 else:
     # This block executes when app.py is imported as a module by a server (e.g., Hypercorn).
-    # This is the standard execution path.
     logger.info("----------------------------------------------------------------------")
-    logger.info(">>> Zephyrine EngineMain (app.py) imported as a module by server... <<<")
+    logger.info(">>> APP.PY: MODULE IMPORTED BY SERVER (e.g., Hypercorn worker process) <<<")
     logger.info("----------------------------------------------------------------------")
 
-    # Database initialization (init_db()) is assumed to have been called at the module level
-    # when 'database.py' was imported, or just before AIProvider if AIProvider needs it.
-    # If init_db() is idempotent, calling it again here might be safe but potentially redundant
-    # if already done by module-level execution.
-    # Let's assume init_db() was called when `from database import init_db` happened.
-    # The global `ai_provider`, `ai_chat`, `ai_agent` instances should also have been
-    # initialized at the module level by this point.
-
+    # Global instances ai_provider, ai_chat, ai_agent should be initialized above this block.
     if ai_provider is None or ai_chat is None or ai_agent is None:
-        logger.critical(
-            "🔥🔥 AI components (ai_provider, ai_chat, ai_agent) were not initialized at the module level. Startup cannot proceed correctly.")
-        # This would indicate a fundamental issue with the import order or global instantiation.
-        # Depending on severity, you might sys.exit(1) here.
-        # For now, we'll log and let it proceed to startup_tasks, which will also check.
+        logger.critical("APP.PY: 🔥🔥 AI components NOT INITIALIZED GLOBALLY. Startup will likely fail.")
     else:
-        logger.success("✅ Core AI components (ai_provider, ai_chat, ai_agent) appear initialized globally.")
+        logger.success("APP.PY: ✅ Core AI components appear initialized globally.")
 
-    logger.info("🚀 Running asynchronous startup tasks (Vector Store Initializations)...")
+    logger.info("APP.PY: 🚀 Preparing to run asynchronous startup_tasks...")
     startup_tasks_completed_successfully = False
+    startup_tasks_start_time = time.monotonic()
+
     try:
-        # Ensure an asyncio event loop is available for run_until_complete.
-        # This is important because when a module is imported, there might not be
-        # a running asyncio event loop in the current thread's context yet,
-        # especially if the WSGI/ASGI server manages loops per worker/thread later.
+        logger.debug("APP.PY: Setting up asyncio event loop for startup_tasks...")
         try:
             loop = asyncio.get_event_loop_policy().get_event_loop()
-            if loop.is_closed():  # If the default loop is closed for some reason
-                logger.warning("Default asyncio event loop was closed. Creating a new one for startup tasks.")
+            if loop.is_closed():
+                logger.warning("APP.PY: Default asyncio event loop was closed. Creating new one.")
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-        except RuntimeError:  # No current event loop in this thread
-            logger.info("No current asyncio event loop found for startup tasks. Creating a new one.")
+        except RuntimeError:
+            logger.info("APP.PY: No current asyncio event loop. Creating new one.")
             loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)  # Set it as the current loop for this thread context
+            asyncio.set_event_loop(loop)
 
-        # Run the startup_tasks coroutine to completion.
-        # This will block here until startup_tasks (and all its awaited calls) are done.
-        loop.run_until_complete(startup_tasks())
-        logger.success("✅ Asynchronous startup tasks (Vector Store Initializations) completed.")
+        logger.info(
+            "APP.PY: >>> CALLING loop.run_until_complete(startup_tasks()). This will block until startup_tasks finishes. <<<")
+        loop.run_until_complete(startup_tasks())  # This should block
+        startup_tasks_duration = time.monotonic() - startup_tasks_start_time
+        logger.info(
+            f"APP.PY: >>> loop.run_until_complete(startup_tasks()) HAS COMPLETED. Duration: {startup_tasks_duration:.2f}s <<<")
+
+        # Check the event status from file_indexer directly after startup_tasks
+        # This requires _file_index_vs_initialized_event to be accessible or a getter.
+        # For simplicity, we'll rely on the logs from initialize_global_file_index_vectorstore itself.
+        # from .file_indexer import _file_index_vs_initialized_event # Avoid direct import of private-like var
+        # logger.info(f"APP.PY: Post startup_tasks, _file_index_vs_initialized_event.is_set(): {_file_index_vs_initialized_event.is_set()}")
+
+        logger.success("APP.PY: ✅ Asynchronous startup_tasks (Vector Store Initializations) reported completion.")
         startup_tasks_completed_successfully = True
 
     except Exception as su_err:
-        logger.error(f"🚨🚨 CRITICAL FAILURE during asyncio.run(startup_tasks): {su_err} 🚨🚨")
-        logger.exception("Startup Tasks Execution Traceback:")
-        # Depending on how critical these vector stores are, you might want to prevent
-        # the application from fully starting if they fail.
-        # For now, it will continue and log warnings when they are accessed.
-        # sys.exit("Critical startup tasks failed. Application cannot start.") # Uncomment to make it fatal
+        startup_tasks_duration = time.monotonic() - startup_tasks_start_time
+        logger.error(
+            f"APP.PY: 🚨🚨 CRITICAL FAILURE during loop.run_until_complete(startup_tasks()) after {startup_tasks_duration:.2f}s: {su_err} 🚨🚨")
+        logger.exception("APP.PY: Startup Tasks Execution Traceback:")
+        startup_tasks_completed_successfully = False  # Ensure it's false
 
     if startup_tasks_completed_successfully:
-        logger.info("🚀 Starting background services (File Indexer, Self Reflector)...")
-        if ENABLE_FILE_INDEXER:  # Check config before starting
+        logger.info("APP.PY: 🚀 Proceeding to start background services (File Indexer, Self Reflector)...")
+        if ENABLE_FILE_INDEXER:
+            logger.info("APP.PY: Starting File Indexer...")
             start_file_indexer()
         else:
-            logger.info("File Indexer is DISABLED by config. Not starting.")
+            logger.info("APP.PY: File Indexer is DISABLED by config. Not starting.")
 
-        if ENABLE_SELF_REFLECTION:  # Check config before starting
+        if ENABLE_SELF_REFLECTION:
+            logger.info("APP.PY: Starting Self Reflector...")
             start_self_reflector()
         else:
-            logger.info("Self Reflector is DISABLED by config. Not starting.")
+            logger.info("APP.PY: Self Reflector is DISABLED by config. Not starting.")
     else:
-        logger.error("Background services (File Indexer, Self Reflector) NOT started due to startup_tasks failure.")
+        logger.error(
+            "APP.PY: Background services (File Indexer, Self Reflector) NOT started due to startup_tasks failure or incompletion.")
 
-    # setup_assistant_proxy() was previously here but commented out in your version.
-    # If needed, ensure it's called appropriately (e.g., only once, or on demand).
     logger.info("--------------------------------------------------------------------")
-    logger.info("✅ Zephyrine EngineMain (app.py) module-level initializations complete.")
-    logger.info(f"   Mimicking Ollama endpoint at /api/...")
-    logger.info(f"   OpenAI compatible endpoints at /v1/...")
-    logger.info(f"   Custom endpoint at /")
-    logger.info(f"   Application (app) is ready to be served by Hypercorn/Gunicorn.")
+    logger.info("APP.PY: ✅ Zephyrine EngineMain module-level initializations complete.")
+    logger.info(f"   Application (app) is now considered ready by this worker process.")
+    logger.info("   Waiting for server to route requests...")
     logger.info("--------------------------------------------------------------------")

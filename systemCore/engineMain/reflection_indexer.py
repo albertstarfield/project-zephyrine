@@ -3,7 +3,7 @@ import os
 import json
 import threading
 import time  # For potential periodic tasks
-from typing import Optional, List
+from typing import Optional, List, Dict, Any
 from loguru import logger
 import sys
 from sqlalchemy.orm import Session
@@ -130,20 +130,18 @@ def index_single_reflection(reflection_interaction: Interaction, provider: AIPro
     Marks the interaction in SQLite DB once indexed. (Requires a new field in Interaction model).
     """
     global global_reflection_vectorstore
-    if not _reflection_vs_initialized_event.is_set():
+    if not _reflection_vs_initialized_event.is_set():  # Ensure this event is being set correctly during init
         logger.warning(
-            f"Reflection VS not initialized. Cannot index reflection ID {reflection_interaction.id}. Triggering initialization...")
-        # This could be problematic if called from a non-async context.
-        # For now, let's assume initialize is called at startup.
-        # If called from an async context:
-        # await initialize_global_reflection_vectorstore(provider, db_session) # Needs to be async or run in thread
-        # If called from sync context (like self_reflector thread):
-        # asyncio.run(initialize_global_reflection_vectorstore(provider, db_session)) # This is not ideal from a running thread.
-        # Best to ensure init happens at app startup.
-        # For now, just log and skip if not initialized.
-        if not global_reflection_vectorstore:  # Check again after potential init
-            logger.error(
-                f"Reflection VS still not ready after init attempt for reflection ID {reflection_interaction.id}. Skipping indexing.")
+            f"Reflection VS not initialized. Cannot index reflection ID {reflection_interaction.id}. Triggering initialization might be needed or check startup.")
+        # Optionally, attempt to initialize if not done:
+        # if not global_reflection_vectorstore:
+        #     initialize_global_reflection_vectorstore(provider, db_session) # This function needs to be sync or handled in thread
+        #     if not _reflection_vs_initialized_event.is_set(): # Check again
+        #         logger.error(f"Reflection VS still not ready after init attempt for reflection ID {reflection_interaction.id}. Skipping.")
+        #         return
+        # For now, assuming init happens at startup:
+        if not global_reflection_vectorstore:
+            logger.error(f"Reflection VS is None though event might be set. Skipping ID {reflection_interaction.id}.")
             return
 
     if not reflection_interaction.llm_response or reflection_interaction.input_type != 'reflection_result':
@@ -151,21 +149,20 @@ def index_single_reflection(reflection_interaction: Interaction, provider: AIPro
             f"Skipping indexing for interaction ID {reflection_interaction.id}: Not a reflection result or no content.")
         return
 
-    # --- Add a new field to Interaction model: `reflection_indexed_in_vs` (Boolean, default False) ---
-    # --- Check if already indexed ---
-    # if reflection_interaction.reflection_indexed_in_vs:
-    #     logger.trace(f"Reflection ID {reflection_interaction.id} already indexed in vector store. Skipping.")
-    #     return
-
     logger.info(
         f"Indexing reflection ID {reflection_interaction.id} into global reflection vector store (Priority ELP{priority} for embedding)...")
 
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=YOUR_REFLECTION_CHUNK_SIZE,  # e.g., 500
-        chunk_overlap=YOUR_REFLECTION_CHUNK_OVERLAP,  # e.g., 50
+        chunk_size=YOUR_REFLECTION_CHUNK_SIZE,
+        chunk_overlap=YOUR_REFLECTION_CHUNK_OVERLAP,
         length_function=len,
         is_separator_regex=False,
     )
+    # Ensure llm_response is not None before splitting
+    if reflection_interaction.llm_response is None:
+        logger.warning(f"LLM response is None for reflection ID {reflection_interaction.id}. Skipping.")
+        return
+
     chunks = text_splitter.split_text(reflection_interaction.llm_response)
 
     if not chunks:
@@ -173,37 +170,69 @@ def index_single_reflection(reflection_interaction: Interaction, provider: AIPro
         return
 
     try:
-        # Embed chunks (this would use the provider's embedding model with priority)
-        logger.debug(f"Embedding {len(chunks)} chunks for reflection ID {reflection_interaction.id}...")
-        # The LlamaCppEmbeddingsWrapper's embed_documents needs to handle the priority kwarg
-        chunk_embeddings = provider.embeddings.embed_documents(chunks, priority=priority)
+        logger.debug(
+            f"Embedding {len(chunks)} chunks for reflection ID {reflection_interaction.id} with priority ELP{priority}...")
+        if not provider.embeddings:
+            logger.error(f"Embeddings provider not available for reflection ID {reflection_interaction.id}. Skipping.")
+            return
 
-        metadatas = [{
+        # LlamaCppEmbeddingsWrapper.embed_documents should accept 'priority'
+        chunk_embeddings: List[List[float]] = provider.embeddings.embed_documents(chunks,
+                                                                                  priority=priority)  # type: ignore
+
+        metadatas: List[Dict[str, Any]] = [{
             "source_interaction_id": reflection_interaction.id,
-            "timestamp": str(reflection_interaction.timestamp),  # Convert datetime to string for Chroma metadata
-            "original_user_input_snippet": (reflection_interaction.user_input or "")[:100]
-            # Snippet of what triggered reflection
+            "timestamp": str(reflection_interaction.timestamp),
+            "original_user_input_snippet": (getattr(reflection_interaction, 'user_input', None) or "")[:100]
         } for _ in range(len(chunks))]
 
-        ids = [f"reflection_{reflection_interaction.id}_chunk_{i}" for i in range(len(chunks))]
+        ids: List[str] = [f"reflection_{reflection_interaction.id}_chunk_{i}" for i in range(len(chunks))]
 
-        with _reflection_vs_write_lock:  # Ensure thread-safe write to Chroma
+        with _reflection_vs_write_lock:
+            if global_reflection_vectorstore is None:  # Should not happen if init was successful
+                logger.error(
+                    "CRITICAL: global_reflection_vectorstore is None within write lock during index_single_reflection. Aborting.")
+                return
+
+            # --- CORRECTED CALL to add_embeddings ---
             global_reflection_vectorstore.add_embeddings(
-                text_embeddings=chunk_embeddings,
-                documents=chunks,  # Store the actual text chunks
+                embeddings=chunk_embeddings,  # Changed from text_embeddings
+                texts=chunks,  # Changed from documents
                 metadatas=metadatas,
                 ids=ids
             )
-            global_reflection_vectorstore.persist()  # Persist changes to disk
+            # --- END CORRECTION ---
+
+            # Persist if the store is configured for persistence
+            if hasattr(global_reflection_vectorstore, 'persist') and callable(
+                    getattr(global_reflection_vectorstore, 'persist')):
+                if hasattr(global_reflection_vectorstore,
+                           '_persist_directory') and global_reflection_vectorstore._persist_directory:  # type: ignore
+                    logger.debug(
+                        f"Persisting global_reflection_vectorstore to {global_reflection_vectorstore._persist_directory}")  # type: ignore
+                    global_reflection_vectorstore.persist()
+                else:
+                    logger.trace("Global reflection vector store not configured for persistence, skipping persist().")
+            else:
+                logger.trace("Global reflection vector store does not have a persist() method or _persist_directory.")
 
         logger.success(f"Successfully indexed {len(chunks)} chunks from reflection ID {reflection_interaction.id}")
 
-        # --- Mark as indexed in SQLite DB ---
-        # Example: Assuming you add `reflection_indexed_in_vs = Column(Boolean, default=False, nullable=False)` to Interaction model
-        # reflection_interaction.reflection_indexed_in_vs = True
-        # db_session.commit()
-        # logger.info(f"Marked reflection ID {reflection_interaction.id} as indexed in SQLite.")
+        # --- Mark as indexed in SQLite DB (Example) ---
+        # This requires adding a boolean field like `reflection_indexed_in_vs` to your Interaction model
+        # and then:
+        # try:
+        #     stmt = update(Interaction).where(Interaction.id == reflection_interaction.id).values(reflection_indexed_in_vs=True)
+        #     db_session.execute(stmt)
+        #     db_session.commit()
+        #     logger.info(f"Marked reflection ID {reflection_interaction.id} as indexed in SQLite.")
+        # except Exception as e_db_update:
+        #     logger.error(f"Failed to mark reflection ID {reflection_interaction.id} as indexed in SQLite: {e_db_update}")
+        #     db_session.rollback()
 
+    except TaskInterruptedException as tie:
+        logger.warning(f"🚦 Embedding for reflection ID {reflection_interaction.id} INTERRUPTED by ELP1: {tie}")
+        # Do not mark as indexed, let it be picked up again or handled
     except Exception as e:
         logger.error(f"Failed to index chunks for reflection ID {reflection_interaction.id}: {e}")
         logger.exception(f"Reflection Indexing Traceback ID {reflection_interaction.id}:")
@@ -219,3 +248,7 @@ def get_global_reflection_vectorstore() -> Optional[Chroma]:
 
 # --- Optional: Periodic task to scan for unindexed reflections (if not done immediately) ---
 # def periodic_reflection_indexing_task(stop_event: threading.Event, provider: AIProvider, session_factory): ...
+
+class TaskInterruptedException(Exception):
+    """Custom exception raised when an ELP0 task is interrupted."""
+    pass
