@@ -114,6 +114,8 @@ from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough, RunnableParallel
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 from langchain_core.exceptions import OutputParserException
+from langchain_core.documents import Document
+from langchain_core.vectorstores import VectorStoreRetriever, VectorStore
 
 # --- Langchain Community Imports ---
 #from langchain_community.vectorstores import Chroma # Use Chroma for in-memory history/URL RAG
@@ -1321,188 +1323,185 @@ class AIChat:
             logger.exception(f"{log_prefix} _get_rag_retriever_thread_wrapper Exception Details:")
             return {"status": "error", "error_message": str(e_wrapper)}
 
-    def _get_rag_retriever(self, db: Session, user_input: str, priority: int = ELP0) -> Tuple[
-        Optional[Any],  # url_retriever
-        Optional[Any],  # session_history_retriever (for on-the-fly session chat)
-        Optional[Any],  # reflection_chunks_retriever (for pre-indexed global reflections) # <<< THIS IS THE ONE
-        str             # session_history_ids_str (IDs of chat turns embedded on-the-fly for session RAG)
+    class _CustomVectorSearchRetriever(VectorStoreRetriever):
+        vectorstore: VectorStore
+        search_type: str = "similarity"
+        search_kwargs: Dict[str, Any]
+        vector_to_search: List[float]
+
+        def _get_relevant_documents(self, query: str, *, run_manager: Any) -> List[Document]:
+            if not self.vectorstore: raise ValueError("Vectorstore not set on _CustomVectorSearchRetriever")
+            k_val = self.search_kwargs.get("k", 4)
+            return self.vectorstore.similarity_search_by_vector(embedding=self.vector_to_search, k=k_val)
+
+        async def _aget_relevant_documents(self, query: str, *, run_manager: Any) -> List[Document]:
+            if not self.vectorstore: raise ValueError("Vectorstore not set on _CustomVectorSearchRetriever")
+            k_val = self.search_kwargs.get("k", 4)
+            # Assuming similarity_search_by_vector is synchronous for Chroma
+            return await asyncio.to_thread(
+                self.vectorstore.similarity_search_by_vector,
+                embedding=self.vector_to_search,
+                k=k_val
+            )
+
+    def _get_rag_retriever(self, db: Session, user_input_for_rag_query: str, priority: int = ELP0) -> Tuple[
+        Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], str
     ]:
         log_prefix = f"RAGRetriever|ELP{priority}|{self.current_session_id or 'NoSession'}"
         logger.critical(
-            f"@@@ ENTERING _get_rag_retriever for session {self.current_session_id}, priority ELP{priority} @@@")
+            f"@@@ ENTERING _get_rag_retriever for session {self.current_session_id}, query: '{user_input_for_rag_query[:30]}...', priority ELP{priority} @@@")
 
-        # Initialize all return variables to None or default
-        url_retriever: Optional[Any] = None
-        session_history_retriever: Optional[Any] = None
-        # ===>>> POTENTIAL ISSUE HERE: Was reflection_chunks_retriever removed from an earlier version of this method?
-        # If this was accidentally removed or commented out during refactoring,
-        # and the return statement still expects 4 items, this would cause the error.
-        # Let's assume based on the error that one of the intended return values is missing.
-        # The type hint suggests it should be `reflection_chunks_retriever`.
-
-        reflection_chunks_retriever: Optional[Any] = None # ENSURE THIS IS INITIALIZED
+        url_retriever: Optional[VectorStoreRetriever] = None
+        session_history_retriever: Optional[VectorStoreRetriever] = None
+        reflection_chunks_retriever: Optional[VectorStoreRetriever] = None
         session_history_ids_str: str = ""
 
-        self.vectorstore_history: Optional[Chroma] = None # This is for session history, not global reflections
+        self.vectorstore_history: Optional[Chroma] = None
         session_history_ids_set = set()
+        rag_query_vector: Optional[List[float]] = None
 
-        try:
-            # 1. URL Retriever
+        try:  # Outer try to catch TaskInterruptedException from embedding calls
+            # --- Step 0: Pre-embed the main RAG query with the specified priority ---
+            if user_input_for_rag_query and self.provider and self.provider.embeddings:
+                logger.debug(
+                    f"{log_prefix} Pre-embedding main RAG query via _embed_texts with priority ELP{priority}: '{user_input_for_rag_query[:50]}...'")
+                if hasattr(self.provider.embeddings, '_embed_texts') and \
+                        callable(getattr(self.provider.embeddings, '_embed_texts')):
+                    embedding_result_list = self.provider.embeddings._embed_texts([user_input_for_rag_query],
+                                                                                  priority=priority)  # type: ignore
+                    if embedding_result_list and len(embedding_result_list) > 0:
+                        rag_query_vector = embedding_result_list[0]
+                else:  # Fallback if _embed_texts is not available (should ideally not happen with LlamaCppEmbeddingsWrapper)
+                    logger.warning(
+                        f"{log_prefix} Embeddings object missing custom '_embed_texts'. Calling public 'embed_query' (will use its default priority).")
+                    rag_query_vector = self.provider.embeddings.embed_query(user_input_for_rag_query)
+
+                if rag_query_vector:
+                    logger.debug(f"{log_prefix} Main RAG query pre-embedded successfully.")
+                else:
+                    logger.error(f"{log_prefix} Main RAG query embedding resulted in None or empty vector.")
+            elif not user_input_for_rag_query:
+                logger.debug(f"{log_prefix} No RAG query input, skipping pre-embedding.")
+            elif not (self.provider and self.provider.embeddings):
+                logger.error(f"{log_prefix} Embeddings provider unavailable, cannot pre-embed query.")
+
+            # --- Step 1: URL Retriever ---
             logger.debug(f"{log_prefix} Step 1: URL Retriever processing...")
-            if hasattr(self, 'vectorstore_url') and self.vectorstore_url:
-                # ... (url_retriever logic)
-                try:
-                    url_rag_k_val = RAG_URL_COUNT
-                    url_retriever = self.vectorstore_url.as_retriever(search_kwargs={"k": url_rag_k_val})
-                    logger.trace(f"{log_prefix} Using existing URL vector store retriever (k={url_rag_k_val}).")
-                except Exception as e_url_vs:
-                    logger.error(
-                        f"{log_prefix} Failed to get URL retriever from existing self.vectorstore_url: {e_url_vs}")
-                    url_retriever = None
+            if hasattr(self, 'vectorstore_url') and self.vectorstore_url and isinstance(self.vectorstore_url, Chroma):
+                if rag_query_vector:
+                    try:
+                        k_url = RAG_URL_COUNT
+                        url_retriever = self._CustomVectorSearchRetriever(vectorstore=self.vectorstore_url,
+                                                                          search_kwargs={"k": k_url},
+                                                                          vector_to_search=rag_query_vector)
+                    except Exception as e_url_ret:
+                        logger.error(f"{log_prefix} Failed custom URL retriever creation: {e_url_ret}")
+                else:
+                    logger.warning(f"{log_prefix} Skipping URL retriever: RAG query not embedded.")
             else:
-                logger.trace(f"{log_prefix} No URL vector store (self.vectorstore_url) available.")
-            logger.debug(f"{log_prefix} Step 1 complete. url_retriever type: {type(url_retriever)}")
+                logger.trace(f"{log_prefix} No URL vector store or not Chroma type.")
+            logger.debug(f"{log_prefix} Step 1 complete. url_retriever: {'Set' if url_retriever else 'None'}")
 
-
-            # 2. Session Chat History Retriever
+            # --- Step 2: Session Chat History Retriever ---
             logger.debug(f"{log_prefix} Step 2: Session Chat History Retriever processing...")
-            # ... (session_history_retriever logic) ...
-            chat_interactions_for_rag = get_recent_interactions( # Synchronous DB call
-                db,
-                limit=RAG_HISTORY_COUNT * 2,
-                session_id=self.current_session_id,
-                mode="chat",
-                include_logs=False
-            )
-            session_history_texts_to_embed = []
-            if chat_interactions_for_rag:
-                chat_interactions_for_rag.reverse()
-                for interaction in chat_interactions_for_rag:
-                    text_to_embed_content = None
+            chat_interactions = get_recent_interactions(db, RAG_HISTORY_COUNT * 2, self.current_session_id, "chat",
+                                                        False)
+            session_texts_to_embed: List[str] = []
+            if chat_interactions:
+                chat_interactions.reverse()
+                for interaction in chat_interactions:  # Populate session_texts_to_embed and session_history_ids_set
+                    text_content: Optional[str] = None
                     if interaction.user_input and interaction.input_type == 'text':
-                        text_to_embed_content = f"User (current session): {interaction.user_input}"
-                    elif interaction.llm_response and interaction.input_type == 'llm_response':
-                        if len(interaction.llm_response.strip()) > 10:
-                            text_to_embed_content = f"AI (current session): {interaction.llm_response}"
-
-                    if text_to_embed_content and interaction.id not in session_history_ids_set:
-                        session_history_texts_to_embed.append(text_to_embed_content)
+                        text_content = f"User (session): {interaction.user_input}"
+                    elif interaction.llm_response and interaction.input_type == 'llm_response' and len(
+                            interaction.llm_response.strip()) > 10:
+                        text_content = f"AI (session): {interaction.llm_response}"
+                    if text_content and interaction.id not in session_history_ids_set:
+                        session_texts_to_embed.append(text_content);
                         session_history_ids_set.add(interaction.id)
-                logger.debug(
-                    f"{log_prefix} Prepared {len(session_history_texts_to_embed)} text snippets from session chat for on-the-fly embedding.")
-            else:
-                logger.debug(f"{log_prefix} No recent session chat interactions found for RAG.")
 
-            if session_history_texts_to_embed:
+            if session_texts_to_embed and self.provider and self.provider.embeddings:
                 logger.debug(
-                    f"{log_prefix} Embedding {len(session_history_texts_to_embed)} session history texts (Embedding Priority ELP{priority})...")
-                try:
-                    if not self.provider.embeddings:
-                        raise ValueError(
-                            "Embeddings provider (self.provider.embeddings) not initialized for session history RAG.")
-                    embedded_session_history_vectors = self.provider.embeddings.embed_documents(
-                        session_history_texts_to_embed, priority=priority
-                    )
-                    self.vectorstore_history = Chroma.from_embeddings(
-                        text_embeddings=embedded_session_history_vectors,
-                        documents=session_history_texts_to_embed,
-                        embedding=self.provider.embeddings
-                    )
-                    k_session_hist = RAG_HISTORY_COUNT // 2 if RAG_HISTORY_COUNT > 2 else RAG_HISTORY_COUNT
-                    if k_session_hist < 1 and RAG_HISTORY_COUNT >= 1: k_session_hist = 1
-                    session_history_retriever = self.vectorstore_history.as_retriever(
-                        search_kwargs={"k": k_session_hist}
-                    )
-                    logger.debug(
-                        f"{log_prefix} Created temporary Session History retriever (k={k_session_hist}) using on-the-fly embeddings.")
-                except TaskInterruptedException as tie_hist:
-                    logger.warning(f"🚦 {log_prefix} Session History RAG embedding INTERRUPTED: {tie_hist}")
-                    session_history_retriever = None
-                    self.vectorstore_history = None
-                    raise tie_hist
-                except Exception as e_hist_vs:
-                    logger.error(f"❌ {log_prefix} Failed temporary session history vector store creation: {e_hist_vs}")
-                    logger.exception(f"{log_prefix} Session History VS Creation Traceback:")
-                    session_history_retriever = None
-                    self.vectorstore_history = None
+                    f"{log_prefix} Embedding {len(session_texts_to_embed)} session history texts via _embed_texts (Priority ELP{priority})...")
+                embedded_session_vectors: Optional[List[List[float]]] = None
+                if hasattr(self.provider.embeddings, '_embed_texts') and \
+                        callable(getattr(self.provider.embeddings, '_embed_texts')):
+                    embedded_session_vectors = self.provider.embeddings._embed_texts(session_texts_to_embed,
+                                                                                     priority=priority)  # type: ignore
+                else:
+                    logger.warning(
+                        f"{log_prefix} Session history: _embed_texts not found. Using public embed_documents (default priority).")
+                    embedded_session_vectors = self.provider.embeddings.embed_documents(session_texts_to_embed)
+
+                if embedded_session_vectors and len(embedded_session_vectors) == len(session_texts_to_embed):
+                    try:
+                        temp_store = Chroma(collection_name=f"sess_hist_temp_{uuid.uuid4().hex[:6]}",
+                                            embedding_function=self.provider.embeddings)
+                        temp_store.add_embeddings(texts=session_texts_to_embed, embeddings=embedded_session_vectors)
+                        self.vectorstore_history = temp_store
+
+                        k_sess = RAG_HISTORY_COUNT // 2 if RAG_HISTORY_COUNT > 1 else RAG_HISTORY_COUNT
+                        if RAG_HISTORY_COUNT == 0: k_sess = 0
+
+                        if k_sess > 0 and rag_query_vector:
+                            session_history_retriever = self._CustomVectorSearchRetriever(
+                                vectorstore=self.vectorstore_history, search_kwargs={"k": k_sess},
+                                vector_to_search=rag_query_vector)
+                        elif not rag_query_vector:
+                            logger.warning(f"{log_prefix} Skipping session history retriever: RAG query not embedded.")
+                    except Exception as e_sess_vs_build:
+                        logger.error(f"{log_prefix} Error building session history Chroma store: {e_sess_vs_build}")
+                else:
+                    logger.error(f"{log_prefix} Session history embedding failed or vector count mismatch.")
             else:
-                logger.debug(f"{log_prefix} No suitable text found in session interactions for on-the-fly history RAG.")
-                session_history_retriever = None
+                logger.debug(f"{log_prefix} No texts for on-the-fly session history RAG.")
             logger.debug(
-                f"{log_prefix} Step 2 complete. session_history_retriever type: {type(session_history_retriever)}")
+                f"{log_prefix} Step 2 complete. session_history_retriever: {'Set' if session_history_retriever else 'None'}")
 
-
-            # 3. Global Reflection Chunks Retriever
+            # --- Step 3: Global Reflection Chunks Retriever ---
             logger.debug(f"{log_prefix} Step 3: Global Reflection Chunks Retriever processing...")
-            active_global_reflection_vs = get_global_reflection_vectorstore() # Synchronous call
-
-            if active_global_reflection_vs:
-                logger.debug(f"{log_prefix} Global reflection vector store is available. Creating retriever for it.")
-                try:
-                    # Ensure k_reflection_chunks is at least 1 if RAG_HISTORY_COUNT is positive
-                    k_reflection_chunks = RAG_HISTORY_COUNT // 2
-                    if RAG_HISTORY_COUNT > 0 and k_reflection_chunks < 1:
-                        k_reflection_chunks = 1
-                    elif RAG_HISTORY_COUNT == 0: # If RAG_HISTORY_COUNT is 0, k_reflection_chunks might be 0
-                        k_reflection_chunks = 0 # or handle as an error/skip
-
-                    if k_reflection_chunks > 0: # Only create retriever if k > 0
-                        reflection_chunks_retriever = active_global_reflection_vs.as_retriever(
-                            search_kwargs={"k": k_reflection_chunks}
-                        )
-                        logger.debug(
-                            f"{log_prefix} Created retriever for global reflection chunks (k={k_reflection_chunks}).")
-                    else:
-                        logger.debug(f"{log_prefix} Skipping reflection retriever as k_reflection_chunks is 0.")
-                        reflection_chunks_retriever = None
-
-                except Exception as e_refl_retr:
-                    logger.error(f"❌ {log_prefix} Failed to create retriever from global reflection VS: {e_refl_retr}")
-                    reflection_chunks_retriever = None
+            active_refl_vs = get_global_reflection_vectorstore()
+            if active_refl_vs and isinstance(active_refl_vs, Chroma):
+                if rag_query_vector:
+                    logger.debug(f"{log_prefix} Global reflection VS available. Creating custom retriever.")
+                    try:
+                        k_refl = RAG_HISTORY_COUNT // 2 if RAG_HISTORY_COUNT > 1 else RAG_HISTORY_COUNT
+                        if RAG_HISTORY_COUNT == 0: k_refl = 0
+                        if k_refl > 0:
+                            reflection_chunks_retriever = self._CustomVectorSearchRetriever(vectorstore=active_refl_vs,
+                                                                                            search_kwargs={"k": k_refl},
+                                                                                            vector_to_search=rag_query_vector)
+                    except Exception as e_refl_ret:
+                        logger.error(f"{log_prefix} Reflection retriever error: {e_refl_ret}")
+                else:
+                    logger.warning(f"{log_prefix} Skipping reflection retriever: RAG query not embedded.")
             else:
-                logger.debug(f"{log_prefix} Global reflection vector store not available or not initialized.")
-                reflection_chunks_retriever = None
+                logger.debug(f"{log_prefix} Global reflection VS not available or not Chroma type.")
             logger.debug(
-                f"{log_prefix} Step 3 complete. reflection_chunks_retriever type: {type(reflection_chunks_retriever)}")
-
+                f"{log_prefix} Step 3 complete. reflection_chunks_retriever: {'Set' if reflection_chunks_retriever else 'None'}")
 
             session_history_ids_str = ",".join(map(str, sorted(list(session_history_ids_set))))
-            logger.trace(
-                f"{log_prefix} Session Chat History Interaction IDs embedded on-the-fly for RAG: [{session_history_ids_str}]")
 
-            final_log_msg = (
-                f"{log_prefix} RAG retriever preparation complete. "
-                f"URL Retr: {'Yes' if url_retriever else 'No'}, "
-                f"SessionChat Retr: {'Yes' if session_history_retriever else 'No'}, "
-                f"ReflectionChunk Retr: {'Yes' if reflection_chunks_retriever else 'No'}." # Added this
-            )
-            logger.info(final_log_msg)
-
-            # === CRITICAL RETURN STATEMENT ===
-            # Debug print just before returning
-            logger.critical(f"@@@ _get_rag_retriever RETURNING (try block): "
-                            f"url_type={type(url_retriever)}, "
-                            f"session_hist_type={type(session_history_retriever)}, "
-                            f"reflection_chunk_type={type(reflection_chunks_retriever)}, "  # Added type log
-                            f"ids_str_type={type(session_history_ids_str)} @@@")
-            # Ensure all 4 items are present in the tuple being returned.
+            logger.info(
+                f"{log_prefix} RAG retriever prep complete. URL: {'Yes' if url_retriever else 'No'}, SessHist: {'Yes' if session_history_retriever else 'No'}, ReflChunk: {'Yes' if reflection_chunks_retriever else 'No'}.")
 
             ret_val = (url_retriever, session_history_retriever, reflection_chunks_retriever, session_history_ids_str)
             logger.critical(
-                f"!!!!! ABOUT TO RETURN {len(ret_val)} items from _get_rag_retriever. Types: {[type(x) for x in ret_val]} !!!!!")
-            return url_retriever, session_history_retriever, reflection_chunks_retriever, session_history_ids_str
+                f"!!!!! _get_rag_retriever ABOUT TO RETURN {len(ret_val)} items. Types: {[type(x) for x in ret_val]} !!!!!")
+            return ret_val
 
-        except TaskInterruptedException as tie:
+        except TaskInterruptedException as tie_outer:
             logger.warning(
-                f"🚦 {log_prefix} TaskInterruptedException caught within _get_rag_retriever: {tie}. Re-raising.")
-            raise tie # This will be caught by the wrapper
-        except Exception as e_outer:
+                f"🚦 {log_prefix} TaskInterruptedException in _get_rag_retriever (likely during prioritized embedding): {tie_outer}. Re-raising.")
+            # This exception will be caught by _get_rag_retriever_thread_wrapper,
+            # which will then return a dict with "status": "interrupted".
+            raise tie_outer
+        except Exception as e_outer:  # Catch any other unexpected errors
             logger.error(f"❌❌ {log_prefix} UNHANDLED EXCEPTION in _get_rag_retriever: {e_outer}")
             logger.exception(f"{log_prefix} _get_rag_retriever Outer Exception Traceback:")
-            logger.critical(
-                "!!! _get_rag_retriever: Reached outer exception handler. Returning default 4-tuple of Nones/empty string.")
-            # Ensure 4 items are returned even in this fallback
-            return None, None, None, ""
+            # This will also be caught by _get_rag_retriever_thread_wrapper,
+            # which will return a dict with "status": "error".
+            raise e_outer  # Re-raise to be caught by the wrapper
 
     async def _generate_file_search_query_async(self, db: Session, user_input_for_analysis: str, recent_direct_history_str: str, session_id: str) -> str:
         """
@@ -4793,18 +4792,18 @@ class AIChat:
     async def _get_vector_search_file_index_context(self, query: str, priority: int = ELP0) -> str:
         """
         Performs a vector similarity search on the global file index vector store
-        and formats the results. Runs embedding for the query with specified priority.
+        and formats the results. Explicitly uses _embed_texts for prioritized query embedding.
         """
         log_prefix = f"🔍 FileVecSearch|ELP{priority}|{self.current_session_id or 'NoSession'}"
         logger.debug(f"{log_prefix} Performing vector search on file index for query: '{query[:50]}...'")
 
-        global_file_vs = get_global_file_index_vectorstore()  # Synchronous call to get the store
+        global_file_vs = get_global_file_index_vectorstore()  # Synchronous call
 
         if not global_file_vs:
             logger.warning(f"{log_prefix} Global file index vector store not available. Cannot perform vector search.")
             return "No vector file index available for search."
 
-        if not self.provider.embeddings:
+        if not self.provider or not self.provider.embeddings:
             logger.error(f"{log_prefix} Embeddings provider not available for vector search query.")
             return "Embeddings provider missing, cannot perform vector file search."
 
@@ -4812,113 +4811,68 @@ class AIChat:
             logger.debug(f"{log_prefix} Empty query for vector search. Skipping.")
             return "No specific query provided for vector file search."
 
+        query_vector: Optional[List[float]] = None
         try:
-            # Chroma's similarity_search will internally use the embedding function
-            # (which is our LlamaCppEmbeddingsWrapper) to embed the query.
-            # We need to ensure that the LlamaCppEmbeddingsWrapper.embed_query
-            # method correctly handles the 'priority' kwarg.
-            # If `similarity_search` does not pass down arbitrary kwargs to the
-            # embedding function, this becomes more complex.
-            #
-            # Current LlamaCppEmbeddingsWrapper.embed_query is designed to take priority.
-            # Chroma's `similarity_search` method typically takes the query string directly.
-            # Let's assume for now that Chroma calls `embed_query` on its configured
-            # embedding function.
-            #
-            # A more explicit way if Chroma doesn't pass priority:
-            # query_embedding = await asyncio.to_thread(self.provider.embeddings.embed_query, query, priority=priority)
-            # search_results_docs = await asyncio.to_thread(
-            #     global_file_vs.similarity_search_by_vector,
-            #     embedding=query_embedding,
-            #     k=RAG_FILE_INDEX_COUNT # Use the count from config
-            # )
-            # For simplicity and assuming embed_query in the wrapper is correctly prioritized:
+            # --- CORRECTED: Explicitly embed the query with priority using _embed_texts ---
+            logger.debug(f"{log_prefix} Explicitly embedding query via _embed_texts with priority ELP{priority}...")
+            if hasattr(self.provider.embeddings, '_embed_texts') and \
+                    callable(getattr(self.provider.embeddings, '_embed_texts')):
 
-            logger.debug(
-                f"{log_prefix} Calling similarity_search (k={RAG_FILE_INDEX_COUNT}) with priority {priority} implicitly through embeddings object...")
-            # The `priority` argument is implicitly handled by the `LlamaCppEmbeddingsWrapper`
-            # when `similarity_search` calls its `embed_query` method.
-            # We must ensure `LlamaCppEmbeddingsWrapper.embed_query` correctly passes priority to `_embed_texts`.
-
-            # Run the blocking similarity_search in a thread
-            # The LlamaCppEmbeddingsWrapper.embed_query will be called with the specified priority
-            # when Chroma needs to embed the query.
-            search_results_docs = await asyncio.to_thread(
-                global_file_vs.similarity_search,
-                query,
-                k=RAG_FILE_INDEX_COUNT,
-                # How to pass priority to the underlying embedding function of Chroma?
-                # Chroma's API for similarity_search doesn't directly take a 'priority' kwarg
-                # to pass to the embedding function.
-                # This implies that the LlamaCppEmbeddingsWrapper *must* handle priority
-                # globally or via a context, which is not ideal.
-                #
-                # A better approach for prioritized query embedding with Chroma:
-                # 1. Embed the query explicitly with priority.
-                # 2. Use similarity_search_by_vector.
-            )
-
-            # === Revised approach for explicit priority in query embedding ===
-            if not hasattr(self.provider.embeddings, 'embed_query'):
-                logger.error(f"{log_prefix} Embeddings object does not have 'embed_query' method.")
-                return "Vector search failed: Embeddings misconfigured."
-
-            # Explicitly embed the query with priority
-            # embed_query in LlamaCppEmbeddingsWrapper should accept priority
-            query_vector = await asyncio.to_thread(
-                self.provider.embeddings.embed_query, query, priority=priority  # Pass priority here
-            )
+                embedding_result_list = await asyncio.to_thread(
+                    self.provider.embeddings._embed_texts,  # Call the internal method # type: ignore
+                    [query],  # _embed_texts expects a list of texts
+                    priority=priority
+                )
+                if embedding_result_list and len(embedding_result_list) > 0:
+                    query_vector = embedding_result_list[0]
+                else:
+                    logger.error(f"{log_prefix} _embed_texts returned None or empty list for query.")
+            else:
+                logger.error(
+                    f"{log_prefix} Embeddings object missing '_embed_texts'. Cannot perform prioritized query embedding for vector search.")
+                return "Vector search failed: Embeddings object misconfigured for priority."
+            # --- END CORRECTION ---
 
             if not query_vector:
-                logger.error(f"{log_prefix} Failed to embed query for vector search.")
+                logger.error(f"{log_prefix} Failed to embed query for vector search (query_vector is None).")
                 return "Vector search failed: Could not embed query."
 
+            logger.debug(
+                f"{log_prefix} Query embedded. Performing similarity_search_by_vector (k={RAG_FILE_INDEX_COUNT})...")
             # Perform search using the pre-computed vector
             search_results_docs = await asyncio.to_thread(
                 global_file_vs.similarity_search_by_vector,
                 embedding=query_vector,
-                k=RAG_FILE_INDEX_COUNT
+                k=RAG_FILE_INDEX_COUNT  # From config
             )
-            # === End revised approach ===
 
             if not search_results_docs:
-                logger.debug(f"{log_prefix} No results found from vector file search for query '{query[:50]}...'")
+                logger.debug(f"{log_prefix} No results from vector file search for query '{query[:50]}...'")
                 return "No relevant file content found via vector search for the query."
 
             logger.info(f"{log_prefix} Found {len(search_results_docs)} results from vector file search.")
 
-            # Format results (similar to _format_file_index_results but from Langchain Documents)
+            # Format results (same as before)
             context_parts = []
-            max_snippet_len = 300  # Characters per snippet
-            max_total_chars = 2000  # Max total characters for this context block
-
+            max_snippet_len = 300
+            max_total_chars = 2000
             for i, doc in enumerate(search_results_docs):
                 if not hasattr(doc, 'page_content') or not hasattr(doc, 'metadata'):
-                    logger.warning(f"{log_prefix} Skipping malformed document in vector search results: {doc}")
+                    logger.warning(f"{log_prefix} Skipping malformed document: {doc}")
                     continue
-
-                content = doc.page_content
+                content = doc.page_content;
                 metadata = doc.metadata
-
-                file_path = metadata.get("source", "Unknown path")
+                file_path = metadata.get("source", "UnkPath");
                 file_name = metadata.get("file_name",
-                                         os.path.basename(file_path) if file_path != "Unknown path" else "Unknown file")
-                last_mod = metadata.get("last_modified", "Unknown date")
-
-                snippet = content[:max_snippet_len]
-                if len(content) > max_snippet_len:
-                    snippet += "..."
-
+                                         os.path.basename(file_path) if file_path != "UnkPath" else "UnkFile")
+                last_mod = metadata.get("last_modified", "UnkDate")
+                snippet = content[:max_snippet_len] + ("..." if len(content) > max_snippet_len else "")
                 entry = (
-                    f"--- Vector File Result {i + 1} (Score: {doc.metadata.get('relevance_score', 'N/A') if hasattr(doc, 'metadata') and isinstance(doc.metadata, dict) else 'N/A'}) ---\n"  # Chroma often puts score in metadata
-                    f"File: {file_name}\n"
-                    f"Path Hint: ...{file_path[-70:]}\n"  # Show end of path
-                    f"Modified: {last_mod}\n"
-                    f"Content Snippet: {snippet}\n"
-                    f"---\n"
-                )
+                    f"--- Vector File Result {i + 1} (Score: {doc.metadata.get('relevance_score', 'N/A') if hasattr(doc, 'metadata') and isinstance(doc.metadata, dict) else 'N/A'}) ---\n"
+                    f"File: {file_name}\nPath Hint: ...{file_path[-70:]}\nModified: {last_mod}\n"
+                    f"Content Snippet: {snippet}\n---\n")
                 if sum(len(p) for p in context_parts) + len(entry) > max_total_chars:
-                    context_parts.append("[Vector file search context truncated due to length]...\n")
+                    context_parts.append("[Vector file search context truncated]...\n");
                     break
                 context_parts.append(entry)
 
@@ -4926,8 +4880,7 @@ class AIChat:
 
         except TaskInterruptedException as tie:
             logger.warning(f"🚦 {log_prefix} Vector file search INTERRUPTED: {tie}")
-            # Re-raise to be handled by the caller (e.g., asyncio.gather)
-            raise
+            raise  # Re-raise to be handled by the caller (e.g., asyncio.gather in background_generate)
         except Exception as e:
             logger.error(f"❌ {log_prefix} Error during vector file search: {e}")
             logger.exception(f"{log_prefix} Vector File Search Traceback:")

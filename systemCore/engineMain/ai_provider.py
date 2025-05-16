@@ -339,108 +339,74 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
         super().__init__()
         self.ai_provider = ai_provider
 
-    def embed_query(self, text: str, priority: int = ELP0) -> List[float]:  # Priority added
-        """Embeds a single query using the specified priority."""
+    def embed_documents(self, texts: List[str]) -> List[List[float]]:
         provider_logger = getattr(self.ai_provider, 'logger', logger)
-        log_prefix = f"EmbedWrapper.embed_query|ELP{priority}"
-        provider_logger.debug(f"{log_prefix}: Embedding single query: '{text[:50]}...'")
+        # This call will use the default priority (ELP0) set in _embed_texts's signature
+        provider_logger.debug(f"EmbedWrapper.embed_documents: Standard call for {len(texts)} texts (delegating to _embed_texts with its default ELP0).")
+        return self._embed_texts(texts) # Default priority ELP0 will be used by _embed_texts
 
-        # _embed_texts is now responsible for calling the worker with priority
-        results = self._embed_texts([text], priority=priority)  # Pass priority here
-
-        if results and isinstance(results, list) and len(results) > 0 and isinstance(results[0], list):
+    # Standard Langchain interface method - uses default priority ELP0
+    def embed_query(self, text: str) -> List[float]:
+        provider_logger = getattr(self.ai_provider, 'logger', logger)
+        provider_logger.debug(f"EmbedWrapper.embed_query: Standard call for query '{text[:30]}...' (delegating to _embed_texts with its default ELP0).")
+        results = self._embed_texts([text]) # Default priority ELP0 will be used by _embed_texts
+        if results and isinstance(results, list) and len(results) > 0 and isinstance(results[0], list) :
             return results[0]
-        else:
-            provider_logger.error(f"{log_prefix}: _embed_texts did not return expected structure. Got: {type(results)}")
-            raise RuntimeError("LLAMA_CPP_PROVIDER_ERROR: Embedding query failed to produce valid vector list.")
-
-    def embed_documents(self, texts: List[str], priority: int = ELP0) -> List[List[float]]:  # Priority added
-        """Embeds a list of documents using the specified priority."""
-        provider_logger = getattr(self.ai_provider, 'logger', logger)
-        log_prefix = f"EmbedWrapper.embed_documents|ELP{priority}"
-        provider_logger.debug(f"{log_prefix}: Embedding {len(texts)} documents.")
-
-        return self._embed_texts(texts, priority=priority)  # Pass priority here
+        provider_logger.error(f"EmbedWrapper.embed_query: _embed_texts did not return a valid vector for query. Result: {results}")
+        raise RuntimeError("Embedding query failed to produce a valid vector via _embed_texts.")
 
     def _embed_texts(self, texts: List[str], priority: int = ELP0) -> List[List[float]]:
-        """
-        Internal helper to call worker for embedding, using specified priority.
-        Handles TaskInterruptedException raised by the worker execution framework.
-        Validates the structure of the returned embeddings.
-        """
-        # Use specific logger from the instance if available, otherwise default logger
-        # Ensure self.ai_provider exists and has a logger attribute or fallback
         provider_logger = getattr(self.ai_provider, 'logger', logger)
-        log_prefix = f"EmbedWrapper|ELP{priority}"
-        provider_logger.debug(f"{log_prefix}: Delegating embedding for {len(texts)} texts.")
+        log_prefix = f"EmbedWrapper._embed_texts|ELP{priority}"  # Uses passed priority
 
-        # Prepare the request payload for the worker
+        if not texts:
+            provider_logger.debug(f"{log_prefix}: Received empty list of texts. Returning empty list.")
+            return []
+
+        provider_logger.debug(f"{log_prefix}: Delegating embedding for {len(texts)} texts to worker.")
         request_payload = {"texts": texts}
 
-        try:
-            # --- Pass priority to _execute_in_worker ---
-            # Call the provider's method to run the task in the isolated worker process
-            provider_logger.trace(f"{log_prefix}: Calling AIProvider._execute_in_worker...")
-            worker_result = self.ai_provider._execute_in_worker(
-                model_role=self.model_role, # Role is "embeddings" for this wrapper
-                task_type="embedding",
-                request_data=request_payload,
-                priority=priority # Pass the received priority
-            )
-            provider_logger.trace(f"{log_prefix}: Received result from worker.")
+        # Call the AIProvider's worker execution method with the specified priority
+        worker_result = self.ai_provider._execute_in_worker(  # type: ignore
+            model_role=self.model_role,  # This is "embeddings"
+            task_type="embedding",
+            request_data=request_payload,
+            priority=priority
+        )
 
-            # --- Process result dictionary from worker ---
-            if worker_result and isinstance(worker_result, dict):
-                if "error" in worker_result:
-                    # --- Handle Interruption ---
-                    # Check if the error message indicates interruption
-                    if interruption_error_marker in worker_result["error"]:
-                         provider_logger.warning(f"🚦 {log_prefix}: Embedding INTERRUPTED: {worker_result['error']}")
-                         # Raise the specific exception to signal interruption upwards
-                         raise TaskInterruptedException(worker_result["error"])
-                    # --- Handle Other Worker Errors ---
-                    else:
-                         error_msg = f"LLAMA_CPP_WORKER_ERROR (Embeddings): {worker_result['error']}"
-                         provider_logger.error(error_msg)
-                         # Raise a standard runtime error for embedding failures
-                         raise RuntimeError(error_msg)
-
-                elif "result" in worker_result and isinstance(worker_result["result"], list):
-                    # --- Validate Embedding Structure ---
-                    # Check if the result is a list of lists, where inner lists contain numbers (float or int)
-                    if all(isinstance(emb, list) and all(isinstance(num, (float, int)) for num in emb) for emb in worker_result["result"]):
-                         # Convert potential ints to floats for consistency before returning
-                         provider_logger.trace(f"{log_prefix}: Embedding structure valid. Converting inner numbers to float...")
-                         float_embeddings = [[float(num) for num in emb] for emb in worker_result["result"]]
-                         provider_logger.debug(f"{log_prefix}: Embedding successful. Returning {len(float_embeddings)} vectors.")
-                         return float_embeddings
-                    else:
-                        # Log error if the structure is invalid (e.g., not list of lists, or inner items aren't numbers)
-                        provider_logger.error(f"{log_prefix}: Worker returned invalid embedding structure. Type: {type(worker_result['result'])}. Example Element Type: {type(worker_result['result'][0]) if worker_result['result'] else 'N/A'}")
-                        raise RuntimeError("LLAMA_CPP_WORKER_RESPONSE_ERROR: Invalid embedding structure returned")
-
+        if worker_result and isinstance(worker_result, dict):
+            if "error" in worker_result:
+                error_msg_content = worker_result['error']
+                if interruption_error_marker in error_msg_content:  # type: ignore
+                    provider_logger.warning(f"🚦 {log_prefix}: Embedding task INTERRUPTED: {error_msg_content}")
+                    raise TaskInterruptedException(error_msg_content)  # type: ignore
                 else:
-                    # Worker dictionary didn't contain 'error' or 'result' keys
-                    provider_logger.error(f"{log_prefix}: Worker returned unknown dictionary structure: {worker_result}")
-                    raise RuntimeError("LLAMA_CPP_WORKER_RESPONSE_ERROR: Unknown dictionary structure")
+                    full_error_msg = f"LLAMA_CPP_EMBED_WORKER_ERROR ({self.model_role}|ELP{priority}): {error_msg_content}"
+                    provider_logger.error(full_error_msg)
+                    raise RuntimeError(full_error_msg)
+            elif "result" in worker_result and isinstance(worker_result["result"], list):
+                batch_embeddings = worker_result["result"]
+                # Validate structure of returned embeddings
+                if all(isinstance(emb, list) and all(isinstance(num, (float, int)) for num in emb) for emb in
+                       batch_embeddings):
+                    provider_logger.debug(
+                        f"{log_prefix}: Embedding successful. Returning {len(batch_embeddings)} vectors.")
+                    return [[float(num) for num in emb] for emb in batch_embeddings]
+                else:
+                    provider_logger.error(
+                        f"{log_prefix}: Worker returned invalid embedding structure. Example Element Type: {type(batch_embeddings[0]) if batch_embeddings else 'N/A'}")
+                    raise RuntimeError(
+                        "LLAMA_CPP_EMBED_WORKER_RESPONSE_ERROR: Invalid embedding structure from worker.")
             else:
-                # _execute_in_worker returned None or a non-dictionary type
-                provider_logger.error(f"{log_prefix}: AIProvider._execute_in_worker failed or returned invalid data type: {type(worker_result)}")
-                raise RuntimeError("LLAMA_CPP_PROVIDER_ERROR: Worker execution failed or returned invalid type")
-
-        except TaskInterruptedException:
-            # Re-raise interruption exception directly if caught from _execute_in_worker
-            # or from the error check above
-            provider_logger.warning(f"🚦 {log_prefix}: Propagating TaskInterruptedException upwards.")
-            raise
-        except Exception as e:
-            # Catch other exceptions (RuntimeError from checks, or unexpected errors)
-            provider_logger.error(f"{log_prefix}: Error during LlamaCppEmbeddingsWrapper delegation: {e}")
-            # Avoid re-logging RuntimeError or TaskInterruptedException tracebacks if they were already logged/handled
-            if not isinstance(e, (RuntimeError, TaskInterruptedException)):
-                 provider_logger.exception(f"{log_prefix} Embedding Delegation Traceback:")
-            # Re-raise the exception so the caller knows the embedding failed
-            raise e
+                provider_logger.error(
+                    f"{log_prefix}: Worker returned unknown dictionary structure for embeddings: {str(worker_result)[:200]}...")
+                raise RuntimeError(
+                    "LLAMA_CPP_EMBED_WORKER_RESPONSE_ERROR: Unknown dictionary structure for embeddings.")
+        else:
+            provider_logger.error(
+                f"{log_prefix}: AIProvider._execute_in_worker for embeddings failed or returned invalid data type: {type(worker_result)}")
+            raise RuntimeError(
+                "LLAMA_CPP_EMBED_PROVIDER_ERROR: Worker execution for embeddings failed or returned invalid type.")
 
 # === AI Provider Class ===
 class AIProvider:
@@ -450,6 +416,8 @@ class AIProvider:
         self.models: Dict[str, Any] = {}
         self.embeddings: Optional[Embeddings] = None
         self.EMBEDDINGS_MODEL_NAME: Optional[str] = None
+        self.embeddings: Optional[LlamaCppEmbeddingsWrapper] = None  # NEW, if always this type
+        self.setup_provider()
         # self.image_generator: Any = None # This will be implicitly handled by calling the worker
 
         # --- llama.cpp specific state ---

@@ -117,9 +117,9 @@ def index_single_reflection(
         priority: int = ELP0
 ):
     global global_reflection_vectorstore
-    log_prefix = f"ReflIndex|ID:{reflection_interaction.id}|ELP{priority}"
+    log_prefix = f"ReflIndex|ID:{getattr(reflection_interaction, 'id', 'Unknown')}|ELP{priority}"
 
-    if not _reflection_vs_initialized_event.is_set():
+    if not _reflection_vs_initialized_event.is_set():  # type: ignore
         logger.warning(f"{log_prefix}: Reflection VS not initialized (_event not set). Skipping indexing.")
         return
     if global_reflection_vectorstore is None:
@@ -127,20 +127,26 @@ def index_single_reflection(
             f"{log_prefix}: CRITICAL - Reflection VS event IS SET, but global_reflection_vectorstore object IS None. Skipping.")
         return
     if not provider or not provider.embeddings:
-        logger.error(f"{log_prefix}: AIProvider or embeddings unavailable. Skipping.")
+        logger.error(f"{log_prefix}: AIProvider or its embeddings are not available. Skipping indexing.")
         return
-    if not reflection_interaction.llm_response or reflection_interaction.input_type != 'reflection_result':
+
+    llm_response_content = getattr(reflection_interaction, 'llm_response', None)
+    interaction_input_type = getattr(reflection_interaction, 'input_type', None)
+
+    if not llm_response_content or interaction_input_type != 'reflection_result':
         logger.debug(f"{log_prefix}: Not a reflection result or no content. Skipping.")
         return
-
-    llm_response_content = reflection_interaction.llm_response
     if not isinstance(llm_response_content, str):
-        logger.warning(f"{log_prefix}: llm_response not a string (type: {type(llm_response_content)}). Skipping.")
+        logger.warning(f"{log_prefix}: llm_response is not a string (type: {type(llm_response_content)}). Skipping.")
         return
 
+    # YOUR_REFLECTION_CHUNK_SIZE and YOUR_REFLECTION_CHUNK_OVERLAP should be imported from config
+    # Define fallbacks if not found, or ensure they are always imported.
+    _chunk_size = globals().get("YOUR_REFLECTION_CHUNK_SIZE", 500)
+    _chunk_overlap = globals().get("YOUR_REFLECTION_CHUNK_OVERLAP", 50)
+
     text_splitter = RecursiveCharacterTextSplitter(
-        chunk_size=YOUR_REFLECTION_CHUNK_SIZE,
-        chunk_overlap=YOUR_REFLECTION_CHUNK_OVERLAP,
+        chunk_size=_chunk_size, chunk_overlap=_chunk_overlap,
         length_function=len, is_separator_regex=False,
     )
     chunks = text_splitter.split_text(llm_response_content)
@@ -150,32 +156,42 @@ def index_single_reflection(
 
     logger.info(f"{log_prefix}: Starting indexing process for {len(chunks)} chunks...")
     try:
-        chunk_embeddings: List[List[float]] = provider.embeddings.embed_documents(chunks,
-                                                                                  priority=priority)  # type: ignore
-        if not chunk_embeddings or len(chunk_embeddings) != len(chunks):
+        logger.debug(f"{log_prefix}: Embedding {len(chunks)} chunks with priority ELP{priority}...")
+
+        # --- MODIFIED CALL: Use the internal _embed_texts for priority ---
+        if not hasattr(provider.embeddings, '_embed_texts') or \
+                not callable(getattr(provider.embeddings, '_embed_texts')):
             logger.error(
-                f"{log_prefix}: Embedding failed or mismatched vectors. Expected {len(chunks)}, Got {len(chunk_embeddings) if chunk_embeddings else 0}.")
+                f"{log_prefix}: Embeddings object is missing '_embed_texts' method. Cannot embed with priority. Skipping.")
             return
 
-        metadatas: List[Dict[str, Any]] = [
-            {"source_interaction_id": reflection_interaction.id,
-             "timestamp": str(reflection_interaction.timestamp),
-             "original_user_input_snippet": (getattr(reflection_interaction, 'user_input', None) or "")[:100]}
-            for _ in range(len(chunks))
-        ]
-        ids: List[str] = [f"reflection_{reflection_interaction.id}_chunk_{i}" for i in range(len(chunks))]
+        chunk_embeddings: List[List[float]] = provider.embeddings._embed_texts(chunks,
+                                                                               priority=priority)  # type: ignore
+        # --- END MODIFIED CALL ---
 
-        with _reflection_vs_write_lock:
-            if global_reflection_vectorstore is None:  # Re-check after lock
+        if not chunk_embeddings or len(chunk_embeddings) != len(chunks):
+            logger.error(
+                f"{log_prefix}: Embedding failed or returned mismatched vectors. Expected {len(chunks)}, Got {len(chunk_embeddings) if chunk_embeddings else 0}.")
+            return
+
+        metadatas: List[Dict[str, Any]] = [{
+            "source_interaction_id": getattr(reflection_interaction, 'id', -1),
+            "timestamp": str(getattr(reflection_interaction, 'timestamp', "N/A")),
+            "original_user_input_snippet": (getattr(reflection_interaction, 'user_input', None) or "")[:100]
+        } for _ in range(len(chunks))]
+        ids: List[str] = [f"reflection_{getattr(reflection_interaction, 'id', 'Unknown')}_chunk_{i}" for i in
+                          range(len(chunks))]
+
+        with _reflection_vs_write_lock:  # type: ignore
+            if global_reflection_vectorstore is None:
                 logger.error(
-                    f"{log_prefix}: CRITICAL - global_reflection_vectorstore is None within write lock. Aborting add.")
+                    f"{log_prefix}: CRITICAL - global_reflection_vectorstore became None before write. Aborting.")
                 return
 
             logger.debug(f"{log_prefix}: Acquired write lock. Adding {len(chunks)} items to Chroma reflection store.")
             task_message_suffix = ""
             try:
-                logger.debug(
-                    f"{log_prefix}: Attempting global_reflection_vectorstore.add_embeddings(texts=..., embeddings=...)")
+                # Using the standard add_embeddings method with corrected keyword arguments
                 global_reflection_vectorstore.add_embeddings(
                     texts=chunks, embeddings=chunk_embeddings, metadatas=metadatas, ids=ids
                 )
@@ -191,36 +207,33 @@ def index_single_reflection(
                 task_message_suffix = "(fallback: add_texts with RE-EMBEDDING)"
                 logger.info(f"{log_prefix}: Fallback add_texts (re-embedding) completed. {task_message_suffix}")
 
-            # Use the imported constant for persistence check
-            if REFLECTION_INDEX_CHROMA_PERSIST_DIR and \
-                    hasattr(global_reflection_vectorstore, 'persist') and \
+            _persist_dir = globals().get("REFLECTION_INDEX_CHROMA_PERSIST_DIR")  # Get from globals if imported
+            if _persist_dir and hasattr(global_reflection_vectorstore, 'persist') and \
                     callable(getattr(global_reflection_vectorstore, 'persist')) and \
-                    getattr(global_reflection_vectorstore, '_persist_directory',
-                            None) == REFLECTION_INDEX_CHROMA_PERSIST_DIR:
+                    getattr(global_reflection_vectorstore, '_persist_directory', None) == _persist_dir:
                 logger.debug(
-                    f"{log_prefix}: Persisting reflection store to {REFLECTION_INDEX_CHROMA_PERSIST_DIR} after adding ID {reflection_interaction.id}")
+                    f"{log_prefix}: Persisting reflection store to {_persist_dir} after adding ID {reflection_interaction.id}")
                 global_reflection_vectorstore.persist()  # type: ignore
             else:
                 logger.trace(
-                    f"{log_prefix}: Reflection store not configured for persistence to '{REFLECTION_INDEX_CHROMA_PERSIST_DIR}' or persist method unavailable. Skipping persist().")
+                    f"{log_prefix}: Reflection store not configured for persistence to '{_persist_dir}'. Skipping persist().")
 
         logger.success(f"{log_prefix}: Successfully indexed {len(chunks)} chunks. {task_message_suffix}")
 
         if hasattr(reflection_interaction, 'reflection_indexed_in_vs'):
             try:
-                if not attributes.instance_state(reflection_interaction).session_id:  # Check if detached
+                if not attributes.instance_state(reflection_interaction).session:  # type: ignore
+                    logger.warning(f"{log_prefix}: Interaction ID {reflection_interaction.id} detached. Merging.")
                     reflection_interaction = db_session.merge(reflection_interaction)  # type: ignore
-                setattr(reflection_interaction, 'reflection_indexed_in_vs', True)  # Use setattr for safety
-                setattr(reflection_interaction, 'last_modified_db', time.strftime("%Y-%m-%d %H:%M:%S"))
+                setattr(reflection_interaction, 'reflection_indexed_in_vs', True)
+                setattr(reflection_interaction, 'last_modified_db',
+                        time.strftime("%Y-%m-%d %H:%M:%S"))  # Consider timezone/SQLAlchemy func.now
                 db_session.commit()
                 logger.info(f"{log_prefix}: Marked reflection ID {reflection_interaction.id} as indexed in SQLite.")
             except Exception as e_db_update:
                 logger.error(
-                    f"{log_prefix}: Failed to mark reflection ID {reflection_interaction.id} as indexed in SQLite: {e_db_update}")
+                    f"{log_prefix}: Failed to mark reflection ID {reflection_interaction.id} as indexed: {e_db_update}")
                 db_session.rollback()
-        else:
-            logger.warning(f"{log_prefix}: Interaction model no 'reflection_indexed_in_vs' attr.")
-
     except TaskInterruptedException as tie:
         logger.warning(f"🚦 {log_prefix}: Embedding for reflection INTERRUPTED: {tie}")
     except Exception as e_index:
