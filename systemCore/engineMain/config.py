@@ -9,7 +9,7 @@ logger.info("Attempting to load environment variables from .env file...")
 
 # --- General Settings ---
 PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "fireworks"
-MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 12))
+MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20))
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *quick* answers (token generation? I forgot)
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", 16384)) # Default token limit for LLM calls
 #DEFAULT_LLM_TEMPERATURE = 0.8
@@ -21,9 +21,9 @@ RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 10))
 DEEP_THOUGHT_RETRY_ATTEMPTS = int(os.getenv("DEEP_THOUGHT_RETRY_ATTEMPTS", 3))
 RESPONSE_TIMEOUT_MS = 15000 # Timeout for potential multi-step process
 # Similarity threshold for reusing previous ToT results (requires numpy/embeddings)
-TOT_SIMILARITY_THRESHOLD = float(os.getenv("TOT_SIMILARITY_THRESHOLD", 0.4))
+TOT_SIMILARITY_THRESHOLD = float(os.getenv("TOT_SIMILARITY_THRESHOLD", 0.1))
 # Fuzzy search threshold for history RAG (0-100, higher is stricter) - Requires thefuzz
-FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 25))
+FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 20))
 MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1)) # Unused
 YOUR_REFLECTION_CHUNK_SIZE = int(os.getenv("YOUR_REFLECTION_CHUNK_SIZE", 450))
 YOUR_REFLECTION_CHUNK_OVERLAP = int(os.getenv("YOUR_REFLECTION_CHUNK_OVERLAP", 50))
@@ -514,19 +514,17 @@ PROMPT_COMPLEXITY_CLASSIFICATION = """Analyze the following user query and the r
 2.  `chat_complex`: Requires deeper thought/analysis (ToT simulation), but still conversational.
 3.  `agent_task`: Requires external actions using tools (files, commands, etc.).
 
-Respond ONLY with a JSON object containing two keys: 'classification' (string: "chat_simple", "chat_complex", or "agent_task") and 'reason' (a brief explanation string).
-Do NOT include any other text, explanations, or conversational filler before or after the JSON object.
-
 User Query: {input}
 Conversation Context: {history_summary}
+---
+Your response MUST be a single, valid JSON object and nothing else.
+The JSON object must contain exactly two keys: "classification" (string: "chat_simple", "chat_complex", or "agent_task") and "reason" (a brief explanation string).
+Do not include any conversational filler, greetings, apologies, or any text outside of the JSON structure.
+Start your response directly with '{{' and end it directly with '}}'.
 
-Example of the JSON format you MUST output:
-{{  // Escaped opening brace
-  "classification": "chat_complex",
-  "reason": "The query asks for a multi-step analysis."
-}} // Escaped closing brace
+Example of the EXACT JSON format you MUST output:
+{{"classification": "chat_complex", "reason": "The query asks for a multi-step analysis."}}
 
-Strictly adhere to providing only the JSON object as your response.
 JSON Response:
 """
 
