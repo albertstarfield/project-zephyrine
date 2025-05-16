@@ -7,6 +7,7 @@ from typing import Optional, List, Dict, Any
 from loguru import logger
 import sys
 from sqlalchemy.orm import Session
+from sqlalchemy.orm import attributes
 #from langchain_community.vectorstores import Chroma
 from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter  # Or your preferred splitter
@@ -14,8 +15,7 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter  # Or your pr
 # Assuming these are accessible or passed in
 from database import Interaction  # The SQLAlchemy model for interactions
 from ai_provider import AIProvider  # To get the embedding function
-from config import YOUR_REFLECTION_CHUNK_SIZE, YOUR_REFLECTION_CHUNK_OVERLAP  # Add these to config.py
-
+from config import *
 
 # --- NEW: Import the custom lock ---
 
@@ -45,197 +45,187 @@ _reflection_vs_initialized_event = threading.Event()
 REFLECTION_VS_PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_reflection_store")
 
 
-def initialize_global_reflection_vectorstore(provider: AIProvider, db_session: Session):
-    """
-    Initializes the global reflection vector store at startup.
-    Loads existing indexed reflection chunks from the database OR from a persisted Chroma directory.
-    This version assumes we might persist Chroma directly.
-    """
+def initialize_global_reflection_vectorstore(provider: AIProvider,
+                                             db_session: Session):  # db_session might not be needed if loading persisted
     global global_reflection_vectorstore
+    logger.info(">>> ReflectionIndexer: Entered initialize_global_reflection_vectorstore <<<")
+
+    if not provider or not provider.embeddings:
+        logger.error("ReflectionIndexer Init: AIProvider or embeddings missing. Cannot initialize.")
+        return
 
     if _reflection_vs_initialized_event.is_set():
-        logger.info("Global Reflection vector store already initialized. Skipping.")
+        logger.info("ReflectionIndexer Init: Skipping, event already set.")
         return
 
     with _reflection_vs_init_lock:
         if _reflection_vs_initialized_event.is_set():
-            logger.info("Global Reflection vector store was initialized while waiting for lock. Skipping.")
+            logger.info("ReflectionIndexer Init: Skipping (double check), event set while waiting for lock.")
             return
-
-        if not provider or not provider.embeddings:
-            logger.error("Cannot init global reflection VS: AIProvider or embeddings missing.")
-            return
-
-        logger.info(f"Initializing GLOBAL Reflection vector store (Persist Dir: {REFLECTION_VS_PERSIST_DIR})...")
         try:
-            if os.path.exists(REFLECTION_VS_PERSIST_DIR) and any(os.scandir(REFLECTION_VS_PERSIST_DIR)):
-                logger.info(f"Loading existing persisted Reflection Chroma DB from: {REFLECTION_VS_PERSIST_DIR}")
+            # Use the imported constants directly from config.py
+            if REFLECTION_INDEX_CHROMA_PERSIST_DIR:  # Check if a path is configured
+                os.makedirs(REFLECTION_INDEX_CHROMA_PERSIST_DIR, exist_ok=True)  # Ensure dir exists
+
+            contains_chroma_files = False
+            if REFLECTION_INDEX_CHROMA_PERSIST_DIR and os.path.exists(REFLECTION_INDEX_CHROMA_PERSIST_DIR):
+                try:
+                    if any(fname.endswith(('.sqlite3', '.duckdb', '.parquet')) for fname in
+                           os.listdir(REFLECTION_INDEX_CHROMA_PERSIST_DIR)):
+                        contains_chroma_files = True
+                except OSError as e_scan:
+                    logger.warning(f"Could not scan persist directory {REFLECTION_INDEX_CHROMA_PERSIST_DIR}: {e_scan}")
+
+            if contains_chroma_files:
+                logger.info(
+                    f"ReflectionIndexer Init: Loading existing persisted Reflection Chroma DB from: {REFLECTION_INDEX_CHROMA_PERSIST_DIR}")
                 global_reflection_vectorstore = Chroma(
-                    persist_directory=REFLECTION_VS_PERSIST_DIR,
+                    collection_name=REFLECTION_INDEX_CHROMA_COLLECTION_NAME,  # Use imported constant
+                    persist_directory=REFLECTION_INDEX_CHROMA_PERSIST_DIR,  # Use imported constant
                     embedding_function=provider.embeddings
                 )
-                logger.success("Successfully loaded persisted Global Reflection vector store.")
+                logger.success("ReflectionIndexer Init: Successfully loaded persisted Global Reflection vector store.")
             else:
                 logger.info(
-                    f"No existing persisted Reflection Chroma DB found at {REFLECTION_VS_PERSIST_DIR}. Creating new empty store.")
-                # Create an empty store that can be added to.
-                # We need at least one document to initialize Chroma this way, or use a different init.
-                # For an empty start that will be added to later:
-                # One way is to initialize with a dummy document and then delete it,
-                # or see if Chroma offers an "empty init" that supports persistence.
-                # For now, let's assume it's okay if it's empty initially and gets populated by index_single_reflection.
-                # If Chroma needs initial data for `persist_directory` to work, this needs adjustment.
-                # Let's try initializing it empty but with the persist directory set.
-                # This might require Chroma to be created and then `add_texts` (or similar) for the first time.
-                # A simpler approach for an empty start that persists:
-                # Create it with a dummy, then if you want, you can clear it.
-                # For now, let's assume it will be populated by index_single_reflection.
-                # If we intend to load ALL past reflections from SQLite DB on startup:
-                # This is more like the file_indexer's global VS init.
-                # Let's assume for now that new reflections are indexed as they come.
-                # So, on startup, we just load what was persisted.
-                # If the dir is empty, global_reflection_vectorstore remains None or we make an empty one.
-
-                # To ensure Chroma can be added to later, we create an empty one if dir is empty/new
-                logger.info(
-                    f"Creating a new (or empty) persistent Reflection Chroma DB at: {REFLECTION_VS_PERSIST_DIR}")
+                    f"ReflectionIndexer Init: No persisted Reflection Chroma DB at {REFLECTION_INDEX_CHROMA_PERSIST_DIR}. Creating new.")
                 global_reflection_vectorstore = Chroma(
-                    collection_name="reflections_persistent",  # Give it a name
+                    collection_name=REFLECTION_INDEX_CHROMA_COLLECTION_NAME,  # Use imported constant
                     embedding_function=provider.embeddings,
-                    persist_directory=REFLECTION_VS_PERSIST_DIR
+                    persist_directory=REFLECTION_INDEX_CHROMA_PERSIST_DIR  # Use imported constant
                 )
-                # global_reflection_vectorstore.persist() # Persist the empty structure
-                logger.success("New empty persistent Global Reflection vector store initialized.")
-
-            # --- OPTIONAL: Load un-indexed reflections from SQLite DB at startup ---
-            # This would be similar to initialize_global_file_index_vectorstore,
-            # querying for Interaction records with input_type='reflection_result'
-            # that haven't been marked as "indexed_into_reflection_vs" (new DB field needed).
-            # For simplicity, we'll skip this full DB scan on startup for now and assume
-            # reflections are indexed as they are created.
-            # logger.info("Startup: (Skipping) Check for unindexed past reflections in SQLite DB...")
+                if REFLECTION_INDEX_CHROMA_PERSIST_DIR and hasattr(global_reflection_vectorstore, 'persist'):
+                    logger.info(
+                        f"ReflectionIndexer Init: Persisting newly created empty structure to {REFLECTION_INDEX_CHROMA_PERSIST_DIR}")
+                    global_reflection_vectorstore.persist()  # Persist the empty collection structure if directory is set
+                logger.success(
+                    "ReflectionIndexer Init: New empty persistent Global Reflection vector store initialized.")
 
             _reflection_vs_initialized_event.set()
-            logger.success("Global Reflection vector store ready.")
-
+            logger.success("ReflectionIndexer Init: Global Reflection vector store ready. Event SET.")
         except Exception as e:
-            logger.error(f"Failed to initialize/load global Reflection vector store: {e}")
-            logger.exception("Global Reflection VS Init/Load Traceback:")
+            logger.error(f"ReflectionIndexer Init: Failed to initialize/load global Reflection vector store: {e}")
+            logger.exception("Reflection VS Init Traceback:")
+            global_reflection_vectorstore = None  # Ensure it's None on failure
+            # Do NOT set event on critical failure here, so app knows it's not ready.
+    logger.info(">>> ReflectionIndexer: Exited initialize_global_reflection_vectorstore <<<")
 
 
-def index_single_reflection(reflection_interaction: Interaction, provider: AIProvider, db_session: Session,
-                            priority: int = ELP0):
-    """
-    Chunks, embeds, and adds a single reflection_result interaction to the global reflection vector store.
-    Marks the interaction in SQLite DB once indexed. (Requires a new field in Interaction model).
-    """
+def index_single_reflection(
+        reflection_interaction: Interaction,
+        provider: AIProvider,
+        db_session: Session,
+        priority: int = ELP0
+):
     global global_reflection_vectorstore
-    if not _reflection_vs_initialized_event.is_set():  # Ensure this event is being set correctly during init
-        logger.warning(
-            f"Reflection VS not initialized. Cannot index reflection ID {reflection_interaction.id}. Triggering initialization might be needed or check startup.")
-        # Optionally, attempt to initialize if not done:
-        # if not global_reflection_vectorstore:
-        #     initialize_global_reflection_vectorstore(provider, db_session) # This function needs to be sync or handled in thread
-        #     if not _reflection_vs_initialized_event.is_set(): # Check again
-        #         logger.error(f"Reflection VS still not ready after init attempt for reflection ID {reflection_interaction.id}. Skipping.")
-        #         return
-        # For now, assuming init happens at startup:
-        if not global_reflection_vectorstore:
-            logger.error(f"Reflection VS is None though event might be set. Skipping ID {reflection_interaction.id}.")
-            return
+    log_prefix = f"ReflIndex|ID:{reflection_interaction.id}|ELP{priority}"
 
+    if not _reflection_vs_initialized_event.is_set():
+        logger.warning(f"{log_prefix}: Reflection VS not initialized (_event not set). Skipping indexing.")
+        return
+    if global_reflection_vectorstore is None:
+        logger.error(
+            f"{log_prefix}: CRITICAL - Reflection VS event IS SET, but global_reflection_vectorstore object IS None. Skipping.")
+        return
+    if not provider or not provider.embeddings:
+        logger.error(f"{log_prefix}: AIProvider or embeddings unavailable. Skipping.")
+        return
     if not reflection_interaction.llm_response or reflection_interaction.input_type != 'reflection_result':
-        logger.debug(
-            f"Skipping indexing for interaction ID {reflection_interaction.id}: Not a reflection result or no content.")
+        logger.debug(f"{log_prefix}: Not a reflection result or no content. Skipping.")
         return
 
-    logger.info(
-        f"Indexing reflection ID {reflection_interaction.id} into global reflection vector store (Priority ELP{priority} for embedding)...")
+    llm_response_content = reflection_interaction.llm_response
+    if not isinstance(llm_response_content, str):
+        logger.warning(f"{log_prefix}: llm_response not a string (type: {type(llm_response_content)}). Skipping.")
+        return
 
     text_splitter = RecursiveCharacterTextSplitter(
         chunk_size=YOUR_REFLECTION_CHUNK_SIZE,
         chunk_overlap=YOUR_REFLECTION_CHUNK_OVERLAP,
-        length_function=len,
-        is_separator_regex=False,
+        length_function=len, is_separator_regex=False,
     )
-    # Ensure llm_response is not None before splitting
-    if reflection_interaction.llm_response is None:
-        logger.warning(f"LLM response is None for reflection ID {reflection_interaction.id}. Skipping.")
-        return
-
-    chunks = text_splitter.split_text(reflection_interaction.llm_response)
-
+    chunks = text_splitter.split_text(llm_response_content)
     if not chunks:
-        logger.warning(f"No text chunks generated for reflection ID {reflection_interaction.id}. Skipping.")
+        logger.warning(f"{log_prefix}: No text chunks from llm_response. Skipping.")
         return
 
+    logger.info(f"{log_prefix}: Starting indexing process for {len(chunks)} chunks...")
     try:
-        logger.debug(
-            f"Embedding {len(chunks)} chunks for reflection ID {reflection_interaction.id} with priority ELP{priority}...")
-        if not provider.embeddings:
-            logger.error(f"Embeddings provider not available for reflection ID {reflection_interaction.id}. Skipping.")
-            return
-
-        # LlamaCppEmbeddingsWrapper.embed_documents should accept 'priority'
         chunk_embeddings: List[List[float]] = provider.embeddings.embed_documents(chunks,
                                                                                   priority=priority)  # type: ignore
+        if not chunk_embeddings or len(chunk_embeddings) != len(chunks):
+            logger.error(
+                f"{log_prefix}: Embedding failed or mismatched vectors. Expected {len(chunks)}, Got {len(chunk_embeddings) if chunk_embeddings else 0}.")
+            return
 
-        metadatas: List[Dict[str, Any]] = [{
-            "source_interaction_id": reflection_interaction.id,
-            "timestamp": str(reflection_interaction.timestamp),
-            "original_user_input_snippet": (getattr(reflection_interaction, 'user_input', None) or "")[:100]
-        } for _ in range(len(chunks))]
-
+        metadatas: List[Dict[str, Any]] = [
+            {"source_interaction_id": reflection_interaction.id,
+             "timestamp": str(reflection_interaction.timestamp),
+             "original_user_input_snippet": (getattr(reflection_interaction, 'user_input', None) or "")[:100]}
+            for _ in range(len(chunks))
+        ]
         ids: List[str] = [f"reflection_{reflection_interaction.id}_chunk_{i}" for i in range(len(chunks))]
 
         with _reflection_vs_write_lock:
-            if global_reflection_vectorstore is None:  # Should not happen if init was successful
+            if global_reflection_vectorstore is None:  # Re-check after lock
                 logger.error(
-                    "CRITICAL: global_reflection_vectorstore is None within write lock during index_single_reflection. Aborting.")
+                    f"{log_prefix}: CRITICAL - global_reflection_vectorstore is None within write lock. Aborting add.")
                 return
 
-            # --- CORRECTED CALL to add_embeddings ---
-            global_reflection_vectorstore.add_embeddings(
-                embeddings=chunk_embeddings,  # Changed from text_embeddings
-                texts=chunks,  # Changed from documents
-                metadatas=metadatas,
-                ids=ids
-            )
-            # --- END CORRECTION ---
+            logger.debug(f"{log_prefix}: Acquired write lock. Adding {len(chunks)} items to Chroma reflection store.")
+            task_message_suffix = ""
+            try:
+                logger.debug(
+                    f"{log_prefix}: Attempting global_reflection_vectorstore.add_embeddings(texts=..., embeddings=...)")
+                global_reflection_vectorstore.add_embeddings(
+                    texts=chunks, embeddings=chunk_embeddings, metadatas=metadatas, ids=ids
+                )
+                task_message_suffix = "(used add_embeddings with pre-computed vectors)"
+                logger.info(f"{log_prefix}: Data added via add_embeddings. {task_message_suffix}")
+            except (AttributeError, TypeError) as e_add_embed:
+                logger.warning(
+                    f"{log_prefix}: global_reflection_vectorstore.add_embeddings failed ({type(e_add_embed).__name__}: {e_add_embed}).")
+                logger.info(
+                    f"Methods on store ({type(global_reflection_vectorstore)}): {dir(global_reflection_vectorstore)}")
+                logger.warning(f"{log_prefix}: Falling back to add_texts (WILL RE-EMBED).")
+                global_reflection_vectorstore.add_texts(texts=chunks, metadatas=metadatas, ids=ids)
+                task_message_suffix = "(fallback: add_texts with RE-EMBEDDING)"
+                logger.info(f"{log_prefix}: Fallback add_texts (re-embedding) completed. {task_message_suffix}")
 
-            # Persist if the store is configured for persistence
-            if hasattr(global_reflection_vectorstore, 'persist') and callable(
-                    getattr(global_reflection_vectorstore, 'persist')):
-                if hasattr(global_reflection_vectorstore,
-                           '_persist_directory') and global_reflection_vectorstore._persist_directory:  # type: ignore
-                    logger.debug(
-                        f"Persisting global_reflection_vectorstore to {global_reflection_vectorstore._persist_directory}")  # type: ignore
-                    global_reflection_vectorstore.persist()
-                else:
-                    logger.trace("Global reflection vector store not configured for persistence, skipping persist().")
+            # Use the imported constant for persistence check
+            if REFLECTION_INDEX_CHROMA_PERSIST_DIR and \
+                    hasattr(global_reflection_vectorstore, 'persist') and \
+                    callable(getattr(global_reflection_vectorstore, 'persist')) and \
+                    getattr(global_reflection_vectorstore, '_persist_directory',
+                            None) == REFLECTION_INDEX_CHROMA_PERSIST_DIR:
+                logger.debug(
+                    f"{log_prefix}: Persisting reflection store to {REFLECTION_INDEX_CHROMA_PERSIST_DIR} after adding ID {reflection_interaction.id}")
+                global_reflection_vectorstore.persist()  # type: ignore
             else:
-                logger.trace("Global reflection vector store does not have a persist() method or _persist_directory.")
+                logger.trace(
+                    f"{log_prefix}: Reflection store not configured for persistence to '{REFLECTION_INDEX_CHROMA_PERSIST_DIR}' or persist method unavailable. Skipping persist().")
 
-        logger.success(f"Successfully indexed {len(chunks)} chunks from reflection ID {reflection_interaction.id}")
+        logger.success(f"{log_prefix}: Successfully indexed {len(chunks)} chunks. {task_message_suffix}")
 
-        # --- Mark as indexed in SQLite DB (Example) ---
-        # This requires adding a boolean field like `reflection_indexed_in_vs` to your Interaction model
-        # and then:
-        # try:
-        #     stmt = update(Interaction).where(Interaction.id == reflection_interaction.id).values(reflection_indexed_in_vs=True)
-        #     db_session.execute(stmt)
-        #     db_session.commit()
-        #     logger.info(f"Marked reflection ID {reflection_interaction.id} as indexed in SQLite.")
-        # except Exception as e_db_update:
-        #     logger.error(f"Failed to mark reflection ID {reflection_interaction.id} as indexed in SQLite: {e_db_update}")
-        #     db_session.rollback()
+        if hasattr(reflection_interaction, 'reflection_indexed_in_vs'):
+            try:
+                if not attributes.instance_state(reflection_interaction).session_id:  # Check if detached
+                    reflection_interaction = db_session.merge(reflection_interaction)  # type: ignore
+                setattr(reflection_interaction, 'reflection_indexed_in_vs', True)  # Use setattr for safety
+                setattr(reflection_interaction, 'last_modified_db', time.strftime("%Y-%m-%d %H:%M:%S"))
+                db_session.commit()
+                logger.info(f"{log_prefix}: Marked reflection ID {reflection_interaction.id} as indexed in SQLite.")
+            except Exception as e_db_update:
+                logger.error(
+                    f"{log_prefix}: Failed to mark reflection ID {reflection_interaction.id} as indexed in SQLite: {e_db_update}")
+                db_session.rollback()
+        else:
+            logger.warning(f"{log_prefix}: Interaction model no 'reflection_indexed_in_vs' attr.")
 
     except TaskInterruptedException as tie:
-        logger.warning(f"🚦 Embedding for reflection ID {reflection_interaction.id} INTERRUPTED by ELP1: {tie}")
-        # Do not mark as indexed, let it be picked up again or handled
-    except Exception as e:
-        logger.error(f"Failed to index chunks for reflection ID {reflection_interaction.id}: {e}")
-        logger.exception(f"Reflection Indexing Traceback ID {reflection_interaction.id}:")
+        logger.warning(f"🚦 {log_prefix}: Embedding for reflection INTERRUPTED: {tie}")
+    except Exception as e_index:
+        logger.error(f"{log_prefix}: Failed to index chunks: {e_index}")
+        logger.exception(f"{log_prefix} Reflection Indexing Traceback:")
 
 
 def get_global_reflection_vectorstore() -> Optional[Chroma]:

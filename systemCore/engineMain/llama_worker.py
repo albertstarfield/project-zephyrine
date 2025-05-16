@@ -70,38 +70,65 @@ def cleanup_initial_think_tag(text: str) -> str:
 
 # --- Token Counting Helper ---
 def count_tokens_cl100k(text_or_messages: Union[str, List[Dict[str, str]]]) -> int:
-    if not TIKTOKEN_AVAILABLE or not cl100k_base_encoder or not text_or_messages:
-        log_worker("TRACE", f"count_tokens_cl100k: Tiktoken not available or no text. Returning -1.")
-        return -1
+    # Handle empty or None input first: 0 tokens
+    if not text_or_messages:
+        log_worker("TRACE", "count_tokens_cl100k: Input is None or empty. Returning 0 tokens.")
+        return 0
+
+    if not TIKTOKEN_AVAILABLE or not cl100k_base_encoder:
+        log_worker("WARNING", "count_tokens_cl100k: Tiktoken not available or encoder not loaded. Using character-based estimate.")
+        # Fallback to character-based estimation if tiktoken is unavailable
+        if isinstance(text_or_messages, str):
+            return len(text_or_messages) // 4  # Rough estimate, can be > 0
+        elif isinstance(text_or_messages, list):
+            char_count = 0
+            for msg in text_or_messages:
+                if isinstance(msg, dict) and "content" in msg:
+                    content_item = msg["content"]
+                    if isinstance(content_item, str):
+                        char_count += len(content_item)
+                    elif isinstance(content_item, list): # VLM content
+                        for part in content_item:
+                             if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str):
+                                 char_count += len(part.get("text",""))
+            return char_count // 4 # Rough estimate
+        return 0 # Default for unknown type with no tiktoken
 
     total_tokens = 0
     try:
         if isinstance(text_or_messages, str):
+            # Ensure empty string after strip results in 0 tokens if tiktoken would count it as 1
+            if not text_or_messages.strip():
+                # log_worker("TRACE", "count_tokens_cl100k: Input string is whitespace only. Returning 0 tokens.")
+                return 0
             tokens = cl100k_base_encoder.encode(text_or_messages)
             total_tokens = len(tokens)
         elif isinstance(text_or_messages, list):
-            for msg_idx, msg in enumerate(text_or_messages):
+            if not any(msg.get("content") for msg in text_or_messages if isinstance(msg,dict)): # Check if all content fields are empty
+                # log_worker("TRACE", "count_tokens_cl100k: All messages in list have no/empty content. Returning 0 tokens.")
+                return 0
+            for msg in text_or_messages:
                 if isinstance(msg, dict) and "content" in msg:
-                    content_to_encode = msg["content"]
-                    if isinstance(content_to_encode, str):
-                        tokens = cl100k_base_encoder.encode(content_to_encode)
-                        total_tokens += len(tokens)
-                        total_tokens += 4  # Approx overhead per message (role, start/end tokens)
-                    elif isinstance(content_to_encode, list):  # For VLM content (text + image_url parts)
-                        for part in content_to_encode:
-                            if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"),
-                                                                                                    str):
-                                tokens = cl100k_base_encoder.encode(part.get("text", ""))
-                                total_tokens += len(tokens)
-                        total_tokens += 4  # Approx overhead for the multi-part message
-                    # else: ignore non-string/non-list content parts for token counting
-                # else: ignore malformed messages in list
-        # log_worker("TRACE", f"count_tokens_cl100k: Counted {total_tokens} tokens.")
+                    content_item = msg["content"]
+                    current_msg_tokens = 0
+                    if isinstance(content_item, str):
+                        if content_item.strip(): # Only count if non-whitespace
+                            tokens = cl100k_base_encoder.encode(content_item)
+                            current_msg_tokens = len(tokens)
+                    elif isinstance(content_item, list): # VLM content
+                        for part_idx, part in enumerate(content_item):
+                            if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str):
+                                if part.get("text","").strip():
+                                    tokens = cl100k_base_encoder.encode(part.get("text",""))
+                                    current_msg_tokens += len(tokens)
+                    if current_msg_tokens > 0:
+                        total_tokens += current_msg_tokens
+                        total_tokens += 4 # Approx overhead per message with content
+        # log_worker("TRACE", f"count_tokens_cl100k: Counted {total_tokens} tokens using tiktoken.")
         return total_tokens
     except Exception as e:
-        log_worker("ERROR", f"Tiktoken counting error in worker: {e}")
-        return -2
-
+        log_worker("ERROR", f"Tiktoken counting error in worker: {e}. Returning -2 to indicate error.")
+        return -2 # Indicate a counting error, distinct from 0 or character estimate
 
 # --- Adaptive Middle Truncate Function ---
 def adaptive_middle_truncate(text: str, target_max_tokens: int, model_actual_n_ctx: int) -> str:

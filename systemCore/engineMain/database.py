@@ -328,94 +328,248 @@ def _is_db_readonly(db_path: str) -> bool:
 
 # --- END Read-Only Check ---
 
+def _check_db_integrity_quick(db_path: str, context_msg: str = "DB") -> bool:
+    """Quickly checks SQLite DB integrity using 'PRAGMA integrity_check'."""
+    if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
+        logger.debug(f"Integrity check (quick) skipped for {context_msg}: File not found or empty at {db_path}")
+        return True
+    logger.info(f"🩺 Performing QUICK integrity check on {context_msg} ('{os.path.basename(db_path)}')...")
+    sqlite3_cmd = shutil.which("sqlite3")
+    if not sqlite3_cmd:
+        logger.error("❌ Cannot run integrity check: 'sqlite3' command not found. Assuming OK for now.")
+        return True
+    try:
+        check_command = [sqlite3_cmd, db_path, "PRAGMA integrity_check;"]
+        # Using a timeout for the integrity check itself
+        process = subprocess.run(check_command, capture_output=True, text=True, check=False,
+                                 timeout=120)  # 2-minute timeout for full check
+        if process.returncode == 0 and process.stdout.strip().lower() == "ok":
+            logger.success(f"✅ Quick integrity check passed for {context_msg}.")
+            return True
+        else:
+            logger.warning(
+                f"🔥 Quick integrity check FAILED for {context_msg}. Output: '{process.stdout.strip()}' Stderr: '{process.stderr.strip()}' RC: {process.returncode}")
+            return False
+    except subprocess.TimeoutExpired:
+        logger.warning(f"❌ Quick integrity check for {context_msg} timed out. Assuming potential issue.")
+        return False
+    except Exception as e:
+        logger.error(f"❌ Error during quick integrity check for {context_msg}: {e}")
+        return False
+
+
+def _check_and_repair_db(db_path: str, context_msg: str = "runtime DB") -> bool:
+    """
+    Performs a full integrity check on the SQLite DB. If it fails,
+    attempts to repair it by dumping to SQL and reloading into a new DB file.
+    This is typically a last resort after simpler checks or snapshot restores.
+    Returns True if the DB is OK or successfully repaired, False otherwise.
+    """
+    if not os.path.exists(db_path):
+        logger.info(f"Full Check/Repair skipped for {context_msg}: DB file '{db_path}' not found.")
+        return False  # Cannot repair a non-existent file; new one should be created by Alembic if needed.
+
+    if os.path.getsize(db_path) == 0:
+        logger.warning(
+            f"Full Check/Repair skipped for {context_msg}: DB file '{db_path}' is empty. Alembic should create schema.")
+        # Delete the empty file so Alembic can create it fresh if this is the runtime DB
+        if db_path == globals().get("RUNTIME_DB_PATH"):  # Check against the global RUNTIME_DB_PATH
+            try:
+                os.remove(db_path)
+                logger.info(f"Removed empty DB file '{db_path}' to allow fresh creation.")
+            except Exception as e_rm_empty:
+                logger.error(f"Could not remove empty DB file '{db_path}': {e_rm_empty}")
+        return False  # Indicate that this empty file is not "OK" for use yet.
+
+    logger.info(f"🩺 Performing FULL integrity check on {context_msg} ('{os.path.basename(db_path)}')...")
+    full_check_start_time = time.monotonic()
+    is_initially_ok = False
+    sqlite3_cmd = shutil.which("sqlite3")
+
+    if not sqlite3_cmd:
+        logger.error("❌ Cannot run full integrity check/repair: 'sqlite3' command not found in PATH.")
+        return False  # Cannot proceed without sqlite3 CLI
+
+    try:
+        # Use a longer timeout for a full integrity check on potentially large DBs
+        check_command = [sqlite3_cmd, db_path, "PRAGMA integrity_check;"]
+        process = subprocess.run(check_command, capture_output=True, text=True, check=False,
+                                 timeout=300)  # 5-minute timeout
+        check_output = process.stdout.strip()
+        check_duration = time.monotonic() - full_check_start_time
+        logger.info(f"Full integrity check for {context_msg} completed in {check_duration:.2f}s.")
+
+        if process.returncode == 0 and check_output.lower() == "ok":
+            logger.success(f"✅ Full integrity check PASSED for {context_msg}.")
+            return True  # DB is OK, no repair needed
+        else:
+            logger.warning(
+                f"🔥 Full integrity check FAILED for {context_msg}. RC={process.returncode}. Output:\n{check_output}\nStderr:\n{process.stderr.strip()}")
+            # Proceed to repair attempt
+    except subprocess.TimeoutExpired:
+        logger.error(f"❌ Full integrity check for {context_msg} TIMED OUT.")
+        # Treat timeout as a failure requiring repair attempt
+    except Exception as e_check:
+        logger.error(f"❌ Error during full integrity check execution for {context_msg}: {e_check}")
+        # Treat any error as a failure requiring repair attempt
+
+    # If we reach here, the initial full integrity check failed or timed out.
+    logger.warning(
+        f"🚨 Attempting automatic repair via SQL dump/reload for {context_msg} ('{os.path.basename(db_path)}')...")
+    repair_start_time = time.monotonic()
+    temp_dump_sql_file: Optional[str] = None
+    repair_successful = False
+
+    # Define a unique name for the corrupted backup
+    timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
+    corrupted_db_backup_path = f"{db_path}.corrupted_before_repair_{timestamp_str}"
+
+    try:
+        # Create a named temporary file for the SQL dump
+        with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".sql", encoding='utf-8') as tmp_sql_fh:
+            temp_dump_sql_file = tmp_sql_fh.name
+        logger.debug(f"DB Repair: Using temporary SQL dump file: {temp_dump_sql_file}")
+
+        # 1. Dump the database to an SQL file using .dump command
+        #    The .dump command is generally good at extracting data even from corrupted DBs.
+        logger.info(f"DB Repair: Dumping '{db_path}' to SQL...")
+        dump_command = [sqlite3_cmd, db_path, ".dump"]
+        with open(temp_dump_sql_file, 'w', encoding='utf-8') as dump_file_handle:
+            dump_process = subprocess.run(
+                dump_command,
+                stdout=dump_file_handle,  # Redirect stdout to the file
+                stderr=subprocess.PIPE,
+                text=True, errors='replace',  # Handle potential encoding issues in stderr
+                check=False,  # Don't raise exception on non-zero exit for dump
+                timeout=600  # 10-minute timeout for dump
+            )
+
+        if dump_process.returncode != 0:
+            # Even if dump has non-zero RC, it might have written some data.
+            # Log stderr if present.
+            logger.warning(f"DB Repair: Dump command finished with RC={dump_process.returncode}.")
+            if dump_process.stderr:
+                logger.warning(f"DB Repair: Dump command STDERR:\n{dump_process.stderr.strip()}")
+            if not os.path.exists(temp_dump_sql_file) or os.path.getsize(temp_dump_sql_file) == 0:
+                logger.error("DB Repair: Dump FAILED to produce any SQL output. Cannot proceed with repair.")
+                return False  # Abort repair if dump is empty
+
+        logger.info(
+            f"DB Repair: Dumped to SQL. Size: {os.path.getsize(temp_dump_sql_file) if os.path.exists(temp_dump_sql_file) else 0} bytes.")
+
+        # 2. Backup the original (potentially corrupted) database file
+        logger.info(f"DB Repair: Backing up original DB '{db_path}' to '{corrupted_db_backup_path}'...")
+        try:
+            shutil.move(db_path, corrupted_db_backup_path)
+        except Exception as e_mv_orig:
+            logger.error(f"DB Repair: FAILED to backup original DB: {e_mv_orig}. Cannot proceed with repair safely.")
+            return False
+
+        # 3. Reload the SQL dump into a new database file (at original db_path)
+        logger.info(f"DB Repair: Reloading SQL dump into new DB file at '{db_path}'...")
+        reload_command = [sqlite3_cmd, db_path]  # sqlite3 CLI creates the DB if it doesn't exist
+        with open(temp_dump_sql_file, 'r', encoding='utf-8') as dump_sql_handle:
+            reload_process = subprocess.run(
+                reload_command,
+                stdin=dump_sql_handle,  # Pipe SQL commands to sqlite3
+                capture_output=True,
+                text=True, errors='replace',
+                check=False,  # Don't raise exception on non-zero exit for reload
+                timeout=1800  # 30-minute timeout for reload (can be large)
+            )
+
+        if reload_process.returncode != 0:
+            logger.error(f"DB Repair: Reload FAILED (RC={reload_process.returncode}).")
+            if reload_process.stderr: logger.error(f"DB Repair: Reload STDERR:\n{reload_process.stderr.strip()}")
+            if reload_process.stdout: logger.warning(f"DB Repair: Reload STDOUT:\n{reload_process.stdout.strip()}")
+
+            logger.warning(
+                f"DB Repair: Attempting to restore original (corrupted) DB from '{corrupted_db_backup_path}' due to reload failure.")
+            try:
+                if os.path.exists(db_path): os.remove(db_path)  # Remove partially reloaded DB
+                shutil.move(corrupted_db_backup_path, db_path)
+                logger.info("DB Repair: Original (corrupted) DB restored.")
+            except Exception as e_restore_corr:
+                logger.error(
+                    f"DB Repair: FAILED to restore original (corrupted) DB: {e_restore_corr}. DB state is uncertain at '{db_path}'.")
+            return False  # Repair failed
+
+        logger.info(f"DB Repair: Reloaded SQL dump into '{db_path}'.")
+        repair_duration = time.monotonic() - repair_start_time
+        logger.success(f"✅ DB Repair: Dump/Reload attempt completed in {repair_duration:.2f}s.")
+
+        # 4. Final integrity check on the reloaded database
+        logger.info("DB Repair: Performing final integrity check on reloaded DB...")
+        if _check_db_integrity_quick(db_path, "repaired DB via dump/reload"):  # Use the quick check
+            logger.success("✅ DB Repair: Repaired DB passed final integrity check.")
+            repair_successful = True
+            # Successfully repaired, corrupted backup can be kept or deleted.
+            # For now, we keep it. Add cleanup logic if desired.
+        else:
+            logger.error(
+                "❌ DB Repair: Repaired DB FAILED final integrity check! Data loss may have occurred or repair was ineffective.")
+            logger.error(f"   The original corrupted DB is at: {corrupted_db_backup_path}")
+            logger.error(f"   The (still problematic) reloaded DB is at: {db_path}")
+            repair_successful = False
+
+    except subprocess.TimeoutExpired as e_timeout:
+        logger.error(f"❌ DB Repair: Process (dump/reload) timed out: {e_timeout}")
+        repair_successful = False
+    except Exception as repair_err:
+        logger.error(f"❌ DB Repair: Unexpected error during repair process: {repair_err}")
+        logger.exception("DB Repair Process Traceback:")
+        repair_successful = False
+    finally:
+        # Clean up the temporary SQL dump file
+        if temp_dump_sql_file and os.path.exists(temp_dump_sql_file):
+            try:
+                os.remove(temp_dump_sql_file)
+                logger.debug(f"DB Repair: Cleaned up temporary SQL dump file: {temp_dump_sql_file}")
+            except Exception as e_rm_temp:
+                logger.warning(f"DB Repair: Failed to clean up temp SQL dump file '{temp_dump_sql_file}': {e_rm_temp}")
+
+    if repair_successful:
+        logger.info(f"DB Repair: Successfully repaired '{db_path}'.")
+    else:
+        logger.error(f"DB Repair: FAILED to repair '{db_path}'. Check logs and backups.")
+
+    return repair_successful
+
 # --- Integrity Check and Repair (_check_and_repair_db) ---
 # (Keep your existing _check_and_repair_db function - it's still useful as a last resort)
 # Small modification: it will now be called *after* snapshot restore attempts.
-def _check_and_repair_db(db_path: str, context_msg: str = "runtime DB") -> bool:
-    """Checks SQLite DB integrity and attempts repair via dump/reload if needed."""
+def _check_db_integrity_quick(db_path: str, context_msg: str = "DB") -> bool:
+    """Quickly checks SQLite DB integrity using 'PRAGMA integrity_check'."""
     if not os.path.exists(db_path) or os.path.getsize(db_path) == 0:
-        logger.debug(f"Integrity check skipped for {context_msg}: DB file not found or empty at {db_path}")
-        return True
+        logger.debug(f"Integrity check (quick) skipped for {context_msg}: File not found or empty at {db_path}")
+        return True # Consider non-existent or empty as "not corrupt" for this check's purpose
 
-    logger.info(f"🩺 Performing integrity check on {context_msg} ('{os.path.basename(db_path)}')...")
-    check_start_time = time.monotonic()
-    is_ok = False
+    logger.info(f"🩺 Performing QUICK integrity check on {context_msg} ('{os.path.basename(db_path)}')...")
     sqlite3_cmd = shutil.which("sqlite3")
     if not sqlite3_cmd:
-        logger.error("❌ Cannot run integrity check: 'sqlite3' command not found in PATH.")
-        return False
+        logger.error("❌ Cannot run integrity check: 'sqlite3' command not found. Assuming OK for now.")
+        return True # Cannot check, assume OK to proceed with caution
 
     try:
+        # Limit integrity check to first few pages for speed, or run full check if preferred.
+        # For a quick check, 'PRAGMA quick_check;' can also be used.
+        # 'PRAGMA integrity_check(10);' checks first 10 pages.
+        # For this initial check, let's use the full integrity_check but with a shorter timeout.
         check_command = [sqlite3_cmd, db_path, "PRAGMA integrity_check;"]
-        process = subprocess.run(check_command, capture_output=True, text=True, check=False, timeout=300)
-        check_output = process.stdout.strip()
-        check_duration = time.monotonic() - check_start_time
-        logger.info(f"Integrity check for {context_msg} completed in {check_duration:.2f}s.")
+        process = subprocess.run(check_command, capture_output=True, text=True, check=False, timeout=60) # Shorter timeout for quick check
 
-        if process.returncode != 0:
-            logger.error(
-                f"Integrity check process for {context_msg} failed (RC={process.returncode}): {process.stderr.strip()}")
-            is_ok = False
-        elif check_output.lower() == "ok":
-            logger.success(f"✅ Integrity check passed for {context_msg}.")
-            is_ok = True
+        if process.returncode == 0 and process.stdout.strip().lower() == "ok":
+            logger.success(f"✅ Quick integrity check passed for {context_msg}.")
+            return True
         else:
-            logger.warning(f"🔥 Integrity check FAILED for {context_msg}. Errors reported:\n{check_output}")
-            is_ok = False
+            logger.warning(f"🔥 Quick integrity check FAILED for {context_msg}. Output: {process.stdout.strip()} Stderr: {process.stderr.strip()}")
+            return False
     except subprocess.TimeoutExpired:
-        logger.error(f"❌ Integrity check for {context_msg} timed out.")
-        return False
+        logger.warning(f"❌ Quick integrity check for {context_msg} timed out. Assuming potential issue.")
+        return False # Treat timeout as a potential issue
     except Exception as e:
-        logger.error(f"❌ Error during integrity check execution for {context_msg}: {e}")
-        return False
-
-    if not is_ok:
-        logger.warning(
-            f"🚨 Attempting automatic repair via dump/reload for {context_msg} ('{os.path.basename(db_path)}')...")
-        # (Keep the existing repair logic from your _check_and_repair_db)
-        # ...
-        # For brevity, assuming the dump/reload logic is the same as your V16
-        # It should return True if repair was successful and final check passed, False otherwise.
-        # Let's simulate that part:
-        repair_start_time = time.monotonic()
-        temp_dump_file = None
-        repair_successful = False
-        try:
-            with tempfile.NamedTemporaryFile(mode='w+', delete=False, suffix=".sql", encoding='utf-8') as tmp_sql:
-                temp_dump_file = tmp_sql.name
-                dump_command = [sqlite3_cmd, db_path, ".dump"]
-                dump_process = subprocess.run(dump_command, stdout=tmp_sql, stderr=subprocess.PIPE, text=True,
-                                              check=False, timeout=600)
-            if dump_process.returncode != 0: logger.error(
-                f"Dump FAILED (RC={dump_process.returncode}). Stderr: {dump_process.stderr.strip()}"); return False
-            corrupted_backup_path = f"{db_path}.corrupted_{int(time.time())}"
-            shutil.move(db_path, corrupted_backup_path)
-            reload_command = [sqlite3_cmd, db_path]
-            with open(temp_dump_file, 'r', encoding='utf-8') as dump_fh:
-                reload_process = subprocess.run(reload_command, stdin=dump_fh, capture_output=True, text=True,
-                                                check=False, timeout=600)
-            if reload_process.returncode != 0: logger.error(
-                f"Reload FAILED (RC={reload_process.returncode}). Stderr: {reload_process.stderr.strip()}"); return False
-            repair_duration = time.monotonic() - repair_start_time;
-            logger.success(f"✅ Repair attempt ({repair_duration:.2f}s).")
-            final_check_command = [sqlite3_cmd, db_path, "PRAGMA integrity_check;"]
-            final_process = subprocess.run(final_check_command, capture_output=True, text=True, check=False,
-                                           timeout=300)
-            if final_process.stdout.strip().lower() == "ok":
-                logger.success("✅ Repaired DB passed final check."); repair_successful = True
-            else:
-                logger.error(
-                    f"❌ Repaired DB FAILED final check! Errors:\n{final_process.stdout.strip()}"); repair_successful = False
-        except Exception as repair_err:
-            logger.error(f"❌ Error during repair: {repair_err}"); repair_successful = False
-        finally:
-            if temp_dump_file and os.path.exists(temp_dump_file):
-                try:
-                    os.remove(temp_dump_file)
-                except Exception:
-                    pass
-        return repair_successful
-    return True
+        logger.error(f"❌ Error during quick integrity check for {context_msg}: {e}")
+        return False # Treat any error as a potential issue
 
 
 # --- END Integrity Check and Repair ---
@@ -698,82 +852,136 @@ def stop_db_snapshotter():
 # --- Engine Creation Wrapper (get_engine) - Modified for Snapshot Restore ---
 def get_engine():
     global _engine, SessionLocal
-    if _engine is not None: return _engine
+    if _engine is not None:
+        return _engine
 
-    logger.info("Initializing SQLAlchemy engine (Runtime DB with Snapshot Restore)...")
-    engine_instance = None
+    logger.info("🚀 Initializing SQLAlchemy engine (Runtime DB with Enhanced Restore Logic)...")
     db_successfully_prepared = False
+    runtime_db_exists_initially = os.path.exists(RUNTIME_DB_PATH)
+    runtime_db_is_empty = runtime_db_exists_initially and os.path.getsize(RUNTIME_DB_PATH) == 0
 
-    # 1. Try decompressing shutdown archive first
+    # --- Step 1: Handle Decompression of Shutdown Archive (if exists) ---
     if os.path.exists(DB_PATH_COMPRESSED):
-        logger.info("Shutdown archive found, attempting decompression...")
-        if _decompress_db(DB_PATH_COMPRESSED, RUNTIME_DB_PATH):  # Decompresses to RUNTIME_DB_PATH
-            if os.path.exists(DB_PATH_COMPRESSED):  # Remove archive after successful decompression
-                try:
-                    os.remove(DB_PATH_COMPRESSED)
-                except Exception as e:
-                    logger.warning(f"Could not remove shutdown archive '{DB_PATH_COMPRESSED}': {e}")
-            logger.info("Successfully prepared runtime DB from shutdown archive.")
+        logger.info(
+            f"Found shutdown archive '{DB_PATH_COMPRESSED}'. Attempting decompression to '{RUNTIME_DB_PATH}'...")
+        if os.path.exists(RUNTIME_DB_PATH):  # If runtime DB also exists, archive takes precedence
+            logger.warning(
+                f"Runtime DB '{RUNTIME_DB_PATH}' also exists. It will be overwritten by shutdown archive if decompression is successful.")
+            try:
+                # Backup current runtime DB before overwriting, just in case archive is bad
+                backup_path = f"{RUNTIME_DB_PATH}.before_archive_restore_{int(time.time())}"
+                shutil.move(RUNTIME_DB_PATH, backup_path)
+                logger.info(f"Backed up existing runtime DB to '{backup_path}'.")
+            except Exception as e_mv:
+                logger.error(
+                    f"Could not backup existing runtime DB before archive restore: {e_mv}. Proceeding with caution.")
+
+        if _decompress_db(DB_PATH_COMPRESSED, RUNTIME_DB_PATH):
+            logger.success(f"Successfully decompressed shutdown archive to '{RUNTIME_DB_PATH}'.")
+            try:
+                os.remove(DB_PATH_COMPRESSED)
+                logger.info(f"Removed shutdown archive '{DB_PATH_COMPRESSED}'.")
+            except Exception as e_rm_arc:
+                logger.warning(f"Could not remove shutdown archive after decompression: {e_rm_arc}")
             db_successfully_prepared = True
+            runtime_db_exists_initially = True  # It exists now
+            runtime_db_is_empty = os.path.getsize(RUNTIME_DB_PATH) == 0
         else:
-            logger.error("Failed to decompress shutdown archive. Will check for snapshots or create new.")
-            db_successfully_prepared = False  # Continue to check snapshots
+            logger.error(
+                f"Failed to decompress shutdown archive '{DB_PATH_COMPRESSED}'. Current runtime DB (if any) is preserved.")
+            # db_successfully_prepared remains False, or True if runtime_db_exists_initially was true and not overwritten.
+            db_successfully_prepared = runtime_db_exists_initially and not runtime_db_is_empty
 
-    # 2. If no runtime DB from archive, or if it exists but is read-only/corrupt, try snapshots
-    if not db_successfully_prepared:
-        is_readonly = _is_db_readonly(RUNTIME_DB_PATH) if os.path.exists(RUNTIME_DB_PATH) else False
-        if not os.path.exists(RUNTIME_DB_PATH) or is_readonly:
-            if is_readonly:
-                logger.warning("Runtime DB is read-only. Attempting snapshot restore.")
+    # --- Step 2: Validate Current/Restored Runtime DB ---
+    if runtime_db_exists_initially and not runtime_db_is_empty:
+        logger.info(f"Validating existing/restored runtime DB at '{RUNTIME_DB_PATH}'...")
+        is_readonly = _is_db_readonly(RUNTIME_DB_PATH)
+        is_corrupt = False
+
+        if is_readonly:
+            logger.warning(f"Runtime DB '{RUNTIME_DB_PATH}' is READ-ONLY. Attempting to restore from snapshot.")
+            db_successfully_prepared = False  # Mark as not prepared, force snapshot restore
+        else:
+            if not _check_db_integrity_quick(RUNTIME_DB_PATH, "current runtime DB"):
+                logger.warning(
+                    f"Runtime DB '{RUNTIME_DB_PATH}' FAILED quick integrity check or is potentially corrupt.")
+                is_corrupt = True
+                db_successfully_prepared = False  # Mark as not prepared, try snapshot restore
             else:
-                logger.info("Runtime DB not found. Attempting snapshot restore.")
+                logger.info(f"Runtime DB '{RUNTIME_DB_PATH}' passed quick integrity check.")
+                db_successfully_prepared = True  # Tentatively okay
 
-            if _restore_from_latest_snapshot():
-                logger.info("Successfully restored runtime DB from snapshot.")
+    elif runtime_db_is_empty:
+        logger.warning(
+            f"Runtime DB '{RUNTIME_DB_PATH}' exists but is empty. Will attempt snapshot restore or create new.")
+        db_successfully_prepared = False
+    else:  # Runtime DB does not exist
+        logger.info(f"Runtime DB '{RUNTIME_DB_PATH}' does not exist. Will attempt snapshot restore or create new.")
+        db_successfully_prepared = False
+
+    # --- Step 3: Attempt Snapshot Restore if Current DB is Not Prepared/Valid ---
+    if not db_successfully_prepared:
+        logger.info(
+            f"Attempting to restore DB from the latest valid snapshot (Snapshots enabled: {ENABLE_DB_SNAPSHOTS})...")
+        if _restore_from_latest_snapshot():  # This function now includes integrity check of snapshot
+            logger.success(f"✅ Database successfully restored from snapshot to '{RUNTIME_DB_PATH}'.")
+            db_successfully_prepared = True
+            # Re-check if it's empty after restore (should not be if snapshot was good)
+            if os.path.exists(RUNTIME_DB_PATH) and os.path.getsize(RUNTIME_DB_PATH) == 0:
+                logger.error("CRITICAL: DB restored from snapshot but is EMPTY. Snapshot might be bad.")
+                db_successfully_prepared = False  # Treat as failure
+        else:
+            logger.warning(
+                f"Snapshot restore failed or no suitable snapshots found. Runtime DB path: '{RUNTIME_DB_PATH}'")
+            # If runtime DB existed but was corrupt/readonly, it might still be there or moved.
+            # If it didn't exist, it still doesn't.
+            # db_successfully_prepared remains False
+
+    # --- Step 4: Final Integrity Check / Repair (if DB exists but wasn't just successfully restored from snapshot) ---
+    # This step is reached if:
+    #   - Initial runtime DB passed quick check (db_successfully_prepared = True)
+    #   - OR Snapshot restore failed, but an older (potentially problematic) DB file still exists at RUNTIME_DB_PATH.
+    #   - OR No DB existed, no archive, no snapshots -> RUNTIME_DB_PATH doesn't exist, this block is skipped.
+    if os.path.exists(RUNTIME_DB_PATH) and os.path.getsize(RUNTIME_DB_PATH) > 0:
+        if not db_successfully_prepared:  # Implies snapshot restore failed, but a DB file might still exist
+            logger.warning(
+                f"Snapshot restore failed. Performing a full integrity check and potential repair on existing DB file: '{RUNTIME_DB_PATH}' as a last resort.")
+            if _check_and_repair_db(RUNTIME_DB_PATH, "existing DB after failed snapshot restore"):
+                logger.info("Full check/repair on existing DB passed or was successful.")
                 db_successfully_prepared = True
             else:
-                logger.warning("Snapshot restore failed or no snapshots available.")
-                # If restore failed AND the original was read-only, this is a problem.
-                if is_readonly:
-                    logger.critical(
-                        "🔥🔥 FATAL: Runtime DB was read-only and snapshot restore failed. Manual intervention likely required.")
-                    sys.exit(1)
-                db_successfully_prepared = False  # Will lead to new DB creation by Alembic if file still missing
-        else:  # Runtime DB exists and is not read-only (or read-only check failed to confirm)
-            logger.info("Runtime DB exists and is not detected as read-only. Proceeding to integrity check.")
-            db_successfully_prepared = True  # Tentatively true, pending integrity check
+                logger.error(f"Full check/repair FAILED for existing DB '{RUNTIME_DB_PATH}'. Moving corrupted file.")
+                # Move the problematic DB file to avoid Alembic trying to migrate a corrupt schema
+                try:
+                    corrupt_final_path = f"{RUNTIME_DB_PATH}.final_corruption_{int(time.time())}"
+                    shutil.move(RUNTIME_DB_PATH, corrupt_final_path)
+                    logger.info(f"Moved final corrupted DB to '{corrupt_final_path}'. A new DB will be created.")
+                except Exception as mv_err:
+                    logger.error(f"Could not move final corrupted DB: {mv_err}. Alembic might fail.")
+                db_successfully_prepared = False  # Will lead to new DB creation by Alembic
+    elif not os.path.exists(RUNTIME_DB_PATH):
+        logger.info("No database file found after all restore attempts. A new DB will be created by Alembic.")
+        db_successfully_prepared = False  # To be clear, though it already is
 
-    # 3. Integrity Check / Repair on the prepared/existing runtime DB
-    if db_successfully_prepared and os.path.exists(RUNTIME_DB_PATH):
-        if not _check_and_repair_db(RUNTIME_DB_PATH, context_msg="prepared runtime DB"):
-            logger.critical(f"🔥🔥 FATAL: DB integrity check/repair FAILED for '{os.path.basename(RUNTIME_DB_PATH)}'.")
-            try:
-                corrupt_final_path = f"{RUNTIME_DB_PATH}.final_corruption_{int(time.time())}"
-                logger.warning(f"Moving final corrupted DB to {corrupt_final_path}")
-                shutil.move(RUNTIME_DB_PATH, corrupt_final_path)
-            except Exception as mv_err:
-                logger.error(f"Could not move final corrupted DB: {mv_err}")
-            db_successfully_prepared = False  # Leads to new DB creation
-    elif not os.path.exists(RUNTIME_DB_PATH):  # If still no DB file after all attempts
-        logger.info(
-            "No existing database found (no archive, no snapshots, or all failed). Will create new via Alembic.")
-        db_successfully_prepared = False  # Explicitly false, though covered
-
-    # 4. Create Engine
+    # --- Step 5: Create Engine ---
     engine_args_internal = {"echo": False, "connect_args": {"check_same_thread": False, "timeout": 60.0}}
-    logger.info(f"Creating SQLAlchemy engine for runtime DB: {RUNTIME_DATABASE_URL}")
+    logger.info(f"Creating SQLAlchemy engine for: {RUNTIME_DATABASE_URL}")
     try:
         _engine = create_engine(RUNTIME_DATABASE_URL, **engine_args_internal)
+        # Test connection
         with _engine.connect() as connection:
-            logger.debug("Engine connection test successful.")
+            logger.debug("Engine connection test successful after all preparations.")
         SessionLocal.configure(bind=_engine)
-        logger.info("SQLAlchemy SessionLocal configured and bound to runtime DB engine.")
-    except Exception as e:
-        logger.critical(f"🔥🔥 DATABASE ENGINE CREATION FAILED for runtime DB: {e}")
+        logger.info("SQLAlchemy SessionLocal configured and bound to engine.")
+    except Exception as e_engine:
+        logger.critical(f"🔥🔥 DATABASE ENGINE CREATION FAILED for '{RUNTIME_DATABASE_URL}': {e_engine}")
+        sys.exit(1)  # Fatal if engine cannot be created
+
+    # SessionLocal should be bound now
+    if SessionLocal is None or not SessionLocal.kw.get('bind'):  # type: ignore
+        logger.critical("🔥🔥 Failed to configure SessionLocal binding after engine creation.")
         sys.exit(1)
 
-    if SessionLocal is None or not SessionLocal.kw.get('bind'):
-        raise RuntimeError("Failed to configure SessionLocal binding")
     return _engine
 
 
