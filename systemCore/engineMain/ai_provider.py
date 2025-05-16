@@ -10,6 +10,7 @@ import json        # Added for worker communication
 import subprocess  # Added for worker management
 import shlex       # <<< --- ADD THIS LINE --- >>>
 import asyncio
+import re
 
 # --- NEW: Import the custom lock ---
 
@@ -114,6 +115,34 @@ class TaskInterruptedException(Exception):
 
 # === llama-cpp-python Langchain Wrappers ===
 
+def strip_initial_think_block(text: str) -> str:
+    """
+    Removes the first occurring <think>...</think> block if it appears at the
+    beginning of the text (possibly after some leading whitespace).
+    Returns the rest of the string, lstripped.
+    If no such block is found at the beginning, returns the original text, lstripped.
+    """
+    if not isinstance(text, str):
+        return ""  # Or raise TypeError, or return as is if that's preferred for non-strings
+
+    # Regex to find <think>...</think> possibly preceded by whitespace,
+    # and capture what comes AFTER it.
+    # ^\s* : matches optional whitespace at the beginning of the string
+    # (<think>[\s\S]*?</think>) : captures the think block (non-greedy)
+    # \s* : matches optional whitespace after the think block
+    # ([\s\S]*) : captures everything else that follows (the target)
+    match = re.match(r"^\s*(<think>[\s\S]*?</think>)\s*([\s\S]*)", text, re.IGNORECASE)
+
+    if match:
+        think_block_content = match.group(1)  # The <think>...</think> part
+        remaining_text = match.group(2)  # The part after the think block
+        # logger.trace(f"Stripped initial think block. Removed: '{think_block_content[:100]}...'. Remaining: '{remaining_text[:100]}...'")
+        return remaining_text.lstrip()  # Return the rest, left-stripped of any space between think and target
+    else:
+        # No initial <think> block found, return the original text (left-stripped)
+        # logger.trace("No initial think block found to strip.")
+        return text.lstrip()
+
 # --- Chat Model Wrapper ---
 class LlamaCppChatWrapper(SimpleChatModel):
     ai_provider: 'AIProvider'
@@ -122,62 +151,68 @@ class LlamaCppChatWrapper(SimpleChatModel):
 
     def _call(
             self,
-            messages: Union[List[BaseMessage], str],  # Can now be a raw string
+            messages: Union[List[BaseMessage], str],  # Can be a raw prompt string or Langchain messages
             stop: Optional[List[str]] = None,
-            run_manager: Optional[CallbackManagerForLLMRun] = None,
-            **kwargs: Any,
+            run_manager: Optional[CallbackManagerForLLMRun] = None,  # Langchain standard
+            **kwargs: Any,  # For additional generation parameters like temperature, max_tokens from chain.invoke
     ) -> str:
-        provider_logger = getattr(self.ai_provider, 'logger', logger)
+        """
+        Core method to interact with the Llama.cpp worker process.
+        Handles raw string prompts (assumed to be fully formatted ChatML) and
+        Langchain BaseMessage lists.
+        Applies `strip_initial_think_block` to the raw LLM output.
+        """
+        provider_logger = getattr(self.ai_provider, 'logger', logger)  # Use AIProvider's logger if available
         wrapper_log_prefix = f"LlamaCppChatWrapper(Role:{self.model_role})"
 
+        # Extract custom 'priority' from kwargs, default to ELP0 if not provided
         priority = kwargs.pop('priority', ELP0)
-        is_raw_chatml_prompt_mode = isinstance(messages, str)  # Detect raw mode
+        is_raw_chatml_prompt_mode = isinstance(messages, str)
 
         provider_logger.debug(
-            f"{wrapper_log_prefix}: Received call. RawMode: {is_raw_chatml_prompt_mode}, Priority: ELP{priority}")
+            f"{wrapper_log_prefix}: Received _call. RawMode: {is_raw_chatml_prompt_mode}, Priority: ELP{priority}, "
+            f"Incoming kwargs: {kwargs}, Stop sequences: {stop}"
+        )
 
-        # Combine model-specific kwargs passed during call with defaults
-        final_model_kwargs = {**self.model_kwargs, **kwargs}
+        # Combine wrapper's default model_kwargs with call-specific kwargs.
+        # Call-specific kwargs (e.g., temperature from a .bind() in a chain) take precedence.
+        final_model_kwargs_for_worker = {**self.model_kwargs, **kwargs}
 
-        # CRITICAL: Ensure stop sequences for raw ChatML mode
-        # The primary stop sequence must be <|im_end|>
-        effective_stop_sequences = list(stop) if stop else []
-        if CHATML_END_TOKEN not in effective_stop_sequences:  # CHATML_END_TOKEN from your utils/config
+        # Ensure stop sequences are correctly handled
+        # The worker will use these to stop generation.
+        effective_stop_sequences = list(stop) if stop is not None else []
+        if CHATML_END_TOKEN not in effective_stop_sequences:
             effective_stop_sequences.append(CHATML_END_TOKEN)
+        # Add other common stop tokens if necessary for this model_role
+        # e.g., if some models tend to hallucinate user turns:
+        # if "<|im_start|>user" not in effective_stop_sequences:
+        #     effective_stop_sequences.append("<|im_start|>user")
+        final_model_kwargs_for_worker["stop"] = effective_stop_sequences
 
-        final_model_kwargs["stop"] = effective_stop_sequences
-        provider_logger.trace(f"{wrapper_log_prefix}: Final stop sequences: {final_model_kwargs['stop']}")
-        provider_logger.trace(f"{wrapper_log_prefix}: Final model kwargs for worker: {final_model_kwargs}")
+        provider_logger.trace(
+            f"{wrapper_log_prefix}: Final model kwargs for worker (incl. merged stop sequences): {final_model_kwargs_for_worker}")
 
-        request_payload = {}
-        task_type_for_worker = ""
+        request_payload: Dict[str, Any]
+        task_type_for_worker: str
 
         if is_raw_chatml_prompt_mode:
-            raw_prompt_string = messages  # messages is the string
-            request_payload = {
-                "prompt": raw_prompt_string,
-                "kwargs": final_model_kwargs
-            }
-            task_type_for_worker = "raw_text_completion"  # New task type for worker
+            # 'messages' is already a fully formatted string (e.g., raw ChatML)
+            request_payload = {"prompt": messages, "kwargs": final_model_kwargs_for_worker}
+            task_type_for_worker = "raw_text_completion"
             provider_logger.debug(
-                f"{wrapper_log_prefix}: Prepared for raw_text_completion. Prompt length: {len(raw_prompt_string)}")
+                f"{wrapper_log_prefix}: Prepared for 'raw_text_completion'. Prompt len: {len(messages)}")  # type: ignore
         else:
-            # This is the old path, for compatibility or if other parts still send BaseMessage lists
-            # For the "all raw ChatML" goal, this path might become unused by AIChat/Agent.
-            provider_logger.warning(
-                f"{wrapper_log_prefix}: Received List[BaseMessage]. Formatting for standard chat task (might be deprecated path).")
-            formatted_messages_for_worker = self._format_messages_for_llama_cpp(
-                messages)  # messages is List[BaseMessage]
-            request_payload = {
-                "messages": formatted_messages_for_worker,
-                "kwargs": final_model_kwargs
-            }
-            task_type_for_worker = "chat"  # Existing task type for worker
+            # 'messages' is List[BaseMessage], needs formatting for the worker's "chat" task type
+            provider_logger.debug(f"{wrapper_log_prefix}: Formatting List[BaseMessage] for 'chat' task type.")
+            formatted_messages_for_worker = self._format_messages_for_llama_cpp(messages)  # type: ignore
+            request_payload = {"messages": formatted_messages_for_worker, "kwargs": final_model_kwargs_for_worker}
+            task_type_for_worker = "chat"
 
         try:
             provider_logger.debug(
                 f"{wrapper_log_prefix}: Delegating to _execute_in_worker (Task: {task_type_for_worker}, Priority: ELP{priority})...")
-            worker_result = self.ai_provider._execute_in_worker(
+            # _execute_in_worker is assumed to be a method of self.ai_provider
+            worker_result = self.ai_provider._execute_in_worker(  # type: ignore
                 model_role=self.model_role,
                 task_type=task_type_for_worker,
                 request_data=request_payload,
@@ -185,78 +220,85 @@ class LlamaCppChatWrapper(SimpleChatModel):
             )
 
             if not worker_result or not isinstance(worker_result, dict):
-                provider_logger.error(
-                    f"{wrapper_log_prefix}: Worker execution failed or returned invalid data type: {type(worker_result)}")
-                return f"[{self._llm_type.upper()}_PROVIDER_ERROR: Worker execution failed or returned invalid type]"
+                err_msg = f"Worker execution failed or returned invalid data type: {type(worker_result)}"
+                provider_logger.error(f"{wrapper_log_prefix}: {err_msg}")
+                return f"[{self._llm_type.upper()}_PROVIDER_ERROR: {err_msg}]"
 
             if "error" in worker_result:
-                error_msg = f"{self._llm_type.upper()}_WORKER_ERROR ({self.model_role}): {worker_result['error']}"
-                provider_logger.error(error_msg)
-                return f"[{error_msg}]"
+                error_msg_content = worker_result['error']
+                if interruption_error_marker in error_msg_content:  # type: ignore
+                    provider_logger.warning(
+                        f"🚦 {wrapper_log_prefix}: Task INTERRUPTED (marker from worker '{error_msg_content}'). Raising TaskInterruptedException.")
+                    raise TaskInterruptedException(error_msg_content)  # type: ignore
+
+                # For other worker errors (e.g., token limit exceeded)
+                error_msg_to_return = f"{self._llm_type.upper()}_WORKER_ERROR (Role:{self.model_role}): {error_msg_content}"
+                provider_logger.error(f"{wrapper_log_prefix}: {error_msg_to_return}")
+                return f"[{error_msg_to_return}]"  # Return the error string directly
 
             if "result" not in worker_result:
-                provider_logger.error(
-                    f"{wrapper_log_prefix}: Worker returned unknown dictionary structure: {worker_result}")
-                return f"[{self._llm_type.upper()}_WORKER_RESPONSE_ERROR: Unknown dictionary structure]"
+                err_msg = f"Worker returned unknown dictionary structure (missing 'result' key): {str(worker_result)[:200]}..."
+                provider_logger.error(f"{wrapper_log_prefix}: {err_msg}")
+                return f"[{self._llm_type.upper()}_WORKER_RESPONSE_ERROR: {err_msg}]"
 
             completion_data = worker_result["result"]
+            raw_response_content_from_llm_core: str = ""
 
-            # Parse based on task type
-            response_content = ""
             if task_type_for_worker == "raw_text_completion":
-                # Expecting OpenAI-like completion structure from worker: result['choices'][0]['text']
                 if (completion_data and isinstance(completion_data, dict) and
                         'choices' in completion_data and isinstance(completion_data['choices'], list) and
                         completion_data['choices'] and isinstance(completion_data['choices'][0], dict) and
                         'text' in completion_data['choices'][0]):
-                    response_content = completion_data['choices'][0]['text']
+                    raw_response_content_from_llm_core = completion_data['choices'][0]['text']
                 else:
-                    provider_logger.error(
-                        f"{wrapper_log_prefix}: Worker (raw_text_completion) returned unexpected result structure: {completion_data}")
-                    return f"[{self._llm_type.upper()}_WORKER_RESPONSE_ERROR: Invalid raw completion structure]"
-
+                    err_msg = f"Worker (raw_text_completion) returned unexpected result structure: {str(completion_data)[:200]}..."
+                    provider_logger.error(f"{wrapper_log_prefix}: {err_msg}")
+                    return f"[{self._llm_type.upper()}_WORKER_RESPONSE_ERROR: {err_msg}]"
             elif task_type_for_worker == "chat":
-                # Existing parsing logic for chat completion
                 if (completion_data and isinstance(completion_data, dict) and
                         'choices' in completion_data and isinstance(completion_data['choices'], list) and
                         completion_data['choices'] and isinstance(completion_data['choices'][0], dict) and
                         'message' in completion_data['choices'][0] and
                         isinstance(completion_data['choices'][0]['message'], dict) and
                         'content' in completion_data['choices'][0]['message']):
-                    response_content = completion_data['choices'][0]['message']['content']
+                    raw_response_content_from_llm_core = completion_data['choices'][0]['message']['content']
                 else:
-                    provider_logger.error(
-                        f"{wrapper_log_prefix}: Worker (chat) returned unexpected result structure: {completion_data}")
-                    return f"[{self._llm_type.upper()}_WORKER_RESPONSE_ERROR: Invalid chat completion structure]"
+                    err_msg = f"Worker (chat) returned unexpected result structure: {str(completion_data)[:200]}..."
+                    provider_logger.error(f"{wrapper_log_prefix}: {err_msg}")
+                    return f"[{self._llm_type.upper()}_WORKER_RESPONSE_ERROR: {err_msg}]"
 
-            else:  # Should not happen
-                provider_logger.error(
-                    f"{wrapper_log_prefix}: Unknown task_type_for_worker '{task_type_for_worker}' during result parsing.")
-                return f"[{self._llm_type.upper()}_INTERNAL_ERROR: Unknown task type for parsing]"
+            if not isinstance(raw_response_content_from_llm_core, str):
+                raw_response_content_from_llm_core = str(raw_response_content_from_llm_core or "")
 
-            if response_content is None:
-                provider_logger.warning(f"{wrapper_log_prefix}: Worker returned None content. Treating as empty.")
-                response_content = ""
-            elif not isinstance(response_content, str):
-                provider_logger.warning(
-                    f"{wrapper_log_prefix}: Worker returned non-string content (type: {type(response_content)}). Converting to string.")
-                response_content = str(response_content)
+            provider_logger.trace(
+                f"{wrapper_log_prefix}: Raw content from LLM core (len={len(raw_response_content_from_llm_core)}): '{raw_response_content_from_llm_core[:150]}...'")
 
-            # Remove the stop token if the model included it (some models do)
-            # This is important because we added <|im_end|> to stop sequences.
-            if response_content.endswith(CHATML_END_TOKEN):
-                response_content = response_content[:-len(CHATML_END_TOKEN)]
+            # Apply the utility to strip the initial <think> block
+            final_content_after_think_strip = strip_initial_think_block(raw_response_content_from_llm_core)
+            if len(final_content_after_think_strip) != len(raw_response_content_from_llm_core.lstrip()):
+                provider_logger.info(
+                    f"{wrapper_log_prefix}: Applied strip_initial_think_block. Result len: {len(final_content_after_think_strip)}")
+            provider_logger.trace(
+                f"{wrapper_log_prefix}: Content after strip_initial_think_block: '{final_content_after_think_strip[:150]}...'")
 
-            response_content = response_content.strip()  # Clean leading/trailing whitespace
+            # Remove trailing stop token if the model included it (e.g., <|im_end|>)
+            if final_content_after_think_strip.endswith(CHATML_END_TOKEN):
+                final_content_after_think_strip = final_content_after_think_strip[:-len(CHATML_END_TOKEN)]
+
+            response_to_return = final_content_after_think_strip.strip()  # Final cleanup of whitespace
 
             provider_logger.debug(
-                f"{wrapper_log_prefix}: Successfully extracted content (len:{len(response_content)}).")
-            return response_content
+                f"{wrapper_log_prefix}: Successfully extracted and cleaned content (len:{len(response_to_return)}). Returning.")
+            return response_to_return
 
-        except Exception as e:
-            provider_logger.error(f"{wrapper_log_prefix}: Unexpected error during _call: {e}")
-            provider_logger.exception(f"{wrapper_log_prefix} Call Traceback:")
-            return f"[{self._llm_type.upper()}_WRAPPER_ERROR: {type(e).__name__} - {e}]"
+        except TaskInterruptedException:  # Re-raise if caught from _execute_in_worker via error check
+            provider_logger.warning(f"🚦 {wrapper_log_prefix}: TaskInterruptedException caught in _call. Re-raising.")
+            raise
+        except Exception as e_call:  # Catch any other unexpected errors in this _call method
+            provider_logger.error(f"{wrapper_log_prefix}: Unexpected error in _call: {e_call}")
+            provider_logger.exception(f"{wrapper_log_prefix} _call Traceback:")
+            # Return a formatted error string that Langchain can handle
+            return f"[{self._llm_type.upper()}_WRAPPER_ERROR: {type(e_call).__name__} - {str(e_call)[:100]}]"
 
     def _stream( # This method becomes more complex if we want to stream raw ChatML
         self, messages: Union[List[BaseMessage], str], stop: Optional[List[str]] = None,

@@ -3634,145 +3634,190 @@ class AIChat:
                  interaction_data['execution_time_ms'] = interaction_data.get('execution_time_ms', 0) + duration
                  raise # Re-raise the original non-interruption error
 
-    def _classify_input_complexity(self, db: Session, user_input: str, interaction_data: dict) -> str:
-        """Classifies input as 'chat_simple', 'chat_complex', or 'agent_task' (synchronous)."""
-        request_id = f"classify-{interaction_data.get('session_id', 'unknownsession')}-{uuid.uuid4()}"
-        log_prefix = f"🤔 Classify|{request_id}"
+    async def _classify_input_complexity(self, db: Session, user_input: str,
+                                         interaction_data_for_metrics: dict) -> str:  # Renamed for clarity
+        """
+        Classifies input as 'chat_simple', 'chat_complex', or 'agent_task'.
+        Uses router model, expects JSON, robustly extracts JSON from LLM output.
+        """
+        request_id_suffix = str(uuid.uuid4())[:8]
+        log_prefix = f"🤔 Classify|ELP0|{interaction_data_for_metrics.get('session_id', 'unknown')[:8]}-{request_id_suffix}"
         logger.info(f"{log_prefix} Classifying input complexity for: '{user_input[:50]}...'")
 
-        history_summary = self._get_history_summary(db, MEMORY_SIZE)
+        # Get history summary synchronously as it's a DB call
+        # Run this in a thread if _get_history_summary becomes very slow, though unlikely for typical limits
+        history_summary = self._get_history_summary(db, MEMORY_SIZE)  # MEMORY_SIZE from config
 
-        classification_model = self.provider.get_model("router")
-        if not classification_model:
-            logger.warning(f"{log_prefix} Router model not found for classification, falling back to default.")
-            classification_model = self.provider.get_model("default")
+        classification_model_instance = self.provider.get_model("router")
+        if not classification_model_instance:
+            logger.warning(f"{log_prefix} Router model unavailable for classification. Falling back to default model.")
+            classification_model_instance = self.provider.get_model("default")
 
-        if not classification_model:
-            logger.error(f"{log_prefix} ❌ Default model also not found! Cannot perform input classification.")
-            # ... (existing fallback and DB logging) ...
+        if not classification_model_instance:
+            error_msg = "Classification model (router/default) not available."
+            logger.error(f"{log_prefix} ❌ {error_msg}")
+            interaction_data_for_metrics['classification'] = "chat_simple"  # Fallback classification
+            interaction_data_for_metrics['classification_reason'] = error_msg
+            try:
+                add_interaction(db, session_id=interaction_data_for_metrics.get("session_id"), mode="chat",
+                                input_type="log_error", user_input="[Classify Model Unavailable]",
+                                llm_response=error_msg)
+            except Exception as db_err:
+                logger.error(f"{log_prefix} Failed log classify model error: {db_err}")
             return "chat_simple"
 
-        # --- MODIFICATION: Use StrOutputParser first, then manually parse JSON ---
-        # The chain will first output the raw string from the LLM.
-        # We will then attempt to extract JSON from this raw string.
+        # Bind a low temperature for more deterministic JSON output if model supports .bind()
+        classification_model_for_call = classification_model_instance
+        if hasattr(classification_model_instance, 'bind') and callable(getattr(classification_model_instance, 'bind')):
+            try:
+                classification_model_for_call = classification_model_instance.bind(temperature=0.1)
+                logger.debug(f"{log_prefix} Bound temperature=0.1 to classification model.")
+            except Exception as bind_err:
+                logger.warning(
+                    f"{log_prefix} Could not bind temperature to classification model: {bind_err}. Using original.")
+
+        # Chain to get RAW STRING output first
         classification_chain_raw_output = (
                 self.input_classification_prompt  # PROMPT_COMPLEXITY_CLASSIFICATION
-                | classification_model
-                | StrOutputParser()  # Get raw string output
+                | classification_model_for_call
+                | StrOutputParser()
         )
-
-        json_parser = JsonOutputParser()  # We'll use this after cleaning
+        json_parser = JsonOutputParser()  # For parsing the extracted string
 
         attempts = 0
-        last_error = None
-        classification_reason_from_llm = "N/A"  # For logging if JSON parse fails
+        last_error_for_retry_log: Optional[Exception] = None
+        # This will be updated with the actual raw output from the LLM in each attempt
+        raw_llm_response_text_current_attempt = "No LLM response received yet for classification."
+        classification_reason_parsed = "N/A (JSON parsing or extraction failed)"
 
-        while attempts < DEEP_THOUGHT_RETRY_ATTEMPTS:
+        while attempts < DEEP_THOUGHT_RETRY_ATTEMPTS:  # DEEP_THOUGHT_RETRY_ATTEMPTS from config
             attempts += 1
             logger.debug(f"{log_prefix} Classification attempt {attempts}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
-            raw_llm_response_text = ""  # Initialize
+
+            json_string_to_parse: Optional[str] = None  # String that will be fed to json_parser
+
             try:
                 prompt_inputs_for_classification = {"input": user_input, "history_summary": history_summary}
 
-                # Call LLM to get raw string output
-                raw_llm_response_text = self._call_llm_with_timing(
+                # Call LLM (via _call_llm_with_timing which uses asyncio.to_thread for the sync chain.invoke)
+                # _call_llm_with_timing gets the output from LlamaCppChatWrapper._call, which has already
+                # run strip_initial_think_block.
+                raw_llm_response_text_current_attempt = await asyncio.to_thread(
+                    self._call_llm_with_timing,
                     classification_chain_raw_output,
                     prompt_inputs_for_classification,
-                    interaction_data  # For timing
-                    # Priority ELP0 is default for _call_llm_with_timing
+                    interaction_data_for_metrics,  # For timing updates
+                    priority=ELP0  # Classification is a background-like ELP0 task
                 )
-                logger.trace(
-                    f"{log_prefix} Raw LLM output for classification (Attempt {attempts}):\n{raw_llm_response_text}")
+                logger.info(
+                    f"{log_prefix} Raw LLM output for classification (Attempt {attempts}, len={len(raw_llm_response_text_current_attempt)}):\n>>>>\n{raw_llm_response_text_current_attempt}\n<<<<")
 
-                # --- Step 1: Clean <think> tags (if any) ---
-                text_after_think_removal = re.sub(r'<think>.*?</think>', '', raw_llm_response_text,
-                                                  flags=re.DOTALL | re.IGNORECASE).strip()
+                # --- Robust JSON Extraction from the (already think-stripped) raw response ---
+                cleaned_for_json_extraction = raw_llm_response_text_current_attempt
 
-                # --- Step 2: Robustly find and extract the JSON block ---
-                # Try to find JSON within ```json ... ``` or standalone { ... }
-                json_str_to_parse = None
-                json_markdown_match = re.search(r"```json\s*(.*?)\s*```", text_after_think_removal, re.DOTALL)
+                # 1. Remove any residual ChatML assistant preamble if model didn't strictly follow "JSON ONLY"
+                cleaned_for_json_extraction = re.sub(
+                    r"^\s*(assistant\s*\n?)?(<\|im_start\|>\s*(system|assistant)\s*\n?)?", "",
+                    cleaned_for_json_extraction, flags=re.IGNORECASE).lstrip()
+                # 2. Remove trailing ChatML end token
+                _CHATML_END_TOKEN = getattr(globals(), 'CHATML_END_TOKEN', '<|im_end|>')  # Get from globals or default
+                if cleaned_for_json_extraction.endswith(_CHATML_END_TOKEN):
+                    cleaned_for_json_extraction = cleaned_for_json_extraction[:-len(_CHATML_END_TOKEN)].strip()
+
+                # 3. Attempt to find JSON block
+                json_markdown_match = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", cleaned_for_json_extraction,
+                                                re.DOTALL)
                 if json_markdown_match:
-                    json_str_to_parse = json_markdown_match.group(1).strip()
-                    logger.trace(f"{log_prefix} Extracted JSON from markdown block: {json_str_to_parse}")
+                    json_string_to_parse = json_markdown_match.group(1).strip()
+                    logger.trace(f"{log_prefix} Extracted JSON from markdown block: {json_string_to_parse[:200]}...")
                 else:
-                    # Fallback: Find the first '{' and last '}'
-                    first_brace = text_after_think_removal.find('{')
-                    last_brace = text_after_think_removal.rfind('}')
-                    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-                        json_str_to_parse = text_after_think_removal[first_brace: last_brace + 1].strip()
-                        logger.trace(f"{log_prefix} Extracted JSON using find '{{...}}' fallback: {json_str_to_parse}")
+                    # Fallback: find the last complete JSON object pattern in the string
+                    # Regex: looks for { ... } which might be followed by whitespace or <|im_end|> or end of string
+                    all_json_candidates = re.findall(r"(\{[\s\S]*?\})(?=\s*$|\s*<\|im_end\|>)",
+                                                     cleaned_for_json_extraction, re.DOTALL)
+                    if all_json_candidates:
+                        json_string_to_parse = all_json_candidates[-1].strip()  # Take the last one found
+                        logger.trace(
+                            f"{log_prefix} Extracted JSON using findall (last candidate): {json_string_to_parse[:200]}...")
                     else:
-                        # If no clear JSON block, the raw response itself might be non-JSON (as in your error)
-                        # or it might be malformed. Let the json_parser try the cleaned text_after_think_removal.
-                        # If that also fails, the JSONDecodeError will be caught.
-                        json_str_to_parse = text_after_think_removal  # Try parsing the whole cleaned string
-                        logger.warning(
-                            f"{log_prefix} No clear JSON block found, will attempt to parse: '{json_str_to_parse[:100]}...'")
+                        # If no clear block, the LLM might have outputted only JSON (ideal after stripping other noise)
+                        # or it's still malformed.
+                        json_string_to_parse = cleaned_for_json_extraction.strip()
+                        if not (json_string_to_parse.startswith("{") and json_string_to_parse.endswith("}")):
+                            logger.warning(
+                                f"{log_prefix} No clear JSON block found in '{cleaned_for_json_extraction[:100]}...'. Attempting to parse as is.")
 
-                if not json_str_to_parse:  # If even after fallbacks, string is empty
+                if not json_string_to_parse:  # If string is empty after all cleaning
                     logger.warning(
-                        f"{log_prefix} After cleaning, string to parse for JSON is empty. Raw was: '{raw_llm_response_text}'")
-                    last_error = ValueError("LLM response for classification was empty after cleaning.")
-                    # Log this specific state to DB
-                    try:
-                        add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat",
-                                        input_type="log_warning",
-                                        user_input=f"[Classify Empty after Clean Attempt {attempts}]",
-                                        llm_response=f"Raw: {raw_llm_response_text[:500]}")
-                    except Exception:
-                        pass
+                        f"{log_prefix} After cleaning, string to parse for JSON is empty. Raw LLM was: '{raw_llm_response_text_current_attempt}'")
+                    last_error_for_retry_log = ValueError(
+                        "LLM response for classification was empty after robust cleaning.")
                     if attempts < DEEP_THOUGHT_RETRY_ATTEMPTS:
-                        time.sleep(0.5 + attempts * 0.5); continue
+                        await asyncio.sleep(0.5 + attempts * 0.5); continue
                     else:
-                        break  # Max retries
+                        break
 
-                # --- Step 3: Parse the extracted JSON string ---
-                parsed_json = json_parser.parse(json_str_to_parse)  # Use the Langchain parser's method
+                    # 4. Parse the extracted JSON string
+                parsed_json_output = json_parser.parse(json_string_to_parse)
 
-                classification = parsed_json.get("classification", "chat_simple")
-                reason = str(parsed_json.get("reason", "N/A"))
-                classification_reason_from_llm = reason  # Store for logging if needed
+                classification_val = str(parsed_json_output.get("classification", "chat_simple")).lower()
+                reason_val = str(parsed_json_output.get("reason", "N/A"))
+                classification_reason_parsed = reason_val  # Store the successfully parsed reason
 
-                if classification not in ["chat_simple", "chat_complex", "agent_task"]:
+                if classification_val not in ["chat_simple", "chat_complex", "agent_task"]:
                     logger.warning(
-                        f"{log_prefix} Classification LLM returned invalid category '{classification}', defaulting to chat_simple. Parsed from: '{json_str_to_parse}'")
-                    classification = "chat_simple"
+                        f"{log_prefix} Classification LLM returned invalid category '{classification_val}'. Defaulting to chat_simple. Parsed from: '{json_string_to_parse}'")
+                    classification_val = "chat_simple"
 
-                interaction_data['classification'] = classification
-                interaction_data['classification_reason'] = reason
-                logger.info(f"{log_prefix} ✅ Input classified as: '{classification}'. Reason: {reason}")
-                return classification  # Success
+                interaction_data_for_metrics['classification'] = classification_val
+                interaction_data_for_metrics['classification_reason'] = reason_val
+                logger.info(f"{log_prefix} ✅ Input classified as: '{classification_val}'. Reason: {reason_val}")
+                return classification_val  # Successful classification and parsing
 
-            except json.JSONDecodeError as json_e:  # Catch errors from json_parser.parse or direct json.loads
-                last_error = json_e
+            except TaskInterruptedException as tie:  # If _call_llm_with_timing raises it
+                logger.warning(f"🚦 {log_prefix} Classification LLM call INTERRUPTED: {tie}")
+                # This is a critical interruption, probably best to stop and not retry.
+                interaction_data_for_metrics['classification'] = "chat_simple"  # Fallback
+                interaction_data_for_metrics['classification_reason'] = f"Classification interrupted: {tie}"
+                try:
+                    add_interaction(db, session_id=interaction_data_for_metrics.get("session_id"), mode="chat",
+                                    input_type="log_warning", user_input="[Classify Interrupted]",
+                                    llm_response=str(tie))
+                except:
+                    pass
+                return "chat_simple"  # Return fallback
+            except OutputParserException as ope:  # From json_parser.parse()
+                last_error_for_retry_log = ope
                 logger.warning(
-                    f"⚠️ {log_prefix} Error parsing JSON for classification (Attempt {attempts}/{DEEP_THOUGHT_RETRY_ATTEMPTS}): {json_e}. String tried: '{json_str_to_parse if 'json_str_to_parse' in locals() else 'N/A'}'. Raw LLM output: '{raw_llm_response_text[:200]}...'")
-                if attempts < DEEP_THOUGHT_RETRY_ATTEMPTS:
-                    time.sleep(0.5 + attempts * 0.5)
-                else:
-                    break  # Max retries
-            except Exception as e:  # Catch other errors like OutputParserException from Langchain if parse fails
-                last_error = e
+                    f"⚠️ {log_prefix} Error parsing JSON for classification (Attempt {attempts}): {ope}. String tried: '{json_string_to_parse if json_string_to_parse is not None else 'N/A'}'. Raw LLM (after think strip): '{raw_llm_response_text_current_attempt[:200]}...'")
+            except Exception as e:  # Other errors (e.g., from _call_llm_with_timing if not TaskInterruptedException)
+                last_error_for_retry_log = e
                 logger.warning(
-                    f"⚠️ {log_prefix} Error during classification processing (Attempt {attempts}/{DEEP_THOUGHT_RETRY_ATTEMPTS}): {e}. Raw LLM output: '{raw_llm_response_text[:200]}...'")
-                if attempts < DEEP_THOUGHT_RETRY_ATTEMPTS:
-                    time.sleep(0.5 + attempts * 0.5)
-                else:
-                    break  # Max retries
+                    f"⚠️ {log_prefix} Error during classification processing (Attempt {attempts}): {e}. Raw LLM: '{raw_llm_response_text_current_attempt[:200]}...'")
 
-        # After retries or if loop broken
-        logger.error(
-            f"{log_prefix} ❌ Max retries ({attempts}/{DEEP_THOUGHT_RETRY_ATTEMPTS}) for input classification. Last error: {last_error}")
-        interaction_data['classification'] = "chat_simple"  # Fallback
-        interaction_data[
-            'classification_reason'] = f"Classification failed after {attempts} retries. Last error: {last_error}. Last LLM reason attempt: '{classification_reason_from_llm}'"
+            # If an exception occurred and we haven't returned, prepare for retry or failure
+            if attempts < DEEP_THOUGHT_RETRY_ATTEMPTS:
+                await asyncio.sleep(0.5 + attempts * 0.5)  # Wait before retrying
+            else:  # Max retries reached
+                logger.error(
+                    f"{log_prefix} ❌ Max retries ({attempts}/{DEEP_THOUGHT_RETRY_ATTEMPTS}) for input classification. Last error: {last_error_for_retry_log}")
+                break  # Exit the while loop
+
+        # Fallback after retries or if loop broken due to max retries
+        final_fallback_classification = "chat_simple"
+        final_fallback_reason = f"Classification failed after {attempts} retries. Last error: {last_error_for_retry_log}. Last LLM reason attempt: '{classification_reason_parsed}'. Raw output was: {raw_llm_response_text_current_attempt[:200]}..."
+
+        interaction_data_for_metrics['classification'] = final_fallback_classification
+        interaction_data_for_metrics['classification_reason'] = final_fallback_reason
         try:
-            add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat", input_type="log_error",
-                            llm_response=f"Input classification failed after {attempts} attempts. Last LLM output: '{raw_llm_response_text[:500]}'. Error: {last_error}")
-        except Exception as db_err:
-            logger.error(f"Failed log classification retry error: {db_err}")
-        return "chat_simple"
+            add_interaction(db, session_id=interaction_data_for_metrics.get("session_id"), mode="chat",
+                            input_type="log_error",
+                            user_input=f"[Classify Max Retries for: {user_input[:100]}]",
+                            llm_response=final_fallback_reason[:4000])  # Log the detailed fallback reason
+        except Exception as db_err_final:
+            logger.error(f"{log_prefix} Failed to log classification max_retries error: {db_err_final}")
+
+        return final_fallback_classification
 
 
     def _run_tree_of_thought(self, db: Session, input: str, rag_context_docs: List[Any], history_rag_interactions: List[Interaction], log_context_str: str, recent_direct_history_str: str, file_index_context_str: str, interaction_data: Dict[str, Any], triggering_interaction_id: int) -> str:
@@ -5375,15 +5420,21 @@ class AIChat:
                 trigger_interaction_for_update = db.query(Interaction).filter(
                     Interaction.id == interaction_id_that_triggers_tot).first()
                 if trigger_interaction_for_update:
-                    try:  # Update tot_analysis_spawned etc.
-                        setattr(trigger_interaction_for_update, 'tot_analysis_spawned', True)
-                        setattr(trigger_interaction_for_update, 'requires_deep_thought', True)
-                        setattr(trigger_interaction_for_update, 'deep_thought_reason',
-                                interaction_data.get('classification_reason', 'Complex, ToT spawned.'))
-                        setattr(trigger_interaction_for_update, 'last_modified_db', time.strftime("%Y-%m-%d %H:%M:%S"))
+                    try:
+                        if hasattr(trigger_interaction_for_update, 'tot_analysis_spawned'):  # Check if field exists
+                            trigger_interaction_for_update.tot_analysis_spawned = True  # type: ignore
+                        trigger_interaction_for_update.requires_deep_thought = True  # type: ignore
+                        trigger_interaction_for_update.deep_thought_reason = interaction_data.get(
+                            'classification_reason', 'Complex query, ToT spawned.')  # type: ignore
+                        # REMOVE THE FOLLOWING LINE:
+                        # setattr(trigger_interaction_for_update, 'last_modified_db', time.strftime("%Y-%m-%d %H:%M:%S"))
                         db.commit()
+                        logger.debug(
+                            f"{log_prefix} Marked Interaction ID {interaction_id_that_triggers_tot} as tot_analysis_spawned=True.")
                     except Exception as e_tot_db:
-                        logger.error(f"Error updating ToT spawn flags: {e_tot_db}"); db.rollback()
+                        logger.error(
+                            f"Error updating ToT spawn flags for ID {interaction_id_that_triggers_tot}: {e_tot_db}")
+                        db.rollback()
 
                 imagined_ctx_for_tot = imagined_img_vlm_desc_this_turn or interaction_data.get(
                     'image_description') or "None."
@@ -5413,57 +5464,172 @@ class AIChat:
             logger.exception(f"{log_prefix} Background Generate Main Traceback:")
             final_response_text_for_this_turn = f"Error during background processing: {type(e_bg_gen).__name__} - {e_bg_gen}"
             interaction_data.update({'llm_response': final_response_text_for_this_turn[:4000], 'input_type': 'error'})
-
         finally:
+            # This block ALWAYS runs, regardless of exceptions in the try block.
+            # It's crucial for saving the final state of the interaction.
+
+            # 1. Prepare the final data to be saved for the main interaction of this background_generate call.
+            #    Start with the interaction_data dictionary, which has been updated throughout the process.
             final_db_data_to_save = interaction_data.copy()
+
+            # 2. Clean the final response text that will be stored.
+            #    final_response_text_for_this_turn holds the outcome of the main logic path (action or LLM gen).
             final_response_text_cleaned = self._cleanup_llm_output(final_response_text_for_this_turn)
             final_db_data_to_save['llm_response'] = final_response_text_cleaned
+
+            # 3. Set final execution time.
             final_db_data_to_save['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
+
+            # 4. Remove manual last_modified_db if it was somehow added to interaction_data;
+            #    SQLAlchemy's onupdate/server_default will handle this.
+            if 'last_modified_db' in final_db_data_to_save:
+                del final_db_data_to_save['last_modified_db']
+
+            # 5. Truncate base64 image data if it's for logging and too long.
+            #    This refers to interaction_data['imagined_image_b64'] if an image was generated by "imagine" action.
+            #    The original user-provided image_b64 was already snippetized when interaction_data was first built.
             if final_db_data_to_save.get('imagined_image_b64'):
-                b64 = final_db_data_to_save['imagined_image_b64']
-                if len(b64) > 1000000: final_db_data_to_save['imagined_image_b64'] = b64[
-                                                                                     :100] + f"...[trunc_{len(b64)}]"
+                b64_data = final_db_data_to_save['imagined_image_b64']
+                # Define a max length for storing base64 in DB text field to avoid excessive size.
+                MAX_B64_DB_LOG_LEN = 1000000  # Example: 1MB for the base64 string
+                if isinstance(b64_data, str) and len(b64_data) > MAX_B64_DB_LOG_LEN:
+                    final_db_data_to_save['imagined_image_b64'] = b64_data[
+                                                                  :100] + f"...[base64_truncated_len_{len(b64_data)}]"
+                elif not isinstance(b64_data, str):  # Should not happen if set correctly
+                    logger.warning(
+                        f"{log_prefix}: 'imagined_image_b64' in final_db_data_to_save is not a string, cannot log snippet.")
+                    final_db_data_to_save['imagined_image_b64'] = "[Invalid b64 data type]"
 
-            try:  # Final DB save/update logic
+            logger.debug(
+                f"{log_prefix}: Preparing to save final DB state. Interrupted: {interrupted_flag}. Is Reflection: {is_reflection_task}.")
+            logger.trace(
+                f"{log_prefix}: Final data to attempt save/update: { {k: (str(v)[:70] + '...' if isinstance(v, str) and len(v) > 70 else v) for k, v in final_db_data_to_save.items()} }")
+
+            try:
                 if is_reflection_task and original_interaction_to_update_for_reflection:
-                    if not interrupted_flag and final_db_data_to_save.get('input_type') != 'error':
-                        original_interaction_to_update_for_reflection.reflection_completed = True
-                        setattr(original_interaction_to_update_for_reflection, 'last_modified_db',
-                                time.strftime("%Y-%m-%d %H:%M:%S"))
-                        db.commit()
-                        new_refl_output_data = final_db_data_to_save.copy()
-                        new_refl_output_data.update({'input_type': "reflection_result",
-                                                     'user_input': f"[Refl.Result for Orig.ID {update_interaction_id}]",
-                                                     'reflection_completed': False})
-                        valid_keys = {c.name for c in Interaction.__table__.columns}
-                        db_kwargs_refl = {k: v for k, v in new_refl_output_data.items() if k in valid_keys}
-                        refl_rec = await asyncio.to_thread(add_interaction, db, **db_kwargs_refl)
-                        if refl_rec and self.provider and self.provider.embeddings:
-                            await asyncio.to_thread(index_single_reflection, refl_rec, self.provider, db, ELP0)
-                    elif interrupted_flag:
-                        original_interaction_to_update_for_reflection.reflection_completed = False
-                        interruption_note = f"\n--- Reflection Interrupted ---"
-                        original_interaction_to_update_for_reflection.llm_response = (getattr(
-                            original_interaction_to_update_for_reflection, 'llm_response',
-                            None) or "") + interruption_note
-                        setattr(original_interaction_to_update_for_reflection, 'last_modified_db',
-                                time.strftime("%Y-%m-%d %H:%M:%S"))
-                        db.commit()
-                elif not is_reflection_task and saved_initial_interaction:
-                    for k, v in final_db_data_to_save.items():
-                        if hasattr(saved_initial_interaction, k): setattr(saved_initial_interaction, k, v)
-                    db.commit()
-                elif not is_reflection_task and not saved_initial_interaction:
-                    valid_keys = {c.name for c in Interaction.__table__.columns}
-                    db_kwargs_final = {k: v for k, v in final_db_data_to_save.items() if k in valid_keys}
-                    await asyncio.to_thread(add_interaction, db, **db_kwargs_final)
-            except Exception as final_db_err:
-                logger.error(f"❌ {log_prefix}: CRITICAL error during final DB save: {final_db_err}"); db.rollback()
+                    # This was a reflection task. Its "result" is the deep analysis.
+                    # This result is saved as a NEW interaction of type 'reflection_result'.
+                    # The original interaction that triggered this reflection is marked 'reflection_completed'.
 
-            final_status = 'Interrupted' if interrupted_flag else (
+                    if interrupted_flag:
+                        logger.warning(
+                            f"{log_prefix}: Finalizing INTERRUPTED reflection task for original ID {update_interaction_id}.")
+                        original_interaction_to_update_for_reflection.reflection_completed = False  # Remains pending
+                        interruption_note = f"\n\n--- Reflection Task (ID: {request_id}) Interrupted ({datetime.datetime.now(datetime.timezone.utc).isoformat()}): {final_response_text_cleaned} ---"
+                        current_llm_response = getattr(original_interaction_to_update_for_reflection, 'llm_response',
+                                                       "") or ""
+                        original_interaction_to_update_for_reflection.llm_response = (
+                                                                                                 current_llm_response + interruption_note)[
+                                                                                     :getattr(
+                                                                                         Interaction.llm_response.type,
+                                                                                         'length',
+                                                                                         4000)]  # Append and truncate
+                        # Let onupdate handle last_modified_db
+                        db.commit()
+                        logger.info(
+                            f"{log_prefix}: Marked original interaction {update_interaction_id} as reflection NOT completed (interrupted). Appended note.")
+                    elif final_db_data_to_save.get('input_type') == 'error':  # Reflection task itself had an error
+                        logger.error(
+                            f"{log_prefix}: Reflection task for original ID {update_interaction_id} resulted in an error state.")
+                        original_interaction_to_update_for_reflection.reflection_completed = False  # Remains pending, or mark as error?
+                        error_note = f"\n\n--- Reflection Task (ID: {request_id}) Errored ({datetime.datetime.now(datetime.timezone.utc).isoformat()}): {final_response_text_cleaned} ---"
+                        current_llm_response = getattr(original_interaction_to_update_for_reflection, 'llm_response',
+                                                       "") or ""
+                        original_interaction_to_update_for_reflection.llm_response = (
+                                                                                                 current_llm_response + error_note)[
+                                                                                     :getattr(
+                                                                                         Interaction.llm_response.type,
+                                                                                         'length', 4000)]
+                        db.commit()
+                        logger.info(
+                            f"{log_prefix}: Marked original interaction {update_interaction_id} as reflection NOT completed (errored). Appended error note.")
+                        # Also save the error itself as a new 'error' type interaction for this reflection session_id
+                        await asyncio.to_thread(add_interaction, db, **final_db_data_to_save)
+
+                    else:  # Reflection task succeeded
+                        original_interaction_to_update_for_reflection.reflection_completed = True
+                        # Let onupdate handle last_modified_db
+                        db.commit()
+                        logger.info(
+                            f"{log_prefix}: Marked original interaction {update_interaction_id} as reflection_completed=True.")
+
+                        # Prepare data for the new 'reflection_result' interaction record
+                        new_reflection_result_data = final_db_data_to_save.copy()  # Start with most fields
+                        new_reflection_result_data.update({
+                            'input_type': "reflection_result",  # Specific type for this new record
+                            'user_input': f"[Self-Reflection Result for Original Interaction ID {update_interaction_id} based on: '{original_interaction_to_update_for_reflection.user_input[:100]}...']",
+                            'classification': "reflection_output",  # Specific classification
+                            'reflection_completed': False,  # This result itself isn't a reflection trigger (usually)
+                            'tot_analysis_spawned': final_db_data_to_save.get('tot_analysis_spawned', False),
+                            # If reflection itself spawned ToT
+                            'requires_deep_thought': False  # Usually false for a result record
+                        })
+
+                        valid_keys = {c.name for c in Interaction.__table__.columns}
+                        db_kwargs_refl_result = {k: v for k, v in new_reflection_result_data.items() if
+                                                 k in valid_keys and k != 'id'}  # Exclude ID for new record
+
+                        reflection_record_saved = await asyncio.to_thread(add_interaction, db, **db_kwargs_refl_result)
+                        if reflection_record_saved and reflection_record_saved.id:
+                            logger.info(
+                                f"{log_prefix}: Saved reflection result as new Interaction ID {reflection_record_saved.id}.")
+                            # Index this new reflection result into its dedicated vector store
+                            if self.provider and self.provider.embeddings:
+                                logger.info(
+                                    f"{log_prefix}: Queuing reflection content (ID {reflection_record_saved.id}) for indexing...")
+                                await asyncio.to_thread(index_single_reflection, reflection_record_saved, self.provider,
+                                                        db, ELP0)
+                            else:
+                                logger.error(
+                                    f"{log_prefix}: Cannot index reflection ID {reflection_record_saved.id}, AIProvider/embeddings not ready.")
+                        else:
+                            logger.error(f"{log_prefix}: Failed to save reflection result as a new interaction to DB.")
+
+                elif not is_reflection_task and saved_initial_interaction:
+                    # This was a regular user query, update the placeholder record we saved earlier.
+                    logger.debug(
+                        f"{log_prefix}: Updating initial interaction {saved_initial_interaction.id} with final background results.")
+                    for key_to_update, value_to_set in final_db_data_to_save.items():
+                        if key_to_update == 'id': continue  # Don't try to update the ID
+                        if hasattr(saved_initial_interaction, key_to_update):
+                            setattr(saved_initial_interaction, key_to_update, value_to_set)
+                    # Let onupdate handle last_modified_db
+                    db.commit()
+                    logger.info(
+                        f"{log_prefix}: Successfully updated Interaction ID {saved_initial_interaction.id} with final background results.")
+
+                elif not is_reflection_task and not saved_initial_interaction:
+                    # Initial placeholder save failed, so save the entire result as a new interaction.
+                    logger.warning(
+                        f"{log_prefix}: Initial placeholder save failed. Saving final background state as a new record.")
+                    # final_db_data_to_save already has all necessary fields.
+                    valid_keys = {c.name for c in Interaction.__table__.columns}
+                    db_kwargs_final_new = {k: v for k, v in final_db_data_to_save.items() if
+                                           k in valid_keys and k != 'id'}
+                    await asyncio.to_thread(add_interaction, db, **db_kwargs_final_new)
+                    logger.info(f"{log_prefix}: Saved final background state as a new interaction record.")
+
+                else:  # Should not be reached: (is_reflection_task AND NOT original_interaction_to_update_for_reflection)
+                    # This case is handled at the start of background_generate.
+                    logger.error(
+                        f"{log_prefix}: Final DB Save Logic Error - Reached an unexpected state. is_reflection_task={is_reflection_task}, saved_initial_interaction exists: {saved_initial_interaction is not None}, original_reflection_target exists: {original_interaction_to_update_for_reflection is not None}")
+
+            except Exception as final_db_save_err:
+                logger.error(
+                    f"❌ {log_prefix}: CRITICAL error during final DB save/update operations: {final_db_save_err}")
+                logger.exception(f"{log_prefix} Final DB Save/Update Traceback:")
+                try:
+                    db.rollback()  # Rollback any partial changes from this finally block's try
+                except Exception as rb_err_final:
+                    logger.error(f"{log_prefix}: Rollback after final DB save error FAILED: {rb_err_final}")
+
+            final_outcome_status_str = 'Interrupted' if interrupted_flag else (
                 'Error' if final_db_data_to_save.get('input_type') == 'error' else 'Success')
             logger.info(
-                f"{log_prefix} Async Background Generate END. Status: {final_status}. Duration: {final_db_data_to_save['execution_time_ms']:.2f}ms")
+                f"{log_prefix} Async Background Generate (ELP0 Pipeline) END. Final Outcome: {final_outcome_status_str}. Total Duration: {final_db_data_to_save.get('execution_time_ms', 0):.2f}ms")
+            # The DB session `db` passed to background_generate is managed by its caller.
+            # If `background_generate` was called by `run_self_reflection_loop`, the loop's finally closes it.
+            # If called by `handle_openai_chat_completion`'s thread, that thread's finally closes it.
 
     def _run_tree_of_thought_v2(self, db: Session, input: str,
                                 rag_context_docs: List[Any],
