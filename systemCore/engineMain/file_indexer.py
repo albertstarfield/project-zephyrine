@@ -1253,292 +1253,280 @@ class FileIndexer:
 
 
 def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
-    """
-    Synchronous task to initialize the global file index vector store.
-    Designed to be run in a separate thread via asyncio.to_thread.
-    Handles DB queries, data processing, Chroma store creation, and event setting.
-    """
-    global global_file_index_vectorstore  # To modify the module-level global variable
+    global global_file_index_vectorstore
 
     task_status: str = "unknown_error_before_processing"
     task_message: str = "Initialization did not complete as expected."
     initialization_succeeded_or_known_empty: bool = False
     total_records_from_db: int = 0
-    processed_records_for_chroma: int = 0
+    processed_records_for_chroma: int = 0  # <<< INITIALIZE HERE
 
     overall_start_time: float = time.monotonic()
     logger.info(">>> _locked_initialization_task: Attempting to acquire _file_index_vs_init_lock... <<<")
 
-    with _file_index_vs_init_lock:  # Ensures only one thread executes this block at a time
+    with _file_index_vs_init_lock:
         lock_acquired_time: float = time.monotonic()
         logger.info(
-            f">>> _locked_initialization_task: ACQUIRED _file_index_vs_init_lock (waited {lock_acquired_time - overall_start_time:.2f}s). <<<")
+            f">>> _locked_initialization_task: ACQUIRED _file_index_vs_init_lock (waited {lock_acquired_time - overall_start_time:.3f}s). <<<")
 
-        if _file_index_vs_initialized_event.is_set():  # Check if another thread already completed
-            logger.info(
-                ">>> _locked_initialization_task: SKIPPING - _file_index_vs_initialized_event ALREADY SET (double check). <<<")
+        if _file_index_vs_initialized_event.is_set():
+            logger.info(">>> _locked_initialization_task: SKIPPING - event ALREADY SET (double check). <<<")
             return {"status": "skipped_already_initialized", "message": "Initialization event was already set."}
 
-        db_session: Optional[Session] = None  # Type hint for Session
+        db_session: Optional[Session] = None
         try:
-            current_stage_start_time: float = time.monotonic()
-            logger.info(">>> _locked_initialization_task: Stage 1: Basic Checks and DB Session. <<<")
-
+            # STAGE 0: Provider/Embeddings Check
+            logger.info(">>> _locked_initialization_task: Stage 0: Validating Provider and Embeddings. <<<")
+            # ... (Provider check logic as before) ...
             if not provider_ref or not provider_ref.embeddings:
-                task_status = "error_provider_missing"
-                task_message = "AIProvider instance or its embeddings attribute is not available for FileIndex VS creation."
+                task_status = "error_provider_missing";
+                task_message = "AIProvider or embeddings missing."
                 logger.error(
                     f"{task_message} (Provider: {provider_ref}, Embeddings: {getattr(provider_ref, 'embeddings', 'N/A')})")
-                initialization_succeeded_or_known_empty = True  # Consider this a "complete" (failed) init attempt
+                initialization_succeeded_or_known_empty = True;
                 global_file_index_vectorstore = None
-                # Event set in finally block
                 return {"status": task_status, "message": task_message}
+            logger.debug("Stage 0 (Provider Check) completed.")
 
-            db_session = SessionLocal()  # type: ignore # Assuming SessionLocal is your SQLAlchemy session factory
+            # STAGE 1: Attempt to load persisted Chroma DB
+            current_stage_start_time_s1: float = time.monotonic()
+            # Use FILE_INDEX_CHROMA_PERSIST_DIR and FILE_INDEX_CHROMA_COLLECTION_NAME from config
+            # These should be imported into this file_indexer.py module
+            # For this example, I'll use placeholder strings if not imported.
+            _persist_dir_to_use = globals().get("FILE_INDEX_CHROMA_PERSIST_DIR", "./default_chroma_persist/file_index")
+            _collection_name_to_use = globals().get("FILE_INDEX_CHROMA_COLLECTION_NAME", "default_file_collection")
+
+            logger.info(
+                f">>> _locked_initialization_task: Stage 1: Attempting to load persisted Chroma FileIndex VS from: {_persist_dir_to_use} <<<")
+
+            if not os.path.isabs(_persist_dir_to_use):
+                logger.warning(
+                    f"Persist directory '{_persist_dir_to_use}' is not absolute. This might lead to issues if CWD changes.")
+
+            contains_chroma_files = False
+            if os.path.exists(_persist_dir_to_use):
+                try:
+                    if any(fname.endswith(('.sqlite3', '.duckdb', '.parquet')) for fname in
+                           os.listdir(_persist_dir_to_use)):
+                        contains_chroma_files = True
+                except OSError as e_scan:
+                    logger.warning(f"Could not scan persist directory {_persist_dir_to_use}: {e_scan}")
+
+            if contains_chroma_files:
+                try:
+                    loaded_store = Chroma(
+                        collection_name=_collection_name_to_use,
+                        embedding_function=provider_ref.embeddings,
+                        persist_directory=_persist_dir_to_use
+                    )
+                    global_file_index_vectorstore = loaded_store
+                    task_status = "success_loaded_from_persist"
+                    task_message = f"Successfully loaded FileIndex VS from {_persist_dir_to_use}."
+                    initialization_succeeded_or_known_empty = True
+                    logger.success(
+                        task_message + f" Stage 1 (Load Persisted) took {time.monotonic() - current_stage_start_time_s1:.3f}s.")
+                    return {"status": task_status, "message": task_message}
+                except Exception as e_persist_load:
+                    logger.warning(
+                        f"Failed to load persisted Chroma from {_persist_dir_to_use}: {e_persist_load}. Will rebuild.")
+            else:
+                logger.info(f"No usable persisted Chroma VS at {_persist_dir_to_use}. Will build from SQL DB.")
+                if _persist_dir_to_use:
+                    try:
+                        os.makedirs(_persist_dir_to_use, exist_ok=True)
+                    except OSError as e_mkdir:
+                        logger.error(f"Could not create persist directory {_persist_dir_to_use}: {e_mkdir}.")
+
+            # STAGE 2: DB Session and Query (if not loaded from persist)
+            # ... (DB Session creation and diagnostic queries as before) ...
+            current_stage_start_time_s2: float = time.monotonic()
+            logger.info(">>> _locked_initialization_task: Stage 2: DB Session and Query. <<<")
+            db_session = SessionLocal()  # type: ignore
             if not db_session:
-                task_status = "error_db_session"
-                task_message = "Failed to create a new database session for FileIndex VS initialization."
-                logger.error(task_message)
-                initialization_succeeded_or_known_empty = True  # Consider this a "complete" (failed) init attempt
+                task_status = "error_db_session";
+                task_message = "Failed to create DB session for rebuild."
+                logger.error(task_message);
+                initialization_succeeded_or_known_empty = True;
                 global_file_index_vectorstore = None
-                # Event set in finally block
                 return {"status": task_status, "message": task_message}
-
-            query_obj = db_session.query(FileIndex).filter(
-                FileIndex.embedding_json.isnot(None),
-                FileIndex.indexed_content.isnot(None),
-                FileIndex.index_status.in_(['indexed_text', 'success', 'partial_vlm_error'])
-            )
-            logger.debug(
-                f">>> _locked_initialization_task: SQLAlchemy Query: {str(query_obj.statement.compile(compile_kwargs={'literal_binds': True}))} <<<")
-            indexed_files = query_obj.all()
-
-            # Test 1: Count all rows
-            total_rows_sqla = db_session.query(FileIndex).count()
-            logger.info(f">>> _locked_initialization_task: SQLAlchemy total rows in file_index: {total_rows_sqla} <<<")
-
-            # Test 2: Count by one status
-            indexed_text_rows_sqla = db_session.query(FileIndex).filter(
-                FileIndex.index_status == 'indexed_text').count()
-            logger.info(
-                f">>> _locked_initialization_task: SQLAlchemy rows with status 'indexed_text': {indexed_text_rows_sqla} <<<")
-
-            # Test 3: Count with embedding_json not null
-            embedding_not_null_sqla = db_session.query(FileIndex).filter(FileIndex.embedding_json.isnot(None)).count()
-            logger.info(
-                f">>> _locked_initialization_task: SQLAlchemy rows with embedding_json NOT NULL: {embedding_not_null_sqla} <<<")
-
-
-
-            logger.debug(f"Stage 1 completed in {time.monotonic() - current_stage_start_time:.2f}s.")
-
-            current_stage_start_time = time.monotonic()
-            logger.info(">>> _locked_initialization_task: Stage 2: Querying indexed files from Database... <<<")
+            engine_url = str(db_session.bind.url) if db_session.bind else "No engine bound"  # type: ignore
+            logger.debug(f">>> _locked_initialization_task: DB session connected to: {engine_url} <<<")
+            # ... (Diagnostic queries for total rows, etc.)
             indexed_files = db_session.query(FileIndex).filter(  # type: ignore
-                FileIndex.embedding_json.isnot(None),  # type: ignore
-                FileIndex.indexed_content.isnot(None),  # type: ignore
-                FileIndex.index_status.in_(['indexed_text', 'success', 'partial_vlm_error'])  # type: ignore
+                FileIndex.embedding_json.isnot(None), FileIndex.indexed_content.isnot(None),
+                FileIndex.index_status.in_(['indexed_text', 'success', 'partial_vlm_error'])
             ).all()
             total_records_from_db = len(indexed_files)
             logger.info(
-                f"Stage 2 (DB Query) completed in {time.monotonic() - current_stage_start_time:.2f}s. Found {total_records_from_db} candidate records.")
+                f"Stage 2 (DB Query for rebuild) completed in {time.monotonic() - current_stage_start_time_s2:.3f}s. Found {total_records_from_db} candidates.")
 
             if not indexed_files:
-                logger.warning(
-                    "No potentially indexable files found in DB (with embeddings & content). FileIndex VS will be empty.")
+                # ... (handling for no files as before) ...
+                logger.warning("No files in DB to rebuild FileIndex VS. It will be empty.");
                 global_file_index_vectorstore = None
-                task_status = "success_empty_db"
-                task_message = "Initialization complete: No indexable files found in the database."
+                task_status = "success_empty_db_rebuild";
+                task_message = "Init (rebuild): No indexable files in DB."
                 initialization_succeeded_or_known_empty = True
             else:
-                current_stage_start_time = time.monotonic()
+                # STAGE 3: Processing DB records
+                current_stage_start_time_s3: float = time.monotonic()
                 logger.info(
                     f">>> _locked_initialization_task: Stage 3: Processing {total_records_from_db} DB records for Chroma lists... <<<")
-                texts_for_vs: List[str] = []
+                texts_for_vs: List[str] = [];
                 embeddings_for_vs: List[List[float]] = []
-                metadatas_for_vs: List[Dict[str, Any]] = []
+                metadatas_for_vs: List[Dict[str, Any]] = [];
                 ids_for_vs: List[str] = []
 
-                report_interval = max(1, total_records_from_db // 20)  # Log progress roughly 20 times
-                if report_interval > 2000: report_interval = 2000  # Cap interval for very large sets
+                # Reset processed_records_for_chroma here as it's specific to this loop
+                processed_records_for_chroma = 0  # <<< ENSURE IT'S RESET IF THIS BLOCK IS ENTERED
 
-                time_of_last_log_report = time.monotonic()
-                records_processed_since_last_log = 0
+                report_interval = max(1, total_records_from_db // 20);
+                if report_interval > 2000: report_interval = 2000
+                time_of_last_log_report_s3 = time.monotonic();
+                records_processed_since_last_log_s3 = 0
 
                 for record_idx, db_record_obj in enumerate(indexed_files):
                     record_id_for_log = getattr(db_record_obj, 'id', f'unknown_idx_{record_idx}')
                     try:
                         embedding_json_str = getattr(db_record_obj, 'embedding_json', None)
                         indexed_content_str = getattr(db_record_obj, 'indexed_content', None)
-
                         if not embedding_json_str: continue
-                        if not indexed_content_str: continue
-
+                        if not indexed_content_str or not indexed_content_str.strip():
+                            logger.warning(f"    Record ID {record_id_for_log} content is empty/invalid. Skipping.")
+                            continue
                         vector_data = json.loads(embedding_json_str)
-
-                        if not isinstance(vector_data, list) or not all(
+                        if not isinstance(vector_data, list) or not vector_data or not all(
                                 isinstance(f_val, (float, int)) for f_val in vector_data):
-                            logger.warning(
-                                f"    Record ID {record_id_for_log} has invalid embedding_json (not list of numbers). Skipping.")
+                            logger.warning(f"    Record ID {record_id_for_log} invalid embedding_json. Skipping.")
                             continue
-                        if not isinstance(indexed_content_str, str) or not indexed_content_str.strip():
-                            logger.warning(
-                                f"    Record ID {record_id_for_log} has empty/invalid indexed_content. Skipping.")
-                            continue
-
                         texts_for_vs.append(indexed_content_str)
-                        embeddings_for_vs.append([float(f_val) for f_val in vector_data])  # Ensure floats
+                        embeddings_for_vs.append([float(f_val) for f_val in vector_data])
                         metadatas_for_vs.append({
-                            "source": getattr(db_record_obj, 'file_path', "Unknown Path"),
-                            "file_id": record_id_for_log,
-                            "file_name": getattr(db_record_obj, 'file_name', "Unknown Filename"),
+                            "source": getattr(db_record_obj, 'file_path', "UnkPath"), "file_id": record_id_for_log,
+                            "file_name": getattr(db_record_obj, 'file_name', "UnkFile"),
                             "last_modified": str(getattr(db_record_obj, 'last_modified_os', "N/A")),
-                            "index_status": getattr(db_record_obj, 'index_status', "Unknown Status"),
-                            "mime_type": getattr(db_record_obj, 'mime_type', "Unknown MIME")
+                            "index_status": getattr(db_record_obj, 'index_status', "Unk"),
+                            "mime_type": getattr(db_record_obj, 'mime_type', "UnkMIME")
                         })
                         ids_for_vs.append(f"file_{record_id_for_log}")
-                        processed_records_for_chroma += 1
+                        processed_records_for_chroma += 1  # Increment the counter for successfully prepared records
                     except json.JSONDecodeError as json_err:
-                        logger.warning(
-                            f"    Record ID {record_id_for_log} embedding_json PARSE FAILED: {json_err}. Skipping.")
+                        logger.warning(f"    Record ID {record_id_for_log} JSON PARSE FAILED: {json_err}. Skipping.")
                     except Exception as e_record_proc:
                         logger.warning(
-                            f"    Record ID {record_id_for_log} UNEXPECTED error during data prep: {e_record_proc}. Skipping.")
+                            f"    Record ID {record_id_for_log} UNEXPECTED prep error: {e_record_proc}. Skipping.")
 
-                    records_processed_since_last_log += 1
-                    if records_processed_since_last_log >= report_interval or (record_idx + 1) == total_records_from_db:
-                        now_time = time.monotonic()
-                        batch_dur = now_time - time_of_last_log_report
-                        total_loop_dur = now_time - current_stage_start_time
-                        rate_batch = records_processed_since_last_log / batch_dur if batch_dur > 0 else float('inf')
-                        rate_total = processed_records_for_chroma / total_loop_dur if total_loop_dur > 0 else float(
+                    records_processed_since_last_log_s3 += 1
+                    if records_processed_since_last_log_s3 >= report_interval or (
+                            record_idx + 1) == total_records_from_db:
+                        now_time_s3 = time.monotonic();
+                        batch_dur_s3 = now_time_s3 - time_of_last_log_report_s3;
+                        total_loop_dur_s3 = now_time_s3 - current_stage_start_time_s3
+                        rate_batch_s3 = records_processed_since_last_log_s3 / batch_dur_s3 if batch_dur_s3 > 0 else float(
+                            'inf');
+                        rate_total_s3 = processed_records_for_chroma / total_loop_dur_s3 if total_loop_dur_s3 > 0 else float(
                             'inf')
                         logger.info(
-                            f"  Processed {processed_records_for_chroma}/{total_records_from_db} records for VS "
-                            f"({(processed_records_for_chroma / total_records_from_db) * 100:.1f}%). "
-                            f"Batch: {records_processed_since_last_log} in {batch_dur:.2f}s (~{rate_batch:.0f} rec/s). "
-                            f"TotalLoop: {total_loop_dur:.2f}s (~{rate_total:.0f} rec/s avg)."
-                        )
-                        records_processed_since_last_log = 0
-                        time_of_last_log_report = now_time
+                            f"  Processed {processed_records_for_chroma}/{total_records_from_db} for VS ({(processed_records_for_chroma / total_records_from_db) * 100:.1f}%). Batch: {records_processed_since_last_log_s3} in {batch_dur_s3:.2f}s (~{rate_batch_s3:.0f}r/s). LoopTime: {total_loop_dur_s3:.2f}s (~{rate_total_s3:.0f}r/s avg).")
+                        records_processed_since_last_log_s3 = 0;
+                        time_of_last_log_report_s3 = now_time_s3
 
                 logger.info(
-                    f"Stage 3 (DB Record Processing Loop) completed in {time.monotonic() - current_stage_start_time:.2f}s. Prepared {processed_records_for_chroma} valid items for Chroma.")
+                    f"Stage 3 (DB Record Processing) completed in {time.monotonic() - current_stage_start_time_s3:.3f}s. Prepared {processed_records_for_chroma} valid items for Chroma.")
 
-                if texts_for_vs and embeddings_for_vs and (len(texts_for_vs) == len(embeddings_for_vs)):
-                    current_stage_start_time = time.monotonic()
+                # STAGE 4: Building/Populating Chroma store
+                if texts_for_vs and embeddings_for_vs and \
+                        (len(texts_for_vs) == len(embeddings_for_vs)) and \
+                        (len(texts_for_vs) == len(metadatas_for_vs)) and \
+                        (len(texts_for_vs) == len(ids_for_vs)):
+                    # ... (Chroma population logic as in the previous full version, using _persist_dir_to_use and _collection_name_to_use) ...
+                    current_stage_start_time_s4: float = time.monotonic()
                     logger.info(
-                        f">>> _locked_initialization_task: Stage 4: Building/Populating Chroma store with {len(texts_for_vs)} items... <<<")
-
+                        f">>> _locked_initialization_task: Stage 4: Populating Chroma store with {len(texts_for_vs)} items... <<<")
+                    temp_chroma_store: Optional[Chroma] = None
                     try:
-                        # PERSIST_DIRECTORY_FILES = "./chroma_dbs/file_index_global_store" # Example path
-                        # os.makedirs(PERSIST_DIRECTORY_FILES, exist_ok=True) # Ensure dir exists if persisting
-
                         temp_chroma_store = Chroma(
-                            collection_name="global_file_index_collection_v5",  # Unique name
+                            collection_name=_collection_name_to_use,
                             embedding_function=provider_ref.embeddings,
-                            # persist_directory=PERSIST_DIRECTORY_FILES # Uncomment to persist
+                            persist_directory=_persist_dir_to_use
                         )
-                        init_duration = time.monotonic() - current_stage_start_time
                         logger.info(
-                            f"Empty Chroma store initialized in {init_duration:.2f}s. Adding {len(texts_for_vs)} embeddings...")
+                            f"Chroma store object initialized. Adding {len(texts_for_vs)} pre-computed embeddings...")
+                        add_embed_start_time = time.monotonic();
+                        task_message_suffix = ""
+                        try:
+                            logger.debug("Attempting temp_chroma_store.add_embeddings(texts=..., embeddings=...)")
+                            temp_chroma_store.add_embeddings(texts=texts_for_vs, embeddings=embeddings_for_vs,
+                                                             metadatas=metadatas_for_vs, ids=ids_for_vs)
+                            task_message_suffix = "(used add_embeddings with pre-computed)"
+                        except (AttributeError, TypeError) as e_add_embed:
+                            logger.warning(
+                                f"add_embeddings failed ({type(e_add_embed).__name__}: {e_add_embed}). Methods: {dir(temp_chroma_store)}. Falling back to add_texts (re-embedding).")
+                            temp_chroma_store.add_texts(texts=texts_for_vs, metadatas=metadatas_for_vs, ids=ids_for_vs)
+                            task_message_suffix = "(fallback to add_texts with RE-EMBEDDING)"
 
-                        add_embed_start_time = time.monotonic()
-                        temp_chroma_store.add_embeddings(  # Using keyword arguments as per VectorStore base class
-                            embeddings=embeddings_for_vs,
-                            texts=texts_for_vs,
-                            metadatas=metadatas_for_vs,
-                            ids=ids_for_vs
-                        )
                         add_embed_duration = time.monotonic() - add_embed_start_time
-
-                        # if PERSIST_DIRECTORY_FILES and hasattr(temp_chroma_store, 'persist'):
-                        #    persist_start_time = time.monotonic()
-                        #    temp_chroma_store.persist()
-                        #    logger.info(f"Chroma store persisted in {time.monotonic() - persist_start_time:.2f}s.")
+                        if _persist_dir_to_use and hasattr(temp_chroma_store, 'persist'): temp_chroma_store.persist()
 
                         global_file_index_vectorstore = temp_chroma_store
-                        task_status = "success_created"
-                        task_message = f"Successfully created FileIndex VS with {len(texts_for_vs)} items. Add_embeddings took {add_embed_duration:.2f}s."
-                        initialization_succeeded_or_known_empty = True
-                        logger.success(
-                            task_message + f" Total Chroma stage time: {time.monotonic() - current_stage_start_time:.2f}s.")
-
-                    except AttributeError as ae:
+                        task_status = "success_created_from_sql";
+                        task_message = f"VS created from SQL with {len(texts_for_vs)} items. Add took {add_embed_duration:.3f}s {task_message_suffix}."
+                        initialization_succeeded_or_known_empty = True;
+                        logger.success(task_message)
+                    except Exception as e_chroma_final:  # Catch other errors
+                        logger.error(f"Chroma final build error: {e_chroma_final}");
+                        logger.exception("Traceback:")
+                        task_status = "critical_error_chroma_build";
+                        task_message = f"Chroma build error: {e_chroma_final}"
+                        global_file_index_vectorstore = None;
+                        initialization_succeeded_or_known_empty = False
+                else:  # Mismatch or no valid data after loop
+                    # ... (error/warning and set task_status, task_message, global_file_index_vectorstore=None, initialization_succeeded_or_known_empty=True)
+                    if not (texts_for_vs and embeddings_for_vs):
+                        logger.warning("No valid items for Chroma after loop.");
+                        task_status = "success_no_valid_data_rebuild"
+                    else:
                         logger.error(
-                            f"ATTRIBUTE ERROR during Chroma add_embeddings: {ae}. This indicates an API mismatch with your langchain-chroma version.")
-                        logger.info(
-                            f"Methods available on Chroma instance: {dir(temp_chroma_store if 'temp_chroma_store' in locals() else Chroma)}")
-                        task_status = "critical_error_chroma_api";
-                        task_message = f"Chroma API error: {ae}"
-                        global_file_index_vectorstore = None;
-                        initialization_succeeded_or_known_empty = False
-                    except ValueError as ve:
-                        logger.error(f"VALUE ERROR during Chroma add_embeddings (e.g., length mismatch): {ve}")
-                        task_status = "critical_error_chroma_add_value";
-                        task_message = f"Chroma add_embeddings ValueError: {ve}"
-                        global_file_index_vectorstore = None;
-                        initialization_succeeded_or_known_empty = False
-                    except Exception as e_chroma_add_final:
-                        logger.error(f"UNEXPECTED ERROR during Chroma final build: {e_chroma_add_final}")
-                        logger.exception("Chroma Build Traceback:")
-                        task_status = "critical_error_chroma_add_generic";
-                        task_message = f"Chroma init/add generic error: {e_chroma_add_final}"
-                        global_file_index_vectorstore = None;
-                        initialization_succeeded_or_known_empty = False
-
-                elif texts_for_vs and embeddings_for_vs and (len(texts_for_vs) != len(embeddings_for_vs)):
-                    logger.error(
-                        f"Data mismatch: texts ({len(texts_for_vs)}) vs embeddings ({len(embeddings_for_vs)}). Cannot populate Chroma.")
-                    global_file_index_vectorstore = None
-                    task_status = "error_data_mismatch";
-                    task_message = "Init: Data mismatch for Chroma."
-                    initialization_succeeded_or_known_empty = True
-                else:
-                    logger.warning("No valid items to build FileIndex VS after DB record processing loop.")
-                    global_file_index_vectorstore = None
-                    task_status = "success_no_valid_data";
-                    task_message = "Init: No valid data from DB to populate VS."
+                            f"Data mismatch for Chroma (rebuild): texts ({len(texts_for_vs)}) vs embeddings ({len(embeddings_for_vs)}).");
+                        task_status = "error_data_mismatch_rebuild"
+                    global_file_index_vectorstore = None;
+                    task_message = f"Init (rebuild): {task_status}"
                     initialization_succeeded_or_known_empty = True
 
-        except Exception as e_init_critical:  # Catch-all for unexpected errors during the main try block
-            task_status = "critical_error_during_init"
-            task_message = f"CRITICAL ERROR during FileIndex VS initialization stages: {e_init_critical}"
-            logger.error(task_message)
-            logger.exception("FileIndex VS Critical Init Traceback (within lock):")
-            global_file_index_vectorstore = None  # Ensure it's None on critical failure
-            initialization_succeeded_or_known_empty = False  # Explicitly false
+        except Exception as e_init_critical:
+            task_status = "critical_error_overall_init";
+            task_message = f"CRITICAL ERROR FileIndex VS init: {e_init_critical}"
+            logger.error(task_message);
+            logger.exception("Traceback (critical):");
+            global_file_index_vectorstore = None
+            initialization_succeeded_or_known_empty = False
 
-        finally:  # This finally block is associated with the try block inside the 'with _file_index_vs_init_lock:'
+        finally:
             if db_session:
                 try:
                     db_session.close()
                 except Exception as e_close:
-                    logger.warning(f"Error closing DB session in FileIndex VS init: {e_close}")
+                    logger.warning(f"Error closing DB in FileIndex VS init: {e_close}")
 
-            # Determine if event should be set based on outcome
+            # Event setting logic based on initialization_succeeded_or_known_empty
             if initialization_succeeded_or_known_empty or \
-                    task_status in ["error_provider_missing", "error_db_session", "error_data_mismatch"]:
-                # These are states where the init process has "completed" its attempt, even if it failed early or found no data.
-                if not _file_index_vs_initialized_event.is_set():  # Set only if not already set (shouldn't be if lock worked)
+                    task_status in ["error_provider_missing", "error_db_session", "error_data_mismatch",
+                                    "success_loaded_from_persist"]:
+                if not _file_index_vs_initialized_event.is_set():
                     _file_index_vs_initialized_event.set()
                     logger.info(
-                        f">>> SET _file_index_vs_initialized_event. Final Status: {task_status}. Total Task Time: {time.monotonic() - overall_start_time:.2f}s <<<")
-                else:  # Should not happen if lock is effective and this is the first init thread
+                        f">>> SET _file_index_vs_initialized_event. Final Status: {task_status}. Total Task Time: {time.monotonic() - overall_start_time:.3f}s <<<")
+                else:
                     logger.info(
-                        f">>> _file_index_vs_initialized_event was ALREADY SET. Final Status: {task_status}. Total Task Time: {time.monotonic() - overall_start_time:.2f}s <<<")
-            else:  # A critical, unrecoverable error occurred (e.g., during Chroma build)
+                        f">>> _file_index_vs_initialized_event was ALREADY SET. Final Status: {task_status}. Total Task Time: {time.monotonic() - overall_start_time:.3f}s <<<")
+            else:
                 logger.error(
-                    f">>> _file_index_vs_initialized_event NOT SET due to critical error status: {task_status}. Total Task Time: {time.monotonic() - overall_start_time:.2f}s <<<")
+                    f">>> _file_index_vs_initialized_event NOT SET due to critical error status: {task_status}. Total Task Time: {time.monotonic() - overall_start_time:.3f}s <<<")
 
             logger.info(
-                f">>> _locked_initialization_task: Exiting _file_index_vs_init_lock context. Final Status: {task_status} <<<")
+                f">>> _locked_initialization_task: Exiting _file_index_vs_init_lock context. Final Status: {task_status}, Message: \"{task_message}\" <<<")
             return {"status": task_status, "message": task_message}
-    # End of 'with _file_index_vs_init_lock:'
 
-    # This part of the function (outside the 'with' block) should ideally not be reached
-    # if the logic inside the 'with' block correctly returns.
-    # This acts as a fallback return if the 'with' block is somehow exited without returning.
     logger.error(
         ">>> _locked_initialization_task: Exited WITHOUT properly returning from 'with lock' block. This is unexpected. <<<")
     return {"status": "error_unexpected_exit_from_lock", "message": "Task exited lock context unexpectedly."}

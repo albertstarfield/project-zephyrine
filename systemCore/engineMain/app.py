@@ -4978,7 +4978,7 @@ class AIChat:
         interrupted_flag = False
 
         if not user_input and not image_b64:
-            logger.warning(f"{log_prefix} Empty input for background generate.");
+            logger.warning(f"{log_prefix} Empty input for background generate.")
             return
 
         if is_reflection_task:
@@ -4987,10 +4987,10 @@ class AIChat:
                     Interaction.id == update_interaction_id).first()
                 if not original_interaction_to_update_for_reflection:
                     logger.error(
-                        f"{log_prefix}: CRITICAL - Cannot find original interaction ID {update_interaction_id}. Aborting reflection.");
+                        f"{log_prefix}: CRITICAL - Cannot find original interaction ID {update_interaction_id}. Aborting reflection.")
                     return
             except Exception as load_err:
-                logger.error(f"{log_prefix}: Error loading original interaction {update_interaction_id}: {load_err}");
+                logger.error(f"{log_prefix}: Error loading original interaction {update_interaction_id}: {load_err}")
                 return
 
         try:
@@ -5015,7 +5015,8 @@ class AIChat:
                     except TaskInterruptedException:
                         raise
                     except Exception as e:
-                        interaction_data['image_description'] = f"[VLM Error: {e}]"; logger.error(
+                        interaction_data['image_description'] = f"[VLM Error: {e}]"
+                        logger.error(
                             f"VLM user image error: {e}")
                 else:
                     interaction_data['image_description'] = "[VLM Model Unavailable]"
@@ -5056,13 +5057,15 @@ class AIChat:
                         logger.warning(f"{log_prefix} BG URL RAG invoke error: {e}")
                 if sess_hist_ret_obj_bg:
                     try:
-                        s_docs = await asyncio.to_thread(sess_hist_ret_obj_bg.invoke, q_rag); session_docs.extend(
+                        s_docs = await asyncio.to_thread(sess_hist_ret_obj_bg.invoke, q_rag)
+                        session_docs.extend(
                             s_docs or [])
                     except Exception as e:
                         logger.warning(f"{log_prefix} BG Session RAG invoke error: {e}")
                 if refl_chunk_ret_obj_bg:
                     try:
-                        r_docs = await asyncio.to_thread(refl_chunk_ret_obj_bg.invoke, q_rag); reflection_docs.extend(
+                        r_docs = await asyncio.to_thread(refl_chunk_ret_obj_bg.invoke, q_rag)
+                        reflection_docs.extend(
                             r_docs or [])
                     except Exception as e:
                         logger.warning(f"{log_prefix} BG Reflection RAG invoke error: {e}")
@@ -5218,8 +5221,9 @@ class AIChat:
                 if img_prompt:
                     img_data_list, img_err = await self.provider.generate_image_async(img_prompt, None, ELP0)
                     if img_err:
-                        final_response_text = f"Imagine Error: {img_err}"; interaction_data[
-                            'assistant_action_result'] = final_response_text;
+                        final_response_text = f"Imagine Error: {img_err}"
+                        interaction_data[
+                            'assistant_action_result'] = final_response_text
                     elif img_data_list and img_data_list[0].get("b64_json"):
                         interaction_data['imagined_image_b64'] = img_data_list[0]["b64_json"]
                         desc = await self._describe_generated_image_async(db, session_id, img_data_list[0]["b64_json"])
@@ -5228,10 +5232,12 @@ class AIChat:
                         final_response_text = f"I've imagined that: {desc or 'Generated an image.'}"
                         interaction_data['assistant_action_result'] = "Imagine success."
                     else:
-                        final_response_text = "Imagine Error: No image data."; interaction_data[
+                        final_response_text = "Imagine Error: No image data."
+                        interaction_data[
                             'assistant_action_result'] = final_response_text
                 else:
-                    final_response_text = "Imagine Error: Prompt gen failed."; interaction_data[
+                    final_response_text = "Imagine Error: Prompt gen failed."
+                    interaction_data[
                         'assistant_action_result'] = final_response_text
 
             elif action_details and detected_action_type != "no_action":
@@ -5332,7 +5338,7 @@ class AIChat:
 
         except TaskInterruptedException as tie:
             logger.warning(f"🚦 {log_prefix} Background Generate Task INTERRUPTED: {tie}")
-            interrupted_flag = True;
+            interrupted_flag = True
             final_response_text = f"[Background task interrupted: {tie}]"
             interaction_data.update({'llm_response': final_response_text, 'classification': "task_failed_interrupted",
                                      'input_type': 'log_warning'})
@@ -5365,7 +5371,7 @@ class AIChat:
                         add_interaction(db, **final_db_data); db.commit()
                 else:  # Not interrupted
                     if is_reflection_task and original_interaction_to_update_for_reflection:
-                        original_interaction_to_update_for_reflection.reflection_completed = True;
+                        original_interaction_to_update_for_reflection.reflection_completed = True
                         db.commit()
                         new_refl_output_data = final_db_data.copy()
                         new_refl_output_data.update({
@@ -5388,7 +5394,7 @@ class AIChat:
                         db_kwargs_final = {k: v for k, v in final_db_data.items() if k in valid_keys}
                         await asyncio.to_thread(add_interaction, db, **db_kwargs_final)
             except Exception as final_db_err:
-                logger.error(f"❌ {log_prefix}: CRITICAL error during final DB save: {final_db_err}");
+                logger.error(f"❌ {log_prefix}: CRITICAL error during final DB save: {final_db_err}")
                 db.rollback()
 
             final_status = 'Interrupted' if interrupted_flag else (
@@ -6226,7 +6232,8 @@ def _stream_openai_chat_response_generator_flask(
                 finally:
                     if db_session:
                         try:
-                            db_session.close(); logger.debug(
+                            db_session.close()
+                            logger.debug(
                                 f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): DB session closed for direct_generate.")
                         except Exception as ce:
                             logger.error(f"Error closing DB session for direct_generate: {ce}")
@@ -6259,7 +6266,8 @@ def _stream_openai_chat_response_generator_flask(
             current_sink_id = sink_id_holder[0]
             if current_sink_id is not None:
                 try:
-                    logger.remove(current_sink_id); logger.debug(
+                    logger.remove(current_sink_id)
+                    logger.debug(
                         f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): Log sink {current_sink_id} removed.")
                 except Exception as remove_err:
                     logger.error(f"Failed remove log sink {current_sink_id}: {remove_err}")
@@ -6297,7 +6305,7 @@ def _stream_openai_chat_response_generator_flask(
                 queue_item = message_queue.get(timeout=LOG_QUEUE_TIMEOUT)
                 if queue_item is GENERATION_DONE_SENTINEL:
                     logger.debug(f"FLASK_STREAM_LIVE {resp_id}: Received DONE sentinel.")
-                    processing_complete = True;
+                    processing_complete = True
                     continue
                 elif isinstance(queue_item, tuple) and len(queue_item) == 2:
                     message_type, message_data = queue_item
@@ -6330,7 +6338,7 @@ def _stream_openai_chat_response_generator_flask(
             except Exception as q_err:
                 logger.error(f"FLASK_STREAM_LIVE {resp_id}: Error getting from queue: {q_err}")
                 if final_result_data["error"] is None:
-                    final_result_data["error"] = q_err;
+                    final_result_data["error"] = q_err
                     final_result_data["finish_reason"] = "error"
                 processing_complete = True
 
@@ -7122,7 +7130,7 @@ def handle_openai_chat_completion():
         last_user_msg_obj = None
         for msg_item in reversed(messages_from_req):  # Renamed loop var
             if isinstance(msg_item, dict) and msg_item.get("role") == "user":
-                last_user_msg_obj = msg_item;
+                last_user_msg_obj = msg_item
                 break
 
         if not last_user_msg_obj: raise ValueError("No message with role 'user' found.")
@@ -7866,17 +7874,28 @@ async def handle_openai_image_generations():  # Route is async
     request_id = f"req-img-gen-{uuid.uuid4()}"
     logger.info(f"🚀 OpenAI-Style Image Generation Request ID: {request_id} (ELP1 Priority)")
 
-    db: Session = g.db
+    # Get DB session from Flask's g or create if not present (ensure before_request/teardown_request handle this)
+    # For simplicity here, assuming g.db is correctly managed by Flask context handlers
+    db: Optional[Session] = getattr(g, 'db', None)
+    if db is None:  # Fallback if g.db is not set (e.g. if before_request failed or not run)
+        logger.error(f"{request_id}: DB session not found in g.db. Creating temporary session for this request.")
+        db_temp_session = SessionLocal()  # type: ignore
+        db_to_use = db_temp_session
+    else:
+        db_to_use = db
+
     final_response_status_code: int = 500
     resp: Optional[Response] = None
     session_id_for_log: str = f"img_gen_req_default_{request_id}"
-    raw_request_data: Optional[Dict] = None
+    raw_request_data: Optional[Dict[str, Any]] = None
     request_data_snippet_for_log: str = "No request data processed"
 
     try:
+        # --- 1. Get and Validate Request JSON Body ---
         try:
-            raw_request_data = request.get_json()
-            if not raw_request_data: raise ValueError("Empty JSON payload received.")
+            raw_request_data = request.get_json()  # Use await if using Quart, or request.get_json() for Flask
+            if not raw_request_data:
+                raise ValueError("Empty JSON payload received.")
             try:
                 request_data_snippet_for_log = json.dumps(raw_request_data)[:1000]
             except:
@@ -7884,7 +7903,7 @@ async def handle_openai_image_generations():  # Route is async
         except Exception as json_err:
             logger.warning(f"{request_id}: Failed to get/parse JSON body: {json_err}")
             try:
-                request_data_snippet_for_log = request.get_data(as_text=True)[:1000]
+                request_data_snippet_for_log = (await request.get_data(as_text=True))[:1000]  # await for Quart
             except:
                 request_data_snippet_for_log = "Could not read request body"
             resp_data, status_code_val = _create_openai_error_response(
@@ -7892,216 +7911,234 @@ async def handle_openai_image_generations():  # Route is async
                 status_code=400)
             resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
             final_response_status_code = status_code_val
-            return resp
+            return resp  # Early return
 
+        # --- 2. Extract Expected Parameters ---
         prompt_from_user = raw_request_data.get("prompt")
         model_requested = raw_request_data.get("model")
-
-        # --- MODIFICATION FOR n_images ---
-        # Default to 2 images for this direct ELP1 endpoint if 'n' is not specified by the client.
-        # Client can still override by sending "n": 1 or "n": X.
         n_images_requested_by_client = raw_request_data.get("n")
-        if n_images_requested_by_client is None:
-            n_images = 2  # Default to 2 for ELP1 direct generation
-            logger.info(
-                f"{request_id}: 'n' not specified by client, defaulting to {n_images} for ELP1 image generation.")
-        else:
-            try:
-                n_images = int(n_images_requested_by_client)
-                if n_images < 1:
-                    logger.warning(
-                        f"{request_id}: Client requested 'n={n_images_requested_by_client}', which is invalid. Defaulting to 1.")
-                    n_images = 1
-                # You might want to add a server-side cap on 'n' here, e.g., if n_images > MAX_IMAGES_PER_REQUEST: n_images = MAX_IMAGES_PER_REQUEST
-            except ValueError:
-                logger.warning(
-                    f"{request_id}: Client sent invalid value for 'n': '{n_images_requested_by_client}'. Defaulting to 2.")
-                n_images = 2
-        # --- END MODIFICATION FOR n_images ---
-
         size_requested_str = raw_request_data.get("size", IMAGE_GEN_DEFAULT_SIZE)
         response_format_requested = raw_request_data.get("response_format", "b64_json").lower()
+        # Optional OpenAI params, currently logged but not all used by worker
         quality_requested = raw_request_data.get("quality", "standard")
         style_requested = raw_request_data.get("style", "vivid")
-        user_provided_id = raw_request_data.get("user")
+        user_provided_id_for_tracking = raw_request_data.get("user")
 
         session_id_for_log = raw_request_data.get("session_id", session_id_for_log)
-        if ai_chat:
-            ai_chat.current_session_id = session_id_for_log
+
+        if ai_chat:  # Ensure ai_chat global instance is available
+            ai_chat.current_session_id = session_id_for_log  # Set for helpers in ai_chat
         else:
-            logger.error(f"{request_id}: ai_chat instance not available. Cannot set session ID for helpers.")
-            resp_data, status_code_val = _create_openai_error_response("Server AI component not ready.",
+            logger.error(
+                f"{request_id}: Global 'ai_chat' instance not available. Cannot proceed with image generation context.")
+            resp_data, status_code_val = _create_openai_error_response("Server AI component (AIChat) not ready.",
                                                                        err_type="server_error", status_code=503)
             resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
             final_response_status_code = status_code_val
             return resp
 
+        # Determine n_images (number of images to generate)
+        if n_images_requested_by_client is None:
+            n_images = 1  # Default to 1 image for this direct ELP1 endpoint.
+            # Previous default was 2, changed to 1 for faster single user requests.
+            # Can be configured or kept at 1. Max can be capped.
+            logger.info(f"{request_id}: 'n' not specified, defaulting to {n_images} for ELP1 image generation.")
+        else:
+            try:
+                n_images = int(n_images_requested_by_client)
+                if n_images < 1: n_images = 1  # Min 1
+                # MAX_IMAGES_PER_REQUEST = 4 # Example cap
+                # if n_images > MAX_IMAGES_PER_REQUEST: n_images = MAX_IMAGES_PER_REQUEST; logger.warning(...)
+            except ValueError:
+                logger.warning(f"{request_id}: Invalid 'n': '{n_images_requested_by_client}'. Defaulting to 1.")
+                n_images = 1
+
         logger.debug(
             f"{request_id}: Image Gen Request Parsed - Prompt: '{str(prompt_from_user)[:50]}...', "
-            f"ModelReq: {model_requested}, N (final): {n_images}, Size: {size_requested_str}, RespFormat: {response_format_requested}, "  # Log final n_images
-            f"Quality: {quality_requested}, Style: {style_requested}, User: {user_provided_id}"
+            f"ModelReq: {model_requested}, N (final): {n_images}, Size: {size_requested_str}, RespFormat: {response_format_requested}"
         )
 
+        # --- 3. Validate Core Parameters ---
         if not prompt_from_user or not isinstance(prompt_from_user, str):
-            raise ValueError("'prompt' field is required and must be a string.")
+            raise ValueError("'prompt' field is required and must be a string for image generation.")
         if not model_requested or model_requested != IMAGE_GEN_MODEL_NAME_CLIENT_FACING:
-            logger.warning(
-                f"{request_id}: Invalid Image Gen model '{model_requested}'. Expected '{IMAGE_GEN_MODEL_NAME_CLIENT_FACING}'.")
-            resp_data, status_code_val = _create_openai_error_response(
-                f"Invalid model. This endpoint only supports the '{IMAGE_GEN_MODEL_NAME_CLIENT_FACING}' model for image generation.",
-                err_type="invalid_request_error", code="model_not_found", status_code=404)
-            resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
-            final_response_status_code = status_code_val
-            return resp
-
+            raise ValueError(f"Invalid 'model'. This endpoint supports '{IMAGE_GEN_MODEL_NAME_CLIENT_FACING}'.")
         if response_format_requested not in ["b64_json", "url"]:
             logger.warning(
                 f"{request_id}: Invalid 'response_format': {response_format_requested}. Defaulting to 'b64_json'.")
             response_format_requested = "b64_json"
 
+        # --- 4. Refine User Prompt using RAG Context (ELP1) ---
         logger.info(f"{request_id}: Refining user prompt for image generation (ELP1)...")
-        url_retriever_obj, history_retriever_obj, _ = await asyncio.to_thread(
-            ai_chat._get_rag_retriever, db, prompt_from_user, priority=ELP1
-        )
-        retrieved_history_docs_for_refine = []
-        if history_retriever_obj:
-            retrieved_history_docs_for_refine = await asyncio.to_thread(history_retriever_obj.invoke, prompt_from_user)
-        history_rag_str_for_refine = ai_chat._format_docs(retrieved_history_docs_for_refine, source_type="History RAG")
-        direct_hist_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=3)
-        recent_direct_history_str_for_refine = ai_chat._format_direct_history(direct_hist_interactions)
 
-        refined_prompt = await ai_chat._refine_direct_image_prompt_async(
-            db=db, session_id=session_id_for_log, user_image_request=prompt_from_user,
-            history_rag_str=history_rag_str_for_refine, recent_direct_history_str=recent_direct_history_str_for_refine,
+        wrapped_rag_result = await asyncio.to_thread(
+            ai_chat._get_rag_retriever_thread_wrapper,
+            db_to_use,
+            prompt_from_user,  # Use original prompt for RAG context query
+            ELP1
+        )
+
+        session_hist_retriever_for_refine: Optional[Any] = None
+        if wrapped_rag_result.get("status") == "success":
+            rag_data_tuple = wrapped_rag_result.get("data")
+            if isinstance(rag_data_tuple, tuple) and len(rag_data_tuple) == 4:
+                _url_ret_temp, session_hist_retriever_for_refine, _refl_ret_temp, _ids_temp = rag_data_tuple
+            else:  # Should be caught by wrapper, but safeguard
+                raise RuntimeError(f"RAG wrapper returned unexpected data structure for image prompt: {rag_data_tuple}")
+        elif wrapped_rag_result.get("status") == "interrupted":
+            raise TaskInterruptedException(wrapped_rag_result.get("error_message", "RAG for image prompt interrupted"))
+        else:  # Error
+            raise RuntimeError(
+                f"RAG for image prompt refinement failed: {wrapped_rag_result.get('error_message', 'Unknown RAG error')}")
+
+        retrieved_history_docs = []
+        if session_hist_retriever_for_refine:
+            retrieved_history_docs = await asyncio.to_thread(session_hist_retriever_for_refine.invoke, prompt_from_user)
+
+        history_rag_str = ai_chat._format_docs(retrieved_history_docs, source_type="History RAG")
+
+        direct_hist_interactions_list = await asyncio.to_thread(get_global_recent_interactions, db_to_use, limit=3)
+        recent_direct_history_str = ai_chat._format_direct_history(direct_hist_interactions_list)
+
+        refined_prompt_for_generation = await ai_chat._refine_direct_image_prompt_async(
+            db=db_to_use, session_id=session_id_for_log, user_image_request=prompt_from_user,
+            history_rag_str=history_rag_str, recent_direct_history_str=recent_direct_history_str,
             priority=ELP1
         )
-        if not refined_prompt:
-            logger.warning(f"{request_id}: Prompt refinement yielded empty or failed. Using original prompt.")
-            refined_prompt = prompt_from_user
-        elif refined_prompt == prompt_from_user:
-            logger.info(f"{request_id}: Prompt refinement did not change the prompt. Using original.")
+
+        if not refined_prompt_for_generation or refined_prompt_for_generation == prompt_from_user:
+            logger.info(f"{request_id}: Prompt refinement yielded no change or failed. Using original prompt.")
+            refined_prompt_for_generation = prompt_from_user
         else:
-            logger.info(f"{request_id}: Using refined prompt for generation: '{refined_prompt}'")
-        try:
-            add_interaction(db, session_id=session_id_for_log, mode="image_gen", input_type="text_prompt_to_worker",
-                            user_input=prompt_from_user, llm_response=refined_prompt)
-            db.commit()
-        except Exception as db_log_err:
-            logger.error(f"{request_id}: Failed to log refined prompt: {db_log_err}")
-            if db: db.rollback()
+            logger.info(f"{request_id}: Using refined prompt for image generation: '{refined_prompt_for_generation}'")
 
+        try:  # Log the prompt that will be used
+            add_interaction(db_to_use, session_id=session_id_for_log, mode="image_gen",
+                            input_type="text_prompt_to_img_worker",
+                            user_input=prompt_from_user,  # Original prompt
+                            llm_response=refined_prompt_for_generation)  # Refined prompt sent to worker
+            db_to_use.commit()
+        except Exception as db_log_err_prompt:
+            logger.error(f"{request_id}: Failed to log refined image prompt: {db_log_err_prompt}")
+            if db_to_use: db_to_use.rollback()
+
+        # --- 5. Generate Image(s) using AIProvider (ELP1) ---
         logger.info(
-            f"{request_id}: Requesting {n_images} image(s) from AIProvider with ELP1 priority. Refined Prompt: '{refined_prompt[:100]}...'")
-        all_generated_image_data_from_provider = []
-        error_occurred_during_generation_loop = False
-        final_error_message_from_loop = None
+            f"{request_id}: Requesting {n_images} image(s) from AIProvider (ELP1). Prompt: '{refined_prompt_for_generation[:100]}...'")
+        all_generated_image_data_items = []
+        error_during_loop = False
+        loop_error_message = None
 
-        for i in range(n_images):  # Loop n_images times
-            if error_occurred_during_generation_loop: break
+        for i in range(n_images):
+            if error_during_loop: break
             logger.info(f"{request_id}: Generating image {i + 1}/{n_images}...")
-            list_of_image_dicts, gen_error_msg = await ai_provider.generate_image_async(
-                prompt=refined_prompt, image_base64=None, priority=ELP1
+            # ai_provider.generate_image_async returns: Tuple[Optional[List[Dict[str, Optional[str]]]], Optional[str]]
+            # The first element is a list of image data dicts (usually one dict per call for this worker)
+            # The second is an error message string if any.
+            list_of_one_image_dict, image_gen_err_msg = await ai_provider.generate_image_async(
+                prompt=refined_prompt_for_generation,
+                image_base64=None,  # This endpoint is for txt2img primarily
+                priority=ELP1
             )
-            if gen_error_msg:
-                logger.error(f"{request_id}: Image generation failed for image attempt {i + 1}: {gen_error_msg}")
-                final_error_message_from_loop = gen_error_msg
-                if interruption_error_marker in gen_error_msg: raise TaskInterruptedException(gen_error_msg)
-                error_occurred_during_generation_loop = True
+            if image_gen_err_msg:
+                logger.error(f"{request_id}: Image generation failed for attempt {i + 1}: {image_gen_err_msg}")
+                loop_error_message = image_gen_err_msg
+                if interruption_error_marker in image_gen_err_msg: raise TaskInterruptedException(image_gen_err_msg)
+                error_during_loop = True
                 break
-            elif list_of_image_dicts and isinstance(list_of_image_dicts, list) and list_of_image_dicts:
-                all_generated_image_data_from_provider.append(list_of_image_dicts[0])
-                logger.info(f"{request_id}: Image {i + 1}/{n_images} data received from provider.")
+            elif list_of_one_image_dict and isinstance(list_of_one_image_dict, list) and list_of_one_image_dict:
+                all_generated_image_data_items.append(list_of_one_image_dict[0])  # Append the single image dict
+                logger.info(f"{request_id}: Image {i + 1}/{n_images} data received.")
             else:
-                logger.warning(
-                    f"{request_id}: Image generation for image attempt {i + 1} returned no data and no error.")
-                final_error_message_from_loop = "Image generation worker returned no data for an image."
-                error_occurred_during_generation_loop = True
+                logger.warning(f"{request_id}: Image generation attempt {i + 1} returned no data and no error.")
+                loop_error_message = "Image worker returned no data for an image attempt."
+                error_during_loop = True
                 break
 
-        if error_occurred_during_generation_loop or not all_generated_image_data_from_provider:
-            resp_data, status_code_val = _create_openai_error_response(
-                final_error_message_from_loop or "Image generation failed to produce any results.",
-                err_type="server_error", status_code=500)
+        if error_during_loop or not all_generated_image_data_items:
+            final_err_msg = loop_error_message or "Image generation failed to produce any results."
+            resp_data, status_code_val = _create_openai_error_response(final_err_msg, err_type="server_error",
+                                                                       status_code=500)
             resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
             final_response_status_code = status_code_val
             return resp
 
-        response_data_items_for_client = []
-        for img_data_dict_from_worker in all_generated_image_data_from_provider:
-            png_b64_data = img_data_dict_from_worker.get("b64_json")
-            if png_b64_data:
+        # --- 6. Format Response ---
+        response_data_list_for_client = []
+        for img_data_item in all_generated_image_data_items:
+            png_b64 = img_data_item.get("b64_json")  # Expecting PNG base64 from worker
+            # avif_b64 = img_data_item.get("b64_avif") # Worker might also provide AVIF
+            if png_b64:
                 if response_format_requested == "b64_json":
-                    response_data_items_for_client.append({"b64_json": png_b64_data})
-                elif response_format_requested == "url":
-                    logger.warning(f"{request_id}: Returning data URI for 'url' format request.")
-                    response_data_items_for_client.append(
-                        {"url": f"data:image/png;base64,{png_b64_data}"})  # Provide data URI
+                    response_data_list_for_client.append({"b64_json": png_b64})
+                elif response_format_requested == "url":  # Return data URI
+                    logger.warning(f"{request_id}: Returning data URI for 'url' format image request.")
+                    response_data_list_for_client.append({"url": f"data:image/png;base64,{png_b64}"})
             else:
-                logger.error(
-                    f"{request_id}: Worker returned image data item without 'b64_json' (PNG). Skipping item: {img_data_dict_from_worker}")
+                logger.error(f"{request_id}: Worker image data item missing 'b64_json' (PNG). Item: {img_data_item}")
 
-        if not response_data_items_for_client:
-            logger.error(
-                f"{request_id}: No valid image data (PNG b64_json) found after processing worker response for {n_images} images.")
-            resp_data, status_code_val = _create_openai_error_response(
-                "Failed to obtain valid image data from generation worker.", err_type="server_error", status_code=500)
+        if not response_data_list_for_client:
+            logger.error(f"{request_id}: No valid PNG b64_json data found after processing worker response(s).")
+            resp_data, status_code_val = _create_openai_error_response("Failed to get valid image data from worker.",
+                                                                       err_type="server_error", status_code=500)
             resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
             final_response_status_code = status_code_val
             return resp
 
-        openai_response_body = {"created": int(time.time()), "data": response_data_items_for_client}
+        openai_response_body = {"created": int(time.time()), "data": response_data_list_for_client}
         response_payload = json.dumps(openai_response_body)
         resp = Response(response_payload, status=200, mimetype='application/json')
         final_response_status_code = 200
 
-    except ValueError as ve:
-        logger.warning(f"{request_id}: Invalid Image Gen request: {ve}")
+    except ValueError as ve:  # Catches explicit ValueErrors from parameter validation
+        logger.warning(f"{request_id}: Invalid Image Gen request (ValueError): {ve}")
         resp_data, status_code_val = _create_openai_error_response(str(ve), err_type="invalid_request_error",
                                                                    status_code=400)
         resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
         final_response_status_code = status_code_val
-    except TaskInterruptedException as tie:
+    except TaskInterruptedException as tie:  # Catches interruptions from RAG or image gen
         logger.warning(f"🚦 {request_id}: Image Generation request (ELP1) INTERRUPTED: {tie}")
         resp_data, status_code_val = _create_openai_error_response(f"Image generation task was interrupted: {tie}",
                                                                    err_type="server_error", code="task_interrupted",
                                                                    status_code=503)
         resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
         final_response_status_code = status_code_val
-    except Exception as e:
-        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Image Gen endpoint:")
-        error_message = f"Internal server error in Image Gen endpoint: {type(e).__name__} - {str(e)}"
+    except Exception as e_main:  # Catch-all for other unexpected errors
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Image Gen endpoint main try block:")
+        error_message = f"Internal server error in Image Gen endpoint: {type(e_main).__name__} - {str(e_main)}"
         resp_data, status_code_val = _create_openai_error_response(error_message, err_type="server_error",
                                                                    status_code=500)
         resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
         final_response_status_code = status_code_val
         try:
-            if db:
-                add_interaction(db, session_id=session_id_for_log, mode="image_gen", input_type='error',
-                                user_input=f"Image Gen Handler Error. Request: {request_data_snippet_for_log}",
-                                llm_response=error_message[:2000]); db.commit()
-            else:
-                logger.error(f"{request_id}: Cannot log Image Gen handler error: DB session unavailable.")
-        except Exception as db_err_log:
-            logger.error(f"{request_id}: ❌ Failed log Image Gen handler error to DB: {db_err_log}")
-            if db: db.rollback()
+            if db_to_use:
+                add_interaction(db_to_use, session_id=session_id_for_log, mode="image_gen", input_type='error',
+                                user_input=f"Image Gen Handler Error. Req: {request_data_snippet_for_log}",
+                                llm_response=error_message[:2000])
+                db_to_use.commit()
+        except Exception as db_err_log_main:
+            logger.error(f"{request_id}: ❌ Failed log main Image Gen handler error to DB: {db_err_log_main}")
+            if db_to_use: db_to_use.rollback()
     finally:
         duration_req = (time.monotonic() - start_req) * 1000
         logger.info(
             f"🏁 OpenAI-Style Image Gen Request {request_id} handled in {duration_req:.2f} ms. Final HTTP Status: {final_response_status_code}")
+        if 'db_temp_session' in locals() and db_temp_session:  # Close temp session if created
+            db_temp_session.close()
+            logger.debug(f"{request_id}: Closed temporary DB session for image gen.")
 
-    if resp is None:
+    if resp is None:  # Should ideally not be reached if all paths assign to resp
         logger.error(f"{request_id}: Image Gen Handler logic flaw - response object 'resp' was not assigned!")
-        resp_data, status_code_val = _create_openai_error_response(
-            "Internal error: Image Gen Handler failed to produce a response object.", err_type="server_error",
-            status_code=500)
+        resp_data, status_code_val = _create_openai_error_response("Internal error: Handler did not produce response.",
+                                                                   err_type="server_error", status_code=500)
         resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
         try:
-            if db: add_interaction(db, session_id=session_id_for_log, mode="image_gen", input_type='error',
-                                   user_input=f"Image Gen Handler No Resp. Req: {request_data_snippet_for_log}",
-                                   llm_response="Critical: No response object created by Image Gen handler."); db.commit()
-        except Exception as db_err_log_final:
-            logger.error(f"{request_id}: Failed to log 'no response object' Image Gen error to DB: {db_err_log_final}")
-            if db: db.rollback()
+            if db_to_use: add_interaction(db_to_use, session_id=session_id_for_log, mode="image_gen",
+                                          input_type='error',
+                                          user_input=f"ImgGen NoResp. Req: {request_data_snippet_for_log}",
+                                          llm_response="Critical: No resp obj created."); db_to_use.commit()
+        except:
+            pass
     return resp
 
 

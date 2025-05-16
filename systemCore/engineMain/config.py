@@ -107,6 +107,26 @@ DB_SNAPSHOT_DIR_NAME = "db_snapshots"
 DB_SNAPSHOT_RETENTION_COUNT = int(os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 7)) # << SET TO 7 HERE or via .env
 DB_SNAPSHOT_FILENAME_PREFIX = "snapshot_"
 DB_SNAPSHOT_FILENAME_SUFFIX = ".db.zst"
+_file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__)) # If config.py is in the same dir as file_indexer.py
+# Or, if config.py is in engineMain and file_indexer.py is also there:
+# _file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__))
+
+# Define a subdirectory for Chroma databases relative to the module's location
+CHROMA_DB_BASE_PATH = os.path.join(_file_indexer_module_dir, "chroma_vector_stores")
+
+_REFLECTION_VS_PERSIST_DIR = getattr(globals(), 'REFLECTION_INDEX_CHROMA_PERSIST_DIR',
+                                   os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_reflection_store_default"))
+_REFLECTION_COLLECTION_NAME = getattr(globals(), 'REFLECTION_INDEX_CHROMA_COLLECTION_NAME',
+                                      "global_reflections_default_collection")
+
+# Specific persist directory for the global file index
+FILE_INDEX_CHROMA_PERSIST_DIR = os.path.join(CHROMA_DB_BASE_PATH, "global_file_index_v1")
+FILE_INDEX_CHROMA_COLLECTION_NAME = "global_file_index_collection_v1" # Keep this consistent
+
+# Specific persist directory for the global reflection index (if you also want to make it persistent)
+REFLECTION_INDEX_CHROMA_PERSIST_DIR = os.path.join(CHROMA_DB_BASE_PATH, "global_reflection_index_v1")
+REFLECTION_INDEX_CHROMA_COLLECTION_NAME = "global_reflection_collection_v1" # Keep this consistent
+
 
 # --- Placeholder for Stable Diffusion ---
 # --- NEW: Imagination Worker (Stable Diffusion FLUX) Settings ---
