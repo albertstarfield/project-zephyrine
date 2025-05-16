@@ -32,128 +32,152 @@ class PriorityQuotaLock:
         logger.info("🚦 PriorityQuotaLock initialized. ELP1 Interrupt Quota: {}", self.QUOTA_MAX)
 
     def acquire(self, priority: int, proc: Optional[subprocess.Popen] = None, timeout: Optional[float] = None) -> bool:
-        """
-        Acquires the lock based on priority and quota.
-        ELP1 can interrupt ELP0 if quota allows.
-        Stores the associated process 'proc' if priority is ELP0.
-
-        Returns:
-            bool: True if the lock was acquired, False otherwise (e.g., timeout).
-        """
         acquire_start_time = time.monotonic()
         requesting_thread_ident = threading.get_ident()
-        log_prefix = f"PQLock|ELP{priority}|Thr{requesting_thread_ident}"
+        log_prefix = f"PQLock|ACQ|ELP{priority}|Thr{requesting_thread_ident}"  # Changed prefix for acquire
         logger.trace("{}:: Attempting acquire...", log_prefix)
 
         if priority not in [ELP0, ELP1]:
             raise ValueError("Invalid priority level")
-        if priority == ELP0 and proc is not None:
-            # This is problematic - proc is only known *after* the lock is acquired
-            # and the process is started. We need to set it later.
-            logger.warning("{}:: Process passed during acquire for ELP0, should be set later.", log_prefix)
-            # raise ValueError("Process should not be provided during acquire for ELP0")
 
         with self._condition:
-            logger.trace("{}:: Acquired internal condition lock.", log_prefix)
+            logger.trace(
+                "{}:: Acquired internal condition. Current state: locked={}, holder_prio={}, holder_proc_pid={}, quota={}, elp1_wait_cnt={}",
+                log_prefix, self._is_locked, self._lock_holder_priority,
+                self._lock_holder_proc.pid if self._lock_holder_proc else "None",
+                self._elp1_interrupt_quota, self._elp1_waiting_count)
+
             if priority == ELP1:
                 self._elp1_waiting_count += 1
+                logger.trace("{}:: Incremented ELP1 waiting count to {}", log_prefix, self._elp1_waiting_count)
 
-            # --- Wait Condition Loop ---
+            loop_iteration = 0
             while True:
-                can_interrupt = (priority == ELP1 and
-                                 self._is_locked and
-                                 self._lock_holder_priority == ELP0 and
-                                 self._elp1_interrupt_quota > 0)
+                loop_iteration += 1
+                logger.trace("{}:: Loop iteration {}. Checking conditions...", log_prefix, loop_iteration)
 
-                if not self._is_locked:
-                    # Lock is free, acquire it
+                is_locked_val = self._is_locked
+                holder_priority_val = self._lock_holder_priority
+                interrupt_quota_val = self._elp1_interrupt_quota
+
+                can_interrupt = (priority == ELP1 and
+                                 is_locked_val and
+                                 holder_priority_val == ELP0 and
+                                 interrupt_quota_val > 0)
+
+                logger.trace(
+                    "{}:: Conditions eval: priority_is_ELP1={}, is_locked={}, holder_is_ELP0={}, quota_OK={}. ==> can_interrupt={}",
+                    log_prefix, (priority == ELP1), is_locked_val, (holder_priority_val == ELP0),
+                    (interrupt_quota_val > 0), can_interrupt)
+
+                if not is_locked_val:
                     self._is_locked = True
                     self._lock_holder_priority = priority
-                    self._lock_holder_proc = None # Will be set later for ELP0
-                    self._lock_holder_thread_ident = requesting_thread_ident
-
-                    if priority == ELP0:
-                         # Reset ELP1 quota when ELP0 gets a chance
-                         self._elp1_interrupt_quota = self.QUOTA_MAX
-                         logger.info("{}:: Acquired lock (Free). Resetting ELP1 quota to {}.", log_prefix, self.QUOTA_MAX)
-                    else: # ELP1 acquired a free lock
-                         logger.info("{}:: Acquired lock (Free). Quota remaining: {}", log_prefix, self._elp1_interrupt_quota)
-
-                    if priority == ELP1: self._elp1_waiting_count -= 1
-                    return True # Lock acquired
-
-                elif can_interrupt:
-                    # ELP1 needs to interrupt ELP0
-                    logger.warning("{}:: Attempting IMMEDIATE INTERRUPT (SIGKILL/Force) ELP0 (Holder Thr: {})! Quota: {}->{}",
-                                   log_prefix, self._lock_holder_thread_ident,
-                                   self._elp1_interrupt_quota, self._elp1_interrupt_quota - 1)
-
-                    # --- Kill the ELP0 worker process FORCEFULLY ---
-                    interrupted_proc = self._lock_holder_proc
-                    if interrupted_proc and interrupted_proc.poll() is None:
-                        pid_to_kill = interrupted_proc.pid
-                        logger.warning("{}:: Forcefully terminating ELP0 process PID: {}", log_prefix, pid_to_kill)
-                        try:
-                            # --- MODIFICATION HERE ---
-                            # Directly use kill() or platform equivalent
-                            if platform.system() == "Windows":
-                                # Windows: Use taskkill with /F for force
-                                kill_cmd = ["taskkill", "/PID", str(pid_to_kill), "/F"]
-                                kill_proc = subprocess.run(kill_cmd, capture_output=True, text=True, check=False)
-                                if kill_proc.returncode != 0:
-                                    logger.error("{}:: taskkill /F failed for PID {}: {}", log_prefix, pid_to_kill, kill_proc.stderr.strip())
-                                else:
-                                    logger.info("{}:: taskkill /F successful for PID {}", log_prefix, pid_to_kill)
-                            else:
-                                # Unix-like: Use os.kill with SIGKILL
-                                import signal as sig # Import signal module
-                                os.kill(pid_to_kill, sig.SIGKILL)
-                                logger.info("{}:: Sent SIGKILL to PID {}", log_prefix, pid_to_kill)
-                            # --- END MODIFICATION ---
-
-                            # Wait briefly to allow OS to clean up, process state might not update instantly
-                            interrupted_proc.wait(timeout=1.0)
-
-                        except ProcessLookupError:
-                             logger.warning("{}:: ELP0 process PID {} not found during kill attempt (already exited?).", log_prefix, pid_to_kill)
-                        except subprocess.TimeoutExpired:
-                            logger.error("{}:: Wait after kill timed out for PID {}. Process might be stuck.", log_prefix, pid_to_kill)
-                        except Exception as kill_err:
-                            logger.error("{}:: Error forcefully killing ELP0 process PID {}: {}", log_prefix, pid_to_kill, kill_err)
-                            # Continue? If kill fails, ELP0 might not release lock. Still risky, proceed with lock takeover.
-                    # --- End Kill ---
-
-                    # Forcefully take over the lock state (Same as before)
-                    self._is_locked = True
-                    self._lock_holder_priority = ELP1
                     self._lock_holder_proc = None
                     self._lock_holder_thread_ident = requesting_thread_ident
+                    if priority == ELP0:
+                        self._elp1_interrupt_quota = self.QUOTA_MAX
+                        logger.info("{}:: Acquired lock (was Free). Reset ELP1 quota to {}.", log_prefix,
+                                    self.QUOTA_MAX)
+                    else:  # ELP1 acquired a free lock
+                        logger.info("{}:: Acquired lock (was Free). Quota remaining: {}", log_prefix,
+                                    self._elp1_interrupt_quota)
+                    if priority == ELP1: self._elp1_waiting_count -= 1
+                    return True
+
+                elif can_interrupt:
+                    logger.warning("{}:: INTERRUPT PATH: Conditions MET. Holder ELP{} (Proc PID: {}). Quota: {}->{}",
+                                   log_prefix, holder_priority_val,
+                                   self._lock_holder_proc.pid if self._lock_holder_proc else "None",
+                                   interrupt_quota_val, interrupt_quota_val - 1)
+
+                    interrupted_proc = self._lock_holder_proc
+                    original_holder_thread_ident = self._lock_holder_thread_ident  # For logging
+
+                    if interrupted_proc and interrupted_proc.poll() is None:
+                        pid_to_kill = interrupted_proc.pid
+                        logger.warning("{}:: Forcefully terminating ELP0 process PID: {} (was held by Thr: {})",
+                                       log_prefix, pid_to_kill, original_holder_thread_ident)
+                        try:
+                            if platform.system() == "Windows":
+                                kill_cmd = ["taskkill", "/PID", str(pid_to_kill), "/F", "/T"]  # Add /T for process tree
+                                kill_proc_run = subprocess.run(kill_cmd, capture_output=True, text=True, check=False)
+                                if kill_proc_run.returncode != 0:
+                                    logger.error("{}:: taskkill failed for PID {}: {}", log_prefix, pid_to_kill,
+                                                 kill_proc_run.stderr.strip())
+                                else:
+                                    logger.info("{}:: taskkill successful for PID {}", log_prefix, pid_to_kill)
+                            else:
+                                import signal as sig
+                                os.kill(pid_to_kill, sig.SIGKILL)  # SIGKILL for forceful termination
+                                logger.info("{}:: Sent SIGKILL to PID {}", log_prefix, pid_to_kill)
+
+                            # Brief wait for OS to process the kill signal
+                            try:
+                                interrupted_proc.wait(timeout=0.5)  # Shorter wait after kill
+                                logger.info("{}:: ELP0 process PID {} terminated after kill.", log_prefix, pid_to_kill)
+                            except subprocess.TimeoutExpired:
+                                logger.warning(
+                                    "{}:: Wait after kill timed out for PID {}. Process might be stuck or OS is slow.",
+                                    log_prefix, pid_to_kill)
+                        except ProcessLookupError:
+                            logger.warning("{}:: ELP0 process PID {} not found during kill (already exited?).",
+                                           log_prefix, pid_to_kill)
+                        except Exception as kill_err:
+                            logger.error("{}:: Error killing ELP0 process PID {}: {}", log_prefix, pid_to_kill,
+                                         kill_err)
+                    else:
+                        logger.warning(
+                            "{}:: ELP0 lock holder process (PID: {}) not found or already exited. Cannot kill. Taking over lock.",
+                            log_prefix, interrupted_proc.pid if interrupted_proc else "UnknownPID")
+
+                    # Take over lock state
+                    self._is_locked = True  # Already true, but reaffirm
+                    self._lock_holder_priority = ELP1  # Take over with ELP1
+                    self._lock_holder_proc = None  # ELP1 tasks don't register a proc this way
+                    self._lock_holder_thread_ident = requesting_thread_ident  # New holder
                     self._elp1_interrupt_quota -= 1
 
-                    logger.info("{}:: FORCE-INTERRUPTED ELP0 and acquired lock. Quota remaining: {}", log_prefix, self._elp1_interrupt_quota)
-                    self._condition.notify_all()
-                    self._elp1_waiting_count -= 1
-                    return True # Lock acquired via interruption
+                    logger.info(
+                        "{}:: INTERRUPTED ELP0 and acquired lock (was held by Thr: {}). Quota remaining: {}. Notifying all.",
+                        log_prefix, original_holder_thread_ident, self._elp1_interrupt_quota)
+                    self._condition.notify_all()  # Notify any other waiters (though ELP1 took it)
+                    if priority == ELP1: self._elp1_waiting_count -= 1  # This ELP1 is no longer waiting
+                    return True
 
-                else:
-                    # Cannot acquire now (locked by higher/same priority, or ELP1 quota exhausted)
-                    logger.trace("{}:: Lock held by ELP{} (Thr: {}). Waiting...",
-                                 log_prefix, self._lock_holder_priority, self._lock_holder_thread_ident)
-                    if priority == ELP1 and self._lock_holder_priority == ELP0 and self._elp1_interrupt_quota <= 0:
-                        logger.warning("{}:: ELP1 waiting due to EXHAUSTED QUOTA ({} <= 0).", log_prefix, self._elp1_interrupt_quota)
+                else:  # Cannot acquire now (e.g., ELP0 trying to get lock held by ELP1, or ELP1 quota exhausted for interrupting ELP0)
+                    logger.trace(
+                        "{}:: WAIT PATH: Lock held by ELP{} (Thr: {}). Quota: {}. Cannot acquire/interrupt now. Waiting...",
+                        log_prefix, holder_priority_val, self._lock_holder_thread_ident, interrupt_quota_val)
+                    if priority == ELP1 and holder_priority_val == ELP0 and interrupt_quota_val <= 0:
+                        logger.warning(
+                            "{}:: ELP1 waiting specifically due to EXHAUSTED QUOTA ({} <= 0). Will wait for ELP0 to release.",
+                            log_prefix, interrupt_quota_val)
 
-                    # Wait for a signal or timeout
-                    wait_start = time.monotonic()
-                    signaled = self._condition.wait(timeout=timeout)
-                    wait_duration = time.monotonic() - wait_start
+                    wait_for_timeout = timeout  # Use the timeout passed to acquire
+                    if loop_iteration > 1 and timeout is not None:  # If we are looping due to spurious wakeups, adjust remaining timeout
+                        elapsed_since_acquire_start = time.monotonic() - acquire_start_time
+                        wait_for_timeout = max(0, timeout - elapsed_since_acquire_start)
+                        if wait_for_timeout == 0:  # Timeout already expired
+                            logger.warning("{}:: Acquire timed out while waiting for condition.", log_prefix)
+                            if priority == ELP1: self._elp1_waiting_count -= 1
+                            return False
 
-                    if not signaled and timeout is not None:
-                        logger.warning("{}:: Acquire timed out after {:.2f}s.", log_prefix, wait_duration)
-                        if priority == ELP1: self._elp1_waiting_count -= 1
-                        return False # Timed out
+                    logger.trace("{}:: Calling condition.wait(timeout={})...", log_prefix, wait_for_timeout)
+                    signaled = self._condition.wait(timeout=wait_for_timeout)
 
-                    # If signaled, loop continues to re-evaluate conditions
-                    logger.trace("{}:: Woke up from wait ({:.2f}s). Re-evaluating conditions...", log_prefix, wait_duration)
+                    if not signaled and wait_for_timeout is not None and wait_for_timeout > 0:  # Check if it was a real timeout
+                        # Check if timeout was actually reached or if wait_for_timeout was already 0
+                        # This check is a bit redundant if the above wait_for_timeout == 0 check is hit.
+                        current_elapsed = time.monotonic() - acquire_start_time
+                        if timeout is not None and current_elapsed >= timeout:
+                            logger.warning("{}:: Acquire timed out after condition.wait(). Total elapsed: {:.2f}s",
+                                           log_prefix, current_elapsed)
+                            if priority == ELP1: self._elp1_waiting_count -= 1
+                            return False
+
+                    logger.trace("{}:: Woke up from condition.wait(). Signaled: {}. Re-evaluating...", log_prefix,
+                                 signaled)
 
             # --- End Wait Condition Loop ---
             # This part should ideally not be reached due to return statements in the loop
