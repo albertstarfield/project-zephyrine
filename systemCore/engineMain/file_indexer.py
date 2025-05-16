@@ -641,11 +641,34 @@ class FileIndexer:
                     if self.embedding_model:
                         logger.debug(f"🧠 Phase 1 Generating embedding for: {file_path} (PRIORITY: ELP0)")
                         try:
-                            # Call embed_query with ELP0 priority
-                            vector = self.embedding_model.embed_query(content, priority=ELP0)
-                            embedding_json_str = json.dumps(vector)
-                            status = 'indexed_text' # Mark as successfully indexed with text
-                            logger.trace(f"Embedding generated successfully for {file_path}")
+                            # --- CORRECTED CALL ---
+                            # Ensure the embedding_model (which is LlamaCppEmbeddingsWrapper) has _embed_texts
+                            if hasattr(self.embedding_model, '_embed_texts') and \
+                                    callable(getattr(self.embedding_model, '_embed_texts')):
+
+                                # _embed_texts expects a list of texts and returns a list of embeddings.
+                                # Since we are embedding a single 'content' string, wrap it in a list.
+                                embedding_list = self.embedding_model._embed_texts([content],
+                                                                                   priority=ELP0)  # type: ignore
+
+                                if embedding_list and len(embedding_list) > 0:
+                                    vector = embedding_list[0]  # Get the first (and only) embedding
+                                    embedding_json_str = json.dumps(vector)
+                                    status = 'indexed_text'
+                                    logger.trace(f"Embedding generated successfully for {file_path}")
+                                else:
+                                    logger.error(
+                                        f"Embedding generation via _embed_texts returned None or empty list for {file_path}")
+                                    status = 'error_embedding'
+                                    error_message = "Embedding generation returned no vector."
+                                    embedding_json_str = None
+                            else:
+                                logger.error(
+                                    f"CRITICAL: self.embedding_model (type: {type(self.embedding_model)}) does not have _embed_texts method. Cannot embed with priority.")
+                                status = 'error_embedding'
+                                error_message = "Embedding model misconfigured (no _embed_texts method)."
+                                embedding_json_str = None
+                            # --- END CORRECTED CALL ---
                         except Exception as emb_err:
                             # Check if the error is the specific interruption marker
                             if interruption_error_marker in str(emb_err):
