@@ -1417,7 +1417,7 @@ class AIChat:
                             interaction.llm_response.strip()) > 10:
                         text_content = f"AI (session): {interaction.llm_response}"
                     if text_content and interaction.id not in session_history_ids_set:
-                        session_texts_to_embed.append(text_content);
+                        session_texts_to_embed.append(text_content)
                         session_history_ids_set.add(interaction.id)
 
             if session_texts_to_embed and self.provider and self.provider.embeddings:
@@ -3939,6 +3939,87 @@ class AIChat:
                     break
         return "\n".join(summary)
 
+    async def _run_tot_in_background_wrapper_v2(self, db_session_factory: Any,
+                                                original_input_for_tot: str,  # Renamed for clarity
+                                                rag_context_docs: List[Any],
+                                                history_rag_interactions: List[Any],
+                                                log_context_str: str,
+                                                recent_direct_history_str: str,
+                                                file_index_context_str: str,
+                                                triggering_interaction_id: int,
+                                                # ID of interaction that triggered this ToT
+                                                imagined_image_context_str: str):
+
+        # This wrapper runs in a separate thread created by asyncio.create_task(self._run_tot_in_background_wrapper_v2(...))
+        # So, it needs its own DB session.
+        db_for_tot_thread: Optional[Session] = None
+        thread_log_prefix = f"BG_ToT_Wrap|TrigID:{triggering_interaction_id}"
+        logger.info(f"{thread_log_prefix}: Background ToT task thread started.")
+
+        try:
+            db_for_tot_thread = db_session_factory()  # Create a new session for this thread
+            if not db_for_tot_thread:
+                logger.error(f"{thread_log_prefix}: Failed to create DB session. Aborting ToT.")
+                return
+
+            # Prepare interaction_data for the _call_llm_with_timing within _run_tree_of_thought_v2
+            # This is for metrics of the ToT LLM call itself.
+            interaction_data_for_llm_call = {
+                'session_id': self.current_session_id,  # Use session_id from the AIChat instance
+                'mode': 'chat',  # Or 'internal_tot_llm_call'
+                'execution_time_ms': 0
+            }
+
+            # Run the synchronous _run_tree_of_thought_v2 using asyncio.to_thread
+            # because _run_tree_of_thought_v2 itself makes blocking calls (_call_llm_with_timing)
+            await asyncio.to_thread(
+                self._run_tree_of_thought_v2,
+                db=db_for_tot_thread,
+                input=original_input_for_tot,  # This is passed to ToT prompt as {input}
+                rag_context_docs=rag_context_docs,
+                history_rag_interactions=history_rag_interactions,
+                log_context_str=log_context_str,
+                recent_direct_history_str=recent_direct_history_str,
+                file_index_context_str=file_index_context_str,
+                imagined_image_context_str=imagined_image_context_str,
+                interaction_data_for_tot_llm_call=interaction_data_for_llm_call,  # For the LLM call timing
+                original_user_input_for_log=original_input_for_tot,  # For logging within ToT result record
+                triggering_interaction_id_for_log=triggering_interaction_id  # For logging
+            )
+            logger.info(f"{thread_log_prefix}: _run_tree_of_thought_v2 completed execution.")
+
+            # Mark the original interaction as "ToT analysis spawned"
+            # This is better than directly putting the ToT result on it.
+            trigger_interaction = db_for_tot_thread.query(Interaction).filter(
+                Interaction.id == triggering_interaction_id).first()
+            if trigger_interaction:
+                if hasattr(trigger_interaction, 'tot_analysis_spawned'):
+                    trigger_interaction.tot_analysis_spawned = True  # type: ignore
+                    trigger_interaction.last_modified_db = time.strftime("%Y-%m-%d %H:%M:%S")  # type: ignore
+                    db_for_tot_thread.commit()
+                    logger.info(
+                        f"{thread_log_prefix}: Marked original Interaction ID {triggering_interaction_id} as tot_analysis_spawned=True.")
+                else:
+                    logger.warning(
+                        f"{thread_log_prefix}: Original Interaction ID {triggering_interaction_id} missing 'tot_analysis_spawned' field.")
+            else:
+                logger.error(
+                    f"{thread_log_prefix}: Could not find original Interaction ID {triggering_interaction_id} to mark as ToT spawned.")
+
+        except TaskInterruptedException:
+            logger.warning(f"🚦 {thread_log_prefix}: ToT task was interrupted.")
+            # The interruption should have been logged by _run_tree_of_thought_v2 already.
+        except Exception as e:
+            logger.error(f"{thread_log_prefix}: Error running ToT in background wrapper: {e}")
+            logger.exception(f"{thread_log_prefix} ToT Wrapper Traceback:")
+            # The error should have been logged by _run_tree_of_thought_v2 as a new interaction.
+        finally:
+            if db_for_tot_thread:
+                try:
+                    db_for_tot_thread.close()
+                except Exception as e_close:
+                    logger.error(f"{thread_log_prefix}: Error closing ToT DB session: {e_close}")
+            logger.info(f"{thread_log_prefix}: Background ToT task thread finished.")
 
     async def _run_tot_in_background_wrapper(self, db_session_factory: Any, input: str, rag_context_docs: List[Any], history_rag_interactions: List[Interaction], log_context_str: str, recent_direct_history_str: str, file_index_context_str: str, triggering_interaction_id: int):
         """Async wrapper to run synchronous ToT logic with its own DB session."""
@@ -4442,23 +4523,30 @@ class AIChat:
 
     # --- NEW HELPER: Routing ---
     async def _route_to_specialist(self, db: Session, session_id: str, user_input: str, context: Dict) -> Tuple[
-        str, str, str]:
+        str, str, str
+    ]:
         log_prefix = f"🧠 Route|ELP0|{session_id}"
-        logger.info(f"{log_prefix}: Routing request with direct JSON output expected from router...")
+        logger.info(f"{log_prefix}: Routing request. Expecting JSON from router model...")
 
-        # --- Use the "router" model, which should be a general instruction-following model ---
         router_model = self.provider.get_model("router")
-        default_model_key = "general"
+        default_model_key = "general"  # Fallback model
 
         if not router_model:
-            # ... (error handling as before) ...
-            return default_model_key, user_input, "Router model unavailable."
+            logger.error(f"{log_prefix}: Router model ('router') not available! Falling back to '{default_model_key}'.")
+            # Log this failure to DB
+            try:
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input="[Router Model Unavailable]",
+                                llm_response=f"Router model key 'router' not configured. Defaulting to {default_model_key}.")
+            except Exception as db_err:
+                logger.error(f"{log_prefix} Failed to log router model unavailable: {db_err}")
+            return default_model_key, user_input, "Router model unavailable, using default."
 
-        prompt_input_router = {  # Inputs for PROMPT_ROUTER
+        prompt_input_router = {
             "input": user_input,
             "pending_tot_result": context.get("pending_tot_result", "None."),
             "recent_direct_history": context.get("recent_direct_history", "None."),
-            "context": context.get("url_context", "None."),  # URL context
+            "context": context.get("url_context", "None."),
             "history_rag": context.get("history_rag", "None."),
             "file_index_context": context.get("file_index_context", "None."),
             "log_context": context.get("log_context", "None."),
@@ -4466,65 +4554,135 @@ class AIChat:
             "imagined_image_vlm_description": context.get("imagined_image_vlm_description", "None.")
         }
 
-        # Expect direct JSON output from the router model
-        router_chain = (
-                ChatPromptTemplate.from_template(PROMPT_ROUTER)
+        # Chain to get RAW STRING output first
+        router_chain_raw_output = (
+                ChatPromptTemplate.from_template(PROMPT_ROUTER)  # PROMPT_ROUTER instructs to output ONLY JSON
                 | router_model
-                | JsonOutputParser()  # Parse JSON directly from router output
+                | StrOutputParser()  # Get the raw string
         )
 
+        # JsonOutputParser instance to parse the extracted string later
+        json_parser = JsonOutputParser()
+
         router_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
-        routing_result_json: Optional[Dict] = None
-        last_error = None
+        last_error: Optional[Exception] = None
+        raw_llm_response_for_logging = "Router LLM call did not produce parsable output."
 
-        for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):
-            logger.debug(f"{log_prefix} Router direct JSON attempt {attempt + 1}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
+        for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):  # DEEP_THOUGHT_RETRY_ATTEMPTS from config
+            current_attempt = attempt + 1
+            logger.debug(f"{log_prefix} Router JSON extraction attempt {current_attempt}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
+
+            raw_llm_router_response_text = ""
+            json_string_to_parse: Optional[str] = None
+
             try:
-                routing_result_json = await asyncio.to_thread(
-                    self._call_llm_with_timing, router_chain, prompt_input_router,
-                    router_timing_data, priority=ELP0
+                # Call LLM to get the raw string output
+                raw_llm_router_response_text = await asyncio.to_thread(
+                    self._call_llm_with_timing, router_chain_raw_output, prompt_input_router,
+                    router_timing_data, priority=ELP0  # ELP0 for router
                 )
-                # _call_llm_with_timing returns the parsed JSON if JsonOutputParser succeeds
+                raw_llm_response_for_logging = raw_llm_router_response_text  # For logging on error
+                logger.trace(
+                    f"{log_prefix} Raw LLM Router Output (Attempt {current_attempt}):\n{raw_llm_router_response_text}")
 
-                if isinstance(routing_result_json, dict) and routing_result_json.get(
-                        "chosen_model") and routing_result_json.get("refined_query"):
-                    chosen_model = routing_result_json["chosen_model"]
-                    refined_query = routing_result_json["refined_query"]
-                    reasoning = routing_result_json.get("reasoning", "N/A")
+                # --- Robust JSON Extraction Logic ---
+                # 1. Remove ChatML tokens / assistant preamble if present
+                cleaned_for_json_extraction = raw_llm_router_response_text
+                # Remove common assistant start patterns, case insensitive
+                cleaned_for_json_extraction = re.sub(r"^\s*assistant\s*\n?(<\|im_start\|>)?", "",
+                                                     cleaned_for_json_extraction, flags=re.IGNORECASE).lstrip()
+
+                # 2. Remove <think> tags or other LLM "noise" before JSON
+                cleaned_for_json_extraction = re.sub(r"<think>.*?</think>", "", cleaned_for_json_extraction,
+                                                     flags=re.DOTALL | re.IGNORECASE).strip()
+
+                # 3. Find JSON block (markdown or direct)
+                json_markdown_match = re.search(r"```json\s*(.*?)\s*```", cleaned_for_json_extraction, re.DOTALL)
+                if json_markdown_match:
+                    json_string_to_parse = json_markdown_match.group(1).strip()
+                    logger.trace(f"{log_prefix} Extracted JSON from markdown block: {json_string_to_parse[:200]}...")
+                else:
+                    # Fallback: Find the first '{' and last '}' that form a valid JSON object
+                    # This is more robust than just finding the first/last brace in the whole string
+                    match = re.search(r"(\{.*?\})(?=\s*<\|im_end\|>|\s*$)", cleaned_for_json_extraction, re.DOTALL)
+                    if match:
+                        json_string_to_parse = match.group(1).strip()
+                        logger.trace(
+                            f"{log_prefix} Extracted JSON using regex '{{.*?}}': {json_string_to_parse[:200]}...")
+                    else:
+                        # If no clear block, the LLM might have outputted only JSON (ideal) or malformed output
+                        json_string_to_parse = cleaned_for_json_extraction  # Try parsing the whole cleaned string
+                        logger.warning(
+                            f"{log_prefix} No clear JSON block found via regex, will attempt to parse: '{json_string_to_parse[:100]}...'")
+
+                if not json_string_to_parse or not json_string_to_parse.strip():
+                    logger.warning(
+                        f"{log_prefix} After cleaning, string to parse for JSON is empty. Raw was: '{raw_llm_router_response_text}'")
+                    last_error = ValueError("Router LLM response for JSON was empty after cleaning.")
+                    if current_attempt < DEEP_THOUGHT_RETRY_ATTEMPTS:
+                        time.sleep(0.5 + attempt * 0.5); continue
+                    else:
+                        break  # Max retries
+
+                # 4. Parse the extracted JSON string
+                parsed_json_output = json_parser.parse(json_string_to_parse)  # Use Langchain's parser for consistency
+
+                if isinstance(parsed_json_output, dict) and \
+                        "chosen_model" in parsed_json_output and \
+                        "refined_query" in parsed_json_output:
+
+                    chosen_model = str(parsed_json_output["chosen_model"])
+                    refined_query = str(parsed_json_output["refined_query"])
+                    reasoning = str(parsed_json_output.get("reasoning", "N/A"))
+
                     valid_model_keys = {"vlm", "latex", "math", "code", "general"}
                     if chosen_model in valid_model_keys:
                         logger.info(
                             f"✅ {log_prefix} Router chose: '{chosen_model}'. Reason: {reasoning}. Query: '{refined_query[:50]}...'")
-                        # ... (DB logging of success) ...
+                        try:
+                            add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug",
+                                            user_input="[Router Success]",
+                                            llm_response=f"Chose: {chosen_model}, Reason: {reasoning[:100]}",
+                                            classification=f"routed_to_{chosen_model}")
+                        except Exception:
+                            pass
                         return chosen_model, refined_query, reasoning
                     else:
-                        last_error = ValueError(f"Router returned invalid model key '{chosen_model}'")
-                        logger.warning(f"{log_prefix} {last_error}. Full result: {routing_result_json}")
-                        # ... (DB logging of warning) ...
+                        last_error = ValueError(f"Router returned invalid model key '{chosen_model}' in JSON.")
+                        logger.warning(f"{log_prefix} {last_error} Full parsed JSON: {parsed_json_output}")
                 else:
-                    last_error = ValueError("Router output not the expected JSON dict structure.")
-                    logger.warning(f"{log_prefix} {last_error}. Received: {routing_result_json}")
-                    # ... (DB logging of warning) ...
+                    last_error = ValueError(
+                        "Router output parsed as JSON, but missing required keys ('chosen_model', 'refined_query').")
+                    logger.warning(f"{log_prefix} {last_error} Parsed JSON: {parsed_json_output}")
 
-            except TaskInterruptedException as tie:
-                raise tie
-            except Exception as e:  # Catches OutputParserException if JSON is malformed, or other errors
+            except TaskInterruptedException as tie:  # If _call_llm_with_timing raises it
+                logger.warning(f"🚦 {log_prefix} Router LLM call INTERRUPTED: {tie}")
+                raise tie  # Propagate to be handled by background_generate's main try-except
+            except OutputParserException as ope:  # From json_parser.parse()
+                last_error = ope
+                logger.warning(
+                    f"⚠️ {log_prefix} Error parsing JSON from router (Attempt {current_attempt}): {ope}. String tried: '{json_string_to_parse if json_string_to_parse is not None else 'N/A'}'. Raw LLM: '{raw_llm_router_response_text[:200]}...'")
+            except Exception as e:  # Other errors during LLM call or processing
                 last_error = e
-                logger.warning(f"⚠️ {log_prefix} Error during router direct JSON attempt {attempt + 1}: {e}")
-                # The raw text that failed parsing would be inside 'e' if it's OutputParserException
-                if isinstance(e, OutputParserException):
-                    logger.warning(f"   LLM Output that failed JSON parsing: {e.llm_output}")
-                # ... (DB logging of error) ...
+                logger.warning(
+                    f"⚠️ {log_prefix} Error during router processing (Attempt {current_attempt}): {e}. Raw LLM: '{raw_llm_router_response_text[:200]}...'")
 
-            if attempt < DEEP_THOUGHT_RETRY_ATTEMPTS - 1:
-                await asyncio.sleep(0.5 + attempt * 0.5)
-            else:
+            if current_attempt < DEEP_THOUGHT_RETRY_ATTEMPTS:
+                await asyncio.sleep(0.5 + attempt * 0.5)  # Use asyncio.sleep for async func
+            else:  # Max retries reached
                 logger.error(f"❌ {log_prefix} Max retries for router. Last error: {last_error}")
-                # ... (DB logging of final failure) ...
-                return default_model_key, user_input, f"Router failed after retries: {last_error}"
+                break
 
-        # Fallback if loop finishes unexpectedly (shouldn't happen)
-        return default_model_key, user_input, "Router unexpected exit after retries."
+                # Fallback after retries
+        logger.error(
+            f"{log_prefix} Router failed after {DEEP_THOUGHT_RETRY_ATTEMPTS} attempts. Last error: {last_error}. Defaulting to '{default_model_key}'.")
+        try:
+            add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                            user_input="[Router Failed - Max Retries]",
+                            llm_response=f"Router failed: {last_error}. Raw LLM last attempt: {raw_llm_response_for_logging[:500]}")
+        except Exception:
+            pass
+        return default_model_key, user_input, f"Router failed after retries: {last_error}"
 
     # --- generate method ---
     # app.py -> Inside AIChat class
@@ -4860,9 +5018,9 @@ class AIChat:
                 if not hasattr(doc, 'page_content') or not hasattr(doc, 'metadata'):
                     logger.warning(f"{log_prefix} Skipping malformed document: {doc}")
                     continue
-                content = doc.page_content;
+                content = doc.page_content
                 metadata = doc.metadata
-                file_path = metadata.get("source", "UnkPath");
+                file_path = metadata.get("source", "UnkPath")
                 file_name = metadata.get("file_name",
                                          os.path.basename(file_path) if file_path != "UnkPath" else "UnkFile")
                 last_mod = metadata.get("last_modified", "UnkDate")
@@ -4872,7 +5030,7 @@ class AIChat:
                     f"File: {file_name}\nPath Hint: ...{file_path[-70:]}\nModified: {last_mod}\n"
                     f"Content Snippet: {snippet}\n---\n")
                 if sum(len(p) for p in context_parts) + len(entry) > max_total_chars:
-                    context_parts.append("[Vector file search context truncated]...\n");
+                    context_parts.append("[Vector file search context truncated]...\n")
                     break
                 context_parts.append(entry)
 
@@ -4889,20 +5047,13 @@ class AIChat:
     async def background_generate(self, db: Session, user_input: str, session_id: str = None,
                                   classification: str = "chat_simple", image_b64: Optional[str] = None,
                                   update_interaction_id: Optional[int] = None):
-        """
-        Handles comprehensive background processing (ELP0) for chat interactions.
-        Includes multi-source RAG, action analysis/execution, multi-LLM routing,
-        translation, response correction, and ToT spawning, with token-aware context management.
-        If update_interaction_id is provided, this is a reflection task.
-        """
+        # ... (request_id, is_reflection_task, log_prefix, self.current_session_id setup as before) ...
         request_id = f"gen-{uuid.uuid4()}"
         is_reflection_task = update_interaction_id is not None
         log_prefix = f"🔄 REFLECT {request_id}" if is_reflection_task else f"💬 BGEN {request_id}"
-
         if not session_id:
             session_id = f"session_{int(time.time())}" if not is_reflection_task else f"reflection_on_{update_interaction_id}_{str(uuid.uuid4())[:8]}"
         self.current_session_id = session_id
-
         logger.info(
             f"{log_prefix} Async Background Generate (ELP0 Pipeline) START --> Session: {session_id}, "
             f"Initial Class: '{classification}', Input: '{user_input[:50]}...', Img: {'Yes' if image_b64 else 'N'}, "
@@ -4910,311 +5061,268 @@ class AIChat:
         )
         request_start_time = time.monotonic()
 
+        # Initialize interaction_data with all expected fields
         interaction_data = {
             "session_id": session_id, "mode": "chat", "input_type": "text",
             "user_input": user_input, "llm_response": "[Processing background task...]",
             "execution_time_ms": 0, "classification": classification, "classification_reason": None,
-            "rag_history_ids": None, "rag_source_url": None, "requires_deep_thought": False,
-            "deep_thought_reason": None, "tot_analysis_requested": False, "tot_result": None,
-            "tot_delivered": False, "emotion_context_analysis": None, "image_description": None,
+            "rag_history_ids": None, "rag_source_url": None,
+            "requires_deep_thought": (classification == "chat_complex") or is_reflection_task,
+            "deep_thought_reason": None, "tot_analysis_requested": False,
+            "tot_analysis_spawned": False,  # New field
+            "emotion_context_analysis": None, "image_description": None,
             "assistant_action_analysis_json": None, "assistant_action_type": None,
             "assistant_action_params": None, "assistant_action_executed": False,
-            "assistant_action_result": None, "image_data": image_b64[:20] + "..." if image_b64 else None,
+            "assistant_action_result": None,
+            "image_data": image_b64[:20] + "..." if image_b64 else None,
             "imagined_image_prompt": None, "imagined_image_b64": None,
             "imagined_image_vlm_description": None, "reflection_completed": False
         }
         if image_b64: interaction_data["input_type"] = "image+text"
 
-        final_response_text = "Error: Background processing failed unexpectedly."
+        final_response_text_for_this_turn = "Error: Background processing failed unexpectedly."
         saved_initial_interaction: Optional[Interaction] = None
         original_interaction_to_update_for_reflection: Optional[Interaction] = None
         interrupted_flag = False
 
-        if not user_input and not image_b64:
-            logger.warning(f"{log_prefix} Empty input for background generate.")
-            return
-
+        if not user_input and not image_b64: logger.warning(f"{log_prefix} Empty input. Aborting."); return
         if is_reflection_task:
             try:
                 original_interaction_to_update_for_reflection = db.query(Interaction).filter(
                     Interaction.id == update_interaction_id).first()
                 if not original_interaction_to_update_for_reflection:
                     logger.error(
-                        f"{log_prefix}: CRITICAL - Cannot find original interaction ID {update_interaction_id}. Aborting reflection.")
+                        f"{log_prefix}: CRITICAL - Original reflection target ID {update_interaction_id} not found.")
                     return
-            except Exception as load_err:
-                logger.error(f"{log_prefix}: Error loading original interaction {update_interaction_id}: {load_err}")
-                return
+                interaction_data["classification_reason"] = "Self-reflection task, proceeding with deep analysis."
+            except Exception as e:
+                logger.error(f"{log_prefix}: Error loading reflection target ID {update_interaction_id}: {e}"); return
 
         try:
             current_input_for_llm_analysis = user_input
-            if image_b64:
+            if image_b64:  # VLM Preprocessing
+                # ... (VLM logic as before, updates current_input_for_llm_analysis and interaction_data['image_description'])
                 logger.info(f"{log_prefix} User image provided, VLM description (ELP0)...")
                 vlm_model_user = self.provider.get_model("vlm")
                 if vlm_model_user:
                     try:
                         user_img_uri = f"data:image/png;base64,{image_b64}"
-                        user_img_content_part = {"type": "image_url", "image_url": {"url": user_img_uri}}
-                        vlm_user_prompt = "Describe this image concisely, focusing on key elements relevant to a conversation."
-                        vlm_user_messages = [
-                            HumanMessage(content=[user_img_content_part, {"type": "text", "text": vlm_user_prompt}])]
-                        vlm_user_chain = vlm_model_user | StrOutputParser()
-                        vlm_user_timing_data = {"session_id": session_id, "mode": "chat"}
-                        desc = await asyncio.to_thread(self._call_llm_with_timing, vlm_user_chain, vlm_user_messages,
-                                                       vlm_user_timing_data, ELP0)
+                        img_content = {"type": "image_url", "image_url": {"url": user_img_uri}}
+                        vlm_prompt = "Describe this image concisely for conversational context."
+                        vlm_messages = [HumanMessage(content=[img_content, {"type": "text", "text": vlm_prompt}])]
+                        vlm_chain = vlm_model_user | StrOutputParser()
+                        timing_data_vlm = {"session_id": session_id, "mode": "chat"}
+                        desc = await asyncio.to_thread(self._call_llm_with_timing, vlm_chain, vlm_messages,
+                                                       timing_data_vlm, ELP0)
                         interaction_data['image_description'] = desc
-                        current_input_for_llm_analysis = f"[Image Desc (User): {desc}]\n\nUser Query: {user_input or '(Query related to image)'}"
-                        logger.info(f"{log_prefix} VLM desc for user image: '{str(desc)[:100]}...'")
+                        current_input_for_llm_analysis = f"[Image Desc (User): {desc}]\n\nUser Query: {user_input or '(Query on image)'}"
                     except TaskInterruptedException:
                         raise
-                    except Exception as e:
-                        interaction_data['image_description'] = f"[VLM Error: {e}]"
-                        logger.error(
-                            f"VLM user image error: {e}")
+                    except Exception as e_vlm:
+                        interaction_data['image_description'] = f"[VLM Error: {e_vlm}]"
                 else:
                     interaction_data['image_description'] = "[VLM Model Unavailable]"
 
-            pending_tot_interaction_obj = await asyncio.to_thread(get_pending_tot_result, db, session_id)
-            pending_tot_context_str = "None."
-            if pending_tot_interaction_obj and pending_tot_interaction_obj.tot_result:
-                pending_tot_context_str = f"Pending ToT Result: {pending_tot_interaction_obj.tot_result}"
+            # --- Initialize context strings with defaults BEFORE gather ---
+            url_ctx_untruncated = "No URL context found."
+            sess_refl_rag_untrunc = "No Session/Reflection RAG context found."
+            kw_file_ctx_untrunc = "No keyword file search results."
+            vec_file_ctx_result_str = "No vector file search results."
+            log_ctx_prompt = "No relevant logs found."
+            direct_hist_prompt = "No recent direct history."
+            hist_summary_action = "No history summary available."  # For action analysis
+            url_docs_for_prompt_list: List[Any] = []
+            session_hist_docs_for_prompt_list: List[Any] = []
+            reflection_chunk_docs_for_prompt_list: List[Any] = []
+            # --- End Initialize context strings ---
 
+            logger.debug(f"{log_prefix} Starting concurrent context fetching (All ELP0)...")
             temp_global_hist_kw = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-            temp_direct_hist_kw = self._format_direct_history(temp_global_hist_kw)
-            keyword_file_search_query = await self._generate_file_search_query_async(db, current_input_for_llm_analysis,
-                                                                                     temp_direct_hist_kw, session_id)
+            temp_direct_hist_kw = self._format_direct_history(temp_global_hist_kw)  # Sync
+            keyword_file_query = await self._generate_file_search_query_async(db, current_input_for_llm_analysis,
+                                                                              temp_direct_hist_kw, session_id)
 
-            logger.debug(f"{log_prefix} Starting concurrent context fetching (All ELP0 operations)...")
-            wrapped_rag_res_bg = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db,
-                                                         current_input_for_llm_analysis, ELP0)
-
-            url_ret_obj_bg, sess_hist_ret_obj_bg, refl_chunk_ret_obj_bg, sess_chat_rag_ids_bg = None, None, None, ""
-            if wrapped_rag_res_bg.get("status") == "success":
-                url_ret_obj_bg, sess_hist_ret_obj_bg, refl_chunk_ret_obj_bg, sess_chat_rag_ids_bg = wrapped_rag_res_bg[
-                    "data"]
-            elif wrapped_rag_res_bg.get("status") == "interrupted":
-                raise TaskInterruptedException(wrapped_rag_res_bg.get("error_message"))
+            wrapped_rag_res = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db,
+                                                      current_input_for_llm_analysis, ELP0)
+            url_ret_obj, sess_hist_ret_obj, refl_chunk_ret_obj, sess_chat_rag_ids = None, None, None, ""
+            if wrapped_rag_res.get("status") == "success":
+                url_ret_obj, sess_hist_ret_obj, refl_chunk_ret_obj, sess_chat_rag_ids = wrapped_rag_res["data"]
+            elif wrapped_rag_res.get("status") == "interrupted":
+                raise TaskInterruptedException(wrapped_rag_res.get("error_message"))
             else:
-                raise RuntimeError(f"RAG retrieval failed: {wrapped_rag_res_bg.get('error_message')}")
-            interaction_data['rag_history_ids'] = sess_chat_rag_ids_bg
+                raise RuntimeError(f"RAG retriever init failed: {wrapped_rag_res.get('error_message')}")
+            interaction_data['rag_history_ids'] = sess_chat_rag_ids
             if hasattr(self, 'vectorstore_url') and self.vectorstore_url: interaction_data['rag_source_url'] = getattr(
                 self.vectorstore_url, '_source_url', None)
 
-            async def retrieve_separate_rag_docs_concurrently_bg_local():
-                url_docs, session_docs, reflection_docs = [], [], []
-                q_rag = current_input_for_llm_analysis
-                if url_ret_obj_bg:
+            async def retrieve_docs_task_local():  # Renamed to avoid potential scope issues
+                # ... (implementation as before, populating local url_docs, sess_docs, refl_docs)
+                _url_docs, _sess_docs, _refl_docs = [], [], []
+                _q_rag = current_input_for_llm_analysis
+                if url_ret_obj:
                     try:
-                        u_docs = await asyncio.to_thread(url_ret_obj_bg.invoke, q_rag); url_docs.extend(u_docs or [])
+                        _u_d = await asyncio.to_thread(url_ret_obj.invoke, _q_rag); _url_docs.extend(_u_d or [])
                     except Exception as e:
                         logger.warning(f"{log_prefix} BG URL RAG invoke error: {e}")
-                if sess_hist_ret_obj_bg:
+                if sess_hist_ret_obj:
                     try:
-                        s_docs = await asyncio.to_thread(sess_hist_ret_obj_bg.invoke, q_rag)
-                        session_docs.extend(
-                            s_docs or [])
+                        _s_d = await asyncio.to_thread(sess_hist_ret_obj.invoke, _q_rag); _sess_docs.extend(_s_d or [])
                     except Exception as e:
                         logger.warning(f"{log_prefix} BG Session RAG invoke error: {e}")
-                if refl_chunk_ret_obj_bg:
+                if refl_chunk_ret_obj:
                     try:
-                        r_docs = await asyncio.to_thread(refl_chunk_ret_obj_bg.invoke, q_rag)
-                        reflection_docs.extend(
-                            r_docs or [])
+                        _r_d = await asyncio.to_thread(refl_chunk_ret_obj.invoke, _q_rag); _refl_docs.extend(_r_d or [])
                     except Exception as e:
                         logger.warning(f"{log_prefix} BG Reflection RAG invoke error: {e}")
-                return {"url_docs_bg": url_docs, "session_hist_docs_bg": session_docs,
-                        "reflection_chunk_docs_bg": reflection_docs}
+                return {"url_docs": _url_docs, "session_docs": _sess_docs, "reflection_docs": _refl_docs}
 
-            gathered_results = await asyncio.gather(
-                retrieve_separate_rag_docs_concurrently_bg_local(),
+            gathered_contexts = await asyncio.gather(
+                retrieve_docs_task_local(),
                 asyncio.to_thread(get_recent_interactions, db, RAG_HISTORY_COUNT * 2, session_id, "chat", True),
                 asyncio.to_thread(get_global_recent_interactions, db, limit=10),
                 asyncio.to_thread(self._run_emotion_analysis, db, user_input, interaction_data),
-                asyncio.to_thread(search_file_index, db, keyword_file_search_query,
-                                  RAG_FILE_INDEX_COUNT) if search_file_index and keyword_file_search_query else asyncio.sleep(
+                asyncio.to_thread(search_file_index, db, keyword_file_query,
+                                  RAG_FILE_INDEX_COUNT) if search_file_index and keyword_file_query else asyncio.sleep(
                     0, result=[]),
                 self._get_vector_search_file_index_context(current_input_for_llm_analysis, ELP0),
                 return_exceptions=True
             )
 
-            retrieved_rag_dict, log_entries, global_hist, _, kw_file_res, vec_file_ctx_str = [None] * 6  # Default unpack
-            for i, res_item in enumerate(gathered_results):
+            # Process gathered_contexts, assigning to the pre-initialized context strings
+            rag_docs_dict_res = {"url_docs": [], "session_docs": [], "reflection_docs": []}  # Default
+            log_entries_list_res, global_hist_list_res, kw_file_results_list_res = [], [], []
+
+            for i, res_item in enumerate(gathered_contexts):
                 if isinstance(res_item, TaskInterruptedException):
                     raise res_item
                 elif isinstance(res_item, BaseException):
                     logger.error(f"{log_prefix} Error in BG concurrent task {i}: {res_item}")
-                    if i == 0:
-                        retrieved_rag_dict = {"url_docs_bg": [], "session_hist_docs_bg": [],
-                                              "reflection_chunk_docs_bg": []}
-                    elif i == 1:
-                        log_entries = []
-                    elif i == 2:
-                        global_hist = []
-                    elif i == 4:
-                        kw_file_res = []
-                    elif i == 5:
-                        vec_file_ctx_str = f"[Vector File Search Error: {type(res_item).__name__}]"
+                    if i == 5: vec_file_ctx_result_str = f"[Vector File Search Error: {type(res_item).__name__}]"
+                    # Other defaults are already set
                 else:
                     if i == 0:
-                        retrieved_rag_dict = res_item
+                        rag_docs_dict_res = res_item if isinstance(res_item, dict) else rag_docs_dict_res
                     elif i == 1:
-                        log_entries = res_item
+                        log_entries_list_res = res_item if isinstance(res_item, list) else []
                     elif i == 2:
-                        global_hist = res_item
+                        global_hist_list_res = res_item if isinstance(res_item, list) else []
                     elif i == 4:
-                        kw_file_res = res_item
+                        kw_file_results_list_res = res_item if isinstance(res_item, list) else []
                     elif i == 5:
-                        vec_file_ctx_str = res_item
+                        vec_file_ctx_result_str = res_item if isinstance(res_item,
+                                                                         str) else "Vector search result not string."
 
-            emotion_ctx_str = interaction_data.get('emotion_context_analysis', "N/A")
-            url_docs_list = retrieved_rag_dict.get("url_docs_bg", [])
-            session_hist_docs_list = retrieved_rag_dict.get("session_hist_docs_bg", [])
-            reflection_docs_list = retrieved_rag_dict.get("reflection_chunk_docs_bg", [])
+            emotion_analysis_str = interaction_data.get('emotion_context_analysis',
+                                                        "N/A")  # Already updated in interaction_data
+            url_docs_for_prompt_list = rag_docs_dict_res.get("url_docs", [])
+            session_hist_docs_for_prompt_list = rag_docs_dict_res.get("session_docs", [])
+            reflection_chunk_docs_for_prompt_list = rag_docs_dict_res.get("reflection_docs", [])
 
-            url_ctx_untruncated = self._format_docs(url_docs_list, "URL Context")
-            sess_refl_rag_untruncated = self._format_docs(session_hist_docs_list + reflection_docs_list,
-                                                          "Session/Reflection RAG")
-            kw_file_ctx_untruncated = self._format_file_index_results(kw_file_res)
-            log_ctx_str_prompt = self._format_log_history(log_entries)
-            direct_hist_str_prompt = self._format_direct_history(global_hist)
-            hist_summary_action = self._get_history_summary(db, MEMORY_SIZE)
+            url_ctx_untruncated = self._format_docs(url_docs_for_prompt_list, "URL Context")
+            sess_refl_rag_untrunc = self._format_docs(
+                session_hist_docs_for_prompt_list + reflection_chunk_docs_for_prompt_list, "Session/Reflection RAG")
+            kw_file_ctx_untrunc = self._format_file_index_results(kw_file_results_list_res)
+            log_ctx_prompt = self._format_log_history(log_entries_list_res)
+            direct_hist_prompt = self._format_direct_history(global_hist_list_res)
+            hist_summary_action = self._get_history_summary(db, MEMORY_SIZE)  # This one is defined here
 
-            # --- TOKEN BUDGETING FOR ALL LLM PROMPTS IN BACKGROUND_GENERATE ---
-            # Base this on the router prompt as it's often complex and includes many context placeholders
-            # Using a general LLAMA_CPP_N_CTX from config as the model's actual context window.
-            # If different models chosen by router have different context windows, this becomes more complex.
-            # The llama_worker's dynamic n_ctx is based on its *input prompt*, not a fixed model property visible here easily.
-            MODEL_CONTEXT_WINDOW_BUDGET = LLAMA_CPP_N_CTX  # Use the configured general context size
-            ROUTER_PROMPT_TOKEN_ESTIMATE = self._count_tokens(PROMPT_ROUTER)  # Estimate fixed part of router prompt
-            CURRENT_INPUT_TOKEN_ESTIMATE = self._count_tokens(current_input_for_llm_analysis)
-            STATIC_CONTEXT_TOKEN_ESTIMATE = self._count_tokens(log_ctx_str_prompt) + \
-                                            self._count_tokens(direct_hist_str_prompt) + \
-                                            self._count_tokens(pending_tot_context_str) + \
-                                            self._count_tokens(emotion_ctx_str) + \
-                                            self._count_tokens(interaction_data.get('imagined_image_vlm_description',
-                                                                                    ''))  # Context for imagined image
+            # --- Token Budgeting (as before) ---
+            MODEL_CTX_WIN = LLAMA_CPP_N_CTX
+            PROMPT_BASE_EST_TOKENS = self._count_tokens(PROMPT_ROUTER)
+            INPUT_TOKENS = self._count_tokens(current_input_for_llm_analysis)
+            STATIC_CTX_TOKENS = self._count_tokens(log_ctx_prompt) + self._count_tokens(direct_hist_prompt) + \
+                                self._count_tokens(emotion_analysis_str) + \
+                                self._count_tokens(interaction_data.get('imagined_image_vlm_description',
+                                                                        ''))  # Add imagined image desc
+            LLM_RESPONSE_BUFFER = 1024
+            total_fixed_tokens = PROMPT_BASE_EST_TOKENS + INPUT_TOKENS + STATIC_CTX_TOKENS
+            max_tokens_for_all_dynamic = MODEL_CTX_WIN - total_fixed_tokens - LLM_RESPONSE_BUFFER
+            if max_tokens_for_all_dynamic < 200: max_tokens_for_all_dynamic = max(0, max_tokens_for_all_dynamic)
+            logger.debug(f"{log_prefix} BG Token Budget: MaxForAllDynamic={max_tokens_for_all_dynamic}")
 
-            BUFFER_FOR_LLM_RESPONSE_BG = 1024  # More generous buffer for complex background tasks
+            combined_dyn_untrunc = (
+                f"URL Context:\n{url_ctx_untruncated}\n\nSess/Refl RAG:\n{sess_refl_rag_untrunc}\n\n"
+                f"File KW:\n{kw_file_ctx_untrunc}\n\nFile Vec:\n{vec_file_ctx_result_str}").strip()
+            main_dynamic_ctx_block_for_llm = self._truncate_rag_context(combined_dyn_untrunc,
+                                                                        max_tokens_for_all_dynamic) if max_tokens_for_all_dynamic > 0 else "[Dynamic Context Skipped: Budget]"
 
-            total_fixed_tokens_for_prompts = ROUTER_PROMPT_TOKEN_ESTIMATE + CURRENT_INPUT_TOKEN_ESTIMATE + STATIC_CONTEXT_TOKEN_ESTIMATE
-            max_tokens_for_all_dynamic_rag_file = MODEL_CONTEXT_WINDOW_BUDGET - total_fixed_tokens_for_prompts - BUFFER_FOR_LLM_RESPONSE_BG
-
-            if max_tokens_for_all_dynamic_rag_file < 200:
-                logger.warning(
-                    f"{log_prefix} Low token budget for all dynamic context ({max_tokens_for_all_dynamic_rag_file}). Will be heavily truncated.")
-                max_tokens_for_all_dynamic_rag_file = max(0, max_tokens_for_all_dynamic_rag_file)
-
-            logger.debug(
-                f"{log_prefix} BG Token Budget: MaxForAllDynamic={max_tokens_for_all_dynamic_rag_file} (ModelCtx={MODEL_CONTEXT_WINDOW_BUDGET}, FixedEst={total_fixed_tokens_for_prompts})")
-
-            # Combine all RAG/File contexts then truncate ONCE
-            combined_dynamic_untruncated_for_specialist_corrector_tot = (
-                f"URL Context:\n{url_ctx_untruncated}\n\n"
-                f"Session/Reflection RAG:\n{sess_refl_rag_untruncated}\n\n"
-                f"File Keyword Search Context:\n{kw_file_ctx_untruncated}\n\n"
-                f"File Vector Search Context:\n{vec_file_ctx_str}"
-            ).strip()
-
-            if max_tokens_for_all_dynamic_rag_file > 0:
-                truncated_main_dynamic_context_block = self._truncate_rag_context(
-                    combined_dynamic_untruncated_for_specialist_corrector_tot,
-                    max_tokens_for_all_dynamic_rag_file
-                )
-            else:
-                truncated_main_dynamic_context_block = "[All RAG/File Context Skipped Due to Token Budget]"
-
-            # For router prompt, which takes separate context fields, we need to truncate them individually
-            # while respecting the overall dynamic budget. A simple division of budget:
-            budget_per_router_src = max_tokens_for_all_dynamic_rag_file // 3 if max_tokens_for_all_dynamic_rag_file > 0 else 0
-            url_ctx_for_router = self._truncate_rag_context(url_ctx_untruncated, budget_per_router_src)
-            sess_refl_rag_for_router = self._truncate_rag_context(sess_refl_rag_untruncated, budget_per_router_src)
-            combined_file_ctx_for_router = self._truncate_rag_context(
-                (
-                    f"File Keyword Context:\n{kw_file_ctx_untruncated}\n\nFile Vector Context:\n{vec_file_ctx_str}").strip(),
-                budget_per_router_src
-            )
-
-            logger.trace(
-                f"{log_prefix} BG Truncated Main Dynamic Context for Specialist/Corrector/ToT:\n{truncated_main_dynamic_context_block[:300]}...")
+            budget_per_src_router = max_tokens_for_all_dynamic // 3 if max_tokens_for_all_dynamic > 0 else 0
+            url_ctx_for_router = self._truncate_rag_context(url_ctx_untruncated, budget_per_src_router)
+            sess_refl_router = self._truncate_rag_context(sess_refl_rag_untrunc, budget_per_src_router)
+            file_ctx_for_router = self._truncate_rag_context(
+                (f"File KW:\n{kw_file_ctx_untrunc}\n\nFile Vec:\n{vec_file_ctx_result_str}").strip(),
+                budget_per_src_router)
 
             # --- Action Analysis ---
-            action_analysis_payload = {"history_summary": hist_summary_action, "log_context": log_ctx_str_prompt,
-                                       "recent_direct_history": direct_hist_str_prompt,
-                                       "file_index_context": combined_file_ctx_for_router}
+            action_payload = {"history_summary": hist_summary_action, "log_context": log_ctx_prompt,
+                              "recent_direct_history": direct_hist_prompt, "file_index_context": file_ctx_for_router}
             action_details = await asyncio.to_thread(self._analyze_assistant_action, db, current_input_for_llm_analysis,
-                                                     session_id, action_analysis_payload)
-            detected_action_type = "no_action"
+                                                     session_id, action_payload)
+            detected_action_type = action_details.get("action_type", "no_action") if action_details else "no_action"
             if action_details:
-                detected_action_type = action_details.get("action_type", "no_action")
-                interaction_data.update({
-                    'assistant_action_analysis_json': json.dumps(action_details),
-                    'assistant_action_type': detected_action_type,
-                    'assistant_action_params': json.dumps(action_details.get("parameters", {}))
-                })
+                interaction_data.update({'assistant_action_analysis_json': json.dumps(action_details),
+                                         'assistant_action_type': detected_action_type,
+                                         'assistant_action_params': json.dumps(action_details.get("parameters", {}))})
 
             if not is_reflection_task:
-                initial_save_data = interaction_data.copy()
-                initial_save_data['llm_response'] = "[BG Pending...]"
-                initial_save_data['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
+                initial_save = interaction_data.copy()
+                initial_save['llm_response'] = "[BG Pending...]"
+                initial_save['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
                 valid_keys = {c.name for c in Interaction.__table__.columns}
-                db_kwargs = {k: v for k, v in initial_save_data.items() if k in valid_keys}
+                db_kwargs = {k: v for k, v in initial_save.items() if k in valid_keys}
                 saved_initial_interaction = await asyncio.to_thread(add_interaction, db, **db_kwargs)
 
-            imagined_image_vlm_description_for_llm_context = interaction_data.get(
-                'image_description')  # From user image
+            imagined_img_vlm_desc_this_turn = interaction_data.get('image_description')
+
             if action_details and detected_action_type == "imagine":
+                # ... (Imagine logic as before - ensure all context strings like sess_refl_router are defined)
                 interaction_data['assistant_action_executed'] = True
                 idea_to_viz = action_details.get("parameters", {}).get("idea_to_visualize", user_input)
                 img_prompt = await self._generate_image_generation_prompt_async(db, session_id, user_input, idea_to_viz,
-                                                                                sess_refl_rag_for_router,
-                                                                                combined_file_ctx_for_router,
-                                                                                direct_hist_str_prompt,
-                                                                                url_ctx_for_router, log_ctx_str_prompt)
+                                                                                sess_refl_router, file_ctx_for_router,
+                                                                                direct_hist_prompt, url_ctx_for_router,
+                                                                                log_ctx_prompt)
                 interaction_data['imagined_image_prompt'] = img_prompt
                 if img_prompt:
-                    img_data_list, img_err = await self.provider.generate_image_async(img_prompt, None, ELP0)
+                    img_data_list, img_err = await self.provider.generate_image_async(img_prompt, None,
+                                                                                      ELP0)  # Pass image_b64=None for txt2img
                     if img_err:
-                        final_response_text = f"Imagine Error: {img_err}"
-                        interaction_data[
-                            'assistant_action_result'] = final_response_text
+                        final_response_text_for_this_turn = f"Imagine Error: {img_err}"
                     elif img_data_list and img_data_list[0].get("b64_json"):
                         interaction_data['imagined_image_b64'] = img_data_list[0]["b64_json"]
                         desc = await self._describe_generated_image_async(db, session_id, img_data_list[0]["b64_json"])
                         interaction_data['imagined_image_vlm_description'] = desc
-                        imagined_image_vlm_description_for_llm_context = desc  # For THIS turn's context
-                        final_response_text = f"I've imagined that: {desc or 'Generated an image.'}"
-                        interaction_data['assistant_action_result'] = "Imagine success."
+                        imagined_img_vlm_desc_this_turn = desc
+                        final_response_text_for_this_turn = f"I've imagined that: {desc or 'Generated an image.'}"
                     else:
-                        final_response_text = "Imagine Error: No image data."
-                        interaction_data[
-                            'assistant_action_result'] = final_response_text
+                        final_response_text_for_this_turn = "Imagine Error: No image data."
                 else:
-                    final_response_text = "Imagine Error: Prompt gen failed."
-                    interaction_data[
-                        'assistant_action_result'] = final_response_text
+                    final_response_text_for_this_turn = "Imagine Error: Prompt gen failed."
+                interaction_data['assistant_action_result'] = final_response_text_for_this_turn
+
 
             elif action_details and detected_action_type != "no_action":
-                target_inter_for_action = saved_initial_interaction if not is_reflection_task else original_interaction_to_update_for_reflection
-                if target_inter_for_action:
-                    final_response_text = await self._execute_assistant_action(db, session_id, action_details,
-                                                                               target_inter_for_action)
+                target_inter_action = saved_initial_interaction if not is_reflection_task else original_interaction_to_update_for_reflection
+                if target_inter_action:
+                    final_response_text_for_this_turn = await self._execute_assistant_action(db, session_id,
+                                                                                             action_details,
+                                                                                             target_inter_action)  # type: ignore
                 else:
-                    final_response_text = "Error: Missing interaction context for action."
+                    final_response_text_for_this_turn = "Error: Missing interaction context for action."
+                interaction_data['assistant_action_result'] = final_response_text_for_this_turn
+
+
             else:  # No action, standard LLM response
-                router_payload_for_llm = {
-                    "pending_tot_result": pending_tot_context_str,
-                    "recent_direct_history": direct_hist_str_prompt,
-                    "context": url_ctx_for_router,  # Individually truncated for router
-                    "history_rag": sess_refl_rag_for_router,  # Individually truncated for router
-                    "file_index_context": combined_file_ctx_for_router,  # Individually truncated for router
-                    "log_context": log_ctx_str_prompt,
-                    "emotion_analysis": emotion_ctx_str,
-                    "imagined_image_vlm_description": imagined_image_vlm_description_for_llm_context or "None."
-                    # From this turn's imagine, or user's image desc
+                router_payload_llm = {
+                    "input": current_input_for_llm_analysis,
+                    "recent_direct_history": direct_hist_prompt, "context": url_ctx_for_router,
+                    "history_rag": sess_refl_router, "file_index_context": file_ctx_for_router,
+                    "log_context": log_ctx_prompt, "emotion_analysis": emotion_analysis_str,
+                    "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn or "None."
                 }
                 chosen_model, refined_q, route_reason = await self._route_to_specialist(db, session_id,
                                                                                         current_input_for_llm_analysis,
-                                                                                        router_payload_for_llm)
+                                                                                        router_payload_llm)
                 interaction_data['classification_reason'] = f"Routed to {chosen_model}: {route_reason}"
 
                 specialist_input_trans = refined_q
@@ -5224,22 +5332,18 @@ class AIChat:
                 specialist_model_llm = self.provider.get_model(chosen_model)
                 if not specialist_model_llm: raise ValueError(f"Specialist '{chosen_model}' unavailable.")
 
-                # Use the globally truncated combined RAG/File context for specialist and corrector
-                specialist_payload_final = {
-                    "input": specialist_input_trans, "emotion_analysis": emotion_ctx_str,
-                    "context": url_ctx_untruncated,
-                    # Send the original untruncated, but it will be part of overall string for the main prompt
-                    "history_rag": sess_refl_rag_untruncated,
-                    "file_index_context": truncated_main_dynamic_context_block,  # MAIN TRUNCATED BLOCK
-                    "log_context": log_ctx_str_prompt,
-                    "recent_direct_history": direct_hist_str_prompt,
-                    "pending_tot_result": pending_tot_context_str,
-                    "imagined_image_vlm_description": imagined_image_vlm_description_for_llm_context or interaction_data.get(
+                specialist_payload_final_llm = {
+                    "input": specialist_input_trans, "emotion_analysis": emotion_analysis_str,
+                    "context": url_ctx_untruncated,  # Use fuller (but globally truncated) contexts for specialist
+                    "history_rag": sess_refl_rag_untrunc,
+                    "file_index_context": main_dynamic_ctx_block_for_llm,
+                    "log_context": log_ctx_prompt, "recent_direct_history": direct_hist_prompt,
+                    "pending_tot_result": "None.",
+                    "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn or interaction_data.get(
                         'image_description', 'None.')
                 }
-                # Ensure self.text_prompt_template uses these keys
                 spec_chain = (RunnableLambda(lambda
-                                                 x: specialist_payload_final) | self.text_prompt_template | specialist_model_llm | StrOutputParser())
+                                                 x: specialist_payload_final_llm) | self.text_prompt_template | specialist_model_llm | StrOutputParser())
                 timing_spec = {"session_id": session_id, "mode": "chat"}
                 draft_resp = await asyncio.to_thread(self._call_llm_with_timing, spec_chain, {}, timing_spec, ELP0)
 
@@ -5247,253 +5351,247 @@ class AIChat:
                         "zh" in specialist_input_trans or any("\u4e00" <= char <= "\u9fff" for char in draft_resp)):
                     draft_resp = await self._translate(draft_resp, "en", "zh")
 
-                final_response_text = await self._correct_response(db, session_id, current_input_for_llm_analysis,
-                                                                   specialist_payload_final,
-                                                                   draft_resp)  # Corrector gets same rich context
+                final_response_text_for_this_turn = await self._correct_response(db, session_id,
+                                                                                 current_input_for_llm_analysis,
+                                                                                 specialist_payload_final_llm,
+                                                                                 draft_resp)
 
             # --- ToT Spawning ---
             classification_for_tot = interaction_data.get('classification', 'chat_simple')
             if is_reflection_task: classification_for_tot = "chat_complex"
             should_spawn_tot_bg = (classification_for_tot == "chat_complex")
-            target_inter_for_tot_flags = saved_initial_interaction if not is_reflection_task else original_interaction_to_update_for_reflection
 
-            if target_inter_for_tot_flags:
-                try:
-                    # ... (Update ToT flags as before)
-                    needs_commit = False
-                    if target_inter_for_tot_flags.requires_deep_thought != should_spawn_tot_bg: target_inter_for_tot_flags.requires_deep_thought = should_spawn_tot_bg; needs_commit = True
-                    dt_reason = interaction_data.get('classification_reason',
-                                                     'ToT spawned') if should_spawn_tot_bg else None
-                    if target_inter_for_tot_flags.deep_thought_reason != dt_reason: target_inter_for_tot_flags.deep_thought_reason = dt_reason; needs_commit = True
-                    if target_inter_for_tot_flags.tot_analysis_requested != should_spawn_tot_bg: target_inter_for_tot_flags.tot_analysis_requested = should_spawn_tot_bg; needs_commit = True
-                    if needs_commit: db.commit()
-                except Exception as e:
-                    logger.error(f"ToT DB flag update error: {e}"); db.rollback()
+            interaction_id_that_triggers_tot: Optional[int] = None
+            user_input_that_triggers_tot: str = current_input_for_llm_analysis
 
-            if should_spawn_tot_bg and target_inter_for_tot_flags:
-                logger.warning(f"⏳ {log_prefix} Spawning ToT for Trigger ID: {target_inter_for_tot_flags.id}...")
-                imagined_ctx_for_tot = imagined_image_vlm_description_for_llm_context or interaction_data.get(
+            if is_reflection_task and original_interaction_to_update_for_reflection:
+                interaction_id_that_triggers_tot = original_interaction_to_update_for_reflection.id
+            elif not is_reflection_task and saved_initial_interaction:
+                interaction_id_that_triggers_tot = saved_initial_interaction.id
+
+            if should_spawn_tot_bg and interaction_id_that_triggers_tot is not None:
+                logger.warning(
+                    f"⏳ {log_prefix} Spawning background ToT for Trigger ID: {interaction_id_that_triggers_tot}.")
+                trigger_interaction_for_update = db.query(Interaction).filter(
+                    Interaction.id == interaction_id_that_triggers_tot).first()
+                if trigger_interaction_for_update:
+                    try:  # Update tot_analysis_spawned etc.
+                        setattr(trigger_interaction_for_update, 'tot_analysis_spawned', True)
+                        setattr(trigger_interaction_for_update, 'requires_deep_thought', True)
+                        setattr(trigger_interaction_for_update, 'deep_thought_reason',
+                                interaction_data.get('classification_reason', 'Complex, ToT spawned.'))
+                        setattr(trigger_interaction_for_update, 'last_modified_db', time.strftime("%Y-%m-%d %H:%M:%S"))
+                        db.commit()
+                    except Exception as e_tot_db:
+                        logger.error(f"Error updating ToT spawn flags: {e_tot_db}"); db.rollback()
+
+                imagined_ctx_for_tot = imagined_img_vlm_desc_this_turn or interaction_data.get(
                     'image_description') or "None."
+                # Ensure all context lists passed to ToT wrapper are defined
                 tot_payload = {
-                    "db_session_factory": SessionLocal, "input": user_input,
-                    "rag_context_docs": url_docs_list,  # Pass the lists of actual Document objects
-                    "history_rag_interactions": session_hist_docs_list + reflection_docs_list,
-                    "log_context_str": log_ctx_str_prompt,
-                    "recent_direct_history_str": direct_hist_str_prompt,
-                    "file_index_context_str": truncated_main_dynamic_context_block,  # Pass the globally truncated block
+                    "db_session_factory": SessionLocal,
+                    "original_input_for_tot": user_input_that_triggers_tot,
+                    "rag_context_docs": url_docs_for_prompt_list,
+                    "history_rag_interactions": session_hist_docs_for_prompt_list + reflection_chunk_docs_for_prompt_list,
+                    "log_context_str": log_ctx_prompt,
+                    "recent_direct_history_str": direct_hist_prompt,
+                    "file_index_context_str": main_dynamic_ctx_block_for_llm,
                     "imagined_image_context_str": imagined_ctx_for_tot,
-                    "triggering_interaction_id": target_inter_for_tot_flags.id,
+                    "triggering_interaction_id": interaction_id_that_triggers_tot,
                 }
-                asyncio.create_task(self._run_tot_in_background_wrapper_v2(**tot_payload))
-
-            if pending_tot_interaction_obj:
-                await asyncio.to_thread(mark_tot_delivered, db, pending_tot_interaction_obj.id)
+                asyncio.create_task(self._run_tot_in_background_wrapper_v2(**tot_payload))  # type: ignore
 
         except TaskInterruptedException as tie:
             logger.warning(f"🚦 {log_prefix} Background Generate Task INTERRUPTED: {tie}")
             interrupted_flag = True
-            final_response_text = f"[Background task interrupted: {tie}]"
-            interaction_data.update({'llm_response': final_response_text, 'classification': "task_failed_interrupted",
-                                     'input_type': 'log_warning'})
+            final_response_text_for_this_turn = f"[Background task interrupted: {tie}]"
+            interaction_data.update(
+                {'llm_response': final_response_text_for_this_turn, 'classification': "task_failed_interrupted",
+                 'input_type': 'log_warning'})
         except Exception as e_bg_gen:
             logger.error(f"❌❌ {log_prefix} UNHANDLED exception in background_generate: {e_bg_gen}")
             logger.exception(f"{log_prefix} Background Generate Main Traceback:")
-            final_response_text = f"Error during background processing: {type(e_bg_gen).__name__} - {e_bg_gen}"
-            interaction_data.update({'llm_response': final_response_text[:4000], 'input_type': 'error'})
+            final_response_text_for_this_turn = f"Error during background processing: {type(e_bg_gen).__name__} - {e_bg_gen}"
+            interaction_data.update({'llm_response': final_response_text_for_this_turn[:4000], 'input_type': 'error'})
+
         finally:
-            # --- Final DB Update ---
-            final_db_data = interaction_data.copy()
-            final_response_text_cleaned = self._cleanup_llm_output(final_response_text)
-            final_db_data['llm_response'] = final_response_text_cleaned
-            final_db_data['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
-            if final_db_data.get('imagined_image_b64'):  # Truncate b64 for DB log
-                b64 = final_db_data['imagined_image_b64']
-                if len(b64) > 1000000: final_db_data['imagined_image_b64'] = b64[:100] + f"...[trunc_{len(b64)}]"
-            try:
-                if interrupted_flag:
-                    if is_reflection_task and original_interaction_to_update_for_reflection:
-                        original_interaction_to_update_for_reflection.reflection_completed = False
-                        original_interaction_to_update_for_reflection.llm_response = (
-                                                                                                 original_interaction_to_update_for_reflection.llm_response or "") + f"\n--- Reflection Interrupted ---"
-                        db.commit()
-                    elif not is_reflection_task and saved_initial_interaction:
-                        for k, v in final_db_data.items():
-                            if hasattr(saved_initial_interaction, k): setattr(saved_initial_interaction, k, v)
-                        db.commit()
-                    else:
-                        add_interaction(db, **final_db_data); db.commit()
-                else:  # Not interrupted
-                    if is_reflection_task and original_interaction_to_update_for_reflection:
+            final_db_data_to_save = interaction_data.copy()
+            final_response_text_cleaned = self._cleanup_llm_output(final_response_text_for_this_turn)
+            final_db_data_to_save['llm_response'] = final_response_text_cleaned
+            final_db_data_to_save['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
+            if final_db_data_to_save.get('imagined_image_b64'):
+                b64 = final_db_data_to_save['imagined_image_b64']
+                if len(b64) > 1000000: final_db_data_to_save['imagined_image_b64'] = b64[
+                                                                                     :100] + f"...[trunc_{len(b64)}]"
+
+            try:  # Final DB save/update logic
+                if is_reflection_task and original_interaction_to_update_for_reflection:
+                    if not interrupted_flag and final_db_data_to_save.get('input_type') != 'error':
                         original_interaction_to_update_for_reflection.reflection_completed = True
+                        setattr(original_interaction_to_update_for_reflection, 'last_modified_db',
+                                time.strftime("%Y-%m-%d %H:%M:%S"))
                         db.commit()
-                        new_refl_output_data = final_db_data.copy()
-                        new_refl_output_data.update({
-                            'input_type': "reflection_result" if final_db_data.get(
-                                'input_type') != 'error' else 'error',
-                            'user_input': f"[Refl.Result for Orig.ID {update_interaction_id}]",
-                            'reflection_completed': False
-                        })
-                        valid_keys_refl = {c.name for c in Interaction.__table__.columns}
-                        db_kwargs_refl = {k: v for k, v in new_refl_output_data.items() if k in valid_keys_refl}
+                        new_refl_output_data = final_db_data_to_save.copy()
+                        new_refl_output_data.update({'input_type': "reflection_result",
+                                                     'user_input': f"[Refl.Result for Orig.ID {update_interaction_id}]",
+                                                     'reflection_completed': False})
+                        valid_keys = {c.name for c in Interaction.__table__.columns}
+                        db_kwargs_refl = {k: v for k, v in new_refl_output_data.items() if k in valid_keys}
                         refl_rec = await asyncio.to_thread(add_interaction, db, **db_kwargs_refl)
                         if refl_rec and self.provider and self.provider.embeddings:
                             await asyncio.to_thread(index_single_reflection, refl_rec, self.provider, db, ELP0)
-                    elif not is_reflection_task and saved_initial_interaction:
-                        for k, v in final_db_data.items():
-                            if hasattr(saved_initial_interaction, k): setattr(saved_initial_interaction, k, v)
+                    elif interrupted_flag:
+                        original_interaction_to_update_for_reflection.reflection_completed = False
+                        interruption_note = f"\n--- Reflection Interrupted ---"
+                        original_interaction_to_update_for_reflection.llm_response = (getattr(
+                            original_interaction_to_update_for_reflection, 'llm_response',
+                            None) or "") + interruption_note
+                        setattr(original_interaction_to_update_for_reflection, 'last_modified_db',
+                                time.strftime("%Y-%m-%d %H:%M:%S"))
                         db.commit()
-                    elif not is_reflection_task and not saved_initial_interaction:  # Initial save failed
-                        valid_keys = {c.name for c in Interaction.__table__.columns}
-                        db_kwargs_final = {k: v for k, v in final_db_data.items() if k in valid_keys}
-                        await asyncio.to_thread(add_interaction, db, **db_kwargs_final)
+                elif not is_reflection_task and saved_initial_interaction:
+                    for k, v in final_db_data_to_save.items():
+                        if hasattr(saved_initial_interaction, k): setattr(saved_initial_interaction, k, v)
+                    db.commit()
+                elif not is_reflection_task and not saved_initial_interaction:
+                    valid_keys = {c.name for c in Interaction.__table__.columns}
+                    db_kwargs_final = {k: v for k, v in final_db_data_to_save.items() if k in valid_keys}
+                    await asyncio.to_thread(add_interaction, db, **db_kwargs_final)
             except Exception as final_db_err:
-                logger.error(f"❌ {log_prefix}: CRITICAL error during final DB save: {final_db_err}")
-                db.rollback()
+                logger.error(f"❌ {log_prefix}: CRITICAL error during final DB save: {final_db_err}"); db.rollback()
 
             final_status = 'Interrupted' if interrupted_flag else (
-                'Error' if final_db_data.get('input_type') == 'error' else 'Success')
+                'Error' if final_db_data_to_save.get('input_type') == 'error' else 'Success')
             logger.info(
-                f"{log_prefix} Async Background Generate END. Status: {final_status}. Duration: {final_db_data['execution_time_ms']:.2f}ms")
-
-    async def _run_tot_in_background_wrapper_v2(self, db_session_factory: Any, input: str,
-                                                rag_context_docs: List[Any],
-                                                history_rag_interactions: List[Interaction], log_context_str: str,
-                                                recent_direct_history_str: str, file_index_context_str: str,
-                                                triggering_interaction_id: int,
-                                                imagined_image_context_str: str):  # Added imagined_image_context_str
-        """Async wrapper to run synchronous ToT logic with its own DB session. V2 passes imagined context."""
-        logger.info(f"BG ToT Wrapper V2: Starting for trigger ID {triggering_interaction_id}")
-        db = db_session_factory()
-        # Ensure interaction_data is correctly structured for _run_tree_of_thought
-        bg_interaction_data = {
-            'id': triggering_interaction_id,  # Placeholder, _run_tree_of_thought might not use it
-            'execution_time_ms': 0,
-            'session_id': self.current_session_id,  # Assuming self.current_session_id is accessible
-            'mode': 'chat',
-            # Add other fields if _call_llm_with_timing or other helpers inside _run_tree_of_thought need them
-        }
-        try:
-            await asyncio.to_thread(
-                self._run_tree_of_thought_v2,  # Call a V2 of ToT
-                db=db,
-                input=input,
-                rag_context_docs=rag_context_docs,
-                history_rag_interactions=history_rag_interactions,
-                log_context_str=log_context_str,
-                recent_direct_history_str=recent_direct_history_str,
-                file_index_context_str=file_index_context_str,
-                imagined_image_context_str=imagined_image_context_str,  # Pass new context
-                interaction_data=bg_interaction_data,
-                triggering_interaction_id=triggering_interaction_id
-            )
-            logger.info(f"BG ToT Wrapper V2: Finished successfully for trigger ID {triggering_interaction_id}")
-        except Exception as e:
-            logger.error(f"BG ToT Wrapper V2: Error running ToT for trigger ID {triggering_interaction_id}: {e}")
-            logger.exception("BG ToT Wrapper V2 Traceback:")
-        finally:
-            if db:
-                db.close()
+                f"{log_prefix} Async Background Generate END. Status: {final_status}. Duration: {final_db_data_to_save['execution_time_ms']:.2f}ms")
 
     def _run_tree_of_thought_v2(self, db: Session, input: str,
-                                rag_context_docs: List[Any],  # These are URL docs (List[Document])
-                                history_rag_interactions: List[Any],  # THIS IS List[Document] from history RAG
+                                rag_context_docs: List[Any],
+                                history_rag_interactions: List[Any],
                                 log_context_str: str,
                                 recent_direct_history_str: str,
                                 file_index_context_str: str,
-                                imagined_image_context_str: str,
-                                interaction_data: Dict[str, Any],
-                                triggering_interaction_id: int) -> str:
-        """Runs Tree of Thoughts simulation (synchronous), includes direct history, logs, and imagined context."""
-        user_input = input
+                                imagined_image_context_str: str,  # From previous response
+                                interaction_data_for_tot_llm_call: Dict[str, Any],  # For _call_llm_with_timing
+                                original_user_input_for_log: str,  # The user input that triggered this ToT
+                                triggering_interaction_id_for_log: int  # ID of the interaction that triggered ToT
+                                ) -> str:  # Returns the ToT result string, but primarily saves it
+
         logger.warning(
-            f"🌳 Running ToT V2 for input: '{user_input[:50]}...' (Trigger ID: {triggering_interaction_id})")
-        # interaction_data['tot_analysis_requested'] = True # This dict is local to this call, not the main one from background_generate
+            f"🌳 Running ToT V2 for original input (ID: {triggering_interaction_id_for_log}): '{original_user_input_for_log[:50]}...'")
 
-        # rag_context_docs are the URL RAG results (List[Document])
+        # interaction_data_for_tot_llm_call is primarily for _call_llm_with_timing's metrics,
+        # not for modifying the original interaction directly with the ToT result.
+
         url_rag_context_str = self._format_docs(rag_context_docs, source_type="URL Document Context")
-
-        # history_rag_interactions are the History RAG results (List[Document])
-        # Use _format_docs for these, not _format_interaction_list_to_string
         history_rag_context_str = self._format_docs(history_rag_interactions,
-                                                    source_type="Retrieved History/Reflection Context")  # <<< CORRECTED HERE
+                                                    source_type="Retrieved History/Reflection Context")
 
-        tot_model = self.provider.get_model("general")
+        tot_model = self.provider.get_model("general")  # Or a specific ToT model
         if not tot_model:
-            # ... (error handling as before) ...
-            logger.error("ToT model ('general') not available for ToT V2 execution.")
-            add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat", input_type="log_error",
-                            user_input=f"[ToT V2 Failed - Model Unavailable ID: {triggering_interaction_id}]",
-                            llm_response="ToT model unavailable.")
-            if triggering_interaction_id:
-                trigger_interaction = db.query(Interaction).filter(Interaction.id == triggering_interaction_id).first()
-                if trigger_interaction: trigger_interaction.tot_result = "Error: ToT model unavailable."; trigger_interaction.tot_delivered = False; db.commit()
-            return "Error during deep analysis: Model unavailable."
+            error_msg = "ToT model ('general') not available for ToT V2 execution."
+            logger.error(error_msg)
+            # Log this failure as a new interaction related to the ToT attempt
+            try:
+                add_interaction(db,
+                                session_id=interaction_data_for_tot_llm_call.get("session_id"),
+                                mode="internal_error",  # Or specific ToT error mode
+                                input_type="log_error",
+                                user_input=f"[ToT V2 Failed - Model Unavailable for Trigger ID: {triggering_interaction_id_for_log}]",
+                                llm_response=error_msg)
+                db.commit()
+            except Exception as db_err:
+                logger.error(f"Failed to log ToT model unavailable error: {db_err}")
+            return f"Error: ToT model unavailable for analysis of '{original_user_input_for_log[:30]}...'."
 
-        # The prompt PROMPT_TREE_OF_THOUGHTS_V2 expects 'context' (for URL RAG) and 'history_rag' (for History/Reflection RAG)
+        # PROMPT_TREE_OF_THOUGHTS_V2 should be designed to take these contexts
         chain = (ChatPromptTemplate.from_template(PROMPT_TREE_OF_THOUGHTS_V2) | tot_model | StrOutputParser())
-        tot_result = "Error during ToT analysis (V2)."
+
+        full_tot_result_text = "Error during ToT analysis (V2) - initial value."
         try:
-            # Ensure the keys in the dict match the variables in PROMPT_TREE_OF_THOUGHTS_V2
             llm_input_for_tot = {
-                "input": user_input,
-                "context": url_rag_context_str,  # For URL docs
-                "history_rag": history_rag_context_str,  # For history/reflection RAG docs
+                "input": original_user_input_for_log,  # Use the original input that needs deep thought
+                "context": url_rag_context_str,
+                "history_rag": history_rag_context_str,
                 "file_index_context": file_index_context_str,
                 "log_context": log_context_str,
-                "recent_direct_history": recent_direct_history_str,  # This is already a string
-                "imagined_image_context": imagined_image_context_str
+                "recent_direct_history": recent_direct_history_str,
+                "imagined_image_context": imagined_image_context_str  # Context from image generated in previous step
             }
 
-            llm_result = self._call_llm_with_timing(
+            # _call_llm_with_timing will use interaction_data_for_tot_llm_call for its own metrics logging
+            # but we won't use its return to update the *original* interaction's llm_response.
+            full_tot_result_text = self._call_llm_with_timing(
                 chain,
                 llm_input_for_tot,
-                interaction_data,
+                interaction_data_for_tot_llm_call,  # For timing and session_id for logging within _call_llm_with_timing
                 priority=ELP0
             )
-            tot_result = llm_result
-            # ... (rest of the method as before: logging, saving ToT result to DB) ...
-            logger.info(f"🌳 ToT analysis V2 LLM call complete for Trigger ID: {triggering_interaction_id}.")
-            if triggering_interaction_id:
-                trigger_interaction = db.query(Interaction).filter(Interaction.id == triggering_interaction_id).first()
-                if trigger_interaction:
-                    trigger_interaction.tot_result = tot_result
-                    trigger_interaction.tot_analysis_requested = True
-                    trigger_interaction.tot_delivered = False
+            logger.info(
+                f"🌳 ToT analysis V2 LLM call complete for Trigger ID: {triggering_interaction_id_for_log}. Result length: {len(full_tot_result_text)}")
+
+            # --- SAVE ToT RESULT AS A NEW INTERACTION ---
+            try:
+                tot_result_interaction_data = {
+                    "session_id": interaction_data_for_tot_llm_call.get("session_id"),  # Same session
+                    "mode": "chat",  # Or "internal_analysis"
+                    "input_type": "tot_result",  # Special type for this record
+                    "user_input": f"[ToT Analysis Result for Original Query ID {triggering_interaction_id_for_log}: '{original_user_input_for_log[:100]}...']",
+                    "llm_response": full_tot_result_text,
+                    "classification": "tot_output",
+                    "execution_time_ms": interaction_data_for_tot_llm_call.get("execution_time_ms", 0),
+                    # Time for this ToT LLM call
+                    # Mark as not needing further reflection/ToT itself, unless desired
+                    "reflection_completed": True,
+                    "tot_analysis_requested": False,
+                    "tot_analysis_spawned": False  # This result doesn't spawn another ToT
+                }
+                # Ensure all valid keys for Interaction model
+                valid_keys = {c.name for c in Interaction.__table__.columns}
+                db_kwargs_tot_result = {k: v for k, v in tot_result_interaction_data.items() if k in valid_keys}
+
+                new_tot_interaction = add_interaction(db, **db_kwargs_tot_result)
+                if new_tot_interaction:
                     db.commit()
                     logger.success(
-                        f"✅ Saved ToT V2 result to Interaction ID {triggering_interaction_id} (undelivered).")
+                        f"✅ Saved ToT V2 result as new Interaction ID {new_tot_interaction.id} for original Trigger ID {triggering_interaction_id_for_log}.")
                 else:
-                    # ... (log orphaned ToT result) ...
                     logger.error(
-                        f"❌ Could not find original interaction {triggering_interaction_id} to save ToT V2 result.")
-                    add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat",
-                                    input_type="log_warning",
-                                    llm_response=f"Orphaned ToT V2 Result for input '{user_input[:50]}...': {tot_result[:200]}...")
-            return tot_result
+                        f"❌ Failed to save ToT V2 result as new interaction for Trigger ID {triggering_interaction_id_for_log}.")
+            except Exception as db_save_err:
+                logger.error(
+                    f"❌ Error saving ToT V2 result to DB for Trigger ID {triggering_interaction_id_for_log}: {db_save_err}")
+                db.rollback()
+
+            return full_tot_result_text  # Return the text for potential immediate use if desired by wrapper, but primary is DB save
+
         except TaskInterruptedException as tie:
-            # ... (handle interruption as before) ...
-            logger.warning(f"🚦 ToT V2 for Trigger ID {triggering_interaction_id} INTERRUPTED: {tie}")
-            if triggering_interaction_id:
-                trigger_interaction = db.query(Interaction).filter(Interaction.id == triggering_interaction_id).first()
-                if trigger_interaction:
-                    if trigger_interaction.tot_result is None or "Error" in trigger_interaction.tot_result:
-                        trigger_interaction.tot_result = "[ToT Analysis Interrupted]"
-                        trigger_interaction.tot_delivered = False
-                    db.commit()
-            raise tie
+            logger.warning(f"🚦 ToT V2 for Trigger ID {triggering_interaction_id_for_log} INTERRUPTED: {tie}")
+            # Log this interruption as a new, brief interaction
+            try:
+                add_interaction(db, session_id=interaction_data_for_tot_llm_call.get("session_id"),
+                                mode="internal_error",
+                                input_type="log_warning",
+                                user_input=f"[ToT V2 Interrupted for Trigger ID: {triggering_interaction_id_for_log}]",
+                                llm_response=str(tie))
+                db.commit()
+            except Exception:
+                pass
+            raise tie  # Re-raise for the wrapper to know
         except Exception as e:
-            # ... (handle other exceptions as before) ...
-            err_msg = f"Error during ToT V2 generation (Trigger ID: {triggering_interaction_id}): {e}"
+            err_msg = f"Error during ToT V2 generation (Trigger ID: {triggering_interaction_id_for_log}): {e}"
             logger.error(f"❌ {err_msg}")
-            add_interaction(db, session_id=interaction_data.get("session_id"), mode="chat", input_type="log_error",
-                            llm_response=err_msg)
-            if triggering_interaction_id:
-                trigger_interaction = db.query(Interaction).filter(Interaction.id == triggering_interaction_id).first()
-                if trigger_interaction:
-                    trigger_interaction.tot_result = err_msg
-                    trigger_interaction.tot_delivered = False
-                    db.commit()
-            return "Error during deep analysis (V2)."
+            # Log this error as a new interaction
+            try:
+                add_interaction(db, session_id=interaction_data_for_tot_llm_call.get("session_id"),
+                                mode="internal_error",
+                                input_type="log_error",
+                                user_input=f"[ToT V2 Failed for Trigger ID: {triggering_interaction_id_for_log}]",
+                                llm_response=err_msg)
+                db.commit()
+            except Exception:
+                pass
+            return f"Error during deep analysis (V2) for '{original_user_input_for_log[:30]}...'."
 
     # --- reset Method ---
     def reset(self, db: Session, session_id: str = None):

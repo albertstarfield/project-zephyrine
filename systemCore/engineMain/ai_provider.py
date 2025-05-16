@@ -1135,7 +1135,7 @@ class AIProvider:
                 # --- Setup Chat Models (Wrappers only) ---
                 # We don't load models here, just create wrappers for each role
                 logger.info("Creating llama.cpp chat wrappers for configured roles...")
-                default_temp = 1.2 # Example default temp
+                default_temp = DEFAULT_LLM_TEMPERATURE # Example default temp
                 common_model_kwargs = {"temperature": default_temp, "max_tokens": MAX_TOKENS}
 
                 for role in self._llama_model_map.keys():
