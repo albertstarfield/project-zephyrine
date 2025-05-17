@@ -549,6 +549,26 @@ class AIProvider:
         logger.info(f"✅ Imagination worker script and model directory appear configured.")
         STABLE_DIFFUSION_WORKER_CONFIGURED = True
 
+    def is_resource_busy_with_high_priority(self) -> bool:
+        """
+        Checks if the shared resource lock is currently held by an ELP1 task
+        or if ELP1 tasks are actively waiting.
+        """
+        if hasattr(self, '_priority_quota_lock') and self._priority_quota_lock:
+            # Type hint for clarity if PriorityQuotaLock is imported properly
+            lock_instance: Optional[PriorityQuotaLock] = self._priority_quota_lock  # type: ignore
+
+            if lock_instance and isinstance(lock_instance, PriorityQuotaLock):  # Check it's the right type
+                is_locked, holder_priority, _ = lock_instance.get_status()
+                # Check elp1_waiting_count directly if exposed, or infer
+                # For now, let's assume if it's locked by ELP1, it's busy with high priority.
+                # A more advanced check could see lock_instance._elp1_waiting_count > 0
+                if is_locked and holder_priority == ELP1:
+                    return True
+                # If you add a method to PriorityQuotaLock like `get_elp1_waiting_count()`
+                # if lock_instance.get_elp1_waiting_count() > 0:
+                #     return True
+        return False
 
     # <<< --- NEW: Worker Execution Method --- >>>
     def _execute_in_worker(self, model_role: str, task_type: str, request_data: Dict[str, Any], priority: int = ELP0) -> \

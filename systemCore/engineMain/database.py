@@ -11,6 +11,8 @@ import subprocess
 import tempfile
 import threading  # For the snapshotter thread
 
+from sqlalchemy.cyextension import collections
+
 # --- Zstandard Import ---
 try:
     import zstandard as zstd
@@ -38,7 +40,7 @@ from alembic import command
 # from alembic.runtime.environment import EnvironmentContext # Not directly used
 # from alembic.runtime.migration import MigrationContext # Not directly used
 from alembic.util import CommandError
-
+from collections import deque
 from loguru import logger
 
 # --- Configuration & Paths ---
@@ -1345,6 +1347,52 @@ def get_recent_interactions(db: Session, limit=5, session_id=None, mode="chat", 
     except Exception as e:
         logger.error(f"Error fetching recent interactions: {e}"); return []
 
+_log_batch_queue = deque()
+_log_batch_queue_lock = threading.Lock()
+_log_writer_thread: Optional[threading.Thread] = None # This is the instance of DatabaseLogBatchWriter
+# LOG_QUEUE_MAX_SIZE is imported from config
+
+def queue_interaction_for_batch_logging(**kwargs) -> None:
+    """
+    Queues interaction data for asynchronous batch logging.
+    This is the preferred method for most non-critical log entries.
+    Relies on global variables: _log_writer_thread, _log_batch_queue_lock,
+    _log_batch_queue, LOG_QUEUE_MAX_SIZE, and the direct add_interaction for fallback.
+    """
+    # Check if batch writer is running; if not, fallback to direct write for safety.
+    # These globals must be defined and accessible in the scope of database.py
+    if _log_writer_thread is None or not _log_writer_thread.is_alive():  # type: ignore
+        logger.warning(
+            "Log writer thread not active. Logging directly (fallback) for: input_type='{}', user_input='{}...'".format(
+                kwargs.get("input_type", "unknown"), str(kwargs.get("user_input", ""))[:30]
+            )
+        )
+        # add_interaction is the direct, synchronous version that handles its own session
+        add_interaction(**kwargs)  # type: ignore
+        return
+
+    with _log_batch_queue_lock:  # type: ignore
+        if len(_log_batch_queue) < LOG_QUEUE_MAX_SIZE:  # type: ignore
+            # Add a timestamp if not present, as batching delays actual DB insertion
+            kwargs.setdefault('timestamp', datetime.datetime.now(datetime.timezone.utc))
+            _log_batch_queue.append(kwargs)  # type: ignore
+        else:
+            logger.warning(
+                f"Log batch queue is full (current size: {len(_log_batch_queue)}, max: {LOG_QUEUE_MAX_SIZE}). Discarding new log: {kwargs.get('input_type')}")  # type: ignore
+            # Fallback: try to log the discarded item event as a critical direct log
+            try:
+                critical_log_data = {
+                    "input_type": "log_error",  # Mark as an error
+                    "user_input": f"[Log Batch Queue Full] Discarded log of type: {kwargs.get('input_type', 'unknown')}",
+                    "llm_response": f"Original User Input Snippet: {str(kwargs.get('user_input', 'N/A'))[:500]}. Original LLM Response Snippet: {str(kwargs.get('llm_response', 'N/A'))[:500]}"
+                }
+                # Preserve session_id and mode if they were in the discarded log
+                if 'session_id' in kwargs: critical_log_data['session_id'] = kwargs['session_id']
+                if 'mode' in kwargs: critical_log_data['mode'] = kwargs['mode']
+
+                add_interaction(**critical_log_data)  # type: ignore
+            except Exception as e_crit_log:
+                logger.error(f"Failed to log 'Log Batch Queue Full' event directly: {e_crit_log}")
 
 def get_pending_tot_result(db: Session, session_id: str) -> Optional[Interaction]:
     try:

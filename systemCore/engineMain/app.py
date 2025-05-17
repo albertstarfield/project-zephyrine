@@ -157,13 +157,40 @@ except ImportError:
     fuzz = None # Placeholder
 
 
+try:
+    # ... (your existing local imports for AIProvider, database, config) ...
+    from config import ENABLE_STELLA_ICARUS_HOOKS # Ensure this is imported
+    from stella_icarus_utils import StellaIcarusHookManager # <<< NEW IMPORT
+except ImportError as e:
+    # ... (your existing ImportError handling) ...
+    StellaIcarusHookManager = None # Define as None if import fails
+    ENABLE_STELLA_ICARUS_HOOKS = False # Default to false if config itself fails
+    # ...
+
+
+# === Global Semaphores and Concurrency Control ===
+# Default to a small number, can be overridden by environment variable if desired
+_default_max_bg_tasks = 10 #parallel???
+try:
+    MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = int(os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks))
+    if MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS <= 0:
+        logger.warning(f"MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS was <= 0, defaulting to {_default_max_bg_tasks}")
+        MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = _default_max_bg_tasks
+except ValueError:
+    logger.warning(f"Invalid value for MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS env var, defaulting to {_default_max_bg_tasks}")
+    MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = _default_max_bg_tasks
+
+logger.info(f"🚦 Max concurrent background generate tasks: {MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS}")
+background_generate_task_semaphore = threading.Semaphore(MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS)
+# === End Global Semaphores ===
+
 # --- Local Imports with Error Handling ---
 try:
     from ai_provider import AIProvider, ai_provider_instance as global_ai_provider_ref
     # Import database components needed in app.py
     
     from database import (
-        init_db, add_interaction, get_recent_interactions, # <<< REMOVED get_db
+        init_db, queue_interaction_for_batch_logging, add_interaction, get_recent_interactions, # <<< REMOVED get_db
         get_past_tot_interactions, Interaction, SessionLocal, AppleScriptAttempt, # Added AppleScriptAttempt if needed here
         get_global_recent_interactions, get_pending_tot_result, mark_tot_delivered,
         get_past_applescript_attempts, FileIndex, search_file_index # Added new DB function
@@ -289,13 +316,6 @@ except Exception as inspect_err:
 # --- END DEBUGGING STEP ---
 
 # --- Initialize Database ---
-try:
-    init_db()
-    logger.success("✅ Database Initialized Successfully")
-except Exception as e:
-    logger.critical(f"🔥🔥 DATABASE INITIALIZATION FAILED: {e}")
-    logger.exception("DB Init Traceback:") # Log full traceback
-    sys.exit(1)
 
 
 # --- Determine Python Executable ---
@@ -876,6 +896,8 @@ class TaskInterruptedException(Exception):
     """Custom exception raised when an ELP0 task is interrupted."""
     pass
 
+
+
 # === AI Chat Logic (Amaryllis - SQLite RAG with Fuzzy Search) ===
 class AIChat:
     """Handles Chat Mode interactions with RAG, ToT, Action Analysis, Multi-LLM routing, and VLM preprocessing."""
@@ -886,6 +908,28 @@ class AIChat:
         self.vectorstore_history: Optional[Chroma] = None # In-memory store for current request
         self.current_session_id: Optional[str] = None
         self.setup_prompts()
+
+        # --- NEW: Initialize StellaIcarusHookManager ---
+        # --- MODIFIED: Initialize StellaIcarusHookManager ---
+        self.stella_icarus_manager: Optional[StellaIcarusHookManager] = None
+        if ENABLE_STELLA_ICARUS_HOOKS and StellaIcarusHookManager is not None:  # Check if class was imported
+            try:
+                self.stella_icarus_manager = StellaIcarusHookManager()
+                if self.stella_icarus_manager.hook_load_errors:
+                    logger.warning("AIChat Init: StellaIcarusHookManager loaded with some errors.")
+                elif not self.stella_icarus_manager.hooks:
+                    logger.info("AIChat Init: StellaIcarusHookManager loaded, but no hooks found/active.")
+                else:
+                    logger.success("AIChat Init: StellaIcarusHookManager loaded successfully with hooks.")
+            except Exception as e_sihm_init:
+                logger.error(f"AIChat Init: Failed to initialize StellaIcarusHookManager: {e_sihm_init}")
+                self.stella_icarus_manager = None
+        elif not StellaIcarusHookManager:
+            logger.error("AIChat Init: StellaIcarusHookManager class not available (import failed?). Hooks disabled.")
+        else:  # ENABLE_STELLA_ICARUS_HOOKS is False
+            logger.info("AIChat Init: StellaIcarusHooks are disabled by configuration.")
+        # --- END MODIFIED ---
+        # --- END NEW ---
 
     @staticmethod
     def _construct_raw_chatml_prompt(
@@ -4738,72 +4782,103 @@ class AIChat:
     async def direct_generate(self, db: Session, user_input: str, session_id: str,
                               vlm_description: Optional[str] = None,
                               image_b64: Optional[str] = None) -> str:
-        """
-        Handles the fast-path direct response generation with ELP1 priority.
-        Constructs a raw ChatML prompt including RAG from URLs, conversational history (on-the-fly),
-        and global self-reflection chunks (pre-indexed). Sends it for completion.
-        Uses _get_rag_retriever_thread_wrapper for robust RAG context fetching and applies token truncation.
-        """
         direct_req_id = f"dgen-raw_chatml-{uuid.uuid4()}"
         log_prefix = f"⚡️ {direct_req_id}|ELP1"
         logger.info(
-            f"{log_prefix} Direct Generate (RAW CHATML MODE) START --> Session: {session_id}, Input: '{user_input[:50]}...', VLM Desc: {'Yes' if vlm_description else 'No'}, Image b64: {'Yes' if image_b64 else 'No'}")
+            f"{log_prefix} Direct Generate START --> Session: {session_id}, Input: '{user_input[:50]}...', VLM Desc: {'Yes' if vlm_description else 'No'}, Image b64: {'Yes' if image_b64 else 'No'}")
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
 
-        # --- Get Fast Model ---
-        fast_model = self.provider.get_model("general_fast")
-        if not fast_model:
-            error_msg = "Fast model 'general_fast' for direct response is not configured."
-            logger.error(f"{log_prefix}: {error_msg}")
-            try:
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                                user_input="[Direct Gen Failed - Model Unavailable]",
-                                llm_response=error_msg)
-                db.commit()
-            except Exception as db_log_err:
-                logger.error(f"{log_prefix} Failed to log fast model unavailable error: {db_log_err}")
-                if db: db.rollback()
-            return f"Error: Cannot generate quick response ({error_msg})."
+        # Initialize with all potential fields and their defaults for a successful ELP1 LLM path
+        interaction_data_for_log: Dict[str, Any] = {
+            "session_id": session_id, "mode": "chat",
+            "input_type": "image+text" if vlm_description or image_b64 else "text",
+            "user_input": user_input,
+            "llm_response": "[Processing direct generate...]",  # Placeholder, will be updated
+            "execution_time_ms": 0,
+            "image_description": vlm_description,
+            "image_data": image_b64[:20] + "..." if image_b64 else None,
+            "classification": "direct_response_raw_chatml_elp1",  # Default for this path
+            "classification_reason": "Direct ELP1 path execution.",
+            "rag_history_ids": None, "rag_source_url": None,
+            "requires_deep_thought": False, "deep_thought_reason": None,
+            "tot_analysis_requested": False, "tot_analysis_spawned": False,
+            "tot_result": None, "tot_delivered": False,
+            "emotion_context_analysis": None, "assistant_action_analysis_json": None,
+            "assistant_action_type": None, "assistant_action_params": None,
+            "assistant_action_executed": False, "assistant_action_result": None,
+            "imagined_image_prompt": None, "imagined_image_b64": None,
+            "imagined_image_vlm_description": None, "reflection_completed": False,
+            "reflection_indexed_in_vs": False  # Added new field
+        }
 
-        # --- Prepare Content for ChatML Construction ---
-        system_prompt_content_base = PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT  # From config.py
-        historical_turns_for_chatml: List[Dict[str, str]] = []
-        rag_context_block_for_system_prompt = "No relevant RAG context found."
-        session_chat_rag_ids_used_str = ""  # Populated by RAG wrapper
-        final_system_prompt_content = system_prompt_content_base  # Start with base
-        final_response_text = "[Direct generation failed (process error) - LLM call not reached or failed]"  # Default error
-
-        url_retriever_obj: Optional[Any] = None
-        session_hist_retriever_obj: Optional[Any] = None
-        reflection_chunk_retriever_obj: Optional[Any] = None
+        # This variable will hold the text to be returned to the client
+        # It's updated by hook, LLM, or error handling.
+        response_to_return_to_client = "[Error: Response not set during direct_generate]"
 
         try:
-            # --- RAG Context Fetching ---
-            logger.debug(f"{log_prefix} Fetching RAG retrievers via thread wrapper (ELP1)...")
+            # --- StellaIcarusHook Check (EARLY EXIT) ---
+            if self.stella_icarus_manager and self.stella_icarus_manager.is_enabled:
+                hook_response_text = self.stella_icarus_manager.check_and_execute(user_input, session_id)
+                if hook_response_text is not None:
+                    logger.info(f"{log_prefix} STELLA_ICARUS_HOOK triggered for: '{user_input[:50]}...'")
+                    interaction_data_for_log['llm_response'] = hook_response_text
+                    interaction_data_for_log['classification'] = "stella_icarus_hooked"
+                    interaction_data_for_log['classification_reason'] = "Input matched a StellaIcarusHook."
+                    response_to_return_to_client = hook_response_text
+                    return response_to_return_to_client  # Exits try, 'finally' will run
+            # --- End StellaIcarusHook Check ---
+
+            fast_model = self.provider.get_model("general_fast")
+            if not fast_model:
+                error_msg = "Fast model 'general_fast' for direct response is not configured."
+                logger.error(f"{log_prefix}: {error_msg}")
+                response_to_return_to_client = f"Error: Cannot generate quick response ({error_msg})."
+                interaction_data_for_log['llm_response'] = response_to_return_to_client
+                interaction_data_for_log['classification'] = "error_model_unavailable"
+                return response_to_return_to_client  # Exits try, 'finally' will run
+
+            # --- RAG Context & Prompt Construction (if not hooked) ---
+            system_prompt_content_base = PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT
+            historical_turns_for_chatml: List[Dict[str, str]] = []
+            rag_context_block_for_system_prompt = "No relevant RAG context found."
+            session_chat_rag_ids_used_str = ""
+            final_system_prompt_content = system_prompt_content_base
+
+            url_retriever_obj: Optional[Any] = None
+            session_hist_retriever_obj: Optional[Any] = None
+            reflection_chunk_retriever_obj: Optional[Any] = None
+
             rag_query_input = user_input
             if not rag_query_input and vlm_description:
-                rag_query_input = f"Regarding the image described as: {vlm_description}"
+                rag_query_input = f"Regarding image: {vlm_description}"
             elif not rag_query_input and not vlm_description:
-                rag_query_input = ""  # Empty query if no text/vlm
+                rag_query_input = ""
 
             wrapped_rag_result = await asyncio.to_thread(
                 self._get_rag_retriever_thread_wrapper, db, rag_query_input, ELP1
             )
 
             if wrapped_rag_result.get("status") == "success":
-                url_retriever_obj, session_hist_retriever_obj, reflection_chunk_retriever_obj, session_chat_rag_ids_used_str = \
-                wrapped_rag_result["data"]
+                rag_data_tuple = wrapped_rag_result.get("data")
+                if isinstance(rag_data_tuple, tuple) and len(rag_data_tuple) == 4:
+                    url_retriever_obj, session_hist_retriever_obj, reflection_chunk_retriever_obj, session_chat_rag_ids_used_str = rag_data_tuple
+                    interaction_data_for_log['rag_history_ids'] = session_chat_rag_ids_used_str
+                    if hasattr(self, 'vectorstore_url') and self.vectorstore_url and hasattr(self.vectorstore_url,
+                                                                                             '_source_url'):
+                        interaction_data_for_log['rag_source_url'] = self.vectorstore_url._source_url  # type: ignore
+                else:
+                    raise RuntimeError(f"RAG wrapper malformed data: {rag_data_tuple}")
             elif wrapped_rag_result.get("status") == "interrupted":
                 raise TaskInterruptedException(wrapped_rag_result.get("error_message", "RAG interrupted"))
             else:  # Error
-                error_msg = wrapped_rag_result.get("error_message", "Unknown RAG error")
-                logger.error(f"{log_prefix}: RAG retrieval failed: {error_msg}")
-                final_system_prompt_content = f"{system_prompt_content_base}\n\n[System Note: Error RAG: {error_msg}]"
-                # Retrievers remain None
+                error_msg_rag = wrapped_rag_result.get("error_message", "Unknown RAG error")
+                logger.error(f"{log_prefix}: RAG retrieval failed: {error_msg_rag}")
+                final_system_prompt_content = f"{system_prompt_content_base}\n\n[System Note: Error RAG: {error_msg_rag}]"
 
             all_retrieved_rag_docs: List[Any] = []
             if wrapped_rag_result.get("status") == "success":
+                # (Invoke retrievers as before, populate all_retrieved_rag_docs)
                 if url_retriever_obj:
                     try:
                         docs = await asyncio.to_thread(url_retriever_obj.invoke,
@@ -4823,21 +4898,15 @@ class AIChat:
                     except Exception as e:
                         logger.warning(f"{log_prefix} Reflection RAG invoke error: {e}")
 
-            # --- Token-aware Truncation of Formatted RAG Context ---
             if all_retrieved_rag_docs:
+                # (Token budgeting and truncation logic as before)
                 untruncated_rag_block = self._format_docs(all_retrieved_rag_docs, "Combined RAG Context")
-
-                # Determine current user input for token counting (including VLM)
                 current_full_input_for_tokens = user_input
-                if vlm_description:
-                    current_full_input_for_tokens = f"[Image Description: {vlm_description.strip()}]{CHATML_NL}{CHATML_NL}User Query: {user_input.strip() or '(Query about image)'}"
-                else:
-                    current_full_input_for_tokens = user_input.strip()
+                if vlm_description: current_full_input_for_tokens = f"[Image: {vlm_description.strip()}]{CHATML_NL}{user_input.strip() or '(Query image)'}"
 
-                # Fetch direct history for accurate fixed token count
-                direct_hist_interactions_tc = get_global_recent_interactions(db, limit=3)  # Sync for token count
+                direct_hist_interactions_tc = await asyncio.to_thread(get_global_recent_interactions, db, limit=3)
                 temp_hist_turns_tc: List[Dict[str, str]] = []
-                for item_tc in direct_hist_interactions_tc:  # Renamed to avoid clash
+                for item_tc in direct_hist_interactions_tc:
                     r, c = (None, None)
                     if item_tc.input_type == 'text' and item_tc.user_input:
                         r, c = "user", item_tc.user_input
@@ -4850,37 +4919,27 @@ class AIChat:
                 history_turns_text_tc = "\n".join(t["content"] for t in temp_hist_turns_tc)
                 history_turns_tokens = self._count_tokens(history_turns_text_tc)
 
-                BUFFER_TOKENS_FOR_RESPONSE = 512  # From config or defined here
-                # LLAMA_CPP_N_CTX for the 'general_fast' model. If worker uses dynamic for it, this is an estimate.
-                # For direct_generate, we target LLAMA_CPP_N_CTX as defined in config.py.
+                # Ensure BUFFER_TOKENS_FOR_RESPONSE is defined (e.g., in config or here)
+                BUFFER_TOKENS_FOR_RESPONSE = getattr(self, 'BUFFER_TOKENS_FOR_RESPONSE', 512)  # Example
                 MODEL_CONTEXT_WINDOW = LLAMA_CPP_N_CTX
                 fixed_parts_total_tokens = base_prompt_tokens + user_input_tokens + history_turns_tokens
-
                 max_rag_tokens_budget = MODEL_CONTEXT_WINDOW - fixed_parts_total_tokens - BUFFER_TOKENS_FOR_RESPONSE
                 if max_rag_tokens_budget < 100: max_rag_tokens_budget = max(0, max_rag_tokens_budget)
-
-                logger.debug(
-                    f"{log_prefix} Token Budget for RAG: MaxBudget={max_rag_tokens_budget} (ModelCtx={MODEL_CONTEXT_WINDOW}, FixedParts={fixed_parts_total_tokens})")
 
                 if max_rag_tokens_budget > 0:
                     rag_context_block_for_system_prompt = self._truncate_rag_context(untruncated_rag_block,
                                                                                      max_rag_tokens_budget)
                 else:
-                    rag_context_block_for_system_prompt = "[RAG Context Skipped: Insufficient Token Budget]"
-            else:
-                rag_context_block_for_system_prompt = "No relevant RAG context found."
+                    rag_context_block_for_system_prompt = "[RAG Context Skipped: Budget]"
 
             if rag_context_block_for_system_prompt not in ["No relevant RAG context found.",
-                                                           "[RAG Context Skipped: Insufficient Token Budget]"]:
+                                                           "[RAG Context Skipped: Budget]"]:
                 final_system_prompt_content += (
-                    f"\n\n--- Relevant Context from History, Reflections & URLs (RAG) ---\n"
-                    f"{rag_context_block_for_system_prompt}\n"
-                    f"--- End Relevant Context ---"
+                    f"\n\n--- Relevant Context (RAG) ---\n{rag_context_block_for_system_prompt}\n--- End RAG ---"
                 )
 
-            # Actual direct history for ChatML turns (not RAG source material)
             direct_history_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=3)
-            for interaction_dh in direct_history_interactions:  # Renamed loop variable
+            for interaction_dh in direct_history_interactions:
                 role_dh, content_dh = None, None
                 if interaction_dh.input_type == 'text' and interaction_dh.user_input:
                     role_dh, content_dh = "user", interaction_dh.user_input
@@ -4891,106 +4950,92 @@ class AIChat:
                         -1] and role_dh == "user" and content_dh.strip() == user_input.strip())
                     if not is_current_input_repeat:
                         historical_turns_for_chatml.append({"role": role_dh, "content": content_dh.strip()})
-            if historical_turns_for_chatml: logger.debug(
-                f"{log_prefix} Added {len(historical_turns_for_chatml)} direct history turns to ChatML.")
 
-        except TaskInterruptedException as tie_context:  # From RAG wrapper or other await asyncio.to_thread calls
-            logger.warning(f"🚦 {log_prefix}: Context fetching INTERRUPTED: {tie_context}")
-            final_system_prompt_content = f"{system_prompt_content_base}\n\n[System Note: Context fetching interrupted. Limited info.]"
-            historical_turns_for_chatml.append({"role": "system", "content": f"[RAG Interrupted: {tie_context}]"})
-            raise  # Propagate to main try-except
-        except Exception as context_err:  # Other errors during context prep
-            logger.error(f"{log_prefix}: Error during context prep: {context_err}")
-            logger.exception(f"{log_prefix} Context Prep Traceback:")
-            final_system_prompt_content = f"{system_prompt_content_base}\n\n[System Note: Error preparing RAG. Base instructions only.]"
-            historical_turns_for_chatml.append({"role": "system", "content": "[Error RAG Context]"})
-            # Do not re-raise general errors, try to proceed
+            current_user_turn_for_chatml = user_input
+            if vlm_description:
+                current_user_turn_for_chatml = f"[Image Description: {vlm_description.strip()}]{CHATML_NL}{CHATML_NL}User Query: {user_input.strip() or '(Query on image)'}"
+            elif not current_user_turn_for_chatml.strip() and image_b64:  # Only image provided, no text query
+                current_user_turn_for_chatml = "(User provided an image without a specific text query)"
+            elif not current_user_turn_for_chatml.strip():  # No text, no image
+                current_user_turn_for_chatml = "(User provided no text)"
 
-        # --- Construct final prompt ---
-        current_user_turn_for_chatml = user_input  # Default
-        if vlm_description:
-            current_user_turn_for_chatml = f"[Image Description: {vlm_description.strip()}]{CHATML_NL}{CHATML_NL}User Query: {user_input.strip() or '(Query on image)'}"
-        else:
-            current_user_turn_for_chatml = user_input.strip()
-        if not current_user_turn_for_chatml: current_user_turn_for_chatml = "(User provided no text)"
-
-        raw_chatml_prompt_string = self._construct_raw_chatml_prompt(
-            system_content=final_system_prompt_content,
-            history_turns=historical_turns_for_chatml,
-            current_turn_content=current_user_turn_for_chatml,
-            current_turn_role="user",
-            prompt_for_assistant_response=True
-        )
-        prompt_tokens_final_est = self._count_tokens(raw_chatml_prompt_string)
-        logger.trace(
-            f"{log_prefix}: Final Raw ChatML Prompt (len {len(raw_chatml_prompt_string)}, est. tokens {prompt_tokens_final_est}):\n==PROMPT START==\n{raw_chatml_prompt_string[:1500]}...\n==PROMPT END PREVIEW=="
-        )
-        if prompt_tokens_final_est > LLAMA_CPP_N_CTX:  # Compare to config's general context size
-            logger.error(
-                f"{log_prefix}: CRITICAL - Assembled prompt ({prompt_tokens_final_est} tokens) for 'general_fast' model may exceed its effective context window ({LLAMA_CPP_N_CTX}). Worker might fail.")
-
-        # --- Call LLM with ELP1 ---
-        try:
-            logger.debug(f"{log_prefix}: Calling 'general_fast' model with raw ChatML (ELP1)...")
-            raw_llm_response = await asyncio.to_thread(
-                fast_model._call,  # Synchronous LlamaCppChatWrapper._call
-                messages=raw_chatml_prompt_string,
-                stop=[CHATML_END_TOKEN],  # Ensure stop token from config
-                priority=ELP1,
-                # kwargs like temperature, max_tokens (for generation) are passed from fast_model.model_kwargs
-                # or can be added here if needed, e.g. max_tokens = BUFFER_FOR_RESPONSE_DIRECT
+            raw_chatml_prompt_string = self._construct_raw_chatml_prompt(
+                system_content=final_system_prompt_content,
+                history_turns=historical_turns_for_chatml,
+                current_turn_content=current_user_turn_for_chatml,
+                current_turn_role="user",
+                prompt_for_assistant_response=True
             )
+            # (Log prompt length and potential overflow as before)
+
+            # --- LLM Call ---
+            logger.debug(f"{log_prefix} Calling 'general_fast' model (ELP1)...")
+            raw_llm_response = await asyncio.to_thread(
+                fast_model._call,
+                messages=raw_chatml_prompt_string,
+                stop=[CHATML_END_TOKEN],
+                priority=ELP1,
+            )
+            response_to_return_to_client = self._cleanup_llm_output(raw_llm_response)
+            interaction_data_for_log['llm_response'] = response_to_return_to_client
+            # interaction_data_for_log['classification'] is already "direct_response_raw_chatml_elp1"
+
+        except TaskInterruptedException as tie:
+            logger.warning(f"🚦 {log_prefix} Direct Generate Task INTERRUPTED: {tie}")
+            response_to_return_to_client = f"[Error: Direct response (ELP1) interrupted: {tie}]"
+            interaction_data_for_log['llm_response'] = response_to_return_to_client
+            interaction_data_for_log['classification'] = "direct_response_interrupted"
+            raise  # Re-raise to be caught by the route handler for 503 status
+
+        except Exception as e_direct_path:
+            logger.error(f"❌ {log_prefix}: Error during direct_generate LLM path: {e_direct_path}")
+            logger.exception(f"{log_prefix} Direct Generate LLM Path Traceback:")
+            response_to_return_to_client = f"[Error generating direct response (ELP1): {type(e_direct_path).__name__} - {str(e_direct_path)[:200]}]"
+            interaction_data_for_log['llm_response'] = response_to_return_to_client
+            interaction_data_for_log['classification'] = "direct_response_error"
+            # Do not re-raise here; let 'finally' log this error state and then return the error text.
+
+        finally:
+            # This block always runs, ensuring logging and consistent return value setting.
+            direct_duration_ms_final = (time.monotonic() - direct_start_time) * 1000.0
+            interaction_data_for_log['execution_time_ms'] = direct_duration_ms_final
+
+            # If an exception occurred and response_to_return_to_client wasn't set by the hook or LLM success,
+            # it would still hold its default error or the error set in the except block.
+            # Ensure llm_response in log data matches the final response_to_return_to_client.
+            if interaction_data_for_log.get('llm_response') != response_to_return_to_client:
+                # This might happen if an error occurred after the hook check but before LLM set it,
+                # or if an error occurred in the LLM path and response_to_return_to_client was updated by an except block.
+                interaction_data_for_log['llm_response'] = response_to_return_to_client
+
             logger.info(
-                f"{log_prefix}: 'general_fast' (ELP1) call complete. Raw len: {len(raw_llm_response if isinstance(raw_llm_response, str) else str(raw_llm_response))}")
-            final_response_text = self._cleanup_llm_output(raw_llm_response)
+                f"{log_prefix} Direct Generate END. Duration: {direct_duration_ms_final:.2f}ms. Final Resp Snippet: '{str(interaction_data_for_log.get('llm_response', ''))[:70]}...'. Class: {interaction_data_for_log.get('classification')}")
 
-        except TaskInterruptedException as tie_llm:
-            logger.error(f"🚦 {log_prefix}: Direct LLM call (ELP1) INTERRUPTED: {tie_llm}")
-            final_response_text = f"[Error: Direct response (ELP1) interrupted. Try again.]"
-            # DB log in finally, re-raise to be caught by Flask route handler's main try-except
-            raise
-        except Exception as e_llm:
-            logger.error(f"❌ {log_prefix}: Error during direct LLM call (ELP1): {e_llm}")
-            logger.exception(f"{log_prefix} Direct LLM Call Traceback (ELP1):")
-            final_response_text = f"[Error generating direct response (ELP1): {type(e_llm).__name__} - {e_llm}]"
-            # DB log in finally
+            try:
+                # Use queue_interaction_for_batch_logging for this frequent log
+                queue_interaction_for_batch_logging(**interaction_data_for_log)
+                logger.trace(f"{log_prefix} Queued final direct_generate interaction for batch logging.")
+            except Exception as log_err_final_q:
+                logger.error(f"❌ {log_prefix}: Failed to QUEUE final direct_generate interaction: {log_err_final_q}")
+                # Fallback to direct synchronous write if queueing fails.
+                # This needs a new DB session as `db` from route might be closed or in bad state.
+                fallback_db_session_for_log: Optional[Session] = None
+                try:
+                    if SessionLocal:
+                        fallback_db_session_for_log = SessionLocal()  # type: ignore
+                        # Use the direct add_interaction which handles its own commit
+                        add_interaction(fallback_db_session_for_log, **interaction_data_for_log)
+                        logger.warning(
+                            f"{log_prefix} Logged direct_generate interaction DIRECTLY due to queueing failure.")
+                    else:
+                        logger.error(f"{log_prefix} SessionLocal not available for fallback direct log.")
+                except Exception as fallback_direct_log_err:
+                    logger.error(f"❌ {log_prefix}: Fallback direct logging ALSO FAILED: {fallback_direct_log_err}")
+                finally:
+                    if fallback_db_session_for_log:
+                        fallback_db_session_for_log.close()
 
-        # --- Final DB Log ---
-        direct_duration_ms = (time.monotonic() - direct_start_time) * 1000
-        logger.info(
-            f"{log_prefix} Direct Generate END. Duration: {direct_duration_ms:.2f}ms. Final Response len: {len(final_response_text)}")
-
-        try:
-            interaction_log_data = {
-                "session_id": session_id, "mode": "chat",
-                "input_type": "image+text" if vlm_description else "text",
-                "user_input": user_input, "llm_response": final_response_text,
-                "execution_time_ms": direct_duration_ms,
-                "image_description": vlm_description,  # Desc of user-provided image
-                "classification": "direct_response_raw_chatml_elp1",
-                "rag_history_ids": session_chat_rag_ids_used_str,  # From RAG wrapper
-                "rag_source_url": self.vectorstore_url._source_url if hasattr(self,
-                                                                              'vectorstore_url') and self.vectorstore_url and hasattr(
-                    self.vectorstore_url, '_source_url') else None,
-                "image_data": image_b64[:20] + "..." if image_b64 else None,  # User-provided image_b64 snippet
-                "requires_deep_thought": False, "deep_thought_reason": None,
-                "tot_analysis_requested": False, "tot_result": None, "tot_delivered": False,
-                "emotion_context_analysis": None,  # Not run in this direct path
-                "assistant_action_analysis_json": None, "assistant_action_type": None,
-                "assistant_action_params": None, "assistant_action_executed": False,
-                "assistant_action_result": None,
-                "imagined_image_prompt": None, "imagined_image_b64": None,  # No AI imagination in direct path
-                "imagined_image_vlm_description": None, "reflection_completed": False
-            }
-            valid_db_keys = {c.name for c in Interaction.__table__.columns}
-            db_kwargs_for_log = {k: v for k, v in interaction_log_data.items() if k in valid_db_keys}
-            add_interaction(db, **db_kwargs_for_log)
-            db.commit()
-        except Exception as log_err_final:
-            logger.error(f"❌ {log_prefix}: Failed to log final direct_generate interaction: {log_err_final}")
-            if db: db.rollback()
-
-        return final_response_text
+        return response_to_return_to_client
 
     async def _get_vector_search_file_index_context(self, query: str, priority: int = ELP0) -> str:
         """
@@ -7452,55 +7497,108 @@ def handle_openai_chat_completion():
         # This function needs to create its own asyncio event loop and DB session
         def run_background_task_with_new_loop(
                 user_input_bg: str, session_id_bg: str, classification_bg: str,
-                image_b64_bg: Optional[str], vlm_desc_user_img_bg: Optional[str]):
-            bg_log_prefix_thread = f"[BG Task {request_id}]"
-            bg_db_session: Optional[Session] = None
-            loop = None
-            try:
-                logger.info(f"{bg_log_prefix_thread} Background thread started for session {session_id_bg}.")
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
+                image_b64_bg: Optional[str], vlm_desc_user_img_bg: Optional[str]):  # Add other necessary args
 
-                bg_db_session = SessionLocal()  # New DB session for this thread
+            bg_log_prefix_thread = f"[BG Task {request_id} Thr:{threading.get_ident()}]"
+            acquired_semaphore = False
+            loop = None
+            bg_db_session: Optional[Session] = None
+
+            # --- NEW: Politeness Check Loop ---
+            MAX_POLITENESS_WAIT_SECONDS = 30  # Max total time to wait for ELP1 activity to clear
+            POLITENESS_CHECK_INTERVAL_SECONDS = 1.5  # How often to check
+            politeness_wait_start_time = time.monotonic()
+            initial_check_done = False
+
+            while True:
+                if ai_provider and ai_provider.is_resource_busy_with_high_priority():
+                    logger.info(
+                        f"{bg_log_prefix_thread} AIProvider resources busy with ELP1. Pausing background task start...")
+                    initial_check_done = True
+                    time.sleep(POLITENESS_CHECK_INTERVAL_SECONDS)
+                    if time.monotonic() - politeness_wait_start_time > MAX_POLITENESS_WAIT_SECONDS:
+                        logger.warning(
+                            f"{bg_log_prefix_thread} Max politeness wait time ({MAX_POLITENESS_WAIT_SECONDS}s) exceeded. Proceeding despite ELP1 activity.")
+                        break
+                else:
+                    if initial_check_done:  # Log only if we actually waited
+                        logger.info(
+                            f"{bg_log_prefix_thread} AIProvider resources appear free. Proceeding with background task.")
+                    else:  # Log if we proceed immediately on first check
+                        logger.debug(f"{bg_log_prefix_thread} AIProvider resources free on initial check. Proceeding.")
+                    break  # Exit politeness loop
+            # --- END NEW: Politeness Check Loop ---
+
+            try:
+                logger.debug(f"{bg_log_prefix_thread} Attempting to acquire background_generate_task_semaphore...")
+                background_generate_task_semaphore.acquire()  # This is the main concurrency limiter
+                acquired_semaphore = True
+                logger.info(f"{bg_log_prefix_thread} Acquired background_generate_task_semaphore. Starting processing.")
+
+                # ... (rest of your run_background_task_with_new_loop logic:
+                #      new asyncio loop, db session, ai_chat.background_generate) ...
+                # Setup new asyncio loop for this thread if needed
+                try:
+                    loop = asyncio.get_event_loop()
+                    if loop.is_running():
+                        logger.warning(
+                            f"{bg_log_prefix_thread} Event loop already running in this new thread. This is unexpected.")
+                except RuntimeError:
+                    loop = asyncio.new_event_loop()
+                    asyncio.set_event_loop(loop)
+
+                logger.debug(f"{bg_log_prefix_thread} Creating DB session for background task...")
+                if SessionLocal is None:
+                    logger.error(f"{bg_log_prefix_thread} SessionLocal is None. Cannot create DB session.")
+                    # Release semaphore if acquired, then return
+                    if acquired_semaphore: background_generate_task_semaphore.release()
+                    return
+                bg_db_session = SessionLocal()  # type: ignore
                 if not bg_db_session:
                     logger.error(f"{bg_log_prefix_thread} Failed to create DB session for background task.")
+                    if acquired_semaphore: background_generate_task_semaphore.release()
                     return
 
-                # The actual background_generate call
+                logger.info(f"{bg_log_prefix_thread} Calling ai_chat.background_generate...")
                 loop.run_until_complete(
                     ai_chat.background_generate(
                         db=bg_db_session,
-                        user_input=user_input_bg,  # Use the original user input
+                        user_input=user_input_bg,
                         session_id=session_id_bg,
-                        classification=classification_bg,  # Use classification determined earlier
-                        image_b64=image_b64_bg,  # Pass user's original image b64 if any
-                        # vlm_description for user's image is passed implicitly via current_input_for_llm_analysis within background_generate if image_b64_bg is present
+                        classification=classification_bg,
+                        image_b64=image_b64_bg
                     )
                 )
-                logger.info(f"{bg_log_prefix_thread} Background generate task completed.")
+                logger.info(f"{bg_log_prefix_thread} ai_chat.background_generate task completed.")
+
+
             except Exception as task_err:
-                logger.error(f"{bg_log_prefix_thread} Error during background task: {task_err}")
+                logger.error(f"{bg_log_prefix_thread} Error during background task execution: {task_err}")
                 logger.exception(f"{bg_log_prefix_thread} Background Task Execution Traceback:")
                 if bg_db_session:
                     try:
+                        from database import add_interaction
                         add_interaction(bg_db_session, session_id=session_id_bg, mode="chat", input_type="log_error",
                                         user_input=f"Background Task Error ({request_id})",
-                                        llm_response=f"Error: {task_err}"[:2000])
-                        bg_db_session.commit()
+                                        llm_response=f"Error: {str(task_err)[:1500]}"
+                                        )
                     except Exception as db_log_err_bg:
-                        logger.error(f"{bg_log_prefix_thread} Failed to log BG error: {db_log_err_bg}")
+                        logger.error(f"{bg_log_prefix_thread} Failed to log BG error to DB: {db_log_err_bg}")
             finally:
                 if bg_db_session:
                     try:
-                        bg_db_session.close()
+                        bg_db_session.close(); logger.debug(f"{bg_log_prefix_thread} BG DB session closed.")
                     except:
-                        pass  # Ignore close errors
-                if loop:
+                        pass
+                if loop and hasattr(loop, 'is_closed') and not loop.is_closed():  # Check if loop has is_closed
                     try:
-                        loop.close()
+                        loop.close(); logger.debug(f"{bg_log_prefix_thread} BG asyncio loop closed.")
                     except:
-                        pass  # Ignore loop close errors if already closed or in use
-                logger.info(f"{bg_log_prefix_thread} Background thread finished and cleaned up.")
+                        pass
+                if acquired_semaphore:
+                    background_generate_task_semaphore.release()
+                    logger.info(f"{bg_log_prefix_thread} Released background_generate_task_semaphore.")
+                logger.info(f"{bg_log_prefix_thread} Background thread function finished.")
 
         try:
             background_thread_obj = threading.Thread(  # Renamed to avoid conflict
@@ -8513,99 +8611,155 @@ async def startup_tasks():
 
 if __name__ == "__main__":
     # This block executes if app.py is run directly (e.g., python app.py)
-    # This is NOT the typical way to run a Flask/Quart app for production or development with Hypercorn.
-    # Hypercorn imports 'app' as a module.
     logger.error("This script (app.py) is designed to be run with an ASGI/WSGI server like Hypercorn.")
     logger.error("Example: hypercorn app:app --bind 127.0.0.1:11434")
-    logger.error(
-        "If you are trying to run standalone for testing limited functionality, some features might not work as expected, especially background tasks and full request handling.")
-
-    # Optionally, you could add some minimal direct execution logic here for specific tests,
-    # but it's generally better to test through the server.
-    # For instance, you could try to initialize just the DB and AI provider for basic checks:
-    # print("Attempting direct initialization for basic checks (not a full server run)...")
-    # try:
-    #     init_db() # Assuming this is globally defined
-    #     if ai_provider is None: # Check if it was initialized globally by module import
-    #          print("AI Provider not initialized globally. This path needs review for direct run.")
-    #     # You might try calling startup_tasks here for testing, but it's tricky without the server's loop context
-    #     # asyncio.run(startup_tasks()) # This might work depending on context
-    #     print("Basic initializations attempted. For full functionality, use Hypercorn.")
-    # except Exception as e:
-    #     print(f"Error during direct initialization attempt: {e}")
-
     sys.exit(1)  # Exit because this isn't the intended way to run
 else:
     # This block executes when app.py is imported as a module by a server (e.g., Hypercorn).
     logger.info("----------------------------------------------------------------------")
-    logger.info(">>> APP.PY: MODULE IMPORTED BY SERVER (e.g., Hypercorn worker process) <<<")
+    logger.info(">>> APP.PY: MODULE IMPORTED BY SERVER (Hypercorn worker process) <<<")
     logger.info("----------------------------------------------------------------------")
 
-    # Global instances ai_provider, ai_chat, ai_agent should be initialized above this block.
+    # Ensure critical global instances were initialized earlier in the module loading
+    # (These are typically defined after config and before this 'else' block)
     if ai_provider is None or ai_chat is None or ai_agent is None:
-        logger.critical("APP.PY: 🔥🔥 AI components NOT INITIALIZED GLOBALLY. Startup will likely fail.")
+        logger.critical(
+            "APP.PY: 🔥🔥 Core AI components (ai_provider, ai_chat, ai_agent) are NOT INITIALIZED. Application cannot start properly.")
+        # This is a fundamental setup error, exiting directly.
+        print("APP.PY: CRITICAL FAILURE - Core AI components not initialized. Exiting.", file=sys.stderr, flush=True)
+        sys.exit(1)
     else:
         logger.success("APP.PY: ✅ Core AI components appear initialized globally.")
 
-    logger.info("APP.PY: 🚀 Preparing to run asynchronous startup_tasks...")
+    # --- Initialize Database ---
+    # This is a critical step. If it fails, the app should not proceed.
+    db_initialized_successfully = False
+    try:
+        logger.info("APP.PY: >>> CALLING init_db() NOW. This must complete successfully for the application. <<<")
+        # init_db() is imported from database.py
+        # It's responsible for setting up the engine, SessionLocal, and migrations.
+        init_db()
+        db_initialized_successfully = True  # If init_db() returns without exception, assume success
+        logger.success("APP.PY: ✅ init_db() call completed (reported no critical errors).")
+    except Exception as e_init_db_call:
+        # init_db() itself should log details of its failure.
+        # This catches any exception re-raised by init_db() indicating a fatal setup error.
+        logger.critical(f"APP.PY: 🔥🔥 init_db() FAILED CRITICALLY DURING APP STARTUP: {e_init_db_call}")
+        logger.exception("APP.PY: Traceback for init_db() failure at app level:")
+        print(f"APP.PY: CRITICAL FAILURE IN init_db(): {e_init_db_call}. Cannot continue. Exiting.", file=sys.stderr,
+              flush=True)
+        sys.exit(1)  # Force exit if database initialization fails
+
+    # If we reach here, db_initialized_successfully must be True,
+    # because the except block above would have sys.exit(1).
+    # This explicit check is a safeguard.
+    if not db_initialized_successfully:
+        logger.critical(
+            "APP.PY: Sanity check - init_db() did not set success flag or was bypassed. EXITING ABNORMALLY.")
+        sys.exit(1)
+
+    # --- Check if SessionLocal from database.py is usable AFTER init_db() ---
+    # This is a sanity check to ensure init_db actually configured SessionLocal.
+    try:
+        from database import SessionLocal as AppSessionLocalCheck  # Re-import to get current state
+
+        if AppSessionLocalCheck is None:
+            logger.critical(
+                "APP.PY: FATAL - SessionLocal from database.py is STILL NONE after init_db() call! This indicates a severe problem in init_db's internal logic. EXITING.")
+            sys.exit(1)
+        else:
+            logger.info(
+                f"APP.PY: SessionLocal from database.py is NOT None after init_db(). Type: {type(AppSessionLocalCheck)}.")
+            # Further check if it's bound (it should be if init_db was successful)
+            if hasattr(AppSessionLocalCheck, 'kw') and AppSessionLocalCheck.kw.get('bind'):
+                logger.success("APP.PY: ✅ SessionLocal appears configured and bound to an engine.")
+            else:
+                logger.error(
+                    "APP.PY: 🔥 SessionLocal exists but may NOT BE BOUND to an engine (kw.bind missing). Startup tasks requiring DB will likely fail. EXITING.")
+                sys.exit(1)
+    except ImportError:
+        logger.critical(
+            "APP.PY: FATAL - Could not import SessionLocal from database.py AFTER init_db() for checking. EXITING.")
+        sys.exit(1)
+    except Exception as e_sl_check:
+        logger.critical(f"APP.PY: FATAL - Unexpected error checking SessionLocal: {e_sl_check}. EXITING.")
+        sys.exit(1)
+
+    # --- Run Asynchronous Startup Tasks (like Vector Store Initialization) ---
+    logger.info("APP.PY: 🚀 Preparing to run asynchronous startup_tasks (e.g., Vector Store initializations)...")
     startup_tasks_completed_successfully = False
     startup_tasks_start_time = time.monotonic()
 
     try:
         logger.debug("APP.PY: Setting up asyncio event loop for startup_tasks...")
         try:
+            # Get an existing loop or create a new one for this context
             loop = asyncio.get_event_loop_policy().get_event_loop()
             if loop.is_closed():
-                logger.warning("APP.PY: Default asyncio event loop was closed. Creating new one.")
+                logger.warning("APP.PY: Default asyncio event loop was closed. Creating new one for startup_tasks.")
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
-        except RuntimeError:
-            logger.info("APP.PY: No current asyncio event loop. Creating new one.")
+        except RuntimeError:  # No current event loop on this thread
+            logger.info("APP.PY: No current asyncio event loop for startup_tasks. Creating new one.")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
         logger.info(
             "APP.PY: >>> CALLING loop.run_until_complete(startup_tasks()). This will block until startup_tasks finishes. <<<")
-        loop.run_until_complete(startup_tasks())  # This should block
+        loop.run_until_complete(startup_tasks())  # startup_tasks() is defined earlier in app.py
         startup_tasks_duration = time.monotonic() - startup_tasks_start_time
         logger.info(
             f"APP.PY: >>> loop.run_until_complete(startup_tasks()) HAS COMPLETED. Duration: {startup_tasks_duration:.2f}s <<<")
-
-        # Check the event status from file_indexer directly after startup_tasks
-        # This requires _file_index_vs_initialized_event to be accessible or a getter.
-        # For simplicity, we'll rely on the logs from initialize_global_file_index_vectorstore itself.
-        # from .file_indexer import _file_index_vs_initialized_event # Avoid direct import of private-like var
-        # logger.info(f"APP.PY: Post startup_tasks, _file_index_vs_initialized_event.is_set(): {_file_index_vs_initialized_event.is_set()}")
-
-        logger.success("APP.PY: ✅ Asynchronous startup_tasks (Vector Store Initializations) reported completion.")
         startup_tasks_completed_successfully = True
-
     except Exception as su_err:
         startup_tasks_duration = time.monotonic() - startup_tasks_start_time
-        logger.error(
+        logger.critical(
             f"APP.PY: 🚨🚨 CRITICAL FAILURE during loop.run_until_complete(startup_tasks()) after {startup_tasks_duration:.2f}s: {su_err} 🚨🚨")
         logger.exception("APP.PY: Startup Tasks Execution Traceback:")
-        startup_tasks_completed_successfully = False  # Ensure it's false
+        # If startup_tasks fail (e.g., vector store init), the app might be in a bad state.
+        # Deciding to exit here or continue with limited functionality is a design choice.
+        # For now, let's exit as these tasks might be critical.
+        print(f"APP.PY: CRITICAL FAILURE IN startup_tasks(): {su_err}. Cannot continue. Exiting.", file=sys.stderr,
+              flush=True)
+        sys.exit(1)
 
-    if startup_tasks_completed_successfully:
-        logger.info("APP.PY: 🚀 Proceeding to start background services (File Indexer, Self Reflector)...")
-        if ENABLE_FILE_INDEXER:
-            logger.info("APP.PY: Starting File Indexer...")
-            start_file_indexer()
-        else:
-            logger.info("APP.PY: File Indexer is DISABLED by config. Not starting.")
+    # --- Start Other Background Services (File Indexer, Self Reflector) ---
+    # These are only started if init_db() AND startup_tasks() completed successfully.
+    if db_initialized_successfully and startup_tasks_completed_successfully:
+        logger.info(
+            "APP.PY: ✅ Core initializations (DB, Startup Tasks) successful. Proceeding to start background services...")
 
-        if ENABLE_SELF_REFLECTION:
-            logger.info("APP.PY: Starting Self Reflector...")
-            start_self_reflector()
+        # Ensure start_file_indexer and start_self_reflector are defined in app.py
+        # and that ENABLE_FILE_INDEXER, ENABLE_SELF_REFLECTION are from config.py
+        if 'ENABLE_FILE_INDEXER' in globals() and ENABLE_FILE_INDEXER:
+            logger.info("APP.PY: Starting File Indexer service...")
+            if 'start_file_indexer' in globals() and callable(globals()['start_file_indexer']):
+                start_file_indexer()  # This function should exist in app.py
+            else:
+                logger.error("APP.PY: 'start_file_indexer' function not found. File Indexer NOT started.")
         else:
-            logger.info("APP.PY: Self Reflector is DISABLED by config. Not starting.")
+            logger.info("APP.PY: File Indexer is DISABLED by config or variable not found. Not starting.")
+
+        if 'ENABLE_SELF_REFLECTION' in globals() and ENABLE_SELF_REFLECTION:
+            logger.info("APP.PY: Starting Self Reflector service...")
+            if 'start_self_reflector' in globals() and callable(globals()['start_self_reflector']):
+                start_self_reflector()  # This function should exist in app.py
+            else:
+                logger.error("APP.PY: 'start_self_reflector' function not found. Self Reflector NOT started.")
+        else:
+            logger.info("APP.PY: Self Reflector is DISABLED by config or variable not found. Not starting.")
     else:
         logger.error(
-            "APP.PY: Background services (File Indexer, Self Reflector) NOT started due to startup_tasks failure or incompletion.")
+            "APP.PY: Background services (File Indexer, Self Reflector) NOT started due to failure in DB init or startup_tasks.")
+        # Even if we didn't sys.exit above, this state is problematic.
+        # It's probably best to ensure exit happened earlier.
+        # If somehow execution reaches here with flags false, it's a logic error.
+        print("APP.PY: CRITICAL - Reached end of startup with initialization flags false. Exiting.", file=sys.stderr,
+              flush=True)
+        sys.exit(1)
 
     logger.info("--------------------------------------------------------------------")
     logger.info("APP.PY: ✅ Zephyrine EngineMain module-level initializations complete.")
-    logger.info(f"   Application (app) is now considered ready by this worker process.")
+    logger.info(f"   Application (app) is now considered ready by this worker process (PID: {os.getpid()}).")
     logger.info("   Waiting for server to route requests...")
     logger.info("--------------------------------------------------------------------")
