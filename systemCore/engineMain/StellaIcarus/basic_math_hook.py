@@ -87,8 +87,8 @@ PATTERN = re.compile(
 
 
 def handler(match: Match[str], user_input: str, session_id: str) -> Optional[str]:
-    SUCCESS_PREFIX = "StellaCalc: "
-    ERROR_PREFIX = "StellaError: "
+    SUCCESS_PREFIX = "This is what I get or the result of my calculation: "
+    ERROR_PREFIX = "I think Im lost can you repeat that again to me?"
 
     try:
         num1_str, operator_str, num2_str = match.groups()
