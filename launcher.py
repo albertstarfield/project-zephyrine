@@ -44,6 +44,10 @@ INITIAL_PYTHON_MINOR = 12
 FALLBACK_PYTHON_MAJOR = 3
 FALLBACK_PYTHON_MINOR = 12
 
+running_processes = [] # For services started by the current script instance
+process_lock = threading.Lock()
+relaunched_conda_process_obj = None # <<<< ADD THIS LINE
+
 # --- Executable Paths (will be redefined after Conda activation) ---
 IS_WINDOWS = os.name == 'nt'
 PYTHON_EXECUTABLE = sys.executable
@@ -170,6 +174,50 @@ def print_colored(prefix, message, color=None):
         print(f"[{now} | {prefix.ljust(10)}] {message.strip()}")
 
 
+def terminate_relaunched_process(process_obj, name="Relaunched Conda Process"):
+    if not process_obj or process_obj.poll() is not None:
+        return # Process doesn't exist or already terminated
+
+    pid = process_obj.pid
+    print_system(f"Attempting to terminate {name} (PID: {pid}) and its process tree...")
+    try:
+        if IS_WINDOWS:
+            # Use taskkill to terminate the process tree. /F for force, /T for tree.
+            kill_cmd = ['taskkill', '/F', '/T', '/PID', str(pid)]
+            print_system(f"Executing: {' '.join(kill_cmd)}")
+            result = subprocess.run(kill_cmd, check=False, capture_output=True, text=True)
+            if result.returncode == 0:
+                print_system(f"Taskkill command for {name} (PID: {pid}) executed successfully.")
+            else:
+                print_warning(f"Taskkill for {name} (PID: {pid}) exited with {result.returncode}. stdout: {result.stdout.strip()}, stderr: {result.stderr.strip()}")
+        else:
+            # On Unix, send SIGTERM to the entire process group.
+            # This requires process_obj to have been started with preexec_fn=os.setsid.
+            pgid = os.getpgid(pid)
+            print_system(f"Sending SIGTERM to process group {pgid} for {name} (PID: {pid}).")
+            os.killpg(pgid, signal.SIGTERM)
+
+        # Wait for the process to terminate
+        try:
+            process_obj.wait(timeout=5)
+            print_system(f"{name} (PID: {pid}) and its tree terminated gracefully.")
+        except subprocess.TimeoutExpired:
+            print_warning(f"{name} (PID: {pid}) tree did not terminate gracefully after initial signal/command.")
+            if IS_WINDOWS:
+                if process_obj.poll() is None: # Check if it's still running
+                    print_warning(f"{name} (PID: {pid}) might still be running after taskkill /F /T. Manual check may be needed.")
+            else:
+                # If SIGTERM failed, escalate to SIGKILL for the process group.
+                print_system(f"Sending SIGKILL to process group {pgid} for {name} (PID: {pid}).")
+                os.killpg(pgid, signal.SIGKILL)
+                process_obj.wait(timeout=2) # Give SIGKILL a moment
+                print_system(f"{name} (PID: {pid}) tree killed.")
+    except ProcessLookupError:
+        print_system(f"{name} (PID: {pid}) process or group already gone.")
+    except Exception as e:
+        print_error(f"Error during termination of {name} (PID: {pid}) tree: {e}")
+
+
 def print_system(message): print_colored("SYSTEM", message)
 
 
@@ -272,38 +320,54 @@ def start_service_thread(target_func, name):
 
 def cleanup_processes():
     print_system("\nShutting down services...")
+
+    # --- Handle the main relaunched 'conda run' process first ---
+    # This is relevant if the *initial* launcher instance is exiting (e.g., Ctrl+C)
+    # while it was waiting for 'conda run' to complete.
+    global relaunched_conda_process_obj # Ensure we're using the global
+    if relaunched_conda_process_obj and relaunched_conda_process_obj.poll() is None:
+        print_system("Initial launcher instance is shutting down; terminating the 'conda run' process and its children...")
+        terminate_relaunched_process(relaunched_conda_process_obj, "Relaunched 'conda run' process")
+        relaunched_conda_process_obj = None # Mark as handled
+
+    # --- Handle locally managed services (e.g., Engine, Backend, Frontend) ---
+    # This is relevant for the *relaunched* script instance cleaning up its own services,
+    # or if the initial script ever started services directly.
     with process_lock:
-        procs_to_terminate = list(running_processes)
-        running_processes.clear()
+        procs_to_terminate = list(running_processes) # Make a copy
+        running_processes.clear() # Clear the global list
 
     for proc, name in reversed(procs_to_terminate):
-        if proc.poll() is None:
+        if proc.poll() is None: # Check if process is still running
             print_system(f"Terminating {name} (PID: {proc.pid})...")
             try:
-                proc.terminate()
+                proc.terminate() # Send SIGTERM (or Windows equivalent)
                 try:
-                    proc.wait(timeout=5)
+                    proc.wait(timeout=5) # Wait for graceful shutdown
                     print_system(f"{name} terminated gracefully.")
                 except subprocess.TimeoutExpired:
                     print_warning(f"{name} did not terminate gracefully, killing (PID: {proc.pid})...")
-                    proc.kill()
-                    proc.wait(timeout=2)
+                    proc.kill() # Send SIGKILL (or Windows equivalent)
+                    proc.wait(timeout=2) # Wait for kill
                     print_system(f"{name} killed.")
             except Exception as e:
                 print_error(f"Error terminating/killing {name} (PID: {proc.pid}): {e}")
         else:
             print_system(f"{name} already exited (return code: {proc.poll()}).")
 
-
-atexit.register(cleanup_processes)
+atexit.register(cleanup_processes) # This line should already exist
 
 
 def signal_handler(sig, frame):
-    print_system("\nCtrl+C received. Initiating shutdown...")
-    sys.exit(0)
-
+    print_system(f"\nSignal {sig} received. Initiating shutdown via atexit handlers...")
+    # The atexit handler (cleanup_processes) will perform the necessary terminations.
+    # We set a non-zero exit code, common for interruption.
+    # 130 for SIGINT (Ctrl+C), 128 + signal number for others.
+    sys.exit(130 if sig == signal.SIGINT else 128 + sig)
 
 signal.signal(signal.SIGINT, signal_handler)
+if not IS_WINDOWS: # SIGTERM is not really a thing for console apps on Windows this way for Ctrl+C
+    signal.signal(signal.SIGTERM, signal_handler) # Handle SIGTERM for graceful shutdown requests on Unix
 
 
 # --- Service Start Functions ---
@@ -898,7 +962,7 @@ if __name__ == "__main__":
     print_system(f"Root directory: {ROOT_DIR}")
     print_system(f"Target Conda environment path: {TARGET_CONDA_ENV_PATH}")
     print_system(f"Initial Python: {sys.version.split()[0]} on {platform.system()} ({platform.machine()})")
-
+    #global relaunched_conda_process_obj  # To be managed by atexit if parent is interrupted
     current_conda_env_path_check = os.getenv("CONDA_PREFIX")
     is_already_in_correct_env = False
     if current_conda_env_path_check:
@@ -997,40 +1061,98 @@ if __name__ == "__main__":
         # Ensure log directory exists
         os.makedirs(RELAUNCH_LOG_DIR, exist_ok=True)
 
+
+        relaunched_conda_process_obj = None  # Initialize
+
         try:
-            # Open log files in append mode ('a') or write mode ('w')
-            # Using 'w' will clear the log on each relaunch attempt, good for fresh diagnostics
-            # Using 'a' will append, good for seeing history across multiple attempts if needed
+            # Open log files. 'w' clears log on each relaunch attempt (good for fresh diagnostics).
+            # 'a' would append (good for history if needed).
             with open(RELAUNCH_STDOUT_LOG, 'w', encoding='utf-8') as f_stdout, \
                     open(RELAUNCH_STDERR_LOG, 'w', encoding='utf-8') as f_stderr:
 
-                process_conda_run = subprocess.Popen(
-                    conda_run_cmd_list,
-                    stdout=f_stdout,  # Redirect stdout to file
-                    stderr=f_stderr,  # Redirect stderr to file
-                    text=True,  # Still good practice for process interaction
-                    errors='replace',
-                    bufsize=1
-                )
-
-                # We are no longer streaming to parent's TTY for the relaunch itself.
-                # Parent script will wait for conda run to finish.
-                process_conda_run.wait()
-
-                return_code = process_conda_run.returncode
-                if return_code != 0:
-                    print_error(
-                        f"'conda run' process (executing the relaunched script) exited with code {return_code}.")
-                    print_error(f"Check logs: STDOUT='{RELAUNCH_STDOUT_LOG}', STDERR='{RELAUNCH_STDERR_LOG}'")
+                popen_kwargs = {
+                    "stdout": f_stdout,  # Redirect stdout to file
+                    "stderr": f_stderr,  # Redirect stderr to file
+                    "text": True,  # Decode stdout/stderr as text
+                    "errors": 'replace',  # How to handle decoding errors
+                    "bufsize": 1  # Line-buffered
+                }
+                if IS_WINDOWS:
+                    # CREATE_NEW_PROCESS_GROUP allows 'taskkill /T /PID <parent_pid>'
+                    # to work effectively for terminating the entire process tree
+                    # started by cmd.exe (which 'conda run' often uses via .bat).
+                    popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
                 else:
-                    print_system(f"'conda run' process completed. Check logs for output from relaunched script.")
+                    # os.setsid makes the child process a new session leader and
+                    # process group leader. This allows os.killpg to send a signal
+                    # to the entire process group.
+                    popen_kwargs["preexec_fn"] = os.setsid
 
-                sys.exit(return_code)
+                # Start the 'conda run' process
+                process_conda_run = subprocess.Popen(
+                    conda_run_cmd_list,  # The command to run
+                    **popen_kwargs  # Pass all constructed Popen arguments
+                )
+                # Store the Popen object globally so the atexit handler can find it
+                # if the parent script is interrupted.
+                relaunched_conda_process_obj = process_conda_run
 
-        except Exception as e:
-            print_error(f"Failed to execute 'conda run' and log its output: {e}")
-            sys.exit(1)
+                exit_code_from_conda_run = -1  # Default value if wait() is interrupted early
+                try:
+                    # Parent script (this instance) waits here for the relaunched script to finish.
+                    # This is a blocking call.
+                    process_conda_run.wait()
+                    # If wait() returns, the process has terminated. Get its return code.
+                    exit_code_from_conda_run = process_conda_run.returncode
+                except KeyboardInterrupt:
+                    # This KeyboardInterrupt is for the *parent* script (this instance)
+                    # if it receives Ctrl+C WHILE it is in process_conda_run.wait().
+                    # The signal_handler (defined earlier) should have already been triggered
+                    # and called sys.exit(), which in turn triggers the atexit handler (cleanup_processes).
+                    # cleanup_processes will see relaunched_conda_process_obj is set
+                    # and will attempt to terminate the 'conda run' process and its children.
+                    print_system("Parent script's wait for 'conda run' was interrupted by KeyboardInterrupt.")
+                    print_system(
+                        "Atexit handler (cleanup_processes) will attempt to terminate the 'conda run' process tree.")
+                    # The signal_handler usually calls sys.exit(130). If this try-except
+                    # is somehow reached without sys.exit being called by the signal handler (unlikely),
+                    # we ensure an exit to trigger atexit.
+                    if not getattr(sys, 'exitfunc_called', False):  # Check if atexit is already in motion
+                        sys.exit(130)  # Standard exit code for Ctrl+C
+                    # If sys.exit was already called by signal_handler, this 'return' might not be strictly necessary
+                    # but ensures this path exits if the signal handler logic changes.
+                # If process_conda_run.wait() completed without a KeyboardInterrupt for *this parent script*:
+                print_system(
+                    f"'conda run' process (executing the relaunched script) finished with code: {exit_code_from_conda_run}.")
+                # Clear the global Popen object because the process has finished.
+                # The parent's atexit handler no longer needs to try and kill it.
+                relaunched_conda_process_obj = None
 
+                if exit_code_from_conda_run != 0:
+                    print_error(
+                        f"'conda run' process exited with non-zero code: {exit_code_from_conda_run}.")
+                    print_error(
+                        f"Check relaunched script logs: STDOUT='{RELAUNCH_STDOUT_LOG}', STDERR='{RELAUNCH_STDERR_LOG}'")
+                else:
+                    print_system(
+                        f"'conda run' process completed successfully. Check logs for output from the relaunched script.")
+
+                # The parent script now exits with the same return code as the 'conda run' process.
+                sys.exit(exit_code_from_conda_run)
+
+        except FileNotFoundError as e_fnf:
+            # This usually means CONDA_EXECUTABLE or 'python' (within conda run) was not found.
+            print_error(
+                f"Failed to execute 'conda run' (command or a component not found: {conda_run_cmd_list[0]}): {e_fnf}")
+            # relaunched_conda_process_obj is likely None if Popen itself failed.
+            sys.exit(1)  # Critical failure, parent exits.
+        except Exception as e_outer:
+            # Catch any other unexpected errors during Popen or the surrounding logic.
+            print_error(f"An unexpected error occurred while trying to execute 'conda run' or wait for it: {e_outer}")
+            # relaunched_conda_process_obj might be set if Popen succeeded but another error occurred before wait or during logging.
+            # The atexit handler (cleanup_processes) of this *initial* script instance will run if sys.exit() is called.
+            # If relaunched_conda_process_obj is still set and the process is running, cleanup_processes will attempt to terminate it.
+            sys.exit(1)  # Critical failure, parent exits.
     # --- From this point onwards, we are confirmed to be in the correct Conda environment ---
     # This ACTIVE_ENV_PATH should have been set if is_already_in_correct_env was true at the start.
     # If not, it implies an issue with the script's logic flow or Conda environment detection.
