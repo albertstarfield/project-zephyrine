@@ -42,6 +42,7 @@ from alembic import command
 from alembic.util import CommandError
 from collections import deque
 from loguru import logger
+from config import *
 
 # --- Configuration & Paths ---
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -95,8 +96,11 @@ class Interaction(Base):
     id = Column(Integer, primary_key=True, index=True)
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     session_id = Column(String, index=True, nullable=True)
-    mode = Column(String, default="chat", index=True)
-    input_type = Column(String, default="text")
+
+    # Ensuring server_default for string columns if they are NOT NULL and have a Python default
+    mode = Column(String, nullable=False, server_default="chat", index=True)
+    input_type = Column(String, nullable=False, server_default="text")
+
     user_input = Column(Text, nullable=True)
     llm_response = Column(Text, nullable=True)
     classification = Column(String, nullable=True)
@@ -104,37 +108,50 @@ class Interaction(Base):
     emotion_context_analysis = Column(Text, nullable=True)
     tool_name = Column(String, nullable=True)
     tool_parameters = Column(Text, nullable=True)
-    # tool_result field removed as it was not in the latest schema
-    image_data = Column(Text, nullable=True)
+    image_data = Column(Text, nullable=True)  # For user-provided image b64 snippet
     url_processed = Column(String, nullable=True)
-    image_description = Column(Text, nullable=True)
+    image_description = Column(Text, nullable=True)  # For VLM desc of user-provided image
     latex_representation = Column(Text, nullable=True)
     latex_explanation = Column(Text, nullable=True)
     execution_time_ms = Column(Float, nullable=True)
-    reflection_completed = Column(Boolean, default=False, nullable=False, index=True)
+
+    # Boolean columns that are NOT NULL need server_default for SQLite
+    reflection_completed = Column(Boolean, nullable=False, server_default=text("0"), index=True)
+
     rag_source_url = Column(String, nullable=True)
-    rag_history_ids = Column(String, nullable=True)
-    requires_deep_thought = Column(Boolean, nullable=True)
+    rag_history_ids = Column(String, nullable=True)  # Comma-separated IDs
+
+    requires_deep_thought = Column(Boolean, nullable=True)  # Nullable, Python default is fine
     deep_thought_reason = Column(Text, nullable=True)
-    tot_analysis_requested = Column(Boolean, default=False)
+
+    tot_analysis_requested = Column(Boolean, nullable=False, server_default=text("0"))
+    tot_analysis_spawned = Column(Boolean, nullable=False,
+                                  server_default=text("0"))  # <<< CORRECTLY ADDED WITH SERVER_DEFAULT
     tot_result = Column(Text, nullable=True)
-    tot_delivered = Column(Boolean, default=False, index=True, server_default='0')
+    tot_delivered = Column(Boolean, nullable=False, server_default=text("0"), index=True)
+
     assistant_action_analysis_json = Column(Text, nullable=True)
     assistant_action_type = Column(String, nullable=True, index=True)
     assistant_action_params = Column(Text, nullable=True)
-    assistant_action_executed = Column(Boolean, default=False, server_default='0')
+    assistant_action_executed = Column(Boolean, nullable=False, server_default=text("0"))
     assistant_action_result = Column(Text, nullable=True)
+
     last_modified_db = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
-    # --- NEW: Fields for imagined image (from app.py) ---
+
     imagined_image_prompt = Column(Text, nullable=True)
-    imagined_image_b64 = Column(Text, nullable=True)
-    imagined_image_vlm_description = Column(Text, nullable=True)
-    # --- END NEW ---
+    imagined_image_b64 = Column(Text, nullable=True)  # For AI-generated image b64 snippet
+    imagined_image_vlm_description = Column(Text, nullable=True)  # For VLM desc of AI-generated image
+
+    reflection_indexed_in_vs = Column(Boolean, nullable=False, server_default=text("0"),
+                                      index=True)  # <<< CORRECTLY ADDED WITH SERVER_DEFAULT
+
     __table_args__ = (
         Index('ix_interactions_session_mode_timestamp', 'session_id', 'mode', 'timestamp'),
         Index('ix_interactions_undelivered_tot', 'session_id', 'mode', 'tot_delivered', 'timestamp'),
         Index('ix_interactions_action_type_time', 'assistant_action_type', 'timestamp'),
         Index('ix_interactions_reflection_pending', 'reflection_completed', 'mode', 'input_type', 'timestamp'),
+        Index('ix_interactions_reflection_indexed_vs', 'reflection_indexed_in_vs', 'input_type', 'timestamp'),
+    # Index for new field
     )
 
 
@@ -271,7 +288,8 @@ def _decompress_db(source_path: str, target_path: str) -> bool:
         logger.exception("Decompression Traceback:")
         if os.path.exists(target_path):
             try:
-                os.remove(target_path); logger.warning(
+                os.remove(target_path)
+                logger.warning(
                     f"Removed partial target file '{target_path}' after failed decompression.")
             except Exception as rm_err:
                 logger.error(f"Failed to remove partial target file: {rm_err}")
@@ -782,7 +800,8 @@ class DatabaseSnapshotter(threading.Thread):
             # If compression failed, ensure final_snapshot_path (if partially created) is removed
             if not compression_successful_flag and os.path.exists(final_snapshot_path):
                 try:
-                    os.remove(final_snapshot_path); logger.warning(
+                    os.remove(final_snapshot_path)
+                    logger.warning(
                         f"Removed partial snapshot file '{final_snapshot_path}' after error.")
                 except Exception as e_rem_final:
                     logger.error(f"Failed to remove partial snapshot file '{final_snapshot_path}': {e_rem_final}")
@@ -993,91 +1012,188 @@ def get_engine():
 # --- Alembic Helper Functions (_get_alembic_config, _create_default_env_py, etc.) ---
 # (Keep your existing Alembic helpers here - unchanged)
 def _get_alembic_config() -> Optional[Config]:
-    if not os.path.exists(ALEMBIC_INI_PATH): logger.error(f"Alembic ini not found: {ALEMBIC_INI_PATH}"); return None
+    if not os.path.exists(ALEMBIC_INI_PATH):
+        logger.error(f"Alembic ini file not found at {ALEMBIC_INI_PATH}. Cannot proceed.")
+        return None
     try:
         alembic_cfg = Config(ALEMBIC_INI_PATH)
-        alembic_cfg.set_main_option("sqlalchemy.url", RUNTIME_DATABASE_URL)
-        alembic_cfg.set_main_option("script_location", os.path.relpath(ALEMBIC_DIR, APP_DIR).replace("\\", "/"))
+        # env.py will use PROJECT_CONFIG_DATABASE_URL, but ini needs a valid placeholder
+        alembic_cfg.set_main_option("sqlalchemy.url", DATABASE_URL)
+        alembic_cfg.set_main_option("script_location", os.path.relpath(ALEMBIC_DIR, MODULE_DIR).replace("\\", "/"))
         return alembic_cfg
     except Exception as e:
-        logger.error(f"Failed load/config Alembic from {ALEMBIC_INI_PATH}: {e}"); return None
+        logger.error(f"Failed to load/configure Alembic from {ALEMBIC_INI_PATH}: {e}")
+        return None
 
 
 def _create_default_env_py():
-    if not os.path.exists(ALEMBIC_ENV_PY_PATH):
-        logger.warning(f"🔧 Alembic env.py not found. Creating default at {ALEMBIC_ENV_PY_PATH}")
-        env_py_content = f"""
+    logger.info(f"Ensuring Alembic env.py at {ALEMBIC_ENV_PY_PATH} is correctly configured...")
+    env_py_content = f"""\
 import os
 import sys
 from logging.config import fileConfig
-from sqlalchemy import engine_from_config, pool, create_engine
+from sqlalchemy import create_engine, pool
 from alembic import context
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
-APP_DIR = os.path.abspath(os.path.join(SCRIPT_DIR, '..'))
-if APP_DIR not in sys.path: sys.path.insert(0, APP_DIR)
-target_metadata = None; RUNTIME_DATABASE_URL_FROM_DB_PY = None
+
+ENV_PY_SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+ENGINE_MAIN_DIR = os.path.abspath(os.path.join(ENV_PY_SCRIPT_DIR, '..'))
+
+# Critical: Print CWD when env.py is run
+print(f"[alembic/env.py] Current Working Directory: {{os.getcwd()}}", file=sys.stderr)
+print(f"[alembic/env.py] ENGINE_MAIN_DIR determined as: {{ENGINE_MAIN_DIR}}", file=sys.stderr)
+print(f"[alembic/env.py] Initial sys.path: {{sys.path}}", file=sys.stderr)
+
+if ENGINE_MAIN_DIR not in sys.path:
+    sys.path.insert(0, ENGINE_MAIN_DIR)
+    print(f"[alembic/env.py] Added {{ENGINE_MAIN_DIR}} to sys.path.", file=sys.stderr)
+    print(f"[alembic/env.py] Modified sys.path: {{sys.path}}", file=sys.stderr)
+
+alembic_ini_config = context.config
+target_metadata = None
+EFFECTIVE_DATABASE_URL_FOR_ALEMBIC = None
+
+print(f"[alembic/env.py] === STARTING IMPORTS ===", file=sys.stderr)
 try:
-    from database import Base, RUNTIME_DATABASE_URL
-    RUNTIME_DATABASE_URL_FROM_DB_PY = RUNTIME_DATABASE_URL
-    from database import Interaction, AppleScriptAttempt, FileIndex # Ensure all models are imported
-    target_metadata = Base.metadata
-except ImportError as e: print(f"Alembic env.py: ERROR importing: {{e}}"); raise
-config = context.config
-effective_db_url = RUNTIME_DATABASE_URL_FROM_DB_PY or config.get_main_option("sqlalchemy.url")
-if not effective_db_url: raise ValueError("DB URL not found.")
-config.set_main_option("sqlalchemy.url", effective_db_url)
-if config.config_file_name is not None:
-    try: fileConfig(config.config_file_name)
-    except Exception as fc_err: print(f"Alembic env.py: Error log config: {{fc_err}}")
-is_sqlite = effective_db_url.startswith("sqlite")
+    print(f"[alembic/env.py] Attempting: from database import Base, Interaction, AppleScriptAttempt, FileIndex", file=sys.stderr)
+    from database import Base, Interaction, AppleScriptAttempt, FileIndex
+    print(f"[alembic/env.py]   Successfully imported from 'database'. Type of Base: {{type(Base)}}", file=sys.stderr)
+
+    if Base is not None and hasattr(Base, 'metadata'):
+        target_metadata = Base.metadata
+        if target_metadata is not None and hasattr(target_metadata, 'tables'):
+            print(f"[alembic/env.py]   Base.metadata is valid. Tables found: {{list(target_metadata.tables.keys())}}", file=sys.stderr)
+            if not target_metadata.tables:
+                print("[alembic/env.py]   WARNING: Base.metadata.tables collection is EMPTY!", file=sys.stderr)
+        else:
+            print("[alembic/env.py]   CRITICAL: Base.metadata is None or has no 'tables' attribute!", file=sys.stderr)
+            target_metadata = None # Ensure it's None if problematic
+    else:
+        print("[alembic/env.py]   CRITICAL: Imported 'Base' is None or has no 'metadata' attribute!", file=sys.stderr)
+        target_metadata = None # Ensure it's None
+
+    print(f"[alembic/env.py] Attempting: from config import PROJECT_CONFIG_DATABASE_URL", file=sys.stderr)
+    from config import PROJECT_CONFIG_DATABASE_URL 
+    EFFECTIVE_DATABASE_URL_FOR_ALEMBIC = PROJECT_CONFIG_DATABASE_URL
+    print(f"[alembic/env.py]   Successfully imported PROJECT_CONFIG_DATABASE_URL='{EFFECTIVE_DATABASE_URL_FOR_ALEMBIC}'", file=sys.stderr)
+
+except ImportError as e_import_env:
+    print(f"[alembic/env.py] CRITICAL IMPORT ERROR: {{e_import_env}}", file=sys.stderr)
+    raise 
+except Exception as e_env_setup:
+    print(f"[alembic/env.py] CRITICAL UNEXPECTED SETUP ERROR: {{e_env_setup}}", file=sys.stderr)
+    raise
+print(f"[alembic/env.py] === IMPORTS FINISHED ===", file=sys.stderr)
+
+if target_metadata is None: # Check after try-except
+    print("[alembic/env.py] CRITICAL: target_metadata is None after import attempts. Autogenerate will be empty.", file=sys.stderr)
+    # Optionally, could create a dummy MetaData here to prevent Alembic from crashing,
+    # but an empty migration is the symptom we want to see if this is the case.
+    # from sqlalchemy import MetaData
+    # target_metadata = MetaData() # This would lead to empty script
+
+if not EFFECTIVE_DATABASE_URL_FOR_ALEMBIC:
+    raise ValueError("PROJECT_CONFIG_DATABASE_URL from config.py was None. Alembic cannot proceed.")
+
+alembic_ini_config.set_main_option("sqlalchemy.url", EFFECTIVE_DATABASE_URL_FOR_ALEMBIC)
+
+if alembic_ini_config.config_file_name is not None:
+    try: fileConfig(alembic_ini_config.config_file_name)
+    except Exception as fc_err: print(f"[alembic/env.py] Warn: Error log config from alembic.ini: {{fc_err}}", file=sys.stderr)
+
+is_sqlite = EFFECTIVE_DATABASE_URL_FOR_ALEMBIC.startswith("sqlite")
+
 def run_migrations_offline() -> None:
-    context.configure(url=effective_db_url, target_metadata=target_metadata, literal_binds=True, dialect_opts={{"paramstyle": "named"}}, render_as_batch=is_sqlite)
+    print("[alembic/env.py] Configuring for OFFLINE migration.", file=sys.stderr)
+    context.configure(url=EFFECTIVE_DATABASE_URL_FOR_ALEMBIC, target_metadata=target_metadata, literal_binds=True, dialect_opts={{"paramstyle": "named"}}, render_as_batch=is_sqlite, compare_server_default=True)
     with context.begin_transaction(): context.run_migrations()
+
 def run_migrations_online() -> None:
+    print("[alembic/env.py] Configuring for ONLINE migration.", file=sys.stderr)
     connectable_args = {{"connect_args": {{"check_same_thread": False, "timeout": 60.0}}}} if is_sqlite else {{}}
-    connectable = create_engine(effective_db_url, poolclass=pool.NullPool, **connectable_args)
+    connectable = create_engine(EFFECTIVE_DATABASE_URL_FOR_ALEMBIC, poolclass=pool.NullPool, **connectable_args) # type: ignore
     try:
         with connectable.connect() as connection:
-            context.configure(connection=connection, target_metadata=target_metadata, render_as_batch=is_sqlite, compare_type=True)
-            with context.begin_transaction(): context.run_migrations()
+            context.configure(connection=connection, target_metadata=target_metadata, render_as_batch=is_sqlite, compare_type=True, compare_server_default=True)
+            print("[alembic/env.py] Context configured for online. Beginning transaction and running migrations...", file=sys.stderr)
+            with context.begin_transaction():
+                context.run_migrations()
+            print("[alembic/env.py] Online migrations ran.", file=sys.stderr)
     finally:
         if connectable: connectable.dispose()
+
 if context.is_offline_mode(): run_migrations_offline()
 else: run_migrations_online()
+print("[alembic/env.py] Script execution finished.", file=sys.stderr)
 """
+    # Logic to write/overwrite env.py if needed (as before)
+    write_env_py = True
+    if os.path.exists(ALEMBIC_ENV_PY_PATH):
+        try:
+            with open(ALEMBIC_ENV_PY_PATH, 'r') as f_current_env: current_content = f_current_env.read()
+            if current_content.strip() == env_py_content.strip(): write_env_py = False; logger.trace(f"Alembic env.py at {ALEMBIC_ENV_PY_PATH} is up-to-date.")
+            else: logger.warning(f"Alembic env.py at {ALEMBIC_ENV_PY_PATH} differs. Overwriting.")
+        except Exception as e_read_env: logger.warning(f"Could not read existing env.py, will overwrite: {e_read_env}")
+    if write_env_py:
         try:
             os.makedirs(os.path.dirname(ALEMBIC_ENV_PY_PATH), exist_ok=True)
-            with open(ALEMBIC_ENV_PY_PATH, 'w') as f:
-                f.write(env_py_content)
-            logger.success(f"✅ Default env.py created/overwritten.")
-        except IOError as e:
-            logger.error(f"❌ Failed to write default env.py: {e}"); raise
-
+            with open(ALEMBIC_ENV_PY_PATH, 'w') as f: f.write(env_py_content)
+            logger.success(f"✅ Alembic env.py created/overwritten at {ALEMBIC_ENV_PY_PATH}.")
+        except IOError as e: logger.error(f"❌ Failed to write default env.py: {e}"); raise
 
 def _create_default_script_mako():
-    if not os.path.exists(ALEMBIC_SCRIPT_MAKO_PATH):
-        logger.warning(f"🔧 Alembic script template not found. Creating default at {ALEMBIC_SCRIPT_MAKO_PATH}")
-        mako_content = """\"\"\"${message}\"\"\"
+    # Overwrite mako template each time to ensure it's the correct version,
+    # or check content before writing if you prefer.
+    # For simplicity of ensuring the fix, let's overwrite if different or missing.
+    logger.info(f"Ensuring Alembic script.py.mako at {ALEMBIC_SCRIPT_MAKO_PATH} is correctly formatted...")
+
+    # Note the f"""\ at the beginning for a clean multi-line f-string
+    mako_content = f"""\
+\"\"\"${{message}}\"\"\"
 from typing import Sequence, Union
+
 from alembic import op
 import sqlalchemy as sa
-${imports if imports else ""}
-revision: str = ${repr(up_revision)}
-down_revision: Union[str, None] = ${repr(down_revision)}
-branch_labels: Union[str, Sequence[str], None] = ${repr(branch_labels)}
-depends_on: Union[str, Sequence[str], None] = ${repr(depends_on)}
+
+${{imports if imports else ""}}
+
+# revision identifiers, used by Alembic.
+revision: str = ${{repr(up_revision)}}
+down_revision: Union[str, None] = ${{repr(down_revision)}}
+branch_labels: Union[str, Sequence[str], None] = ${{repr(branch_labels)}}
+depends_on: Union[str, Sequence[str], None] = ${{repr(depends_on)}}
+
+
 def upgrade() -> None:
-    ${upgrades if upgrades else "pass"}
+    ${{upgrades if upgrades else "pass"}}
+
+
 def downgrade() -> None:
-    ${downgrades if downgrades else "pass"}
+    ${{downgrades if downgrades else "pass"}}
 """
+    write_mako_file = True
+    if os.path.exists(ALEMBIC_SCRIPT_MAKO_PATH):
         try:
+            with open(ALEMBIC_SCRIPT_MAKO_PATH, 'r') as f_current_mako:
+                current_mako_content = f_current_mako.read()
+            if current_mako_content.strip() == mako_content.strip(): # Compare stripped content
+                write_mako_file = False
+                logger.trace(f"Alembic script.py.mako at {ALEMBIC_SCRIPT_MAKO_PATH} is already up-to-date.")
+            else:
+                logger.warning(f"Alembic script.py.mako at {ALEMBIC_SCRIPT_MAKO_PATH} differs. Overwriting.")
+        except Exception as e_read_mako:
+            logger.warning(f"Could not read existing script.py.mako to compare, will overwrite: {e_read_mako}")
+
+    if write_mako_file:
+        try:
+            # Ensure the parent directory exists (alembic/)
+            os.makedirs(os.path.dirname(ALEMBIC_SCRIPT_MAKO_PATH), exist_ok=True)
             with open(ALEMBIC_SCRIPT_MAKO_PATH, 'w') as f:
                 f.write(mako_content)
-            logger.success(f"✅ Default script.py.mako created.")
+            logger.success(f"✅ Default script.py.mako created/overwritten at {ALEMBIC_SCRIPT_MAKO_PATH}.")
         except IOError as e:
-            logger.error(f"❌ Failed to write default script.py.mako: {e}"); raise
-
+            logger.error(f"❌ Failed to write default script.py.mako: {e}")
+            raise # Re-raise if writing fails, as it's a critical setup file
+# --- END Alembic Helper Functions ---
 
 # --- END Alembic Helpers ---
 
@@ -1108,178 +1224,254 @@ def check_and_apply_migrations() -> bool:
 
 # --- END Migration Application ---
 
+def start_log_batch_writer():
+    global _log_writer_thread
+    if not (_log_writer_thread and _log_writer_thread.is_alive()):
+        if SessionLocal is None or not SessionLocal.kw.get('bind'): logger.error("Cannot start Log Batch Writer: SessionLocal not configured."); return # type: ignore
+        logger.info("🚀 Starting DB Log Batch Writer..."); _log_writer_stop_event.clear(); _log_writer_thread = DatabaseLogBatchWriter(_log_writer_stop_event); _log_writer_thread.start()
+def stop_log_batch_writer(wait_for_flush_timeout: Optional[float] = 10.0):
+    global _log_writer_thread
+    if _log_writer_thread and isinstance(_log_writer_thread, DatabaseLogBatchWriter) and _log_writer_thread.is_alive():
+        logger.info("Signaling Log Batch Writer to shutdown..."); _log_writer_thread.signal_shutdown_and_flush(); _log_writer_stop_event.set()
+        if wait_for_flush_timeout and wait_for_flush_timeout > 0: _log_writer_thread.join(timeout=wait_for_flush_timeout)
+        logger.info(f"Log Batch Writer {'finished' if not _log_writer_thread.is_alive() else 'did not finish in timeout'}.")
+
 # --- init_db - Modified to start snapshotter ---
 def init_db():
-    """
-    Initializes the Database: Handles decompression, ensures schema is up-to-date
-    via Alembic migrations (auto-generating if needed), sets up engine/session
-    for the RUNTIME DB, and logs stats.
-    """
-    logger.info("🚀 Initializing Database (Runtime DB with Snapshot Restore)...")
-    global _engine, SessionLocal
+    global _engine, SessionLocal  # To ensure they are assigned if this is the first init
+    logger.info("🚀 Initializing Database (Strategy: Always Fresh Alembic Baseline)...")
 
-    if _engine is not None and SessionLocal is not None and SessionLocal.kw.get('bind'):
-        logger.warning("Database already initialized. Skipping re-initialization.")
+    # Block to prevent re-entry if already initialized in this process
+    if _engine is not None and SessionLocal is not None and SessionLocal.kw.get('bind'):  # type: ignore
+        logger.warning("Database already initialized in this process. Skipping re-initialization.")
+        # Ensure background services are running if app is reloaded (e.g., by Hypercorn worker restart)
+        if ENABLE_DB_SNAPSHOTS and (_snapshotter_thread is None or not _snapshotter_thread.is_alive()):  # type: ignore
+            start_db_snapshotter()
+        if (_log_writer_thread is None or not _log_writer_thread.is_alive()):  # type: ignore
+            if SessionLocal and SessionLocal.kw.get('bind'):  # type: ignore
+                start_log_batch_writer()
+            else:  # Should not happen if already initialized
+                logger.error("init_db (re-entry): SessionLocal not bound, cannot start log writer.")
         return
 
-    engine_instance = None
-    migration_successful = False
+    # Create SessionLocal factory once if it doesn't exist. get_engine() will bind it.
+    if SessionLocal is None:
+        SessionLocal = sessionmaker(autocommit=False, autoflush=False)
+        logger.debug("database.py init_db: SessionLocal factory created.")
 
+    # --- 1. Get/Prepare Engine and Ensure DB File is Ready ---
+    # get_engine() handles archive decompression, snapshot restore, basic integrity checks.
+    # It initializes global _engine and binds global SessionLocal.
+    engine_instance = get_engine()  # This must succeed and configure SessionLocal.
+    if not engine_instance or not _engine or not SessionLocal or not SessionLocal.kw.get('bind'):  # type: ignore
+        # get_engine() should sys.exit on critical failure, this is a fallback assertion.
+        logger.critical("CRITICAL: Engine or SessionLocal not properly initialized by get_engine(). Cannot proceed.")
+        raise RuntimeError("Fatal error in get_engine() preventing Alembic setup or DB operations.")
+    logger.info("Engine and SessionLocal are ready. Runtime database file prepared by get_engine().")
+
+    # --- 2. Aggressively Reset Alembic State for a Fresh Baseline ---
+    logger.warning("INIT_DB STRATEGY: Deleting existing Alembic versions and DB history for a fresh baseline.")
+
+    # 2a. Clear contents of alembic/versions directory
+    if os.path.isdir(ALEMBIC_VERSIONS_PATH):
+        logger.info(f"Clearing Alembic versions directory: {ALEMBIC_VERSIONS_PATH}")
+        try:
+            for filename in os.listdir(ALEMBIC_VERSIONS_PATH):
+                file_path = os.path.join(ALEMBIC_VERSIONS_PATH, filename)
+                if os.path.isfile(file_path) and file_path.endswith((".py", ".pyc")):
+                    os.unlink(file_path)
+                elif os.path.isdir(file_path) and filename == "__pycache__":
+                    shutil.rmtree(file_path)
+            logger.info("Alembic versions directory cleared.")
+        except Exception as e_clear_versions:
+            logger.error(f"Failed to fully clear alembic/versions: {e_clear_versions}. Proceeding cautiously.")
+    else:  # Ensure the directory exists for Alembic to write into
+        os.makedirs(ALEMBIC_VERSIONS_PATH, exist_ok=True)
+        logger.info(f"Created Alembic versions directory: {ALEMBIC_VERSIONS_PATH}")
+
+    # 2b. Drop the alembic_version table from the database to reset history
+    logger.info("Dropping 'alembic_version' table from the database if it exists...")
     try:
-        engine_instance = get_engine()
-        if not engine_instance:
-            raise RuntimeError("get_engine() failed to return a valid engine instance.")
-        logger.info("Engine initialization/check complete.")
+        with engine_instance.connect() as connection:  # Use the engine_instance from get_engine()
+            connection.execute(text("DROP TABLE IF EXISTS alembic_version;"))
+            connection.commit()
+        logger.info("'alembic_version' table dropped (or did not exist).")
+    except Exception as e_drop_table:
+        logger.error(
+            f"Failed to drop 'alembic_version' table: {e_drop_table}. This might be okay if DB is truly new and table never existed.")
+        # If this fails on an existing DB, subsequent Alembic commands might still error,
+        # but the goal is to make it behave like a fresh DB.
 
-        _create_default_env_py()
-        _create_default_script_mako()
-        if not os.path.exists(ALEMBIC_INI_PATH):
-            logger.warning(f"🔧 Alembic config file not found. Creating default at {ALEMBIC_INI_PATH}")
-            alembic_dir_for_ini = os.path.relpath(ALEMBIC_DIR, APP_DIR).replace("\\", "/")
-            alembic_cfg_content = f"""[alembic]
+    # --- 3. Ensure Alembic Configuration Files Exist and are Correct ---
+    # These functions create default ini, env.py, script.py.mako if missing.
+    # _create_default_env_py() is critical as it writes an env.py that correctly
+    # imports Base.metadata from this database.py and PROJECT_CONFIG_DATABASE_URL from config.py.
+    _create_default_env_py()  # Must be defined in this file
+    _create_default_script_mako()  # Must be defined in this file
+    if not os.path.exists(ALEMBIC_INI_PATH):
+        logger.warning(f"🔧 Alembic config file alembic.ini not found. Creating default at {ALEMBIC_INI_PATH}")
+        alembic_dir_for_ini = os.path.relpath(ALEMBIC_DIR, MODULE_DIR).replace("\\", "/")
+        # alembic.ini's sqlalchemy.url will be overridden by env.py with PROJECT_CONFIG_DATABASE_URL,
+        # but it needs a valid placeholder. Using DATABASE_URL from config is fine.
+        alembic_cfg_content = f"""
+[alembic]
+# path to migration scripts
 script_location = {alembic_dir_for_ini}
-sqlalchemy.url = {RUNTIME_DATABASE_URL}
-# ... (rest of your ini content from V17) ...
+
+# SQLAlchemy database URL
+sqlalchemy.url = {DATABASE_URL}
+
+# Other Alembic settings can go here if needed
+# e.g. file_template, timezone, etc.
+
+[post_write_hooks]
+# This section is optional, used for code auto-formatting after generation
+# hooks = autopep8
+# autopep8.type = command
+# autopep8.entrypoint = autopep8
+# autopep8.options = --in-place --aggressive --aggressive
+
+# Logging configuration (simplified to avoid 'command' formatter issue)
+[loggers]
+keys = root,sqlalchemy,alembic
+
+[handlers]
+keys = console
+
+[formatters]
+keys = generic 
+
+[logger_root]
+level = WARN
+handlers = console
+qualname =
+
+[logger_sqlalchemy]
+level = WARN
+handlers = # No specific handler, inherits from root or default
+qualname = sqlalchemy.engine
+
+[logger_alembic]
+level = INFO
+handlers = console
+qualname = alembic
+
+[handler_console]
+class = StreamHandler
+args = (sys.stderr,)
+level = NOTSET
+formatter = generic 
+
 [formatter_generic]
 format = %(levelname)-5.5s [%(name)s] %(message)s
 datefmt = %H:%M:%S
+
 """
-            try:
-                with open(ALEMBIC_INI_PATH, 'w') as f:
-                    f.write(alembic_cfg_content)
-                logger.success(f"📝 Default alembic.ini created.")
-            except IOError as e:
-                logger.error(f"❌ Failed to write default alembic.ini: {e}"); raise
-        logger.info("Alembic configuration files ensured.")
-
-        # --- MODIFIED PART FOR AUTOGENERATION ---
-        # Always attempt to generate a revision to detect changes,
-        # then upgrade. Alembic will only create a new file if changes are detected.
-        logger.info("Attempting to auto-generate migration script for any schema changes...")
-        autogen_success = False
-        autogen_message = f"Autodetect schema changes {datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
         try:
-            command_args = [
-                sys.executable, "-m", "alembic",
-                "-c", ALEMBIC_INI_PATH,
-                "revision", "--autogenerate",
-                "-m", autogen_message
-            ]
-            logger.info(f"Running command: {' '.join(command_args)}")
-            process = subprocess.run(
-                command_args, cwd=APP_DIR,
-                capture_output=True, text=True, check=False, timeout=60  # check=False initially
-            )
+            with open(ALEMBIC_INI_PATH, 'w') as f:
+                f.write(alembic_cfg_content)
+            logger.success(f"📝 Default alembic.ini created at {ALEMBIC_INI_PATH}.")
+        except IOError as e:
+            logger.error(f"❌ Failed to write default alembic.ini: {e}")
+            raise  # This is a critical setup step
 
-            # Alembic revision --autogenerate returns 0 even if no changes are detected.
-            # We need to check its output to see if a new file was generated.
-            if process.returncode == 0:
-                if "Generating" in process.stdout or "Generated" in process.stdout:  # Check for output indicating a new file
-                    logger.success(f"✅ Alembic autogenerated new migration script. Output:\n{process.stdout}")
-                    autogen_success = True
-                else:
-                    logger.info("Alembic autogenerate: No new schema changes detected to create a migration file.")
-                    autogen_success = True  # Considered success as no changes means nothing to generate
-            else:  # Error in running alembic command itself
-                logger.error(f"❌ Failed running 'alembic revision --autogenerate' (RC: {process.returncode}).")
-                logger.error(f"   Cmd: {' '.join(command_args)}")
-                logger.error(f"   Stdout: {process.stdout}")
-                logger.error(f"   Stderr: {process.stderr}")
-                logger.critical("   Check imports/metadata in alembic/env.py & model definitions!")
-                # Do not proceed to upgrade if autogen command itself failed
+    alembic_cfg = _get_alembic_config()  # Must be defined in this file
+    if not alembic_cfg:
+        raise RuntimeError("Failed to load/create Alembic configuration (alembic.ini).")
 
-            if process.stderr and "Target database is not up to date." in process.stderr:
-                logger.warning(
-                    "Alembic indicated target database is not up to date during autogen. Upgrade will attempt to fix.")
-                # This is not necessarily a failure of autogen itself, but a state Alembic noticed.
-
-        except subprocess.CalledProcessError as cpe:  # Should not be hit if check=False
-            logger.error(
-                f"❌ Error during 'alembic revision --autogenerate' (CalledProcessError): {cpe.stderr or cpe.stdout}")
-        except FileNotFoundError:
-            logger.error(f"❌ Failed auto-generate: '{sys.executable} -m alembic' not found.")
-        except subprocess.TimeoutExpired:
-            logger.error("❌ Auto-generate timed out.")
+    # --- 4. Autogenerate and Apply Fresh Baseline Migration ---
+    migration_successful = False
+    try:
+        logger.info("Attempting to auto-generate a new baseline migration script...")
+        autogen_message = f"Baseline_schema_on_startup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
+        try:
+            # With versions folder empty and alembic_version table gone (or empty),
+            # this should create a new initial script based on current models.
+            command.revision(alembic_cfg, message=autogen_message, autogenerate=True)
+            logger.success(
+                f"Alembic 'revision --autogenerate' for baseline executed. Check 'alembic/versions' for the new script.")
         except Exception as auto_err:
-            logger.error(f"❌ Unexpected error during auto-generation: {auto_err}")
-        # --- END MODIFIED PART ---
+            logger.error(f"CRITICAL: Failed to autogenerate Alembic baseline migration: {auto_err}")
+            logger.exception("Alembic autogenerate baseline TRACEBACK:")
+            # If autogeneration itself fails, it often indicates issues with env.py, model definitions,
+            # or Alembic's ability to connect to the DB (even if just for inspection).
+            raise RuntimeError(f"Alembic baseline autogeneration failed critically: {auto_err}") from auto_err
 
-        migration_successful = check_and_apply_migrations()  # This will apply any newly generated or pending migrations
+        logger.info("Attempting to apply migrations to head (should apply the new baseline)...")
+        try:
+            command.upgrade(alembic_cfg, "head")
+            logger.success("✅ 'alembic upgrade head' command finished successfully.")
+            migration_successful = True
+        except Exception as upg_err:
+            logger.error(f"❌ Alembic 'upgrade head' FAILED: {upg_err}")
+            logger.exception("Alembic upgrade TRACEBACK:")
+            # This is where "NOT NULL constraint failed" errors would typically appear
+            # if model definitions (server_default) are not correctly handled by the autogenerated script.
+            migration_successful = False  # Ensure it's false
 
         if not migration_successful:
-            logger.warning("Skipping schema verification as migration step failed or reported errors.")
-            # If migrations fail critically, we might want to exit or take other actions.
-            # For now, it will proceed and potentially fail later if schema is indeed bad.
-        else:
-            logger.info("📊 Logging Database Schema Statistics (Verification)...")
-            try:
-                if not engine_instance: raise RuntimeError("Engine lost before inspection.")
-                inspector = sql_inspect(engine_instance)
-                table_names = inspector.get_table_names()
-                logger.info(f"  Tables ({len(table_names)}): {', '.join(table_names)}")
-                expected_tables = {'alembic_version', 'interactions', 'applescript_attempts', 'file_index'}
-                found_tables = set(table_names);
-                missing_tables = expected_tables - found_tables
-                if missing_tables:
-                    logger.error(f"‼️ Expected tables MISSING: {', '.join(missing_tables)}")
-                    if 'alembic_version' in missing_tables: logger.critical(
-                        "   'alembic_version' MISSING - Migrations failed!")
-                    migration_successful = False
-                total_columns = 0
-                if table_names:
-                    with engine_instance.connect() as connection:
-                        for table_name in table_names:
-                            try:
-                                columns = inspector.get_columns(table_name)
-                                column_names = [c['name'] for c in columns];
-                                col_count = len(columns);
-                                total_columns += col_count
-                                row_count = -1
-                                try:
-                                    row_count = connection.execute(
-                                        text(f'SELECT COUNT(*) FROM "{table_name}"')).scalar_one()
-                                except:
-                                    pass
-                                logger.info(
-                                    f"    Table '{table_name}': Rows={row_count}, Cols={col_count} ({', '.join(column_names)})")
-                                # <<< ADD COLUMN CHECK FOR INTERACTIONS TABLE HERE >>>
-                                if table_name == "interactions":
-                                    interaction_cols = {c['name'] for c in columns}
-                                    expected_interaction_cols = {"imagined_image_prompt", "imagined_image_b64",
-                                                                 "imagined_image_vlm_description"}
-                                    missing_interaction_cols = expected_interaction_cols - interaction_cols
-                                    if missing_interaction_cols:
-                                        logger.error(
-                                            f"‼️ Table 'interactions' is MISSING expected columns: {', '.join(missing_interaction_cols)}")
-                                        migration_successful = False  # Mark as failure if new columns are missing
-                                    else:
-                                        logger.info(
-                                            "✅ Table 'interactions' contains the new 'imagined_image_*' columns.")
-                                # <<< END COLUMN CHECK >>>
-                            except Exception as ti_err:
-                                logger.error(f"Err inspecting '{table_name}': {ti_err}")
-                    logger.info(f"  Total Columns: {total_columns}")
-                else:
-                    logger.warning("  No tables found. Migrations likely failed.")
-                    migration_successful = False
-            except Exception as inspect_err:
-                logger.error(f"❌ Schema inspection failed: {inspect_err}")
-                migration_successful = False
+            # This means either autogen produced a bad script or the upgrade itself failed.
+            # With the "always fresh" strategy, this indicates a fundamental problem.
+            raise RuntimeError(
+                "Alembic upgrade failed after attempting fresh baseline. Check model definitions (esp. NOT NULL Booleans need server_default=text('0')) and the autogenerated script in alembic/versions/.")
 
-        if migration_successful:
-            logger.success("✅ Database initialization sequence completed successfully.")
-        else:
-            logger.critical("🔥🔥 Database initialization FAILED or schema verification (including new columns) failed.")
-            raise RuntimeError("Database initialization failed migration or verification.")
+        # --- 5. Schema Verification (Optional but Recommended) ---
+        logger.info("📊 Verifying Database Schema after fresh baseline and upgrade...")
+        try:
+            inspector = sql_inspect(engine_instance)
+            table_names = inspector.get_table_names()
+            expected_tables = {'alembic_version', 'interactions', 'applescript_attempts',
+                               'file_index'}  # Add all your tables
+            if not expected_tables.issubset(set(table_names)):
+                missing_tbl_str = f"Missing expected tables: {expected_tables - set(table_names)}"
+                logger.error(f"‼️ {missing_tbl_str}")
+                raise RuntimeError(f"Schema verification failed: {missing_tbl_str}")
+            logger.info("✅ All expected tables are present.")
 
+            # Example detailed check for a specific table and key columns
+            if "interactions" in table_names:
+                interaction_cols_info = inspector.get_columns("interactions")
+                interaction_col_names = {col['name'] for col in interaction_cols_info}
+                expected_interaction_cols_subset = {"id", "timestamp", "user_input", "llm_response",
+                                                    "reflection_indexed_in_vs", "tot_analysis_spawned"}
+                if not expected_interaction_cols_subset.issubset(interaction_col_names):
+                    missing_interaction_cols_str = f"Missing key columns in 'interactions': {expected_interaction_cols_subset - interaction_col_names}"
+                    logger.error(f"‼️ {missing_interaction_cols_str}")
+                    raise RuntimeError(f"Schema verification failed: {missing_interaction_cols_str}")
+                logger.info("✅ Table 'interactions' contains key expected columns.")
+            logger.success("✅ Database schema verification passed (basic checks).")
+        except Exception as verify_err:
+            logger.error(f"❌ Schema verification FAILED: {verify_err}")
+            raise RuntimeError(f"Schema verification failed after migration: {verify_err}") from verify_err
+
+        logger.success("✅ Database initialization (fresh Alembic baseline strategy) completed successfully.")
+
+        # --- Start Background Services ---
+        # These are started only if all previous steps were successful.
         start_db_snapshotter()
-        atexit.register(_shutdown_hook)
-        atexit.register(stop_db_snapshotter)
+        start_log_batch_writer()
 
-    except Exception as init_err:
-        logger.critical(f"🔥🔥 UNEXPECTED FAILURE during database initialization: {init_err}")
-        logger.exception("Initialization Traceback:")
-        sys.exit("CRITICAL: Database Initialization Failure")
+        # Register shutdown hooks (order can be important for graceful shutdown)
+        atexit.register(stop_log_batch_writer)  # Flush logs first
+        atexit.register(stop_db_snapshotter)  # Stop snapshotting
+        atexit.register(_shutdown_hook)  # Then compress DB
+
+    except Exception as init_err_outer:  # Catches RuntimeErrors raised from within or other exceptions
+        logger.critical(f"🔥🔥 OVERALL DATABASE INITIALIZATION FAILURE: {init_err_outer}")
+        # Traceback should have been logged by the block that raised the RuntimeError.
+        # If not, or for other exceptions:
+        if not isinstance(init_err_outer, RuntimeError):  # Log if it wasn't one of our explicit RuntimeErrors
+            logger.exception("Database Initialization Full Traceback (Outer Catch):")
+
+        # Attempt to gracefully stop threads if they were somehow started before the failure
+        if _log_writer_thread and _log_writer_thread.is_alive():  # type: ignore
+            stop_log_batch_writer(wait_for_flush_timeout=1.0)  # Quick flush attempt
+        if _snapshotter_thread and _snapshotter_thread.is_alive():  # type: ignore
+            stop_db_snapshotter()
+
+        # Re-raise so app.py's top-level try-except during import can catch it and sys.exit.
+        # No need for another sys.exit() here, let the caller handle final termination.
+        raise
 
 
 # --- END init_db ---
@@ -1287,49 +1479,49 @@ datefmt = %H:%M:%S
 
 # --- Database Interaction Functions (add_interaction, get_recent_interactions, etc.) ---
 # (Keep your existing DB interaction functions here - unchanged from V16)
-def add_interaction(db: Session, **kwargs) -> Optional[Interaction]:
-    interaction: Optional[Interaction] = None
-    try:
-        valid_keys = {c.name for c in Interaction.__table__.columns}
-        filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}
-        filtered_kwargs.setdefault('mode', 'chat')
-        if 'input_type' not in filtered_kwargs:
-            if filtered_kwargs.get('user_input'):
-                filtered_kwargs['input_type'] = 'text'
-            elif filtered_kwargs.get('llm_response'):
-                filtered_kwargs['input_type'] = 'llm_response'
-            else:
-                filtered_kwargs['input_type'] = 'log_info'
-        filtered_kwargs.setdefault('reflection_completed', False)
-        filtered_kwargs.setdefault('tot_delivered', False)
-        filtered_kwargs.setdefault('tot_analysis_requested', False)
-        filtered_kwargs.setdefault('assistant_action_executed', False)
-        filtered_kwargs.setdefault('requires_deep_thought', None)
-        interaction = Interaction(**filtered_kwargs)
-        db.add(interaction);
-        db.commit();
-        db.refresh(interaction)
-        log_level = "INFO";
-        log_extra = ""
-        if interaction.input_type == 'error' or interaction.input_type == 'log_error':
-            log_level = "ERROR"; log_extra = " ❌ ERROR"
-        elif interaction.input_type == 'log_warning':
-            log_level = "WARNING"; log_extra = " ⚠️ WARN"
-        logger.log(log_level,
-                   f"💾 Interaction {interaction.id} ({interaction.mode}/{interaction.input_type}){log_extra}")
-        return interaction
-    except SQLAlchemyError as e:
-        logger.error(f"❌ Error saving interaction: {e}")
-        if isinstance(e, (OperationalError, ProgrammingError)) and (
-                "column" in str(e).lower() or "table" in str(e).lower()):
-            logger.critical(f"SCHEMA MISMATCH: {e}. Run migrations!")
+def add_interaction(db_session_param: Optional[Session] = None, **kwargs) -> Optional[Interaction]:
+    created_session_locally = False
+    actual_db_session: Optional[Session] = db_session_param
+
+    if actual_db_session is None:
+        if SessionLocal is None:
+            logger.error("add_interaction (direct): SessionLocal is None. Cannot create DB session.")
+            return None
         try:
-            db.rollback()
-        except Exception as rb_err:
-            logger.error(f"Rollback failed: {rb_err}")
+            actual_db_session = SessionLocal()  # type: ignore
+            created_session_locally = True
+        except Exception as e_sess:
+            logger.error(f"add_interaction (direct): Failed to create local DB session: {e_sess}")
+            return None
+
+    if actual_db_session is None:  # Should not happen if SessionLocal() worked
+        logger.error("add_interaction (direct): DB session is unexpectedly None after creation attempt.")
         return None
+
+    interaction_instance: Optional[Interaction] = None
+    try:
+        interaction_instance = _core_add_interaction_to_session(actual_db_session, **kwargs)
+        actual_db_session.commit()
+        actual_db_session.refresh(interaction_instance)
+
+        log_level = "INFO"
+        log_extra = ""
+        if interaction_instance.input_type == 'error' or interaction_instance.input_type == 'log_error':
+            log_level = "ERROR"
+            log_extra = " ❌ ERROR (Immediate)"
+        elif interaction_instance.input_type == 'log_warning':
+            log_level = "WARNING"
+            log_extra = " ⚠️ WARN (Immediate)"
+        logger.log(log_level,
+                   f"💾 Interaction {interaction_instance.id} ({interaction_instance.mode}/{interaction_instance.input_type}){log_extra} - Immediate Write")
+        return interaction_instance
     except Exception as e:
-        logger.error(f"❌ Unexpected error saving interaction: {e}"); return None
+        logger.error(f"add_interaction (Direct Write): Failed: {e}")
+        if actual_db_session: actual_db_session.rollback()
+        return None
+    finally:
+        if created_session_locally and actual_db_session:
+            actual_db_session.close()
 
 
 def get_recent_interactions(db: Session, limit=5, session_id=None, mode="chat", include_logs=False) -> List[
@@ -1349,50 +1541,65 @@ def get_recent_interactions(db: Session, limit=5, session_id=None, mode="chat", 
 
 _log_batch_queue = deque()
 _log_batch_queue_lock = threading.Lock()
+_log_writer_stop_event = threading.Event() # <<<< DEFINITION
+
 _log_writer_thread: Optional[threading.Thread] = None # This is the instance of DatabaseLogBatchWriter
 # LOG_QUEUE_MAX_SIZE is imported from config
 
+def _core_add_interaction_to_session(db_session: Session, **kwargs) -> Interaction:
+    valid_keys = {c.name for c in Interaction.__table__.columns}
+    filtered_kwargs = {k: v for k, v in kwargs.items() if k in valid_keys}
+    filtered_kwargs.setdefault('mode', 'chat')
+    if 'input_type' not in filtered_kwargs:
+        if filtered_kwargs.get('user_input'):
+            filtered_kwargs['input_type'] = 'text'
+        elif filtered_kwargs.get('llm_response'):
+            filtered_kwargs['input_type'] = 'llm_response'
+        else:
+            filtered_kwargs['input_type'] = 'log_info'  # Default for unspecified logs
+
+    # Ensure all boolean NOT NULL fields have defaults if not provided in kwargs,
+    # matching the server_default which is for DDL. This is for Python object creation.
+    defaults_to_set = {
+        'reflection_completed': False, 'tot_delivered': False, 'tot_analysis_requested': False,
+        'tot_analysis_spawned': False, 'assistant_action_executed': False,
+        'reflection_indexed_in_vs': False,
+        'requires_deep_thought': None  # This one is nullable
+    }
+    for field, default_val in defaults_to_set.items():
+        # Only set default if field is part of the model (valid_keys check already did this broadly)
+        # and if it's not already in filtered_kwargs
+        if field in valid_keys and field not in filtered_kwargs:
+            filtered_kwargs[field] = default_val
+        elif field in valid_keys and filtered_kwargs.get(
+                field) is None and default_val is not None:  # If explicitly passed as None but shouldn't be
+            if not Interaction.__table__.columns[field].nullable and default_val is not None:
+                filtered_kwargs[field] = default_val
+
+    interaction = Interaction(**filtered_kwargs)
+    db_session.add(interaction)
+    return interaction
+
+
+
 def queue_interaction_for_batch_logging(**kwargs) -> None:
-    """
-    Queues interaction data for asynchronous batch logging.
-    This is the preferred method for most non-critical log entries.
-    Relies on global variables: _log_writer_thread, _log_batch_queue_lock,
-    _log_batch_queue, LOG_QUEUE_MAX_SIZE, and the direct add_interaction for fallback.
-    """
-    # Check if batch writer is running; if not, fallback to direct write for safety.
-    # These globals must be defined and accessible in the scope of database.py
-    if _log_writer_thread is None or not _log_writer_thread.is_alive():  # type: ignore
-        logger.warning(
-            "Log writer thread not active. Logging directly (fallback) for: input_type='{}', user_input='{}...'".format(
-                kwargs.get("input_type", "unknown"), str(kwargs.get("user_input", ""))[:30]
-            )
-        )
-        # add_interaction is the direct, synchronous version that handles its own session
-        add_interaction(**kwargs)  # type: ignore
+    if _log_writer_thread is None or not _log_writer_thread.is_alive():
+        logger.warning("Log writer thread not active. Logging directly (fallback) for: input_type='{}'".format(kwargs.get("input_type", "unknown")))
+        add_interaction(**kwargs)
         return
 
-    with _log_batch_queue_lock:  # type: ignore
-        if len(_log_batch_queue) < LOG_QUEUE_MAX_SIZE:  # type: ignore
-            # Add a timestamp if not present, as batching delays actual DB insertion
+    with _log_batch_queue_lock:
+        if len(_log_batch_queue) < LOG_QUEUE_MAX_SIZE:
             kwargs.setdefault('timestamp', datetime.datetime.now(datetime.timezone.utc))
-            _log_batch_queue.append(kwargs)  # type: ignore
+            _log_batch_queue.append(kwargs)
         else:
-            logger.warning(
-                f"Log batch queue is full (current size: {len(_log_batch_queue)}, max: {LOG_QUEUE_MAX_SIZE}). Discarding new log: {kwargs.get('input_type')}")  # type: ignore
-            # Fallback: try to log the discarded item event as a critical direct log
+            logger.warning(f"Log batch queue is full (size: {LOG_QUEUE_MAX_SIZE}). Discarding log: {kwargs.get('input_type')}")
             try:
-                critical_log_data = {
-                    "input_type": "log_error",  # Mark as an error
-                    "user_input": f"[Log Batch Queue Full] Discarded log of type: {kwargs.get('input_type', 'unknown')}",
-                    "llm_response": f"Original User Input Snippet: {str(kwargs.get('user_input', 'N/A'))[:500]}. Original LLM Response Snippet: {str(kwargs.get('llm_response', 'N/A'))[:500]}"
-                }
-                # Preserve session_id and mode if they were in the discarded log
-                if 'session_id' in kwargs: critical_log_data['session_id'] = kwargs['session_id']
-                if 'mode' in kwargs: critical_log_data['mode'] = kwargs['mode']
-
-                add_interaction(**critical_log_data)  # type: ignore
+                add_interaction(input_type="log_error", user_input=f"[Log Q Full] Discarded: {kwargs.get('input_type')}",
+                                llm_response=f"OrigData: {str(kwargs)[:500]}",
+                                session_id=kwargs.get('session_id'), mode=kwargs.get('mode', 'chat'))
             except Exception as e_crit_log:
-                logger.error(f"Failed to log 'Log Batch Queue Full' event directly: {e_crit_log}")
+                logger.error(f"Failed to log 'Log Queue Full' event directly: {e_crit_log}")
 
 def get_pending_tot_result(db: Session, session_id: str) -> Optional[Interaction]:
     try:
@@ -1411,7 +1618,7 @@ def mark_tot_delivered(db: Session, interaction_id: int):
     try:
         if 'tot_delivered' not in Interaction.__table__.columns: return
         stmt = update(Interaction).where(Interaction.id == interaction_id).values(tot_delivered=True)
-        db.execute(stmt);
+        db.execute(stmt)
         db.commit()
     except Exception as e:
         logger.error(f"Error marking ToT delivered for ID {interaction_id}: {e}"); db.rollback()
@@ -1469,4 +1676,97 @@ def search_file_index(db: Session, query: str, limit: int = 10) -> List[FileInde
         return results
     except Exception as e:
         logger.error(f"Error searching file index: {e}"); return []
+
+
+class DatabaseLogBatchWriter(threading.Thread):  # <<<< DEFINITION
+    def __init__(self, stop_event: threading.Event):  # stop_event is the global _log_writer_stop_event
+        super().__init__(name="DatabaseLogBatchWriterThread", daemon=True)
+        self.stop_event = stop_event
+        self.is_shutting_down = False
+        logger.info(
+            f"DatabaseLogBatchWriter initialized. BatchSize: {LOG_BATCH_SIZE}, FlushInterval: {LOG_FLUSH_INTERVAL_SECONDS}s")
+
+    def _write_batch(self, items_to_write: List[Dict]):
+        if not items_to_write:
+            return
+
+        db_session_writer: Optional[Session] = None
+        successful_items_in_batch = 0
+        try:
+            if SessionLocal is None:  # Should be configured by init_db -> get_engine
+                logger.error("DatabaseLogBatchWriter: SessionLocal factory is None. Cannot write batch.")
+                return
+
+            db_session_writer = SessionLocal()  # type: ignore
+
+            for item_data in items_to_write:
+                try:
+                    item_data.setdefault('input_type', 'log_info_batched')  # Default for batched logs
+                    _core_add_interaction_to_session(db_session_writer, **item_data)
+                    successful_items_in_batch += 1
+                except Exception as e_item:
+                    logger.error(
+                        f"DatabaseLogBatchWriter: Error adding single item to batch session: {e_item}. Data: {str(item_data)[:200]}")
+
+            if successful_items_in_batch > 0:
+                db_session_writer.commit()
+                logger.debug(f"DatabaseLogBatchWriter: Committed batch of {successful_items_in_batch} log entries.")
+            elif items_to_write:
+                logger.warning("DatabaseLogBatchWriter: No items successfully added to session in this batch.")
+
+        except SQLAlchemyError as e_sql:
+            logger.error(f"DatabaseLogBatchWriter: SQLAlchemyError during batch processing/commit: {e_sql}")
+            if db_session_writer: db_session_writer.rollback()
+        except Exception as e_batch:
+            logger.error(f"DatabaseLogBatchWriter: Unexpected error during batch write: {e_batch}")
+            if db_session_writer: db_session_writer.rollback()
+        finally:
+            if db_session_writer:
+                db_session_writer.close()
+
+    def run(self):
+        logger.info("💾 DatabaseLogBatchWriter thread started.")
+        while not self.stop_event.is_set() or self.is_shutting_down:
+            items_this_run: List[Dict] = []
+            is_final_flush_attempt = self.is_shutting_down and self.stop_event.is_set()
+
+            with _log_batch_queue_lock:
+                count = 0
+                # Drain fully on final flush, otherwise up to batch size
+                while _log_batch_queue and (count < LOG_BATCH_SIZE or is_final_flush_attempt):
+                    items_this_run.append(_log_batch_queue.popleft())
+                    count += 1
+
+            if items_this_run:
+                self._write_batch(items_this_run)
+
+            if is_final_flush_attempt and not _log_batch_queue:  # Final flush done and queue is empty
+                logger.info("DatabaseLogBatchWriter: Final flush complete. Queue empty. Exiting run loop.")
+                break
+
+            if not items_this_run and not is_final_flush_attempt:  # Queue was empty, not shutting down
+                # logger.trace(f"DatabaseLogBatchWriter: Queue empty, waiting for {LOG_FLUSH_INTERVAL_SECONDS}s or stop signal...")
+                self.stop_event.wait(timeout=LOG_FLUSH_INTERVAL_SECONDS)
+            elif not is_final_flush_attempt:  # Processed items or still flushing, yield briefly
+                time.sleep(0.01)
+        logger.info("💾 DatabaseLogBatchWriter thread stopped.")
+
+    def signal_shutdown_and_flush(self):
+        logger.info("DatabaseLogBatchWriter: Shutdown signaled. Will attempt final flush on next opportunity.")
+        self.is_shutting_down = True
+        # The main stop_event.set() will wake up the run loop if it's waiting on the timeout.
 # --- End of database.py ---
+
+if __name__ != "__main__":
+    logger.debug("---------------------------------------------------------------------")
+    logger.debug("DATABASE.PY MODULE-LEVEL DIAGNOSTIC (when imported by app.py):")
+    try:
+        if 'Base' in globals() and Base is not None and hasattr(Base, 'metadata') and Base.metadata is not None: # type: ignore
+            logger.debug(f"  database.py: Base.metadata tables: {list(Base.metadata.tables.keys())}") # type: ignore
+            if not Base.metadata.tables: # type: ignore
+                logger.warning("  database.py WARNING: Base.metadata has no tables registered when database.py finishes importing!")
+        else:
+            logger.error("  database.py ERROR: 'Base' or 'Base.metadata' is None or malformed at module import time.")
+    except Exception as e_diag:
+        logger.error(f"  database.py DIAGNOSTIC ERROR: {e_diag}")
+    logger.debug("---------------------------------------------------------------------")

@@ -126,6 +126,7 @@ ZSTD_COMPRESSION_LEVEL = 9
 DB_POOL_SIZE = 2 # Minimal fallback
 DB_MAX_OVERFLOW = 2 # Minimal fallback
 _file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__)) # If config.py is in the same dir as file_indexer.py
+MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
 # Or, if config.py is in engineMain and file_indexer.py is also there:
 # _file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__))
 
