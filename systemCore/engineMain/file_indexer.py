@@ -699,14 +699,14 @@ class FileIndexer:
              # Catch permission errors occurring anywhere during the process
              status = 'error_permission'
              error_message = "Permission denied during file processing."
-             content = None; embedding_json_str = None; current_md5_hash = None;
+             content = None; embedding_json_str = None; current_md5_hash = None
              should_update_db = True # Ensure we update the DB record with the error status
              logger.warning(f"Permission error processing {file_path}")
         except Exception as proc_err:
             # Catch any other unexpected errors during processing
             status = 'error_read' # Generic read/processing error
             error_message = f"Processing error: {proc_err}"
-            content = None; embedding_json_str = None; current_md5_hash = None;
+            content = None; embedding_json_str = None; current_md5_hash = None
             should_update_db = True # Update DB with error
             logger.error(f"Error processing file {file_path}: {proc_err}")
             logger.exception("File Processing Phase 1 Traceback:")
@@ -1302,11 +1302,11 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
             logger.info(">>> _locked_initialization_task: Stage 0: Validating Provider and Embeddings. <<<")
             # ... (Provider check logic as before) ...
             if not provider_ref or not provider_ref.embeddings:
-                task_status = "error_provider_missing";
+                task_status = "error_provider_missing"
                 task_message = "AIProvider or embeddings missing."
                 logger.error(
                     f"{task_message} (Provider: {provider_ref}, Embeddings: {getattr(provider_ref, 'embeddings', 'N/A')})")
-                initialization_succeeded_or_known_empty = True;
+                initialization_succeeded_or_known_empty = True
                 global_file_index_vectorstore = None
                 return {"status": task_status, "message": task_message}
             logger.debug("Stage 0 (Provider Check) completed.")
@@ -1366,10 +1366,10 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
             logger.info(">>> _locked_initialization_task: Stage 2: DB Session and Query. <<<")
             db_session = SessionLocal()  # type: ignore
             if not db_session:
-                task_status = "error_db_session";
+                task_status = "error_db_session"
                 task_message = "Failed to create DB session for rebuild."
-                logger.error(task_message);
-                initialization_succeeded_or_known_empty = True;
+                logger.error(task_message)
+                initialization_succeeded_or_known_empty = True
                 global_file_index_vectorstore = None
                 return {"status": task_status, "message": task_message}
             engine_url = str(db_session.bind.url) if db_session.bind else "No engine bound"  # type: ignore
@@ -1385,9 +1385,9 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
 
             if not indexed_files:
                 # ... (handling for no files as before) ...
-                logger.warning("No files in DB to rebuild FileIndex VS. It will be empty.");
+                logger.warning("No files in DB to rebuild FileIndex VS. It will be empty.")
                 global_file_index_vectorstore = None
-                task_status = "success_empty_db_rebuild";
+                task_status = "success_empty_db_rebuild"
                 task_message = "Init (rebuild): No indexable files in DB."
                 initialization_succeeded_or_known_empty = True
             else:
@@ -1395,17 +1395,17 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
                 current_stage_start_time_s3: float = time.monotonic()
                 logger.info(
                     f">>> _locked_initialization_task: Stage 3: Processing {total_records_from_db} DB records for Chroma lists... <<<")
-                texts_for_vs: List[str] = [];
+                texts_for_vs: List[str] = []
                 embeddings_for_vs: List[List[float]] = []
-                metadatas_for_vs: List[Dict[str, Any]] = [];
+                metadatas_for_vs: List[Dict[str, Any]] = []
                 ids_for_vs: List[str] = []
 
                 # Reset processed_records_for_chroma here as it's specific to this loop
                 processed_records_for_chroma = 0  # <<< ENSURE IT'S RESET IF THIS BLOCK IS ENTERED
 
-                report_interval = max(1, total_records_from_db // 20);
+                report_interval = max(1, total_records_from_db // 20)
                 if report_interval > 2000: report_interval = 2000
-                time_of_last_log_report_s3 = time.monotonic();
+                time_of_last_log_report_s3 = time.monotonic()
                 records_processed_since_last_log_s3 = 0
 
                 for record_idx, db_record_obj in enumerate(indexed_files):
@@ -1442,16 +1442,16 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
                     records_processed_since_last_log_s3 += 1
                     if records_processed_since_last_log_s3 >= report_interval or (
                             record_idx + 1) == total_records_from_db:
-                        now_time_s3 = time.monotonic();
-                        batch_dur_s3 = now_time_s3 - time_of_last_log_report_s3;
+                        now_time_s3 = time.monotonic()
+                        batch_dur_s3 = now_time_s3 - time_of_last_log_report_s3
                         total_loop_dur_s3 = now_time_s3 - current_stage_start_time_s3
                         rate_batch_s3 = records_processed_since_last_log_s3 / batch_dur_s3 if batch_dur_s3 > 0 else float(
-                            'inf');
+                            'inf')
                         rate_total_s3 = processed_records_for_chroma / total_loop_dur_s3 if total_loop_dur_s3 > 0 else float(
                             'inf')
                         logger.info(
                             f"  Processed {processed_records_for_chroma}/{total_records_from_db} for VS ({(processed_records_for_chroma / total_records_from_db) * 100:.1f}%). Batch: {records_processed_since_last_log_s3} in {batch_dur_s3:.2f}s (~{rate_batch_s3:.0f}r/s). LoopTime: {total_loop_dur_s3:.2f}s (~{rate_total_s3:.0f}r/s avg).")
-                        records_processed_since_last_log_s3 = 0;
+                        records_processed_since_last_log_s3 = 0
                         time_of_last_log_report_s3 = now_time_s3
 
                 logger.info(
@@ -1475,7 +1475,7 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
                         )
                         logger.info(
                             f"Chroma store object initialized. Adding {len(texts_for_vs)} pre-computed embeddings...")
-                        add_embed_start_time = time.monotonic();
+                        add_embed_start_time = time.monotonic()
                         task_message_suffix = ""
                         try:
                             logger.debug("Attempting temp_chroma_store.add_embeddings(texts=..., embeddings=...)")
@@ -1492,35 +1492,35 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
                         if _persist_dir_to_use and hasattr(temp_chroma_store, 'persist'): temp_chroma_store.persist()
 
                         global_file_index_vectorstore = temp_chroma_store
-                        task_status = "success_created_from_sql";
+                        task_status = "success_created_from_sql"
                         task_message = f"VS created from SQL with {len(texts_for_vs)} items. Add took {add_embed_duration:.3f}s {task_message_suffix}."
-                        initialization_succeeded_or_known_empty = True;
+                        initialization_succeeded_or_known_empty = True
                         logger.success(task_message)
                     except Exception as e_chroma_final:  # Catch other errors
-                        logger.error(f"Chroma final build error: {e_chroma_final}");
+                        logger.error(f"Chroma final build error: {e_chroma_final}")
                         logger.exception("Traceback:")
-                        task_status = "critical_error_chroma_build";
+                        task_status = "critical_error_chroma_build"
                         task_message = f"Chroma build error: {e_chroma_final}"
-                        global_file_index_vectorstore = None;
+                        global_file_index_vectorstore = None
                         initialization_succeeded_or_known_empty = False
                 else:  # Mismatch or no valid data after loop
                     # ... (error/warning and set task_status, task_message, global_file_index_vectorstore=None, initialization_succeeded_or_known_empty=True)
                     if not (texts_for_vs and embeddings_for_vs):
-                        logger.warning("No valid items for Chroma after loop.");
+                        logger.warning("No valid items for Chroma after loop.")
                         task_status = "success_no_valid_data_rebuild"
                     else:
                         logger.error(
-                            f"Data mismatch for Chroma (rebuild): texts ({len(texts_for_vs)}) vs embeddings ({len(embeddings_for_vs)}).");
+                            f"Data mismatch for Chroma (rebuild): texts ({len(texts_for_vs)}) vs embeddings ({len(embeddings_for_vs)}).")
                         task_status = "error_data_mismatch_rebuild"
-                    global_file_index_vectorstore = None;
+                    global_file_index_vectorstore = None
                     task_message = f"Init (rebuild): {task_status}"
                     initialization_succeeded_or_known_empty = True
 
         except Exception as e_init_critical:
-            task_status = "critical_error_overall_init";
+            task_status = "critical_error_overall_init"
             task_message = f"CRITICAL ERROR FileIndex VS init: {e_init_critical}"
-            logger.error(task_message);
-            logger.exception("Traceback (critical):");
+            logger.error(task_message)
+            logger.exception("Traceback (critical):")
             global_file_index_vectorstore = None
             initialization_succeeded_or_known_empty = False
 

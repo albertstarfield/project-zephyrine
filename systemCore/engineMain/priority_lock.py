@@ -237,3 +237,8 @@ class PriorityQuotaLock:
         """Returns (is_locked, holder_priority, elp1_quota)."""
         with self._condition:
             return self._is_locked, self._lock_holder_priority, self._elp1_interrupt_quota
+
+    def get_status_extended(self) -> Tuple[bool, Optional[int], int, int]:
+        """Returns (is_locked, holder_priority, elp1_quota, elp1_waiting_count)."""
+        with self._condition:
+            return self._is_locked, self._lock_holder_priority, self._elp1_interrupt_quota, self._elp1_waiting_count

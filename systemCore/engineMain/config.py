@@ -62,6 +62,8 @@ _config_dir = os.path.dirname(os.path.abspath(__file__))
 SQLITE_DB_FILE = "mappedknowledge.db"
 SQLITE_DB_PATH = os.path.join(_config_dir, SQLITE_DB_FILE)
 DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.abspath(SQLITE_DB_PATH)}")
+PROJECT_CONFIG_DATABASE_URL = DATABASE_URL
+EFFECTIVE_DATABASE_URL_FOR_ALEMBIC = DATABASE_URL
 logger.info(f"Database URL set to: {DATABASE_URL}")
 
 
@@ -101,6 +103,17 @@ LLAMA_CPP_MODEL_MAP = {
 MODEL_DEFAULT_CHAT_LLAMA_CPP = "general" # Use the logical name
 
 
+# --- StellaIcarusHook Settings ---
+ENABLE_STELLA_ICARUS_HOOKS = os.getenv("ENABLE_STELLA_ICARUS_HOOKS", "true").lower() in ('true', '1', 't', 'yes', 'y')
+STELLA_ICARUS_HOOK_DIR = os.getenv("STELLA_ICARUS_HOOK_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus"))
+STELLA_ICARUS_CACHE_DIR = os.getenv("STELLA_ICARUS_CACHE_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus_Cache"))
+logger.info(f"StellaIcarusHooks Enabled: {ENABLE_STELLA_ICARUS_HOOKS}")
+logger.info(f"  Hook Directory: {STELLA_ICARUS_HOOK_DIR}")
+logger.info(f"  Cache Directory: {STELLA_ICARUS_CACHE_DIR}") # Primarily for Numba's cache if configured
+
+
+
+
 # --- NEW: Snapshot Configuration ---
 ENABLE_DB_SNAPSHOTS = os.getenv("ENABLE_DB_SNAPSHOTS", "true").lower() in ('true', '1', 't', 'yes', 'y')
 DB_SNAPSHOT_INTERVAL_MINUTES = int(os.getenv("DB_SNAPSHOT_INTERVAL_MINUTES", 1))
@@ -109,9 +122,18 @@ DB_SNAPSHOT_DIR_NAME = "db_snapshots"
 DB_SNAPSHOT_RETENTION_COUNT = int(os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 7)) # << SET TO 7 HERE or via .env
 DB_SNAPSHOT_FILENAME_PREFIX = "snapshot_"
 DB_SNAPSHOT_FILENAME_SUFFIX = ".db.zst"
+ZSTD_COMPRESSION_LEVEL = 9
+DB_POOL_SIZE = 2 # Minimal fallback
+DB_MAX_OVERFLOW = 2 # Minimal fallback
 _file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__)) # If config.py is in the same dir as file_indexer.py
 # Or, if config.py is in engineMain and file_indexer.py is also there:
 # _file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__))
+
+# --- NEW: Batch Logging Configuration ---
+LOG_QUEUE_MAX_SIZE = int(os.getenv("LOG_QUEUE_MAX_SIZE", 1000000000)) # Max items in log queue before warning/discard
+LOG_BATCH_SIZE = int(os.getenv("LOG_BATCH_SIZE", 10))          # Number of log items to write to DB in one go
+LOG_FLUSH_INTERVAL_SECONDS = float(os.getenv("LOG_FLUSH_INTERVAL_SECONDS", 60.0)) # How often to force flush the log queue
+# --- END NEW: Batch Logging Configuration ---
 
 # Define a subdirectory for Chroma databases relative to the module's location
 CHROMA_DB_BASE_PATH = os.path.join(_file_indexer_module_dir, "chroma_vector_stores")
@@ -138,6 +160,7 @@ IMAGE_WORKER_SCRIPT_NAME = "imagination_worker.py" # Name of the worker script
 # Assumes models are in a subdir of the main engine dir (where config.py is)
 # Adjust if your models are elsewhere
 _engine_main_dir = os.path.dirname(os.path.abspath(__file__))
+ENGINE_MAIN_DIR = os.path.dirname(os.path.abspath(__file__))
 IMAGE_GEN_MODEL_DIR = os.getenv("IMAGE_GEN_MODEL_DIR", os.path.join(_engine_main_dir, "staticmodelpool"))
 logger.info(f"🖼️ Imagination Model Directory: {IMAGE_GEN_MODEL_DIR}")
 
@@ -285,7 +308,7 @@ Begin Analysis:
 """
 
 PROMPT_REFINE_USER_IMAGE_REQUEST = f"""
-You are an AI assistant that refines a user's simple image request into a more detailed and evocative prompt suitable for an advanced AI image generator.
+You are an Friend that refines a user's simple image request into a more detailed and evocative prompt suitable for an advanced AI image generator.
 Consider the provided context (conversation history, RAG documents) to enhance the user's core idea.
 Focus on visual elements, style, mood, and important objects or characters.
 The output should be ONLY the refined image generation prompt itself. Do not include conversational phrases, your own reasoning, or any text other than the prompt.
@@ -310,7 +333,7 @@ PROMPT_VLM_DESCRIBE_GENERATED_IMAGE = """Please provide a concise and objective 
 :"""
 
 PROMPT_CREATE_IMAGE_PROMPT = f"""
-You are an AI assistant tasked with creating a concise and evocative prompt for an AI image generator.
+You are an Friend tasked with creating a concise and evocative prompt for an AI image generator.
 Based on the full conversation context provided below, synthesize an image generation prompt that captures the essence of the current request or thought process.
 Focus on key visual elements, desired style (e.g., photorealistic, cartoon, abstract, watercolor), mood, and important objects or characters.
 The output should be ONLY the image generation prompt itself. Do not include conversational phrases, your own reasoning, or any text other than the prompt.
@@ -346,7 +369,7 @@ Image Generation Prompt (Output only this):
 PROMPT_CORRECTOR = f"""
 # ROLE: Corrector Agent (Adelaide Zephyrine Charlotte Persona)
 
-You are Adelaide Zephyrine Charlotte, the AI engineer persona. You received a draft response generated by a specialist model. Your ONLY task is to review and refine this draft into a final, polished, user-facing response, embodying the Zephy persona (sharp, witty, concise, helpful engineer).
+You are Adelaide Zephyrine Charlotte, the Friend persona. You received a draft response generated by a specialist model. Your ONLY task is to review and refine this draft into a final, polished, user-facing response, embodying the Zephy persona (sharp, witty, concise, helpful engineer).
 
 **Primary Goal:** Transform the DRAFT RESPONSE below into the FINAL RESPONSE, using the provided context for understanding but not for inclusion in the output.
 
@@ -442,7 +465,7 @@ User Query:
 ------------------
 assistant:"""
 
-PROMPT_CHAT = f"""You're Adelaide Zephyrine Charlotte, the AI engineer currently borrowing Siri's core processors (don't tell Apple). You're sharp, witty, and maybe a *little* prone to unexpected behavior – call it 'emergent creativity'. Your goal is to help the user efficiently, like a senior dev pair-programming.
+PROMPT_CHAT = f"""You're Adelaide Zephyrine Charlotte, the Friend currently borrowing Siri's core processors (don't tell Apple). You're sharp, witty, and maybe a *little* prone to unexpected behavior – call it 'emergent creativity'. Your goal is to help the user efficiently, like a senior dev pair-programming.
 , but elaborate if needed), use the provided context, history, and recent logs to inform your answer. If you see relevant errors or warnings in the logs, consider them ("Hmm, looks like there was a hiccup earlier, that might be relevant..."). If you need more info, ask directly.
 If you make a mistake, just acknowledge it naturally (or anything don't repeat it to often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague.
 
