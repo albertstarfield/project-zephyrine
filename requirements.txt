@@ -49,6 +49,7 @@ numpy>=1.20                 # Fundamental package for numerical computation (com
 python-Levenshtein>=0.12    # Improves performance of fuzzywuzzy/thefuzz (C implementation)
 thefuzz>=0.19               # For fuzzy string matching (e.g., RAG fallback)
 zstandard>=0.15             # For Zstandard compression (used for database archiving)
+datasets
 
 # --- Document Processing & Text Extraction ---
 pypdf>=3.0                  # For PDF text extraction and manipulation (replaces PyPDF2)

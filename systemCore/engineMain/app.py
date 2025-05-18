@@ -155,7 +155,7 @@ except ImportError:
     logger.warning("⚠️ thefuzz not installed. Fuzzy search RAG fallback disabled. Run 'pip install thefuzz python-Levenshtein'.")
     fuzz_process = None # Placeholder
     fuzz = None # Placeholder
-
+FUZZY_SEARCH_THRESHOLD_APP = getattr(globals(), 'FUZZY_SEARCH_THRESHOLD', 30) # Default to 80 if not from
 
 try:
     # ... (your existing local imports for AIProvider, database, config) ...
@@ -1391,6 +1391,7 @@ class AIChat:
     def _get_rag_retriever(self, db: Session, user_input_for_rag_query: str, priority: int = ELP0) -> Tuple[
         Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], str
     ]:
+        # ... (log_prefix, logger.critical lines remain the same) ...
         log_prefix = f"RAGRetriever|ELP{priority}|{self.current_session_id or 'NoSession'}"
         logger.critical(
             f"@@@ ENTERING _get_rag_retriever for session {self.current_session_id}, query: '{user_input_for_rag_query[:30]}...', priority ELP{priority} @@@")
@@ -1398,38 +1399,41 @@ class AIChat:
         url_retriever: Optional[VectorStoreRetriever] = None
         session_history_retriever: Optional[VectorStoreRetriever] = None
         reflection_chunks_retriever: Optional[VectorStoreRetriever] = None
-        session_history_ids_str: str = ""
+        session_history_ids_str: str = ""  # For logging which specific session IDs were part of the on-the-fly Chroma
 
-        self.vectorstore_history: Optional[Chroma] = None
-        session_history_ids_set = set()
+        self.vectorstore_history: Optional[Chroma] = None  # Temp Chroma for current session's history
+        session_history_ids_set = set()  # To track IDs added to temp Chroma store
         rag_query_vector: Optional[List[float]] = None
 
-        try:  # Outer try to catch TaskInterruptedException from embedding calls
-            # --- Step 0: Pre-embed the main RAG query with the specified priority ---
+        # --- Store for combined RAG results (both vector and fuzzy) ---
+        # We will add Langchain Document objects here, converting fuzzy SQL results to Documents.
+        all_retrieved_history_docs: List[Document] = []
+        all_retrieved_reflection_docs: List[Document] = []
+        # URL retriever results are handled separately as they come from a persistent store
+
+        try:
+            # --- Step 0: Pre-embed the main RAG query ---
             if user_input_for_rag_query and self.provider and self.provider.embeddings:
+                # ... (existing pre-embedding logic using priority - UNCHANGED) ...
                 logger.debug(
                     f"{log_prefix} Pre-embedding main RAG query via _embed_texts with priority ELP{priority}: '{user_input_for_rag_query[:50]}...'")
-                if hasattr(self.provider.embeddings, '_embed_texts') and \
-                        callable(getattr(self.provider.embeddings, '_embed_texts')):
+                if hasattr(self.provider.embeddings, '_embed_texts') and callable(
+                        getattr(self.provider.embeddings, '_embed_texts')):
                     embedding_result_list = self.provider.embeddings._embed_texts([user_input_for_rag_query],
                                                                                   priority=priority)  # type: ignore
-                    if embedding_result_list and len(embedding_result_list) > 0:
-                        rag_query_vector = embedding_result_list[0]
-                else:  # Fallback if _embed_texts is not available (should ideally not happen with LlamaCppEmbeddingsWrapper)
+                    if embedding_result_list and len(embedding_result_list) > 0: rag_query_vector = \
+                    embedding_result_list[0]
+                else:
                     logger.warning(
                         f"{log_prefix} Embeddings object missing custom '_embed_texts'. Calling public 'embed_query' (will use its default priority).")
                     rag_query_vector = self.provider.embeddings.embed_query(user_input_for_rag_query)
-
                 if rag_query_vector:
                     logger.debug(f"{log_prefix} Main RAG query pre-embedded successfully.")
                 else:
                     logger.error(f"{log_prefix} Main RAG query embedding resulted in None or empty vector.")
-            elif not user_input_for_rag_query:
-                logger.debug(f"{log_prefix} No RAG query input, skipping pre-embedding.")
-            elif not (self.provider and self.provider.embeddings):
-                logger.error(f"{log_prefix} Embeddings provider unavailable, cannot pre-embed query.")
 
-            # --- Step 1: URL Retriever ---
+            # --- Step 1: URL Retriever (Vector Search Only - No SQL fallback for URLs defined here) ---
+            # ... (existing URL retriever logic - UNCHANGED) ...
             logger.debug(f"{log_prefix} Step 1: URL Retriever processing...")
             if hasattr(self, 'vectorstore_url') and self.vectorstore_url and isinstance(self.vectorstore_url, Chroma):
                 if rag_query_vector:
@@ -1446,88 +1450,252 @@ class AIChat:
                 logger.trace(f"{log_prefix} No URL vector store or not Chroma type.")
             logger.debug(f"{log_prefix} Step 1 complete. url_retriever: {'Set' if url_retriever else 'None'}")
 
-            # --- Step 2: Session Chat History Retriever ---
-            logger.debug(f"{log_prefix} Step 2: Session Chat History Retriever processing...")
-            chat_interactions = get_recent_interactions(db, RAG_HISTORY_COUNT * 2, self.current_session_id, "chat",
-                                                        False)
-            session_texts_to_embed: List[str] = []
-            if chat_interactions:
-                chat_interactions.reverse()
-                for interaction in chat_interactions:  # Populate session_texts_to_embed and session_history_ids_set
+            # --- Step 2: Session Chat History Retriever (Vector + Fuzzy Fallback) ---
+            logger.debug(f"{log_prefix} Step 2: Session Chat History Retriever processing (Vector + Fuzzy Fallback)...")
+            # Get raw chat interactions for both vector store creation AND fuzzy search
+            chat_interactions_for_processing = get_recent_interactions(
+                db, RAG_HISTORY_COUNT * 4, self.current_session_id, "chat", False  # Get more for fuzzy
+            )
+            chat_interactions_for_processing.reverse()  # Oldest first for prompt context flow
+
+            # --- 2a. Vector Search for Session History ---
+            if chat_interactions_for_processing and self.provider and self.provider.embeddings and rag_query_vector:
+                session_texts_to_embed_for_vs: List[str] = []
+                temp_interaction_mapping_for_vs: Dict[
+                    int, Interaction] = {}  # Map index in list to original interaction
+
+                for idx, interaction in enumerate(chat_interactions_for_processing):
                     text_content: Optional[str] = None
                     if interaction.user_input and interaction.input_type == 'text':
                         text_content = f"User (session): {interaction.user_input}"
                     elif interaction.llm_response and interaction.input_type == 'llm_response' and len(
                             interaction.llm_response.strip()) > 10:
                         text_content = f"AI (session): {interaction.llm_response}"
+
                     if text_content and interaction.id not in session_history_ids_set:
-                        session_texts_to_embed.append(text_content)
-                        session_history_ids_set.add(interaction.id)
+                        session_texts_to_embed_for_vs.append(text_content)
+                        temp_interaction_mapping_for_vs[len(session_texts_to_embed_for_vs) - 1] = interaction
+                        session_history_ids_set.add(interaction.id)  # Track for logging
 
-            if session_texts_to_embed and self.provider and self.provider.embeddings:
+                if session_texts_to_embed_for_vs:
+                    logger.debug(
+                        f"{log_prefix} Session History: Embedding {len(session_texts_to_embed_for_vs)} texts for on-the-fly VS (Priority ELP{priority})...")
+                    embedded_session_vectors_vs: Optional[List[List[float]]] = None
+                    if hasattr(self.provider.embeddings, '_embed_texts') and callable(
+                            getattr(self.provider.embeddings, '_embed_texts')):
+                        embedded_session_vectors_vs = self.provider.embeddings._embed_texts(
+                            session_texts_to_embed_for_vs, priority=priority)  # type: ignore
+                    else:  # Fallback
+                        embedded_session_vectors_vs = self.provider.embeddings.embed_documents(
+                            session_texts_to_embed_for_vs)
+
+                    if embedded_session_vectors_vs and len(embedded_session_vectors_vs) == len(
+                            session_texts_to_embed_for_vs):
+                        try:
+                            self.vectorstore_history = Chroma(collection_name=f"sess_hist_temp_{uuid.uuid4().hex[:6]}",
+                                                              embedding_function=self.provider.embeddings)
+                            self.vectorstore_history.add_embeddings(texts=session_texts_to_embed_for_vs,
+                                                                    embeddings=embedded_session_vectors_vs)
+
+                            k_sess_vec = RAG_HISTORY_COUNT // 2 if RAG_HISTORY_COUNT > 1 else RAG_HISTORY_COUNT  # Num vector results
+                            if k_sess_vec > 0:
+                                # Vector search using the custom retriever
+                                temp_retriever = self._CustomVectorSearchRetriever(vectorstore=self.vectorstore_history,
+                                                                                   search_kwargs={"k": k_sess_vec},
+                                                                                   vector_to_search=rag_query_vector)
+                                vector_results_session_docs = temp_retriever.invoke(
+                                    user_input_for_rag_query)  # invoke() gets docs
+                                all_retrieved_history_docs.extend(vector_results_session_docs or [])
+                                logger.info(
+                                    f"{log_prefix} Session History: Vector search found {len(vector_results_session_docs or [])} docs.")
+                        except Exception as e_sess_vs:
+                            logger.error(
+                                f"{log_prefix} Session History: Error building/querying on-the-fly Chroma: {e_sess_vs}")
+                    else:
+                        logger.error(
+                            f"{log_prefix} Session History: Embedding failed or vector count mismatch for on-the-fly VS.")
+            else:
                 logger.debug(
-                    f"{log_prefix} Embedding {len(session_texts_to_embed)} session history texts via _embed_texts (Priority ELP{priority})...")
-                embedded_session_vectors: Optional[List[List[float]]] = None
-                if hasattr(self.provider.embeddings, '_embed_texts') and \
-                        callable(getattr(self.provider.embeddings, '_embed_texts')):
-                    embedded_session_vectors = self.provider.embeddings._embed_texts(session_texts_to_embed,
-                                                                                     priority=priority)  # type: ignore
-                else:
-                    logger.warning(
-                        f"{log_prefix} Session history: _embed_texts not found. Using public embed_documents (default priority).")
-                    embedded_session_vectors = self.provider.embeddings.embed_documents(session_texts_to_embed)
+                    f"{log_prefix} Session History: Skipping vector search (no interactions, provider/embeddings, or query vector).")
 
-                if embedded_session_vectors and len(embedded_session_vectors) == len(session_texts_to_embed):
+            # --- 2b. Fuzzy Search Fallback for Session History ---
+            # Perform if vector search found fewer than desired results or if FUZZY_ALWAYS_AUGMENT is True
+            desired_total_history_results = RAG_HISTORY_COUNT
+            if FUZZY_AVAILABLE and (
+                    len(all_retrieved_history_docs) < desired_total_history_results // 2 or RAG_HISTORY_COUNT == 0):  # Example condition
+                logger.info(
+                    f"{log_prefix} Session History: Vector search results ({len(all_retrieved_history_docs)}) insufficient or RAG_HISTORY_COUNT is 0. Attempting fuzzy search...")
+                fuzzy_matches_session: List[Tuple[Interaction, int]] = []
+                processed_for_fuzzy_ids = set(
+                    doc.metadata.get("interaction_id") for doc in all_retrieved_history_docs if
+                    doc.metadata)  # Avoid re-adding vector results
+
+                for interaction in chat_interactions_for_processing:  # Iterate over the already fetched interactions
+                    if interaction.id in processed_for_fuzzy_ids: continue  # Skip if already got via vector search
+
+                    text_to_match_on = ""
+                    if interaction.user_input and interaction.input_type == 'text':
+                        text_to_match_on = interaction.user_input
+                    elif interaction.llm_response and interaction.input_type == 'llm_response':
+                        text_to_match_on = interaction.llm_response
+
+                    if text_to_match_on.strip():
+                        score = fuzz.partial_ratio(user_input_for_rag_query.lower(), text_to_match_on.lower())
+                        if score >= FUZZY_SEARCH_THRESHOLD_APP:
+                            fuzzy_matches_session.append((interaction, score))
+
+                if fuzzy_matches_session:
+                    fuzzy_matches_session.sort(key=lambda x: x[1], reverse=True)  # Sort by score
+                    # How many more do we need to reach desired_total_history_results?
+                    needed_fuzzy_count = max(0, desired_total_history_results - len(all_retrieved_history_docs))
+                    for interaction, score in fuzzy_matches_session[:needed_fuzzy_count]:
+                        content = interaction.user_input if interaction.input_type == 'text' else interaction.llm_response
+                        doc = Document(
+                            page_content=f"{'User' if interaction.input_type == 'text' else 'AI'} (fuzzy score {score}): {content}",
+                            metadata={"source": "session_history_fuzzy", "interaction_id": interaction.id,
+                                      "timestamp": str(interaction.timestamp)}
+                        )
+                        all_retrieved_history_docs.append(doc)
+                        processed_for_fuzzy_ids.add(interaction.id)
+                    logger.info(
+                        f"{log_prefix} Session History: Added {len(fuzzy_matches_session[:needed_fuzzy_count])} docs via fuzzy search.")
+
+            # Create the final session_history_retriever based on *all_retrieved_history_docs*
+            # This is a bit of a hack as retriever usually queries. Here, we pre-populate.
+            if all_retrieved_history_docs:
+                # Create a temporary Chroma store *just for these combined results* to make it a retriever
+                if self.provider and self.provider.embeddings:
                     try:
-                        temp_store = Chroma(collection_name=f"sess_hist_temp_{uuid.uuid4().hex[:6]}",
-                                            embedding_function=self.provider.embeddings)
-                        temp_store.add_embeddings(texts=session_texts_to_embed, embeddings=embedded_session_vectors)
-                        self.vectorstore_history = temp_store
+                        # Extract texts and metadatas for the new temp store
+                        texts_for_final_hist_store = [doc.page_content for doc in all_retrieved_history_docs]
+                        metadatas_for_final_hist_store = [doc.metadata for doc in all_retrieved_history_docs]
+                        # Embed these specific texts
+                        final_hist_embeddings = self.provider.embeddings._embed_texts(texts_for_final_hist_store,
+                                                                                      priority=priority) if hasattr(
+                            self.provider.embeddings, '_embed_texts') else self.provider.embeddings.embed_documents(
+                            texts_for_final_hist_store)
 
-                        k_sess = RAG_HISTORY_COUNT // 2 if RAG_HISTORY_COUNT > 1 else RAG_HISTORY_COUNT
-                        if RAG_HISTORY_COUNT == 0: k_sess = 0
-
-                        if k_sess > 0 and rag_query_vector:
-                            session_history_retriever = self._CustomVectorSearchRetriever(
-                                vectorstore=self.vectorstore_history, search_kwargs={"k": k_sess},
-                                vector_to_search=rag_query_vector)
-                        elif not rag_query_vector:
-                            logger.warning(f"{log_prefix} Skipping session history retriever: RAG query not embedded.")
-                    except Exception as e_sess_vs_build:
-                        logger.error(f"{log_prefix} Error building session history Chroma store: {e_sess_vs_build}")
-                else:
-                    logger.error(f"{log_prefix} Session history embedding failed or vector count mismatch.")
-            else:
-                logger.debug(f"{log_prefix} No texts for on-the-fly session history RAG.")
+                        if final_hist_embeddings and len(final_hist_embeddings) == len(texts_for_final_hist_store):
+                            temp_final_hist_vs = Chroma(collection_name=f"final_hist_ret_{uuid.uuid4().hex[:6]}",
+                                                        embedding_function=self.provider.embeddings)
+                            temp_final_hist_vs.add_embeddings(texts=texts_for_final_hist_store,
+                                                              embeddings=final_hist_embeddings,
+                                                              metadatas=metadatas_for_final_hist_store)
+                            # This retriever will essentially just return all docs or a subset if k is small
+                            session_history_retriever = temp_final_hist_vs.as_retriever(
+                                search_kwargs={"k": desired_total_history_results})
+                            logger.debug(
+                                f"{log_prefix} Session History: Final retriever created with {len(all_retrieved_history_docs)} combined docs.")
+                        else:
+                            logger.error(
+                                f"{log_prefix} Session History: Failed to embed docs for final combined retriever.")
+                    except Exception as e_final_hist_vs:
+                        logger.error(
+                            f"{log_prefix} Session History: Error creating final combined retriever: {e_final_hist_vs}")
             logger.debug(
-                f"{log_prefix} Step 2 complete. session_history_retriever: {'Set' if session_history_retriever else 'None'}")
+                f"{log_prefix} Step 2 (Session History) complete. Total retrieved: {len(all_retrieved_history_docs)} docs. Retriever set: {session_history_retriever is not None}")
 
-            # --- Step 3: Global Reflection Chunks Retriever ---
-            logger.debug(f"{log_prefix} Step 3: Global Reflection Chunks Retriever processing...")
-            active_refl_vs = get_global_reflection_vectorstore()
-            if active_refl_vs and isinstance(active_refl_vs, Chroma):
-                if rag_query_vector:
-                    logger.debug(f"{log_prefix} Global reflection VS available. Creating custom retriever.")
+            # --- Step 3: Global Reflection Chunks Retriever (Vector + Fuzzy Fallback) ---
+            logger.debug(
+                f"{log_prefix} Step 3: Global Reflection Chunks Retriever processing (Vector + Fuzzy Fallback)...")
+            active_refl_vs_instance = get_global_reflection_vectorstore()  # Get the global store
+
+            # --- 3a. Vector Search for Reflections ---
+            if active_refl_vs_instance and isinstance(active_refl_vs_instance, Chroma) and rag_query_vector:
+                try:
+                    k_refl_vec = RAG_HISTORY_COUNT // 2 if RAG_HISTORY_COUNT > 1 else RAG_HISTORY_COUNT
+                    if k_refl_vec > 0:
+                        temp_refl_retriever = self._CustomVectorSearchRetriever(vectorstore=active_refl_vs_instance,
+                                                                                search_kwargs={"k": k_refl_vec},
+                                                                                vector_to_search=rag_query_vector)
+                        vector_results_reflection_docs = temp_refl_retriever.invoke(user_input_for_rag_query)
+                        all_retrieved_reflection_docs.extend(vector_results_reflection_docs or [])
+                        logger.info(
+                            f"{log_prefix} Reflections: Vector search found {len(vector_results_reflection_docs or [])} docs.")
+                except Exception as e_refl_vs:
+                    logger.error(f"{log_prefix} Reflections: Error querying global reflection VS: {e_refl_vs}")
+            else:
+                logger.debug(
+                    f"{log_prefix} Reflections: Skipping vector search (VS not available/Chroma or no query vector).")
+
+            # --- 3b. Fuzzy Search Fallback for Reflections ---
+            desired_total_reflection_results = RAG_HISTORY_COUNT
+            if FUZZY_AVAILABLE and (
+                    len(all_retrieved_reflection_docs) < desired_total_reflection_results // 2 or RAG_HISTORY_COUNT == 0):
+                logger.info(
+                    f"{log_prefix} Reflections: Vector search results ({len(all_retrieved_reflection_docs)}) insufficient or RAG_HISTORY_COUNT is 0. Attempting fuzzy search on reflection_result interactions...")
+                # Query SQL for 'reflection_result' type interactions
+                # Limiting to recent ones for performance, or those not already retrieved by vector.
+                # This part is more complex as fuzzy search needs text, and Interaction objects don't directly become Langchain Documents.
+                # For simplicity, let's assume we can query a limited set of recent reflection_result Interaction objects.
+                recent_reflection_sql_interactions = db.query(Interaction).filter(
+                    Interaction.input_type == 'reflection_result',
+                    Interaction.llm_response.isnot(None)  # Ensure there's content
+                ).order_by(desc(Interaction.timestamp)).limit(RAG_HISTORY_COUNT * 5).all()  # Get more candidates
+
+                fuzzy_matches_reflection: List[Tuple[Interaction, int]] = []
+                processed_refl_fuzzy_ids = set(
+                    doc.metadata.get("source_interaction_id") for doc in all_retrieved_reflection_docs if doc.metadata)
+
+                for interaction in recent_reflection_sql_interactions:
+                    if interaction.id in processed_refl_fuzzy_ids: continue
+                    if interaction.llm_response:
+                        score = fuzz.partial_ratio(user_input_for_rag_query.lower(), interaction.llm_response.lower())
+                        if score >= FUZZY_SEARCH_THRESHOLD_APP:
+                            fuzzy_matches_reflection.append((interaction, score))
+
+                if fuzzy_matches_reflection:
+                    fuzzy_matches_reflection.sort(key=lambda x: x[1], reverse=True)
+                    needed_fuzzy_refl_count = max(0,
+                                                  desired_total_reflection_results - len(all_retrieved_reflection_docs))
+                    for interaction, score in fuzzy_matches_reflection[:needed_fuzzy_refl_count]:
+                        doc = Document(
+                            page_content=f"Reflection (fuzzy score {score}, ID {interaction.id}): {interaction.llm_response}",
+                            metadata={"source": "reflection_fuzzy", "source_interaction_id": interaction.id,
+                                      "timestamp": str(interaction.timestamp)}
+                        )
+                        all_retrieved_reflection_docs.append(doc)
+                        processed_refl_fuzzy_ids.add(interaction.id)
+                    logger.info(
+                        f"{log_prefix} Reflections: Added {len(fuzzy_matches_reflection[:needed_fuzzy_refl_count])} docs via fuzzy search.")
+
+            # Create the final reflection_chunks_retriever (similar to session history)
+            if all_retrieved_reflection_docs:
+                if self.provider and self.provider.embeddings:
                     try:
-                        k_refl = RAG_HISTORY_COUNT // 2 if RAG_HISTORY_COUNT > 1 else RAG_HISTORY_COUNT
-                        if RAG_HISTORY_COUNT == 0: k_refl = 0
-                        if k_refl > 0:
-                            reflection_chunks_retriever = self._CustomVectorSearchRetriever(vectorstore=active_refl_vs,
-                                                                                            search_kwargs={"k": k_refl},
-                                                                                            vector_to_search=rag_query_vector)
-                    except Exception as e_refl_ret:
-                        logger.error(f"{log_prefix} Reflection retriever error: {e_refl_ret}")
-                else:
-                    logger.warning(f"{log_prefix} Skipping reflection retriever: RAG query not embedded.")
-            else:
-                logger.debug(f"{log_prefix} Global reflection VS not available or not Chroma type.")
+                        texts_for_final_refl_store = [doc.page_content for doc in all_retrieved_reflection_docs]
+                        metadatas_for_final_refl_store = [doc.metadata for doc in all_retrieved_reflection_docs]
+                        final_refl_embeddings = self.provider.embeddings._embed_texts(texts_for_final_refl_store,
+                                                                                      priority=priority) if hasattr(
+                            self.provider.embeddings, '_embed_texts') else self.provider.embeddings.embed_documents(
+                            texts_for_final_refl_store)
+
+                        if final_refl_embeddings and len(final_refl_embeddings) == len(texts_for_final_refl_store):
+                            temp_final_refl_vs = Chroma(collection_name=f"final_refl_ret_{uuid.uuid4().hex[:6]}",
+                                                        embedding_function=self.provider.embeddings)
+                            temp_final_refl_vs.add_embeddings(texts=texts_for_final_refl_store,
+                                                              embeddings=final_refl_embeddings,
+                                                              metadatas=metadatas_for_final_refl_store)
+                            reflection_chunks_retriever = temp_final_refl_vs.as_retriever(
+                                search_kwargs={"k": desired_total_reflection_results})
+                            logger.debug(
+                                f"{log_prefix} Reflections: Final retriever created with {len(all_retrieved_reflection_docs)} combined docs.")
+                        else:
+                            logger.error(
+                                f"{log_prefix} Reflections: Failed to embed docs for final combined retriever.")
+                    except Exception as e_final_refl_vs:
+                        logger.error(
+                            f"{log_prefix} Reflections: Error creating final combined retriever: {e_final_refl_vs}")
             logger.debug(
-                f"{log_prefix} Step 3 complete. reflection_chunks_retriever: {'Set' if reflection_chunks_retriever else 'None'}")
+                f"{log_prefix} Step 3 (Reflections) complete. Total retrieved: {len(all_retrieved_reflection_docs)} docs. Retriever set: {reflection_chunks_retriever is not None}")
 
             session_history_ids_str = ",".join(map(str, sorted(list(session_history_ids_set))))
 
             logger.info(
-                f"{log_prefix} RAG retriever prep complete. URL: {'Yes' if url_retriever else 'No'}, SessHist: {'Yes' if session_history_retriever else 'No'}, ReflChunk: {'Yes' if reflection_chunks_retriever else 'No'}.")
+                f"{log_prefix} RAG retriever prep complete. URL: {'Yes' if url_retriever else 'No'}, "
+                f"SessHistCombined: {'Yes' if session_history_retriever else 'No'} ({len(all_retrieved_history_docs)} docs total), "
+                f"ReflChunkCombined: {'Yes' if reflection_chunks_retriever else 'No'} ({len(all_retrieved_reflection_docs)} docs total)."
+            )
 
             ret_val = (url_retriever, session_history_retriever, reflection_chunks_retriever, session_history_ids_str)
             logger.critical(
@@ -1537,15 +1705,11 @@ class AIChat:
         except TaskInterruptedException as tie_outer:
             logger.warning(
                 f"🚦 {log_prefix} TaskInterruptedException in _get_rag_retriever (likely during prioritized embedding): {tie_outer}. Re-raising.")
-            # This exception will be caught by _get_rag_retriever_thread_wrapper,
-            # which will then return a dict with "status": "interrupted".
             raise tie_outer
-        except Exception as e_outer:  # Catch any other unexpected errors
+        except Exception as e_outer:
             logger.error(f"❌❌ {log_prefix} UNHANDLED EXCEPTION in _get_rag_retriever: {e_outer}")
             logger.exception(f"{log_prefix} _get_rag_retriever Outer Exception Traceback:")
-            # This will also be caught by _get_rag_retriever_thread_wrapper,
-            # which will return a dict with "status": "error".
-            raise e_outer  # Re-raise to be caught by the wrapper
+            raise e_outer
 
     async def _generate_file_search_query_async(self, db: Session, user_input_for_analysis: str, recent_direct_history_str: str, session_id: str) -> str:
         """
@@ -5037,106 +5201,183 @@ class AIChat:
 
         return response_to_return_to_client
 
-    async def _get_vector_search_file_index_context(self, query: str, priority: int = ELP0) -> str:
+    async def _get_vector_search_file_index_context(self, query: str, priority: int = ELP0, stop_event_param: Optional[threading.Event] = None) -> str:
         """
-        Performs a vector similarity search on the global file index vector store
-        and formats the results. Explicitly uses _embed_texts for prioritized query embedding.
+        Performs a vector similarity search on the global file index vector store.
+        If no vector results are found, attempts a fuzzy search on the SQL FileIndex table as a fallback.
+        Formats the results. Explicitly uses _embed_texts for prioritized query embedding.
         """
         log_prefix = f"🔍 FileVecSearch|ELP{priority}|{self.current_session_id or 'NoSession'}"
-        logger.debug(f"{log_prefix} Performing vector search on file index for query: '{query[:50]}...'")
+        logger.debug(f"{log_prefix} Attempting file search for query: '{query[:50]}...'")
 
-        global_file_vs = get_global_file_index_vectorstore()  # Synchronous call
+        global_file_vs = get_global_file_index_vectorstore() # Synchronous call
+
+        # --- Vector Search Attempt ---
+        vector_search_succeeded = False
+        search_results_docs: List[Any] = [] # Will hold Langchain Document objects
 
         if not global_file_vs:
-            logger.warning(f"{log_prefix} Global file index vector store not available. Cannot perform vector search.")
-            return "No vector file index available for search."
-
-        if not self.provider or not self.provider.embeddings:
+            logger.warning(f"{log_prefix} Global file index vector store not available for vector search.")
+        elif not self.provider or not self.provider.embeddings:
             logger.error(f"{log_prefix} Embeddings provider not available for vector search query.")
-            return "Embeddings provider missing, cannot perform vector file search."
-
-        if not query:
-            logger.debug(f"{log_prefix} Empty query for vector search. Skipping.")
-            return "No specific query provided for vector file search."
-
-        query_vector: Optional[List[float]] = None
-        try:
-            # --- CORRECTED: Explicitly embed the query with priority using _embed_texts ---
-            logger.debug(f"{log_prefix} Explicitly embedding query via _embed_texts with priority ELP{priority}...")
-            if hasattr(self.provider.embeddings, '_embed_texts') and \
-                    callable(getattr(self.provider.embeddings, '_embed_texts')):
-
-                embedding_result_list = await asyncio.to_thread(
-                    self.provider.embeddings._embed_texts,  # Call the internal method # type: ignore
-                    [query],  # _embed_texts expects a list of texts
-                    priority=priority
-                )
-                if embedding_result_list and len(embedding_result_list) > 0:
-                    query_vector = embedding_result_list[0]
+        elif not query:
+            logger.debug(f"{log_prefix} Empty query for vector search. Skipping vector part.")
+        else:
+            query_vector: Optional[List[float]] = None
+            try:
+                logger.debug(f"{log_prefix} Explicitly embedding query via _embed_texts with priority ELP{priority}...")
+                if hasattr(self.provider.embeddings, '_embed_texts') and \
+                        callable(getattr(self.provider.embeddings, '_embed_texts')):
+                    embedding_result_list = await asyncio.to_thread(
+                        self.provider.embeddings._embed_texts, [query], priority=priority # type: ignore
+                    )
+                    if embedding_result_list and len(embedding_result_list) > 0:
+                        query_vector = embedding_result_list[0]
+                    else:
+                        logger.error(f"{log_prefix} _embed_texts returned None or empty list for query.")
                 else:
-                    logger.error(f"{log_prefix} _embed_texts returned None or empty list for query.")
-            else:
-                logger.error(
-                    f"{log_prefix} Embeddings object missing '_embed_texts'. Cannot perform prioritized query embedding for vector search.")
-                return "Vector search failed: Embeddings object misconfigured for priority."
-            # --- END CORRECTION ---
+                    logger.error(f"{log_prefix} Embeddings object missing '_embed_texts'. Cannot perform prioritized query embedding.")
 
-            if not query_vector:
-                logger.error(f"{log_prefix} Failed to embed query for vector search (query_vector is None).")
-                return "Vector search failed: Could not embed query."
+                if not query_vector:
+                    logger.error(f"{log_prefix} Failed to embed query for vector search (query_vector is None).")
+                else:
+                    logger.debug(f"{log_prefix} Query embedded. Performing similarity_search_by_vector (k={RAG_FILE_INDEX_COUNT})...")
+                    # Perform search using the pre-computed vector
+                    search_results_docs = await asyncio.to_thread(
+                        global_file_vs.similarity_search_by_vector,
+                        embedding=query_vector,
+                        k=RAG_FILE_INDEX_COUNT  # From config
+                    )
+                    if search_results_docs:
+                        vector_search_succeeded = True
+                        logger.info(f"{log_prefix} Found {len(search_results_docs)} results from VECTOR file search.")
+                    else:
+                        logger.info(f"{log_prefix} No results from VECTOR file search for query '{query[:50]}...'")
 
-            logger.debug(
-                f"{log_prefix} Query embedded. Performing similarity_search_by_vector (k={RAG_FILE_INDEX_COUNT})...")
-            # Perform search using the pre-computed vector
-            search_results_docs = await asyncio.to_thread(
-                global_file_vs.similarity_search_by_vector,
-                embedding=query_vector,
-                k=RAG_FILE_INDEX_COUNT  # From config
-            )
+            except TaskInterruptedException as tie:
+                logger.warning(f"🚦 {log_prefix} Vector file search INTERRUPTED: {tie}")
+                raise # Re-raise to be handled by the caller
+            except Exception as e:
+                logger.error(f"❌ {log_prefix} Error during vector file search: {e}")
+                logger.exception(f"{log_prefix} Vector File Search Traceback:")
+                # Continue to fuzzy search fallback
 
-            if not search_results_docs:
-                logger.debug(f"{log_prefix} No results from vector file search for query '{query[:50]}...'")
-                return "No relevant file content found via vector search for the query."
+        # --- Fuzzy Search Fallback ---
+        fuzzy_search_results_text_list: List[str] = []
+        if not vector_search_succeeded:
+            if not FUZZY_AVAILABLE:
+                logger.warning(f"{log_prefix} Vector search failed and Fuzzy search (thefuzz) is not available. No file context.")
+                return "No relevant file content found (vector search failed, fuzzy search unavailable)."
 
-            logger.info(f"{log_prefix} Found {len(search_results_docs)} results from vector file search.")
+            logger.info(f"{log_prefix} Vector search yielded no results. Attempting FUZZY search fallback for query: '{query[:50]}...'")
+            db_for_fuzzy: Optional[Session] = None
+            try:
+                db_for_fuzzy = SessionLocal() # type: ignore
+                if not db_for_fuzzy: raise RuntimeError("Failed to get DB session for fuzzy search.")
 
-            # Format results (same as before)
+                # Fetch a reasonable number of candidates from SQL to perform fuzzy search on
+                # Limiting this to avoid loading too much into memory.
+                # We search against file_name and indexed_content (if not too long).
+                # Order by last_modified_os to potentially get more relevant recent files.
+                candidate_records = db_for_fuzzy.query(FileIndex).filter(
+                    FileIndex.index_status.in_(['indexed_text', 'success', 'partial_vlm_error']) # Only search indexed files
+                ).order_by(desc(FileIndex.last_modified_os)).limit(500).all() # Limit candidates
+
+                if not candidate_records:
+                    logger.info(f"{log_prefix} FUZZY: No candidate records in SQL DB for fuzzy search.")
+                else:
+                    logger.debug(f"{log_prefix} FUZZY: Found {len(candidate_records)} candidate records from SQL.")
+                    fuzzy_matches: List[Tuple[FileIndex, int]] = [] # Store (record, score)
+
+                    for record in candidate_records:
+                        if stop_event_param and stop_event_param.is_set():  # Check if passed and set
+                            logger.info(f"{log_prefix} FUZZY search interrupted by stop_event_param.")
+                            break
+                        # Text to search against: filename + content snippet
+                        text_to_match_on = record.file_name or ""
+                        if record.indexed_content:
+                            # Use a snippet of content to keep fuzzy search performant
+                            content_snippet = (record.indexed_content[:500] + "...") if len(record.indexed_content) > 500 else record.indexed_content
+                            text_to_match_on += " " + content_snippet
+
+                        if not text_to_match_on.strip(): continue
+
+                        # Use fuzz.partial_ratio for substring matching, good for finding queries within larger text
+                        score = fuzz.partial_ratio(query.lower(), text_to_match_on.lower())
+
+                        if score >= FUZZY_SEARCH_THRESHOLD_APP: # FUZZY_SEARCH_THRESHOLD_APP from app.py/config
+                            fuzzy_matches.append((record, score))
+
+                    if fuzzy_matches:
+                        # Sort by score descending, then by last_modified_os descending
+                        fuzzy_matches.sort(key=lambda x: (x[1], x[0].last_modified_os or datetime.datetime.min), reverse=True)
+                        top_fuzzy_matches = fuzzy_matches[:RAG_FILE_INDEX_COUNT] # Take top N
+                        logger.info(f"{log_prefix} FUZZY: Found {len(top_fuzzy_matches)} matches with score >= {FUZZY_SEARCH_THRESHOLD_APP}.")
+
+                        for i, (record, score) in enumerate(top_fuzzy_matches):
+                            content_snippet = (record.indexed_content[:300] + "...") if record.indexed_content and len(record.indexed_content) > 300 else (record.indexed_content or "[No content]")
+                            entry = (
+                                f"--- Fuzzy File Result {i + 1} (Score: {score}) ---\n"
+                                f"File: {record.file_name}\nPath Hint: ...{record.file_path[-70:]}\nModified: {record.last_modified_os.strftime('%Y-%m-%d %H:%M') if record.last_modified_os else 'N/A'}\n"
+                                f"Content Snippet: {content_snippet}\n---\n"
+                            )
+                            fuzzy_search_results_text_list.append(entry)
+                    else:
+                        logger.info(f"{log_prefix} FUZZY: No matches found above threshold {FUZZY_SEARCH_THRESHOLD_APP}.")
+
+            except Exception as e_fuzzy:
+                logger.error(f"❌ {log_prefix} Error during FUZZY search: {e_fuzzy}")
+                logger.exception(f"{log_prefix} Fuzzy Search Traceback:")
+                fuzzy_search_results_text_list.append(f"[Error performing fuzzy file search: {type(e_fuzzy).__name__}]\n")
+            finally:
+                if db_for_fuzzy: db_for_fuzzy.close()
+
+        # --- Format Results ---
+        if vector_search_succeeded and search_results_docs:
             context_parts = []
             max_snippet_len = 300
-            max_total_chars = 2000
+            max_total_chars = 2000 # Max length for combined vector context
+            current_chars = 0
             for i, doc in enumerate(search_results_docs):
                 if not hasattr(doc, 'page_content') or not hasattr(doc, 'metadata'):
-                    logger.warning(f"{log_prefix} Skipping malformed document: {doc}")
+                    logger.warning(f"{log_prefix} Skipping malformed vector document: {doc}")
                     continue
                 content = doc.page_content
                 metadata = doc.metadata
                 file_path = metadata.get("source", "UnkPath")
-                file_name = metadata.get("file_name",
-                                         os.path.basename(file_path) if file_path != "UnkPath" else "UnkFile")
+                file_name = metadata.get("file_name", os.path.basename(file_path) if file_path != "UnkPath" else "UnkFile")
                 last_mod = metadata.get("last_modified", "UnkDate")
+                # Langchain Chroma typically returns relevance_score which is distance (lower is better).
+                # We can invert it or just display as is.
+                relevance_score = doc.metadata.get('relevance_score', 'N/A') if isinstance(doc.metadata, dict) else 'N/A'
+
                 snippet = content[:max_snippet_len] + ("..." if len(content) > max_snippet_len else "")
                 entry = (
-                    f"--- Vector File Result {i + 1} (Score: {doc.metadata.get('relevance_score', 'N/A') if hasattr(doc, 'metadata') and isinstance(doc.metadata, dict) else 'N/A'}) ---\n"
+                    f"--- Vector File Result {i + 1} (Score: {relevance_score}) ---\n" # Score might be distance
                     f"File: {file_name}\nPath Hint: ...{file_path[-70:]}\nModified: {last_mod}\n"
                     f"Content Snippet: {snippet}\n---\n")
-                if sum(len(p) for p in context_parts) + len(entry) > max_total_chars:
-                    context_parts.append("[Vector file search context truncated]...\n")
+                if current_chars + len(entry) > max_total_chars:
+                    context_parts.append("[Vector file search context truncated due to length]...\n")
                     break
                 context_parts.append(entry)
-
+                current_chars += len(entry)
             return "".join(context_parts) if context_parts else "No relevant file content found via vector search."
-
-        except TaskInterruptedException as tie:
-            logger.warning(f"🚦 {log_prefix} Vector file search INTERRUPTED: {tie}")
-            raise  # Re-raise to be handled by the caller (e.g., asyncio.gather in background_generate)
-        except Exception as e:
-            logger.error(f"❌ {log_prefix} Error during vector file search: {e}")
-            logger.exception(f"{log_prefix} Vector File Search Traceback:")
-            return f"Error performing vector file search: {type(e).__name__}"
+        elif fuzzy_search_results_text_list:
+            # Combine fuzzy results, already formatted as text strings
+            # Limit total length of fuzzy results string for the prompt
+            combined_fuzzy_text = "".join(fuzzy_search_results_text_list)
+            max_fuzzy_chars = 2000 # Max length for combined fuzzy context
+            if len(combined_fuzzy_text) > max_fuzzy_chars:
+                return combined_fuzzy_text[:max_fuzzy_chars] + "\n[Fuzzy file search context truncated due to length]...\n"
+            return combined_fuzzy_text
+        else:
+            # Neither vector nor fuzzy search yielded results
+            return "No relevant file content found via vector or fuzzy search for the query."
 
     async def background_generate(self, db: Session, user_input: str, session_id: str = None,
                                   classification: str = "chat_simple", image_b64: Optional[str] = None,
-                                  update_interaction_id: Optional[int] = None):
+                                  update_interaction_id: Optional[int] = None,
+                                  stop_event_for_bg: Optional[threading.Event] = None):
         # ... (request_id, is_reflection_task, log_prefix, self.current_session_id setup as before) ...
         request_id = f"gen-{uuid.uuid4()}"
         is_reflection_task = update_interaction_id is not None
@@ -5245,26 +5486,79 @@ class AIChat:
             if hasattr(self, 'vectorstore_url') and self.vectorstore_url: interaction_data['rag_source_url'] = getattr(
                 self.vectorstore_url, '_source_url', None)
 
-            async def retrieve_docs_task_local():  # Renamed to avoid potential scope issues
-                # ... (implementation as before, populating local url_docs, sess_docs, refl_docs)
-                _url_docs, _sess_docs, _refl_docs = [], [], []
-                _q_rag = current_input_for_llm_analysis
-                if url_ret_obj:
+            async def retrieve_docs_task_local() -> Dict[str, List[Any]]:
+                """
+                Local async helper to invoke RAG retrievers.
+                Runs in asyncio.gather. Retrieves documents from URL, session history (combined vector/fuzzy),
+                and reflection chunks (combined vector/fuzzy) RAG sources.
+                """
+                task_log_prefix = f"{log_prefix}|RAGDocsLocal"  # Specific prefix for this task's logs
+                logger.debug(f"{task_log_prefix}: Starting document retrieval...")
+
+                _url_docs_retrieved: List[Any] = []
+                _session_docs_retrieved: List[Any] = []
+                _reflection_docs_retrieved: List[Any] = []
+
+                # Query string for all retrievers
+                _query_for_rag_invoke = current_input_for_llm_analysis  # Uses variable from outer scope
+
+                # 1. URL Document Retrieval (if url_ret_obj exists)
+                if url_ret_obj:  # url_ret_obj is from the outer scope of background_generate
                     try:
-                        _u_d = await asyncio.to_thread(url_ret_obj.invoke, _q_rag); _url_docs.extend(_u_d or [])
-                    except Exception as e:
-                        logger.warning(f"{log_prefix} BG URL RAG invoke error: {e}")
-                if sess_hist_ret_obj:
+                        logger.debug(
+                            f"{task_log_prefix}: Invoking URL retriever for query: '{_query_for_rag_invoke[:30]}...'")
+                        # Retriever's invoke method is typically synchronous for Chroma
+                        retrieved = await asyncio.to_thread(url_ret_obj.invoke, _query_for_rag_invoke)
+                        _url_docs_retrieved.extend(retrieved or [])
+                        logger.debug(f"{task_log_prefix}: URL retriever found {len(retrieved or [])} docs.")
+                    except Exception as e_url_invoke:
+                        logger.warning(f"{task_log_prefix} URL RAG invoke error: {e_url_invoke}")
+                        # Optionally, add an error marker to the context or handle
+                else:
+                    logger.debug(
+                        f"{task_log_prefix}: URL retriever object (url_ret_obj) not available. Skipping URL RAG.")
+
+                # 2. Session History Document Retrieval (if sess_hist_ret_obj exists)
+                #    This retriever was already populated with combined vector+fuzzy results.
+                if sess_hist_ret_obj:  # sess_hist_ret_obj is from the outer scope
                     try:
-                        _s_d = await asyncio.to_thread(sess_hist_ret_obj.invoke, _q_rag); _sess_docs.extend(_s_d or [])
-                    except Exception as e:
-                        logger.warning(f"{log_prefix} BG Session RAG invoke error: {e}")
-                if refl_chunk_ret_obj:
+                        logger.debug(
+                            f"{task_log_prefix}: Invoking Session History (Combined) retriever for query: '{_query_for_rag_invoke[:30]}...'")
+                        retrieved = await asyncio.to_thread(sess_hist_ret_obj.invoke, _query_for_rag_invoke)
+                        _session_docs_retrieved.extend(retrieved or [])
+                        logger.debug(
+                            f"{task_log_prefix}: Session History (Combined) retriever found {len(retrieved or [])} docs.")
+                    except Exception as e_sess_invoke:
+                        logger.warning(
+                            f"{task_log_prefix} Session History (Combined) RAG invoke error: {e_sess_invoke}")
+                else:
+                    logger.debug(
+                        f"{task_log_prefix}: Session History (Combined) retriever object (sess_hist_ret_obj) not available. Skipping Session RAG.")
+
+                # 3. Reflection Chunks Document Retrieval (if refl_chunk_ret_obj exists)
+                #    This retriever was also populated with combined vector+fuzzy results.
+                if refl_chunk_ret_obj:  # refl_chunk_ret_obj is from the outer scope
                     try:
-                        _r_d = await asyncio.to_thread(refl_chunk_ret_obj.invoke, _q_rag); _refl_docs.extend(_r_d or [])
-                    except Exception as e:
-                        logger.warning(f"{log_prefix} BG Reflection RAG invoke error: {e}")
-                return {"url_docs": _url_docs, "session_docs": _sess_docs, "reflection_docs": _refl_docs}
+                        logger.debug(
+                            f"{task_log_prefix}: Invoking Reflection Chunks (Combined) retriever for query: '{_query_for_rag_invoke[:30]}...'")
+                        retrieved = await asyncio.to_thread(refl_chunk_ret_obj.invoke, _query_for_rag_invoke)
+                        _reflection_docs_retrieved.extend(retrieved or [])
+                        logger.debug(
+                            f"{task_log_prefix}: Reflection Chunks (Combined) retriever found {len(retrieved or [])} docs.")
+                    except Exception as e_refl_invoke:
+                        logger.warning(
+                            f"{task_log_prefix} Reflection Chunks (Combined) RAG invoke error: {e_refl_invoke}")
+                else:
+                    logger.debug(
+                        f"{task_log_prefix}: Reflection Chunks (Combined) retriever object (refl_chunk_ret_obj) not available. Skipping Reflection RAG.")
+
+                logger.debug(
+                    f"{task_log_prefix}: Document retrieval finished. URLs: {len(_url_docs_retrieved)}, Sessions: {len(_session_docs_retrieved)}, Reflections: {len(_reflection_docs_retrieved)}")
+                return {
+                    "url_docs": _url_docs_retrieved,
+                    "session_docs": _session_docs_retrieved,
+                    "reflection_docs": _reflection_docs_retrieved
+                }
 
             gathered_contexts = await asyncio.gather(
                 retrieve_docs_task_local(),
