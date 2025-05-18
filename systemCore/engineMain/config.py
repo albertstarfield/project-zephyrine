@@ -23,7 +23,10 @@ RESPONSE_TIMEOUT_MS = 15000 # Timeout for potential multi-step process
 # Similarity threshold for reusing previous ToT results (requires numpy/embeddings)
 TOT_SIMILARITY_THRESHOLD = float(os.getenv("TOT_SIMILARITY_THRESHOLD", 0.1))
 # Fuzzy search threshold for history RAG (0-100, higher is stricter) - Requires thefuzz
+
 FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 20))
+
+
 MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1)) # Unused
 YOUR_REFLECTION_CHUNK_SIZE = int(os.getenv("YOUR_REFLECTION_CHUNK_SIZE", 450))
 YOUR_REFLECTION_CHUNK_OVERLAP = int(os.getenv("YOUR_REFLECTION_CHUNK_OVERLAP", 50))
@@ -170,7 +173,7 @@ IMAGE_GEN_DIFFUSION_MODEL_NAME = os.getenv("IMAGE_GEN_DIFFUSION_MODEL_NAME", "fl
 IMAGE_GEN_CLIP_L_NAME = os.getenv("IMAGE_GEN_CLIP_L_NAME", "flux1-clip_l.gguf")
 IMAGE_GEN_T5XXL_NAME = os.getenv("IMAGE_GEN_T5XXL_NAME", "flux1-t5xxl.gguf")
 IMAGE_GEN_VAE_NAME = os.getenv("IMAGE_GEN_VAE_NAME", "flux1-ae.gguf")
-IMAGE_GEN_WORKER_TIMEOUT = int(os.getenv("IMAGE_GEN_WORKER_TIMEOUT", 500))
+IMAGE_GEN_WORKER_TIMEOUT = int(os.getenv("IMAGE_GEN_WORKER_TIMEOUT", 1800))
 
 # --- stable-diffusion-cpp Library Parameters ---
 IMAGE_GEN_DEVICE = os.getenv("IMAGE_GEN_DEVICE", "default") # e.g., 'cpu', 'cuda:0', 'mps', 'default'
@@ -179,8 +182,8 @@ IMAGE_GEN_N_THREADS = int(os.getenv("IMAGE_GEN_N_THREADS", 0)) # 0 for auto, pos
 
 # --- Image Generation Defaults (passed to worker via JSON stdin) ---
 IMAGE_GEN_DEFAULT_NEGATIVE_PROMPT = os.getenv("IMAGE_GEN_DEFAULT_NEGATIVE_PROMPT", "Bad Morphed Graphic or Body, ugly, deformed, disfigured, extra limbs, blurry, low resolution")
-IMAGE_GEN_DEFAULT_SIZE = os.getenv("IMAGE_GEN_DEFAULT_SIZE", "768x448") # WidthxHeight for FLUX
-IMAGE_GEN_DEFAULT_SAMPLE_STEPS = int(os.getenv("IMAGE_GEN_DEFAULT_SAMPLE_STEPS", 4)) # FLUX Schnell needs fewer steps
+IMAGE_GEN_DEFAULT_SIZE = os.getenv("IMAGE_GEN_DEFAULT_SIZE", "768x512") # WidthxHeight for FLUX
+IMAGE_GEN_DEFAULT_SAMPLE_STEPS = int(os.getenv("IMAGE_GEN_DEFAULT_SAMPLE_STEPS", 5)) # FLUX Schnell needs fewer steps
 IMAGE_GEN_DEFAULT_CFG_SCALE = float(os.getenv("IMAGE_GEN_DEFAULT_CFG_SCALE", 1.0)) # FLUX uses lower CFG
 IMAGE_GEN_DEFAULT_SAMPLE_METHOD = os.getenv("IMAGE_GEN_DEFAULT_SAMPLE_METHOD", "euler") # 'euler' is good for FLUX
 IMAGE_GEN_DEFAULT_SEED = int(os.getenv("IMAGE_GEN_DEFAULT_SEED", -1)) # -1 for random
@@ -194,10 +197,10 @@ REFINEMENT_MODEL_ENABLED = os.getenv("REFINEMENT_MODEL_ENABLED", "true").lower()
 REFINEMENT_MODEL_NAME = os.getenv("REFINEMENT_MODEL_NAME", "sd-refinement.gguf") # Assumed to be in IMAGE_GEN_MODEL_DIR
 REFINEMENT_PROMPT_PREFIX = os.getenv("REFINEMENT_PROMPT_PREFIX", "Masterpiece, Amazing, 4k, cinematic, ")
 REFINEMENT_PROMPT_SUFFIX = os.getenv("REFINEMENT_PROMPT_SUFFIX", ", highly detailed, sharp focus, intricate details, best quality, award winning photography, ultra realistic")
-REFINEMENT_STRENGTH = float(os.getenv("REFINEMENT_STRENGTH", 0.30)) # How much the refiner changes the FLUX image
-REFINEMENT_CFG_SCALE = float(os.getenv("REFINEMENT_CFG_SCALE", 7.0)) # Typical SD 1.5/2.x CFG
+REFINEMENT_STRENGTH = float(os.getenv("REFINEMENT_STRENGTH", 0.5)) # How much the refiner changes the FLUX image
+REFINEMENT_CFG_SCALE = float(os.getenv("REFINEMENT_CFG_SCALE", 9.0)) # Typical SD 1.5/2.x CFG
 REFINEMENT_SAMPLE_METHOD = os.getenv("REFINEMENT_SAMPLE_METHOD", "dpmpp2mv2") # Changed from euler_a based on your comment
-REFINEMENT_ADD_NOISE_STRENGTH = float(os.getenv("REFINEMENT_ADD_NOISE_STRENGTH", 0.8)) # 0.0 = no noise, 1.0-5.0 for subtle noise
+REFINEMENT_ADD_NOISE_STRENGTH = float(os.getenv("REFINEMENT_ADD_NOISE_STRENGTH", 2)) # 0.0 = no noise, 1.0-5.0 for subtle noise
 
 
 # --- END NEW ---
