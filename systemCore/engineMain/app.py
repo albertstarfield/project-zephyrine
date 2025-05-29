@@ -67,6 +67,7 @@ from werkzeug.utils import secure_filename # For safely handling uploaded filena
 import difflib
 import contextlib # For ensuring driver quit
 from urllib.parse import urlparse, parse_qs, quote_plus, urljoin
+import langcodes
 
 # --- Selenium Imports (add if not present) ---
 try:
@@ -8113,6 +8114,14 @@ def handle_openai_models():
             # "description": "Speech-to-Text model based on Whisper." # Optional
         },
         {
+            "id": AUDIO_TRANSLATION_MODEL_CLIENT_FACING,  # From config.py
+            "object": "model",
+            "created": int(time.time()),
+            "owned_by": META_MODEL_OWNER,  # From config.py
+            "permission": [], "root": AUDIO_TRANSLATION_MODEL_CLIENT_FACING, "parent": None,
+            # "description": "Audio-to-Audio Translation Service" # Optional
+        },
+        {
             "id": IMAGE_GEN_MODEL_NAME_CLIENT_FACING,  # Use the constant
             "object": "model",
             "created": int(time.time()),
@@ -8397,6 +8406,251 @@ def handle_openai_asr_transcriptions():
         except:
             pass
     return resp
+# === NEW: Translation Audio Convo ===
+
+@app.route("/v1/audio/translations", methods=["POST"])
+def handle_openai_audio_translations():
+    """
+    Handles audio translation requests:
+    1. Transcribes input audio to text (ASR - ELP1).
+    2. Translates text to target language using LLM (LLM - ELP1).
+    3. Synthesizes translated text to audio (TTS - ELP1).
+    """
+    start_req_time = time.monotonic()
+    request_id = f"req-translate-{uuid.uuid4()}"
+    logger.info(f"🚀 Flask OpenAI-Style Audio Translation Request ID: {request_id}")
+
+    db: Session = g.db
+    final_status_code: int = 500
+    resp: Optional[Response] = None
+    session_id_for_log: str = f"translate_req_{request_id}"
+    uploaded_filename: Optional[str] = None
+    temp_input_audio_path: Optional[str] = None
+
+    transcribed_text_intermediate: Optional[str] = None
+    translated_text_intermediate: Optional[str] = None
+
+    try:
+        # Check master enable flags from config
+        if not ENABLE_ASR:  # Assuming TTS is implicitly enabled if this endpoint is hit.
+            # You could add an ENABLE_TTS config flag too if desired.
+            error_msg = "Core ASR capability is disabled on this server, cannot perform translation."
+            logger.error(f"{request_id}: {error_msg}")
+            resp_data, status_code = _create_openai_error_response(error_msg, err_type="server_error",
+                                                                   code="translation_capability_disabled",
+                                                                   status_code=503)
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_status_code = status_code
+            return resp
+
+        if not request.content_type or not request.content_type.startswith('multipart/form-data'):
+            raise ValueError("Invalid content type. Must be multipart/form-data.")
+
+        audio_file_storage = request.files.get('file')
+        model_requested = request.form.get('model')
+
+        target_language_code = request.form.get('target_language', DEFAULT_TRANSLATION_TARGET_LANGUAGE).lower()
+        source_language_code_asr = request.form.get('source_language', "auto").lower()
+
+        output_voice_requested = request.form.get('voice')
+        output_audio_format = request.form.get('response_format', 'mp3').lower()
+
+        session_id_for_log = request.form.get("session_id", session_id_for_log)
+        if ai_chat: ai_chat.current_session_id = session_id_for_log
+        if audio_file_storage and audio_file_storage.filename:
+            uploaded_filename = secure_filename(audio_file_storage.filename)
+
+        logger.debug(
+            f"{request_id}: Translate Request - File: {uploaded_filename or 'Missing'}, ModelReq: {model_requested}, "
+            f"TargetLang: {target_language_code}, SourceLangASR: {source_language_code_asr}, OutputVoice: {output_voice_requested}, OutputFormat: {output_audio_format}"
+        )
+
+        if not audio_file_storage: raise ValueError("'file' field (audio data) is required.")
+        if not model_requested or model_requested != AUDIO_TRANSLATION_MODEL_CLIENT_FACING:  # From config.py
+            raise ValueError(f"Invalid 'model'. This endpoint supports '{AUDIO_TRANSLATION_MODEL_CLIENT_FACING}'.")
+
+        # --- Step 0: Save Uploaded File ---
+        temp_audio_dir = os.path.join(SCRIPT_DIR, "temp_audio_worker_files")  # SCRIPT_DIR from app.py
+        os.makedirs(temp_audio_dir, exist_ok=True)
+        _, file_extension = os.path.splitext(uploaded_filename or ".tmpaud")
+        temp_file_obj = tempfile.NamedTemporaryFile(dir=temp_audio_dir, suffix=file_extension, delete=False)
+        temp_input_audio_path = temp_file_obj.name
+        audio_file_storage.save(temp_input_audio_path)
+        temp_file_obj.close()
+        logger.info(f"{request_id}: Input audio saved temporarily to: {temp_input_audio_path}")
+
+        # --- Step 1: ASR (Audio to Text) - ELP1 ---
+        logger.info(f"{request_id}: Step 1: Transcribing audio (ELP1)...")
+        asr_worker_script = os.path.join(SCRIPT_DIR, "audio_worker.py")
+        # APP_PYTHON_EXECUTABLE & WHISPER_MODEL_DIR from config or defined in app.py
+        asr_worker_cmd = [APP_PYTHON_EXECUTABLE, asr_worker_script, "--task-type", "asr",
+                          "--model-dir", WHISPER_MODEL_DIR, "--temp-dir", temp_audio_dir]
+        asr_request_data = {
+            "input_audio_path": temp_input_audio_path,
+            "whisper_model_name": WHISPER_DEFAULT_MODEL_FILENAME,  # From config.py
+            "language": source_language_code_asr,  # Can be "auto"
+            "request_id": f"{request_id}-asr"
+        }
+        asr_response, asr_err = _execute_audio_worker_with_priority(asr_worker_cmd, asr_request_data, ELP1, SCRIPT_DIR,
+                                                                    ASR_WORKER_TIMEOUT)  # From config.py
+        if asr_err or not (
+                asr_response and isinstance(asr_response.get("result"), dict) and "text" in asr_response["result"]):
+            raise RuntimeError(f"ASR step failed: {asr_err or 'Invalid ASR worker response'}")
+        transcribed_text_intermediate = asr_response["result"]["text"]
+        logger.info(
+            f"{request_id}: Step 1: Transcription successful (Snippet: '{transcribed_text_intermediate[:100]}...').")
+
+        # --- Step 2: LLM Translation (Text to Text) - ELP1 ---
+        logger.info(
+            f"{request_id}: Step 2: Translating text to '{target_language_code}' (ELP1) using LLM role '{TRANSLATION_LLM_ROLE}'...")  # TRANSLATION_LLM_ROLE from config.py
+        translation_model = ai_provider.get_model(TRANSLATION_LLM_ROLE)  # type: ignore
+        if not translation_model:
+            raise RuntimeError(f"LLM model for translation role '{TRANSLATION_LLM_ROLE}' not available.")
+
+        source_lang_full, target_lang_full = source_language_code_asr, target_language_code
+        try:
+            if source_language_code_asr != "auto":
+                source_lang_full = langcodes.Language.make(language=source_language_code_asr).display_name()
+            else:
+                source_lang_full = "Unknown (auto-detect by ASR or Translator)"
+            target_lang_full = langcodes.Language.make(language=target_language_code).display_name()
+        except Exception as lang_err:
+            logger.warning(f"{request_id}: langcodes issue: {lang_err}. Using codes.")
+
+        translation_prompt_input = {
+            "text_to_translate": transcribed_text_intermediate,
+            "target_language_full_name": target_lang_full, "target_language_code": target_language_code,
+            "source_language_full_name": source_lang_full, "source_language_code": source_language_code_asr
+        }
+        translation_chain = ChatPromptTemplate.from_template(
+            PROMPT_TRANSLATE_TEXT) | translation_model | StrOutputParser()  # PROMPT_TRANSLATE_TEXT from config.py
+        timing_data_translation = {"session_id": session_id_for_log, "mode": "translation_llm"}
+
+        translated_text_intermediate = ai_chat._call_llm_with_timing(  # type: ignore
+            translation_chain, translation_prompt_input, timing_data_translation, priority=ELP1
+        )
+        if not translated_text_intermediate or (isinstance(translated_text_intermediate, str) and (
+                "ERROR" in translated_text_intermediate or "Traceback" in translated_text_intermediate)):
+            raise RuntimeError(f"LLM translation step failed. Response: {translated_text_intermediate}")
+        translated_text_intermediate = translated_text_intermediate.strip()
+        logger.info(
+            f"{request_id}: Step 2: Translation successful (Snippet: '{translated_text_intermediate[:100]}...').")
+
+        # --- Step 3: TTS (Translated Text to Audio) - ELP1 ---
+        logger.info(f"{request_id}: Step 3: Synthesizing translated text to audio (ELP1)...")
+        final_tts_voice = output_voice_requested
+        if not final_tts_voice:
+            lang_to_voice_map = {"en": "EN-US", "es": "ES-ES", "fr": "FR-FR", "de": "DE-DE", "zh": "ZH-CN",
+                                 "ja": "JP-JA", "ko": "KO-KR"}
+            final_tts_voice = lang_to_voice_map.get(target_language_code, f"{target_language_code.upper()}-US")
+            logger.info(
+                f"{request_id}: No explicit voice for TTS, using default '{final_tts_voice}' for language '{target_language_code}'.")
+
+        tts_worker_script = os.path.join(SCRIPT_DIR, "audio_worker.py")
+        tts_worker_cmd = [APP_PYTHON_EXECUTABLE, tts_worker_script, "--task-type", "tts",
+                          "--model-lang", target_language_code.upper(),
+                          "--model-dir", WHISPER_MODEL_DIR,  # General model dir
+                          "--temp-dir", temp_audio_dir,
+                          "--device", "auto"]
+        tts_request_data = {
+            "input": translated_text_intermediate, "voice": final_tts_voice,
+            "response_format": output_audio_format, "request_id": f"{request_id}-tts"
+        }
+        tts_response, tts_err = _execute_audio_worker_with_priority(tts_worker_cmd, tts_request_data, ELP1, SCRIPT_DIR,
+                                                                    TTS_WORKER_TIMEOUT)  # TTS_WORKER_TIMEOUT from config.py
+        if tts_err or not (
+                tts_response and isinstance(tts_response.get("result"), dict) and "audio_base64" in tts_response[
+            "result"]):
+            raise RuntimeError(f"TTS step failed: {tts_err or 'Invalid TTS worker response'}")
+
+        audio_info = tts_response["result"]
+        audio_b64_data = audio_info["audio_base64"]
+        final_audio_format = audio_info.get("format", output_audio_format)
+        final_mime_type = audio_info.get("mime_type", f"audio/{final_audio_format}")
+        logger.info(f"{request_id}: Step 3: Translated audio synthesis successful. Format: {final_audio_format}.")
+
+        # --- Step 4: Return Audio Response ---
+        audio_bytes = base64.b64decode(audio_b64_data)
+        resp = Response(audio_bytes, status=200, mimetype=final_mime_type)
+        final_status_code = 200
+
+        try:
+            log_summary = (f"ASR: '{transcribed_text_intermediate[:70]}...' -> "
+                           f"Translate ({source_language_code_asr} to {target_language_code}): '{translated_text_intermediate[:70]}...' -> "
+                           f"TTS ({final_tts_voice}, {final_audio_format})")
+            add_interaction(db, session_id=session_id_for_log, mode="audio_translation", input_type="audio_file",
+                            user_input=f"[AudioTranslate Request - File: {uploaded_filename or 'UnknownFile'}]",
+                            llm_response=log_summary, classification="translation_successful",
+                            execution_time_ms=(time.monotonic() - start_req_time) * 1000)
+            db.commit()
+        except Exception as db_log_err_success:
+            logger.error(f"{request_id}: Failed to log successful audio translation to DB: {db_log_err_success}")
+            if db: db.rollback()
+
+    except ValueError as ve:
+        logger.warning(f"{request_id}: Invalid Audio Translation request: {ve}")
+        resp_data, status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
+                                                               status_code=400)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_status_code = status_code
+    except FileNotFoundError as fnf_err:
+        logger.error(f"{request_id}: Server configuration error for Audio Translation: {fnf_err}")
+        resp_data, status_code = _create_openai_error_response(f"Server configuration error: {fnf_err}",
+                                                               err_type="server_error", status_code=500)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_status_code = status_code
+    except RuntimeError as rt_err:
+        logger.error(f"{request_id}: Audio Translation pipeline error: {rt_err}")
+        resp_data, status_code = _create_openai_error_response(f"Audio Translation failed: {rt_err}",
+                                                               err_type="server_error", status_code=500)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_status_code = status_code
+    except TaskInterruptedException as tie:
+        logger.warning(f"🚦 {request_id}: Audio Translation task INTERRUPTED: {tie}")
+        resp_data, status_code = _create_openai_error_response(f"Translation task interrupted: {tie}",
+                                                               err_type="server_error", code="task_interrupted",
+                                                               status_code=503)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_status_code = status_code
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Audio Translation endpoint:")
+        error_message = f"Internal server error in Audio Translation endpoint: {type(e).__name__}"
+        resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_status_code = status_code
+        try:
+            if db: add_interaction(db, session_id=session_id_for_log, mode="audio_translation", input_type='error',
+                                   user_input=f"AudioTranslation Handler Error. File: {uploaded_filename or 'N/A'}",
+                                   llm_response=error_message[:2000]); db.commit()
+        except Exception as db_err_log:
+            logger.error(f"{request_id}: ❌ Failed log AudioTranslation handler error: {db_err_log}")
+
+    finally:
+        if temp_input_audio_path and os.path.exists(temp_input_audio_path):
+            try:
+                os.remove(temp_input_audio_path)
+                logger.info(f"{request_id}: Deleted temporary input audio file: {temp_input_audio_path}")
+            except Exception as e_del:
+                logger.warning(
+                    f"{request_id}: Failed to delete temporary input audio file '{temp_input_audio_path}': {e_del}")
+
+        duration_req = (time.monotonic() - start_req_time) * 1000
+        logger.info(
+            f"🏁 OpenAI-Style Audio Translation Request {request_id} handled in {duration_req:.2f} ms. Status: {final_status_code}")
+
+    if resp is None:
+        logger.error(f"{request_id}: Audio Translation Handler logic flaw - response object 'resp' was not assigned!")
+        resp_data, _ = _create_openai_error_response("Internal error: Handler failed to produce a response.",
+                                                     status_code=500)
+        resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
+        try:
+            if db: add_interaction(db, session_id=session_id_for_log, mode="audio_translation", input_type='error',
+                                   user_input=f"AudioTranslation NoResp. File: {uploaded_filename or 'N/A'}",
+                                   llm_response="Critical: No response object created by handler."); db.commit()
+        except:
+            pass
+    return resp
+
 
 # === NEW: OpenAI Compatible TTS Endpoint ===
 @app.route("/v1/audio/speech", methods=["POST"])
@@ -8998,6 +9252,389 @@ except Exception as e:
     logger.exception("AI Init Traceback:")
     ai_provider = None
     sys.exit(1)
+
+## Fine tuning API Call handler
+
+
+@app.route("/v1/fine_tuning/jobs", methods=["POST"])
+def handle_create_fine_tuning_job():
+    request_id = f"req-ft-create-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received POST /v1/fine_tuning/jobs (Placeholder)")
+    # request_data = request.json # You might want to log this if needed
+
+    response_message = (
+        "This system does not perform traditional fine-tuning by retraining model weights. "
+        "Instead, it adapts and learns continuously through mechanisms like: "
+        "1. Self-reflection on past interactions to refine understanding and generate new insights. "
+        "2. Building and utilizing a knowledge base from indexed documents and reflections (Vector Learning/RAG). "
+        "3. Background processing and analysis of complex queries (e.g., Tree of Thoughts). "
+        "No new 'fine-tuning job ID' is created, as these processes are ongoing."
+    )
+
+    # Mimic a successful creation response with a dummy job object containing the explanation
+    dummy_job_id = f"conceptual_learning_process_{int(time.time())}"
+    response_body = {
+        "id": dummy_job_id,
+        "object": "fine_tuning.job",
+        "model": "adaptive_system",
+        "created_at": int(time.time()),
+        "finished_at": None,
+        "fine_tuned_model": None,
+        "organization_id": "org-placeholder",
+        "result_files": [],
+        "status": "conceptual_learning_active",  # Custom status
+        "validation_file": None,
+        "training_file": "continuous_interaction_stream",
+        "hyperparameters": {
+            "n_epochs": "continuous",
+            "learning_mechanism": "self_reflection_and_rag"
+        },
+        "trained_tokens": None,
+        "message": response_message  # Adding the custom message
+    }
+    logger.info(f"{request_id}: Responding with placeholder information about continuous learning.")
+    return jsonify(response_body), 200
+
+
+@app.route("/v1/fine_tuning/jobs", methods=["GET"])
+def handle_list_fine_tuning_jobs():
+    request_id = f"req-ft-list-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/fine_tuning/jobs (Placeholder)")
+
+    response_message = (
+        "This system adapts via continuous self-reflection and knowledge base updates, "
+        "rather than discrete fine-tuning jobs. Therefore, there are no traditional 'jobs' to list. "
+        "System improvements are ongoing."
+    )
+
+    # Return an OpenAI-like list structure, but with a custom object explaining the situation
+    response_body = {
+        "object": "list",
+        "data": [
+            {
+                "id": "continuous_learning_main_process",
+                "object": "fine_tuning.job",  # Or a custom object type like "learning_process_status"
+                "model": "adaptive_system",
+                "created_at": int(time.time()),  # Could be app start time
+                "status": "active_and_ongoing",
+                "message": response_message
+            }
+        ],
+        "has_more": False
+    }
+    logger.info(f"{request_id}: Responding with placeholder list describing continuous learning.")
+    return jsonify(response_body), 200
+
+
+@app.route("/v1/fine_tuning/jobs/<string:fine_tuning_job_id>", methods=["GET"])
+def handle_retrieve_fine_tuning_job(fine_tuning_job_id: str):
+    request_id = f"req-ft-retrieve-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/fine_tuning/jobs/{fine_tuning_job_id} (Placeholder)")
+
+    if fine_tuning_job_id == "continuous_learning_main_process":
+        response_message = (
+            f"Details for '{fine_tuning_job_id}': This represents the system's ongoing adaptation "
+            "through self-reflection, background analysis, and knowledge base updates. "
+            "It does not have traditional job parameters like epochs or specific data files."
+        )
+        response_body = {
+            "id": fine_tuning_job_id,
+            "object": "fine_tuning.job",  # Or custom
+            "model": "adaptive_system",
+            "created_at": int(time.time()),  # Could be app start time
+            "status": "active_and_ongoing",
+            "message": response_message,
+            "hyperparameters": {
+                "learning_mechanisms": ["self_reflection", "rag_vector_learning", "background_generate_tot"]
+            }
+        }
+        logger.info(f"{request_id}: Responding with placeholder details for continuous learning process.")
+        return jsonify(response_body), 200
+    else:
+        response_message = (
+            f"Fine-tuning job ID '{fine_tuning_job_id}' does not correspond to a traditional fine-tuning job. "
+            "This system adapts via continuous self-reflection and knowledge base updates, not discrete fine-tuning jobs."
+        )
+        # OpenAI usually returns 404 for non-existent job IDs
+        resp_data, _ = _create_openai_error_response(
+            message=response_message,
+            err_type="invalid_request_error",
+            code="fine_tuning_job_not_found"
+        )
+        logger.info(f"{request_id}: Job ID '{fine_tuning_job_id}' not found as a traditional job.")
+        return jsonify(resp_data), 404
+
+
+@app.route("/v1/fine_tuning/jobs/<string:fine_tuning_job_id>/cancel", methods=["POST"])
+def handle_cancel_fine_tuning_job(fine_tuning_job_id: str):
+    request_id = f"req-ft-cancel-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received POST /v1/fine_tuning/jobs/{fine_tuning_job_id}/cancel (Placeholder)")
+
+    response_message = (
+        f"The learning process '{fine_tuning_job_id}' in this system represents continuous adaptation "
+        "(self-reflection, background analysis, knowledge updates) and cannot be 'canceled' in the traditional sense of a discrete fine-tuning job. "
+        "These processes are integral to the system's operation."
+    )
+
+    # If the ID matches the conceptual one, provide the explanation. Otherwise, 404.
+    if fine_tuning_job_id == "continuous_learning_main_process":
+        response_body = {
+            "id": fine_tuning_job_id,
+            "object": "fine_tuning.job",  # Or custom
+            "status": "cancellation_not_applicable",  # Custom status
+            "message": response_message
+        }
+        logger.info(f"{request_id}: Responding that continuous learning process cannot be canceled.")
+        return jsonify(response_body), 200
+    else:
+        resp_data, _ = _create_openai_error_response(
+            message=f"Fine-tuning job ID '{fine_tuning_job_id}' not found or not applicable for cancellation.",
+            err_type="invalid_request_error",
+            code="fine_tuning_job_not_found"
+        )
+        logger.info(f"{request_id}: Job ID '{fine_tuning_job_id}' not found for cancellation.")
+        return jsonify(resp_data), 404
+
+
+@app.route("/v1/fine_tuning/jobs/<string:fine_tuning_job_id>/events", methods=["GET"])
+def handle_list_fine_tuning_job_events(fine_tuning_job_id: str):
+    request_id = f"req-ft-events-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/fine_tuning/jobs/{fine_tuning_job_id}/events (Placeholder)")
+
+    # Parameters for pagination (OpenAI standard), though we won't use them for much here
+    # after_param = request.args.get("after")
+    # limit_param = request.args.get("limit", type=int, default=20)
+
+    response_message = (
+        f"No discrete events available for '{fine_tuning_job_id}'. This system learns continuously "
+        "through self-reflection on interactions, background analysis, and knowledge base updates. "
+        "Progress and activities are logged internally."
+    )
+
+    if fine_tuning_job_id == "continuous_learning_main_process":
+        response_body = {
+            "object": "list",
+            "data": [
+                {
+                    "object": "fine_tuning.job.event",
+                    "id": f"event_info_{int(time.time())}",
+                    "created_at": int(time.time()),
+                    "level": "info",
+                    "message": response_message,
+                    "data": {
+                        "step": None,
+                        "metrics": {"self_reflection_cycles": "ongoing", "rag_updates": "continuous"}
+                    },
+                    "type": "message"
+                }
+            ],
+            "has_more": False
+        }
+        logger.info(f"{request_id}: Responding with placeholder event for continuous learning.")
+        return jsonify(response_body), 200
+    else:
+        # For unknown job IDs, return an empty list of events as per OpenAI spec for non-existent jobs
+        # or a 404 if the job itself is considered not found.
+        # Let's return 404 consistent with retrieve.
+        resp_data, _ = _create_openai_error_response(
+            message=f"Fine-tuning job ID '{fine_tuning_job_id}' not found.",
+            err_type="invalid_request_error",
+            code="fine_tuning_job_not_found"
+        )
+        logger.info(f"{request_id}: Job ID '{fine_tuning_job_id}' not found for events.")
+        return jsonify(resp_data), 404
+
+
+##v1/files openAI expected to be?
+@app.route("/v1/files", methods=["POST"])
+def handle_upload_file_stub():
+    request_id = f"req-file-upload-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received POST /v1/files (Placeholder)")
+
+    # Log the attempt
+    # db: Session = g.db # Assuming g.db is set up by @app.before_request
+    # try:
+    #     # You could log form data or file info if desired, e.g., request.form.get('purpose')
+    #     add_interaction(db, session_id=request_id, mode="api_stub", input_type="file_upload_attempt",
+    #                     user_input="Attempt to upload file via /v1/files.",
+    #                     llm_response="Endpoint is a placeholder explaining local indexing.")
+    #     db.commit()
+    # except Exception as e:
+    #     logger.error(f"{request_id}: DB log error for file upload stub: {e}")
+    #     if db: db.rollback()
+
+    response_message = (
+        "File uploads via this API are not supported as Zephy/Adelaide directly indexes and learns from files "
+        "on the local file system based on its configuration. To make a file's content available, "
+        "ensure it is located within the paths monitored by the system's file indexer."
+    )
+    # Mimic a file object structure but with the informational message.
+    # OpenAI typically returns a file object on successful upload.
+    response_body = {
+        "id": f"placeholder_local_indexing_info_{int(time.time())}",
+        "object": "file",
+        "bytes": 0,
+        "created_at": int(time.time()),
+        "filename": "N/A - Local Indexing Active",
+        "purpose": "N/A",  # OpenAI uses 'fine-tune', 'assistants', etc.
+        "status": "processed_by_local_indexer_policy",  # Custom status
+        "status_details": response_message
+    }
+    logger.info(f"{request_id}: Responding with placeholder information about local file indexing.")
+    return jsonify(response_body), 200  # 200 OK with explanation, or 405/501 if you prefer
+
+
+@app.route("/v1/files", methods=["GET"])
+def handle_list_files_stub():
+    request_id = f"req-file-list-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/files (Placeholder)")
+    db: Session = g.db
+
+    response_message = (
+        "This system does not manage 'uploaded files' in the traditional OpenAI API sense. "
+        "It indexes local files. While this endpoint won't list them in OpenAI's format, "
+        "the system's knowledge base is built from files found in paths defined by its configuration. "
+        "You can query the internal 'FileIndex' database table for details on indexed files."
+    )
+
+    # Return an OpenAI-like list structure with data: [] and the message.
+    # Or, optionally, you could query your FileIndex table and try to format a few entries.
+    # For a simple stub conveying the message:
+    response_body = {
+        "object": "list",
+        "data": [],  # No "uploaded" files in the OpenAI sense
+        "message": response_message
+    }
+    logger.info(f"{request_id}: Responding with placeholder list explaining local indexing.")
+    return jsonify(response_body), 200
+
+
+@app.route("/v1/files/<string:file_id>", methods=["GET"])
+def handle_retrieve_file_metadata_stub(file_id: str):
+    request_id = f"req-file-retrieve-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/files/{file_id} (Placeholder/DB Lookup)")
+    db: Session = g.db
+
+    found_file_record: Optional[FileIndex] = None
+    search_method = "unknown"
+
+    # Try to interpret file_id as either a database integer ID or a file_path
+    try:
+        numeric_file_id = int(file_id)
+        found_file_record = db.query(FileIndex).filter(FileIndex.id == numeric_file_id).first()
+        search_method = f"database ID ({numeric_file_id})"
+    except ValueError:
+        # Not an integer, try as a file path (or part of it)
+        # For a direct path match, it would need to be the full path.
+        # For simplicity, let's assume if it's not an int, it might be a filename client has.
+        # A more robust search might use `file_id` in a LIKE query for file_name or file_path.
+        # For this stub, we'll primarily rely on ID or exact path match if we were to implement fully.
+        # Let's try to see if it's a path we have indexed.
+        # This requires `file_id` to be the actual path string.
+        found_file_record = db.query(FileIndex).filter(FileIndex.file_path == file_id).first()
+        search_method = f"exact file path ('{file_id}')"
+        if not found_file_record:  # Fallback: search by filename if it's not a full path
+            found_file_record = db.query(FileIndex).filter(FileIndex.file_name == file_id).first()
+            if found_file_record: search_method = f"file name ('{file_id}')"
+
+    if found_file_record:
+        response_body = {
+            "id": str(found_file_record.id),  # Use DB ID as the file_id
+            "object": "file",
+            "bytes": found_file_record.size_bytes or 0,
+            "created_at": int(found_file_record.last_indexed_db.timestamp()),  # Or file creation time if stored
+            "filename": found_file_record.file_name,
+            "purpose": "locally_indexed_for_rag",  # Custom purpose
+            "status": found_file_record.index_status,
+            "status_details": f"Locally indexed file. Path: {found_file_record.file_path}. Last OS Mod: {found_file_record.last_modified_os}"
+        }
+        logger.info(
+            f"{request_id}: Found and returning metadata for indexed file (ID: {found_file_record.id}) based on query for '{file_id}' using {search_method}.")
+        return jsonify(response_body), 200
+    else:
+        response_message = (
+            f"File ID or path '{file_id}' does not correspond to a known locally indexed file in the system's database. "
+            "Zephy/Adelaide works with files indexed from the local filesystem."
+        )
+        resp_data, _ = _create_openai_error_response(
+            message=response_message,
+            err_type="invalid_request_error",
+            code="file_not_found"
+        )
+        logger.info(f"{request_id}: File '{file_id}' not found in local index using {search_method}.")
+        return jsonify(resp_data), 404
+
+
+@app.route("/v1/files/<string:file_id>", methods=["DELETE"])
+def handle_delete_file_stub(file_id: str):
+    request_id = f"req-file-delete-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received DELETE /v1/files/{file_id} (Placeholder)")
+
+    response_message = (
+        f"File deletion via this API (for ID/path '{file_id}') is not supported. Zephy/Adelaide indexes "
+        "local files. To remove a file from being accessed or indexed, please delete or move it "
+        "from the local filesystem using your operating system's file manager. "
+        "The file indexer will update its records on a subsequent scan."
+    )
+
+    # OpenAI typically returns a deletion confirmation object.
+    response_body = {
+        "id": file_id,  # Echo back the ID
+        "object": "file.deleted_stub",  # Custom object type
+        "deleted": True,  # Indicate the API call was processed
+        "message": response_message
+    }
+    logger.info(f"{request_id}: Responding with placeholder for file deletion, explaining local file management.")
+    return jsonify(response_body), 200
+
+
+@app.route("/v1/files/<string:file_id>/content", methods=["GET"])
+def handle_retrieve_file_content_stub(file_id: str):
+    request_id = f"req-file-content-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/files/{file_id}/content (Placeholder/DB Lookup)")
+    db: Session = g.db
+
+    found_file_record: Optional[FileIndex] = None
+    search_method = "unknown"
+    try:
+        numeric_file_id = int(file_id)
+        found_file_record = db.query(FileIndex).filter(FileIndex.id == numeric_file_id).first()
+        search_method = f"database ID ({numeric_file_id})"
+    except ValueError:
+        found_file_record = db.query(FileIndex).filter(FileIndex.file_path == file_id).first()
+        search_method = f"exact file path ('{file_id}')"
+        if not found_file_record:
+            found_file_record = db.query(FileIndex).filter(FileIndex.file_name == file_id).first()
+            if found_file_record: search_method = f"file name ('{file_id}')"
+
+    if found_file_record and found_file_record.indexed_content:
+        content = found_file_record.indexed_content
+        # Determine a basic MIME type, default to text/plain
+        mime_type = found_file_record.mime_type if found_file_record.mime_type else "text/plain"
+        if "unknown" in mime_type.lower(): mime_type = "text/plain"  # Fallback for "UnknownMIME"
+
+        logger.info(
+            f"{request_id}: Found and returning content for indexed file (ID: {found_file_record.id}, Path: {found_file_record.file_path}) with MIME type {mime_type}.")
+        # OpenAI returns raw content, not JSON
+        return Response(content, status=200, mimetype=mime_type)
+    elif found_file_record and not found_file_record.indexed_content:
+        response_message = (
+            f"File '{file_id}' (Path: {found_file_record.file_path}) was found in the index, but its content has not been "
+            "extracted or stored. Status: {found_file_record.index_status}."
+        )
+        resp_data, _ = _create_openai_error_response(
+            message=response_message, err_type="invalid_request_error", code="file_content_not_available")
+        logger.info(f"{request_id}: File '{file_id}' found but no indexed content available.")
+        return jsonify(resp_data), 404  # Or 200 with an error message in content if API expects that
+    else:
+        response_message = (
+            f"File ID or path '{file_id}' does not correspond to a known locally indexed file with available content. "
+            "Zephy/Adelaide works with files indexed from the local filesystem."
+        )
+        resp_data, _ = _create_openai_error_response(
+            message=response_message, err_type="invalid_request_error", code="file_not_found")
+        logger.info(f"{request_id}: File '{file_id}' or its content not found in local index using {search_method}.")
+        return jsonify(resp_data), 404
 
 # Define startup_tasks (as you had it)
 async def startup_tasks():
