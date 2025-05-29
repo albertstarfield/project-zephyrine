@@ -1115,22 +1115,23 @@ def main():
             sys.exit(1)
 
         # Use config variables from config.py (available via 'from config import *')
-        # These are defined at the module level if config.py is imported.
-        asr_model_directory = WHISPER_MODEL_DIR
-        default_asr_model_filename = WHISPER_DEFAULT_MODEL_FILENAME
-        default_asr_language = WHISPER_DEFAULT_LANGUAGE
+        asr_model_directory_from_config = WHISPER_MODEL_DIR
+        default_asr_model_filename_from_config = WHISPER_DEFAULT_MODEL_FILENAME
+        default_asr_language_from_config = WHISPER_DEFAULT_LANGUAGE
 
         log_worker("INFO",
-                   f"ASR Config Used: Model Dir='{asr_model_directory}', Default Model='{default_asr_model_filename}', Default Lang='{default_asr_language}'")
+                   f"ASR Config Used: Model Dir='{asr_model_directory_from_config}', Default Model='{default_asr_model_filename_from_config}', Default Lang='{default_asr_language_from_config}'")
 
         temp_converted_wav_path: Optional[str] = None
         input_audio_path_resolved: Optional[str] = None
-        asr_model_filename_to_load: str = default_asr_model_filename
-        language_to_use: str = default_asr_language
+        asr_model_filename_to_load: str = default_asr_model_filename_from_config
+        language_for_transcription: str = default_asr_language_from_config
 
+        # ASR Test Mode
         if args.test_mode:
             log_worker("INFO", "Running ASR in TEST MODE.")
             # Construct path relative to script's temp_dir or model_dir for test input
+            # args.model_dir is the one passed via command line, which should be staticmodelpool
             input_audio_path_resolved = os.path.join(args.temp_dir, args.test_audio_input)
             if not os.path.exists(input_audio_path_resolved):
                 input_audio_path_resolved = os.path.join(args.model_dir, args.test_audio_input)
@@ -1143,8 +1144,14 @@ def main():
                 sys.exit(1)
 
             asr_model_filename_to_load = args.asr_test_model
-            language_to_use = args.model_lang
-        else:  # Standard ASR Mode (from stdin)
+            language_arg_for_test = args.model_lang.lower()  # --model-lang is used for ASR lang in test
+            if not language_arg_for_test or language_arg_for_test == "auto":
+                language_for_transcription = "auto"
+            else:
+                language_for_transcription = language_arg_for_test
+
+        # Standard ASR Mode (from stdin) - only if not in test mode
+        else:
             input_json_str_asr: Optional[str] = None
             try:
                 log_worker("INFO", "ASR Standard Mode: Waiting for request data on stdin...")
@@ -1154,12 +1161,19 @@ def main():
                 log_worker("INFO", "ASR Request data JSON parsed.")
 
                 input_audio_path_resolved = request_data.get("input_audio_path")
-                asr_model_filename_to_load = request_data.get("whisper_model_name", default_asr_model_filename)
-                language_to_use = request_data.get("language", default_asr_language)
+                asr_model_filename_to_load = request_data.get("whisper_model_name",
+                                                              default_asr_model_filename_from_config)
+                language_from_req = request_data.get("language", default_asr_language_from_config)
+
+                if not language_from_req or language_from_req.strip().lower() == "auto":
+                    language_for_transcription = "auto"
+                else:
+                    language_for_transcription = language_from_req.strip().lower()
 
                 if not input_audio_path_resolved: raise ValueError("Missing 'input_audio_path' for ASR task.")
                 if not os.path.exists(input_audio_path_resolved): raise FileNotFoundError(
                     f"Input audio file not found: {input_audio_path_resolved}")
+
             except Exception as e_asr_stdin:
                 log_worker("ERROR", f"ASR task failed during stdin processing: {e_asr_stdin}");
                 if input_json_str_asr: log_worker("ERROR", f"ASR Failing Input: {input_json_str_asr[:500]}")
@@ -1170,8 +1184,7 @@ def main():
 
         # --- Common ASR processing for both test and standard mode from here ---
         try:
-            # Model path is constructed using args.model_dir (passed by app.py, points to staticmodelpool)
-            # and asr_model_filename_to_load (from request or test arg).
+            # Model path construction using args.model_dir (passed by app.py, points to staticmodelpool)
             model_directory_for_asr_load = args.model_dir
             full_whisper_model_path = os.path.join(model_directory_for_asr_load, asr_model_filename_to_load)
 
@@ -1187,20 +1200,27 @@ def main():
                            "ffmpeg command not found. ASR will only work if input audio is already 16kHz mono WAV.")
             else:
                 log_worker("INFO",
-                           f"Found ffmpeg: {ffmpeg_path}. Attempting audio conversion to 16kHz mono WAV for: {input_audio_path_resolved}")
+                           f"Found ffmpeg: {ffmpeg_path}. Attempting audio extraction/conversion to 16kHz mono WAV for: {input_audio_path_resolved}")
 
-                # Define a specific subdirectory within args.temp_dir for these conversions
+                # Create a specific subdirectory within args.temp_dir for ffmpeg conversions
                 asr_conversion_temp_dir = os.path.join(args.temp_dir, "asr_ffmpeg_temp")
                 os.makedirs(asr_conversion_temp_dir, exist_ok=True)
 
+                # Use tempfile to create a uniquely named temporary file for the output
                 with tempfile.NamedTemporaryFile(prefix="asr_converted_", suffix=".wav", dir=asr_conversion_temp_dir,
                                                  delete=False) as tmp_f:
                     temp_converted_wav_path = tmp_f.name
+                    # The file is created, now ffmpeg will write to this path.
 
                 ffmpeg_command = [
-                    ffmpeg_path, '-i', input_audio_path_resolved,
-                    '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le',
-                    '-y', temp_converted_wav_path
+                    ffmpeg_path,
+                    '-i', input_audio_path_resolved,  # Input file (can be video or audio)
+                    '-vn',  # Disable video recording (extract audio stream only)
+                    '-acodec', 'pcm_s16le',  # Output audio codec: 16-bit PCM signed little-endian
+                    '-ar', '16000',  # Output audio sample rate: 16kHz
+                    '-ac', '1',  # Output audio channels: 1 (mono)
+                    '-y',  # Overwrite output file without asking
+                    temp_converted_wav_path
                 ]
                 log_worker("INFO", f"Running ffmpeg: {' '.join(ffmpeg_command)}")
                 conversion_start_time = time.monotonic()
@@ -1210,15 +1230,21 @@ def main():
                     conversion_duration = time.monotonic() - conversion_start_time
                     if process.returncode == 0:
                         log_worker("INFO",
-                                   f"ffmpeg conversion successful in {conversion_duration:.2f}s. Using: {temp_converted_wav_path}")
+                                   f"ffmpeg audio extraction/conversion successful in {conversion_duration:.2f}s. Using: {temp_converted_wav_path}")
                         path_to_transcribe = temp_converted_wav_path
                     else:
                         log_worker("ERROR",
-                                   f"ffmpeg conversion failed (RC={process.returncode}). Stderr: {process.stderr.strip()}")
-                        log_worker("WARNING", "ASR will attempt original audio. May fail if not 16kHz mono WAV.")
-                        if temp_converted_wav_path and os.path.exists(temp_converted_wav_path): os.remove(
-                            temp_converted_wav_path)
-                        temp_converted_wav_path = None
+                                   f"ffmpeg audio extraction/conversion failed (RC={process.returncode}). Stderr: {process.stderr.strip()}")
+                        log_worker("WARNING",
+                                   "ASR will attempt original file. May fail if not 16kHz mono WAV or if it's a video format pywhispercpp cannot handle directly.")
+                        if temp_converted_wav_path and os.path.exists(
+                                temp_converted_wav_path):  # Clean up failed conversion
+                            try:
+                                os.remove(temp_converted_wav_path)
+                            except Exception as e_rm_fail:
+                                log_worker("WARNING",
+                                           f"Could not remove temp ffmpeg file {temp_converted_wav_path} after fail: {e_rm_fail}")
+                        temp_converted_wav_path = None  # Mark as not available
                 except subprocess.TimeoutExpired:
                     log_worker("ERROR", "ffmpeg conversion timed out.");
                     if temp_converted_wav_path and os.path.exists(temp_converted_wav_path): os.remove(
@@ -1231,14 +1257,20 @@ def main():
                     temp_converted_wav_path = None
 
             log_worker("INFO", f"Loading Whisper model for ASR: {full_whisper_model_path}")
+            # Use model= instead of model_path=
             whisper_model_instance = WhisperModel(model=full_whisper_model_path, print_realtime=False,
-                                                  print_progress=False)  # Use model=
+                                                  print_progress=False)
 
-            log_worker("INFO", f"Transcribing audio file: {path_to_transcribe} with language: {language_to_use}")
-            transcribe_params = {'language': language_to_use, 'translate': False}
+            log_worker("INFO",
+                       f"Transcribing audio file: {path_to_transcribe} with language: '{language_for_transcription}'")
+            # Prepare parameters for pywhispercpp's transcribe method
+            transcribe_params = {'language': language_for_transcription, 'translate': False}
+            # Add other parameters as needed, e.g.,
+            # transcribe_params['n_threads'] = os.cpu_count() or 4
+            # transcribe_params['prompt'] = "Some initial prompt context" # if provided by request
 
             task_start_asr = time.monotonic()
-            # Unpack the params dictionary
+            # Unpack the params dictionary using **
             segments = whisper_model_instance.transcribe(path_to_transcribe, **transcribe_params)
             task_duration_asr = time.monotonic() - task_start_asr
 
@@ -1261,7 +1293,7 @@ def main():
                 except Exception as e_del_temp:
                     log_worker("WARNING",
                                f"Failed to delete temporary WAV file {temp_converted_wav_path}: {e_del_temp}")
-
+    # --- End ASR Task ---
     else:
         result_payload = {"error": f"Unknown task_type specified to worker: {args.task_type}"}
         log_worker("ERROR", result_payload["error"])

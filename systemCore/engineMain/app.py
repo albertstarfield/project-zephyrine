@@ -8194,8 +8194,9 @@ def handle_openai_asr_transcriptions():
     """
     Handles requests mimicking OpenAI's Audio Transcriptions endpoint.
     Uses audio_worker.py with pywhispercpp for ASR, running at ELP1 priority.
+    Logs successful transcriptions to the Interaction database.
     """
-    start_req = time.monotonic()
+    start_req = time.monotonic()  # For overall request timing
     request_id = f"req-asr-{uuid.uuid4()}"
     logger.info(f"🚀 Flask OpenAI-Style ASR Request ID: {request_id}")
 
@@ -8205,9 +8206,10 @@ def handle_openai_asr_transcriptions():
     session_id_for_log: str = f"asr_req_default_{request_id}"
     uploaded_filename_for_log: Optional[str] = None
     temp_audio_file_path: Optional[str] = None
+    language_param_for_log: Optional[str] = None  # To store language used for logging
 
     try:
-        if not ENABLE_ASR:  # Check if ASR is enabled in config.py
+        if not ENABLE_ASR:
             logger.warning(f"{request_id}: ASR endpoint called but ASR is disabled in config.")
             resp_data, status_code = _create_openai_error_response(
                 "ASR functionality is currently disabled on this server.",
@@ -8218,25 +8220,23 @@ def handle_openai_asr_transcriptions():
             return resp
 
         if not request.content_type or not request.content_type.startswith('multipart/form-data'):
-            logger.warning(f"{request_id}: Invalid content type: {request.content_type}. Expected multipart/form-data.")
             raise ValueError("Invalid content type. Must be multipart/form-data.")
 
         file_storage = request.files.get('file')
         model_requested = request.form.get('model')
-        language_requested = request.form.get('language')
+        language_param_for_log = request.form.get('language')  # For logging, worker uses its default or this
         prompt_for_whisper = request.form.get('prompt')
         response_format_req = request.form.get('response_format', 'json').lower()
-        # temperature_requested = request.form.get('temperature', type=float) # If you implement passing this to worker
 
         session_id_for_log = request.form.get("session_id", session_id_for_log)
-        if ai_chat: ai_chat.current_session_id = session_id_for_log  # Set for AIChat instance if used
+        if ai_chat: ai_chat.current_session_id = session_id_for_log
 
         if file_storage and file_storage.filename:
             uploaded_filename_for_log = secure_filename(file_storage.filename)
 
         logger.debug(
             f"{request_id}: ASR Request Parsed - File: {uploaded_filename_for_log or 'Missing'}, "
-            f"ModelReq: {model_requested}, Lang: {language_requested}, Prompt: {str(prompt_for_whisper)[:30]}..., "
+            f"ModelReq: {model_requested}, Lang: {language_param_for_log}, Prompt: {str(prompt_for_whisper)[:30]}..., "
             f"RespFormat: {response_format_req}"
         )
 
@@ -8244,70 +8244,67 @@ def handle_openai_asr_transcriptions():
         if not model_requested: raise ValueError("'model' field (e.g., 'Zephyloid-Whisper-Normal') is required.")
 
         if model_requested != ASR_MODEL_NAME_CLIENT_FACING:  # From config.py
-            logger.warning(
-                f"{request_id}: Invalid ASR model '{model_requested}'. Expected '{ASR_MODEL_NAME_CLIENT_FACING}'.")
             raise ValueError(f"Invalid model. This endpoint only supports '{ASR_MODEL_NAME_CLIENT_FACING}'.")
 
-        supported_asr_response_formats = ["json", "text"]  # "srt", "verbose_json", "vtt" can be added
+        supported_asr_response_formats = ["json", "text"]
         if response_format_req not in supported_asr_response_formats:
             raise ValueError(
                 f"Unsupported response_format: '{response_format_req}'. Supported: {', '.join(supported_asr_response_formats)}.")
 
-        # Save uploaded file to a temporary location
-        # SCRIPT_DIR should be defined at the top of app.py: os.path.dirname(os.path.abspath(__file__))
         temp_audio_dir = os.path.join(SCRIPT_DIR, "temp_audio_worker_files")
         os.makedirs(temp_audio_dir, exist_ok=True)
 
-        _, file_extension = os.path.splitext(uploaded_filename_for_log or ".tmpwav")  # Ensure some extension
+        _, file_extension = os.path.splitext(uploaded_filename_for_log or ".tmpwav")
         temp_file_obj = tempfile.NamedTemporaryFile(dir=temp_audio_dir, suffix=file_extension, delete=False)
         temp_audio_file_path = temp_file_obj.name
         file_storage.save(temp_audio_file_path)
         temp_file_obj.close()
         logger.info(f"{request_id}: Uploaded audio saved temporarily to: {temp_audio_file_path}")
 
-        # Prepare command for audio_worker.py
         audio_worker_script_path = os.path.join(SCRIPT_DIR, "audio_worker.py")
         if not os.path.exists(audio_worker_script_path):
             raise FileNotFoundError(f"Audio worker script missing at {audio_worker_script_path}")
 
         worker_command = [
-            APP_PYTHON_EXECUTABLE,  # sys.executable from app.py
+            APP_PYTHON_EXECUTABLE,
             audio_worker_script_path,
             "--task-type", "asr",
-            "--model-dir", WHISPER_MODEL_DIR,  # From config.py (points to staticmodelpool)
-            "--temp-dir", temp_audio_dir  # Added temp-dir for worker, though ASR might not use it as much as TTS MP3
+            "--model-dir", WHISPER_MODEL_DIR,
+            "--temp-dir", temp_audio_dir  # For ffmpeg conversions in worker
         ]
 
         worker_request_data = {
             "input_audio_path": temp_audio_file_path,
-            "whisper_model_name": WHISPER_DEFAULT_MODEL_FILENAME,  # From config.py
-            "language": language_requested or WHISPER_DEFAULT_LANGUAGE,  # From config.py
+            "whisper_model_name": WHISPER_DEFAULT_MODEL_FILENAME,
+            "language": language_param_for_log or WHISPER_DEFAULT_LANGUAGE,
             "request_id": request_id
-            # If you enhance audio_worker.py to accept Whisper 'prompt' or 'temperature':
-            # "transcription_prompt": prompt_for_whisper,
-            # "temperature": temperature_requested,
         }
 
         logger.info(f"{request_id}: Executing audio worker for ASR (ELP1 priority)...")
-        # _execute_audio_worker_with_priority is a synchronous function.
-        # If this Flask route is async, you'd use await asyncio.to_thread()
+
+        asr_call_start_time = time.monotonic()
         parsed_response, error_msg = _execute_audio_worker_with_priority(
             worker_command=worker_command,
             request_data=worker_request_data,
-            priority=ELP1,  # User-facing ASR runs at ELP1
+            priority=ELP1,
             worker_cwd=SCRIPT_DIR,
-            timeout=ASR_WORKER_TIMEOUT  # From config.py, e.g., 300 seconds
+            timeout=ASR_WORKER_TIMEOUT
         )
+        asr_processing_duration_ms = (time.monotonic() - asr_call_start_time) * 1000
 
         if error_msg:
             logger.error(f"{request_id}: ASR worker execution failed: {error_msg}")
+            error_type = "server_error"
+            status_code = 500
             if "interrupted" in error_msg.lower():
-                resp_data, status_code = _create_openai_error_response(
-                    f"ASR task interrupted: {error_msg}", err_type="server_error", code="task_interrupted",
-                    status_code=503)
+                error_type = "server_error";
+                status_code = 503;
+                error_msg = f"ASR task interrupted: {error_msg}"
             else:
-                resp_data, status_code = _create_openai_error_response(
-                    f"ASR failed: {error_msg}", err_type="server_error", status_code=500)
+                error_msg = f"ASR failed: {error_msg}"
+
+            resp_data, _ = _create_openai_error_response(error_msg, err_type=error_type, code=None,
+                                                         status_code=status_code)
             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
             final_response_status_code = status_code
         elif parsed_response and isinstance(parsed_response.get("result"), dict) and "text" in parsed_response[
@@ -8315,12 +8312,30 @@ def handle_openai_asr_transcriptions():
             transcribed_text = parsed_response["result"]["text"]
             logger.info(f"{request_id}: ASR successful. Transcribed text (snippet): {transcribed_text[:100]}...")
 
+            # --- ADD TRANSCRIPTION TO INTERACTION DATABASE ---
+            try:
+                interaction_log_data = {
+                    "session_id": session_id_for_log,
+                    "mode": "asr_service",  # Differentiate from internal ASR for other features
+                    "input_type": "audio_transcription_success",
+                    "user_input": f"[ASR Request - File: {uploaded_filename_for_log or 'UnknownFile'}, Lang: {language_param_for_log or WHISPER_DEFAULT_LANGUAGE}, API Format: {response_format_req}]",
+                    "llm_response": transcribed_text,  # Storing the transcription here
+                    "classification": "asr_transcribed_text",
+                    "execution_time_ms": asr_processing_duration_ms  # Time for ASR worker + call
+                }
+                add_interaction(db, **interaction_log_data)
+                db.commit()
+                logger.info(f"{request_id}: Successfully logged ASR transcription to database.")
+            except Exception as db_log_err:
+                logger.error(f"{request_id}: Failed to log ASR transcription to database: {db_log_err}")
+                if db: db.rollback()
+                # --- END DATABASE LOGGING ---
+
             if response_format_req == "json":
-                response_body = {"text": transcribed_text}  # OpenAI ASR JSON format
+                response_body = {"text": transcribed_text}
                 resp = Response(json.dumps(response_body), status=200, mimetype='application/json')
             elif response_format_req == "text":
                 resp = Response(transcribed_text, status=200, mimetype='text/plain; charset=utf-8')
-            # Add other formats (SRT, VTT, verbose_json) here if implemented in audio_worker
             else:
                 resp_data, status_code = _create_openai_error_response(
                     f"Internal error: unhandled response format '{response_format_req}'.", status_code=500)
@@ -8336,14 +8351,14 @@ def handle_openai_asr_transcriptions():
 
     except ValueError as ve:
         logger.warning(f"{request_id}: Invalid ASR request: {ve}")
-        resp_data, status_code = _create_openai_error_response(
-            str(ve), err_type="invalid_request_error", status_code=400)
+        resp_data, status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
+                                                               status_code=400)
         resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
     except FileNotFoundError as fnf_err:
         logger.error(f"{request_id}: Server configuration error for ASR: {fnf_err}")
-        resp_data, status_code = _create_openai_error_response(
-            f"Server configuration error for ASR: {fnf_err}", err_type="server_error", status_code=500)
+        resp_data, status_code = _create_openai_error_response(f"Server configuration error for ASR: {fnf_err}",
+                                                               err_type="server_error", status_code=500)
         resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
     except Exception as e:
@@ -8375,6 +8390,12 @@ def handle_openai_asr_transcriptions():
         resp_data, _ = _create_openai_error_response("Internal error: ASR Handler failed to produce a response.",
                                                      status_code=500)
         resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
+        try:  # Log this critical failure
+            if db: add_interaction(db, session_id=session_id_for_log, mode="asr", input_type='error',
+                                   user_input=f"ASR Handler No Resp. File: {uploaded_filename_for_log or 'N/A'}",
+                                   llm_response="Critical: No response object created by ASR handler."); db.commit()
+        except:
+            pass
     return resp
 
 # === NEW: OpenAI Compatible TTS Endpoint ===
