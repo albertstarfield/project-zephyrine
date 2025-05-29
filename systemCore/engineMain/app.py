@@ -3792,54 +3792,96 @@ class AIChat:
 
         return "\n".join(log_str_parts) if log_str_parts else "No recent relevant logs found."
 
-
-    def _call_llm_with_timing(self, chain: Any, inputs: Any, interaction_data: Dict[str, Any], priority: int = ELP0): # Added priority parameter
+    def _call_llm_with_timing(self, chain: Any, inputs: Any, interaction_data: Dict[str, Any], priority: int = ELP0):
         """
-        Wrapper to call LLM chain, measure time, log, and handle priority/interruptions.
-        Raises TaskInterruptedException if the underlying call is interrupted.
+        Wrapper to call LLM chain/model, measure time, log, and handle priority/interruptions.
+        Implements retries for ELP0 tasks if they encounter TaskInterruptedException.
         """
-        start_time = time.time()
-        response = None # Initialize response
-        try:
-            logger.trace(f"🚀 Invoking chain {type(chain)} with inputs type: {type(inputs)} (Priority: ELP{priority})")
-            # Pass priority down via config dictionary
-            response = chain.invoke(inputs, config={'priority': priority})
-            duration = (time.time() - start_time) * 1000
-            logger.info(f"⏱️ LLM Inference (ELP{priority}) took {duration:.2f} ms")
-            interaction_data['execution_time_ms'] = interaction_data.get('execution_time_ms', 0) + duration
+        request_start_time = time.monotonic()  # Time for the whole operation including retries
+        response_from_llm = None
 
-            # --- Check for interruption marker in the response string ---
-            # This assumes the StrOutputParser() returns the error string directly
-            if isinstance(response, str) and interruption_error_marker in response:
-                 logger.warning(f"🚦 Task Interrupted (Detected in _call_llm_with_timing). Raising TaskInterruptedException.")
-                 raise TaskInterruptedException(response) # Raise specific exception
+        # Determine retry parameters based on priority
+        # Only ELP0 tasks will attempt retries on interruption
+        max_retries = LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES if priority == ELP0 else 0
+        retry_delay_seconds = LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY
 
-            return response
+        attempt_count = 0
+        while attempt_count <= max_retries:
+            attempt_count += 1
+            call_start_time = time.monotonic()  # Time for this specific attempt
+            log_prefix_call = f"LLMCall|ELP{priority}|Attempt-{attempt_count}"
 
-        except TaskInterruptedException:
-             # Re-raise the specific exception if caught directly
-             raise
-        except Exception as e:
-            # --- Check if the exception itself signals interruption ---
-            if interruption_error_marker in str(e):
-                 logger.warning(f"🚦 Task Interrupted (Detected via Exception in _call_llm_with_timing). Raising TaskInterruptedException.")
-                 raise TaskInterruptedException(str(e)) # Raise specific exception
-            # --- Handle other errors ---
-            else:
-                 log_err_msg = f"LLM Chain Error (ELP{priority}): {e}"
-                 logger.error(f"❌ {log_err_msg}")
-                 logger.exception("Traceback for LLM Chain error:")
-                 session_id = interaction_data.get("session_id")
-                 mode = interaction_data.get("mode", "chat")
-                 try: # Log error to DB
-                     temp_db = SessionLocal()
-                     add_interaction(temp_db, session_id=session_id, mode=mode, input_type="log_error", llm_response=log_err_msg[:4000])
-                     temp_db.close()
-                 except Exception as db_log_err:
-                      logger.error(f"Failed to log LLM error to DB: {db_log_err}")
-                 duration = (time.time() - start_time) * 1000
-                 interaction_data['execution_time_ms'] = interaction_data.get('execution_time_ms', 0) + duration
-                 raise # Re-raise the original non-interruption error
+            try:
+                logger.trace(f"{log_prefix_call}: Invoking chain/model {type(chain)}...")
+
+                llm_call_config = {'priority': priority}  # For LlamaCppChatWrapper
+
+                # The actual call to the LLM (via chain or model)
+                if hasattr(chain, 'invoke') and callable(chain.invoke):  # Langchain runnable
+                    response_from_llm = chain.invoke(inputs, config=llm_call_config)
+                elif callable(chain):  # Direct model call (e.g., for raw ChatML in direct_generate)
+                    # Assuming 'chain' is the model and 'inputs' is the raw prompt string.
+                    # The LlamaCppChatWrapper._call method handles 'priority' from config.
+                    response_from_llm = chain(messages=inputs, stop=[CHATML_END_TOKEN], **llm_call_config)
+                else:
+                    raise TypeError(f"Unsupported chain/model type for _call_llm_with_timing: {type(chain)}")
+
+                call_duration_ms = (time.monotonic() - call_start_time) * 1000
+                # Log duration for this specific attempt
+                logger.info(f"⏱️ {log_prefix_call}: Succeeded in {call_duration_ms:.2f} ms")
+
+                # Update total execution time in interaction_data with this attempt's duration
+                interaction_data['execution_time_ms'] = interaction_data.get('execution_time_ms', 0) + call_duration_ms
+
+                # Check if the response string itself indicates an interruption (from worker)
+                if isinstance(response_from_llm, str) and interruption_error_marker in response_from_llm:
+                    logger.warning(f"🚦 {log_prefix_call}: Task Interrupted (marker found in LLM response string).")
+                    raise TaskInterruptedException(response_from_llm)  # Trigger retry logic
+
+                return response_from_llm  # Successful call, exit retry loop
+
+            except TaskInterruptedException as tie:
+                call_duration_ms_on_interrupt = (time.monotonic() - call_start_time) * 1000
+                interaction_data['execution_time_ms'] = interaction_data.get('execution_time_ms',
+                                                                             0) + call_duration_ms_on_interrupt
+                logger.warning(
+                    f"🚦 {log_prefix_call}: Caught TaskInterruptedException after {call_duration_ms_on_interrupt:.2f}ms: {tie}")
+
+                if priority == ELP0 and attempt_count <= max_retries:
+                    logger.info(
+                        f"    Retrying ELP0 task (attempt {attempt_count}/{max_retries + 1}) after {retry_delay_seconds}s due to interruption...")
+                    # For asyncio.to_thread compatibility, use synchronous time.sleep
+                    time.sleep(retry_delay_seconds)
+                    # Loop continues for the next attempt
+                else:
+                    # Max retries reached for ELP0, or it's not an ELP0 task, or error from non-LLM part
+                    if priority == ELP0:
+                        logger.error(f"    ELP0 task giving up after {attempt_count} interruption attempts.")
+                    raise  # Re-raise TaskInterruptedException to be handled by the caller (e.g., background_generate)
+
+            except Exception as e:  # Handles other exceptions not related to TaskInterruptedException
+                call_duration_ms_on_error = (time.monotonic() - call_start_time) * 1000
+                interaction_data['execution_time_ms'] = interaction_data.get('execution_time_ms',
+                                                                             0) + call_duration_ms_on_error
+                log_err_msg = f"LLM Chain/Model Error (ELP{priority}, Attempt {attempt_count}): {e}"
+                logger.error(f"❌ {log_err_msg}")
+                # Log full traceback for these non-interruption errors
+                logger.exception(f"Traceback for LLM Chain/Model error ({log_prefix_call}):")
+
+                # Log this error to DB (simplified for brevity, actual DB logging in background_generate)
+                session_id_for_log = interaction_data.get("session_id", "unknown_session")
+                # add_interaction(db, session_id=session_id_for_log, ..., llm_response=log_err_msg)
+
+                raise  # Re-raise the original non-interruption error; these are not retried by this loop
+
+        # This part of the function should ideally not be reached if the loop logic is correct,
+        # as success returns directly, and exceptions (including TaskInterruptedException after max retries) are re-raised.
+        # This is a fallback.
+        total_duration_ms = (time.monotonic() - request_start_time) * 1000
+        interaction_data['execution_time_ms'] = total_duration_ms  # Ensure total time is updated
+        logger.error(
+            f"{log_prefix_call}: LLM call failed after all retries or was not retriable. Returning error indication.")
+        return f"[LLM_CALL_UNEXPECTED_EXIT_ELP{priority}]"
 
     async def _classify_input_complexity(self, db: Session, user_input: str,
                                          interaction_data_for_metrics: dict) -> str:  # Renamed for clarity

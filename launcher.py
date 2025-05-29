@@ -11,7 +11,7 @@ import platform
 from datetime import datetime, date
 import json  # For parsing conda info
 import traceback
-
+from typing import Optional
 
 # --- Configuration ---
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -989,6 +989,96 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
     return accepted, time_taken
 
 
+def _ensure_conda_package(package_name: str,
+                          executable_to_check: Optional[str] = None,
+                          conda_channel: str = "conda-forge",
+                          is_critical: bool = True) -> bool:
+    """
+    Checks if an executable (related to a Conda package) is available.
+    If not, attempts to install the Conda package into the TARGET_CONDA_ENV_PATH.
+    This function should be called when the script is running *inside* the target Conda environment.
+    """
+    check_exe = executable_to_check if executable_to_check else package_name
+
+    print_system(f"Checking for executable '{check_exe}' (from Conda package '{package_name}')...")
+
+    # When this function runs, we expect to be *inside* the activated zephyrineCondaVenv.
+    # So, shutil.which should find executables installed in this environment.
+    found_path = shutil.which(check_exe)
+
+    is_in_env = False
+    if found_path:
+        try:
+            # Normalize paths for reliable comparison
+            norm_found_path = os.path.normcase(os.path.realpath(found_path))
+            norm_target_env_path = os.path.normcase(os.path.realpath(TARGET_CONDA_ENV_PATH))
+            # Check if the found executable is within our target Conda environment
+            if norm_found_path.startswith(norm_target_env_path):
+                is_in_env = True
+                print_system(f"Executable '{check_exe}' found in target Conda environment: {found_path}")
+            else:
+                print_warning(
+                    f"Executable '{check_exe}' found at '{found_path}', but it's OUTSIDE the target Conda env '{TARGET_CONDA_ENV_PATH}'. Will attempt install into env.")
+        except Exception as e_path:
+            print_warning(f"Error verifying path for '{check_exe}': {e}. Assuming not in env.")
+
+    if not found_path or not is_in_env:
+        if not found_path:
+            print_warning(f"Executable '{check_exe}' (for package '{package_name}') not found in PATH.")
+
+        print_system(
+            f"Attempting to install '{package_name}' from channel '{conda_channel}' into Conda env '{os.path.basename(TARGET_CONDA_ENV_PATH)}' using prefix...")
+
+        # CONDA_EXECUTABLE should be the path to the conda binary (e.g., from base or miniconda)
+        # TARGET_CONDA_ENV_PATH is the prefix of the environment we are installing into.
+        conda_install_cmd = [
+            CONDA_EXECUTABLE, "install", "--yes",
+            "--prefix", TARGET_CONDA_ENV_PATH,  # Crucial for installing into the correct environment
+            "-c", conda_channel,
+            package_name
+        ]
+
+        # The run_command function will execute this.
+        # It inherits the environment, but CONDA_EXECUTABLE should work correctly.
+        if not run_command(conda_install_cmd, cwd=ROOT_DIR,
+                           name=f"CONDA-INSTALL-{package_name.upper().replace('-', '_')}",
+                           check=True):  # check=True will raise error on failure
+            print_error(f"Failed to install Conda package '{package_name}'.")
+            if is_critical:
+                print_error(f"'{package_name}' is a critical dependency. Exiting.")
+                sys.exit(1)
+            return False
+        else:
+            print_system(f"Successfully installed Conda package '{package_name}'. Verifying executable...")
+            # Re-check after install attempt
+            found_path_after_install = shutil.which(check_exe)
+            if found_path_after_install:
+                norm_found_path_after = os.path.normcase(os.path.realpath(found_path_after_install))
+                norm_target_env_path_after = os.path.normcase(os.path.realpath(TARGET_CONDA_ENV_PATH))
+                if norm_found_path_after.startswith(norm_target_env_path_after):
+                    print_system(f"Executable '{check_exe}' now found in Conda environment: {found_path_after_install}")
+                    # Update global command variables if they were naively set
+                    # This ensures subsequent run_command calls use the Conda-installed versions if they were system-wide before
+                    if check_exe == "git" and 'GIT_CMD' in globals() and globals()[
+                        'GIT_CMD'] != found_path_after_install: globals()['GIT_CMD'] = found_path_after_install
+                    if check_exe == "cmake" and 'CMAKE_CMD' in globals() and globals()[
+                        'CMAKE_CMD'] != found_path_after_install: globals()['CMAKE_CMD'] = found_path_after_install
+                    if check_exe == "npm" and 'NPM_CMD' in globals() and globals()[
+                        'NPM_CMD'] != found_path_after_install: globals()['NPM_CMD'] = found_path_after_install
+                    # For 'node', it's usually just called as 'node', not stored in a CMD var
+                    return True
+                else:
+                    print_error(
+                        f"'{check_exe}' installed by Conda but found at '{found_path_after_install}', which is not in the target env '{TARGET_CONDA_ENV_PATH}'. This indicates a PATH or conda setup issue.")
+                    if is_critical: sys.exit(1)
+                    return False
+            else:
+                print_error(
+                    f"Executable '{check_exe}' still not found after Conda install attempt for package '{package_name}'.")
+                if is_critical: sys.exit(1)
+                return False
+    return True  # Already found in env, or successfully installed and verified
+
 # --- File Download Logic ---
 def download_file_with_progress(url, destination_path, file_description, requests_session):
     from tqdm import tqdm
@@ -1065,9 +1155,49 @@ if __name__ == "__main__":
             print_warning(f"Error comparing Conda paths: {e}")
 
     if is_already_in_correct_env:
-        # --- This is the RELAUNCHED script, running inside the correct Conda environment ---
         print_system(f"Running inside target Conda environment (Prefix: {ACTIVE_ENV_PATH})")
         print_system(f"Python executable in use: {sys.executable}")
+
+        # --- ADD THIS BLOCK TO ENSURE CONDA_EXECUTABLE IS SET IN RELAUNCHED SCRIPT ---
+        if globals().get('CONDA_EXECUTABLE') is None:  # Check if it wasn't set (it wouldn't be on relaunch)
+            print_system("Relaunched script: CONDA_EXECUTABLE is None. Attempting to load from cache or PATH...")
+            loaded_from_cache = False
+            if os.path.exists(CONDA_PATH_CACHE_FILE):
+                try:
+                    with open(CONDA_PATH_CACHE_FILE, 'r', encoding='utf-8') as f_cache:
+                        cached_path = f_cache.read().strip()
+                    if cached_path and _verify_conda_path(cached_path):  # _verify_conda_path must be globally defined
+                        globals()['CONDA_EXECUTABLE'] = cached_path
+                        print_system(f"Using Conda executable from cache in relaunched script: {CONDA_EXECUTABLE}")
+                        loaded_from_cache = True
+                    else:
+                        print_warning("Cached Conda path was invalid or verification failed in relaunched script.")
+                except Exception as e_cache_read:
+                    print_warning(f"Error reading Conda cache in relaunched script: {e_cache_read}")
+
+            if not loaded_from_cache:  # If cache didn't work or didn't exist
+                print_system("Attempting to find Conda via shutil.which('conda') in relaunched script...")
+                conda_exe_from_which = shutil.which("conda.exe" if IS_WINDOWS else "conda")
+                if conda_exe_from_which and _verify_conda_path(conda_exe_from_which):
+                    globals()['CONDA_EXECUTABLE'] = conda_exe_from_which
+                    print_system(f"Found Conda via shutil.which in relaunched script: {CONDA_EXECUTABLE}")
+                    # Optionally, re-cache it here if you want to update a potentially stale cache
+                    # try:
+                    #     with open(CONDA_PATH_CACHE_FILE, 'w', encoding='utf-8') as f_cache_update:
+                    #         f_cache_update.write(CONDA_EXECUTABLE)
+                    # except IOError: pass
+                else:
+                    print_error(
+                        "CRITICAL: Conda executable could not be determined in relaunched script (cache & shutil.which failed). Conda package installations will fail.")
+                    # You might want to sys.exit(1) here if CONDA_EXECUTABLE is essential for subsequent steps
+                    # that absolutely require it, even in the relaunched script. For _ensure_conda_package, it is.
+                    # For now, it will proceed and _ensure_conda_package will fail if CONDA_EXECUTABLE is still None.
+
+        if globals().get('CONDA_EXECUTABLE') is None:
+            print_error(
+                "CRITICAL: CONDA_EXECUTABLE is still None after attempting to load in relaunched script. Subsequent Conda operations WILL FAIL.")
+            # sys.exit("Failed to determine CONDA_EXECUTABLE in relaunched context.") # Consider exiting
+        # --- END ADDED BLOCK ---
 
         print_system("<<<<< RELAUNCHED SCRIPT IS ALIVE AND RUNNING THIS LINE >>>>>")
         sys.stdout.flush()
@@ -1096,6 +1226,8 @@ if __name__ == "__main__":
                 sys.exit(1)
             print_system(
                 f"Confirmed active Conda environment from CONDA_PREFIX (re-fetched): {os.path.basename(ACTIVE_ENV_PATH)}")
+
+
 
         _sys_exec_dir = os.path.dirname(sys.executable)
         PYTHON_EXECUTABLE = sys.executable
@@ -1144,6 +1276,46 @@ if __name__ == "__main__":
         if not run_command([PIP_EXECUTABLE, "install", "-r", engine_req_path], ENGINE_MAIN_DIR, "PIP-ENGINE-REQ"):
             print_error("Failed to install Python dependencies for Engine. Exiting.");
             sys.exit(1)
+
+        # --- Ensure Core Command-Line Tools via Conda ---
+        print_system("--- Ensuring core command-line tools are present in Conda environment ---")
+        if not _ensure_conda_package(package_name="git", executable_to_check="git", is_critical=True):
+            print_error("Git could not be ensured. Many setup steps will fail.");
+            sys.exit(1)
+
+        if not _ensure_conda_package(package_name="cmake", executable_to_check="cmake", is_critical=True):
+            print_error("CMake could not be ensured. Builds will fail.");
+            sys.exit(1)
+
+        # Node.js provides both 'node' and 'npm'
+        if not _ensure_conda_package(package_name="nodejs", executable_to_check="node", is_critical=True):
+            print_error("Node.js (node) could not be ensured. Backend/Frontend setup will fail.");
+            sys.exit(1)
+        if not _ensure_conda_package(package_name="nodejs", executable_to_check="npm", is_critical=True):
+            # Technically, nodejs should provide npm, but an explicit check can be good.
+            # If node was installed, npm should be there. If not, this might re-trigger nodejs install.
+            print_error("Node.js (npm) could not be ensured. Backend/Frontend setup will fail.");
+            sys.exit(1)
+
+        # For ffmpeg, it's not strictly critical for the launcher to exit if missing, but ASR/TTS for some formats will fail.
+        _ensure_conda_package(package_name="ffmpeg", executable_to_check="ffmpeg", is_critical=False)
+        # The existing warning about ffmpeg for pywhispercpp can remain as an extra reminder.
+        print_system("--- Core command-line tools check/install attempt complete ---")
+
+        # --- Re-evaluate global CMD variables AFTER potential Conda installs ---
+        # This ensures we use the Conda-installed versions if they were just put there.
+        # shutil.which() will search the PATH, which should now prioritize the Conda env's bin.
+        globals()['GIT_CMD'] = shutil.which("git") or ('git.exe' if IS_WINDOWS else 'git')
+        globals()['CMAKE_CMD'] = shutil.which("cmake") or ('cmake.exe' if IS_WINDOWS else 'cmake')
+        npm_exe_check = "npm.cmd" if IS_WINDOWS else "npm"
+        globals()['NPM_CMD'] = shutil.which(npm_exe_check) or npm_exe_check
+
+        print_system(f"Updated GIT_CMD to: {GIT_CMD}")
+        print_system(f"Updated CMAKE_CMD to: {CMAKE_CMD}")
+        print_system(f"Updated NPM_CMD to: {NPM_CMD}")
+        if not all([shutil.which("git"), shutil.which("cmake"), shutil.which("npm"), shutil.which("node")]):
+            print_warning(
+                "One or more critical tools (git, cmake, node, npm) still not found after conda install attempts. Subsequent steps might fail.")
 
         try:
             import tiktoken; TIKTOKEN_AVAILABLE = True; print_system("tiktoken is available.")
