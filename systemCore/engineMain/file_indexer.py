@@ -555,295 +555,297 @@ class FileIndexer:
 
     def _process_file_phase1(self, file_path: str, db_session: Session):
         """
-        Phase 1: Gets metadata, hash. Extracts text ONLY for non-Office/non-PDF files.
-        Marks Office/PDF files for later processing. Embeds extracted text using ELP0.
+        Phase 1: Gets metadata, hash. Extracts text for PDFs and standard text files.
+        Embeds extracted text using ELP0. Marks PDFs and Office files for later VLM processing.
         Handles ELP0 interruptions during embedding.
         """
-        # Check/Wait at the START of processing a file
-        if self._wait_if_server_busy(log_wait=False): # Don't log busy waits per file
+        if self._wait_if_server_busy(log_wait=False):
             logger.trace(f"Yielding file processing due to busy server: {file_path}")
-            return # Skip this file entirely for now if server busy at start
+            return
         if self.stop_event.is_set():
-            return # Exit if stop requested
+            logger.trace(f"File processing interrupted by stop signal: {file_path}")
+            return
 
         logger.trace(f"Phase 1 Processing: {file_path}")
-        # Initialize variables
         file_name = os.path.basename(file_path)
-        status = 'pending' # Initial status
-        content: Optional[str] = None
+        status = 'pending'
+        content: Optional[str] = None  # This will hold the text to be stored in indexed_content
         error_message: Optional[str] = None
         embedding_json_str: Optional[str] = None
         current_md5_hash: Optional[str] = None
         vlm_processing_status_to_set: Optional[str] = None
-        should_update_db = True # Assume update needed unless skipped
+        should_update_db = True
         existing_record: Optional[FileIndex] = None
-        size_bytes: int = -1 # Default size
+        size_bytes: int = -1
         mtime_os: Optional[datetime.datetime] = None
         mime_type: Optional[str] = None
 
         try:
-            # 1. Get File Metadata
             size_bytes_stat, mtime_os_stat, mime_type_stat = self._get_file_metadata(file_path)
-            if size_bytes_stat is None and mtime_os_stat is None:
-                 # Likely permission error or file vanished after os.walk found it
-                 status = 'error_permission'
-                 error_message = "Permission denied or file vanished during stat."
+            if size_bytes_stat is None and mtime_os_stat is None:  # File likely vanished or permission issue during stat
+                status = 'error_permission';
+                error_message = "Permission denied or file vanished during stat."
             else:
-                 # Store valid metadata, use -1 for unknown size
-                 size_bytes = size_bytes_stat if size_bytes_stat is not None else -1
-                 mtime_os = mtime_os_stat
-                 mime_type = mime_type_stat
+                size_bytes = size_bytes_stat if size_bytes_stat is not None else -1
+                mtime_os = mtime_os_stat;
+                mime_type = mime_type_stat
 
-            # 2. Calculate Current MD5 Hash (if possible and no prior error)
-            if status == 'pending':
+            if status == 'pending':  # Only proceed if no error yet
                 try:
                     current_md5_hash = self._calculate_md5(file_path, size_bytes)
-                    # If hashing returns None for a file that *should* be hashable, mark as error
                     if current_md5_hash is None and size_bytes >= 0 and size_bytes <= MAX_HASH_FILE_SIZE_BYTES:
-                        status = 'error_hash'
-                        error_message = "Failed to calculate MD5 hash."
-                        logger.warning(f"MD5 hash calculation failed for: {file_path}")
+                        status = 'error_hash';
+                        error_message = "Failed to calculate MD5 hash (returned None for hashable file)."
                 except PermissionError:
-                    # Let the outer handler catch PermissionError from hashing
-                    raise
-                except Exception as hash_err:
-                     # Catch unexpected errors during hashing call
-                     status = 'error_hash'
-                     error_message = f"Error during hashing: {hash_err}"
-                     current_md5_hash = None
-                     logger.error(f"Unexpected error calling _calculate_md5 for {file_path}: {hash_err}")
+                    raise  # Let outer handler catch this
+                except Exception as hash_err:  # Catch other errors during _calculate_md5 call
+                    status = 'error_hash';
+                    error_message = f"Error during hashing call: {hash_err}";
+                    current_md5_hash = None
 
-            # 3. Check Database using MD5 (if possible and no prior error)
             if status == 'pending':
                 try:
                     existing_record = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
                     if existing_record:
-                        # Determine if file needs re-processing based on hash/timestamp
                         hashes_match = (current_md5_hash is not None and existing_record.md5_hash == current_md5_hash)
-                        # Check timestamp only if hashing was skipped due to size on *both* attempts
-                        large_file_timestamps_match = (
-                            current_md5_hash is None and size_bytes > MAX_HASH_FILE_SIZE_BYTES and
-                            existing_record.md5_hash is None and
-                            mtime_os and existing_record.last_modified_os and
-                            mtime_os <= existing_record.last_modified_os
-                        )
+                        large_timestamps_match = (current_md5_hash is None and size_bytes > MAX_HASH_FILE_SIZE_BYTES and
+                                                  existing_record.md5_hash is None and mtime_os and existing_record.last_modified_os and
+                                                  mtime_os <= existing_record.last_modified_os)  # type: ignore
 
-                        if hashes_match or large_file_timestamps_match:
-                            logger.trace(f"Skipping DB update (Content Unchanged): {file_path}")
-                            should_update_db = False # File hasn't changed significantly
+                        if hashes_match or large_timestamps_match:
+                            should_update_db = False
+                            file_ext_check = os.path.splitext(existing_record.file_name)[1].lower()
+                            is_pdf_or_office = file_ext_check == '.pdf' or file_ext_check in OFFICE_EXTENSIONS
+
+                            if self.vlm_model and self.latex_model and is_pdf_or_office and \
+                                    (existing_record.vlm_processing_status is None or \
+                                     existing_record.vlm_processing_status in ['pending_vlm', 'pending_conversion',
+                                                                               'error_vlm', 'error_conversion',
+                                                                               'skipped_vlm_no_model']):
+                                vlm_processing_status_to_set = 'pending_vlm' if file_ext_check == '.pdf' else 'pending_conversion'
+                                should_update_db = True  # Force DB update just for VLM status
+                                logger.trace(
+                                    f"Content unchanged, but VLM status needs update for {file_path} to {vlm_processing_status_to_set}")
+
+                            if not should_update_db:
+                                logger.trace(f"Skipping (Content & VLM status OK/not applicable): {file_path}")
                         else:
-                            logger.trace(f"Needs update (Changed Hash/Timestamp/New): {file_path}")
-                            # Keep status 'pending' for content processing
+                            logger.trace(f"Needs update (Changed Hash/Timestamp or New): {file_path}")
                 except SQLAlchemyError as db_check_err:
-                     logger.error(f"DB check failed for {file_path}: {db_check_err}")
-                     status = 'error_read' # Treat DB error as a read error for the file state
-                     error_message = f"Database check failed: {db_check_err}"
-                     should_update_db = False # Don't proceed if DB check fails
+                    logger.error(f"DB check failed for {file_path}: {db_check_err}")
+                    status = 'error_read';
+                    error_message = f"Database check failed: {db_check_err}";
+                    should_update_db = False
 
-            # 4. Process Content (Extract/Embed/Mark) if Update Needed & No Prior Error
-            if should_update_db and status == 'pending':
+            if should_update_db and status == 'pending':  # Only process content if DB update is needed and no prior critical errors
                 file_ext = os.path.splitext(file_name)[1].lower()
-                # Determine file type and if it's a target for VLM processing later
-                is_vlm_target = file_ext in VLM_TARGET_EXTENSIONS # Check against VLM target types
-                is_text_target = file_ext in TEXT_EXTENSIONS or (mime_type and mime_type.startswith('text/'))
+                is_pdf_target = file_ext == '.pdf'
+                is_office_target_for_vlm = file_ext in OFFICE_EXTENSIONS  # Imported from config.py
+                is_general_text_target = file_ext in TEXT_EXTENSIONS or (mime_type and mime_type.startswith('text/'))
 
-                if is_vlm_target:
-                    # Mark for Phase 2, do not extract text or embed now
-                    status = 'indexed_meta' # Only index metadata in this phase
-                    content = None
-                    should_embed = False
-                    if self.vlm_model:
-                         # Set appropriate pending status based on type (PDF direct, Office needs conversion)
-                         vlm_processing_status_to_set = 'pending_vlm' if file_ext == '.pdf' else 'pending_conversion'
-                    else:
-                         logger.trace(f"Skipping VLM marking (VLM model unavailable): {file_path}")
-                         # Inherit status if record exists, otherwise None
-                         vlm_processing_status_to_set = existing_record.vlm_processing_status if existing_record else None
+                extracted_text_for_embedding: Optional[str] = None  # Text that will be embedded
 
-                elif is_text_target:
-                    # Handle standard text files
-                    if size_bytes <= MAX_TEXT_FILE_SIZE_BYTES:
-                        content = self._extract_text(file_path, size_bytes)
-                        if content is None: # Check if extraction failed
-                             status = 'error_read'; error_message = "Text extraction failed"
-                             should_embed = False
-                        else:
-                             should_embed = True # Text extracted, attempt embedding
-                    else:
-                        # Text file too large
-                        status = 'skipped_size'
-                        error_message = f"Skipped content (exceeds {MAX_TEXT_FILE_SIZE_MB} MB)"
-                        content = None
-                        should_embed = False
-                else:
-                     # File is not VLM target and not recognized text, index metadata only
-                     status = 'indexed_meta'
-                     content = None
-                     should_embed = False
-                     logger.trace(f"Indexing metadata only for {file_path} (Type: {mime_type or file_ext})")
-
-                # --- Generate Embedding (if text extracted and should_embed is True) ---
-                if status == 'pending' and content is not None and should_embed: # Check content explicitly not None
-                    if self.embedding_model:
-                        logger.debug(f"🧠 Phase 1 Generating embedding for: {file_path} (PRIORITY: ELP0)")
-                        try:
-                            # --- CORRECTED CALL ---
-                            # Ensure the embedding_model (which is LlamaCppEmbeddingsWrapper) has _embed_texts
-                            if hasattr(self.embedding_model, '_embed_texts') and \
-                                    callable(getattr(self.embedding_model, '_embed_texts')):
-
-                                # _embed_texts expects a list of texts and returns a list of embeddings.
-                                # Since we are embedding a single 'content' string, wrap it in a list.
-                                embedding_list = self.embedding_model._embed_texts([content],
-                                                                                   priority=ELP0)  # type: ignore
-
-                                if embedding_list and len(embedding_list) > 0:
-                                    vector = embedding_list[0]  # Get the first (and only) embedding
-                                    embedding_json_str = json.dumps(vector)
-                                    status = 'indexed_text'
-                                    logger.trace(f"Embedding generated successfully for {file_path}")
-                                else:
-                                    logger.error(
-                                        f"Embedding generation via _embed_texts returned None or empty list for {file_path}")
-                                    status = 'error_embedding'
-                                    error_message = "Embedding generation returned no vector."
-                                    embedding_json_str = None
-                            else:
-                                logger.error(
-                                    f"CRITICAL: self.embedding_model (type: {type(self.embedding_model)}) does not have _embed_texts method. Cannot embed with priority.")
-                                status = 'error_embedding'
-                                error_message = "Embedding model misconfigured (no _embed_texts method)."
-                                embedding_json_str = None
-                            # --- END CORRECTED CALL ---
-                        except Exception as emb_err:
-                            # Check if the error is the specific interruption marker
-                            if interruption_error_marker in str(emb_err):
-                                logger.warning(f"🚦 Embedding for {file_path} INTERRUPTED by ELP1. Resetting to pending.")
-                                status = 'pending' # Reset status to retry later
-                                error_message = "Embedding interrupted by higher priority task"
-                                embedding_json_str = None
-                                content = None # Discard potentially partial content if interrupted? Optional.
-                                # Ensure DB update happens to save the 'pending' status
-                                should_update_db = True
-                            else:
-                                # Handle other embedding errors
-                                logger.error(f"Embedding generation failed for {file_path}: {emb_err}")
-                                status = 'error_embedding'
-                                error_message = f"Embedding failed: {emb_err}"
-                                embedding_json_str = None
-                                # Keep content if it was extracted, just mark embedding error
-                    else:
-                        # No embedding model, but text was extracted
+                if is_pdf_target:
+                    logger.trace(f"PDF detected: {file_path}. Initial text extraction & embedding pass.")
+                    extracted_text_for_embedding = self._extract_pdf(file_path)  # Can raise PermissionError
+                    if extracted_text_for_embedding:
                         status = 'indexed_text'
-                        logger.warning(f"Skipping embedding (no model) for: {file_path}")
-                elif status == 'pending':
-                     # If status is still pending here, it means conditions for embedding weren't met
-                     # or it wasn't a text file/VLM target initially. Set final status.
-                     status = 'indexed_meta' if not is_vlm_target else status # Keep pending_vlm/conversion if set
+                        content = extracted_text_for_embedding  # Store for DB
+                        logger.trace(f"Extracted ~{len(content)} chars from PDF: {file_path}")
+                    else:  # Text extraction failed or returned None/empty
+                        status = 'error_read';
+                        error_message = "PDF text extraction failed."
+                        content = None  # Ensure content is None if extraction fails
+                        logger.warning(error_message + f" File: {file_path}")
+
+                    # Mark for VLM processing in Phase 2 regardless of text extraction success for PDF (unless permission error)
+                    if self.vlm_model and self.latex_model:
+                        vlm_processing_status_to_set = 'pending_vlm'
+                    else:
+                        vlm_processing_status_to_set = 'skipped_vlm_no_model'
+
+                elif is_office_target_for_vlm:
+                    logger.trace(f"Office file: {file_path}. Marking for Phase 2 VLM (conversion & analysis).")
+                    status = 'indexed_meta'
+                    content = None;
+                    extracted_text_for_embedding = None;
+                    embedding_json_str = None
+                    if self.vlm_model and self.latex_model:
+                        vlm_processing_status_to_set = 'pending_conversion'
+                    else:
+                        vlm_processing_status_to_set = 'skipped_vlm_no_model'
+
+                elif is_general_text_target:
+                    if size_bytes <= MAX_TEXT_FILE_SIZE_BYTES:
+                        extracted_text_for_embedding = self._extract_text(file_path,
+                                                                          size_bytes)  # Can raise PermissionError
+                        if extracted_text_for_embedding is None:
+                            status = 'error_read'; error_message = "Text extraction failed"; content = None
+                        else:
+                            status = 'indexed_text'; content = extracted_text_for_embedding
+                    else:
+                        status = 'skipped_size';
+                        error_message = f"Text file too large (>{MAX_TEXT_FILE_SIZE_MB}MB)";
+                        content = None
+
+                else:  # Not PDF, not Office, not recognized text
+                    status = 'indexed_meta';
+                    content = None;
+                    extracted_text_for_embedding = None
+                    logger.trace(f"Metadata only for {file_path} (Type: {mime_type or file_ext})")
+
+                # --- Generate Embedding for successfully extracted text ---
+                if extracted_text_for_embedding and status == 'indexed_text':
+                    if self.embedding_model:
+                        logger.debug(f"🧠 Phase 1 Embedding content for: {file_path} (PRIORITY: ELP0)")
+                        try:
+                            if hasattr(self.embedding_model, '_embed_texts') and callable(
+                                    getattr(self.embedding_model, '_embed_texts')):
+                                embedding_list = self.embedding_model._embed_texts([extracted_text_for_embedding],
+                                                                                   priority=ELP0)  # type: ignore
+                                if embedding_list and len(embedding_list) > 0:
+                                    embedding_json_str = json.dumps(embedding_list[0])
+                                    logger.trace(f"Content embedding successful for {file_path}")
+                                else:
+                                    status = 'error_embedding';
+                                    error_message = (error_message or "") + " Content embedding returned no vector."
+                                    embedding_json_str = None;
+                                    logger.error(f"Embedding returned no vector for {file_path}")
+                            else:
+                                status = 'error_embedding';
+                                error_message = (
+                                                            error_message or "") + " Embedding model misconfigured (no _embed_texts)."
+                                embedding_json_str = None;
+                                logger.error(f"Embedding model misconfig for {file_path}")
+                        except Exception as emb_err:
+                            if interruption_error_marker in str(emb_err):
+                                logger.warning(f"🚦 Content embedding for {file_path} INTERRUPTED. Resetting status.")
+                                status = 'pending';
+                                error_message = "Embedding interrupted";
+                                embedding_json_str = None;
+                                content = None
+                            else:
+                                status = 'error_embedding';
+                                error_message = (error_message or "") + f" Content embedding failed: {emb_err}"
+                                embedding_json_str = None;
+                                logger.error(f"Embedding failed for {file_path}: {emb_err}")
+                    else:  # No embedding model
+                        logger.warning(
+                            f"No embedding model available for content: {file_path}. Status remains '{status}'.")
+                        # embedding_json_str remains None, status is 'indexed_text' but without embedding
+
+                # If content extraction failed, status would be 'error_read' or 'skipped_size'.
+                # If embedding failed, status would be 'error_embedding'.
+                # Ensure 'content' is None if embedding failed or wasn't performed on extracted text.
+                if status != 'indexed_text' or embedding_json_str is None:
+                    if status == 'indexed_text' and embedding_json_str is None:  # Text extracted but not embedded
+                        logger.debug(f"File {file_path} has text content but no embedding. Will store text.")
+                    else:  # Any other error status, or if status is indexed_text but content was reset (e.g. due to interrupt)
+                        pass  # Content might already be None or holds the extracted text if embedding failed but text is ok.
+
+                # Final status consolidation if it was left as 'pending' by interruption logic but there's no VLM path
+                if status == 'pending' and not (is_pdf_target or is_office_target_for_vlm):
+                    status = 'indexed_meta'
+
 
         except PermissionError:
-             # Catch permission errors occurring anywhere during the process
-             status = 'error_permission'
-             error_message = "Permission denied during file processing."
-             content = None; embedding_json_str = None; current_md5_hash = None
-             should_update_db = True # Ensure we update the DB record with the error status
-             logger.warning(f"Permission error processing {file_path}")
-        except Exception as proc_err:
-            # Catch any other unexpected errors during processing
-            status = 'error_read' # Generic read/processing error
-            error_message = f"Processing error: {proc_err}"
-            content = None; embedding_json_str = None; current_md5_hash = None
-            should_update_db = True # Update DB with error
-            logger.error(f"Error processing file {file_path}: {proc_err}")
-            logger.exception("File Processing Phase 1 Traceback:")
+            status = 'error_permission';
+            error_message = "Permission denied during file processing."
+            content = None;
+            embedding_json_str = None;
+            current_md5_hash = None;
+            should_update_db = True
+            logger.warning(f"Permission error processing {file_path}")
+        except Exception as proc_err:  # Catch-all for other unexpected errors
+            status = 'error_read';
+            error_message = f"Unexpected processing error: {proc_err}"
+            content = None;
+            embedding_json_str = None;
+            current_md5_hash = None;
+            should_update_db = True
+            logger.error(f"Error processing file {file_path}: {proc_err}", exc_info=True)
 
-        # --- 5. Update Database Record ---
+        # --- Database Update ---
         if should_update_db:
-            # Determine final status if logic above left it as 'pending' unexpectedly
-            if status == 'pending':
-                 logger.warning(f"File {file_path} reached DB update with pending status. Defaulting status to indexed_meta.")
-                 status = 'indexed_meta'
+            final_status = status
+            if status == 'pending':  # Ensure 'pending' isn't written if no further action is planned
+                final_status = 'indexed_meta'  # Default if no specific processing path was hit or error occurred
+                if (
+                        is_pdf_target or is_office_target_for_vlm) and vlm_processing_status_to_set and 'pending' in vlm_processing_status_to_set:
+                    final_status = 'indexed_meta'  # Store meta, VLM status will indicate next step
+                elif extracted_text_for_embedding and not embedding_json_str:  # Text was extracted, but not embedded
+                    final_status = 'indexed_text'  # Still useful to save the text
 
-            logger.debug(f"Phase 1 DB Update: {file_path} -> Status: {status}, Hash: {current_md5_hash}, VLM Marked: {vlm_processing_status_to_set}")
+            logger.debug(
+                f"Phase 1 DB Update for: {file_path} -> FinalStatus: {final_status}, VLM_Next: {vlm_processing_status_to_set}, HasContent: {content is not None}, HasEmb: {embedding_json_str is not None}")
 
-            # Prepare data, ensuring None is used for fields not set
-            record_data = {
-                'file_name': file_name,
-                'size_bytes': size_bytes, # Already defaulted to -1 if needed
-                'mime_type': mime_type,
-                'last_modified_os': mtime_os,
-                'index_status': status,
-                'indexed_content': (content[:50000] + '...[truncated]') if content and len(content) > 50000 else content, # Truncate long content
-                'embedding_json': embedding_json_str,
+            record_data: Dict[str, Any] = {
+                'file_name': file_name, 'size_bytes': size_bytes, 'mime_type': mime_type,
+                'last_modified_os': mtime_os, 'index_status': final_status,
                 'md5_hash': current_md5_hash,
-                'processing_error': error_message[:1000] if error_message else None, # Limit error message length
-                'last_indexed_db': datetime.datetime.now(datetime.timezone.utc),
-                'vlm_processing_status': vlm_processing_status_to_set, # Explicitly set from logic above
-                'latex_representation': None, # Always None/cleared in Phase 1 if VLM is pending/marked
-                'latex_explanation': None,    # Always None/cleared in Phase 1 if VLM is pending/marked
+                'processing_error': error_message[:1000] if error_message else None,
+                'last_indexed_db': datetime.datetime.now(datetime.timezone.utc)
             }
-
-            # If the file existed before, and VLM processing was NOT marked as pending
-            # this time (e.g., status became 'error_read' or 'indexed_meta'),
-            # we might want to preserve the *old* VLM status and results if they existed.
-            if existing_record and record_data.get('vlm_processing_status') is None:
-                  record_data['vlm_processing_status'] = existing_record.vlm_processing_status
-                  # Only keep old LaTeX if VLM status isn't being reset to pending
-                  if existing_record.vlm_processing_status not in ['pending_vlm', 'pending_conversion']:
-                      record_data['latex_representation'] = existing_record.latex_representation
-                      record_data['latex_explanation'] = existing_record.latex_explanation
+            if content is not None:  # Store extracted text if available
+                record_data['indexed_content'] = (content[:DB_TEXT_TRUNCATE_LEN] + '...[truncated]') if len(
+                    content) > DB_TEXT_TRUNCATE_LEN else content  # Use DB_TEXT_TRUNCATE_LEN from config
+            if embedding_json_str is not None:
+                record_data['embedding_json'] = embedding_json_str
+            if vlm_processing_status_to_set is not None:
+                record_data['vlm_processing_status'] = vlm_processing_status_to_set
+                if vlm_processing_status_to_set in ['pending_vlm', 'pending_conversion']:
+                    record_data['latex_representation'] = None  # Clear old VLM data if re-queueing
+                    record_data['latex_explanation'] = None
 
             try:
                 if existing_record:
-                    # Update existing record
-                    # Filter record_data to only valid columns before update
-                    valid_columns = {c.name for c in FileIndex.__table__.columns}
-                    update_values = {k: v for k, v in record_data.items() if k in valid_columns}
-                    stmt = update(FileIndex).where(FileIndex.id == existing_record.id).values(**update_values)
-                    db_session.execute(stmt)
-                    logger.trace(f"Phase 1 Updated existing DB record ID {existing_record.id} for {file_path}")
-                else:
-                    # Insert new record
-                    # Filter record_data to only valid columns before insert
-                    valid_columns = {c.name for c in FileIndex.__table__.columns}
-                    insert_values = {k: v for k, v in record_data.items() if k in valid_columns}
-                    new_record = FileIndex(file_path=file_path, **insert_values)
-                    db_session.add(new_record)
-                    # Commit immediately to get ID if needed (optional)
-                    # db_session.flush()
-                    # logger.trace(f"Phase 1 Inserted new DB record ID {new_record.id} for {file_path}")
+                    update_values = {k: v for k, v in record_data.items() if
+                                     k != 'file_name' or getattr(existing_record,
+                                                                 k) != v}  # Avoid re-setting file_name unless changed, etc.
+                    # More careful update: only set fields if they have a new value or are explicitly being cleared
+                    final_update_values = {}
+                    for k, v_new in record_data.items():
+                        v_old = getattr(existing_record, k, None)
+                        if v_new is not None or k in ['indexed_content', 'embedding_json', 'processing_error',
+                                                      'latex_representation', 'latex_explanation',
+                                                      'vlm_processing_status']:  # these can be set to None explicitly
+                            if v_new != v_old:  # only update if changed or explicitly set
+                                final_update_values[k] = v_new
+                    if 'last_indexed_db' not in final_update_values:  # Always update last_indexed_db
+                        final_update_values['last_indexed_db'] = record_data['last_indexed_db']
 
-                db_session.commit() # Commit the transaction for this file
-
+                    if final_update_values:  # Only execute update if there are changes
+                        stmt = update(FileIndex).where(FileIndex.id == existing_record.id).values(**final_update_values)
+                        db_session.execute(stmt)
+                        logger.trace(
+                            f"Phase 1 Updated DB ID {existing_record.id} for {file_path} with fields: {list(final_update_values.keys())}")
+                    else:
+                        logger.trace(
+                            f"Phase 1 No changes to update in DB for existing record ID {existing_record.id} ({file_path})")
+                else:  # New record
+                    new_record_obj = FileIndex(file_path=file_path, **record_data)  # type: ignore
+                    db_session.add(new_record_obj)
+                    logger.trace(f"Phase 1 Added new DB record for {file_path}")
+                db_session.commit()
             except SQLAlchemyError as db_err:
-                 logger.error(f"Phase 1 DB update/insert FAILED for {file_path}: {db_err}")
-                 db_session.rollback() # Rollback changes for this specific file on error
-                 logger.exception("DB Update/Insert Traceback:")
-
-        elif existing_record:
-             # Case: MD5 matched (should_update_db=False), but maybe VLM status needs updating
-             # This logic path might be redundant if VLM marking happens only when should_update_db is True.
-             # Check if the *calculated* VLM status differs from the existing one.
-             calculated_vlm_status = None # Recalculate what it *should* be based on type
-             file_ext = os.path.splitext(file_name)[1].lower()
-             is_vlm_target = file_ext in VLM_TARGET_EXTENSIONS
-             if is_vlm_target and self.vlm_model:
-                  calculated_vlm_status = 'pending_vlm' if file_ext == '.pdf' else 'pending_conversion'
-
-             if calculated_vlm_status is not None and existing_record.vlm_processing_status != calculated_vlm_status:
-                 logger.debug(f"Updating only VLM status to '{calculated_vlm_status}' for {file_path} (Content Unchanged)")
-                 try:
-                     update_data = {'vlm_processing_status': calculated_vlm_status}
-                     # Reset LaTeX fields if marking as pending
-                     if calculated_vlm_status in ['pending_vlm', 'pending_conversion']:
-                          update_data['latex_representation'] = None
-                          update_data['latex_explanation'] = None
-                     stmt = update(FileIndex).where(FileIndex.id == existing_record.id).values(**update_data)
-                     db_session.execute(stmt)
-                     db_session.commit()
-                 except SQLAlchemyError as db_vlm_err:
-                     logger.error(f"DB VLM status only update FAILED for {file_path}: {db_vlm_err}")
-                     db_session.rollback()
+                logger.error(f"Phase 1 DB update/insert FAILED for {file_path}: {db_err}", exc_info=True)
+                db_session.rollback()
+        elif existing_record:  # should_update_db was false, but we might need to update just VLM status if it was re-queued by hash/timestamp check
+            if vlm_processing_status_to_set and existing_record.vlm_processing_status != vlm_processing_status_to_set:
+                logger.debug(
+                    f"Content unchanged, but updating VLM status for {file_path} from '{existing_record.vlm_processing_status}' to '{vlm_processing_status_to_set}'")
+                try:
+                    update_vlm_data = {'vlm_processing_status': vlm_processing_status_to_set,
+                                       'last_indexed_db': datetime.datetime.now(datetime.timezone.utc)}
+                    if vlm_processing_status_to_set in ['pending_vlm', 'pending_conversion']:
+                        update_vlm_data['latex_representation'] = None;
+                        update_vlm_data['latex_explanation'] = None
+                    stmt = update(FileIndex).where(FileIndex.id == existing_record.id).values(**update_vlm_data)
+                    db_session.execute(stmt);
+                    db_session.commit()
+                except SQLAlchemyError as db_vlm_err:
+                    logger.error(f"DB VLM status only update FAILED for {file_path}: {db_vlm_err}");
+                    db_session.rollback()
     # --- END MODIFIED: _process_file_phase1 ---
 
 

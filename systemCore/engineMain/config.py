@@ -59,6 +59,8 @@ AGENT_MAX_SCRIPT_RETRIES = 3 # Max attempts to generate/fix AppleScript per acti
 ENABLE_FILE_INDEXER_STR = os.getenv("ENABLE_FILE_INDEXER", "true")
 ENABLE_FILE_INDEXER = ENABLE_FILE_INDEXER_STR.lower() in ('true', '1', 't', 'yes', 'y')
 logger.info(f"File Indexer Enabled: {ENABLE_FILE_INDEXER}")
+DB_TEXT_TRUNCATE_LEN = int(os.getenv("DB_TEXT_TRUNCATE_LEN", 50000)) # Max length for indexed_content before truncation
+
 
 # --- Database Settings (SQLite) ---
 _config_dir = os.path.dirname(os.path.abspath(__file__))
