@@ -156,13 +156,21 @@ STABLE_DIFFUSION_CPP_PYTHON_CLONE_DIR_NAME = "stable-diffusion-cpp-python_build"
 STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH = os.path.join(ROOT_DIR, STABLE_DIFFUSION_CPP_PYTHON_CLONE_DIR_NAME)
 CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".custom_sd_cpp_python_installed_v1_conda")
 
+# pywhispercpp python configuration
+PYWHISPERCPP_REPO_URL = "https://github.com/absadiki/pywhispercpp"
+PYWHISPERCPP_CLONE_DIR_NAME = "pywhispercpp_build" # Name for the local clone directory
+PYWHISPERCPP_CLONE_PATH = os.path.join(ROOT_DIR, PYWHISPERCPP_CLONE_DIR_NAME)
+PYWHISPERCPP_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".pywhispercpp_installed_v1")
+
+
 
 FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     LICENSE_FLAG_FILE,
     MELO_TTS_INSTALLED_FLAG_FILE,
     CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE,
     CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE,
-    CONDA_PATH_CACHE_FILE # If conda env is rebuilt, re-finding conda might be necessary
+    CONDA_PATH_CACHE_FILE,
+    PYWHISPERCPP_INSTALLED_FLAG_FILE # <-- Add this line
 ]
 
 
@@ -1208,6 +1216,85 @@ if __name__ == "__main__":
                 f.write(f"Tested: {datetime.now().isoformat()}\n")
         else:
             print_system("MeloTTS previously installed/tested.")
+
+        if not os.path.exists(PYWHISPERCPP_INSTALLED_FLAG_FILE):
+            print_system(f"--- PyWhisperCpp Installation (from local clone) ---")
+
+            if not shutil.which(GIT_CMD):
+                print_error(f"'{GIT_CMD}' not found. Git is required to install pywhispercpp from source.")
+                print_warning("Skipping PyWhisperCpp installation. ASR functionality will be unavailable.")
+            else:
+                # 1. Clean and Clone the repository
+                if os.path.exists(PYWHISPERCPP_CLONE_PATH):
+                    print_system(f"Removing existing pywhispercpp build directory: {PYWHISPERCPP_CLONE_PATH}")
+                    try:
+                        shutil.rmtree(PYWHISPERCPP_CLONE_PATH)
+                    except Exception as e:
+                        print_error(
+                            f"Failed to remove existing pywhispercpp build directory: {e}. Please remove it manually and retry.")
+                        # Consider this a blocking error for this install attempt
+
+                if not os.path.exists(PYWHISPERCPP_CLONE_PATH):  # Proceed only if old one is gone or never existed
+                    print_system(
+                        f"Cloning pywhispercpp from '{PYWHISPERCPP_REPO_URL}' to '{PYWHISPERCPP_CLONE_PATH}'...")
+                    if not run_command([GIT_CMD, "clone", PYWHISPERCPP_REPO_URL, PYWHISPERCPP_CLONE_PATH],
+                                       cwd=ROOT_DIR, name="GIT-CLONE-PYWHISPERCPP"):
+                        print_error("Failed to clone pywhispercpp repository. Installation aborted for this run.")
+                    else:
+                        print_system(f"Successfully cloned pywhispercpp to {PYWHISPERCPP_CLONE_PATH}.")
+
+                        # --- ADDED: Initialize and update submodules ---
+                        print_system(
+                            "Initializing and updating pywhispercpp submodules (e.g., whisper.cpp, pybind11)...")
+                        if not run_command([GIT_CMD, "submodule", "update", "--init", "--recursive"],
+                                           cwd=PYWHISPERCPP_CLONE_PATH,  # Run this inside the cloned repo
+                                           name="GIT-SUBMODULE-PYWHISPERCPP"):
+                            print_error(
+                                "Failed to update pywhispercpp submodules. Installation may fail or be incomplete.")
+                            # This is often critical, so you might consider exiting or marking install as failed.
+                        else:
+                            print_system("Pywhispercpp submodules updated successfully.")
+                        # --- END ADDED STEP ---
+
+                        # 2. Prepare environment and pip install from local clone
+                        pip_local_install_cmd = [PIP_EXECUTABLE, "install", "."]
+
+                        build_env_override = {}
+                        backend_detected = "default (CPU)"
+
+                        if os.getenv("GGML_CUDA") == '1':
+                            build_env_override['GGML_CUDA'] = '1';
+                            backend_detected = "CUDA"
+                            print_system("CUDA backend for PyWhisperCpp build detected via GGML_CUDA=1 env var.")
+                        elif os.getenv("WHISPER_COREML") == '1':
+                            build_env_override['WHISPER_COREML'] = '1';
+                            backend_detected = "CoreML"
+                            print_system(
+                                "CoreML backend for PyWhisperCpp build detected via WHISPER_COREML=1 env var.")
+                        # ... (add other elif for GGML_VULKAN, GGML_BLAS, WHISPER_OPENVINO as before) ...
+
+                        print_system(
+                            f"Attempting to build and install pywhispercpp from local source '{PYWHISPERCPP_CLONE_PATH}' (Target Backend: {backend_detected})...")
+
+                        if not run_command(pip_local_install_cmd,
+                                           cwd=PYWHISPERCPP_CLONE_PATH,
+                                           name="PIP-PYWHISPERCPP-LOCAL",
+                                           env_override=build_env_override if build_env_override else None):
+                            print_error("Failed to build/install pywhispercpp from local source.")
+                            print_warning("ASR functionality using Whisper.cpp might be impaired.")
+                        else:
+                            print_system("pywhispercpp built and installed successfully from local source.")
+                            print_warning(
+                                "For pywhispercpp to transcribe audio formats other than WAV, ensure FFmpeg is installed and accessible in your system's PATH.")
+                            try:
+                                with open(PYWHISPERCPP_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
+                                    f.write(
+                                        f"Installed from local source, backend hint '{backend_detected}' on: {datetime.now().isoformat()}\n")
+                                print_system("pywhispercpp installation flag created.")
+                            except IOError as flag_err:
+                                print_error(f"Could not create pywhispercpp installation flag file: {flag_err}")
+        else:
+            print_system("PyWhisperCpp previously installed (flag file found).")
 
         provider_env_check = os.getenv("PROVIDER", "llama_cpp").lower()
         if provider_env_check == "llama_cpp":
