@@ -134,6 +134,24 @@ if ENABLE_ASR:
     logger.info(f"   🎤 Default Whisper Language: {WHISPER_DEFAULT_LANGUAGE}")
     logger.info(f"   🎤 Client-Facing ASR Model Name (for API): {ASR_MODEL_NAME_CLIENT_FACING}")
 
+# --- Audio Translation Settings ---
+AUDIO_TRANSLATION_MODEL_CLIENT_FACING = os.getenv("AUDIO_TRANSLATION_MODEL_CLIENT_FACING", "Zephyloid-AudioTranslate-v1")
+# Default target language for audio translations if not specified by the client
+DEFAULT_TRANSLATION_TARGET_LANGUAGE = os.getenv("DEFAULT_TRANSLATION_TARGET_LANGUAGE", "en")
+# Which LLM model role to use for the text translation step.
+# The 'translator' role (e.g., NanoTranslator) is ideal if it supports the required language pairs.
+# Otherwise, 'general_fast' or 'general' could be used.
+TRANSLATION_LLM_ROLE = os.getenv("TRANSLATION_LLM_ROLE", "translator")
+ASR_WORKER_TIMEOUT = int(os.getenv("ASR_WORKER_TIMEOUT", 300)) # Timeout for ASR worker (if not already defined)
+TTS_WORKER_TIMEOUT = int(os.getenv("TTS_WORKER_TIMEOUT", 120)) # Timeout for TTS worker (if not already defined)
+TRANSLATION_LLM_TIMEOUT_MS = int(os.getenv("TRANSLATION_LLM_TIMEOUT_MS", 30000)) # Timeout for the LLM translation step (milliseconds)
+
+logger.info(f"🌐 Audio Translation Client-Facing Model: {AUDIO_TRANSLATION_MODEL_CLIENT_FACING}")
+logger.info(f"   🌐 Default Translation Target Language: {DEFAULT_TRANSLATION_TARGET_LANGUAGE}")
+logger.info(f"   🌐 LLM Role for Translation: {TRANSLATION_LLM_ROLE}")
+logger.info(f"   🌐 ASR Worker Timeout: {ASR_WORKER_TIMEOUT}s") # If you added this recently
+logger.info(f"   🌐 TTS Worker Timeout: {TTS_WORKER_TIMEOUT}s") # If you added this recently
+logger.info(f"   🌐 Translation LLM Timeout: {TRANSLATION_LLM_TIMEOUT_MS}ms")
 
 # --- StellaIcarusHook Settings ---
 ENABLE_STELLA_ICARUS_HOOKS = os.getenv("ENABLE_STELLA_ICARUS_HOOKS", "true").lower() in ('true', '1', 't', 'yes', 'y')
@@ -283,6 +301,19 @@ Invalid Text:
 {{{invalid_text}}}
 ============================
 Corrected JSON Output:
+"""
+
+
+PROMPT_TRANSLATE_TEXT = f"""Translate the following text into {{target_language_full_name}} (ISO code: {{target_language_code}}).
+The source text is likely in {{source_language_full_name}} (ISO code: {{source_language_code}}), but attempt auto-detection if {{source_language_code}} is 'auto'.
+Output ONLY the translated text. Do not add any explanations, greetings, or conversational filler.
+
+Text to Translate:
+\"\"\"
+{{text_to_translate}}
+\"\"\"
+
+Translated Text (into {{target_language_full_name}}):
 """
 
 PROMPT_ROUTER = """Analyze the user's query, conversation history, and context (including file search results) to determine the best specialized model to handle the request.
