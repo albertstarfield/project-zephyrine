@@ -702,7 +702,7 @@ class FileIndexer:
                             if hasattr(self.embedding_model, '_embed_texts') and callable(
                                     getattr(self.embedding_model, '_embed_texts')):
                                 embedding_list = self.embedding_model._embed_texts([extracted_text_for_embedding],
-                                                                                   priority=ELP0)  # type: ignore
+                                                                                   priority=ELP1)  # type: ignore (changed to ELP1 because it ran once and required to have the knowledge for zephy)
                                 if embedding_list and len(embedding_list) > 0:
                                     embedding_json_str = json.dumps(embedding_list[0])
                                     logger.trace(f"Content embedding successful for {file_path}")
