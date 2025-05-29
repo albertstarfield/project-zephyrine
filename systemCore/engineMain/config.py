@@ -71,6 +71,11 @@ PROJECT_CONFIG_DATABASE_URL = DATABASE_URL
 EFFECTIVE_DATABASE_URL_FOR_ALEMBIC = DATABASE_URL
 logger.info(f"Database URL set to: {DATABASE_URL}")
 
+# --- LLM Call Retry Settings for ELP0 Interruption ---
+LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES = int(os.getenv("LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES", 99999)) # e.g., 99999 retries
+LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY = int(os.getenv("LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY", 1)) # e.g., 1 seconds
+logger.info(f"🔧 LLM ELP0 Interrupt Max Retries: {LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES}")
+logger.info(f"🔧 LLM ELP0 Interrupt Retry Delay: {LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY}s")
 
 # --- Model Names (Ensure these exist in Ollama) ---
 OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:8141") # Default to 8141

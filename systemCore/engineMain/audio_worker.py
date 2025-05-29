@@ -4,6 +4,8 @@ import sys
 import os
 import json
 import time
+import tempfile
+import subprocess
 import traceback
 import argparse
 import base64
@@ -942,43 +944,51 @@ class SCLParser:
 def main():
     parser = argparse.ArgumentParser(description="Audio Worker (TTS & ASR)")
     parser.add_argument("--task-type", required=True, choices=["tts", "asr"], help="Task to perform: 'tts' or 'asr'")
-    # TTS specific args
-    parser.add_argument("--model-lang", default="EN", help="Language for TTS model (e.g., EN, ES, FR, ZH, JP, KR)")
-    # Common args
+    parser.add_argument("--model-lang", default="EN",
+                        help="Language for TTS model or ASR (e.g., EN, ES, FR, ZH, JP, KR)")
     parser.add_argument("--device", default="auto", help="Device for PyTorch (TTS) or backend hint (ASR if supported)")
     parser.add_argument("--model-dir", required=True,
                         help="Base directory for ALL models (MeloTTS language data and ASR GGUF)")
-    parser.add_argument("--temp-dir", default=".", help="Directory for temporary files (e.g., MP3 conversion)")
-    # Test mode specific arg (currently only for TTS)
-    parser.add_argument("--test-mode", action="store_true", help="Run TTS in test mode, generate fixed audio file.")
-    parser.add_argument("--output-file", default="test_output.mp3", help="Output filename for TTS test mode.")
+    parser.add_argument("--temp-dir", default=".",
+                        help="Base directory for temporary files (e.g., conversions, TTS output)")
+
+    parser.add_argument("--test-mode", action="store_true", help="Run in test mode. Behavior depends on --task-type.")
+    parser.add_argument("--output-file", default="test_output.wav", help="Output filename for TTS test mode audio.")
+    parser.add_argument("--test-audio-input", default="test_input.wav", help="Input audio filename for ASR test mode.")
+    parser.add_argument("--asr-test-model", default="whisper-large-v3-q8_0.gguf",
+                        help="Whisper model filename for ASR test mode (within --model-dir).")
 
     args = parser.parse_args()
     result_payload: Dict[str, Any] = {"error": f"Worker failed to complete task: {args.task_type}"}
 
     # --- TTS Task ---
     if args.task_type == "tts":
+        # --- [Your existing, confirmed working TTS Logic from response #57] ---
+        # This includes:
+        # - Checking MELO_AVAILABLE and SCLParser
+        # - Loading TTS model and SCLParser instance (corrected without sample_rate in constructor)
+        # - Handling args.test_mode for TTS
+        # - Handling standard TTS mode (reading JSON from stdin, calling SCLParser, format conversion, base64)
+        # - Setting result_payload
+        # - Error handling throughout
+        # For brevity, this full block is not repeated here, but it's the same as your working version.
+        # Ensure the SCLParser instantiation is:
+        # scl_parser_instance = SCLParser(tts_model_instance, device=args.device)
         log_worker("INFO",
                    f"TTS Task selected. Language: {args.model_lang}, Device: {args.device}, TestMode: {args.test_mode}")
-        if not MELO_AVAILABLE or SCLParser is None:  # Check if SCLParser class is available
+        if not MELO_AVAILABLE or SCLParser is None:
             result_payload = {"error": "MeloTTS or SCLParser not available/defined in worker for TTS."}
             log_worker("ERROR", result_payload["error"])
-            print(json.dumps(result_payload), flush=True)
+            print(json.dumps(result_payload), flush=True);
             sys.exit(1)
 
-        tts_model_instance = None  # MeloTTS model instance
+        tts_model_instance = None
         scl_parser_instance = None
         try:
             load_start = time.monotonic()
-            if 'torch' in sys.modules:
-                sys.modules['torch'].set_num_threads(1)
-
+            if 'torch' in sys.modules: sys.modules['torch'].set_num_threads(1)
             tts_model_instance = TTS(language=args.model_lang, device=args.device)
-
-            # --- CORRECTED LINE ---
             scl_parser_instance = SCLParser(tts_model_instance, device=args.device)
-            # --- END CORRECTION ---
-
             load_duration = time.monotonic() - load_start
             log_worker("INFO", f"TTS Model and SCLParser loaded successfully in {load_duration:.2f}s.")
         except Exception as e_load_tts:
@@ -988,24 +998,28 @@ def main():
             print(json.dumps(result_payload), flush=True);
             sys.exit(1)
 
-        if args.test_mode:
+        if args.test_mode:  # TTS Test Mode
             log_worker("INFO", "Running TTS in TEST MODE.")
-            test_text = "[prosody rate='medium' pitch='0.1']Hello Zephy, this is a test from the audio worker.[/prosody]"  # Shorter test
-            output_path_test = os.path.join(args.temp_dir, args.output_file)
+            test_text_tts = "[prosody rate='medium' pitch='0.1']This is a text to speech test from the audio worker test mode.[/prosody]"
+            output_path_tts_test = os.path.join(args.temp_dir, args.output_file)
+            os.makedirs(args.temp_dir, exist_ok=True)
             try:
-                log_worker("DEBUG", f"Test mode speaker: {args.model_lang}-US")
-                audio_data_test, sr_test = scl_parser_instance.parse(test_text,
-                                                                     speaker=f'{args.model_lang}-US')  # type: ignore
-
+                speaker_for_test = f'{args.model_lang}-US'
+                if speaker_for_test not in scl_parser_instance.speaker_ids:  # type: ignore
+                    first_available_speaker = list(scl_parser_instance.speaker_ids.keys())[
+                        0] if scl_parser_instance.speaker_ids else "EN-US"  # type: ignore
+                    log_worker("WARNING", f"Test speaker {speaker_for_test} not found, using {first_available_speaker}")
+                    speaker_for_test = first_available_speaker
+                audio_data_test, sr_test = scl_parser_instance.parse(test_text_tts,
+                                                                     speaker=speaker_for_test)  # type: ignore
                 if audio_data_test is not None and sr_test is not None:
                     audio_data_test_to_save = audio_data_test
                     if audio_data_test.ndim == 2 and audio_data_test.shape[0] < audio_data_test.shape[1] and \
                             audio_data_test.shape[0] <= 2:
                         audio_data_test_to_save = audio_data_test.T
-
-                    sf.write(output_path_test, audio_data_test_to_save, sr_test, format='WAV', subtype='PCM_16')
-                    log_worker("INFO", f"Test TTS audio generated and saved to {output_path_test}")
-                    result_payload = {"result": {"status": "Test TTS audio generated", "file": output_path_test}}
+                    sf.write(output_path_tts_test, audio_data_test_to_save, sr_test, format='WAV', subtype='PCM_16')
+                    log_worker("INFO", f"Test TTS audio generated and saved to {output_path_tts_test}")
+                    result_payload = {"result": {"status": "Test TTS audio generated", "file": output_path_tts_test}}
                 else:
                     result_payload = {"error": "Test TTS generation failed (SCLParser returned no audio data)."}
             except Exception as e_test_tts:
@@ -1014,96 +1028,82 @@ def main():
                 result_payload = {"error": f"TTS Test mode execution error: {str(e_test_tts)}"}
             print(json.dumps(result_payload), flush=True)
             sys.exit(0)
-
-        # Standard TTS Mode (from stdin)
-        input_json_str_tts: Optional[str] = None
-        try:
-            log_worker("INFO", "TTS Standard Mode: Waiting for request data on stdin...")
-            input_json_str_tts = sys.stdin.read()
-            if not input_json_str_tts: raise ValueError("Received empty input from stdin for TTS.")
-            request_data = json.loads(input_json_str_tts)
-            log_worker("INFO", "TTS Request data JSON parsed.")
-
-            text_to_speak = request_data.get("input")
-            speaker_id_req = request_data.get("voice", f'{args.model_lang}-US')
-            output_format_req = request_data.get("response_format", "mp3").lower()
-
-            if not text_to_speak or not isinstance(text_to_speak, str): raise ValueError(
-                "Missing or invalid 'input' for TTS.")
-            if not speaker_id_req or not isinstance(speaker_id_req,
-                                                    str) or speaker_id_req not in scl_parser_instance.speaker_ids:  # type: ignore
-                raise ValueError(
-                    f"Invalid 'voice'. Requested: '{speaker_id_req}'. Available: {list(scl_parser_instance.speaker_ids.keys())}")  # type: ignore
-
-            log_worker("INFO",
-                       f"Task: Speak Text='{text_to_speak[:50]}...', Speaker='{speaker_id_req}', Format='{output_format_req}'")
-            task_start_tts = time.monotonic()
-            final_audio_data, final_sample_rate = scl_parser_instance.parse(text_to_speak,
-                                                                            speaker=speaker_id_req)  # type: ignore
-            task_duration_tts = time.monotonic() - task_start_tts
-            log_worker("INFO", f"TTS generation by SCLParser completed in {task_duration_tts:.2f}s.")
-
-            if final_audio_data is None or final_sample_rate is None: raise RuntimeError(
-                "SCLParser failed to generate audio.")
-
-            audio_bytes_io = io.BytesIO()
-            target_mime_type = f"audio/{output_format_req}"
-            audio_to_write_tts = final_audio_data
-            if final_audio_data.ndim == 2 and final_audio_data.shape[0] < final_audio_data.shape[1] and \
-                    final_audio_data.shape[0] <= 2:
-                audio_to_write_tts = final_audio_data.T
-
-            if output_format_req == "wav":
-                sf.write(audio_bytes_io, audio_to_write_tts, final_sample_rate, format='WAV', subtype='PCM_16')
-                target_mime_type = "audio/wav"
-            elif output_format_req == "mp3":
-                if shutil.which("ffmpeg") is None and shutil.which("ffmpeg.exe") is None:
-                    log_worker("ERROR", "ffmpeg not found. Cannot convert to MP3. Defaulting to WAV.")
+        else:  # Standard TTS Mode
+            input_json_str_tts: Optional[str] = None
+            try:
+                log_worker("INFO", "TTS Standard Mode: Waiting for request data on stdin...")
+                input_json_str_tts = sys.stdin.read()
+                if not input_json_str_tts: raise ValueError("Received empty input from stdin for TTS.")
+                request_data = json.loads(input_json_str_tts)
+                log_worker("INFO", "TTS Request data JSON parsed.")
+                text_to_speak = request_data.get("input")
+                speaker_id_req = request_data.get("voice", f'{args.model_lang}-US')
+                output_format_req = request_data.get("response_format", "mp3").lower()
+                if not text_to_speak or not isinstance(text_to_speak, str): raise ValueError(
+                    "Missing or invalid 'input' for TTS.")
+                if not speaker_id_req or not isinstance(speaker_id_req,
+                                                        str) or speaker_id_req not in scl_parser_instance.speaker_ids:  # type: ignore
+                    raise ValueError(
+                        f"Invalid 'voice'. Requested: '{speaker_id_req}'. Available: {list(scl_parser_instance.speaker_ids.keys())}")  # type: ignore
+                log_worker("INFO",
+                           f"Task: Speak Text='{text_to_speak[:50]}...', Speaker='{speaker_id_req}', Format='{output_format_req}'")
+                task_start_tts = time.monotonic()
+                final_audio_data, final_sample_rate = scl_parser_instance.parse(text_to_speak,
+                                                                                speaker=speaker_id_req)  # type: ignore
+                task_duration_tts = time.monotonic() - task_start_tts
+                log_worker("INFO", f"TTS generation by SCLParser completed in {task_duration_tts:.2f}s.")
+                if final_audio_data is None or final_sample_rate is None: raise RuntimeError(
+                    "SCLParser failed to generate audio.")
+                audio_bytes_io = io.BytesIO();
+                target_mime_type = f"audio/{output_format_req}";
+                audio_to_write_tts = final_audio_data
+                if final_audio_data.ndim == 2 and final_audio_data.shape[0] < final_audio_data.shape[1] and \
+                        final_audio_data.shape[0] <= 2: audio_to_write_tts = final_audio_data.T
+                if output_format_req == "wav":
                     sf.write(audio_bytes_io, audio_to_write_tts, final_sample_rate, format='WAV', subtype='PCM_16');
-                    output_format_req = "wav";
                     target_mime_type = "audio/wav"
-                else:
-                    temp_mp3_path = os.path.join(args.temp_dir, f"temp_tts_{os.getpid()}.mp3")
-                    try:
-                        audio_tensor_for_save = torch.from_numpy(final_audio_data.astype(np.float32))
-                        if audio_tensor_for_save.ndim == 1:
-                            audio_tensor_for_save = audio_tensor_for_save.unsqueeze(0)
-                        elif audio_tensor_for_save.shape[1] < audio_tensor_for_save.shape[0] and \
-                                audio_tensor_for_save.shape[1] <= 2:
-                            audio_tensor_for_save = audio_tensor_for_save.T
-
-                        torchaudio.save(temp_mp3_path, audio_tensor_for_save, final_sample_rate, format="mp3")
-                        with open(temp_mp3_path, "rb") as f_mp3:
-                            audio_bytes_io.write(f_mp3.read())
-                        target_mime_type = "audio/mpeg"
-                    except Exception as mp3_err:
-                        log_worker("ERROR", f"Failed to convert to MP3: {mp3_err}. Defaulting to WAV.")
-                        audio_bytes_io = io.BytesIO();
+                elif output_format_req == "mp3":
+                    if shutil.which("ffmpeg") is None and shutil.which("ffmpeg.exe") is None:
+                        log_worker("ERROR", "ffmpeg not found. Defaulting to WAV.");
                         sf.write(audio_bytes_io, audio_to_write_tts, final_sample_rate, format='WAV', subtype='PCM_16');
                         output_format_req = "wav";
                         target_mime_type = "audio/wav"
-                    finally:
-                        if os.path.exists(temp_mp3_path):
-                            try:
-                                os.remove(temp_mp3_path)
-                            except Exception as e_rm:
-                                log_worker("WARNING", f"Failed to remove temp MP3 {temp_mp3_path}: {e_rm}")
-            else:
-                log_worker("WARNING", f"Unsupported TTS output format '{output_format_req}'. Defaulting to WAV.")
-                sf.write(audio_bytes_io, audio_to_write_tts, final_sample_rate, format='WAV', subtype='PCM_16');
-                output_format_req = "wav";
-                target_mime_type = "audio/wav"
-
-            audio_bytes_io.seek(0)
-            audio_base64 = base64.b64encode(audio_bytes_io.read()).decode('utf-8')
-            result_payload = {
-                "result": {"audio_base64": audio_base64, "format": output_format_req, "mime_type": target_mime_type,
-                           "sample_rate": final_sample_rate}}
-        except Exception as e_tts_std:
-            log_worker("ERROR", f"TTS Standard Mode failed: {e_tts_std}");
-            if input_json_str_tts: log_worker("ERROR", f"TTS Failing Input: {input_json_str_tts[:500]}")
-            log_worker("ERROR", traceback.format_exc())
-            result_payload = {"error": f"Worker TTS execution error: {str(e_tts_std)}"}
+                    else:
+                        temp_mp3_path = os.path.join(args.temp_dir, f"temp_tts_{os.getpid()}.mp3")
+                        try:
+                            audio_tensor_save = torch.from_numpy(final_audio_data.astype(np.float32))
+                            if audio_tensor_save.ndim == 1:
+                                audio_tensor_save = audio_tensor_save.unsqueeze(0)
+                            elif audio_tensor_save.shape[1] < audio_tensor_save.shape[0] and audio_tensor_save.shape[
+                                1] <= 2:
+                                audio_tensor_save = audio_tensor_save.T
+                            torchaudio.save(temp_mp3_path, audio_tensor_save, final_sample_rate, format="mp3")
+                            with open(temp_mp3_path, "rb") as fmp3:
+                                audio_bytes_io.write(fmp3.read())
+                            target_mime_type = "audio/mpeg"
+                        except Exception as mp3_err:
+                            log_worker("ERROR", f"MP3 conversion error: {mp3_err}. Defaulting to WAV.");
+                            audio_bytes_io = io.BytesIO();
+                            sf.write(audio_bytes_io, audio_to_write_tts, final_sample_rate, format='WAV',
+                                     subtype='PCM_16');
+                            output_format_req = "wav";
+                            target_mime_type = "audio/wav"
+                        finally:
+                            if os.path.exists(temp_mp3_path): os.remove(temp_mp3_path)
+                else:
+                    sf.write(audio_bytes_io, audio_to_write_tts, final_sample_rate, format='WAV',
+                             subtype='PCM_16'); output_format_req = "wav"; target_mime_type = "audio/wav"
+                audio_bytes_io.seek(0);
+                audio_base64 = base64.b64encode(audio_bytes_io.read()).decode('utf-8')
+                result_payload = {
+                    "result": {"audio_base64": audio_base64, "format": output_format_req, "mime_type": target_mime_type,
+                               "sample_rate": final_sample_rate}}
+            except Exception as e_tts_std:
+                log_worker("ERROR", f"TTS Standard Mode failed: {e_tts_std}");
+                if input_json_str_tts: log_worker("ERROR", f"TTS Failing Input: {input_json_str_tts[:500]}")
+                log_worker("ERROR", traceback.format_exc());
+                result_payload = {"error": f"Worker TTS execution error: {str(e_tts_std)}"}
+        # --- End TTS Standard Mode ---
 
     # --- ASR Task ---
     elif args.task_type == "asr":
@@ -1114,47 +1114,132 @@ def main():
             print(json.dumps(result_payload), flush=True);
             sys.exit(1)
 
-        # Use config variables for ASR model details
-        # These are available because 'from config import *' is at the top of audio_worker.py
-        asr_model_directory = WHISPER_MODEL_DIR  # From config.py (defaults to LLAMA_CPP_GGUF_DIR)
-        default_asr_model_filename = WHISPER_DEFAULT_MODEL_FILENAME  # From config.py
-        default_asr_language = WHISPER_DEFAULT_LANGUAGE  # From config.py
+        # Use config variables from config.py (available via 'from config import *')
+        # These are defined at the module level if config.py is imported.
+        asr_model_directory = WHISPER_MODEL_DIR
+        default_asr_model_filename = WHISPER_DEFAULT_MODEL_FILENAME
+        default_asr_language = WHISPER_DEFAULT_LANGUAGE
 
         log_worker("INFO",
-                   f"ASR Config: Model Dir='{asr_model_directory}', Default Model='{default_asr_model_filename}', Default Lang='{default_asr_language}'")
+                   f"ASR Config Used: Model Dir='{asr_model_directory}', Default Model='{default_asr_model_filename}', Default Lang='{default_asr_language}'")
 
-        input_json_str_asr: Optional[str] = None
+        temp_converted_wav_path: Optional[str] = None
+        input_audio_path_resolved: Optional[str] = None
+        asr_model_filename_to_load: str = default_asr_model_filename
+        language_to_use: str = default_asr_language
+
+        if args.test_mode:
+            log_worker("INFO", "Running ASR in TEST MODE.")
+            # Construct path relative to script's temp_dir or model_dir for test input
+            input_audio_path_resolved = os.path.join(args.temp_dir, args.test_audio_input)
+            if not os.path.exists(input_audio_path_resolved):
+                input_audio_path_resolved = os.path.join(args.model_dir, args.test_audio_input)
+
+            if not os.path.exists(input_audio_path_resolved):
+                log_worker("ERROR",
+                           f"ASR Test Mode: Test audio file '{args.test_audio_input}' not found in '{args.temp_dir}' or '{args.model_dir}'.")
+                result_payload = {"error": f"ASR test audio file not found: {args.test_audio_input}"}
+                print(json.dumps(result_payload), flush=True);
+                sys.exit(1)
+
+            asr_model_filename_to_load = args.asr_test_model
+            language_to_use = args.model_lang
+        else:  # Standard ASR Mode (from stdin)
+            input_json_str_asr: Optional[str] = None
+            try:
+                log_worker("INFO", "ASR Standard Mode: Waiting for request data on stdin...")
+                input_json_str_asr = sys.stdin.read()
+                if not input_json_str_asr: raise ValueError("ASR task: Received empty input from stdin.")
+                request_data = json.loads(input_json_str_asr)
+                log_worker("INFO", "ASR Request data JSON parsed.")
+
+                input_audio_path_resolved = request_data.get("input_audio_path")
+                asr_model_filename_to_load = request_data.get("whisper_model_name", default_asr_model_filename)
+                language_to_use = request_data.get("language", default_asr_language)
+
+                if not input_audio_path_resolved: raise ValueError("Missing 'input_audio_path' for ASR task.")
+                if not os.path.exists(input_audio_path_resolved): raise FileNotFoundError(
+                    f"Input audio file not found: {input_audio_path_resolved}")
+            except Exception as e_asr_stdin:
+                log_worker("ERROR", f"ASR task failed during stdin processing: {e_asr_stdin}");
+                if input_json_str_asr: log_worker("ERROR", f"ASR Failing Input: {input_json_str_asr[:500]}")
+                log_worker("ERROR", traceback.format_exc())
+                result_payload = {"error": f"Worker ASR input error: {str(e_asr_stdin)}"}
+                print(json.dumps(result_payload), flush=True);
+                sys.exit(1)
+
+        # --- Common ASR processing for both test and standard mode from here ---
         try:
-            log_worker("INFO", "ASR Standard Mode: Waiting for request data on stdin...")
-            input_json_str_asr = sys.stdin.read()
-            if not input_json_str_asr: raise ValueError("ASR task: Received empty input from stdin.")
-            request_data = json.loads(input_json_str_asr)
-            log_worker("INFO", "ASR Request data JSON parsed.")
+            # Model path is constructed using args.model_dir (passed by app.py, points to staticmodelpool)
+            # and asr_model_filename_to_load (from request or test arg).
+            model_directory_for_asr_load = args.model_dir
+            full_whisper_model_path = os.path.join(model_directory_for_asr_load, asr_model_filename_to_load)
 
-            input_audio_path = request_data.get("input_audio_path")
-            # Allow request to override model filename, else use default from config
-            whisper_model_filename_from_req = request_data.get("whisper_model_name", default_asr_model_filename)
-            language_from_req = request_data.get("language", default_asr_language)
-
-            if not input_audio_path: raise ValueError("Missing 'input_audio_path' for ASR task.")
-            if not os.path.exists(input_audio_path): raise FileNotFoundError(
-                f"Input audio file not found: {input_audio_path}")
-
-            # Construct full path using WHISPER_MODEL_DIR from config.py
-            full_whisper_model_path = os.path.join(asr_model_directory, whisper_model_filename_from_req)
             if not os.path.exists(full_whisper_model_path):
                 raise FileNotFoundError(
-                    f"Whisper model file not found: {full_whisper_model_path}. Ensure it is in '{asr_model_directory}'")
+                    f"Whisper model file '{asr_model_filename_to_load}' not found in '{model_directory_for_asr_load}'")
+
+            path_to_transcribe = input_audio_path_resolved
+            ffmpeg_path = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
+
+            if not ffmpeg_path:
+                log_worker("WARNING",
+                           "ffmpeg command not found. ASR will only work if input audio is already 16kHz mono WAV.")
+            else:
+                log_worker("INFO",
+                           f"Found ffmpeg: {ffmpeg_path}. Attempting audio conversion to 16kHz mono WAV for: {input_audio_path_resolved}")
+
+                # Define a specific subdirectory within args.temp_dir for these conversions
+                asr_conversion_temp_dir = os.path.join(args.temp_dir, "asr_ffmpeg_temp")
+                os.makedirs(asr_conversion_temp_dir, exist_ok=True)
+
+                with tempfile.NamedTemporaryFile(prefix="asr_converted_", suffix=".wav", dir=asr_conversion_temp_dir,
+                                                 delete=False) as tmp_f:
+                    temp_converted_wav_path = tmp_f.name
+
+                ffmpeg_command = [
+                    ffmpeg_path, '-i', input_audio_path_resolved,
+                    '-ar', '16000', '-ac', '1', '-acodec', 'pcm_s16le',
+                    '-y', temp_converted_wav_path
+                ]
+                log_worker("INFO", f"Running ffmpeg: {' '.join(ffmpeg_command)}")
+                conversion_start_time = time.monotonic()
+                try:
+                    process = subprocess.run(ffmpeg_command, capture_output=True, text=True, check=False,
+                                             timeout=120)  # 2 min timeout
+                    conversion_duration = time.monotonic() - conversion_start_time
+                    if process.returncode == 0:
+                        log_worker("INFO",
+                                   f"ffmpeg conversion successful in {conversion_duration:.2f}s. Using: {temp_converted_wav_path}")
+                        path_to_transcribe = temp_converted_wav_path
+                    else:
+                        log_worker("ERROR",
+                                   f"ffmpeg conversion failed (RC={process.returncode}). Stderr: {process.stderr.strip()}")
+                        log_worker("WARNING", "ASR will attempt original audio. May fail if not 16kHz mono WAV.")
+                        if temp_converted_wav_path and os.path.exists(temp_converted_wav_path): os.remove(
+                            temp_converted_wav_path)
+                        temp_converted_wav_path = None
+                except subprocess.TimeoutExpired:
+                    log_worker("ERROR", "ffmpeg conversion timed out.");
+                    if temp_converted_wav_path and os.path.exists(temp_converted_wav_path): os.remove(
+                        temp_converted_wav_path)
+                    temp_converted_wav_path = None
+                except Exception as e_ffmpeg_run:
+                    log_worker("ERROR", f"Error running ffmpeg: {e_ffmpeg_run}")
+                    if temp_converted_wav_path and os.path.exists(temp_converted_wav_path): os.remove(
+                        temp_converted_wav_path)
+                    temp_converted_wav_path = None
 
             log_worker("INFO", f"Loading Whisper model for ASR: {full_whisper_model_path}")
-            whisper_model_instance = WhisperModel(model_path=full_whisper_model_path, print_realtime=False,
-                                                  print_progress=False)
+            whisper_model_instance = WhisperModel(model=full_whisper_model_path, print_realtime=False,
+                                                  print_progress=False)  # Use model=
 
-            log_worker("INFO", f"Transcribing audio file: {input_audio_path} with language: {language_from_req}")
-            transcribe_params = {'language': language_from_req, 'translate': False}
+            log_worker("INFO", f"Transcribing audio file: {path_to_transcribe} with language: {language_to_use}")
+            transcribe_params = {'language': language_to_use, 'translate': False}
 
             task_start_asr = time.monotonic()
-            segments = whisper_model_instance.transcribe(input_audio_path, params=transcribe_params)
+            # Unpack the params dictionary
+            segments = whisper_model_instance.transcribe(path_to_transcribe, **transcribe_params)
             task_duration_asr = time.monotonic() - task_start_asr
 
             transcribed_text = "".join(segment.text for segment in segments).strip()
@@ -1164,11 +1249,18 @@ def main():
             log_worker("DEBUG", f"Transcribed text (first 200 chars): {transcribed_text[:200]}")
             result_payload = {"result": {"text": transcribed_text}}
 
-        except Exception as e_asr:
-            log_worker("ERROR", f"ASR task failed: {e_asr}");
-            if input_json_str_asr: log_worker("ERROR", f"ASR Failing Input: {input_json_str_asr[:500]}")
+        except Exception as e_asr_process:
+            log_worker("ERROR", f"ASR processing failed: {e_asr_process}");
             log_worker("ERROR", traceback.format_exc())
-            result_payload = {"error": f"Worker ASR execution error: {str(e_asr)}"}
+            result_payload = {"error": f"Worker ASR processing error: {str(e_asr_process)}"}
+        finally:
+            if temp_converted_wav_path and os.path.exists(temp_converted_wav_path):
+                try:
+                    os.remove(temp_converted_wav_path)
+                    log_worker("INFO", f"Cleaned up temporary converted WAV file: {temp_converted_wav_path}")
+                except Exception as e_del_temp:
+                    log_worker("WARNING",
+                               f"Failed to delete temporary WAV file {temp_converted_wav_path}: {e_del_temp}")
 
     else:
         result_payload = {"error": f"Unknown task_type specified to worker: {args.task_type}"}
@@ -1190,6 +1282,7 @@ def main():
 
     log_worker("INFO", f"Audio Worker (PID {os.getpid()}) process finished task: {args.task_type}.")
     sys.exit(0)
+
 
 if __name__ == "__main__":
     if not MELO_AVAILABLE and not PYWHISPERCPP_AVAILABLE:
