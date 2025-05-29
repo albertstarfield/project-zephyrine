@@ -4300,17 +4300,19 @@ class AIChat:
                  db.close()
 
     def _analyze_assistant_action(self, db: Session, user_input: str, session_id: str, context: Dict[str, str]) -> \
-    Optional[Dict[str, Any]]:
+            Optional[Dict[str, Any]]:
         """
         Calls LLM (ELP0) to check if input implies a macOS action, extracts parameters.
-        Uses a more robust method to find the JSON block, ignoring <think> tags during extraction.
+        Uses a more robust method to find the JSON block, ignoring <think> tags.
         Handles TaskInterruptedException by re-raising.
         Retries JSON extraction on other errors. Ensures a valid model key is returned.
+        Logs the input prompt_input dictionary on parsing failure.
         """
-        request_id_suffix = str(uuid.uuid4())[:8]  # Shorter suffix for log prefix
+        request_id_suffix = str(uuid.uuid4())[:8]
         log_prefix = f"🤔 ActionAnalyze|ELP0|{session_id[:8]}-{request_id_suffix}"
         logger.info(f"{log_prefix} Analyzing input for potential Assistant Action: '{user_input[:50]}...'")
 
+        # prompt_input is the dictionary passed to the Langchain prompt template
         prompt_input = {
             "input": user_input,
             "history_summary": context.get("history_summary", "N/A"),
@@ -4329,30 +4331,29 @@ class AIChat:
                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
                                 user_input="[Action Analysis Failed - Model Unavailable]",
                                 llm_response="Action analysis model unavailable.")
+                db.commit()
             except Exception as db_err:
                 logger.error(f"{log_prefix} Failed log action analysis model error: {db_err}")
+                if db: db.rollback()
             return None
 
-        # Chain to get raw string output first
         analysis_chain_raw_output = (
                 ChatPromptTemplate.from_template(PROMPT_ASSISTANT_ACTION_ANALYSIS)
                 | action_analysis_model
                 | StrOutputParser()
         )
-
-        json_parser = JsonOutputParser()  # For parsing the cleaned JSON string
+        json_parser = JsonOutputParser()
 
         action_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
         last_error: Optional[Exception] = None
-        raw_llm_response_full_for_logging = "Error: Analysis LLM call failed or did not produce parsable output."
-        classification_reason_from_llm_if_any = "N/A (No JSON reason extracted)"
+        raw_llm_response_full_for_logging = "Error: Analysis LLM call did not produce parsable output."
 
         for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):
             current_attempt_num = attempt + 1
             logger.debug(
                 f"{log_prefix} Assistant Action analysis attempt {current_attempt_num}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
 
-            raw_llm_response_text_current_attempt = ""  # Specific to this attempt
+            raw_llm_response_text_current_attempt = ""
             json_str_to_parse_current_attempt: Optional[str] = None
             analysis_result_current_attempt: Optional[Dict[str, Any]] = None
 
@@ -4360,10 +4361,10 @@ class AIChat:
                 raw_llm_response_text_current_attempt = self._call_llm_with_timing(
                     analysis_chain_raw_output,
                     prompt_input,
-                    action_timing_data,  # This dict is mutated by _call_llm_with_timing
+                    action_timing_data,
                     priority=ELP0
                 )
-                raw_llm_response_full_for_logging = raw_llm_response_text_current_attempt  # Update for logging on error
+                raw_llm_response_full_for_logging = raw_llm_response_text_current_attempt
                 logger.trace(
                     f"{log_prefix} Raw LLM Analysis Response (Attempt {current_attempt_num}):\n{raw_llm_response_text_current_attempt}")
 
@@ -4373,31 +4374,32 @@ class AIChat:
                 json_markdown_match = re.search(r"```json\s*(.*?)\s*```", text_after_think_removal, re.DOTALL)
                 if json_markdown_match:
                     json_str_to_parse_current_attempt = json_markdown_match.group(1).strip()
-                    logger.trace(
-                        f"{log_prefix} Extracted JSON from markdown block: {json_str_to_parse_current_attempt}")
                 else:
                     first_brace = text_after_think_removal.find('{')
                     last_brace = text_after_think_removal.rfind('}')
                     if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
                         json_str_to_parse_current_attempt = text_after_think_removal[
                                                             first_brace: last_brace + 1].strip()
-                        logger.trace(
-                            f"{log_prefix} Extracted JSON using find '{{...}}' fallback: {json_str_to_parse_current_attempt}")
                     else:
                         json_str_to_parse_current_attempt = text_after_think_removal
-                        logger.warning(
-                            f"{log_prefix} No clear JSON block found in (cleaned) '{text_after_think_removal[:100]}...', will attempt to parse.")
+                        if not (json_str_to_parse_current_attempt.startswith(
+                                "{") and json_str_to_parse_current_attempt.endswith("}")):
+                            logger.warning(
+                                f"{log_prefix} No clear JSON block found in (cleaned) '{text_after_think_removal[:100]}...'. LLM output might be non-JSON. Will attempt to parse.")
 
                 if not json_str_to_parse_current_attempt or not json_str_to_parse_current_attempt.strip():
                     logger.warning(
                         f"{log_prefix} After cleaning, string to parse for JSON is empty. Raw was: '{raw_llm_response_text_current_attempt}'")
                     last_error = ValueError("LLM response for action analysis was empty after cleaning.")
+                    logger.debug(
+                        f"{log_prefix} LLM Input that resulted in empty JSON string (Attempt {current_attempt_num}):\nINPUT_START>>>\n{json.dumps(prompt_input, indent=2, default=str)}\n<<<INPUT_END")
                     try:
                         add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
                                         user_input=f"[Action Analysis Empty after Clean Attempt {current_attempt_num}]",
                                         llm_response=f"Raw: {raw_llm_response_text_current_attempt[:500]}")
-                    except Exception:
-                        pass
+                        db.commit()
+                    except Exception as db_err_empty_json:
+                        logger.error(f"{log_prefix} DB log error for empty JSON: {db_err_empty_json}"); db.rollback()
                     if current_attempt_num < DEEP_THOUGHT_RETRY_ATTEMPTS:
                         time.sleep(0.5 + attempt * 0.5); continue
                     else:
@@ -4405,13 +4407,12 @@ class AIChat:
 
                 analysis_result_current_attempt = json_parser.parse(json_str_to_parse_current_attempt)
 
-                # Validate structure
-                if isinstance(analysis_result_current_attempt,
-                              dict) and "action_type" in analysis_result_current_attempt and "parameters" in analysis_result_current_attempt:
+                if isinstance(analysis_result_current_attempt, dict) and \
+                        "action_type" in analysis_result_current_attempt and \
+                        "parameters" in analysis_result_current_attempt:
                     action_type = analysis_result_current_attempt.get("action_type")
                     parameters = analysis_result_current_attempt.get("parameters", {})
                     explanation = analysis_result_current_attempt.get("explanation", "N/A")
-                    classification_reason_from_llm_if_any = explanation  # Store the latest good explanation
 
                     logger.info(
                         f"✅ {log_prefix} Assistant Action analysis successful (Attempt {current_attempt_num}): Type='{action_type}', Params={parameters}, Explanation='{explanation[:50]}...'")
@@ -4421,81 +4422,91 @@ class AIChat:
                                         user_input=f"Assistant Action Analysis OK for: {user_input[:100]}...",
                                         llm_response=f"Action Type: {action_type}, Explanation: {explanation}",
                                         assistant_action_analysis_json=json.dumps(analysis_result_current_attempt),
-                                        # Store parsed JSON
                                         assistant_action_type=action_type,
                                         assistant_action_params=json.dumps(parameters)
                                         )
-                    except Exception as db_err:
-                        logger.error(f"{log_prefix} Failed log action analysis success: {db_err}")
-
+                        db.commit()
+                    except Exception as db_err_aa_ok:
+                        logger.error(f"{log_prefix} DB log error for AA success: {db_err_aa_ok}"); db.rollback()
                     return analysis_result_current_attempt if action_type != "no_action" else None
                 else:
                     logger.warning(
                         f"{log_prefix} Assistant Action analysis produced invalid JSON structure (Attempt {current_attempt_num}): {analysis_result_current_attempt}. String parsed: '{json_str_to_parse_current_attempt}'")
                     last_error = ValueError("Invalid JSON structure after parsing for action analysis")
+                    logger.debug(
+                        f"{log_prefix} LLM Input that led to invalid JSON structure (Attempt {current_attempt_num}):\nINPUT_START>>>\n{json.dumps(prompt_input, indent=2, default=str)}\n<<<INPUT_END")
                     try:
                         add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
                                         user_input=f"Action Analysis Invalid Structure (Attempt {current_attempt_num})",
                                         llm_response=f"Parsed: {str(analysis_result_current_attempt)[:500]}. From: '{json_str_to_parse_current_attempt[:200]}'. Raw: {raw_llm_response_text_current_attempt[:500]}",
                                         assistant_action_analysis_json=raw_llm_response_text_current_attempt[:4000])
-                    except Exception as db_err:
-                        logger.error(f"{log_prefix} Failed log invalid structure: {db_err}")
-                    # Continue to next retry
+                        db.commit()
+                    except Exception as db_err_inv_struct:
+                        logger.error(
+                            f"{log_prefix} DB log error for invalid structure: {db_err_inv_struct}"); db.rollback()
 
             except TaskInterruptedException as tie:
                 logger.warning(f"🚦 {log_prefix} Action Analysis INTERRUPTED (Attempt {current_attempt_num}): {tie}")
-                raise tie
-            except json.JSONDecodeError as json_e:
-                last_error = json_e
+                raise tie  # Propagate to caller (background_generate)
+            except (json.JSONDecodeError, OutputParserException) as parse_err:
+                last_error = parse_err
                 logger.warning(
-                    f"⚠️ {log_prefix} Failed to parse JSON (Attempt {current_attempt_num}): {json_e}. String tried: '{json_str_to_parse_current_attempt if json_str_to_parse_current_attempt is not None else 'N/A'}'. Raw LLM: '{raw_llm_response_text_current_attempt[:200]}...'")
+                    f"⚠️ {log_prefix} Failed to parse JSON for action analysis (Attempt {current_attempt_num}): {parse_err}. "
+                    f"String tried: '{json_str_to_parse_current_attempt if json_str_to_parse_current_attempt is not None else 'N/A'}'. "
+                    f"Raw LLM (from _call_llm_with_timing): '{raw_llm_response_text_current_attempt[:200]}...'")
+                try:
+                    prompt_input_json_str = json.dumps(prompt_input, indent=2, default=str)
+                    logger.debug(
+                        f"{log_prefix} LLM Input that led to JSON parse failure (Attempt {current_attempt_num}):\nINPUT_START>>>\n{prompt_input_json_str}\n<<<INPUT_END")
+                except Exception as dump_err:
+                    logger.error(f"{log_prefix} Could not serialize prompt_input for debug: {dump_err}")
                 try:
                     add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
                                     user_input=f"Action Analysis JSON Parse FAILED (Attempt {current_attempt_num})",
-                                    llm_response=f"Error: {json_e}. Tried to parse: '{str(json_str_to_parse_current_attempt)[:500]}'. Raw LLM: {raw_llm_response_text_current_attempt[:1000]}",
+                                    llm_response=f"Error: {parse_err}. Tried: '{str(json_str_to_parse_current_attempt)[:500]}'. Raw: {raw_llm_response_text_current_attempt[:1000]}",
                                     assistant_action_analysis_json=raw_llm_response_text_current_attempt[:4000])
-                except Exception as db_err:
-                    logger.error(f"{log_prefix} Failed log JSON parse failure: {db_err}")
+                    db.commit()
+                except Exception as db_err_json:
+                    logger.error(f"{log_prefix} DB log error for JSON parse fail: {db_err_json}"); db.rollback()
             except Exception as e:
                 last_error = e
                 logger.warning(
                     f"⚠️ {log_prefix} Error during Action Analysis processing (Attempt {current_attempt_num}): {e}")
-                # --- DIAGNOSTIC LOGS for 'got coroutine' type errors ---
+                logger.exception(f"{log_prefix} Action Analysis Attempt {current_attempt_num} Traceback:")
+                try:
+                    prompt_input_json_str = json.dumps(prompt_input, indent=2, default=str)
+                    logger.debug(
+                        f"{log_prefix} LLM Input that led to general error (Attempt {current_attempt_num}):\nINPUT_START>>>\n{prompt_input_json_str}\n<<<INPUT_END")
+                except Exception as dump_err:
+                    logger.error(f"{log_prefix} Could not serialize prompt_input for debug: {dump_err}")
+
                 logger.warning(
-                    f"   Type of raw_llm_response_text_current_attempt at this error point: {type(raw_llm_response_text_current_attempt)}")
-                if asyncio.iscoroutine(raw_llm_response_text_current_attempt):
-                    logger.warning(
-                        f"   Content of raw_llm_response_text_current_attempt (it is a coroutine): {str(raw_llm_response_text_current_attempt)}")
-                else:  # Log a snippet if it's not a coroutine, to see what it was
-                    logger.warning(
-                        f"   Content of raw_llm_response_text_current_attempt: {str(raw_llm_response_text_current_attempt)[:200]}...")
-                # --- END DIAGNOSTIC LOGS ---
+                    f"   Type of raw_llm_response_text_current_attempt: {type(raw_llm_response_text_current_attempt)}")
+                logger.warning(f"   Content (snippet): {str(raw_llm_response_text_current_attempt)[:200]}...")
                 try:
                     add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
                                     user_input=f"Action Analysis FAILED (Attempt {current_attempt_num})",
-                                    llm_response=f"Error: {e}. Raw (type {type(raw_llm_response_text_current_attempt)}): {str(raw_llm_response_text_current_attempt)[:1000]}",
+                                    llm_response=f"Error: {e}. Raw: {str(raw_llm_response_text_current_attempt)[:1000]}",
                                     assistant_action_analysis_json=str(raw_llm_response_text_current_attempt)[:4000])
-                except Exception as db_err:
-                    logger.error(f"{log_prefix} Failed log general analysis failure: {db_err}")
+                    db.commit()
+                except Exception as db_err_gen:
+                    logger.error(f"{log_prefix} DB log error for general fail: {db_err_gen}"); db.rollback()
 
-            # Wait before retrying if not last attempt and not interrupted
             if current_attempt_num < DEEP_THOUGHT_RETRY_ATTEMPTS:
-                time.sleep(0.5 + attempt * 0.5)  # Correct: synchronous sleep
+                time.sleep(0.5 + attempt * 0.5)
             else:  # Max retries reached
                 logger.error(
                     f"❌ {log_prefix} Max retries ({DEEP_THOUGHT_RETRY_ATTEMPTS}) reached for Assistant Action analysis. Last error: {last_error}")
-                logger.error(f"   Type of last_error: {type(last_error)}")
-                # Log final failure to DB, using the last raw response we captured
                 try:
                     add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
                                     user_input=f"Action Analysis Max Retries for: {user_input[:100]}...",
-                                    llm_response=f"Max retries. Last Error: {last_error}. Last LLM output captured: {raw_llm_response_full_for_logging[:500]}",
+                                    llm_response=f"Max retries. Last Error: {last_error}. Last LLM output: {raw_llm_response_full_for_logging[:500]}",
                                     assistant_action_analysis_json=raw_llm_response_full_for_logging[:4000])
+                    db.commit()
                 except Exception as db_final_err:
-                    logger.error(f"{log_prefix} Failed to log max_retries error to DB: {db_final_err}")
+                    logger.error(f"{log_prefix} DB log error for max retries: {db_final_err}"); db.rollback()
                 return None
 
-                # Fallback if loop finishes due to max retries without returning successfully
         logger.error(
             f"{log_prefix} Exited Assistant Action analysis loop after {DEEP_THOUGHT_RETRY_ATTEMPTS} attempts without success. Last error: {last_error}")
         return None

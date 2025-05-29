@@ -92,7 +92,7 @@ MAX_TEXT_FILE_SIZE_MB = 1
 MAX_TEXT_FILE_SIZE_BYTES = MAX_TEXT_FILE_SIZE_MB * 1024 * 1024
 MAX_HASH_FILE_SIZE_MB = 500 # <<< Limit size for hashing (adjustable)
 MAX_HASH_FILE_SIZE_BYTES = MAX_HASH_FILE_SIZE_MB * 1024 * 1024
-SCAN_INTERVAL_HOURS = 1
+SCAN_INTERVAL_HOURS = 12
 SCAN_INTERVAL_SECONDS = SCAN_INTERVAL_HOURS * 60 * 60
 YIELD_SLEEP_SECONDS = 0.00 # Small sleep during scanning to yield CPU (put it to 0 for maximum utilization)
 MD5_CHUNK_SIZE = 65536 # Read file in chunks for hashing large files
@@ -552,6 +552,144 @@ class FileIndexer:
         except Exception as e:
             logger.error(f"PPTX extraction failed for {file_path}: {e}")
             return None
+
+    def _scan_directory(self, root_path: str, db_session: Session):
+        """
+        Phase 1: Walks through a directory and processes files using _process_file_phase1,
+        skipping OS/system dirs/files and hidden dot files/dirs.
+        Reports progress periodically.
+        (This method was part of the FileIndexer class in previous discussions)
+        """
+        logger.info(f"🔬 Starting Phase 1 Scan for root: {root_path}")
+        total_processed_this_root_scan = 0
+        total_errors_this_root_scan = 0
+        last_report_time = time.monotonic()
+        files_since_last_report = 0
+        errors_since_last_report = 0
+        report_interval_seconds = 60  # Log progress every minute
+
+        # Define common system directories and files to skip
+        # These sets should be appropriate for your environment.
+        # ROOT_DIR should be accessible here if defined at module level in file_indexer.py
+        # or passed appropriately. For this method context, assuming ROOT_DIR is available.
+        common_system_dirs_raw = {
+            "/proc", "/sys", "/dev", "/run", "/etc", "/var", "/tmp", "/private",
+            "/cores", "/opt", "/usr", "/System", "/Library", "/Volumes",
+            "/.MobileBackups", "/.Spotlight-V100", "/.fseventsd",
+            "$recycle.bin", "system volume information", "program files",
+            "program files (x86)", "windows", "programdata", "recovery",
+            "node_modules", "__pycache__", ".venv", "venv", ".env", "env",
+            ".tox", ".pytest_cache", ".mypy_cache", "Cache", "cache",
+            "staticmodelpool", "llama-cpp-python_build", "systemCore",
+            "engineMain", "backend-service", "frontend-face-zephyrine",
+            "Downloads", "Pictures", "Movies", "Music", "Backup", "Archives",
+            os.path.join(globals().get("ROOT_DIR", "."), "build"),
+            os.path.join(globals().get("ROOT_DIR", "."), "zephyrineCondaVenv")
+        }
+        absolute_skip_dirs_normalized = {os.path.normpath(p) for p in common_system_dirs_raw if os.path.isabs(p)}
+        relative_skip_dir_names_lower = {p.lower() for p in common_system_dirs_raw if not os.path.isabs(p)}
+
+        files_to_skip_lower = {
+            '.ds_store', 'thumbs.db', 'desktop.ini', '.localized',
+            '.bash_history', '.zsh_history', 'ntuser.dat', '.swp', '.swo',
+            'pagefile.sys', 'hiberfil.sys', '.volumeicon.icns'
+        }
+
+        try:
+            for current_dir, dirnames, filenames in os.walk(root_path, topdown=True, onerror=None):
+                if self.stop_event.is_set():
+                    logger.info(f"Phase 1 Scan interrupted by stop signal in {current_dir}")
+                    break
+
+                norm_current_dir = os.path.normpath(current_dir)
+                should_skip_dir = False
+
+                if norm_current_dir in absolute_skip_dirs_normalized:
+                    should_skip_dir = True
+                if not should_skip_dir and os.path.basename(norm_current_dir).lower() in relative_skip_dir_names_lower:
+                    should_skip_dir = True
+                if not should_skip_dir and os.path.basename(norm_current_dir).startswith(
+                        '.'):  # Skip hidden directories
+                    should_skip_dir = True
+
+                if should_skip_dir:
+                    logger.trace(f"Phase 1 Skipping excluded/hidden directory: {current_dir}")
+                    dirnames[:] = []  # Don't recurse into this directory
+                    filenames[:] = []  # Don't process files in this directory
+                    continue
+
+                # Prune dot directories from dirnames to prevent walking into them
+                dirnames[:] = [d for d in dirnames if not d.startswith('.')]
+
+                current_dir_file_errors = 0  # Reset for each directory
+
+                for filename in filenames:
+                    if self.stop_event.is_set(): break
+                    if filename.startswith('.'): continue  # Skip hidden files
+                    if filename.lower() in files_to_skip_lower: continue
+
+                    file_path = os.path.join(current_dir, filename)
+                    file_processed_flag = False
+                    file_errored_flag = False
+
+                    try:
+                        if os.path.islink(file_path): continue
+                        if not os.path.isfile(file_path): continue
+
+                        self._process_file_phase1(file_path, db_session)
+                        file_processed_flag = True
+                    except PermissionError:
+                        logger.warning(f"Phase 1 Permission denied processing: {file_path}")
+                        file_errored_flag = True
+                        try:
+                            existing = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
+                            err_vals = {'index_status': 'error_permission',
+                                        'processing_error': "Permission denied during scan.",
+                                        'last_indexed_db': datetime.datetime.now(datetime.timezone.utc)}
+                            if existing:
+                                if existing.index_status != 'error_permission': db_session.execute(
+                                    update(FileIndex).where(FileIndex.id == existing.id).values(**err_vals))
+                            else:
+                                db_session.add(
+                                    FileIndex(file_path=file_path, file_name=filename, **err_vals))  # type: ignore
+                            db_session.commit()
+                        except Exception as db_perm_err:
+                            logger.error(
+                                f"Failed to log perm error for {file_path}: {db_perm_err}"); db_session.rollback()
+                    except Exception as walk_process_err:
+                        logger.error(
+                            f"Phase 1 Error during _process_file_phase1 call for {file_path}: {walk_process_err}",
+                            exc_info=True)
+                        file_errored_flag = True
+                    finally:
+                        if file_processed_flag: total_processed_this_root_scan += 1; files_since_last_report += 1
+                        if file_errored_flag: total_errors_this_root_scan += 1; errors_since_last_report += 1; current_dir_file_errors += 1
+
+                        current_time = time.monotonic()
+                        if current_time - last_report_time >= report_interval_seconds:
+                            rate = files_since_last_report / report_interval_seconds if report_interval_seconds > 0 else files_since_last_report
+                            logger.info(
+                                f"⏳ [Phase 1 Report] In '{os.path.basename(root_path)}' last {report_interval_seconds}s: {files_since_last_report} files (~{rate:.1f}/s), {errors_since_last_report} errors. Root Total: {total_processed_this_root_scan}")
+                            last_report_time = current_time;
+                            files_since_last_report = 0;
+                            errors_since_last_report = 0
+
+                        if YIELD_SLEEP_SECONDS > 0: time.sleep(YIELD_SLEEP_SECONDS)
+
+                if self.stop_event.is_set(): break
+                if current_dir_file_errors > 0: logger.warning(
+                    f"Encountered {current_dir_file_errors} errors processing files within: {current_dir}")
+
+        except Exception as outer_walk_err:
+            logger.error(f"Outer error during Phase 1 os.walk for {root_path}: {outer_walk_err}", exc_info=True)
+            total_errors_this_root_scan += 1
+
+        if not self.stop_event.is_set():
+            logger.success(
+                f"✅ Finished Phase 1 Scan for {root_path}. Total Processed this root: {total_processed_this_root_scan}, Total Errors this root: {total_errors_this_root_scan}")
+        else:
+            logger.warning(
+                f"⏹️ Phase 1 Scan for {root_path} interrupted. Processed in this root-cycle: {total_processed_this_root_scan}, Errors: {total_errors_this_root_scan}")
 
     def _process_file_phase1(self, file_path: str, db_session: Session):
         """
