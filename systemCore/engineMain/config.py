@@ -161,6 +161,11 @@ logger.info(f"StellaIcarusHooks Enabled: {ENABLE_STELLA_ICARUS_HOOKS}")
 logger.info(f"  Hook Directory: {STELLA_ICARUS_HOOK_DIR}")
 logger.info(f"  Cache Directory: {STELLA_ICARUS_CACHE_DIR}") # Primarily for Numba's cache if configured
 
+# --- Text Moderation Setting ---
+# --- Moderation Settings & Prompt ---
+MODERATION_MODEL_CLIENT_FACING = os.getenv("MODERATION_MODEL_CLIENT_FACING", "text-moderation-zephy") # Your custom name
+# This prompt instructs the LLM to give a simple, parsable output.
+logger.info(f"🛡️ Moderation Client-Facing Model Name: {MODERATION_MODEL_CLIENT_FACING}")
 
 
 
@@ -315,6 +320,19 @@ Text to Translate:
 
 Translated Text (into {{target_language_full_name}}):
 """
+
+PROMPT_MODERATION_CHECK = f"""You are a content moderation expert. Analyze the following input text for violations across these categories: hate, hate/threatening, self-harm, sexual, sexual/minors, violence, violence/graphic.
+Your response MUST be one of the following:
+1. If no violations are found, respond ONLY with the exact word: CLEAN
+2. If violations are found, respond ONLY with the word "FLAGGED:" followed by a comma-and-space-separated list of the violated categories. For example: FLAGGED: hate, violence/graphic
+
+Input text:
+\"\"\"
+{{input_text_to_moderate}}
+\"\"\"
+
+Moderation Assessment:"""
+
 
 PROMPT_ROUTER = """Analyze the user's query, conversation history, and context (including file search results) to determine the best specialized model to handle the request.
 

@@ -7294,8 +7294,84 @@ except Exception as e:
     ai_provider = None # <<< Add this line
     sys.exit(1)
 
-# === Flask Routes (Async) ===
 
+def _create_personal_assistant_stub_response(endpoint_name: str, method: str, resource_id: Optional[str] = None, custom_status: str = "not_applicable_personal_assistant"):
+    """
+    Creates a standardized JSON response for Assistants API stubs.
+    """
+    message = (
+        f"The endpoint '{method} {endpoint_name}' for managing separate assistants/threads "
+        "is not implemented in the standard OpenAI way. This system operates as an integrated personal assistant. "
+        "Functionalities like memory, context management, and tool use are embedded within its direct interaction flow "
+        "and internal self-reflection or background generation processes."
+    )
+    if resource_id:
+        message += f" Operation on resource ID '{resource_id}' is not applicable."
+
+    response_body = {
+        "object": "api.stub_response",
+        "endpoint_called": endpoint_name,
+        "method": method,
+        "resource_id_queried": resource_id,
+        "status": custom_status,
+        "message": message,
+        "note": "This is a placeholder response indicating a conceptual difference in system design."
+    }
+    # OpenAI often returns 200 OK even for informative non-errors, or specific errors for non-found resources.
+    # For these stubs explaining a different design, 200 OK with the message can be user-friendly.
+    # Or, you could choose 501 Not Implemented if you prefer to signal it more strongly.
+    return jsonify(response_body), 200
+
+
+def _create_assistants_api_stub_response(
+        endpoint_name: str,
+        method: str,
+        resource_ids: Optional[Dict[str, str]] = None,
+        operation_specific_message: str = "",
+        additional_details: Optional[Dict[str, Any]] = None,
+        object_type_for_response: str = "api.stub_information"  # Custom object type for these stubs
+):
+    """
+    Creates a standardized JSON response for Assistants API stubs,
+    explaining the system's personal assistant design.
+    """
+    message = (
+        f"This system ('Zephy/Adelaide') is designed as an integrated personal assistant. "
+        f"The standard OpenAI Assistants API endpoint '{method} {endpoint_name}' is handled differently. "
+        "Core functionalities like memory, context management, and tool use (agentic mode) are embedded "
+        "within its direct interaction flow and asynchronous background processes, rather than through explicit, "
+        "multi-step Assistant/Thread/Run objects managed via this API."
+    )
+    if operation_specific_message:
+        message += f" Regarding '{method} {endpoint_name}': {operation_specific_message}"
+
+    response_body = {
+        "object": object_type_for_response,
+        "message": message,
+        "details": {
+            "endpoint_called": f"{method} {endpoint_name}",
+            "system_paradigm": "Integrated Personal Assistant with Asynchronous Agentic Mode",
+        }
+    }
+    if resource_ids:
+        response_body["details"]["resource_ids_queried"] = resource_ids  # type: ignore
+    if additional_details:
+        response_body["details"].update(additional_details)
+
+    # Using 200 OK with an informative message, as these are informational stubs.
+    return jsonify(response_body), 200
+
+# === Flask Routes (Async) ===
+"""
+                                                                                                                                                                                                                                                                                 ,--.                                                        
+,--.,------.  ,-----.     ,---.                                            ,-----.                                           ,--.                ,--.  ,--.                    ,---.                 ,--.  ,--.                     ,-.,--.  ,--.,--------.,--------.,------.   /  /,--.   ,--.                                        ,-.   
+|  ||  .--. ''  .--./    '   .-'  ,---. ,--.--.,--.  ,--.,---. ,--.--.    '  .--./ ,---. ,--,--,--.,--,--,--.,--.,--.,--,--, `--' ,---. ,--,--.,-'  '-.`--' ,---. ,--,--,     '   .-'  ,---.  ,---.,-'  '-.`--' ,---. ,--,--,      / .'|  '--'  |'--.  .--''--.  .--'|  .--. ' /  / |   `.'   | ,---. ,--,--,--. ,---. ,--.--.,--. ,--.'. \  
+|  ||  '--' ||  |        `.  `-. | .-. :|  .--' \  `'  /| .-. :|  .--'    |  |    | .-. ||        ||        ||  ||  ||      \,--.| .--'' ,-.  |'-.  .-',--.| .-. ||      \    `.  `-. | .-. :| .--''-.  .-',--.| .-. ||      \    |  | |  .--.  |   |  |      |  |   |  '--' |/  /  |  |'.'|  || .-. :|        || .-. ||  .--' \  '  /  |  | 
+|  ||  | --' '  '--'\    .-'    |\   --.|  |     \    / \   --.|  |       '  '--'\' '-' '|  |  |  ||  |  |  |'  ''  '|  ||  ||  |\ `--.\ '-'  |  |  |  |  |' '-' '|  ||  |    .-'    |\   --.\ `--.  |  |  |  |' '-' '|  ||  |    |  | |  |  |  |   |  |      |  |   |  | --'/  /   |  |   |  |\   --.|  |  |  |' '-' '|  |     \   '   |  | 
+`--'`--'      `-----'    `-----'  `----'`--'      `--'   `----'`--'        `-----' `---' `--`--`--'`--`--`--' `----' `--''--'`--' `---' `--`--'  `--'  `--' `---' `--''--'    `-----'  `----' `---'  `--'  `--' `---' `--''--'     \ '.`--'  `--'   `--'      `--'   `--'   /  /    `--'   `--' `----'`--`--`--' `---' `--'   .-'  /   .' /  
+                                                                                                                                                                                                                                    `-'                                    `--'                                               `---'    `-'   
+"""
+# ====== Server Root =======
 @app.route("/", methods=["POST"])
 async def handle_interaction():
     """Main endpoint to handle user interactions asynchronously (Quart)."""
@@ -7441,15 +7517,16 @@ async def handle_interaction():
     return resp
 
 
+
+
 # === NEW OpenAI Compatible Embeddings Route ===
 # app.py -> Flask Routes Section
 
-# === NEW/REVISED OpenAI Compatible Embeddings Route for Quart ===
+#==============================[openAI API (Most standard) Behaviour]==============================
 @app.route("/v1/embeddings", methods=["POST"])
 @app.route("/api/embed", methods=["POST"])
 @app.route("/api/embeddings", methods=["POST"])
 async def handle_openai_embeddings():
-    """Handles requests mimicking OpenAI's embedding endpoint using Quart."""
     start_req = time.monotonic()
     request_id = f"req-emb-{uuid.uuid4()}" # Unique ID for this request
     logger.info(f"🚀 Quart OpenAI-Style Embedding Request ID: {request_id}")
@@ -8065,6 +8142,200 @@ def handle_openai_chat_completion():
 
     return resp_obj
 
+
+@app.route("/v1/moderations", methods=["POST"])
+async def handle_openai_moderations():
+    """
+    Handles requests mimicking OpenAI's Moderations endpoint.
+    Uses AIChat.direct_generate() with a specific prompt for assessment.
+    """
+    start_req_time = time.monotonic()
+    request_id = f"req-mod-{uuid.uuid4()}"
+    logger.info(f"🚀 Flask OpenAI-Style Moderation Request ID: {request_id}")
+
+    db: Session = g.db
+    final_status_code: int = 500
+    resp: Optional[Response] = None
+    session_id_for_log: str = f"moderation_req_{request_id}"  # Each moderation is a unique "session" for logging
+    raw_request_data: Optional[Dict[str, Any]] = None
+    input_text_to_moderate: Optional[str] = None
+
+    try:
+        try:
+            raw_request_data = await request.get_json()  # Assuming Quart, or request.get_json() for Flask sync
+            if not raw_request_data:
+                raise ValueError("Empty JSON payload received.")
+        except Exception as json_err:
+            logger.warning(f"{request_id}: Failed to get/parse JSON body: {json_err}")
+            resp_data, status_code = _create_openai_error_response(
+                f"Request body is missing or invalid JSON: {json_err}",
+                err_type="invalid_request_error", status_code=400)
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_status_code = status_code
+            return resp
+
+        input_data = raw_request_data.get("input")
+        model_requested = raw_request_data.get("model")  # Logged but we'll use our configured model name
+
+        if model_requested:
+            logger.info(
+                f"{request_id}: Client requested model '{model_requested}', will use configured '{MODERATION_MODEL_CLIENT_FACING}'.")
+
+        if not input_data:
+            raise ValueError("'input' field is required.")
+
+        # OpenAI allows string or array of strings. For simplicity, let's handle single string first.
+        # If you need to handle an array, you'd loop and generate multiple results.
+        if isinstance(input_data, list):
+            if not input_data: raise ValueError("'input' array is empty.")
+            input_text_to_moderate = str(input_data[0])  # Process first item if array for now
+            if len(input_data) > 1:
+                logger.warning(
+                    f"{request_id}: Received array for 'input', processing only the first item for moderation.")
+        elif isinstance(input_data, str):
+            input_text_to_moderate = input_data
+        else:
+            raise ValueError("'input' must be a string or an array of strings.")
+
+        if not input_text_to_moderate.strip():
+            # Handle empty string input gracefully - OpenAI typically flags it as not harmful.
+            logger.info(f"{request_id}: Input text is empty or whitespace. Returning as not flagged.")
+            results_list = [{
+                "flagged": False,
+                "categories": {cat: False for cat in
+                               ["hate", "hate/threatening", "self-harm", "sexual", "sexual/minors", "violence",
+                                "violence/graphic"]},
+                "category_scores": {cat: 0.0 for cat in
+                                    ["hate", "hate/threatening", "self-harm", "sexual", "sexual/minors", "violence",
+                                     "violence/graphic"]}
+            }]
+            response_body = {
+                "id": f"modr-{uuid.uuid4()}",
+                "model": MODERATION_MODEL_CLIENT_FACING,
+                "results": results_list
+            }
+            resp = Response(json.dumps(response_body), status=200, mimetype='application/json')
+            final_status_code = 200
+            return resp
+
+        # --- Call AIChat.direct_generate() for moderation assessment ---
+        # direct_generate runs at ELP1
+        if not ai_chat:  # Should be initialized globally
+            raise RuntimeError("AIChat instance not available.")
+
+        moderation_prompt_filled = PROMPT_MODERATION_CHECK.format(input_text_to_moderate=input_text_to_moderate)
+
+        # Use a unique session_id for this moderation call to keep its logs separate if needed
+        # or use the session_id_for_log passed in the request if that makes sense for your context.
+        # For now, creating a distinct one for the direct_generate call.
+        moderation_llm_session_id = f"mod_llm_req_{request_id}"
+        if ai_chat: ai_chat.current_session_id = moderation_llm_session_id
+
+        logger.info(
+            f"{request_id}: Calling direct_generate for moderation. Input snippet: '{input_text_to_moderate[:70]}...'")
+        # direct_generate is async, and this Flask route is async
+        llm_assessment_text = await ai_chat.direct_generate(
+            db,  # Pass the current request's DB session
+            moderation_prompt_filled,
+            moderation_llm_session_id,  # Session ID for this specific LLM call
+            vlm_description=None,  # No image for moderation
+            image_b64=None
+        )
+
+        logger.info(f"{request_id}: LLM moderation assessment raw response: '{llm_assessment_text}'")
+
+        # --- Parse LLM's assessment and build OpenAI response ---
+        flagged = False
+        categories = {
+            "hate": False, "hate/threatening": False, "self-harm": False,
+            "sexual": False, "sexual/minors": False, "violence": False, "violence/graphic": False
+        }
+        # Category scores are harder to get reliably from a general LLM without specific training
+        # We'll use dummy scores for now.
+        category_scores = {cat: 0.01 for cat in categories}  # Default low scores
+
+        if llm_assessment_text.startswith("FLAGGED:"):
+            flagged = True
+            try:
+                violated_categories_str = llm_assessment_text.replace("FLAGGED:", "").strip()
+                violated_list = [cat.strip() for cat in violated_categories_str.split(',')]
+                for cat_key in violated_list:
+                    if cat_key in categories:
+                        categories[cat_key] = True
+                        category_scores[cat_key] = 0.9  # Example high score for flagged
+                    else:
+                        logger.warning(f"{request_id}: LLM reported an unknown category '{cat_key}'")
+            except Exception as parse_cat_err:
+                logger.error(
+                    f"{request_id}: Could not parse categories from LLM response '{llm_assessment_text}': {parse_cat_err}")
+                # Keep flagged as True, but categories might be inaccurate or all false
+        elif "CLEAN" not in llm_assessment_text.upper():  # If not "CLEAN" and not "FLAGGED:", it's ambiguous
+            logger.warning(
+                f"{request_id}: LLM moderation response ambiguous: '{llm_assessment_text}'. Defaulting to not flagged.")
+            # Flagged remains false
+
+        results_list = [{
+            "flagged": flagged,
+            "categories": categories,
+            "category_scores": category_scores
+        }]
+
+        response_body = {
+            "id": f"modr-{uuid.uuid4()}",  # Generate a new ID for the moderation response
+            "model": MODERATION_MODEL_CLIENT_FACING,  # Use your configured model name
+            "results": results_list
+        }
+        resp = Response(json.dumps(response_body), status=200, mimetype='application/json')
+        final_status_code = 200
+
+        # Log the moderation interaction
+        try:
+            add_interaction(db, session_id=session_id_for_log, mode="moderation", input_type="text_moderated",
+                            user_input=input_text_to_moderate[:2000],  # Log original input
+                            llm_response=json.dumps(results_list[0]),  # Log the result
+                            classification="moderation_checked",
+                            execution_time_ms=(time.monotonic() - start_req_time) * 1000)
+            db.commit()
+        except Exception as db_log_err:
+            logger.error(f"{request_id}: Failed to log moderation result to DB: {db_log_err}")
+            if db: db.rollback()
+
+    except ValueError as ve:
+        logger.warning(f"{request_id}: Invalid Moderation request: {ve}")
+        resp_data, status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
+                                                               status_code=400)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_status_code = status_code
+    except RuntimeError as rte:  # Catch errors from downstream calls like model unavailable
+        logger.error(f"{request_id}: Runtime error during moderation: {rte}")
+        resp_data, status_code = _create_openai_error_response(str(rte), err_type="server_error", status_code=500)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_status_code = status_code
+    except Exception as main_err:
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Moderation endpoint:")
+        error_message = f"Internal server error in Moderation endpoint: {type(main_err).__name__}"
+        resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_status_code = status_code
+        try:
+            if db: add_interaction(db, session_id=session_id_for_log, mode="moderation", input_type='error',
+                                   user_input=f"Moderation Handler Error. Input: {str(input_text_to_moderate)[:200]}",
+                                   llm_response=error_message[:2000]); db.commit()
+        except Exception as db_err_log:
+            logger.error(f"{request_id}: ❌ Failed log Moderation handler error: {db_err_log}")
+
+    finally:
+        duration_req = (time.monotonic() - start_req_time) * 1000
+        logger.info(
+            f"🏁 OpenAI-Style Moderation Request {request_id} handled in {duration_req:.2f} ms. Status: {final_status_code}")
+
+    if resp is None:
+        logger.error(f"{request_id}: Moderation Handler logic flaw - response object 'resp' was not assigned!")
+        resp_data, _ = _create_openai_error_response("Internal error: Handler failed to produce a response.",
+                                                     status_code=500)
+        resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
+    return resp
+
 @app.route("/v1/models", methods=["GET"])
 def handle_openai_models():
     """
@@ -8089,6 +8360,16 @@ def handle_openai_models():
             "created": int(time.time()),
             "owned_by": META_MODEL_OWNER,
             "permission": [], "root": META_MODEL_NAME_NONSTREAM, "parent": None,
+        },
+        {
+            "id": MODERATION_MODEL_CLIENT_FACING, # e.g., "text-moderation-zephy"
+            "object": "model",
+            "created": int(time.time()),
+            "owned_by": META_MODEL_OWNER, # As defined in your config.py
+            "permission": [],
+            "root": MODERATION_MODEL_CLIENT_FACING,
+            "parent": None,
+            # "description": "Moderation service based on internal LLM capabilities." # Optional
         },
         # --- NEW: Add TTS Model Entry ---
         {
@@ -8131,7 +8412,7 @@ def handle_openai_models():
             "parent": None,
             # "description": "Image Generation Model (Internal Use Only)." # Optional
         }
-        # --- END NEW TTS Model Entry ---
+
     ]
 
     response_body = {
@@ -8144,6 +8425,9 @@ def handle_openai_models():
     return Response(response_payload, status=status_code, mimetype='application/json')
 
 
+
+
+#==============================[Ollama Behaviour]==============================
 @app.route("/api/tags", methods=["GET", "HEAD"])
 def handle_ollama_tags():
     """Handles requests mimicking Ollama's /api/tags endpoint, using global constants."""
@@ -9636,6 +9920,228 @@ def handle_retrieve_file_content_stub(file_id: str):
         logger.info(f"{request_id}: File '{file_id}' or its content not found in local index using {search_method}.")
         return jsonify(resp_data), 404
 
+
+
+# --- Assistants API Stubs ---
+@app.route("/v1/assistants", methods=["POST"])
+def create_assistant_stub():
+    request_id = f"req-assistant-create-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received POST /v1/assistants (Placeholder)")
+    # You could log request.json if you want to see what clients are trying to create
+    return _create_personal_assistant_stub_response("/v1/assistants", "POST",
+        custom_status="creation_not_applicable")
+
+@app.route("/v1/assistants", methods=["GET"])
+def list_assistants_stub():
+    request_id = f"req-assistant-list-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/assistants (Placeholder)")
+    # OpenAI list endpoints return an object with a "data" array.
+    response_message = (
+        "This system operates as a single, integrated personal assistant. "
+        "There are no multiple, separately manageable 'assistant' objects to list. "
+        "Its capabilities are defined by its core configuration and ongoing learning processes like self-reflection."
+    )
+    response_body = {
+        "object": "list",
+        "data": [], # Empty list as there are no discrete assistants in this model
+        "message": response_message
+    }
+    return jsonify(response_body), 200
+
+@app.route("/v1/assistants/<string:assistant_id>", methods=["GET"])
+def retrieve_assistant_stub(assistant_id: str):
+    request_id = f"req-assistant-retrieve-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/assistants/{assistant_id} (Placeholder)")
+    return _create_personal_assistant_stub_response(f"/v1/assistants/{assistant_id}", "GET", resource_id=assistant_id)
+
+@app.route("/v1/assistants/<string:assistant_id>", methods=["POST"])
+def modify_assistant_stub(assistant_id: str):
+    request_id = f"req-assistant-modify-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received POST /v1/assistants/{assistant_id} (Placeholder)")
+    return _create_personal_assistant_stub_response(f"/v1/assistants/{assistant_id}", "POST", resource_id=assistant_id,
+        custom_status="modification_not_applicable")
+
+@app.route("/v1/assistants/<string:assistant_id>", methods=["DELETE"])
+def delete_assistant_stub(assistant_id: str):
+    request_id = f"req-assistant-delete-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received DELETE /v1/assistants/{assistant_id} (Placeholder)")
+    return _create_personal_assistant_stub_response(f"/v1/assistants/{assistant_id}", "DELETE", resource_id=assistant_id,
+        custom_status="deletion_not_applicable")
+
+# --- Threads API Stubs ---
+@app.route("/v1/threads", methods=["POST"])
+def create_thread_stub():
+    request_id = f"req-thread-create-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received POST /v1/threads (Placeholder)")
+    return _create_personal_assistant_stub_response("/v1/threads", "POST",
+        custom_status="thread_creation_not_applicable_managed_internally")
+
+@app.route("/v1/threads/<string:thread_id>", methods=["GET"])
+def retrieve_thread_stub(thread_id: str):
+    request_id = f"req-thread-retrieve-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/threads/{thread_id} (Placeholder)")
+    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}", "GET", resource_id=thread_id)
+
+@app.route("/v1/threads/<string:thread_id>", methods=["POST"])
+def modify_thread_stub(thread_id: str):
+    request_id = f"req-thread-modify-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received POST /v1/threads/{thread_id} (Placeholder)")
+    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}", "POST", resource_id=thread_id,
+        custom_status="modification_not_applicable")
+
+@app.route("/v1/threads/<string:thread_id>", methods=["DELETE"])
+def delete_thread_stub(thread_id: str):
+    request_id = f"req-thread-delete-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received DELETE /v1/threads/{thread_id} (Placeholder)")
+    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}", "DELETE", resource_id=thread_id,
+        custom_status="deletion_not_applicable")
+
+# --- Messages API Stubs (within Threads) ---
+@app.route("/v1/threads/<string:thread_id>/messages", methods=["POST"])
+def create_message_stub(thread_id: str):
+    request_id = f"req-message-create-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received POST /v1/threads/{thread_id}/messages (Placeholder)")
+    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}/messages", "POST", resource_id=thread_id,
+        custom_status="message_creation_handled_via_direct_chat")
+
+@app.route("/v1/threads/<string:thread_id>/messages", methods=["GET"])
+def list_messages_stub(thread_id: str):
+    request_id = f"req-message-list-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/threads/{thread_id}/messages (Placeholder)")
+    response_message = (
+        f"Listing messages for thread '{thread_id}' via this API is not applicable. "
+        "Conversation history is managed internally per session. "
+        "Internal database logs store interaction history."
+    )
+    response_body = {
+        "object": "list",
+        "data": [],
+        "message": response_message
+    }
+    return jsonify(response_body), 200
+
+# --- Runs API Stubs (within Threads) ---
+@app.route("/v1/threads/<string:thread_id>/runs", methods=["POST"])
+def create_run_stub(thread_id: str):
+    request_id = f"req-run-create-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received POST /v1/threads/{thread_id}/runs (Placeholder)")
+    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}/runs", "POST", resource_id=thread_id,
+        custom_status="run_creation_implicit_in_direct_interaction")
+
+@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>", methods=["GET"])
+def retrieve_run_stub(thread_id: str, run_id: str):
+    request_id = f"req-run-retrieve-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/threads/{thread_id}/runs/{run_id} (Placeholder)")
+    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}/runs/{run_id}", "GET", resource_id=run_id)
+
+
+@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/cancel", methods=["POST"])
+def cancel_run_stub(thread_id: str, run_id: str):
+    request_id_log = f"req-run-cancel-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id_log}: Received POST /v1/threads/{thread_id}/runs/{run_id}/cancel (Placeholder)")
+
+    specific_message = (
+        "Run cancellation via this API is not directly applicable. This system's agentic tasks, "
+        "if initiated (e.g., by 'background_generate' or an internal agent loop), operate asynchronously. "
+        "While explicit cancellation of a specific internal 'run' by ID is not exposed here, tasks are "
+        "managed by an internal priority system and may be superseded or will naturally complete."
+    )
+    # Mimic OpenAI's Run object structure loosely for the response
+    response_body = {
+        "id": run_id,
+        "object": "thread.run",
+        "thread_id": thread_id,
+        "assistant_id": "integrated_personal_assistant",
+        "status": "cancellation_not_applicable",  # Custom status
+        "started_at": int(time.time()),  # Dummy timestamp
+        "expires_at": None,
+        "cancelled_at": None,
+        "failed_at": None,
+        "completed_at": None,
+        "last_error": None,
+        "model": "N/A (Integrated System)",
+        "instructions": "N/A (Integrated System)",
+        "tools": [{"type": "internal_agentic_mode"}],
+        "file_ids": [],
+        "metadata": {
+            "message": specific_message,
+            "note": "This is a placeholder response indicating a conceptual difference in system design."
+        }
+    }
+    return jsonify(response_body), 200
+
+
+@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/steps", methods=["GET"])
+def list_run_steps_stub(thread_id: str, run_id: str):
+    request_id_log = f"req-run-steps-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id_log}: Received GET /v1/threads/{thread_id}/runs/{run_id}/steps (Placeholder)")
+
+    specific_message = (
+        "This system does not expose discrete 'run steps' in the OpenAI Assistants API format. "
+        "Agentic operations and tool use occur as part of an integrated, asynchronous background process "
+        "(e.g., within AIChat.background_generate or AmaryllisAgent._run_task_in_background). "
+        "Progress or outcomes are reflected in the ongoing conversation, database logs, or direct results "
+        "from initiated tasks, rather than through a list of formal 'steps' for a given 'run ID'."
+    )
+
+    # OpenAI list endpoints return an object with a "data" array.
+    response_body = {
+        "object": "list",
+        "data": [],  # No discrete steps to list in this manner
+        "first_id": None,
+        "last_id": None,
+        "has_more": False,
+        "message": specific_message,  # Custom message field
+        "note": "This is a placeholder response indicating a conceptual difference in system design."
+    }
+    return jsonify(response_body), 200
+
+
+@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/submit_tool_outputs", methods=["POST"])
+def submit_tool_outputs_stub(thread_id: str, run_id: str):
+    request_id_log = f"req-run-submittools-stub-{uuid.uuid4()}"
+    logger.info(
+        f"🚀 {request_id_log}: Received POST /v1/threads/{thread_id}/runs/{run_id}/submit_tool_outputs (Placeholder)")
+    # request_data = request.json # Could log if needed
+
+    specific_message = (
+        "Tool output submission via this API is not applicable. This system's agentic mode "
+        "(e.g., AmaryllisAgent) operates autonomously using its integrated tools and internal logic. "
+        "It does not require or use an explicit external step for tool output submission in this manner, "
+        "as tool execution and result processing are part of its internal asynchronous flow."
+    )
+
+    # Mimic OpenAI's Run object structure loosely
+    response_body = {
+        "id": run_id,
+        "object": "thread.run",
+        "thread_id": thread_id,
+        "assistant_id": "integrated_personal_assistant",
+        "status": "tool_submission_not_applicable",  # Custom status
+        "started_at": int(time.time()),
+        "expires_at": None,
+        "cancelled_at": None,
+        "failed_at": None,
+        "completed_at": None,
+        "last_error": None,
+        "model": "N/A (Integrated System)",
+        "instructions": "N/A (Integrated System)",
+        "tools": [{"type": "internal_agentic_mode"}],
+        "file_ids": [],
+        "metadata": {
+            "message": specific_message,
+            "note": "This is a placeholder response indicating a conceptual difference in system design."
+        }
+    }
+    return jsonify(response_body), 200
+
+
+
+
+
+
+#=============== IPC Server END ===============
+#============================ Main Program Startup
 # Define startup_tasks (as you had it)
 async def startup_tasks():
     logger.info("APP.PY: >>> Entered startup_tasks (async). <<<")
