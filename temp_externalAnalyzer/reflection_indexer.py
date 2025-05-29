@@ -11,12 +11,9 @@ from sqlalchemy.orm import attributes
 #from langchain_community.vectorstores import Chroma
 from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter  # Or your preferred splitter
-import argparse # For __main__
-import asyncio # For running async init in __main__
-import datetime
 
 # Assuming these are accessible or passed in
-from database import Interaction, init_db, SessionLocal  # The SQLAlchemy model for interactions
+from database import Interaction  # The SQLAlchemy model for interactions
 from ai_provider import AIProvider  # To get the embedding function
 from config import *
 
@@ -34,7 +31,7 @@ except ImportError as e:
     ELP0 = 0
     ELP1 = 1
     # You might want to sys.exit(1) here if priority locking is critical
-    # sys.exit(1) # Commented out for testing
+    sys.exit(1)
 interruption_error_marker = "Worker task interrupted by higher priority request" # Define consistently
 
 # --- Globals for this module ---
@@ -230,7 +227,7 @@ def index_single_reflection(
                     reflection_interaction = db_session.merge(reflection_interaction)  # type: ignore
                 setattr(reflection_interaction, 'reflection_indexed_in_vs', True)
                 setattr(reflection_interaction, 'last_modified_db',
-                        datetime.datetime.now(datetime.timezone.utc)) # Use datetime directly
+                        time.strftime("%Y-%m-%d %H:%M:%S"))  # Consider timezone/SQLAlchemy func.now
                 db_session.commit()
                 logger.info(f"{log_prefix}: Marked reflection ID {reflection_interaction.id} as indexed in SQLite.")
             except Exception as e_db_update:
@@ -258,120 +255,3 @@ def get_global_reflection_vectorstore() -> Optional[Chroma]:
 class TaskInterruptedException(Exception):
     """Custom exception raised when an ELP0 task is interrupted."""
     pass
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="Reflection Indexer Test CLI")
-    parser.add_argument("--test", action="store_true", help="Run test initialization and optional search.")
-    parser.add_argument("--search_query", type=str, default=None, help="Query string to search the reflection vector store.")
-    cli_args = parser.parse_args()
-
-    if cli_args.test:
-        logger.remove() # Remove default loguru handler
-        logger.add(sys.stderr, level="INFO") # Add a new one with INFO level for testing
-        logger.info("--- Reflection Indexer Test Mode ---")
-
-        # 1. Initialize Database (critical for SessionLocal and schema)
-        db_session_for_test: Optional[Session] = None
-        try:
-            logger.info("Initializing database via database.init_db()...")
-            init_db() # This function from database.py handles Alembic migrations etc.
-            db_session_for_test = SessionLocal() # type: ignore
-            if db_session_for_test is None:
-                raise Exception("Failed to create a database session after init_db.")
-            logger.info("Database initialization and session creation complete.")
-        except Exception as e_db_init:
-            logger.error(f"Failed to initialize database or create session: {e_db_init}")
-            sys.exit(1)
-
-        # 2. Initialize AIProvider (needed for embeddings)
-        test_ai_provider: Optional[AIProvider] = None
-        try:
-            logger.info(f"Initializing AIProvider (Provider: {PROVIDER})...") # PROVIDER from config.py
-            test_ai_provider = AIProvider(PROVIDER)
-            if not test_ai_provider.embeddings:
-                raise ValueError("AIProvider initialized, but embeddings are not available.")
-            logger.info("AIProvider initialized successfully for embeddings.")
-        except Exception as e_ai_provider:
-            logger.error(f"Failed to initialize AIProvider: {e_ai_provider}")
-            if db_session_for_test: db_session_for_test.close()
-            sys.exit(1)
-
-        # 3. Initialize Global Reflection Vector Store
-        try:
-            logger.info("Initializing global reflection vector store...")
-            # initialize_global_reflection_vectorstore is synchronous
-            initialize_global_reflection_vectorstore(test_ai_provider, db_session_for_test)
-            logger.info("Global reflection vector store initialization process completed.")
-        except Exception as e_vs_init:
-            logger.error(f"Error during reflection vector store initialization: {e_vs_init}")
-            if db_session_for_test: db_session_for_test.close()
-            sys.exit(1)
-
-        # 4. Get the vector store instance
-        reflection_vs = get_global_reflection_vectorstore()
-        if reflection_vs:
-            logger.success("Successfully retrieved global reflection vector store instance.")
-            try:
-                collection_count = reflection_vs._collection.count() # type: ignore
-                logger.info(f"Reflection Chroma collection contains {collection_count} items.")
-            except Exception as e_count:
-                logger.warning(f"Could not get count from Chroma collection: {e_count}")
-
-
-            # Example: Add a dummy reflection to test indexing (optional)
-            if collection_count == 0: # Only add if empty for testing
-                logger.info("Adding a dummy reflection for testing indexing...")
-                dummy_reflection_text = "This is a test reflection about AI metacognition and learning from past interactions. It explores the concept of self-improvement in artificial intelligence systems."
-                dummy_interaction = Interaction(
-                    session_id="test_session_reflection",
-                    mode="chat",
-                    input_type="reflection_result", # Critical: must be this type
-                    user_input="[Test Reflection Trigger]",
-                    llm_response=dummy_reflection_text,
-                    timestamp=datetime.datetime.now(datetime.timezone.utc)
-                )
-                if db_session_for_test:
-                    try:
-                        db_session_for_test.add(dummy_interaction)
-                        db_session_for_test.commit()
-                        db_session_for_test.refresh(dummy_interaction) # Get ID
-                        logger.info(f"Added dummy reflection with ID: {dummy_interaction.id}")
-                        index_single_reflection(dummy_interaction, test_ai_provider, db_session_for_test)
-                        logger.info("Attempted to index dummy reflection.")
-                        # Re-check count
-                        collection_count_after_add = reflection_vs._collection.count() # type: ignore
-                        logger.info(f"Reflection Chroma collection NOW contains {collection_count_after_add} items.")
-                    except Exception as e_dummy:
-                        logger.error(f"Error adding/indexing dummy reflection: {e_dummy}")
-                        if db_session_for_test: db_session_for_test.rollback()
-                else:
-                    logger.error("Cannot add dummy reflection: db_session_for_test is None.")
-
-
-            # 5. Perform Search if query provided
-            if cli_args.search_query:
-                query = cli_args.search_query
-                logger.info(f"Performing search with query: '{query}'")
-                try:
-                    search_results = reflection_vs.similarity_search_with_relevance_scores(query, k=3)
-                    if search_results:
-                        logger.info(f"Found {len(search_results)} results:")
-                        for i, (doc, score) in enumerate(search_results):
-                            print(f"\n--- Result {i+1} (Score: {score:.4f}) ---")
-                            print(f"  Metadata: {doc.metadata}")
-                            print(f"  Content Snippet:\n    {doc.page_content[:300].replace(os.linesep, ' ')}...")
-                    else:
-                        logger.info("No results found for the query.")
-                except Exception as e_search:
-                    logger.error(f"Error during vector search: {e_search}")
-            else:
-                logger.info("No search query provided. Skipping search.")
-        else:
-            logger.error("Failed to get global reflection vector store instance after initialization attempt.")
-
-        if db_session_for_test:
-            db_session_for_test.close()
-        logger.info("--- Reflection Indexer Test Mode Finished ---")
-    else:
-        print("Run with --test to initialize and optionally --search_query \"your query\" to search.")

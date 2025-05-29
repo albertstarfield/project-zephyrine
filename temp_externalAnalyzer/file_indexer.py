@@ -19,9 +19,9 @@ from io import BytesIO
 from PIL import Image # Requires Pillow: pip install Pillow
 #from langchain_community.vectorstores import Chroma # Add Chroma import
 from langchain_chroma import Chroma
-import argparse # For __main__
-import shutil
-import subprocess
+
+
+
 
 
 from langchain_core.messages import HumanMessage
@@ -62,20 +62,21 @@ except ImportError:
 
 # Database imports
 try:
-    from database import SessionLocal, FileIndex, add_interaction, init_db # Import add_interaction if logging indexer status
+    from database import SessionLocal, FileIndex, add_interaction # Import add_interaction if logging indexer status
     from sqlalchemy import update, select
     from sqlalchemy.exc import SQLAlchemyError
 except ImportError:
     logger.critical("❌ Failed to import database components in file_indexer.py. Indexer cannot run.")
     # Define dummy classes/functions to allow loading but prevent execution
-    class SessionLocal: # type: ignore
+    class SessionLocal:
         def __call__(self): return None # type: ignore
-    class FileIndex: pass # type: ignore
-    def add_interaction(*args, **kwargs): pass # type: ignore
-    def init_db(): pass # type: ignore
-    SQLAlchemyError = Exception # type: ignore
+    class FileIndex: pass
+    def add_interaction(*args, **kwargs): pass
+    SQLAlchemyError = Exception
     # Exit if DB cannot be imported
-    # sys.exit("Indexer failed: Database components missing.") # Comment out for potential testing
+    sys.exit("Indexer failed: Database components missing.")
+
+
 
 # --- NEW: Import the custom lock ---
 
@@ -107,7 +108,6 @@ TEXT_EXTENSIONS = { # Added csv
     '.csv', '.tsv', '.tex', '.bib'
 }
 DOC_EXTENSIONS = {'.pdf', '.docx', '.xlsx', '.pptx'}
-OFFICE_EXTENSIONS = {'.docx', '.doc', '.xls', '.xlsx', '.pptx', '.ppt'} # Added from config.py
 
 # --- File types we want to embed ---
 EMBEDDABLE_EXTENSIONS = TEXT_EXTENSIONS.union(DOC_EXTENSIONS).union({'.csv'}) # Explicitly add csv here if not in TEXT_EXTENSIONS
@@ -154,56 +154,8 @@ class FileIndexer:
                  logger.info(f"🛑 {self.thread_name}: Stop signaled while waiting for server.")
                  return True # Indicate stop was requested
         if waited and log_wait:
-             logger.info(f"� {self.thread_name}: Server is free, resuming indexing.")
+             logger.info(f"🟢 {self.thread_name}: Server is free, resuming indexing.")
         return False # Indicate processing can continue
-
-    def _convert_office_to_pdf(self, office_path: str) -> Optional[str]:
-        """
-        Converts an Office document (docx, xlsx, pptx) to a temporary PDF file
-        using unoconv (requires LibreOffice installed).
-        Returns the path to the temporary PDF file or None on failure.
-        """
-        if not shutil.which("unoconv"):
-            logger.error(f"unoconv command not found. Cannot convert Office file: {office_path}")
-            return None
-
-        temp_pdf_dir = os.path.join(os.path.dirname(office_path), "temp_office_conversions")
-        os.makedirs(temp_pdf_dir, exist_ok=True)
-        base_name = os.path.splitext(os.path.basename(office_path))[0]
-        temp_pdf_path = os.path.join(temp_pdf_dir, f"{base_name}.pdf")
-
-        logger.debug(f"Attempting to convert '{office_path}' to PDF at '{temp_pdf_path}' using unoconv...")
-        try:
-            # Command: unoconv -f pdf -o /path/to/output_dir /path/to/input_file
-            # We specify output file directly with -o for some unoconv versions.
-            # If -o expects a dir, then use:
-            # process = subprocess.run(["unoconv", "-f", "pdf", "-o", temp_pdf_dir, office_path],
-            process = subprocess.run(["unoconv", "-f", "pdf", "-o", temp_pdf_path, office_path],
-                                     capture_output=True, text=True, timeout=120, check=False)
-            if process.returncode == 0 and os.path.exists(temp_pdf_path):
-                logger.info(f"Successfully converted '{office_path}' to '{temp_pdf_path}'.")
-                return temp_pdf_path
-            else:
-                logger.error(f"unoconv conversion failed for '{office_path}'. RC: {process.returncode}")
-                logger.error(f"unoconv stdout: {process.stdout.strip()}")
-                logger.error(f"unoconv stderr: {process.stderr.strip()}")
-                if os.path.exists(temp_pdf_path): # Clean up if partial file created
-                    try: os.remove(temp_pdf_path)
-                    except: pass
-                return None
-        except subprocess.TimeoutExpired:
-            logger.error(f"unoconv conversion timed out for '{office_path}'.")
-            if os.path.exists(temp_pdf_path):
-                try: os.remove(temp_pdf_path)
-                except: pass
-            return None
-        except Exception as e:
-            logger.error(f"Error during unoconv conversion of '{office_path}': {e}")
-            if os.path.exists(temp_pdf_path):
-                try: os.remove(temp_pdf_path)
-                except: pass
-            return None
-
 
     def _convert_pdf_to_images(self, pdf_path: str) -> Optional[List[Any]]:
          """Converts PDF pages to PIL Image objects."""
@@ -217,7 +169,7 @@ class FileIndexer:
          except Exception as e:
              logger.error(f"Failed PDF to image conversion for {pdf_path}: {e}")
              return None
-
+    
     def _get_initial_vlm_description(self, image: Image.Image) -> Tuple[Optional[str], Optional[str]]:
         """Calls the 'vlm' model for initial analysis/description with ELP0 priority."""
         # Check server busy/stop event first
@@ -309,6 +261,8 @@ class FileIndexer:
                 return None, f"[LaTeX Refinement Error: {e}]" # Generic error marker
 
 
+    
+    
     def _get_latex_from_image(self, image: Image.Image) -> Tuple[Optional[str], Optional[str]]:
         """Sends a single PIL image to VLM and parses LaTeX."""
         # <<< ADD CHECK/WAIT HERE >>>
@@ -363,7 +317,7 @@ class FileIndexer:
         except Exception as e:
             logger.error(f"VLM call failed during LaTeX extraction: {e}")
             return None, f"[VLM Error: {e}]" # Return error in explanation field
-
+    
     # --- NEW: MD5 Hashing Helper ---
     def _calculate_md5(self, file_path: str, size_bytes: Optional[int]) -> Optional[str]:
         """Calculates the MD5 hash of a file, reading in chunks."""
@@ -552,7 +506,7 @@ class FileIndexer:
         except Exception as e:
             logger.error(f"PPTX extraction failed for {file_path}: {e}")
             return None
-
+    
     def _process_file_phase1(self, file_path: str, db_session: Session):
         """
         Phase 1: Gets metadata, hash. Extracts text ONLY for non-Office/non-PDF files.
@@ -845,7 +799,7 @@ class FileIndexer:
                      logger.error(f"DB VLM status only update FAILED for {file_path}: {db_vlm_err}")
                      db_session.rollback()
     # --- END MODIFIED: _process_file_phase1 ---
-
+    
 
     def _process_pending_vlm_files(self, db_session: Session):
         """Phase 2: Converts Office files, then processes all pending PDFs/converted files using VLM."""
@@ -856,11 +810,10 @@ class FileIndexer:
         logger.info("🔬 Starting Phase 2 Cycle...")
         processed_count = 0; error_count = 0; converted_count = 0; vlm_processed_count = 0
         last_report_time = time.monotonic()
-        interrupted = False # Flag for interruption
 
         # --- Sub-Phase 2a: Convert Office Files ---
         logger.info("--- Phase 2a: Checking for Office files pending conversion ---")
-        while not self.stop_event.is_set() and not interrupted:
+        while not self.stop_event.is_set():
             files_to_convert: List[FileIndex] = []
             try:
                 files_to_convert = db_session.query(FileIndex).filter(
@@ -872,8 +825,8 @@ class FileIndexer:
 
             logger.info(f"Phase 2a: Found {len(files_to_convert)} Office file(s) to convert...")
             for record in files_to_convert:
-                if self.stop_event.is_set(): logger.info("Phase 2a conversion interrupted by stop_event."); interrupted=True; break
-                if self._wait_if_server_busy(): interrupted=True; break # Stop batch if busy
+                if self.stop_event.is_set(): logger.info("Phase 2a conversion interrupted."); break
+                if self._wait_if_server_busy(): break # Stop batch if busy
 
                 input_path = record.file_path
                 record_id = record.id
@@ -883,26 +836,25 @@ class FileIndexer:
                 if temp_pdf_path:
                     new_status = 'pending_vlm' # Mark for VLM processing in next sub-phase
                     converted_count += 1
+                    # --- Optionally process the temp PDF immediately ---
+                    # self._process_single_pdf_for_vlm(db_session, record, temp_pdf_path)
+                    # os.remove(temp_pdf_path) # Clean up temp PDF
+                    # --- OR ---
+                    # Just update status and let the next loop handle it
                     logger.info(f"Conversion successful for ID {record_id}, marked as 'pending_vlm'. Temp PDF: {temp_pdf_path}")
-                    # Clean up the temp PDF path now, as it's not directly used by _process_single_pdf_for_vlm
-                    # _process_single_pdf_for_vlm will re-convert if it's an office file.
-                    # This is inefficient but safer than managing temp file state across phases.
-                    # A better long-term solution would be to pass the temp_pdf_path to _process_single_pdf_for_vlm
-                    # or have _convert_office_to_pdf return the content directly.
-                    # For now, we delete the temp PDF created *here*.
-                    try:
-                        if os.path.exists(temp_pdf_path): os.remove(temp_pdf_path)
-                    except Exception as e_rem_temp:
-                        logger.warning(f"Could not remove temp PDF '{temp_pdf_path}' after conversion marking: {e_rem_temp}")
-                else:
-                    error_count += 1 # Conversion failed
+                    # We need to decide whether to process now or later. Let's mark and process later for simplicity.
+                    # Clean up the temp PDF path *now* if we don't process immediately
+                    # This is complex - maybe conversion should output to a specific cache dir?
+                    # For now, let's assume we need the temp path later, which is risky.
+                    # SAFER: Process immediately. Let's adjust the loop below.
 
                 # Update DB status after conversion attempt
                 try:
                     stmt = update(FileIndex).where(FileIndex.id == record_id).values(
                         vlm_processing_status=new_status,
-                        latex_representation=None, # Clear LaTeX fields
-                        latex_explanation=None,
+                        # Clear LaTeX fields if conversion failed or pending VLM
+                        latex_representation=None if new_status != 'success' else record.latex_representation,
+                        latex_explanation=None if new_status != 'success' else record.latex_explanation,
                         last_indexed_db=datetime.datetime.now(datetime.timezone.utc)
                     )
                     db_session.execute(stmt); db_session.commit()
@@ -910,16 +862,13 @@ class FileIndexer:
                      logger.error(f"Phase 2a DB update failed for ID {record_id}: {db_conv_err}"); db_session.rollback()
                      error_count += 1
 
-                if not self.stop_event.is_set() and not interrupted: time.sleep(1.0) # Longer delay after conversion attempt
+                if not self.stop_event.is_set(): time.sleep(1.0) # Longer delay after conversion attempt
 
-            if self.stop_event.is_set() or self._wait_if_server_busy() or interrupted: break # Exit outer loop if needed
-
-        if interrupted: logger.info("Phase 2a (Conversion) loop exited due to interruption/stop.");
+            if self.stop_event.is_set() or self._wait_if_server_busy(): break # Exit outer loop if needed
 
         # --- Sub-Phase 2b: Process Pending VLM Files (PDFs and Successfully Converted) ---
         logger.info("--- Phase 2b: Checking for files pending VLM analysis ---")
-        interrupted = False # Reset interruption flag for this phase
-        while not self.stop_event.is_set() and not interrupted:
+        while not self.stop_event.is_set():
             batch_start_time = time.monotonic()
             pending_vlm_files: List[FileIndex] = []
             try:
@@ -933,31 +882,34 @@ class FileIndexer:
 
             logger.info(f"Phase 2b: Found {len(pending_vlm_files)} file(s) for VLM analysis...")
             for record in pending_vlm_files:
-                if self.stop_event.is_set(): logger.info("Phase 2b VLM analysis interrupted by stop_event."); interrupted=True; break
-                if self._wait_if_server_busy(): interrupted=True; break # Stop batch
+                if self.stop_event.is_set(): logger.info("Phase 2b VLM analysis interrupted."); break
+                if self._wait_if_server_busy(): break # Stop batch
 
                 file_path = record.file_path # This is the ORIGINAL path (PDF or Office)
                 record_id = record.id
                 logger.info(f"Phase 2b Processing file ID {record_id}: {file_path}")
-                current_status = 'processing'; final_latex_code = None; final_explanation = None;
-                vlm_error_occurred_this_file = False # Track errors for this specific file
+                current_status = 'processing'; final_latex_code = None; final_explanation = None; page_errors = 0; num_pages = 0
                 temp_pdf_to_process = None
-                is_converted_office_file = False
+                is_converted = False
 
-                # Determine the actual PDF path to process
+                # Check if this is an Office file that needs the temp PDF path
                 file_ext = os.path.splitext(file_path)[1].lower()
-                if file_ext == '.pdf':
-                    temp_pdf_to_process = file_path
-                elif file_ext in OFFICE_EXTENSIONS:
-                    logger.info(f"Phase 2b: Office file ID {record_id} needs conversion to temp PDF for VLM.")
-                    temp_pdf_to_process = self._convert_office_to_pdf(file_path)
-                    if not temp_pdf_to_process:
-                        logger.error(f"Phase 2b: Office to PDF conversion failed for {file_path}. Skipping VLM."); current_status = 'error_conversion'; error_count += 1
-                    else:
-                        is_converted_office_file = True
-                        logger.info(f"Phase 2b: Converted Office file to temp PDF: {temp_pdf_to_process}")
+                if file_ext in OFFICE_EXTENSIONS:
+                     # Problem: We didn't store the temp PDF path from Phase 2a!
+                     # Need to re-convert or change Phase 2a to process immediately.
+                     # Let's re-convert for now, acknowledging inefficiency.
+                     logger.warning(f"Phase 2b: Re-converting Office file ID {record_id} to temporary PDF for VLM analysis.")
+                     temp_pdf_to_process = self._convert_office_to_pdf(file_path)
+                     if not temp_pdf_to_process:
+                         logger.error(f"Phase 2b: Re-conversion failed for {file_path}. Skipping VLM."); current_status = 'error_conversion'; error_count += 1
+                         # Go straight to DB update below loop
+                     else:
+                         is_converted = True # Mark that we need to delete temp file later
+                         logger.info(f"Phase 2b: Re-converted to {temp_pdf_to_process}")
+                elif file_ext == '.pdf':
+                     temp_pdf_to_process = file_path # Process the original PDF path
                 else:
-                    logger.error(f"Phase 2b: File ID {record_id} has 'pending_vlm' but isn't PDF/Office ({file_ext}). Skipping."); current_status = 'error_type'; error_count += 1
+                     logger.error(f"Phase 2b: File ID {record_id} has status 'pending_vlm' but is not PDF or known Office type ({file_ext}). Skipping."); current_status = 'error_type'; error_count += 1
 
                 # --- Process the PDF (original or temporary) ---
                 if temp_pdf_to_process:
@@ -968,7 +920,7 @@ class FileIndexer:
 
                         for i, page_image in enumerate(images):
                             page_num = i + 1
-                            if self.stop_event.is_set() or interrupted: current_status = 'pending_vlm'; interrupted=True; break
+                            if self.stop_event.is_set(): current_status = 'pending_vlm'; interrupted=True; break
                             logger.info(f"  🧠 Phase 2b: Analyzing page {page_num}/{num_pages} for file ID {record_id} (VLM/LaTeX - ELP0)...")
 
                             # --- Step 1: Get Initial Description ---
@@ -976,19 +928,18 @@ class FileIndexer:
 
                             if vlm_err_msg: # Check for errors or interruption from VLM step
                                 page_expl_results.append(f"## Page {page_num}\nInitial Analysis Failed: {vlm_err_msg}")
-                                if "[VLM Interrupted]" in vlm_err_msg or "[LaTeX Model Skipped - Server Busy]" in vlm_err_msg or "[VLM Skipped - Stop Requested]" in vlm_err_msg:
-                                    interrupted=True; current_status='pending_vlm'; break
-                                vlm_error_occurred_this_file = True # Mark general error
+                                if "[VLM Interrupted]" in vlm_err_msg: interrupted=True; current_status='pending_vlm'; break
+                                vlm_error_occurred = True # Mark general error
                                 continue # Skip refinement if initial failed
 
                             # --- Step 2: Refine to LaTeX/TikZ (if initial desc obtained) ---
                             refined_latex, refined_expl_msg = self._refine_to_latex_tikz(page_image, initial_desc or "")
 
-                            if refined_expl_msg and ("[LaTeX Refinement Interrupted]" in refined_expl_msg or "[LaTeX Model Skipped - Server Busy]" in refined_expl_msg or "[LaTeX Model Skipped - Stop Requested]" in refined_expl_msg):
+                            if refined_expl_msg and "[LaTeX Refinement Interrupted]" in refined_expl_msg:
                                 interrupted=True; current_status='pending_vlm'; break
                             elif refined_expl_msg and "[LaTeX Refinement Error:" in refined_expl_msg:
                                 page_expl_results.append(f"## Page {page_num}\nLaTeX Refinement Failed: {refined_expl_msg}")
-                                vlm_error_occurred_this_file = True # Mark general error
+                                vlm_error_occurred = True # Mark general error
                             else:
                                 # Success for this page
                                 if refined_latex: page_latex_results.append(f"% Page {page_num}\n{refined_latex}")
@@ -996,7 +947,7 @@ class FileIndexer:
 
                         # --- After processing all pages (or interruption) ---
                         if not interrupted: # Determine final status only if not stopped/interrupted
-                            if vlm_error_occurred_this_file: # If any page had an error (VLM or LaTeX)
+                            if vlm_error_occurred: # If any page had an error (VLM or LaTeX)
                                 current_status = 'partial_vlm_error' if (page_latex_results or page_expl_results) else 'error_vlm'
                             else:
                                 current_status = 'success'
@@ -1006,12 +957,11 @@ class FileIndexer:
                         final_explanation = "\n\n".join(page_expl_results) if page_expl_results else None
 
                     else: # PDF conversion failed
-                        logger.error(f"Phase 2b Skipping file ID {record_id}: PDF to image conversion failed for '{temp_pdf_to_process}'.")
+                        logger.error(f"Phase 2b Skipping file ID {record_id}: PDF conversion failed for '{temp_pdf_to_process}'.")
                         current_status = 'error_conversion'
-                        error_count +=1
 
-                # --- Clean up temporary PDF if created from Office file ---
-                if is_converted_office_file and temp_pdf_to_process and os.path.exists(temp_pdf_to_process):
+                # --- Clean up temporary PDF if created ---
+                if is_converted and temp_pdf_to_process and os.path.exists(temp_pdf_to_process):
                     try: os.remove(temp_pdf_to_process); logger.trace(f"Cleaned up temporary PDF: {temp_pdf_to_process}")
                     except Exception as e: logger.warning(f"Failed to clean up temp PDF '{temp_pdf_to_process}': {e}")
 
@@ -1028,13 +978,12 @@ class FileIndexer:
                 except SQLAlchemyError as db_upd_err:
                     logger.error(f"Phase 2b DB Update FAILED ID {record_id}: {db_upd_err}"); db_session.rollback(); error_count += 1
 
-                if not self.stop_event.is_set() and not interrupted: time.sleep(0.5) # Small delay
+                if not self.stop_event.is_set(): time.sleep(0.5) # Small delay
 
-            if self.stop_event.is_set() or self._wait_if_server_busy() or interrupted: break # Exit outer VLM loop
+            if self.stop_event.is_set() or self._wait_if_server_busy(): break # Exit outer VLM loop
             if not pending_vlm_files: time.sleep(5) # Pause if queue empty
 
         # --- End of outer Phase 2b while loop ---
-        if interrupted: logger.info("Phase 2b (VLM Analysis) loop exited due to interruption/stop.");
         total_duration = time.monotonic() - last_report_time
         logger.success(f"✅ Finished Phase 2 Cycle. Converted: {converted_count}, VLM Processed: {vlm_processed_count}, Errors: {error_count}. Duration: {total_duration:.2f}s")
 
@@ -1042,15 +991,254 @@ class FileIndexer:
     def run(self):
         """Main execution loop: Runs Phase 1 scan, then Phase 2 VLM, then waits."""
         logger.info(f"✅ {self.thread_name} started.")
-        db: Optional[Session] = None # Initialize db to Optional[Session]
+        db: Session = None
+        while not self.stop_event.is_set():
+            cycle_start_time = time.monotonic()
+            # --- Phase 1 ---
+            logger.info(f"--- {self.thread_name}: Starting Scan Cycle (Phase 1) ---")
+            try: db = SessionLocal(); root_paths = self._get_root_paths()
+            except Exception as db_err: logger.error(f"Failed get DB session for Phase 1: {db_err}"); time.sleep(60); continue
+            try:
+                 for root in root_paths:
+                      if self.stop_event.is_set(): break
+                      self._scan_directory(root, db) # Calls Phase 1 logic
+            except Exception as e: logger.error(f"💥 Unhandled error during Phase 1: {e}", exc_info=True)
+            finally:
+                 if db: db.close(); db = None
+            if self.stop_event.is_set(): break
+            phase1_duration = time.monotonic() - cycle_start_time
+            logger.info(f"--- {self.thread_name}: Phase 1 Completed ({phase1_duration:.2f}s) ---")
+
+            # --- Phase 2 ---
+            logger.info(f"--- {self.thread_name}: Starting VLM/Conversion Cycle (Phase 2) ---")
+            phase2_start_time = time.monotonic()
+            try: db = SessionLocal()
+            except Exception as db_err: logger.error(f"Failed get DB session for Phase 2: {db_err}"); time.sleep(60); continue
+            try: self._process_pending_vlm_files(db) # Calls Phase 2 logic
+            except Exception as e: logger.error(f"💥 Unhandled error during Phase 2: {e}", exc_info=True)
+            finally:
+                 if db: db.close(); db = None
+            if self.stop_event.is_set(): break
+            phase2_duration = time.monotonic() - phase2_start_time
+            logger.info(f"--- {self.thread_name}: Phase 2 Completed ({phase2_duration:.2f}s) ---")
+
+            # --- Wait ---
+            total_cycle_duration = time.monotonic() - cycle_start_time
+            wait_time = max(10, SCAN_INTERVAL_SECONDS - total_cycle_duration)
+            logger.info(f"{self.thread_name}: Full cycle ({total_cycle_duration:.1f}s). Waiting {wait_time:.1f}s...")
+            self.stop_event.wait(timeout=wait_time)
+
+        logger.info(f"🛑 {self.thread_name} exiting.")
+
+    def _scan_directory(self, root_path: str, db_session: Session):
+        """
+        Phase 1: Walks through a directory and processes files using _process_file_phase1,
+        skipping OS/system dirs/files and hidden dot files/dirs.
+        Reports progress periodically.
+        """
+        logger.info(f"🔬 Starting Phase 1 Scan Cycle for root: {root_path}")
+        total_processed_this_cycle = 0
+        total_errors_this_cycle = 0
+        last_report_time = time.monotonic()
+        files_since_last_report = 0
+        errors_since_last_report = 0
+        report_interval_seconds = 60 # Log progress every minute
+
+        # --- Skip Logic Initialization ---
+        # Define common system directories (absolute paths mostly)
+        common_system_dirs_raw = {
+            # General Unix/Linux/BSD/macOS (Absolute)
+            "/proc", "/sys", "/dev", "/run", "/etc", "/var", "/tmp", "/private",
+            "/cores", "/opt", "/usr",
+            # Linux Specific (Absolute)
+            "/snap", "/lost+found", "/boot",
+            # macOS Specific (Absolute)
+            "/System", "/Library", "/Users/Shared", "/Network", "/Volumes",
+            "/.MobileBackups", "/.Spotlight-V100", "/.fseventsd",
+            # Windows Specific (Drive Letter Agnostic - checking startswith later)
+            "$recycle.bin", "system volume information", "program files", "program files (x86)",
+            "windows", "programdata", "recovery", "$windows.~bt", "$windows.~ws",
+            "config.msi",
+            # Common Dev/Temp Dirs (Relative name check - avoid common large/generated dirs)
+            "node_modules", "__pycache__", ".venv", "venv", ".env", "env",
+            ".tox", ".pytest_cache", ".mypy_cache", "Cache", "cache", "Library",
+            # Specific to your project structure to avoid indexing itself
+            "staticmodelpool", "llama-cpp-python_build", "systemCore", "engineMain", "backend-service", "frontend-face-zephyrine",
+            # Common user data dirs that might be large/redundant
+            "Downloads", "Pictures", "Movies", "Music",
+            # Common lib/bin dirs (might catch venv dirs too)
+             "python3", "lib", "bin", "database",
+             # Example: Add more potentially large/unwanted directories
+             "Backup", "Archives"
+        }
+
+        # Separate lists for different matching strategies
+        absolute_skip_dirs_normalized = {os.path.normpath(p) for p in common_system_dirs_raw if p.startswith('/') or ':' in p}
+        relative_skip_dir_names_lower = {p.lower() for p in common_system_dirs_raw if not (p.startswith('/') or ':' in p)}
+        absolute_skip_dirs_normalized_lower = {p.lower() for p in absolute_skip_dirs_normalized}
+
+        # Specific system files to skip by name (case-insensitive)
+        files_to_skip_lower = {
+            '.ds_store', 'thumbs.db', 'desktop.ini', '.localized',
+            '.bash_history', '.zsh_history',
+            'ntuser.dat', '.swp', '.swo',
+            'pagefile.sys', 'hiberfil.sys',
+            '.volumeicon.icns', '.cfusertextencoding',
+            '.traceroute.log',
+            # Add potentially large single files if needed
+            '.bash_sessions_disable'
+        }
+        # --- End Skip Logic Init ---
+
+        try:
+            # Using os.walk
+            for current_dir, dirnames, filenames in os.walk(root_path, topdown=True, onerror=None):
+                if self.stop_event.is_set():
+                    logger.info(f"Phase 1 Scan interrupted by stop signal in {current_dir}")
+                    break
+
+                # --- Apply Skip Logic for Directories ---
+                norm_current_dir = os.path.normpath(current_dir)
+                norm_current_dir_lower = norm_current_dir.lower()
+                current_dir_basename_lower = os.path.basename(norm_current_dir).lower()
+                should_skip_dir = False
+
+                # 1. Check against absolute system paths
+                for skip_dir in absolute_skip_dirs_normalized:
+                    # Use os.path.commonpath for more robust checking if needed, but startswith is often sufficient
+                    if norm_current_dir == skip_dir or norm_current_dir.startswith(skip_dir + os.sep):
+                        should_skip_dir = True; break
+                if not should_skip_dir:
+                     for skip_dir_lower in absolute_skip_dirs_normalized_lower:
+                         if norm_current_dir_lower == skip_dir_lower or norm_current_dir_lower.startswith(skip_dir_lower + os.sep):
+                              should_skip_dir = True; break
+
+                # 2. Check if the directory *name* matches a relative skip name
+                if not should_skip_dir:
+                    if current_dir_basename_lower in relative_skip_dir_names_lower:
+                        should_skip_dir = True
+
+                # 3. Skip hidden directories (dot directories)
+                # We check basename here too and prune walk below
+                if not should_skip_dir and os.path.basename(norm_current_dir).startswith('.'):
+                    should_skip_dir = True
+                # --- End Directory Skip Logic ---
+
+                if should_skip_dir:
+                    logger.trace(f"Phase 1 Skipping excluded/hidden directory: {current_dir}")
+                    dirnames[:] = [] # Prune walk - essential for efficiency
+                    filenames[:] = [] # Clear filenames list for this dir
+                    continue
+
+                # --- Prune Hidden Subdirectories from Further Walk (if not already skipped) ---
+                # Filter dirnames *in place* to remove dot-directories before iterating files
+                original_dir_count = len(dirnames)
+                dirnames[:] = [d for d in dirnames if not d.startswith('.')]
+                skipped_dot_dirs = original_dir_count - len(dirnames)
+                if skipped_dot_dirs > 0:
+                     logger.trace(f"Phase 1 Pruning {skipped_dot_dirs} hidden subdirs from walk in: {current_dir}")
+                # --- End Hidden Directory Pruning ---
+
+                logger.trace(f"Phase 1 Scanning {current_dir}...")
+                current_dir_file_errors = 0
+
+                # Process files in the current (non-skipped) directory
+                for filename in filenames:
+                    if self.stop_event.is_set(): break
+
+                    # --- Apply Skip Logic for Files ---
+                    # 1. Skip hidden files (dot files) - Double check needed? Basename check covers parent.
+                    if filename.startswith('.'):
+                        logger.trace(f"Phase 1 Skipping hidden file: {filename}")
+                        continue
+
+                    # 2. Skip specific system/config files by name
+                    filename_lower = filename.lower()
+                    if filename_lower in files_to_skip_lower:
+                         logger.trace(f"Phase 1 Skipping excluded system/config file: {filename}")
+                         continue
+                    # --- End File Skip Logic ---
+
+                    file_path = os.path.join(current_dir, filename)
+                    file_processed = False
+                    file_errored = False
+
+                    try:
+                        # Check link/file status *after* initial name checks
+                        if os.path.islink(file_path):
+                             logger.trace(f"Phase 1 Skipping symbolic link: {file_path}")
+                             continue
+                        # Ensure it's actually a file (could be socket, etc.)
+                        if not os.path.isfile(file_path):
+                            logger.trace(f"Phase 1 Skipping non-file entry: {file_path}")
+                            continue
+
+                        # --- Call PHASE 1 processing ---
+                        self._process_file_phase1(file_path, db_session)
+                        file_processed = True
+                        # --- End Phase 1 call ---
+
+                    except PermissionError:
+                        logger.warning(f"Phase 1 Permission denied accessing path info: {file_path}")
+                        file_errored = True
+                        # Attempt to log error to DB if permission denied during the walk itself
+                        try:
+                            existing = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
+                            if existing:
+                                if existing.index_status != 'error_permission': existing.index_status = 'error_permission'; existing.processing_error = "Permission denied during scan."; db_session.commit()
+                            else: perm_error_record = FileIndex(file_path=file_path, file_name=filename, index_status='error_permission', processing_error="Permission denied during scan."); db_session.add(perm_error_record); db_session.commit()
+                        except Exception as db_perm_err: logger.error(f"Failed to log permission error to DB for {file_path}: {db_perm_err}"); db_session.rollback()
+
+                    except Exception as walk_err:
+                        logger.error(f"Phase 1 Error processing entry {file_path} during walk: {walk_err}", exc_info=True) # Add traceback
+                        file_errored = True
+
+                    finally:
+                        # --- Update Counters & Report ---
+                        if file_processed:
+                            total_processed_this_cycle += 1; files_since_last_report += 1
+                        if file_errored:
+                            total_errors_this_cycle += 1; errors_since_last_report += 1; current_dir_file_errors += 1
+
+                        current_time = time.monotonic()
+                        if current_time - last_report_time >= report_interval_seconds:
+                            rate = files_since_last_report / report_interval_seconds
+                            logger.info(f"⏳ [Phase 1 Report] Last {report_interval_seconds}s: {files_since_last_report} files (~{rate:.1f}/s), {errors_since_last_report} errors. Dir: '...{os.path.basename(current_dir)}'. Cycle Total: {total_processed_this_cycle}")
+                            last_report_time = current_time; files_since_last_report = 0; errors_since_last_report = 0
+                        # --- End Counters & Report ---
+
+                        # Yield CPU slightly between files if needed
+                        if YIELD_SLEEP_SECONDS > 0:
+                            time.sleep(YIELD_SLEEP_SECONDS)
+
+                # Check stop event after processing files in a directory
+                if self.stop_event.is_set(): break
+
+                if current_dir_file_errors > 0:
+                     logger.warning(f"Encountered {current_dir_file_errors} errors processing files within: {current_dir}")
+
+            # End of os.walk loop
+        except Exception as outer_walk_err:
+             logger.error(f"Outer error during Phase 1 os.walk for {root_path}: {outer_walk_err}", exc_info=True)
+             total_errors_this_cycle += 1
+
+        # Log final summary for this root path scan cycle
+        if not self.stop_event.is_set():
+            logger.success(f"✅ Finished Phase 1 Scan for {root_path}. Total Processed: {total_processed_this_cycle}, Total Errors: {total_errors_this_cycle}")
+        else:
+            logger.warning(f"⏹️ Phase 1 Scan for {root_path} interrupted by stop signal. Processed in this cycle: {total_processed_this_cycle}, Errors: {total_errors_this_cycle}")
+
+    def run(self):
+        """Main execution loop: Runs Phase 1 scan, then Phase 2 VLM, then waits."""
+        logger.info(f"✅ {self.thread_name} started.")
+        db: Session = None
 
         while not self.stop_event.is_set():
             cycle_start_time = time.monotonic()
             # --- Phase 1: File Scanning ---
             logger.info(f"--- {self.thread_name}: Starting Scan Cycle (Phase 1) ---")
             try:
-                db = SessionLocal() # type: ignore
-                if db is None: raise Exception("Failed to create DB session for Phase 1")
+                db = SessionLocal()
                 root_paths = self._get_root_paths()
                 for root in root_paths:
                     if self.stop_event.is_set(): break
@@ -1067,8 +1255,7 @@ class FileIndexer:
             logger.info(f"--- {self.thread_name}: Starting VLM/LaTeX Cycle (Phase 2) ---")
             phase2_start_time = time.monotonic()
             try:
-                db = SessionLocal() # type: ignore
-                if db is None: raise Exception("Failed to create DB session for Phase 2")
+                db = SessionLocal()
                 self._process_pending_vlm_files(db) # Executes Phase 2 logic
             except Exception as e:
                  logger.error(f"💥 Unhandled error during Phase 2: {e}", exc_info=True)
@@ -1426,87 +1613,3 @@ def get_global_file_index_vectorstore(timeout_seconds=60) -> Optional[Chroma]:
         logger.warning(
             "File index VS event is set, but global_file_index_vectorstore is still None. Data might be empty or init issue.")
     return global_file_index_vectorstore
-
-
-if __name__ == "__main__":
-    parser = argparse.ArgumentParser(description="File Indexer Test CLI")
-    parser.add_argument("--test", action="store_true", help="Run test initialization and optional search.")
-    parser.add_argument("--search_query", type=str, default=None, help="Query string to search the file index vector store.")
-    cli_args = parser.parse_args()
-
-    if cli_args.test:
-        logger.remove() # Remove default loguru handler
-        logger.add(sys.stderr, level="DEBUG") # Add a new one with DEBUG level for testing
-        logger.info("--- File Indexer Test Mode ---")
-
-        # 1. Initialize Database (critical for SessionLocal and schema)
-        try:
-            logger.info("Initializing database via database.init_db()...")
-            init_db() # This function from database.py handles Alembic migrations etc.
-            logger.info("Database initialization complete.")
-        except Exception as e_db_init:
-            logger.error(f"Failed to initialize database: {e_db_init}")
-            sys.exit(1)
-
-        # 2. Initialize AIProvider (needed for embeddings)
-        #    Ensure PROVIDER is set in your environment or config.py for this to work.
-        #    The AIProvider constructor might try to load all models, which could be slow.
-        #    For testing search, only provider.embeddings is strictly needed by initialize_global_file_index_vectorstore.
-        test_ai_provider: Optional[AIProvider] = None
-        try:
-            logger.info(f"Initializing AIProvider (Provider: {PROVIDER})...") # PROVIDER from config.py
-            test_ai_provider = AIProvider(PROVIDER)
-            if not test_ai_provider.embeddings:
-                raise ValueError("AIProvider initialized, but embeddings are not available.")
-            logger.info("AIProvider initialized successfully for embeddings.")
-        except Exception as e_ai_provider:
-            logger.error(f"Failed to initialize AIProvider: {e_ai_provider}")
-            sys.exit(1)
-
-        # 3. Initialize Global File Index Vector Store (runs the async function)
-        try:
-            logger.info("Initializing global file index vector store (async task)...")
-            asyncio.run(initialize_global_file_index_vectorstore(test_ai_provider)) # Run the async init
-            logger.info("Global file index vector store initialization process completed.")
-        except Exception as e_vs_init:
-            logger.error(f"Error during file index vector store initialization: {e_vs_init}")
-            sys.exit(1)
-
-        # 4. Get the vector store instance
-        file_vs = get_global_file_index_vectorstore(timeout_seconds=10) # Wait a bit if still initializing
-        if file_vs:
-            logger.success("Successfully retrieved global file index vector store instance.")
-            try:
-                collection_count = file_vs._collection.count() # type: ignore
-                logger.info(f"File index Chroma collection contains {collection_count} items.")
-            except Exception as e_count:
-                logger.warning(f"Could not get count from Chroma collection: {e_count}")
-
-            # 5. Perform Search if query provided
-            if cli_args.search_query:
-                query = cli_args.search_query
-                logger.info(f"Performing search with query: '{query}'")
-                try:
-                    # Chroma's similarity_search takes the query string directly
-                    # It will use the embedding_function configured during Chroma init.
-                    search_results = file_vs.similarity_search_with_relevance_scores(query, k=5) # Get top 5 with scores
-                    if search_results:
-                        logger.info(f"Found {len(search_results)} results:")
-                        for i, (doc, score) in enumerate(search_results):
-                            print(f"\n--- Result {i+1} (Score: {score:.4f}) ---")
-                            print(f"  Source: {doc.metadata.get('source', 'N/A')}")
-                            print(f"  File Name: {doc.metadata.get('file_name', 'N/A')}")
-                            print(f"  Content Snippet:\n    {doc.page_content[:300].replace(os.linesep, ' ')}...")
-                    else:
-                        logger.info("No results found for the query.")
-                except Exception as e_search:
-                    logger.error(f"Error during vector search: {e_search}")
-            else:
-                logger.info("No search query provided. Skipping search.")
-        else:
-            logger.error("Failed to get global file index vector store instance after initialization attempt.")
-
-        logger.info("--- File Indexer Test Mode Finished ---")
-    else:
-        print("Run with --test to initialize and optionally --search_query \"your query\" to search.")
-
