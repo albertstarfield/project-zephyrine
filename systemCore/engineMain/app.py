@@ -62,9 +62,8 @@ import queue
 import atexit # To signal shutdown
 import datetime
 import hashlib
-
-
-
+import tempfile
+from werkzeug.utils import secure_filename # For safely handling uploaded filenames
 import difflib
 import contextlib # For ensuring driver quit
 from urllib.parse import urlparse, parse_qs, quote_plus, urljoin
@@ -8147,7 +8146,196 @@ def handle_ollama_tags():
     logger.info(f"🏁 /api/tags request handled in {duration_req:.2f} ms. Status: {status_code}")
     return response
 
-# === NEW: OpenAI Compatible TTS Endpoint (Stub) ===
+
+@app.route("/v1/audio/transcriptions", methods=["POST"])
+def handle_openai_asr_transcriptions():
+    """
+    Handles requests mimicking OpenAI's Audio Transcriptions endpoint.
+    Uses audio_worker.py with pywhispercpp for ASR, running at ELP1 priority.
+    """
+    start_req = time.monotonic()
+    request_id = f"req-asr-{uuid.uuid4()}"
+    logger.info(f"🚀 Flask OpenAI-Style ASR Request ID: {request_id}")
+
+    db: Session = g.db
+    final_response_status_code: int = 500
+    resp: Optional[Response] = None
+    session_id_for_log: str = f"asr_req_default_{request_id}"
+    uploaded_filename_for_log: Optional[str] = None
+    temp_audio_file_path: Optional[str] = None
+
+    try:
+        if not ENABLE_ASR:  # Check if ASR is enabled in config.py
+            logger.warning(f"{request_id}: ASR endpoint called but ASR is disabled in config.")
+            resp_data, status_code = _create_openai_error_response(
+                "ASR functionality is currently disabled on this server.",
+                err_type="server_error", code="asr_disabled", status_code=503
+            )
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+            return resp
+
+        if not request.content_type or not request.content_type.startswith('multipart/form-data'):
+            logger.warning(f"{request_id}: Invalid content type: {request.content_type}. Expected multipart/form-data.")
+            raise ValueError("Invalid content type. Must be multipart/form-data.")
+
+        file_storage = request.files.get('file')
+        model_requested = request.form.get('model')
+        language_requested = request.form.get('language')
+        prompt_for_whisper = request.form.get('prompt')
+        response_format_req = request.form.get('response_format', 'json').lower()
+        # temperature_requested = request.form.get('temperature', type=float) # If you implement passing this to worker
+
+        session_id_for_log = request.form.get("session_id", session_id_for_log)
+        if ai_chat: ai_chat.current_session_id = session_id_for_log  # Set for AIChat instance if used
+
+        if file_storage and file_storage.filename:
+            uploaded_filename_for_log = secure_filename(file_storage.filename)
+
+        logger.debug(
+            f"{request_id}: ASR Request Parsed - File: {uploaded_filename_for_log or 'Missing'}, "
+            f"ModelReq: {model_requested}, Lang: {language_requested}, Prompt: {str(prompt_for_whisper)[:30]}..., "
+            f"RespFormat: {response_format_req}"
+        )
+
+        if not file_storage: raise ValueError("'file' field (audio data) is required.")
+        if not model_requested: raise ValueError("'model' field (e.g., 'Zephyloid-Whisper-Normal') is required.")
+
+        if model_requested != ASR_MODEL_NAME_CLIENT_FACING:  # From config.py
+            logger.warning(
+                f"{request_id}: Invalid ASR model '{model_requested}'. Expected '{ASR_MODEL_NAME_CLIENT_FACING}'.")
+            raise ValueError(f"Invalid model. This endpoint only supports '{ASR_MODEL_NAME_CLIENT_FACING}'.")
+
+        supported_asr_response_formats = ["json", "text"]  # "srt", "verbose_json", "vtt" can be added
+        if response_format_req not in supported_asr_response_formats:
+            raise ValueError(
+                f"Unsupported response_format: '{response_format_req}'. Supported: {', '.join(supported_asr_response_formats)}.")
+
+        # Save uploaded file to a temporary location
+        # SCRIPT_DIR should be defined at the top of app.py: os.path.dirname(os.path.abspath(__file__))
+        temp_audio_dir = os.path.join(SCRIPT_DIR, "temp_audio_worker_files")
+        os.makedirs(temp_audio_dir, exist_ok=True)
+
+        _, file_extension = os.path.splitext(uploaded_filename_for_log or ".tmpwav")  # Ensure some extension
+        temp_file_obj = tempfile.NamedTemporaryFile(dir=temp_audio_dir, suffix=file_extension, delete=False)
+        temp_audio_file_path = temp_file_obj.name
+        file_storage.save(temp_audio_file_path)
+        temp_file_obj.close()
+        logger.info(f"{request_id}: Uploaded audio saved temporarily to: {temp_audio_file_path}")
+
+        # Prepare command for audio_worker.py
+        audio_worker_script_path = os.path.join(SCRIPT_DIR, "audio_worker.py")
+        if not os.path.exists(audio_worker_script_path):
+            raise FileNotFoundError(f"Audio worker script missing at {audio_worker_script_path}")
+
+        worker_command = [
+            APP_PYTHON_EXECUTABLE,  # sys.executable from app.py
+            audio_worker_script_path,
+            "--task-type", "asr",
+            "--model-dir", WHISPER_MODEL_DIR,  # From config.py (points to staticmodelpool)
+            "--temp-dir", temp_audio_dir  # Added temp-dir for worker, though ASR might not use it as much as TTS MP3
+        ]
+
+        worker_request_data = {
+            "input_audio_path": temp_audio_file_path,
+            "whisper_model_name": WHISPER_DEFAULT_MODEL_FILENAME,  # From config.py
+            "language": language_requested or WHISPER_DEFAULT_LANGUAGE,  # From config.py
+            "request_id": request_id
+            # If you enhance audio_worker.py to accept Whisper 'prompt' or 'temperature':
+            # "transcription_prompt": prompt_for_whisper,
+            # "temperature": temperature_requested,
+        }
+
+        logger.info(f"{request_id}: Executing audio worker for ASR (ELP1 priority)...")
+        # _execute_audio_worker_with_priority is a synchronous function.
+        # If this Flask route is async, you'd use await asyncio.to_thread()
+        parsed_response, error_msg = _execute_audio_worker_with_priority(
+            worker_command=worker_command,
+            request_data=worker_request_data,
+            priority=ELP1,  # User-facing ASR runs at ELP1
+            worker_cwd=SCRIPT_DIR,
+            timeout=ASR_WORKER_TIMEOUT  # From config.py, e.g., 300 seconds
+        )
+
+        if error_msg:
+            logger.error(f"{request_id}: ASR worker execution failed: {error_msg}")
+            if "interrupted" in error_msg.lower():
+                resp_data, status_code = _create_openai_error_response(
+                    f"ASR task interrupted: {error_msg}", err_type="server_error", code="task_interrupted",
+                    status_code=503)
+            else:
+                resp_data, status_code = _create_openai_error_response(
+                    f"ASR failed: {error_msg}", err_type="server_error", status_code=500)
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+        elif parsed_response and isinstance(parsed_response.get("result"), dict) and "text" in parsed_response[
+            "result"]:
+            transcribed_text = parsed_response["result"]["text"]
+            logger.info(f"{request_id}: ASR successful. Transcribed text (snippet): {transcribed_text[:100]}...")
+
+            if response_format_req == "json":
+                response_body = {"text": transcribed_text}  # OpenAI ASR JSON format
+                resp = Response(json.dumps(response_body), status=200, mimetype='application/json')
+            elif response_format_req == "text":
+                resp = Response(transcribed_text, status=200, mimetype='text/plain; charset=utf-8')
+            # Add other formats (SRT, VTT, verbose_json) here if implemented in audio_worker
+            else:
+                resp_data, status_code = _create_openai_error_response(
+                    f"Internal error: unhandled response format '{response_format_req}'.", status_code=500)
+                resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+
+            final_response_status_code = resp.status_code
+        else:
+            logger.error(f"{request_id}: ASR worker returned invalid or incomplete response: {parsed_response}")
+            resp_data, status_code = _create_openai_error_response(
+                "ASR worker returned an invalid response structure.", err_type="server_error", status_code=500)
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_response_status_code = status_code
+
+    except ValueError as ve:
+        logger.warning(f"{request_id}: Invalid ASR request: {ve}")
+        resp_data, status_code = _create_openai_error_response(
+            str(ve), err_type="invalid_request_error", status_code=400)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+    except FileNotFoundError as fnf_err:
+        logger.error(f"{request_id}: Server configuration error for ASR: {fnf_err}")
+        resp_data, status_code = _create_openai_error_response(
+            f"Server configuration error for ASR: {fnf_err}", err_type="server_error", status_code=500)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in ASR endpoint:")
+        error_message = f"Internal server error in ASR endpoint: {type(e).__name__}"
+        resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+        try:
+            if db: add_interaction(db, session_id=session_id_for_log, mode="asr", input_type='error',
+                                   user_input=f"ASR Handler Error. File: {uploaded_filename_for_log or 'N/A'}",
+                                   llm_response=error_message[:2000]); db.commit()
+        except Exception as db_err_log:
+            logger.error(f"{request_id}: ❌ Failed log ASR error to DB: {db_err_log}")
+    finally:
+        if temp_audio_file_path and os.path.exists(temp_audio_file_path):
+            try:
+                os.remove(temp_audio_file_path)
+                logger.info(f"{request_id}: Deleted temporary audio file: {temp_audio_file_path}")
+            except Exception as e_del:
+                logger.warning(f"{request_id}: Failed to delete temporary audio file '{temp_audio_file_path}': {e_del}")
+
+        duration_req = (time.monotonic() - start_req) * 1000
+        logger.info(
+            f"🏁 OpenAI-Style ASR Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+
+    if resp is None:
+        logger.error(f"{request_id}: ASR Handler logic flaw - response object 'resp' was not assigned!")
+        resp_data, _ = _create_openai_error_response("Internal error: ASR Handler failed to produce a response.",
+                                                     status_code=500)
+        resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
+    return resp
+
+# === NEW: OpenAI Compatible TTS Endpoint ===
 @app.route("/v1/audio/speech", methods=["POST"])
 def handle_openai_tts():
     """
@@ -8155,53 +8343,49 @@ def handle_openai_tts():
     Expects model "Zephyloid-Alpha", uses audio_worker.py with ELP1 priority.
     """
     start_req = time.monotonic()
-    request_id = f"req-tts-{uuid.uuid4()}" # Unique ID for this TTS request
+    request_id = f"req-tts-{uuid.uuid4()}"
     logger.info(f"🚀 Flask OpenAI-Style TTS Request ID: {request_id} (Worker ELP1)")
 
-    # --- Initialize variables ---
-    db: Session = g.db # Use request-bound session from Flask's g, set by @app.before_request
-    session_id: str = f"tts_req_default_{request_id}" # Default if not parsed
-    raw_request_data: Optional[Dict] = None
+    db: Session = g.db
+    session_id: str = f"tts_req_default_{request_id}"
+    raw_request_data: Optional[Dict[str, Any]] = None
     input_text: Optional[str] = None
     model_requested: Optional[str] = None
     voice_requested: Optional[str] = None
-    response_format_requested: Optional[str] = "mp3" # Default format
+    response_format_requested: Optional[str] = "mp3"
 
-    final_response_status_code: int = 500 # For logging actual outcome
+    final_response_status_code: int = 500
     resp: Optional[Response] = None
     request_data_snippet_for_log: str = "No request data processed"
 
     try:
-        # --- 1. Get and Validate Request JSON Body ---
         try:
             raw_request_data = request.get_json()
             if not raw_request_data:
                 raise ValueError("Empty JSON payload received.")
-            # Safely create a snippet for logging, even if full dump fails
-            try: request_data_snippet_for_log = json.dumps(raw_request_data)[:1000]
-            except: request_data_snippet_for_log = str(raw_request_data)[:1000]
+            try:
+                request_data_snippet_for_log = json.dumps(raw_request_data)[:1000]
+            except:
+                request_data_snippet_for_log = str(raw_request_data)[:1000]
         except Exception as json_err:
             logger.warning(f"{request_id}: Failed to get/parse JSON body: {json_err}")
-            try: request_data_snippet_for_log = request.get_data(as_text=True)[:1000]
-            except: request_data_snippet_for_log = "Could not read request body"
-
+            try:
+                request_data_snippet_for_log = request.get_data(as_text=True)[:1000]
+            except:
+                request_data_snippet_for_log = "Could not read request body"
             resp_data, status_code = _create_openai_error_response(
                 f"Request body is missing or invalid JSON: {json_err}",
                 err_type="invalid_request_error", status_code=400
             )
             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
             final_response_status_code = status_code
-            # Return early on critical parsing error
             return resp
 
-        # --- 2. Extract Expected Parameters ---
         input_text = raw_request_data.get("input")
         model_requested = raw_request_data.get("model")
         voice_requested = raw_request_data.get("voice")
-        # Update session_id if provided in the request, else keep default
         session_id = raw_request_data.get("session_id", session_id)
         response_format_requested = raw_request_data.get("response_format", "mp3").lower()
-        # speed = raw_request_data.get("speed", 1.0) # SCLParser handles speed via tags in input_text
 
         logger.debug(
             f"{request_id}: TTS Request Parsed - SessionID: {session_id}, Input: '{str(input_text)[:50]}...', "
@@ -8209,84 +8393,75 @@ def handle_openai_tts():
             f"Format: {response_format_requested}"
         )
 
-        # --- 3. Validate Core Parameters ---
         if not input_text or not isinstance(input_text, str):
             raise ValueError("'input' field is required and must be a string.")
         if not model_requested or not isinstance(model_requested, str):
-            # This is the client-facing model name, e.g., "Zephyloid-Alpha"
             raise ValueError("'model' field (e.g., 'Zephyloid-Alpha') is required.")
         if not voice_requested or not isinstance(voice_requested, str):
-            # This will be the actual MeloTTS speaker ID like "EN-US"
             raise ValueError("'voice' field (MeloTTS speaker ID, e.g., EN-US) is required.")
 
-        # --- 4. Validate Requested Model Name ---
-        if model_requested != TTS_MODEL_NAME_CLIENT_FACING:
-            logger.warning(f"{request_id}: Invalid TTS model requested '{model_requested}'. Expected '{TTS_MODEL_NAME_CLIENT_FACING}'.")
+        if model_requested != TTS_MODEL_NAME_CLIENT_FACING:  # TTS_MODEL_NAME_CLIENT_FACING from config.py
+            logger.warning(
+                f"{request_id}: Invalid TTS model requested '{model_requested}'. Expected '{TTS_MODEL_NAME_CLIENT_FACING}'.")
             resp_data, status_code = _create_openai_error_response(
                 f"Invalid model. This endpoint only supports the '{TTS_MODEL_NAME_CLIENT_FACING}' model for TTS.",
                 err_type="invalid_request_error", code="model_not_found", status_code=404
             )
             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
             final_response_status_code = status_code
-            # Log duration before early return for invalid model
-            # (This specific logging moved to finally block for consistency)
             return resp
 
-        # --- 5. Determine Internal Melo Language from Voice Parameter ---
-        melo_language = "EN" # Default language
+        melo_language = "EN"
         try:
             lang_part = voice_requested.split('-')[0].upper()
-            # Define supported languages by your MeloTTS setup in audio_worker.py
-            supported_melo_langs = ["EN", "ZH", "JP", "ES", "FR", "KR", "DE"] # Example
+            supported_melo_langs = ["EN", "ZH", "JP", "ES", "FR", "KR", "DE"]
             if lang_part in supported_melo_langs:
                 melo_language = lang_part
             else:
-                logger.warning(f"{request_id}: Could not infer a supported language from voice '{voice_requested}'. Defaulting to {melo_language}.")
-        except Exception: # Catch potential errors like voice_requested not being a string or empty
-            logger.warning(f"{request_id}: Error parsing language from voice '{voice_requested}'. Defaulting to {melo_language}.")
-        logger.debug(f"{request_id}: Using Internal Melo Language: {melo_language} (for voice: {voice_requested})")
+                logger.warning(
+                    f"{request_id}: Could not infer a supported language from voice '{voice_requested}'. Defaulting to {melo_language}.")
+        except Exception:
+            logger.warning(
+                f"{request_id}: Error parsing language from voice '{voice_requested}'. Defaulting to {melo_language}.")
 
-        # --- 6. Prepare and Execute Audio Worker ---
-        audio_worker_script = os.path.join(SCRIPT_DIR, "audio_worker.py")
-        if not os.path.exists(audio_worker_script):
-            logger.error(f"{request_id}: audio_worker.py not found at {audio_worker_script}")
-            # This is a server configuration error
-            raise FileNotFoundError(f"Audio worker script missing at {audio_worker_script}")
+        audio_worker_script_path = os.path.join(SCRIPT_DIR, "audio_worker.py")  # SCRIPT_DIR is where app.py is
+        if not os.path.exists(audio_worker_script_path):
+            logger.error(f"{request_id}: audio_worker.py not found at {audio_worker_script_path}")
+            raise FileNotFoundError(f"Audio worker script missing at {audio_worker_script_path}")
 
-        # Define a temporary directory for any files the worker might create (e.g., for MP3 conversion)
         temp_audio_dir = os.path.join(SCRIPT_DIR, "temp_audio_worker_files")
         os.makedirs(temp_audio_dir, exist_ok=True)
 
+        # Ensure APP_PYTHON_EXECUTABLE is defined (usually sys.executable at top of app.py)
+        # Ensure WHISPER_MODEL_DIR is imported from config.py (this directory is used for all models, including MeloTTS data if needed by worker)
         worker_command = [
-            APP_PYTHON_EXECUTABLE, # Path to python in venv
-            audio_worker_script,
+            APP_PYTHON_EXECUTABLE,
+            audio_worker_script_path,
+            "--task-type", "tts",  # Specify TTS task for the worker
             "--model-lang", melo_language,
-            "--device", "auto", # Or could be configurable via app config
+            "--device", "auto",  # Or make this configurable via app's config
+            "--model-dir", WHISPER_MODEL_DIR,  # Use the general model pool path from config.py
             "--temp-dir", temp_audio_dir
-            # Worker will use defaults for output-file if not in test mode
         ]
 
         worker_request_data = {
             "input": input_text,
-            "voice": voice_requested, # The SCLParser/MeloTTS speaker ID
+            "voice": voice_requested,
             "response_format": response_format_requested,
-            "request_id": request_id # Pass request_id for better worker logging continuity
-            # SCL settings are embedded in the input_text itself by the client
+            "request_id": request_id
         }
 
         logger.info(f"{request_id}: Executing audio worker with ELP1 priority...")
-        # Call the helper function to execute the worker
+        # _execute_audio_worker_with_priority is synchronous
         parsed_response_from_worker, error_string_from_worker = _execute_audio_worker_with_priority(
             worker_command=worker_command,
             request_data=worker_request_data,
-            priority=ELP1, # CRITICAL: Use ELP1 for user-facing TTS
-            worker_cwd=SCRIPT_DIR, # Worker can run from the app's directory
-            timeout=60 # Adjust timeout as needed for TTS generation (e.g., 60 seconds)
+            priority=ELP1,  # Use ELP1 for user-facing TTS
+            worker_cwd=SCRIPT_DIR,
+            timeout=60  # Adjust timeout as needed for TTS generation
         )
 
-        # --- 7. Process Worker Response ---
         if error_string_from_worker:
-            # An error occurred during worker execution or communication
             logger.error(f"{request_id}: Audio worker execution failed: {error_string_from_worker}")
             resp_data, status_code = _create_openai_error_response(
                 f"Audio generation failed: {error_string_from_worker}",
@@ -8294,17 +8469,17 @@ def handle_openai_tts():
             )
             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
             final_response_status_code = status_code
-        elif parsed_response_from_worker and "result" in parsed_response_from_worker and "audio_base64" in parsed_response_from_worker["result"]:
-            # Successful response from worker
+        elif parsed_response_from_worker and "result" in parsed_response_from_worker and "audio_base64" in \
+                parsed_response_from_worker["result"]:
             audio_info = parsed_response_from_worker["result"]
             audio_b64_data = audio_info["audio_base64"]
-            actual_audio_format = audio_info.get("format", "mp3") # Get the format worker actually produced
+            actual_audio_format = audio_info.get("format", "mp3")
             response_mime_type = audio_info.get("mime_type", f"audio/{actual_audio_format}")
 
-            logger.info(f"{request_id}: Audio successfully generated by worker. Format: {actual_audio_format}, Length (b64): {len(audio_b64_data)}")
+            logger.info(
+                f"{request_id}: Audio successfully generated by worker. Format: {actual_audio_format}, Length (b64): {len(audio_b64_data)}")
             try:
                 audio_bytes = base64.b64decode(audio_b64_data)
-                # Return the raw audio bytes with the correct MIME type
                 resp = Response(audio_bytes, status=200, mimetype=response_mime_type)
                 final_response_status_code = 200
             except Exception as decode_err:
@@ -8316,8 +8491,8 @@ def handle_openai_tts():
                 resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
                 final_response_status_code = status_code
         else:
-            # Worker returned a response, but it was invalid or incomplete
-            logger.error(f"{request_id}: Audio worker returned invalid or incomplete response: {parsed_response_from_worker}")
+            logger.error(
+                f"{request_id}: Audio worker returned invalid or incomplete response: {parsed_response_from_worker}")
             resp_data, status_code = _create_openai_error_response(
                 "Audio worker returned an invalid response structure.",
                 err_type="server_error", status_code=500
@@ -8325,197 +8500,58 @@ def handle_openai_tts():
             resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
             final_response_status_code = status_code
 
-    except ValueError as ve: # Catches our explicit ValueErrors for bad client input
+    except ValueError as ve:
         logger.warning(f"{request_id}: Invalid TTS request parameters: {ve}")
         resp_data, status_code = _create_openai_error_response(
-            str(ve), err_type="invalid_request_error", status_code=400
-        )
+            str(ve), err_type="invalid_request_error", status_code=400)
         resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
-    except FileNotFoundError as fnf_err: # For missing worker script
-        logger.error(f"{request_id}: Server configuration error: {fnf_err}")
+    except FileNotFoundError as fnf_err:
+        logger.error(f"{request_id}: Server configuration error for TTS: {fnf_err}")
         resp_data, status_code = _create_openai_error_response(
-            f"Server configuration error: {fnf_err}",
-            err_type="server_error", status_code=500
-        )
+            f"Server configuration error for TTS: {fnf_err}", err_type="server_error", status_code=500)
         resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
-    except Exception as main_handler_err: # Catches other unexpected errors in this handler
+    except Exception as main_handler_err:
         logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in TTS endpoint main handler:")
         error_message = f"Internal server error in TTS endpoint: {type(main_handler_err).__name__}"
         resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
         resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
-        # Log this critical failure to DB if possible
         try:
-            if 'db' in g and g.db: # Check if request DB session exists
-                 add_interaction(g.db, session_id=session_id, mode="tts", input_type='error',
-                                 user_input=f"TTS Handler Error. Request: {request_data_snippet_for_log}",
-                                 llm_response=error_message[:2000])
-            else: logger.error(f"{request_id}: Cannot log TTS handler error: DB session 'g.db' unavailable.")
+            if 'db' in g and g.db:
+                add_interaction(g.db, session_id=session_id, mode="tts", input_type='error',
+                                user_input=f"TTS Handler Error. Request: {request_data_snippet_for_log}",
+                                llm_response=error_message[:2000])
+                db.commit()  # Ensure commit if add_interaction doesn't do it
+            else:
+                logger.error(f"{request_id}: Cannot log TTS handler error: DB session 'g.db' unavailable.")
         except Exception as db_err_log:
-             logger.error(f"{request_id}: ❌ Failed log TTS handler error to DB: {db_err_log}")
+            logger.error(f"{request_id}: ❌ Failed log TTS handler error to DB: {db_err_log}")
+            if 'db' in g and g.db: db.rollback()
+
 
     finally:
-        # This block ALWAYS runs after try/except
         duration_req = (time.monotonic() - start_req) * 1000
-        # Log final status using the status code determined by the try/except blocks
-        logger.info(f"🏁 OpenAI-Style TTS Request {request_id} handled in {duration_req:.2f} ms. Final Status: {final_response_status_code}")
-        # Flask's g.db is closed automatically by the @app.teardown_request handler
+        logger.info(
+            f"🏁 OpenAI-Style TTS Request {request_id} handled in {duration_req:.2f} ms. Final Status: {final_response_status_code}")
+        # g.db is closed automatically by the @app.teardown_request handler
 
-    # --- Return Response ---
-    # Ensure 'resp' is always assigned before returning
     if resp is None:
         logger.error(f"{request_id}: TTS Handler logic flaw - response object 'resp' was not assigned!")
-        # Create a generic error response if 'resp' is somehow still None
-        resp_data, status_code = _create_openai_error_response(
+        resp_data, _ = _create_openai_error_response(
             "Internal error: TTS Handler failed to produce a response object.",
             err_type="server_error", status_code=500
         )
         resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
-        final_response_status_code = status_code # Update for final log if it changed here
-        # Log this critical internal failure if possible
         try:
-             if 'db' in g and g.db:
-                 add_interaction(g.db, session_id=session_id, mode="tts", input_type='error',
-                                 user_input=f"TTS Handler No Resp Object. Req: {request_data_snippet_for_log}",
-                                 llm_response="Critical: No response object created by handler.")
-        except Exception as db_err_log_final:
-             logger.error(f"{request_id}: Failed to log 'no response object' error to DB: {db_err_log_final}")
-
-    return resp # Return the final Flask Response object
-
-@app.route("/v1/audio/transcriptions", methods=["POST"])
-def handle_openai_asr_transcriptions():
-    """
-    Handles requests mimicking OpenAI's Audio Transcriptions endpoint.
-    Currently a STUB - Acknowledges request but does not perform ASR.
-    Expected model: "Zephyloid-Whisper-Normal"
-    """
-    start_req = time.monotonic()
-    request_id = f"req-asr-{uuid.uuid4()}"
-    logger.info(f"🚀 Flask OpenAI-Style ASR Request ID: {request_id} (STUB)")
-
-    final_response_status_code: int = 500
-    resp: Optional[Response] = None
-    session_id_for_log: str = f"asr_req_default_{request_id}" # For logging in case of early failure
-
-    try:
-        # OpenAI ASR endpoint uses multipart/form-data
-        if not request.content_type or not request.content_type.startswith('multipart/form-data'):
-            logger.warning(f"{request_id}: Invalid content type: {request.content_type}. Expected multipart/form-data.")
-            resp_data, status_code = _create_openai_error_response(
-                "Invalid content type. Must be multipart/form-data.",
-                err_type="invalid_request_error", status_code=400
-            )
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code
-            return resp
-
-        # --- Extract Parameters from Form Data ---
-        file_storage = request.files.get('file')
-        model_requested = request.form.get('model')
-        language_requested = request.form.get('language') # Optional (ISO 639-1 code)
-        prompt_requested = request.form.get('prompt') # Optional context prompt
-        response_format_requested = request.form.get('response_format', 'json').lower() # json, text, srt, verbose_json, vtt
-        temperature_requested = request.form.get('temperature', type=float) # Optional
-
-        # --- Get session_id if provided in form data (less common for this endpoint) ---
-        session_id_for_log = request.form.get("session_id", session_id_for_log)
-
-        logger.debug(
-            f"{request_id}: ASR Request Parsed - File: {'Present' if file_storage else 'Missing'}, "
-            f"Model: {model_requested}, Language: {language_requested}, Prompt: {str(prompt_requested)[:30]}..., "
-            f"Format: {response_format_requested}, Temp: {temperature_requested}"
-        )
-
-        # --- Validate Core Parameters ---
-        if not file_storage:
-            raise ValueError("'file' field (audio data) is required.")
-        if not model_requested:
-            raise ValueError("'model' field (e.g., 'Zephyloid-Whisper-Normal') is required.")
-
-        # --- Validate Requested Model Name ---
-        if model_requested != ASR_MODEL_NAME_CLIENT_FACING:
-            logger.warning(f"{request_id}: Invalid ASR model requested '{model_requested}'. Expected '{ASR_MODEL_NAME_CLIENT_FACING}'.")
-            resp_data, status_code = _create_openai_error_response(
-                f"Invalid model. This endpoint only supports the '{ASR_MODEL_NAME_CLIENT_FACING}' model for ASR.",
-                err_type="invalid_request_error", code="model_not_found", status_code=404
-            )
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code
-            return resp
-
-        # --- STUB IMPLEMENTATION ---
-        # In a real implementation:
-        # 1. Save `file_storage.stream` to a temporary file.
-        # 2. Prepare command for `whisper_worker.py` with the temp file path and other options.
-        # 3. Call a helper like `_execute_whisper_worker_with_priority(..., priority=ELP1, ...)`
-        # 4. Get the transcribed text (or structured JSON) from the worker.
-        # 5. Format the response according to `response_format_requested`.
-        # 6. Delete the temporary file.
-
-        supported_response_formats = ["json", "text", "srt", "verbose_json", "vtt"]
-        if response_format_requested not in supported_response_formats:
-            logger.warning(f"{request_id}: Unsupported ASR response_format: {response_format_requested}")
-            resp_data, status_code = _create_openai_error_response(
-                f"Unsupported response_format: '{response_format_requested}'. Supported: {', '.join(supported_response_formats)}.",
-                err_type="invalid_request_error", status_code=400
-            )
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code
-            return resp
-
-        logger.warning(f"{request_id}: ASR transcription is a STUB. Returning 501 Not Implemented.")
-        resp_data, status_code = _create_openai_error_response(
-            "ASR endpoint is currently a stub and does not perform transcription.",
-            err_type="server_error", code="stub_not_implemented", status_code=501 # 501 Not Implemented
-        )
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_response_status_code = status_code
-        # --- END STUB ---
-
-    except ValueError as ve: # Catch our explicit ValueErrors for bad input
-        logger.warning(f"{request_id}: Invalid ASR request: {ve}")
-        resp_data, status_code = _create_openai_error_response(
-            str(ve), err_type="invalid_request_error", status_code=400
-        )
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_response_status_code = status_code
-    except Exception as e:
-        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in ASR endpoint STUB:")
-        error_message = f"Internal server error in ASR stub: {type(e).__name__}"
-        resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_response_status_code = status_code
-        # Log this critical failure to DB if possible
-        try:
-            if 'db' in g and g.db: # Check if request DB session exists
-                 add_interaction(g.db, session_id=session_id_for_log, mode="asr", input_type='error',
-                                 user_input=f"ASR Handler Error. File: {file_storage.filename if file_storage else 'N/A'}",
-                                 llm_response=error_message[:2000])
-            else: logger.error(f"{request_id}: Cannot log ASR handler error: DB session 'g.db' unavailable.")
-        except Exception as db_err_log:
-             logger.error(f"{request_id}: ❌ Failed log ASR handler error to DB: {db_err_log}")
-
-    finally:
-        duration_req = (time.monotonic() - start_req) * 1000
-        logger.info(f"🏁 OpenAI-Style ASR Request {request_id} STUB handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
-        # g.db is closed by teardown_request
-
-    if resp is None: # Safety net
-        logger.error(f"{request_id}: ASR Handler STUB finished unexpectedly without response object!")
-        resp_data, status_code = _create_openai_error_response("Internal error: ASR Handler STUB no response.", status_code=500)
-        resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
-        # final_response_status_code = status_code # Already captured or will be by default
-        try:
-             if 'db' in g and g.db:
-                 add_interaction(g.db, session_id=session_id_for_log, mode="asr", input_type='error',
-                                 user_input=f"ASR Handler No Resp. File: {file_storage.filename if file_storage else 'N/A'}",
-                                 llm_response="Critical: No response object created by ASR handler stub.")
-        except Exception as db_err_log_final:
-             logger.error(f"{request_id}: Failed log 'no response object' ASR error to DB: {db_err_log_final}")
-
+            if 'db' in g and g.db:
+                add_interaction(g.db, session_id=session_id, mode="tts", input_type='error',
+                                user_input=f"TTS Handler No Resp Object. Req: {request_data_snippet_for_log}",
+                                llm_response="Critical: No response object created by handler.")
+                db.commit()
+        except:
+            pass  # Best effort at this point
     return resp
 
 # === NEW: OpenAI Compatible Image Generation Endpoint (Stub) ===

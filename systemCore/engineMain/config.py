@@ -108,6 +108,28 @@ LLAMA_CPP_MODEL_MAP = {
 MODEL_DEFAULT_CHAT_LLAMA_CPP = "general" # Use the logical name
 
 
+# --- Add this new section for ASR (Whisper) Settings ---
+# You can place this section logically, e.g., after TTS or near other model-related settings.
+
+ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal" # This should already exist in your config
+# --- ASR (Whisper) Settings ---
+ENABLE_ASR = os.getenv("ENABLE_ASR", "true").lower() in ('true', '1', 't', 'yes', 'y')
+# WHISPER_MODEL_DIR reuses the general static model pool where GGUF files are stored.
+# This matches where launcher.py downloads the whisper-large-v3-q8_0.gguf model.
+WHISPER_MODEL_DIR = os.getenv("WHISPER_MODEL_DIR", LLAMA_CPP_GGUF_DIR)
+WHISPER_DEFAULT_MODEL_FILENAME = os.getenv("WHISPER_DEFAULT_MODEL_FILENAME", "whisper-large-v3-q8_0.gguf")
+WHISPER_DEFAULT_LANGUAGE = os.getenv("WHISPER_DEFAULT_LANGUAGE", "en") # Default language for transcription
+ASR_WORKER_TIMEOUT = int(os.getenv("ASR_WORKER_TIMEOUT", 300)) # Timeout in seconds for ASR worker
+
+
+logger.info(f"🎤 ASR (Whisper) Enabled: {ENABLE_ASR}")
+if ENABLE_ASR:
+    logger.info(f"   🎤 Whisper Model Directory: {WHISPER_MODEL_DIR}")
+    logger.info(f"   🎤 Default Whisper Model Filename: {WHISPER_DEFAULT_MODEL_FILENAME}")
+    logger.info(f"   🎤 Default Whisper Language: {WHISPER_DEFAULT_LANGUAGE}")
+    logger.info(f"   🎤 Client-Facing ASR Model Name (for API): {ASR_MODEL_NAME_CLIENT_FACING}")
+
+
 # --- StellaIcarusHook Settings ---
 ENABLE_STELLA_ICARUS_HOOKS = os.getenv("ENABLE_STELLA_ICARUS_HOOKS", "true").lower() in ('true', '1', 't', 'yes', 'y')
 STELLA_ICARUS_HOOK_DIR = os.getenv("STELLA_ICARUS_HOOK_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus"))
