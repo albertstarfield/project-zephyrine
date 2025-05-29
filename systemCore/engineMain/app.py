@@ -7064,52 +7064,35 @@ def _format_legacy_completion_response(response_text: str, model_name: str = MET
 
 
 def _execute_audio_worker_with_priority(
-    worker_command: list[str],
-    request_data: Dict[str, Any],
-    priority: int, # ELP0 or ELP1
-    worker_cwd: str,
-    timeout: int = 120 # Timeout for the worker process
+        worker_command: list[str],
+        request_data: Dict[str, Any],
+        priority: int,
+        worker_cwd: str,
+        timeout: int = 120
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    """
-    Executes the audio_worker.py script with specified priority,
-    sends request_data via stdin, and returns parsed JSON response or error.
+    # Ensure ai_provider and its _priority_quota_lock are accessible.
+    # This might be self.ai_provider if this function is part of a class that has it,
+    # or a global ai_provider instance. For this example, assuming global ai_provider.
+    # If ai_provider is an instance variable (e.g., self.ai_provider), adjust accordingly.
+    global ai_provider  # Assuming ai_provider is a global instance initialized elsewhere
 
-    Args:
-        worker_command: List representing the command and its arguments.
-        request_data: Dictionary to be sent as JSON to the worker.
-        priority: ELP0 or ELP1 for acquiring the shared resource lock.
-        worker_cwd: The working directory for the worker script.
-        timeout: Timeout for the worker process in seconds.
-
-    Returns:
-        A tuple: (parsed_json_response, error_message_string).
-                 One of them will be None.
-    """
-    # --- Access the global priority lock (from ai_provider or a global var) ---
-    # This assumes ai_provider and its lock are initialized and accessible.
-    # If not, this part needs to be adapted.
     shared_priority_lock: Optional[PriorityQuotaLock] = getattr(ai_provider, '_priority_quota_lock', None)
-    # ---
 
-    request_id = request_data.get("request_id", "audio-worker-unknown") # Get request_id if passed
+    request_id = request_data.get("request_id", "audio-worker-unknown")
     log_prefix = f"AudioExec|ELP{priority}|{request_id}"
     logger.debug(f"{log_prefix}: Attempting to execute audio worker.")
 
     if not shared_priority_lock:
-        logger.error(f"{log_prefix}: Shared PriorityQuotaLock not available/initialized! Cannot run audio worker with priority.")
+        logger.error(f"{log_prefix}: Shared PriorityQuotaLock not available/initialized! Cannot run audio worker.")
         return None, "Shared resource lock not available."
 
     lock_acquired = False
-    worker_process = None
+    worker_process = None  # Initialize to None
     start_lock_wait = time.monotonic()
     logger.debug(f"{log_prefix}: Acquiring shared resource lock (Priority: ELP{priority})...")
 
-    # Acquire the lock. Audio worker doesn't typically have a process to register
-    # for interruption in the same way as the llama_worker (it's shorter lived per request).
-    # If audio worker *did* have long-running internal processes that ELP1 should kill,
-    # then set_holder_process would be needed for ELP0 audio tasks.
-    # For TTS, we assume the worker itself is the unit to be managed by communicate timeout.
-    lock_acquired = shared_priority_lock.acquire(priority=priority, timeout=None) # No specific timeout for lock acquire itself
+    # Assuming acquire method exists and works as previously discussed
+    lock_acquired = shared_priority_lock.acquire(priority=priority, timeout=None)
     lock_wait_duration = time.monotonic() - start_lock_wait
 
     if lock_acquired:
@@ -7123,78 +7106,126 @@ def _execute_audio_worker_with_priority(
                 stderr=subprocess.PIPE,
                 text=True,
                 encoding='utf-8',
-                errors='replace',
+                errors='replace',  # Handle potential encoding errors in output
                 cwd=worker_cwd
             )
 
-            # If this ELP0 audio task could be long and needs to be interruptible by ELP1 LLM calls:
-            # if priority == ELP0:
-            # shared_priority_lock.set_holder_process(worker_process) # Then lock needs to know this proc
+            # If ELP0, register process with lock for potential interruption
+            if priority == ELP0 and worker_process:
+                if hasattr(shared_priority_lock, 'set_holder_process'):
+                    shared_priority_lock.set_holder_process(worker_process)
+                else:
+                    logger.warning(
+                        f"{log_prefix}: Lock does not have set_holder_process method. ELP0 process cannot be registered for interruption by this lock instance.")
 
             input_json = json.dumps(request_data)
             logger.debug(f"{log_prefix}: Sending input JSON (len={len(input_json)}) to audio worker stdin...")
-            stdout_data, stderr_data = "", ""
+            stdout_data, stderr_data = "", ""  # Initialize
 
             try:
                 stdout_data, stderr_data = worker_process.communicate(input=input_json, timeout=timeout)
                 logger.debug(f"{log_prefix}: Audio worker communicate() finished.")
             except subprocess.TimeoutExpired:
                 logger.error(f"{log_prefix}: Audio worker process timed out after {timeout}s.")
-                worker_process.kill()
-                stdout_data, stderr_data = worker_process.communicate() # Try to get final output
-                logger.error(f"{log_prefix}: Worker timed out. Stderr: {stderr_data.strip()}")
+                if worker_process and worker_process.poll() is None: worker_process.kill()  # Ensure kill on timeout
+                # Try to get final outputs after kill
+                try:
+                    stdout_data, stderr_data = worker_process.communicate()
+                except:
+                    pass  # Best effort
+                logger.error(f"{log_prefix}: Worker timed out. Stderr: {stderr_data.strip() if stderr_data else 'N/A'}")
                 return None, "Audio worker process timed out."
-            except BrokenPipeError: # This could happen if ELP0 audio worker was interrupted by ELP1 LLM
-                logger.warning(f"{log_prefix}: Broken pipe with audio worker. Likely interrupted.")
-                worker_process.wait(timeout=0.5) # Ensure state update
-                return None, "Audio worker task interrupted by higher priority request."
-            except Exception as comm_err:
-                 logger.error(f"{log_prefix}: Error communicating with audio worker: {comm_err}")
-                 if worker_process and worker_process.poll() is None:
-                      try: worker_process.kill(); worker_process.communicate()
-                      except: pass
-                 return None, f"Communication error with audio worker: {comm_err}"
+            except BrokenPipeError:
+                logger.warning(
+                    f"{log_prefix}: Broken pipe with audio worker. Likely interrupted by higher priority task.")
+                if worker_process and worker_process.poll() is None:  # Check if process exists and is running
+                    try:
+                        worker_process.wait(timeout=0.5)  # Brief wait
+                    except subprocess.TimeoutExpired:
+                        worker_process.kill()  # Force kill if wait times out
+                # Attempt to get any remaining output after ensuring process is dealt with
+                try:
+                    stdout_data_bp, stderr_data_bp = "", ""
+                    if worker_process:  # Only if worker_process was successfully created
+                        stdout_data_bp, stderr_data_bp = worker_process.communicate()
+                    stdout_data += stdout_data_bp  # Append if any
+                    stderr_data += stderr_data_bp
+                except Exception as e_bp_comm:
+                    logger.warning(f"{log_prefix}: Error getting final output after BrokenPipe: {e_bp_comm}")
+                return None, "Audio worker task interrupted by higher priority request."  # Use the consistent marker
+            except Exception as comm_err:  # Other communication errors
+                logger.error(f"{log_prefix}: Error communicating with audio worker: {comm_err}")
+                if worker_process and worker_process.poll() is None:
+                    try:
+                        worker_process.kill(); worker_process.communicate()  # Best effort cleanup
+                    except:
+                        pass
+                return None, f"Communication error with audio worker: {comm_err}"
 
-            exit_code = worker_process.returncode
+            exit_code = worker_process.returncode if worker_process else -1  # Handle if worker_process is None
             duration = time.monotonic() - start_time
             logger.info(f"{log_prefix}: Audio worker finished. Exit Code: {exit_code}, Duration: {duration:.2f}s")
 
-            if stderr_data:
-                log_level = "ERROR" if exit_code != 0 else "DEBUG"
-                logger.log(log_level, f"{log_prefix}: Audio Worker STDERR:\n-------\n{stderr_data.strip()}\n-------")
+            if stderr_data:  # Log stderr regardless of exit code for diagnostics
+                log_level_stderr = "ERROR" if exit_code != 0 else "DEBUG"
+                stderr_snippet = (stderr_data[:2000] + '...[TRUNCATED]') if len(stderr_data) > 2000 else stderr_data
+                logger.log(log_level_stderr,
+                           f"{log_prefix}: Audio Worker STDERR:\n-------\n{stderr_snippet.strip()}\n-------")
 
             if exit_code == 0:
-                if not stdout_data:
-                    logger.error(f"{log_prefix}: Audio worker exited cleanly but no stdout.")
-                    return None, "Audio worker produced no output."
+                if not stdout_data or not stdout_data.strip():  # Check if stdout is empty or just whitespace
+                    logger.error(
+                        f"{log_prefix}: Audio worker exited cleanly but no stdout or stdout is empty/whitespace.")
+                    return None, "Audio worker produced no parsable output."
+
+                json_string_to_parse = None  # Initialize
                 try:
-                    parsed_json = json.loads(stdout_data)
+                    # Find the first '{' which should mark the beginning of our JSON object
+                    json_start_index = stdout_data.find('{')
+                    if json_start_index == -1:
+                        logger.error(f"{log_prefix}: No JSON object start ('{{') found in audio worker stdout.")
+                        logger.error(f"{log_prefix}: Raw stdout from worker (first 1000 chars):\n{stdout_data[:1000]}")
+                        return None, "Audio worker did not produce valid JSON output (no '{' found)."
+
+                    json_string_to_parse = stdout_data[json_start_index:]
+                    parsed_json = json.loads(json_string_to_parse)
                     logger.debug(f"{log_prefix}: Parsed audio worker JSON response successfully.")
-                    # Check for internal error reported by the worker
-                    if isinstance(parsed_json, dict) and "error" in parsed_json:
+
+                    if isinstance(parsed_json,
+                                  dict) and "error" in parsed_json:  # Check if worker itself reported an error in JSON
                         logger.error(f"{log_prefix}: Audio worker reported internal error: {parsed_json['error']}")
                         return None, f"Audio worker error: {parsed_json['error']}"
-                    return parsed_json, None # Success
+                    return parsed_json, None  # Success
+
                 except json.JSONDecodeError as json_err:
                     logger.error(f"{log_prefix}: Failed to decode audio worker stdout JSON: {json_err}")
-                    logger.error(f"{log_prefix}: Raw stdout from worker:\n{stdout_data[:1000]}...")
+                    problematic_string_snippet = json_string_to_parse[
+                                                 :500] if json_string_to_parse is not None else stdout_data[:500]
+                    logger.error(
+                        f"{log_prefix}: String snippet attempted for parsing:\n{problematic_string_snippet}...")
+                    logger.error(
+                        f"{log_prefix}: Original raw stdout from worker (first 1000 chars):\n{stdout_data[:1000]}")
                     return None, f"Failed to decode audio worker response: {json_err}"
-            else:
+            else:  # Worker exited with non-zero code
                 err_msg = f"Audio worker process failed (exit code {exit_code})."
+                # Stderr already logged above if present
                 logger.error(f"{log_prefix}: {err_msg}")
                 return None, err_msg
 
-        except Exception as e:
+        except Exception as e:  # Catch-all for unexpected errors in this function's try block
             logger.error(f"{log_prefix}: Unexpected error managing audio worker: {e}")
             logger.exception(f"{log_prefix} Audio Worker Management Traceback:")
-            if worker_process and worker_process.poll() is None:
-                try: worker_process.kill(); worker_process.communicate()
-                except: pass
+            if worker_process and worker_process.poll() is None:  # If Popen succeeded but later error
+                try:
+                    worker_process.kill(); worker_process.communicate()  # Best effort cleanup
+                except:
+                    pass
             return None, f"Error managing audio worker: {e}"
         finally:
-            logger.info(f"{log_prefix}: Releasing shared resource lock.")
-            shared_priority_lock.release()
-    else:
+            if lock_acquired:  # Only release if it was acquired
+                logger.info(f"{log_prefix}: Releasing shared resource lock.")
+                shared_priority_lock.release()
+    else:  # Lock acquisition failed
         logger.error(f"{log_prefix}: FAILED to acquire shared resource lock for audio worker.")
         return None, "Failed to acquire execution lock for audio worker."
 
