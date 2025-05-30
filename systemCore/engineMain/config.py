@@ -432,21 +432,74 @@ Input text:
 
 Moderation Assessment:"""
 
+ACTION_JSON_STRUCTURE_EXAMPLE = """The required JSON structure should be:
+{
+  "action_type": "some_action_string",
+  "parameters": {"param_key": "param_value"},
+  "explanation": "brief_explanation_string"
+}"""
 
-PROMPT_REFORMAT_TO_ROUTER_JSON = f"""The AI's previous output below was an attempt to generate a JSON object for a routing task, but it was either not valid JSON or did not conform to the required structure: {{"chosen_model": "model_key", "refined_query": "query_for_specialist", "reasoning": "explanation_for_choice"}}.
+NO_ACTION_FALLBACK_JSON_EXAMPLE = """{
+  "action_type": "no_action",
+  "parameters": {},
+  "explanation": "Original AI output for action analysis was unclear or did not specify a distinct action after reformat attempt."
+}"""
 
-Analyze the "Faulty AI Output" and reformat it into a single, valid JSON object.
-The JSON object MUST contain ONLY these exact keys: "chosen_model", "refined_query", and "reasoning".
-Ensure all string values within the JSON are correctly quoted.
-If the faulty output provides no clear routing decision or is too garbled to interpret, respond with ONLY the following JSON object, using the original user input as the refined_query:
-{{"chosen_model": "general", "refined_query": "{{original_user_input_placeholder}}", "reasoning": "Original router output was unclear or did not specify a distinct model after reformat attempt. Defaulting to general model."}}
+ROUTER_JSON_STRUCTURE_EXAMPLE = """The required JSON structure should be:
+{
+  "chosen_model": "model_key_string",
+  "refined_query": "query_string_for_specialist",
+  "reasoning": "explanation_string_for_choice"
+}"""
+
+ROUTER_NO_DECISION_FALLBACK_JSON_EXAMPLE = """{{
+  "chosen_model": "general",
+  "refined_query": "{original_user_input_placeholder}",
+  "reasoning": "Original router output was unclear or did not specify a distinct model after reformat attempt. Defaulting to general model."
+}}"""
+
+ROUTER_NO_DECISION_FALLBACK_JSON_EXAMPLE_FOR_FSTRING = f"""{{
+  "chosen_model": "general",
+  "refined_query": "{{{{original_user_input_placeholder}}}}", 
+  "reasoning": "Original router output was unclear or did not specify a distinct model after reformat attempt. Defaulting to general model."
+}}"""
+# Here, {{{{...}}}} in an f-string becomes {{...}} in the output string, which Langchain then sees as its variable.
+
+
+PROMPT_REFORMAT_TO_ROUTER_JSON = f"""The AI's previous output below was an attempt to generate a JSON object for a routing task.
+However, it was either not valid JSON or did not conform to the required structure.
+{ROUTER_JSON_STRUCTURE_EXAMPLE}
+
+Analyze the "Faulty AI Output" and reformat it into a single, valid JSON object with ONLY the keys "chosen_model", "refined_query", and "reasoning".
+If the faulty output provides no clear routing decision, use the `original_user_input_placeholder` variable (which will be the actual user input) for the "refined_query" and default to the "general" model, as shown in this example structure:
+`{ROUTER_NO_DECISION_FALLBACK_JSON_EXAMPLE_FOR_FSTRING}` 
+(Ensure your final output is just the JSON object).
 
 Faulty AI Output:
 \"\"\"
 {{faulty_llm_output_for_reformat}}
 \"\"\"
 
-Corrected JSON Output (ONLY the JSON object itself, no other text or wrappers):
+Corrected JSON Output (ONLY the JSON object itself):
+"""
+
+PROMPT_REFORMAT_TO_ACTION_JSON = f"""The AI's previous output (see "Faulty AI Output" below) was an attempt to generate a JSON object for an action analysis task.
+However, it was either not valid JSON or did not conform to the required structure.
+{ACTION_JSON_STRUCTURE_EXAMPLE}
+
+Please analyze the "Faulty AI Output", understand the intended action and parameters, and reformat it into a single, valid JSON object precisely matching the structure described above.
+The JSON object MUST contain ONLY these exact keys: "action_type" (string), "parameters" (JSON object), and "explanation" (string).
+Ensure all string values within the JSON are correctly quoted.
+
+If the faulty output provides no clear action or is too garbled to interpret, respond with ONLY the following JSON object (ensure it is valid JSON):
+{NO_ACTION_FALLBACK_JSON_EXAMPLE}
+
+Faulty AI Output:
+\"\"\"
+{{faulty_llm_output_for_reformat}}
+\"\"\"
+
+Corrected JSON Output (ONLY the JSON object itself, no other text, no markdown, no wrappers):
 """
 
 PROMPT_ROUTER = """Analyze the user's query, conversation history, and context (including file search results) to determine the best specialized model to handle the request.
