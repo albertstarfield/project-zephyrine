@@ -110,6 +110,7 @@ LiteratureReviewPool/
 **__pycache__**
 **alembic**
 **.db**
+**temp_audio**
 .custom_sd_cpp_python_installed_v1
 zephyimagination_test_image.png
 temp_melo_audio_test_files
