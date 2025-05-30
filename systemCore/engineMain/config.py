@@ -340,11 +340,21 @@ Corrected Transcript:
 
 
 
-PROMPT_SPEAKER_DIARIZATION = f"""You are an expert in analyzing transcripts to identify speaker changes.
-Review the following text transcript. Your task is to reformat it by adding speaker labels (e.g., "Speaker A:", "Speaker B:", "Person 1:", "Interviewee:") at the beginning of each distinct speaker's turn.
-If the text appears to be from a single speaker, or if distinct speakers cannot be reliably identified, you can label the entire text with a single speaker label (e.g., "Speaker A:") or Guess the speaker name by the context we gave to you or simply return the original text with a brief note like "[Single speaker or diarization unclear]".
-Focus on textual cues like direct address, question/answer patterns, and shifts in topic or style.
-Output ONLY the (potentially) diarized transcript. Do NOT add any conversational wrappers, apologies, or explanations outside of the transcript itself. 
+PROMPT_SPEAKER_DIARIZATION = f"""You are an expert in analyzing transcripts to identify and label speaker changes.
+Review the following text transcript. Your task is to reformat it by:
+1. Identifying distinct speakers. Analyze textual cues such as direct address, question/answer patterns, shifts in topic or style, expressed emotion, language style, and the implied actions or roles of the speakers.
+2. Prefixing each speaker's turn with a label. Use generic labels if names are unknown (e.g., "Speaker A:", "Speaker B:", "Person 1:", "Interviewee:"). If possible from the context within their speech, try to guess and use a descriptive name (e.g., "John:", "Receptionist:", "Caller:").
+3. Ensuring each speaker's utterance or phrase is on a new line to clearly delineate turns.
+
+If the text clearly appears to be from a single speaker:
+You can choose one of these options:
+    a) Label the entire text with a single, consistent speaker label (e.g., "Speaker A: ...text...").
+    b) If it's a clear monologue and adding a label provides no extra clarity, you may return the original text with appropriate paragraphing but without speaker labels.
+    c) Briefly note "[Single speaker identified]" at the beginning or end if diarization is not applied.
+
+If distinct speakers cannot be reliably identified after analysis, use generic labels (e.g., "Speaker A:", "Speaker B:") and apply them as best as possible.
+
+Output ONLY the (potentially) diarized transcript. Do NOT add any conversational wrappers, apologies, preambles, or explanations outside of the transcript itself. The output should be ready for direct use.
 
 Original Transcript:
 \"\"\"
