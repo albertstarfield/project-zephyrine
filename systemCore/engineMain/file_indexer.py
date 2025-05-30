@@ -7,6 +7,7 @@ import threading
 import mimetypes
 import datetime
 import asyncio
+import platform
 from sqlalchemy.orm import Session
 from loguru import logger
 import hashlib # <<< Import hashlib for MD5
@@ -558,9 +559,8 @@ class FileIndexer:
         Phase 1: Walks through a directory and processes files using _process_file_phase1,
         skipping OS/system dirs/files and hidden dot files/dirs.
         Reports progress periodically.
-        (This method was part of the FileIndexer class in previous discussions)
         """
-        logger.info(f"🔬 Starting Phase 1 Scan for root: {root_path}")
+        logger.info(f"🔬 Starting Phase 1 Scan Cycle for root: {root_path}")
         total_processed_this_root_scan = 0
         total_errors_this_root_scan = 0
         last_report_time = time.monotonic()
@@ -568,32 +568,91 @@ class FileIndexer:
         errors_since_last_report = 0
         report_interval_seconds = 60  # Log progress every minute
 
-        # Define common system directories and files to skip
-        # These sets should be appropriate for your environment.
-        # ROOT_DIR should be accessible here if defined at module level in file_indexer.py
-        # or passed appropriately. For this method context, assuming ROOT_DIR is available.
+        # --- Comprehensive Directory Exclusion Configuration ---
+        # globals().get("ROOT_DIR", ".") attempts to get ROOT_DIR if it's a global in file_indexer.py
+        # If not, it defaults to ".", which means paths like "./build" would be relative to CWD
+        # This is okay if file_indexer.py is run from the project root.
+        # For more robustness, ROOT_DIR could be passed to FileIndexer or determined from __file__.
+        # For now, assuming ROOT_DIR is accessible or paths are intended to be relative to CWD if it's not.
+        current_script_dir_for_project_paths = os.path.dirname(os.path.dirname(
+            os.path.abspath(__file__)))  # Assuming file_indexer is in engineMain, and ROOT_DIR is one level up
+
         common_system_dirs_raw = {
-            "/proc", "/sys", "/dev", "/run", "/etc", "/var", "/tmp", "/private",
-            "/cores", "/opt", "/usr", "/System", "/Library", "/Volumes",
-            "/.MobileBackups", "/.Spotlight-V100", "/.fseventsd",
-            "$recycle.bin", "system volume information", "program files",
-            "program files (x86)", "windows", "programdata", "recovery",
-            "node_modules", "__pycache__", ".venv", "venv", ".env", "env",
-            ".tox", ".pytest_cache", ".mypy_cache", "Cache", "cache",
-            "staticmodelpool", "llama-cpp-python_build", "systemCore",
-            "engineMain", "backend-service", "frontend-face-zephyrine",
-            "Downloads", "Pictures", "Movies", "Music", "Backup", "Archives",
-            os.path.join(globals().get("ROOT_DIR", "."), "build"),
-            os.path.join(globals().get("ROOT_DIR", "."), "zephyrineCondaVenv")
+            # macOS Specific
+            "/System", "/Library", os.path.expanduser("~/Library"), "/private", "/cores", "/Network",
+            "/Applications", "/.Spotlight-V100", "/.fseventsd", "/.Trashes", "/usr", "/opt", "/System", "/bin", "/cores", "/dev", "/etc", "/private", "/tmp", "/var", os.path.expanduser("~/.Trash"),
+            "/Volumes",  # Often external drives or system volumes, can be very large.
+
+            # Linux Specific
+            "/proc", "/sys", "/dev", "/run", "/lost+found", "/mnt", "/media", "/usr", "/boot", "/srv",
+            "/snap", "/var/lib/snapd", "/var/lib/flatpak",
+            os.path.expanduser("~/.cache"), os.path.expanduser("~/.config"), os.path.expanduser("~/.local/share"),
+            # Standard Linux system dirs often symlinked or part of /usr, /etc, /var (already listed)
+
+            # Windows Specific (using environment variables)
+            "%SystemRoot%", "%WinDir%", "%ProgramFiles%", "%ProgramFiles(x86)%",
+            "%ProgramData%", "%LocalAppData%", "%AppData%",
+            "%UserProfile%\\AppData\\Local\\Temp", "%SystemDrive%\\$Recycle.Bin",
+            "%SystemDrive%\\System Volume Information", "%TEMP%", "%TMP%",
+
+            # Common Development & Build Folders (Relative Names - will be lowercased)
+            "node_modules", "__pycache__", ".venv", "venv", "env", ".env",
+            "target", "build", "dist", "out", "bin", "obj",  # Note: "bin" and "lib" are very generic
+            ".git", ".hg", ".svn", ".gradle", ".idea", ".vscode", ".project",
+            ".pytest_cache", ".mypy_cache", ".ruff_cache", "site-packages", "dist-packages",
+
+            # Common Cache & Temporary Directory Names (Relative Names)
+            "cache", "caches", "tmp", "temp", "logs", "log",  # "logs" is also your project log dir
+
+            # Common User Data Folders (Relative Names - use with caution if scanning broad roots)
+            "Downloads", "Pictures", "Movies", "Music", "Videos", "Documents", "Desktop",
+
+            # Cloud Sync & Backup Folders (Relative Names)
+            "Dropbox", "Google Drive", "OneDrive", "iCloudDrive",
+            "Backup", "Backups", "Archive", "Archives",
+
+            # Project Specific (ensure ROOT_DIR is correctly resolved for these)
+            "staticmodelpool", "llama-cpp-python_build", "stable-diffusion-cpp-python_build",
+            "pywhispercpp_build", "systemCore", "engineMain", "backend-service",
+            "frontend-face-zephyrine", "zephyrineCondaVenv", "db_snapshots",
+            "temp_audio_worker_files",
+            # Explicitly add project's own log directory if it's not already covered
+            os.path.join(current_script_dir_for_project_paths, "logs"),
+            # Add project's build directory if it has one at the root
+            os.path.join(current_script_dir_for_project_paths, "build"),
         }
-        absolute_skip_dirs_normalized = {os.path.normpath(p) for p in common_system_dirs_raw if os.path.isabs(p)}
-        relative_skip_dir_names_lower = {p.lower() for p in common_system_dirs_raw if not os.path.isabs(p)}
+
+        absolute_skip_dirs_resolved = set()
+        relative_skip_dir_names_lower = set()
+
+        for p_raw_item in common_system_dirs_raw:
+            p_expanded_item = p_raw_item
+            IS_WINDOWS = os.name == 'nt'
+            if "%" in p_raw_item and (IS_WINDOWS or platform.system() == "Windows"):
+                p_expanded_item = os.path.expandvars(p_raw_item)
+                if p_expanded_item == p_raw_item and p_raw_item.count('%') >= 2:  # Unexpanded var
+                    logger.trace(f"Path with '%' not expanded: '{p_raw_item}'. Treating as relative name.")
+
+            if p_expanded_item.startswith('~'):
+                p_expanded_item = os.path.expanduser(p_expanded_item)
+
+            if os.path.isabs(p_expanded_item):
+                absolute_skip_dirs_resolved.add(os.path.normcase(os.path.realpath(p_expanded_item)))
+            else:
+                relative_skip_dir_names_lower.add(p_expanded_item.lower())
+
+        logger.debug(
+            f"Resolved {len(absolute_skip_dirs_resolved)} absolute skip paths. Examples: {list(absolute_skip_dirs_resolved)[:3]}")
+        logger.debug(
+            f"Resolved {len(relative_skip_dir_names_lower)} relative skip names. Examples: {list(relative_skip_dir_names_lower)[:3]}")
 
         files_to_skip_lower = {
             '.ds_store', 'thumbs.db', 'desktop.ini', '.localized',
             '.bash_history', '.zsh_history', 'ntuser.dat', '.swp', '.swo',
-            'pagefile.sys', 'hiberfil.sys', '.volumeicon.icns'
+            'pagefile.sys', 'hiberfil.sys', '.volumeicon.icns', '.cfusertextencoding',
+            '.traceroute.log', '.bash_sessions_disable'
         }
+        # --- End Skip Logic Init ---
 
         try:
             for current_dir, dirnames, filenames in os.walk(root_path, topdown=True, onerror=None):
@@ -601,54 +660,59 @@ class FileIndexer:
                     logger.info(f"Phase 1 Scan interrupted by stop signal in {current_dir}")
                     break
 
-                norm_current_dir = os.path.normpath(current_dir)
+                norm_current_dir_for_abs_match = os.path.normcase(os.path.realpath(current_dir))
+                current_dir_basename_lower_for_rel_match = os.path.basename(current_dir).lower()
                 should_skip_dir = False
 
-                if norm_current_dir in absolute_skip_dirs_normalized:
+                # 1. Check against resolved absolute paths and their subdirectories
+                for skip_abs_path in absolute_skip_dirs_resolved:
+                    if norm_current_dir_for_abs_match == skip_abs_path or \
+                            norm_current_dir_for_abs_match.startswith(skip_abs_path + os.sep):
+                        should_skip_dir = True;
+                        break
+
+                if not should_skip_dir and current_dir_basename_lower_for_rel_match in relative_skip_dir_names_lower:
                     should_skip_dir = True
-                if not should_skip_dir and os.path.basename(norm_current_dir).lower() in relative_skip_dir_names_lower:
-                    should_skip_dir = True
-                if not should_skip_dir and os.path.basename(norm_current_dir).startswith(
-                        '.'):  # Skip hidden directories
+
+                if not should_skip_dir and os.path.basename(current_dir).startswith(
+                        '.'):  # Check original name for hidden
                     should_skip_dir = True
 
                 if should_skip_dir:
-                    logger.trace(f"Phase 1 Skipping excluded/hidden directory: {current_dir}")
-                    dirnames[:] = []  # Don't recurse into this directory
-                    filenames[:] = []  # Don't process files in this directory
+                    logger.trace(f"Phase 1 Skipping directory: {current_dir}")
+                    dirnames[:] = []
+                    filenames[:] = []
                     continue
 
-                # Prune dot directories from dirnames to prevent walking into them
-                dirnames[:] = [d for d in dirnames if not d.startswith('.')]
+                dirnames[:] = [d for d in dirnames if not d.startswith('.')]  # Prune hidden subdirs from recursion
 
-                current_dir_file_errors = 0  # Reset for each directory
-
+                current_dir_file_errors = 0
                 for filename in filenames:
                     if self.stop_event.is_set(): break
-                    if filename.startswith('.'): continue  # Skip hidden files
+                    if filename.startswith('.'): continue
                     if filename.lower() in files_to_skip_lower: continue
 
                     file_path = os.path.join(current_dir, filename)
-                    file_processed_flag = False
-                    file_errored_flag = False
+                    file_processed_this_iter = False  # Renamed for clarity
+                    file_errored_this_iter = False  # Renamed for clarity
 
                     try:
                         if os.path.islink(file_path): continue
                         if not os.path.isfile(file_path): continue
 
                         self._process_file_phase1(file_path, db_session)
-                        file_processed_flag = True
+                        file_processed_this_iter = True
                     except PermissionError:
-                        logger.warning(f"Phase 1 Permission denied processing: {file_path}")
-                        file_errored_flag = True
+                        logger.warning(f"Phase 1 Permission denied processing file: {file_path}")
+                        file_errored_this_iter = True
                         try:
-                            existing = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
+                            existing_rec = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
                             err_vals = {'index_status': 'error_permission',
                                         'processing_error': "Permission denied during scan.",
                                         'last_indexed_db': datetime.datetime.now(datetime.timezone.utc)}
-                            if existing:
-                                if existing.index_status != 'error_permission': db_session.execute(
-                                    update(FileIndex).where(FileIndex.id == existing.id).values(**err_vals))
+                            if existing_rec:
+                                if existing_rec.index_status != 'error_permission': db_session.execute(
+                                    update(FileIndex).where(FileIndex.id == existing_rec.id).values(**err_vals))
                             else:
                                 db_session.add(
                                     FileIndex(file_path=file_path, file_name=filename, **err_vals))  # type: ignore
@@ -660,17 +724,17 @@ class FileIndexer:
                         logger.error(
                             f"Phase 1 Error during _process_file_phase1 call for {file_path}: {walk_process_err}",
                             exc_info=True)
-                        file_errored_flag = True
+                        file_errored_this_iter = True
                     finally:
-                        if file_processed_flag: total_processed_this_root_scan += 1; files_since_last_report += 1
-                        if file_errored_flag: total_errors_this_root_scan += 1; errors_since_last_report += 1; current_dir_file_errors += 1
+                        if file_processed_this_iter: total_processed_this_root_scan += 1; files_since_last_report += 1
+                        if file_errored_this_iter: total_errors_this_root_scan += 1; errors_since_last_report += 1; current_dir_file_errors += 1
 
-                        current_time = time.monotonic()
-                        if current_time - last_report_time >= report_interval_seconds:
+                        current_time_monotonic = time.monotonic()
+                        if current_time_monotonic - last_report_time >= report_interval_seconds:
                             rate = files_since_last_report / report_interval_seconds if report_interval_seconds > 0 else files_since_last_report
                             logger.info(
                                 f"⏳ [Phase 1 Report] In '{os.path.basename(root_path)}' last {report_interval_seconds}s: {files_since_last_report} files (~{rate:.1f}/s), {errors_since_last_report} errors. Root Total: {total_processed_this_root_scan}")
-                            last_report_time = current_time;
+                            last_report_time = current_time_monotonic;
                             files_since_last_report = 0;
                             errors_since_last_report = 0
 
@@ -685,7 +749,7 @@ class FileIndexer:
             total_errors_this_root_scan += 1
 
         if not self.stop_event.is_set():
-            logger.success(
+            logger.info(
                 f"✅ Finished Phase 1 Scan for {root_path}. Total Processed this root: {total_processed_this_root_scan}, Total Errors this root: {total_errors_this_root_scan}")
         else:
             logger.warning(
