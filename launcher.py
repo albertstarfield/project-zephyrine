@@ -117,6 +117,11 @@ MODELS_TO_DOWNLOAD = [
         "description": "Whisper Large v3 Model (ASR)"
     },
     {
+        "filename": "whisper-lowlatency-direct.gguf",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-turbo-q5_0.bin?download=true",
+        "description": "Whisper Direct Low Latency (ASR)"
+    },
+    {
         "filename": "flux1-schnell.gguf",
         "url": "https://huggingface.co/Green-Sky/flux.1-schnell-GGUF/resolve/main/flux1-schnell-q2_k.gguf?download=true",
         "description": "FLUX.1 Schnell GGUF (Main Q2_K)"
