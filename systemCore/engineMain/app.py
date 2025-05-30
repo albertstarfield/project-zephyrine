@@ -584,7 +584,7 @@ def run_self_reflection_loop():
             stopped_during_wait = _reflector_stop_event.wait(timeout=wait_time_seconds)
             if stopped_during_wait: logger.info(f"{thread_name}: Stop signal received during idle wait."); break
         elif _reflector_stop_event.is_set():  # If stop set and no wait needed
-            logger.info(f"{thread_name}: Stop signal detected after active cycle.");
+            logger.info(f"{thread_name}: Stop signal detected after active cycle.")
             break
 
     logger.info(f"🛑 {thread_name}: Exiting self-reflection loop.")
@@ -4007,7 +4007,7 @@ class AIChat:
             interaction_data_for_metrics['classification_reason'] = error_msg
             await asyncio.to_thread(add_interaction, db, session_id=current_session_id, mode="chat",
                                     input_type="log_error", user_input="[Classify Model Unavailable]",
-                                    llm_response=error_msg);
+                                    llm_response=error_msg)
             await asyncio.to_thread(db.commit)
             return "chat_simple"
 
@@ -4137,7 +4137,7 @@ class AIChat:
         interaction_data_for_metrics['classification_reason'] = final_fallback_reason
         await asyncio.to_thread(add_interaction, db, session_id=current_session_id, mode="chat", input_type="log_error",
                                 user_input=f"[Classify Max Retries for: {user_input[:100]}]",
-                                llm_response=final_fallback_reason[:4000]);
+                                llm_response=final_fallback_reason[:4000])
         await asyncio.to_thread(db.commit)
         return final_fallback_classification
 
@@ -4426,7 +4426,7 @@ class AIChat:
         }
         action_analysis_model = self.provider.get_model("router") or self.provider.get_model("default")
         if not action_analysis_model:
-            logger.error(f"{log_prefix} ❌ Action analysis model not available!");
+            logger.error(f"{log_prefix} ❌ Action analysis model not available!")
             return None
 
         analysis_chain_raw_output = ChatPromptTemplate.from_template(
@@ -5421,7 +5421,7 @@ class AIChat:
         interrupted_flag = False
 
         if not user_input and not image_b64:
-            logger.warning(f"{log_prefix} Empty input (no text, no image). Aborting background_generate.");
+            logger.warning(f"{log_prefix} Empty input (no text, no image). Aborting background_generate.")
             self.current_session_id = original_chat_session_id
             return
 
@@ -5433,13 +5433,13 @@ class AIChat:
                 if not original_interaction_to_update_for_reflection:
                     logger.error(
                         f"{log_prefix}: CRITICAL - Original reflection target ID {update_interaction_id} not found.")
-                    self.current_session_id = original_chat_session_id;
+                    self.current_session_id = original_chat_session_id
                     return
                 interaction_data["classification_reason"] = "Self-reflection task, proceeding with deep analysis."
                 logger.info(f"{log_prefix}: Loaded original interaction {update_interaction_id} for reflection.")
             except Exception as e_load_orig:
                 logger.error(f"{log_prefix}: Error loading reflection target ID {update_interaction_id}: {e_load_orig}")
-                self.current_session_id = original_chat_session_id;
+                self.current_session_id = original_chat_session_id
                 return
 
         if not is_reflection_task:
@@ -5844,7 +5844,7 @@ class AIChat:
             await asyncio.to_thread(add_interaction, db, session_id=current_session_id,
                                     mode="internal_error", input_type="log_error",
                                     user_input=f"[ToT V2 Failed - Model Unavailable for TrigID: {triggering_interaction_id_for_log}]",
-                                    llm_response=error_msg);
+                                    llm_response=error_msg)
             await asyncio.to_thread(db.commit)
             return f"Error: ToT model unavailable for analysis."
 
@@ -5952,7 +5952,8 @@ class AIChat:
             try:
                 tot_json_to_save_str = json.dumps(parsed_tot_json, indent=2)
             except Exception as e_dump:
-                logger.error(f"{log_prefix} Failed to dump parsed_tot_json: {e_dump}"); tot_json_to_save_str = str(
+                logger.error(f"{log_prefix} Failed to dump parsed_tot_json: {e_dump}")
+                tot_json_to_save_str = str(
                     parsed_tot_json)
 
             # --- New: Check if ToT requires a new background task ---
@@ -5991,7 +5992,8 @@ class AIChat:
                 tot_json_to_save_str = json.dumps(fallback_json_content, indent=2)
             except Exception as e_dump_fallback:
                 logger.error(
-                    f"{log_prefix} Failed to dump fallback ToT JSON: {e_dump_fallback}"); tot_json_to_save_str = str(
+                    f"{log_prefix} Failed to dump fallback ToT JSON: {e_dump_fallback}")
+                tot_json_to_save_str = str(
                     fallback_json_content)
 
         # --- Save ToT result (the JSON string) to a new Interaction record ---
@@ -7269,11 +7271,11 @@ async def _run_background_asr_and_translation_analysis(
 
     try:
         if SessionLocal is None:
-            logger.error(f"{bg_log_prefix}: SessionLocal is None. Cannot create DB session.");
+            logger.error(f"{bg_log_prefix}: SessionLocal is None. Cannot create DB session.")
             return
         db_bg_task = SessionLocal()  # type: ignore
         if not db_bg_task:
-            logger.error(f"{bg_log_prefix}: Failed to create DB session.");
+            logger.error(f"{bg_log_prefix}: Failed to create DB session.")
             return
 
         # === Step 1: High-Quality ASR (ELP0) ===
@@ -8764,7 +8766,7 @@ async def handle_openai_asr_transcriptions():
                                         input_type="log_warning",
                                         user_input=f"[ASR Correction Failed for Req ID {request_id}]",
                                         llm_response=f"LLM output for correction: {str(llm_correction_output)[:1000]}",
-                                        classification="correction_failed_llm");
+                                        classification="correction_failed_llm")
                 await asyncio.to_thread(db.commit)
 
         # --- Step 1.3: Speaker Diarization with LLM (ELP1) ---
@@ -8792,7 +8794,7 @@ async def handle_openai_asr_transcriptions():
                                         input_type="log_warning",
                                         user_input=f"[ASR Diarization Failed for Req ID {request_id}]",
                                         llm_response=f"LLM output for diarization: {str(llm_diarization_output)[:1000]}",
-                                        classification="diarization_failed_llm");
+                                        classification="diarization_failed_llm")
                 await asyncio.to_thread(db.commit)
         else:
             logger.info(f"{request_id}: Corrected transcript is empty. Skipping diarization.")
@@ -8841,25 +8843,25 @@ async def handle_openai_asr_transcriptions():
         logger.warning(f"{request_id}: Invalid ASR request: {ve}")
         resp_data, status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
                                                                status_code=400)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json');
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_status_code = status_code
     except FileNotFoundError as fnf_err:
         logger.error(f"{request_id}: Server configuration error for ASR: {fnf_err}")
         resp_data, status_code = _create_openai_error_response(f"Server configuration error for ASR: {fnf_err}",
                                                                err_type="server_error", status_code=500)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json');
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_status_code = status_code
     except RuntimeError as rt_err:
         logger.error(f"{request_id}: ASR pipeline error: {rt_err}")
         resp_data, status_code = _create_openai_error_response(f"ASR failed: {rt_err}", err_type="server_error",
                                                                status_code=500)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json');
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_status_code = status_code
     except TaskInterruptedException as tie:  # If any ELP1 call was interrupted
         logger.warning(f"🚦 {request_id}: ASR/Diarization task INTERRUPTED: {tie}")
         resp_data, status_code = _create_openai_error_response(f"ASR task interrupted: {tie}", err_type="server_error",
                                                                code="task_interrupted", status_code=503)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json');
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_status_code = status_code
     except Exception as e:
         logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in ASR endpoint (transcription):")
@@ -8929,8 +8931,8 @@ async def handle_openai_audio_translations():
             logger.error(f"{request_id}: {error_msg}")
             resp_data, status_code = _create_openai_error_response(error_msg, err_type="server_error",
                                                                    code="translation_disabled", status_code=503)
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json');
-            final_status_code = status_code;
+            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            final_status_code = status_code
             return resp  # type: ignore
 
         # --- 1. Request Parsing & File Save (as before) ---
@@ -9112,32 +9114,32 @@ async def handle_openai_audio_translations():
         logger.warning(f"{request_id}: Invalid Audio Translation request: {ve}")
         resp_data, status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
                                                                status_code=400)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json');
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_status_code = status_code
     except FileNotFoundError as fnf_err:
         logger.error(f"{request_id}: Server configuration error for Audio Translation: {fnf_err}")
         resp_data, status_code = _create_openai_error_response(f"Server configuration error: {fnf_err}",
                                                                err_type="server_error", status_code=500)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json');
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_status_code = status_code
     except RuntimeError as rt_err:
         logger.error(f"{request_id}: Audio Translation pipeline error: {rt_err}")
         resp_data, status_code = _create_openai_error_response(f"Audio Translation failed: {rt_err}",
                                                                err_type="server_error", status_code=500)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json');
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_status_code = status_code
     except TaskInterruptedException as tie:
         logger.warning(f"🚦 {request_id}: Audio Translation task INTERRUPTED: {tie}")
         resp_data, status_code = _create_openai_error_response(f"Translation task interrupted: {tie}",
                                                                err_type="server_error", code="task_interrupted",
                                                                status_code=503)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json');
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_status_code = status_code
     except Exception as e:
         logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Audio Translation endpoint:")
         error_message = f"Internal server error in Audio Translation endpoint: {type(e).__name__}"
         resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json');
+        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_status_code = status_code
         try:
             if db:
@@ -10039,77 +10041,74 @@ def handle_list_fine_tuning_job_events(fine_tuning_job_id: str):
 ##v1/files openAI expected to be?
 @app.route("/v1/files", methods=["POST"])
 async def handle_upload_and_ingest_file():
+    start_req_time = time.monotonic()  # For overall request timing
     request_id = f"req-file-ingest-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received POST /v1/files (Data Ingestion for Reflection)")
 
-    db: Session = g.db  # Get DB session from Flask's g
-    final_status_code = 500
-    response_body = {}
+    db: Session = g.db
+    final_status_code: int = 500
+    response_body: Dict[str, Any] = {}  # Initialize for consistent return type
+    temp_file_path: Optional[str] = None  # <<< Initialize temp_file_path to None HERE
 
-    # Ensure temp directory exists
-    # FILE_INGESTION_TEMP_DIR should be imported from config
-    await asyncio.to_thread(os.makedirs, FILE_INGESTION_TEMP_DIR, exist_ok=True)
+    # Ensure base temporary directory for ingestions exists
+    # FILE_INGESTION_TEMP_DIR should be imported from config.py
+    # Ensure SCRIPT_DIR is defined if FILE_INGESTION_TEMP_DIR uses it
+    try:
+        # This creates the base directory if it doesn't exist.
+        # Individual files will get unique names within it.
+        await asyncio.to_thread(os.makedirs, FILE_INGESTION_TEMP_DIR, exist_ok=True)
+    except Exception as e_mkdir:
+        logger.error(
+            f"{request_id}: Critical error creating base ingestion directory '{FILE_INGESTION_TEMP_DIR}': {e_mkdir}")
+        response_body, final_status_code = _create_openai_error_response(
+            f"Server setup error: Could not create temporary directory for file ingestion.",
+            err_type="server_error", status_code=500
+        )
+        return Response(json.dumps(response_body), status=final_status_code, mimetype='application/json')
 
     try:
         if 'file' not in request.files:
-            raise ValueError("No file part in the request.")
+            raise ValueError("No file part in the request. Please upload a file using the 'file' field.")
 
         file_storage = request.files['file']
         purpose = request.form.get('purpose')
 
-        if file_storage.filename == '':
-            raise ValueError("No selected file.")
-        if not purpose == 'fine-tune':  # OpenAI requires 'fine-tune' purpose for files used in fine-tuning jobs
-            raise ValueError("Purpose must be 'fine-tune' for data ingestion.")
+        if not file_storage or not file_storage.filename:  # Check if filename is not None or empty
+            raise ValueError("No file selected or file has no name.")
+        if purpose != 'fine-tune':  # OpenAI API requires 'fine-tune' for files used in fine-tuning jobs
+            raise ValueError(
+                "Invalid 'purpose'. Must be 'fine-tune' for data ingestion to be used by the reflection system.")
 
-        filename = secure_filename(file_storage.filename)  # type: ignore
+        filename = secure_filename(file_storage.filename)
+        # temp_file_path is assigned here, after initial checks
         temp_file_path = os.path.join(FILE_INGESTION_TEMP_DIR, f"{request_id}-{filename}")
         await asyncio.to_thread(file_storage.save, temp_file_path)
         logger.info(f"{request_id}: File '{filename}' saved temporarily to '{temp_file_path}'. Purpose: {purpose}")
 
         file_ext = os.path.splitext(filename)[1].lower()
         ingested_interactions_count = 0
-        processed_rows_count = 0  # For CSV/Parquet
+        processed_rows_or_lines = 0
 
-        # Define how to map file content to Interaction fields
-        # This is a simplified example; you'll need to adjust based on your data structure.
-        # Expected columns/keys: "user_input", "llm_response"
-        # Optional: "session_id_override", "mode_override", "input_type_override"
+        common_ingest_session_id = f"ingest_batch_{request_id}"
 
         if file_ext == ".jsonl":
             with open(temp_file_path, 'r', encoding='utf-8') as f_jsonl:
                 for line_num, line in enumerate(f_jsonl):
-                    processed_rows_count += 1
+                    processed_rows_or_lines += 1
+                    if not line.strip(): continue  # Skip empty lines
                     try:
                         data_entry = json.loads(line.strip())
-
-                        user_input_content = None
-                        assistant_response_content = None
+                        user_input_content, assistant_response_content = None, None
                         extracted_successfully = False
 
-                        # Try to extract structured data first
                         messages = data_entry.get("messages")
-                        if isinstance(messages, list) and len(messages) >= 1:  # Allow single message for general data
-                            # Simplified: take first user message as input, first assistant as output
-                            # More sophisticated logic could concatenate or handle various structures
+                        if isinstance(messages, list) and len(messages) >= 1:
                             first_user_msg = next((m.get("content") for m in messages if m.get("role") == "user"), None)
                             first_asst_msg = next((m.get("content") for m in messages if m.get("role") == "assistant"),
                                                   None)
-
                             if first_user_msg: user_input_content = first_user_msg
                             if first_asst_msg: assistant_response_content = first_asst_msg
-
-                            # If only one type of message, decide how to handle
-                            if user_input_content and assistant_response_content:
-                                extracted_successfully = True
-                            elif user_input_content:  # Only user message
-                                assistant_response_content = "[No assistant message in 'messages' array]"
-                                extracted_successfully = True  # Still ingestable
-                            elif assistant_response_content:  # Only assistant message
-                                user_input_content = "[No user message in 'messages' array]"
-                                extracted_successfully = True  # Still ingestable
-                            # If messages array is present but doesn't yield clear pair, it will fall to raw dump
-
+                            if user_input_content or assistant_response_content: extracted_successfully = True
                         elif "prompt" in data_entry and "completion" in data_entry:
                             user_input_content = data_entry.get("prompt")
                             assistant_response_content = data_entry.get("completion")
@@ -10118,136 +10117,110 @@ async def handle_upload_and_ingest_file():
                             user_input_content = data_entry.get("user_input")
                             assistant_response_content = data_entry.get("llm_response")
                             extracted_successfully = True
-                        elif "text" in data_entry:  # Common for generic text datasets
+                        elif "text" in data_entry:  # Fallback for generic text entries
                             user_input_content = data_entry.get("text")
-                            assistant_response_content = "[No explicit completion field, ingested as text]"
+                            assistant_response_content = "[Ingested as single text entry]"
                             extracted_successfully = True
 
-                        interaction_session_id = data_entry.get("session_id_override", f"ingest_{request_id}")
-                        interaction_mode = data_entry.get("mode_override", "chat")
-
-                        if extracted_successfully and user_input_content is not None:  # At least user_input must exist
-                            interaction_input_type = data_entry.get("input_type_override", "text_ingested_structured")
-                            await asyncio.to_thread(
-                                add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
-                                input_type=interaction_input_type, user_input=str(user_input_content),
-                                llm_response=str(
-                                    assistant_response_content) if assistant_response_content is not None else None,
-                                reflection_completed=False
-                            )
+                        if extracted_successfully and user_input_content is not None:
+                            await asyncio.to_thread(add_interaction, db,
+                                                    session_id=data_entry.get("session_id_override",
+                                                                              common_ingest_session_id),
+                                                    mode=data_entry.get("mode_override", "chat_ingested"),
+                                                    input_type=data_entry.get("input_type_override",
+                                                                              "text_ingested_jsonl"),
+                                                    user_input=str(user_input_content),
+                                                    llm_response=str(
+                                                        assistant_response_content) if assistant_response_content is not None else None,
+                                                    reflection_completed=False)
                             ingested_interactions_count += 1
-                        else:
-                            # Fallback: Dump raw JSON object if specific fields not found
+                        else:  # Fallback: Dump raw JSON object
                             logger.warning(
-                                f"{request_id}: JSONL line {line_num + 1} did not match expected structures. Ingesting as raw data.")
-                            interaction_input_type = data_entry.get("input_type_override", "text_ingested_raw_json")
-                            raw_data_str = json.dumps(data_entry)  # Store the whole JSON object as string
-
-                            await asyncio.to_thread(
-                                add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
-                                input_type=interaction_input_type,
-                                user_input=f"[Raw JSON Ingested from line {line_num + 1} of {filename}]: {raw_data_str[:500]}...",
-                                # Snippet in user_input
-                                llm_response=raw_data_str,  # Store full raw JSON in llm_response
-                                reflection_completed=False
-                            )
-                            ingested_interactions_count += 1  # Count it as ingested
-
+                                f"{request_id}: JSONL line {line_num + 1} did not match expected structures. Ingesting raw.")
+                            await asyncio.to_thread(add_interaction, db,
+                                                    session_id=data_entry.get("session_id_override",
+                                                                              common_ingest_session_id),
+                                                    mode=data_entry.get("mode_override", "data_ingestion"),
+                                                    input_type="raw_ingested_json_line",
+                                                    user_input=f"[Raw JSON from line {line_num + 1} of {filename}]",
+                                                    llm_response=json.dumps(data_entry), reflection_completed=False)
+                            ingested_interactions_count += 1
                     except json.JSONDecodeError:
-                        logger.warning(
-                            f"{request_id}: Skipped invalid JSON line {line_num + 1} in '{filename}'. Content: {line.strip()[:100]}")
+                        logger.warning(f"{request_id}: Skipped invalid JSON line {line_num + 1} in '{filename}'.")
 
         elif file_ext in [".csv", ".tsv"]:
             delimiter = '\t' if file_ext == ".tsv" else ','
-            df = await asyncio.to_thread(pd.read_csv, temp_file_path, delimiter=delimiter)
-            processed_rows_count = len(df)
-            for index, row in df.iterrows():
+            df = await asyncio.to_thread(pd.read_csv, temp_file_path, delimiter=delimiter)  # type: ignore
+            processed_rows_or_lines = len(df)
+            for index, row in df.iterrows():  # type: ignore
                 user_input_content = row.get("prompt") or row.get("user_input") or row.get("text")
                 assistant_response_content = row.get("completion") or row.get("llm_response")
 
-                interaction_session_id = row.get("session_id_override", f"ingest_{request_id}")
-                interaction_mode = row.get("mode_override", "chat")
-
-                if user_input_content is not None:  # Require at least some primary text field
-                    interaction_input_type = row.get("input_type_override", "text_ingested_structured")
-                    await asyncio.to_thread(
-                        add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
-                        input_type=interaction_input_type, user_input=str(user_input_content),
-                        llm_response=str(
-                            assistant_response_content) if assistant_response_content is not None else None,
-                        reflection_completed=False
-                    )
+                if user_input_content is not None:
+                    await asyncio.to_thread(add_interaction, db,
+                                            session_id=row.get("session_id_override", common_ingest_session_id),
+                                            mode=row.get("mode_override", "chat_ingested"),
+                                            input_type=row.get("input_type_override", f"text_ingested_{file_ext[1:]}"),
+                                            user_input=str(user_input_content),
+                                            llm_response=str(
+                                                assistant_response_content) if assistant_response_content is not None else None,
+                                            reflection_completed=False)
                     ingested_interactions_count += 1
-                else:
-                    # Fallback: Dump raw row data
+                else:  # Fallback for CSV/TSV row
                     logger.warning(
-                        f"{request_id}: CSV/TSV row {index + 1} did not match expected structures. Ingesting as raw data.")
-                    interaction_input_type = row.get("input_type_override", "text_ingested_raw_tabular")
-                    raw_row_dict = row.to_dict()
-                    raw_data_str = json.dumps(
-                        {k: str(v) for k, v in raw_row_dict.items() if pd.notna(v)})  # Convert row to JSON string
-
-                    await asyncio.to_thread(
-                        add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
-                        input_type=interaction_input_type,
-                        user_input=f"[Raw Tabular Ingested from row {index + 1} of {filename}]: {raw_data_str[:500]}...",
-                        llm_response=raw_data_str,
-                        reflection_completed=False
-                    )
+                        f"{request_id}: {file_ext.upper()} row {index + 1} missing primary text field. Ingesting raw.")
+                    raw_row_dict = {k: str(v) for k, v in row.to_dict().items() if pd.notna(v)}  # type: ignore
+                    await asyncio.to_thread(add_interaction, db,
+                                            session_id=row.get("session_id_override", common_ingest_session_id),
+                                            mode=row.get("mode_override", "data_ingestion"),
+                                            input_type=f"raw_ingested_tabular_row",
+                                            user_input=f"[Raw {file_ext.upper()} row {index + 1} from {filename}]",
+                                            llm_response=json.dumps(raw_row_dict), reflection_completed=False)
                     ingested_interactions_count += 1
 
         elif file_ext == ".parquet":
-            df = await asyncio.to_thread(pd.read_parquet, temp_file_path)
-            processed_rows_count = len(df)
-            for index, row in df.iterrows():
-                # Similar logic as CSV/TSV for extracting structured data or falling back to raw
+            df = await asyncio.to_thread(pd.read_parquet, temp_file_path)  # type: ignore
+            processed_rows_or_lines = len(df)
+            for index, row in df.iterrows():  # type: ignore
                 user_input_content = row.get("prompt") or row.get("user_input") or row.get("text")
                 assistant_response_content = row.get("completion") or row.get("llm_response")
 
-                interaction_session_id = row.get("session_id_override", f"ingest_{request_id}")
-                interaction_mode = row.get("mode_override", "chat")
-
                 if user_input_content is not None:
-                    interaction_input_type = row.get("input_type_override", "text_ingested_structured")
-                    await asyncio.to_thread(
-                        add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
-                        input_type=interaction_input_type, user_input=str(user_input_content),
-                        llm_response=str(
-                            assistant_response_content) if assistant_response_content is not None else None,
-                        reflection_completed=False
-                    )
+                    await asyncio.to_thread(add_interaction, db,
+                                            session_id=row.get("session_id_override", common_ingest_session_id),
+                                            mode=row.get("mode_override", "chat_ingested"),
+                                            input_type=row.get("input_type_override", "text_ingested_parquet"),
+                                            user_input=str(user_input_content),
+                                            llm_response=str(
+                                                assistant_response_content) if assistant_response_content is not None else None,
+                                            reflection_completed=False)
                     ingested_interactions_count += 1
-                else:
-                    logger.warning(f"{request_id}: Parquet row {index + 1} did not match. Ingesting as raw.")
-                    interaction_input_type = row.get("input_type_override", "text_ingested_raw_tabular")
-                    raw_row_dict = row.to_dict()
-                    raw_data_str = json.dumps({k: str(v) for k, v in raw_row_dict.items() if pd.notna(v)})
-                    await asyncio.to_thread(
-                        add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
-                        input_type=interaction_input_type,
-                        user_input=f"[Raw Parquet Ingested from row {index + 1} of {filename}]: {raw_data_str[:500]}...",
-                        llm_response=raw_data_str,
-                        reflection_completed=False
-                    )
+                else:  # Fallback for Parquet row
+                    logger.warning(f"{request_id}: Parquet row {index + 1} missing primary text field. Ingesting raw.")
+                    raw_row_dict = {k: str(v) for k, v in row.to_dict().items() if pd.notna(v)}  # type: ignore
+                    await asyncio.to_thread(add_interaction, db,
+                                            session_id=row.get("session_id_override", common_ingest_session_id),
+                                            mode=row.get("mode_override", "data_ingestion"),
+                                            input_type="raw_ingested_tabular_row",
+                                            user_input=f"[Raw Parquet row {index + 1} from {filename}]",
+                                            llm_response=json.dumps(raw_row_dict), reflection_completed=False)
                     ingested_interactions_count += 1
         else:
-            raise ValueError(f"Unsupported file type: '{file_ext}'. Please use JSONL, CSV, or Parquet.")
+            raise ValueError(f"Unsupported file type: '{file_ext}'. Please use JSONL, CSV, TSV, or Parquet.")
 
         await asyncio.to_thread(db.commit)
-        logger.info(
-            f"{request_id}: Successfully ingested {ingested_interactions_count}/{processed_rows_count} entries from '{filename}' into interactions database for self-reflection.")
+        ingestion_summary = f"Ingested {ingested_interactions_count}/{processed_rows_or_lines} entries from '{filename}' into interactions database for self-reflection."
+        logger.info(f"{request_id}: {ingestion_summary}")
 
-        # Mimic OpenAI File object response
         response_body = {
-            "id": f"file-ingest-job-{request_id}",  # Use request_id as a job-like ID
+            "id": f"file-ingest-job-{request_id}",
             "object": "file",
-            "bytes": await asyncio.to_thread(os.path.getsize, temp_file_path),
-            "created_at": int(time.time()),
-            "filename": filename,
-            "purpose": "fine-tune-data-ingested-for-reflection",  # Custom purpose
-            "status": "processed",
-            "status_details": f"Ingested {ingested_interactions_count} interactions from {processed_rows_count} " \
-                              f"rows/lines for self-reflection. Data ready for background processing."
+            "bytes": await asyncio.to_thread(os.path.getsize,
+                                             temp_file_path) if temp_file_path and await asyncio.to_thread(
+                os.path.exists, temp_file_path) else 0,
+            "created_at": int(time.time()), "filename": filename,
+            "purpose": "fine-tune-data-ingested-for-reflection",
+            "status": "processed", "status_details": ingestion_summary
         }
         final_status_code = 200
 
@@ -10255,15 +10228,25 @@ async def handle_upload_and_ingest_file():
         logger.warning(f"{request_id}: Invalid file upload request: {ve}")
         response_body, final_status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
                                                                          status_code=400)
+    except ImportError as ie:  # Catch pandas import error specifically
+        logger.error(
+            f"{request_id}: Missing library for file processing: {ie}. Please ensure pandas and pyarrow/fastparquet are installed.")
+        response_body, final_status_code = _create_openai_error_response(f"Server missing library for file type: {ie}",
+                                                                         err_type="server_error", status_code=501)
     except Exception as e:
         logger.exception(f"{request_id}: 🔥🔥 Error processing uploaded file for ingestion:")
-        response_body, final_status_code = _create_openai_error_response(f"Server error during file ingestion: {e}",
-                                                                         err_type="server_error", status_code=500)
+        response_body, final_status_code = _create_openai_error_response(
+            f"Server error during file ingestion: {str(e)}", err_type="server_error", status_code=500)
         if db: await asyncio.to_thread(db.rollback)
     finally:
-        if temp_file_path and os.path.exists(temp_file_path):
-            await asyncio.to_thread(os.remove, temp_file_path)
-            logger.info(f"{request_id}: Deleted temporary ingested file: {temp_file_path}")
+        # temp_file_path is defined at the start of the function (initialized to None)
+        if temp_file_path and await asyncio.to_thread(os.path.exists, temp_file_path):
+            try:
+                await asyncio.to_thread(os.remove, temp_file_path)
+                logger.info(f"{request_id}: Deleted temporary ingested file: {temp_file_path}")
+            except Exception as e_del:
+                logger.error(f"{request_id}: Failed to delete temporary ingested file '{temp_file_path}': {e_del}")
+
         duration_req = (time.monotonic() - start_req_time) * 1000
         logger.info(
             f"🏁 /v1/files POST request {request_id} handled in {duration_req:.2f} ms. Status: {final_status_code}")
