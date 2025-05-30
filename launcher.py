@@ -1211,7 +1211,9 @@ def _detect_and_prepare_acceleration_env_vars() -> Dict[str, str]:
     # --- CoreML (Specific to Whisper on Apple platforms, can co-exist with Metal) ---
     if platform.system() == "Darwin":
         print_system("CoreML: Detected Apple platform. CoreML support can be enabled for Whisper.")
-        detected_env_vars["AUTODETECTED_COREML_POSSIBLE"] = "1"
+        print_system("CoreML: However CoreML is garbage in performance and quality so it is disabled, if you wish to override do")
+        print_system("CoreML: export WHISPER_COREML=1 ")
+        detected_env_vars["AUTODETECTED_COREML_POSSIBLE"] = "0"
 
     # --- OpenCL Detection (Lower priority) ---
     # if primary_gpu_backend_detected == "cpu": # Only if no other GPU backend found
@@ -1260,9 +1262,10 @@ def download_file_with_progress(
         url: str,
         destination_path: str,
         file_description: str,
-        requests_session: requests.Session,  # Keep for requests fallback
-        max_retries_non_connection_error: int = 9999999999,
-        aria2_rpc_url: str = "http://localhost:6800/jsonrpc",  # Default for local aria2c RPC
+        requests_session: requests.Session,  # For the requests fallback
+        max_retries_non_connection_error: int = 3,  # Default for non-connection errors
+        aria2_rpc_host: str = "localhost",  # Default host for aria2c RPC
+        aria2_rpc_port: int = 6800,  # Default port for aria2c RPC
         aria2_rpc_secret: Optional[str] = None  # If your aria2c RPC is secured
 ):
     """
@@ -1272,226 +1275,243 @@ def download_file_with_progress(
     """
     print_system(f"Preparing to download {file_description} from {url} to {destination_path}...")
 
-    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+    try:
+        os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+    except OSError as e:
+        print_error(f"Failed to create directory for {destination_path}: {e}")
+        return False  # Cannot proceed if directory creation fails
 
     # --- Attempt Aria2c Download First ---
-    aria2c_executable_path = shutil.which("aria2c")
+    aria2c_executable_path = shutil.which("aria2c")  # Check if aria2c CLI is in PATH
+
     if ARIA2P_AVAILABLE and aria2c_executable_path:
         print_system(f"Aria2c found at '{aria2c_executable_path}'. Attempting download via aria2p...")
-        aria2_api = None
+        aria2_api_instance = None  # Renamed variable to avoid conflict if API is also class name
         try:
             # Initialize API client and connect to aria2 RPC server
-            # This assumes aria2c is running with --enable-rpc
-            aria2_api = aria2p.API(
-                aria2p.Client(host="http://localhost", port=6800, secret=aria2_rpc_secret))  # Basic client
-            # Verify connection by getting version (optional, but good check)
-            version_info = aria2_api.get_version()
+            aria2_client_instance = aria2p.Client(host=aria2_rpc_host, port=aria2_rpc_port, secret=aria2_rpc_secret)
+            aria2_api_instance = aria2p.API(aria2_client_instance)
+
+            # Verify connection by getting global stats
+            global_stats = aria2_api_instance.get_global_stat()
             print_system(
-                f"Connected to aria2c RPC server version {version_info.version} (Features: {', '.join(version_info.enabled_features)})")
+                f"Connected to aria2c RPC server. Speed: {global_stats.download_speed_string()}/{global_stats.upload_speed_string()}, Active: {global_stats.num_active}, Waiting: {global_stats.num_waiting}")
 
             # Define download options for aria2c
-            # These can be made more configurable if needed
-            aria2_options = {
-                "dir": os.path.dirname(destination_path),  # Download directory
-                "out": os.path.basename(destination_path),  # Desired output filename
-                "max-connection-per-server": "16",  # Number of connections
-                "split": "16",  # Split download into 16 parts
+            aria2_options_dict = {
+                "dir": os.path.dirname(destination_path),
+                "out": os.path.basename(destination_path),
+                "max-connection-per-server": "16",
+                "split": "16",
                 "min-split-size": "1M",
-                "stream-piece-selector": "geom",  # Or "inorder"
-                # "http-user-agent": "Mozilla/5.0..." # If specific user agent needed
+                "stream-piece-selector": "geom",
+                "continue": "true",  # Resume downloads
+                "allow-overwrite": "true"  # In case a .tmp_aria2 file exists
             }
 
-            print_system(f"Adding URI to aria2c: {url} with options: {aria2_options}")
-            # Add the URI to aria2c for download
-            download = aria2_api.add_uris([url], options=aria2_options)
+            print_system(f"Adding URI to aria2c: {url} with options: {aria2_options_dict}")
+            download_task = aria2_api_instance.add_uris([url], options=aria2_options_dict)
 
-            if not download:  # Should not happen if add_uris is successful
-                raise RuntimeError("aria2_api.add_uris did not return a download object.")
+            if not download_task:
+                raise RuntimeError("aria2_api.add_uris did not return a download task object.")
 
-            print_system(f"Aria2c download started (GID: {download.gid}). Monitoring progress...")
+            print_system(f"Aria2c download started (GID: {download_task.gid}). Monitoring progress...")
 
-            # Progress monitoring loop
-            # Use tqdm for the progress bar
             with tqdm(total=100, unit='%', desc=file_description[:30], ascii=IS_WINDOWS, leave=False,
                       bar_format='{l_bar}{bar}| {n_fmt}% [{elapsed}<{remaining}, {rate_fmt}{postfix}]') as progress_bar:
-                last_completed_length = 0
-                while not download.is_complete and not download.has_error:
-                    download.update()  # Refresh download status from aria2c
+                last_completed_bytes = 0
+                while not download_task.is_complete and not download_task.has_error:
+                    download_task.update()
 
-                    if download.total_length > 0:
-                        # Update tqdm total if it wasn't known initially or changed
-                        if progress_bar.total != download.total_length:
-                            progress_bar.total = download.total_length
-                            progress_bar.unit = 'iB'  # Switch to bytes once total is known
+                    if download_task.total_length > 0:  # If total size is known
+                        if progress_bar.total != download_task.total_length:  # Initialize or update total for tqdm
+                            progress_bar.total = download_task.total_length
+                            progress_bar.unit = 'iB'  # Switch to bytes
                             progress_bar.unit_scale = True
+                            progress_bar.n = download_task.completed_length  # Set initial progress
+                            last_completed_bytes = download_task.completed_length
+                        else:  # Already initialized with bytes, update by increment
+                            progress_bar.update(download_task.completed_length - last_completed_bytes)
+                            last_completed_bytes = download_task.completed_length
 
-                        # Update progress based on bytes downloaded
-                        progress_bar.update(download.completed_length - last_completed_length)
-                        last_completed_length = download.completed_length
-
-                        # Update postfix with speed and connections
-                        postfix_str = f"S:{download.download_speed_string()} C:{download.connections}"
-                        if download.eta_string(human_readable=True):
-                            postfix_str += f" ETA:{download.eta_string(human_readable=True)}"
-                        progress_bar.set_postfix_str(postfix_str, refresh=False)  # refresh=False with manual refresh
+                        postfix_details = f"S:{download_task.download_speed_string()} C:{download_task.connections}"
+                        if download_task.eta_string(human_readable=True):
+                            postfix_details += f" ETA:{download_task.eta_string(human_readable=True)}"
+                        progress_bar.set_postfix_str(postfix_details, refresh=False)
                         progress_bar.refresh()
                     else:  # Total length not yet known, show percentage if available
-                        if download.progress > progress_bar.n:  # download.progress is 0-100
-                            progress_bar.update(
-                                int(download.progress) - int(progress_bar.n))  # Update by diff in percent
-                        progress_bar.set_postfix_str(f"S:{download.download_speed_string()} C:{download.connections}",
-                                                     refresh=True)
+                        # download_task.progress is 0-100 based on files if total size unknown
+                        if download_task.progress > progress_bar.n:
+                            progress_bar.update(int(download_task.progress) - int(progress_bar.n))
+                        progress_bar.set_postfix_str(
+                            f"S:{download_task.download_speed_string()} C:{download_task.connections}", refresh=True)
 
-                    # Check for errors during loop
-                    if download.error_code is not None:
+                    if download_task.error_code is not None:
                         raise RuntimeError(
-                            f"Aria2c download error (Code {download.error_code}): {download.error_message}")
+                            f"Aria2c download error (Code {download_task.error_code}): {download_task.error_message}")
+                    time.sleep(0.5)
 
-                    # Infinite retry for connection issues is harder with aria2c daemon mode
-                    # as aria2c handles retries internally based on its own settings.
-                    # We primarily rely on its robustness here.
-                    # If the RPC connection itself breaks, aria2p might raise an exception.
-                    time.sleep(0.5)  # Update interval for progress
-
-            # After loop, check final status
-            download.update()  # Final update
-            if download.is_complete:
+            download_task.update()  # Final update
+            if download_task.is_complete:
                 print_system(f"Aria2c download successful for {file_description}!")
-                # aria2c already saved to destination_path due to "dir" and "out" options
-                # Verify file exists as a final check
-                if os.path.exists(destination_path) and os.path.getsize(destination_path) == download.total_length:
-                    return True
+                # Verify file integrity after aria2c reports completion
+                final_path = download_task.files[0].path  # aria2p should update this to the correct path
+                if os.path.exists(final_path) and os.path.getsize(final_path) == download_task.total_length:
+                    if final_path != destination_path:  # If aria2c saved it with a different name (e.g. if "out" option was tricky)
+                        print_warning(f"Aria2c saved to '{final_path}', moving to '{destination_path}'.")
+                        shutil.move(final_path, destination_path)
+                    return True  # Success
                 else:
-                    print_error(
-                        f"Aria2c reported complete, but file mismatch/missing at {destination_path}. Expected size: {download.total_length}, Actual: {os.path.getsize(destination_path) if os.path.exists(destination_path) else 'Not Found'}")
-                    return False  # Fallback to requests if file is not as expected
-            elif download.has_error:
+                    err_msg_verify = f"Aria2c reported complete, but file verification failed at '{final_path}'. Expected: {download_task.total_length}, Actual: {os.path.getsize(final_path) if os.path.exists(final_path) else 'Not Found'}"
+                    print_error(err_msg_verify)
+                    # Fall through to requests if verification fails
+            elif download_task.has_error:
                 print_error(
-                    f"Aria2c download failed for {file_description}. Error (Code {download.error_code}): {download.error_message}")
-                # Clean up potentially incomplete file if aria2c didn't
-                if download.files:  # Check if file paths are available
-                    for file_entry in download.files:
+                    f"Aria2c download failed for {file_description}. Error (Code {download_task.error_code}): {download_task.error_message}")
+                if download_task.files:
+                    for file_entry in download_task.files:  # Clean up potentially incomplete files
                         if os.path.exists(file_entry.path):
                             try:
                                 os.remove(file_entry.path); print_warning(
                                     f"Removed incomplete aria2c download: {file_entry.path}")
                             except Exception as e_rm_aria:
                                 print_error(f"Failed to remove incomplete aria2c file {file_entry.path}: {e_rm_aria}")
-                return False  # Fallback to requests
 
-        except aria2p.client.ClientException as e_aria_client:
-            print_warning(f"Aria2p client/RPC error: {e_aria_client}. Is aria2c daemon running with --enable-rpc?")
+            # If not returned True by now, aria2c path failed or verification failed; fall through to requests
+            print_warning(
+                "Aria2c download path did not complete successfully or file verification failed. Falling back to requests.")
+
+        except aria2p.client.ClientException as e_aria_client:  # Errors connecting to RPC
+            print_warning(
+                f"Aria2p client/RPC connection error: {e_aria_client}. Is aria2c daemon running with --enable-rpc?")
             print_warning("Falling back to requests-based download.")
-        except Exception as e_aria_general:
+        except Exception as e_aria_general:  # Other errors during aria2p usage
             print_warning(f"Unexpected error during Aria2c download attempt: {e_aria_general}")
-            traceback.print_exc(file=sys.stderr)
+            # traceback.print_exc(file=sys.stderr) # Uncomment for detailed debugging if needed
             print_warning("Falling back to requests-based download.")
-        # If aria2c attempt fails for any reason, we fall through to the requests method.
-
     else:
         if not ARIA2P_AVAILABLE:
-            print_system("Aria2p Python library not available. Using requests-based download.")
+            print_system("Aria2p Python library not available. Using requests.")
         elif not aria2c_executable_path:
-            print_system("aria2c executable not found in PATH. Using requests-based download.")
+            print_system("aria2c executable not found in PATH. Using requests.")
 
     # --- Requests-based Download (Fallback or if Aria2c not used) ---
     print_system("Using requests-based download method...")
-    temp_destination_path = destination_path + ".tmp_download_requests"  # Different temp name
-    connection_retries_count = 0
-    other_error_retries_count = 0
-    file_size_on_server = 0
-    initial_head_success = False
+    temp_destination_path_requests = destination_path + ".tmp_download_requests"  # Use a distinct temp name
+    connection_error_retries = 0
+    other_errors_retries = 0
+    server_file_size = 0
+    head_request_successful = False
 
-    try:
-        head_response = requests_session.head(url, timeout=10, allow_redirects=True)
-        head_response.raise_for_status()
-        file_size_on_server = int(head_response.headers.get('content-length', 0))
-        initial_head_success = True
-        print_system(f"File size (requests): {file_size_on_server / (1024 * 1024):.2f} MB.")
-    except requests.exceptions.RequestException as e_head:
-        print_warning(f"Requests: Could not get file size via HEAD: {e_head}.")
+    try:  # Try to get file size with HEAD request first
+        head_resp = requests_session.head(url, timeout=10, allow_redirects=True)
+        head_resp.raise_for_status()
+        server_file_size = int(head_resp.headers.get('content-length', 0))
+        head_request_successful = True
+        print_system(f"File size (requests HEAD): {server_file_size / (1024 * 1024):.2f} MB.")
+    except requests.exceptions.RequestException as e_head_req:
+        print_warning(f"Requests: Could not get file size via HEAD request: {e_head_req}.")
 
-    while True:
+    while True:  # Main retry loop for requests method
         try:
-            print_system(
-                f"Attempting download (requests): {file_description} (ConnRetry: {connection_retries_count + 1}, OtherErrRetry: {other_error_retries_count + 1})")
-            response = requests_session.get(url, stream=True, timeout=(15, 300))
-            response.raise_for_status()
+            current_attempt_log = f"(ConnRetry: {connection_error_retries + 1}, OtherErrRetry: {other_errors_retries + 1})"
+            print_system(f"Attempting download (requests): {file_description} {current_attempt_log}")
 
-            if not initial_head_success and file_size_on_server == 0:
-                file_size_on_server = int(response.headers.get('content-length', 0))
-                if file_size_on_server > 0: print_system(
-                    f"File size (requests GET): {file_size_on_server / (1024 * 1024):.2f} MB.")
+            response = requests_session.get(url, stream=True, timeout=(15, 300))  # (connect_timeout, read_timeout)
+            response.raise_for_status()  # Raises HTTPError for 4xx/5xx responses
 
-            block_size = 8192
-            progress_bar_desc = file_description[:30]
-            progress_bar = tqdm(total=file_size_on_server, unit='iB', unit_scale=True, desc=progress_bar_desc,
-                                ascii=IS_WINDOWS, leave=False,
-                                bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]')
-            downloaded_size = 0
-            with open(temp_destination_path, 'wb') as file:
-                for data_chunk in response.iter_content(block_size):
-                    progress_bar.update(len(data_chunk))
-                    file.write(data_chunk)
-                    downloaded_size += len(data_chunk)
-            progress_bar.close()
+            if not head_request_successful and server_file_size == 0:  # If HEAD failed, try GET headers
+                server_file_size = int(response.headers.get('content-length', 0))
+                if server_file_size > 0: print_system(
+                    f"File size (requests GET): {server_file_size / (1024 * 1024):.2f} MB.")
 
-            if file_size_on_server != 0 and downloaded_size != file_size_on_server:
-                print_error(
-                    f"Requests Download ERROR: Size mismatch (Expected {file_size_on_server}, Got {downloaded_size}).")
-                if os.path.exists(temp_destination_path): os.remove(temp_destination_path)
-                other_error_retries_count += 1
-                if other_error_retries_count >= max_retries_non_connection_error:
-                    print_error(f"Max retries for size mismatch. Download failed for {file_description}.")
-                    return False
+            block_size = 8192  # 8KB
+            progress_bar_description_short = file_description[:30]
+
+            with tqdm(total=server_file_size, unit='iB', unit_scale=True, desc=progress_bar_description_short,
+                      ascii=IS_WINDOWS, leave=False,
+                      bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]') as progress_bar:
+                downloaded_bytes_count = 0
+                with open(temp_destination_path_requests, 'wb') as file_handle:
+                    for data_chunk_item in response.iter_content(block_size):
+                        progress_bar.update(len(data_chunk_item))
+                        file_handle.write(data_chunk_item)
+                        downloaded_bytes_count += len(data_chunk_item)
+
+            if server_file_size != 0 and downloaded_bytes_count != server_file_size:
+                print_error(f"Requests Download ERROR: Size mismatch for {file_description}.")
+                print_error(f"  Expected {server_file_size} bytes, actually downloaded {downloaded_bytes_count} bytes.")
+                if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
+                other_errors_retries += 1
+                if other_errors_retries >= max_retries_non_connection_error:
+                    print_error(
+                        f"Max retries ({max_retries_non_connection_error}) reached for size mismatch. Download failed for {file_description}.")
+                    return False  # Permanent failure for this file
                 print_warning(
-                    f"Retrying (requests) due to size mismatch (retry {other_error_retries_count}/{max_retries_non_connection_error}). Waiting 5s...")
-                time.sleep(5);
-                continue
+                    f"Retrying (requests) due to size mismatch (retry {other_errors_retries}/{max_retries_non_connection_error}). Waiting 5 seconds...")
+                time.sleep(5)
+                continue  # Go to next iteration of the while True loop
 
-            shutil.move(temp_destination_path, destination_path)
+            shutil.move(temp_destination_path_requests, destination_path)
             print_system(f"Successfully downloaded (requests) {file_description} to {destination_path}")
-            return True
+            return True  # Successful download
 
         except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
-                requests.exceptions.ChunkedEncodingError) as e_conn:
-            connection_retries_count += 1
-            print_warning(f"Connection error (requests) for {file_description}: {type(e_conn).__name__} - {e_conn}.")
+                requests.exceptions.ChunkedEncodingError) as e_connection:
+            connection_error_retries += 1
             print_warning(
-                f"Retrying download (attempt {connection_retries_count + 1}). Designed for our famously fast & reliable Indonesian internet! ;) Waiting 5 seconds...")
-            if os.path.exists(temp_destination_path):
+                f"Connection error (requests) for {file_description}: {type(e_connection).__name__} - {e_connection}.")
+            print_warning(
+                f"Retrying download (attempt {connection_error_retries + 1}). Designed for our famously fast & reliable Indonesian internet! ;) Waiting 5 seconds...")
+            if os.path.exists(temp_destination_path_requests):
                 try:
-                    os.remove(temp_destination_path)
-                except Exception as e_rm_conn:
-                    print_warning(f"Could not remove partial download {temp_destination_path}: {e_rm_conn}")
-            time.sleep(5)  # Infinite retries for these specific connection issues
+                    os.remove(temp_destination_path_requests)
+                except Exception as e_remove_conn:
+                    print_warning(
+                        f"Could not remove partial download {temp_destination_path_requests} after connection error: {e_remove_conn}")
+            time.sleep(5)
+            # Loop continues for connection errors (infinite retries)
 
-        except requests.exceptions.HTTPError as e_http:
-            other_error_retries_count += 1
+        except requests.exceptions.HTTPError as e_http_error:
+            other_errors_retries += 1
             print_error(
-                f"HTTP error (requests) for {file_description}: {e_http.response.status_code} {e_http.response.reason}")
-            if os.path.exists(temp_destination_path): os.remove(temp_destination_path)
-            if e_http.response.status_code in [401, 403, 404]:
-                print_error(f"Fatal HTTP error {e_http.response.status_code}. Not retrying.");
-                return False
-            if other_error_retries_count >= max_retries_non_connection_error:
-                print_error(f"Max retries for HTTP error. Download failed for {file_description}.");
-                return False
-            print_warning(
-                f"Retrying (requests) due to HTTP error (retry {other_error_retries_count}/{max_retries_non_connection_error}). Waiting 5s...")
-            time.sleep(5)
+                f"HTTP error (requests) for {file_description}: {e_http_error.response.status_code} {e_http_error.response.reason} for URL {url}")
+            if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
 
-        except Exception as e_general:
-            other_error_retries_count += 1
-            print_error(f"Unexpected error (requests) for {file_description}: {type(e_general).__name__} - {e_general}")
-            traceback.print_exc(file=sys.stderr)
-            if os.path.exists(temp_destination_path): os.remove(temp_destination_path)
-            if other_error_retries_count >= max_retries_non_connection_error:
-                print_error(f"Max retries for general error. Download failed for {file_description}.");
-                return False
+            if e_http_error.response.status_code in [401, 403, 404]:  # Fatal client errors
+                print_error(
+                    f"Fatal HTTP error {e_http_error.response.status_code}. Not retrying for {file_description}.")
+                return False  # Permanent failure
+
+            if other_errors_retries >= max_retries_non_connection_error:
+                print_error(
+                    f"Max retries ({max_retries_non_connection_error}) reached for HTTP error. Download failed for {file_description}.")
+                return False  # Permanent failure
             print_warning(
-                f"Retrying (requests) due to general error (retry {other_error_retries_count}/{max_retries_non_connection_error}). Waiting 5s...")
+                f"Retrying (requests) due to HTTP error (retry {other_errors_retries}/{max_retries_non_connection_error}). Waiting 5 seconds...")
             time.sleep(5)
+            # Loop continues for limited other_errors_retries
+
+        except Exception as e_general_requests:
+            other_errors_retries += 1
+            print_error(
+                f"Unexpected error during requests download for {file_description}: {type(e_general_requests).__name__} - {e_general_requests}")
+            traceback.print_exc(file=sys.stderr)  # Print full traceback for unexpected issues
+            if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
+
+            if other_errors_retries >= max_retries_non_connection_error:
+                print_error(
+                    f"Max retries ({max_retries_non_connection_error}) reached for general error. Download failed for {file_description}.")
+                return False  # Permanent failure
+            print_warning(
+                f"Retrying (requests) due to general error (retry {other_errors_retries}/{max_retries_non_connection_error}). Waiting 5 seconds...")
+            time.sleep(5)
+            # Loop continues for limited other_errors_retries
+
+    # This line should ideally not be reached if the requests loop is infinite for connection errors
+    # and returns False for other maxed-out errors. It's a final safety net.
+    print_error(f"Download failed for {file_description} after all attempts and fallbacks.")
+    return False
 
 
 # --- Main Execution Logic ---
