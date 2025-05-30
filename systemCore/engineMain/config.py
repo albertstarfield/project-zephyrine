@@ -123,6 +123,7 @@ ENABLE_ASR = os.getenv("ENABLE_ASR", "true").lower() in ('true', '1', 't', 'yes'
 # This matches where launcher.py downloads the whisper-large-v3-q8_0.gguf model.
 WHISPER_MODEL_DIR = os.getenv("WHISPER_MODEL_DIR", LLAMA_CPP_GGUF_DIR)
 WHISPER_DEFAULT_MODEL_FILENAME = os.getenv("WHISPER_DEFAULT_MODEL_FILENAME", "whisper-large-v3-q8_0.gguf")
+WHISPER_LOW_LATENCY_MODEL_FILENAME = os.getenv("WHISPER_LOW_LATENCY_MODEL_FILENAME", "whisper-lowlatency-direct.gguf")
 WHISPER_DEFAULT_LANGUAGE = os.getenv("WHISPER_DEFAULT_LANGUAGE", "auto") # Default language for transcription
 ASR_WORKER_TIMEOUT = int(os.getenv("ASR_WORKER_TIMEOUT", 300)) # Timeout in seconds for ASR worker
 
@@ -308,6 +309,50 @@ Invalid Text:
 Corrected JSON Output:
 """
 
+PROMPT_DEEP_TRANSLATION_ANALYSIS = f"""You are an expert translator and linguistic analyst.
+The following text is a high-quality transcription of spoken audio (source language: {{source_language_code}} - {{source_language_full_name}}).
+Your task is to provide an in-depth, highly accurate, and nuanced translation of this text into {{target_language_code}} - {{target_language_full_name}}.
+Pay close attention to context, tone, idiomatic expressions, and any cultural nuances.
+If there are ambiguities in the source text, you may briefly note them if critical, but prioritize producing the best possible fluent translation.
+Output ONLY the translated text. Do not add any conversational wrappers, apologies, or explanations.
+
+Source Transcript (Language: {{source_language_code}} - {{source_language_full_name}}):
+\"\"\"
+{{high_quality_transcribed_text}}
+\"\"\"
+
+In-depth Translation (into {{target_language_code}} - {{target_language_full_name}}):
+"""
+
+PROMPT_AUTOCORRECT_TRANSCRIPTION = f"""You are an expert in correcting speech-to-text transcriptions.
+The following text was transcribed by an AI and may contain errors or be poorly formatted.
+Please review it, correct any mistakes (grammar, spelling, punctuation, missed words, hallucinated words), and improve its readability.
+If the text mentions speakers (e.g., "Speaker 1"), preserve those labels.
+Output ONLY the corrected transcript. Do not add any conversational wrappers, comments, or explanations.
+
+Raw Transcript:
+\"\"\"
+{{raw_transcribed_text}}
+\"\"\"
+
+Corrected Transcript:
+"""
+
+
+
+PROMPT_SPEAKER_DIARIZATION = f"""You are an expert in analyzing transcripts to identify speaker changes.
+Review the following text transcript. Your task is to reformat it by adding speaker labels (e.g., "Speaker A:", "Speaker B:", "Person 1:", "Interviewee:") at the beginning of each distinct speaker's turn.
+If the text appears to be from a single speaker, or if distinct speakers cannot be reliably identified, you can label the entire text with a single speaker label (e.g., "Speaker A:") or Guess the speaker name by the context we gave to you or simply return the original text with a brief note like "[Single speaker or diarization unclear]".
+Focus on textual cues like direct address, question/answer patterns, and shifts in topic or style.
+Output ONLY the (potentially) diarized transcript. Do NOT add any conversational wrappers, apologies, or explanations outside of the transcript itself. 
+
+Original Transcript:
+\"\"\"
+{{transcribed_text}}
+\"\"\"
+
+Diarized Transcript:
+"""
 
 PROMPT_TRANSLATE_TEXT = f"""Translate the following text into {{target_language_full_name}} (ISO code: {{target_language_code}}).
 The source text is likely in {{source_language_full_name}} (ISO code: {{source_language_code}}), but attempt auto-detection if {{source_language_code}} is 'auto'.
