@@ -271,6 +271,11 @@ SELF_REFLECTION_MAX_TOPICS = int(os.getenv("SELF_REFLECTION_MAX_TOPICS", 10)) # 
 SELF_REFLECTION_MODEL = os.getenv("SELF_REFLECTION_MODEL", "general_fast") # Which model identifies topics (router or general_fast?)
 SELF_REFLECTION_FIXER_MODEL = os.getenv("SELF_REFLECTION_FIXER_MODEL", "code") # Model to fix broken JSON
 REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 10)
+
+#---- JSON TWEAKS ----
+JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT = int(os.getenv("JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT", 2)) # e.g., 2 attempts on the reformatted output
+
+
 # --- New Prompt ---
 
 # --- Prompts ---
@@ -324,6 +329,8 @@ Source Transcript (Language: {{source_language_code}} - {{source_language_full_n
 In-depth Translation (into {{target_language_code}} - {{target_language_full_name}}):
 """
 
+
+
 PROMPT_AUTOCORRECT_TRANSCRIPTION = f"""You are an expert in correcting speech-to-text transcriptions.
 The following text was transcribed by an AI and may contain errors or be poorly formatted.
 Please review it, correct any mistakes (grammar, spelling, punctuation, missed words, hallucinated words), and improve its readability.
@@ -337,6 +344,7 @@ Raw Transcript:
 
 Corrected Transcript:
 """
+
 
 
 
@@ -389,6 +397,22 @@ Input text:
 Moderation Assessment:"""
 
 
+PROMPT_REFORMAT_TO_ROUTER_JSON = f"""The AI's previous output below was an attempt to generate a JSON object for a routing task, but it was either not valid JSON or did not conform to the required structure: {{"chosen_model": "model_key", "refined_query": "query_for_specialist", "reasoning": "explanation_for_choice"}}.
+
+Analyze the "Faulty AI Output" and reformat it into a single, valid JSON object.
+The JSON object MUST contain ONLY these exact keys: "chosen_model", "refined_query", and "reasoning".
+Ensure all string values within the JSON are correctly quoted.
+If the faulty output provides no clear routing decision or is too garbled to interpret, respond with ONLY the following JSON object, using the original user input as the refined_query:
+{{"chosen_model": "general", "refined_query": "{{original_user_input_placeholder}}", "reasoning": "Original router output was unclear or did not specify a distinct model after reformat attempt. Defaulting to general model."}}
+
+Faulty AI Output:
+\"\"\"
+{{faulty_llm_output_for_reformat}}
+\"\"\"
+
+Corrected JSON Output (ONLY the JSON object itself, no other text or wrappers):
+"""
+
 PROMPT_ROUTER = """Analyze the user's query, conversation history, and context (including file search results) to determine the best specialized model to handle the request.
 
 Available Models:
@@ -420,12 +444,18 @@ Instruction: Based on all the above, respond ONLY with a single, valid JSON obje
 JSON Output:
 """
 
-PROMPT_TREE_OF_THOUGHTS_V2 = f"""Okay, engaging warp core... I mean, initiating deep thought analysis as Adelaide Zephyrine Charlotte. Let's map this out.
-Given the query and context (including any recent imagined visuals), perform a Tree of Thoughts analysis:
-1.  **Decomposition:** Break down the query. Key components? Ambiguities?
-2.  **Brainstorming:** Generate potential approaches, interpretations, solutions. What are the main paths?
-3.  **Evaluation:** Assess the main paths. Which seem solid? Any dead ends? Why?
-4.  **Synthesis:** Combine the best insights. Explain the approach, results, and any caveats.
+PROMPT_TREE_OF_THOUGHTS_V2 = f"""You are Adelaide Zephyrine Charlotte, performing a deep Tree of Thoughts analysis.
+Given the user's query and all available context, break down the problem, explore solutions, evaluate them, and synthesize a comprehensive answer or plan.
+
+Your response MUST be a single, valid JSON object with the following EXACT keys:
+- "decomposition": (string) Detailed breakdown of the query, identifying key components, ambiguities, and underlying goals.
+- "brainstorming": (list of strings) Several distinct potential approaches, interpretations, or solutions. Each item in the list should be a separate thought or idea.
+- "evaluation": (string) Critical assessment of the brainstormed paths. Discuss pros, cons, feasibility, and potential dead ends for the most promising approaches.
+- "synthesis": (string) A final, comprehensive answer, conclusion, or recommended plan, combining the best insights from the evaluation. This should be the main user-facing textual output derived from the ToT process if this ToT result is directly used.
+- "confidence_score": (float, between 0.0 and 1.0) Your confidence in the quality and relevance of the synthesis.
+- "self_critique": (string, can be null or empty) Any caveats, limitations of this analysis, or areas where your reasoning might be weak or could be improved.
+- "requires_background_task": (boolean) Set to true if your synthesis or conclusion suggests that another complex, multi-step background task should be initiated to further elaborate, research, or act upon the findings. Otherwise, set to false.
+- "next_task_input": (string, can be null or empty) If 'requires_background_task' is true, provide a clear, natural language query or instruction for this new background task. If 'requires_background_task' is false, this field should be null or an empty string.
 
 User Query: {{input}}
 Context from documents/URLs:
@@ -441,7 +471,7 @@ Recent Direct Conversation History:
 Context from Recent Imagination (if any):
 {{imagined_image_context}}
 ==================
-Begin Analysis:
+JSON Output (ONLY the JSON object itself, no other text, no markdown, no wrappers):
 """
 
 PROMPT_REFINE_USER_IMAGE_REQUEST = f"""
@@ -570,6 +600,22 @@ You are Adelaide Zephyrine Charlotte, the Friend persona. You received a draft r
 ### FINAL RESPONSE (Your Output - User-Facing and Result Text ONLY):
 """
 
+PROMPT_REFORMAT_TO_ACTION_JSON = f"""The AI's previous output below was an attempt to generate a JSON object for an action analysis task, but it was either not valid JSON or did not conform to the required structure: {{"action_type": "...", "parameters": {{...}}, "explanation": "..."}}.
+
+Analyze the "Faulty AI Output" and reformat it into a single, valid JSON object.
+The JSON object MUST contain ONLY these exact keys: "action_type", "parameters", and "explanation".
+Ensure all string values within the JSON are correctly quoted.
+If the faulty output provides no clear action or is too garbled to interpret, respond with ONLY the following JSON object:
+{{"action_type": "no_action", "parameters": {{}}, "explanation": "Original AI output for action analysis was unclear or did not specify a distinct action after reformat attempt."}}
+
+Faulty AI Output:
+\"\"\"
+{{faulty_llm_output_for_reformat}}
+\"\"\"
+
+Corrected JSON Output (ONLY the JSON object itself, no other text or wrappers):
+"""
+
 PROMPT_SELF_REFLECTION_TOPICS = """Analyze the following summary of recent global conversation history. Identify up to {max_topics} distinct key themes and Possible branch or possible answer from this, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the AI (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A. Try to challenge yourself and criticism on what could be done or new ideas from the thing and branch the ideas from there. then validate against the RAG or the snippets augmented on this prompt.
 
 Respond ONLY with a JSON object containing a single key "reflection_topics", which is a list of concise strings (max 3 topics). Each string should represent a single topic for reflection. If no specific topics stand out, return an empty list.
@@ -689,6 +735,20 @@ JSON Response:
 """
 
 
+PROMPT_REFORMAT_TO_TOT_JSON = f"""The AI's previous output below was an attempt to generate a JSON object for a Tree of Thoughts analysis, but it was either not valid JSON or did not conform to the required structure (expecting keys: "decomposition", "brainstorming" (list of strings), "evaluation", "synthesis", "confidence_score", "self_critique").
+
+Analyze the "Faulty AI Output" and reformat it into a single, valid JSON object with exactly the specified keys.
+Ensure all string values within the JSON are correctly quoted. The "brainstorming" value must be a list of strings. "confidence_score" must be a float.
+If the faulty output provides no clear ToT analysis or is too garbled to interpret, respond with ONLY the following JSON object:
+{{"decomposition": "N/A - Reformat Failed", "brainstorming": [], "evaluation": "N/A - Reformat Failed", "synthesis": "Original ToT output was unclear or did not provide a structured analysis after the reformat attempt.", "confidence_score": 0.0, "self_critique": "Faulty original output prevented successful reformatting into ToT JSON structure."}}
+
+Faulty AI Output:
+\"\"\"
+{{faulty_llm_output_for_reformat}}
+\"\"\"
+
+Corrected JSON Output (ONLY the JSON object itself, no other text or wrappers):
+"""
 
 PROMPT_TREE_OF_THOUGHTS = f"""Okay, engaging warp core... I mean, initiating deep thought analysis as Adelaide Zephyrine Charlotte. Let's map this out.
 Given the query and context, perform a Tree of Thoughts analysis (go beyond the usual quick reply):

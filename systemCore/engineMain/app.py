@@ -678,6 +678,132 @@ atexit.register(stop_file_indexer)
 # Register the stop function for application exit
 atexit.register(stop_self_reflector)
 
+# json Fixer
+def _extract_json_candidate_string(raw_llm_text: str, log_prefix: str = "JSONExtract") -> Optional[str]:
+    """
+    Robustly extracts a potential JSON string from raw LLM text.
+    Handles <think> tags, markdown code blocks, and finding outermost braces.
+    """
+    if not raw_llm_text or not isinstance(raw_llm_text, str):
+        return None
+
+    logger.trace(f"{log_prefix}: Starting JSON candidate extraction from raw text (len {len(raw_llm_text)}).")
+
+    # 1. Remove <think> tags first
+    text_after_think_removal = re.sub(r'<think>.*?</think>', '', raw_llm_text, flags=re.DOTALL | re.IGNORECASE).strip()
+    if not text_after_think_removal:
+        logger.trace(f"{log_prefix}: Text empty after <think> removal.")
+        return None
+
+    # 2. Remove common LLM preambles/postambles around the JSON content
+    cleaned_text = text_after_think_removal
+    # Remove common assistant start patterns, case insensitive
+    cleaned_text = re.sub(r"^\s*(assistant\s*\n?)?(<\|im_start\|>\s*(system|assistant)\s*\n?)?", "", cleaned_text,
+                          flags=re.IGNORECASE).lstrip()
+    # Remove trailing ChatML end token
+    if CHATML_END_TOKEN and cleaned_text.endswith(CHATML_END_TOKEN):  # CHATML_END_TOKEN from config
+        cleaned_text = cleaned_text[:-len(CHATML_END_TOKEN)].strip()
+
+    # 3. Look for JSON within markdown code blocks (```json ... ```)
+    json_markdown_match = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", cleaned_text, re.DOTALL)
+    if json_markdown_match:
+        extracted_str = json_markdown_match.group(1).strip()
+        logger.trace(f"{log_prefix}: Extracted JSON from markdown block: '{extracted_str[:100]}...'")
+        return extracted_str
+
+    # 4. If not in markdown, find the first '{' and last '}' that likely enclose the main JSON object
+    # This helps strip extraneous text before the first '{' or after the last '}'.
+    first_brace = cleaned_text.find('{')
+    last_brace = cleaned_text.rfind('}')
+    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+        extracted_str = cleaned_text[first_brace: last_brace + 1].strip()
+        logger.trace(f"{log_prefix}: Extracted JSON using outermost braces: '{extracted_str[:100]}...'")
+        return extracted_str
+
+    # 5. If still no clear structure, but text might be just the JSON (e.g. after LLM reformat)
+    if cleaned_text.startswith("{") and cleaned_text.endswith("}"):
+        logger.trace(f"{log_prefix}: Assuming cleaned text itself is the JSON candidate: '{cleaned_text[:100]}...'")
+        return cleaned_text
+
+    logger.warning(
+        f"{log_prefix}: No clear JSON structure found after extraction attempts. Raw (after think): '{text_after_think_removal[:100]}...'")
+    return None  # Return None if no candidate found
+
+
+def _programmatic_json_parse_and_fix(
+        json_candidate_str: str,
+        max_fix_attempts: int = 3,  # How many times to try fixing based on errors
+        log_prefix: str = "JSONFixParse"
+) -> Optional[Union[Dict, List]]:
+    """
+    Attempts to parse a JSON string, applying a limited set of programmatic fixes
+    if initial parsing fails. Iterates up to max_fix_attempts.
+    Returns the parsed Python object (dict/list) or None.
+    """
+    if not json_candidate_str or not isinstance(json_candidate_str, str):
+        return None
+
+    current_text_to_parse = json_candidate_str
+    json_parser = JsonOutputParser()  # Or just use json.loads directly
+
+    for attempt in range(max_fix_attempts):
+        logger.debug(
+            f"{log_prefix}: Parse/fix attempt {attempt + 1}/{max_fix_attempts}. Current text snippet: '{current_text_to_parse[:100]}...'")
+        try:
+            # Standard parse attempt
+            parsed_object = json_parser.parse(
+                current_text_to_parse)  # Langchain's parser can sometimes fix minor issues
+            # Or use: parsed_object = json.loads(current_text_to_parse)
+            logger.debug(f"{log_prefix}: Successfully parsed JSON on attempt {attempt + 1}.")
+            return parsed_object
+        except (json.JSONDecodeError, OutputParserException) as e:
+            logger.warning(f"{log_prefix}: Attempt {attempt + 1} parse failed: {type(e).__name__} - {str(e)[:100]}")
+
+            if attempt == max_fix_attempts - 1:  # Last attempt failed, don't try to fix further
+                logger.error(f"{log_prefix}: Max fix attempts reached. Could not parse after error: {e}")
+                break
+
+            # --- Apply limited programmatic fixes based on common LLM issues ---
+            text_before_fixes = current_text_to_parse
+
+            # Fix 1: Remove trailing commas (before closing brackets/braces)
+            # This is a common issue. Python's json.loads tolerates ONE, but stricter parsers/standards don't.
+            current_text_to_parse = re.sub(r",\s*([\}\]])", r"\1", current_text_to_parse)
+            if current_text_to_parse != text_before_fixes:
+                logger.debug(f"{log_prefix}: Applied trailing comma fix.")
+
+            # Fix 2: Attempt to add quotes to unquoted keys (very heuristic and simple cases)
+            # Looks for { or , followed by whitespace, then word chars (key), then whitespace, then :
+            # This is risky and might not work for all cases or could corrupt complex keys.
+            # Example: { key : "value"} -> { "key" : "value"}
+            # Example: [{"key" : "value", next_key : "next_value"}] -> [{"key" : "value", "next_key" : "next_value"}]
+            # Only apply if the error message suggests unquoted keys, if possible (hard to check generically here)
+            if "Expecting property name enclosed in double quotes" in str(e):
+                text_after_key_quote_fix = re.sub(r"([{,\s])(\w+)(\s*:)", r'\1"\2"\3', current_text_to_parse)
+                if text_after_key_quote_fix != current_text_to_parse:
+                    logger.debug(f"{log_prefix}: Applied heuristic key quoting fix.")
+                    current_text_to_parse = text_after_key_quote_fix
+
+            # Fix 3: Remove JavaScript-style comments
+            text_after_comment_removal = re.sub(r"//.*?\n", "\n", current_text_to_parse, flags=re.MULTILINE)
+            text_after_comment_removal = re.sub(r"/\*.*?\*/", "", text_after_comment_removal, flags=re.DOTALL)
+            if text_after_comment_removal != current_text_to_parse:
+                logger.debug(f"{log_prefix}: Applied JS comment removal fix.")
+                current_text_to_parse = text_after_comment_removal.strip()
+
+            # If no fixes changed the string, and it's not the last attempt,
+            # it means our simple fixes aren't working for this error.
+            if current_text_to_parse == text_before_fixes and attempt < max_fix_attempts - 1:
+                logger.warning(
+                    f"{log_prefix}: Programmatic fixes did not alter the string for error '{str(e)[:50]}...'. Further fixes might be needed or error is complex.")
+                # For more complex errors, one might analyze e.pos, e.msg here, but it's very hard.
+                # We are relying on the LLM re-request to do most heavy lifting.
+                break  # Break from fix attempts if no change, let outer loop handle if it's the LLM re-request loop
+
+    logger.error(
+        f"{log_prefix}: Failed to parse JSON after all programmatic fix attempts. Original candidate: '{json_candidate_str[:200]}...'")
+    return None
+
 
 # --- Flask App Setup ---
 app = Flask(__name__) # Use Flask app
@@ -3885,18 +4011,19 @@ class AIChat:
         return f"[LLM_CALL_UNEXPECTED_EXIT_ELP{priority}]"
 
     async def _classify_input_complexity(self, db: Session, user_input: str,
-                                         interaction_data_for_metrics: dict) -> str:  # Renamed for clarity
+                                         interaction_data_for_metrics: dict) -> str:
         """
         Classifies input as 'chat_simple', 'chat_complex', or 'agent_task'.
-        Uses router model, expects JSON, robustly extracts JSON from LLM output.
+        Uses router model, expects JSON, and now uses robust extraction and parsing/fixing.
         """
         request_id_suffix = str(uuid.uuid4())[:8]
-        log_prefix = f"🤔 Classify|ELP0|{interaction_data_for_metrics.get('session_id', 'unknown')[:8]}-{request_id_suffix}"
+        # Use session_id from interaction_data if available, else a default
+        current_session_id = interaction_data_for_metrics.get("session_id", "unknown_classify_session")
+        log_prefix = f"🤔 Classify|ELP0|{current_session_id[:8]}-{request_id_suffix}"
         logger.info(f"{log_prefix} Classifying input complexity for: '{user_input[:50]}...'")
 
-        # Get history summary synchronously as it's a DB call
-        # Run this in a thread if _get_history_summary becomes very slow, though unlikely for typical limits
-        history_summary = self._get_history_summary(db, MEMORY_SIZE)  # MEMORY_SIZE from config
+        # Get history summary synchronously (it's a DB call)
+        history_summary = await asyncio.to_thread(self._get_history_summary, db, MEMORY_SIZE)  # MEMORY_SIZE from config
 
         classification_model_instance = self.provider.get_model("router")
         if not classification_model_instance:
@@ -3906,167 +4033,142 @@ class AIChat:
         if not classification_model_instance:
             error_msg = "Classification model (router/default) not available."
             logger.error(f"{log_prefix} ❌ {error_msg}")
-            interaction_data_for_metrics['classification'] = "chat_simple"  # Fallback classification
+            interaction_data_for_metrics['classification'] = "chat_simple"  # Fallback
             interaction_data_for_metrics['classification_reason'] = error_msg
-            try:
-                add_interaction(db, session_id=interaction_data_for_metrics.get("session_id"), mode="chat",
-                                input_type="log_error", user_input="[Classify Model Unavailable]",
-                                llm_response=error_msg)
-            except Exception as db_err:
-                logger.error(f"{log_prefix} Failed log classify model error: {db_err}")
+            await asyncio.to_thread(add_interaction, db, session_id=current_session_id, mode="chat",
+                                    input_type="log_error", user_input="[Classify Model Unavailable]",
+                                    llm_response=error_msg);
+            await asyncio.to_thread(db.commit)
             return "chat_simple"
 
-        # Bind a low temperature for more deterministic JSON output if model supports .bind()
         classification_model_for_call = classification_model_instance
         if hasattr(classification_model_instance, 'bind') and callable(getattr(classification_model_instance, 'bind')):
             try:
                 classification_model_for_call = classification_model_instance.bind(temperature=0.1)
-                logger.debug(f"{log_prefix} Bound temperature=0.1 to classification model.")
             except Exception as bind_err:
-                logger.warning(
-                    f"{log_prefix} Could not bind temperature to classification model: {bind_err}. Using original.")
+                logger.warning(f"{log_prefix} Could not bind temperature: {bind_err}.")
 
-        # Chain to get RAW STRING output first
+        prompt_inputs_for_classification = {"input": user_input, "history_summary": history_summary}
         classification_chain_raw_output = (
-                self.input_classification_prompt  # PROMPT_COMPLEXITY_CLASSIFICATION
+                self.input_classification_prompt  # PROMPT_COMPLEXITY_CLASSIFICATION from config
                 | classification_model_for_call
                 | StrOutputParser()
         )
-        json_parser = JsonOutputParser()  # For parsing the extracted string
 
-        attempts = 0
-        last_error_for_retry_log: Optional[Exception] = None
-        # This will be updated with the actual raw output from the LLM in each attempt
-        raw_llm_response_text_current_attempt = "No LLM response received yet for classification."
-        classification_reason_parsed = "N/A (JSON parsing or extraction failed)"
+        last_error_for_log: Optional[Exception] = None
+        raw_llm_response_for_final_log: str = "Classification LLM call did not produce parsable output."
+        parsed_json_output: Optional[Dict[str, Any]] = None
 
-        while attempts < DEEP_THOUGHT_RETRY_ATTEMPTS:  # DEEP_THOUGHT_RETRY_ATTEMPTS from config
-            attempts += 1
-            logger.debug(f"{log_prefix} Classification attempt {attempts}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
+        # Initial LLM calls and parsing attempts
+        for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):  # DEEP_THOUGHT_RETRY_ATTEMPTS from config
+            current_attempt_num = attempt + 1
+            logger.debug(
+                f"{log_prefix} Classification LLM call attempt {current_attempt_num}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
 
-            json_string_to_parse: Optional[str] = None  # String that will be fed to json_parser
-
+            raw_llm_text_this_attempt = ""
             try:
-                prompt_inputs_for_classification = {"input": user_input, "history_summary": history_summary}
-
-                # Call LLM (via _call_llm_with_timing which uses asyncio.to_thread for the sync chain.invoke)
-                # _call_llm_with_timing gets the output from LlamaCppChatWrapper._call, which has already
-                # run strip_initial_think_block.
-                raw_llm_response_text_current_attempt = await asyncio.to_thread(
+                raw_llm_text_this_attempt = await asyncio.to_thread(
                     self._call_llm_with_timing,
                     classification_chain_raw_output,
                     prompt_inputs_for_classification,
-                    interaction_data_for_metrics,  # For timing updates
-                    priority=ELP0  # Classification is a background-like ELP0 task
+                    interaction_data_for_metrics,  # For timing
+                    priority=ELP0
                 )
+                raw_llm_response_for_final_log = raw_llm_text_this_attempt  # Save last raw output
+                logger.trace(
+                    f"{log_prefix} Raw LLM for classification (Attempt {current_attempt_num}): '{raw_llm_text_this_attempt[:200]}...'")
+
+                json_candidate_str = self._extract_json_candidate_string(raw_llm_text_this_attempt,
+                                                                         log_prefix + "-Extract")
+                if json_candidate_str:
+                    # Try parsing with limited fixes (e.g., 1 attempt for this initial loop)
+                    parsed_json_output = self._programmatic_json_parse_and_fix(
+                        json_candidate_str,
+                        1,  # Only 1 fix attempt per initial LLM call
+                        log_prefix + f"-InitialFixAttempt{current_attempt_num}"
+                    )
+                    if parsed_json_output and isinstance(parsed_json_output, dict) and \
+                            "classification" in parsed_json_output and "reason" in parsed_json_output:
+                        classification_val = str(parsed_json_output.get("classification", "chat_simple")).lower()
+                        reason_val = str(parsed_json_output.get("reason", "N/A"))
+                        if classification_val not in ["chat_simple", "chat_complex", "agent_task"]:
+                            logger.warning(f"{log_prefix} Invalid category '{classification_val}'. Defaulting.")
+                            classification_val = "chat_simple"
+                        interaction_data_for_metrics['classification'] = classification_val
+                        interaction_data_for_metrics['classification_reason'] = reason_val
+                        logger.info(f"✅ {log_prefix} Input classified as: '{classification_val}'. Reason: {reason_val}")
+                        return classification_val  # Success
+                else:  # No candidate extracted
+                    last_error_for_log = ValueError(
+                        f"No JSON candidate extracted from LLM output: {raw_llm_text_this_attempt[:100]}")
+
+            except TaskInterruptedException as tie:
+                raise tie  # Propagate immediately
+            except Exception as e:
+                last_error_for_log = e
+
+            logger.warning(
+                f"⚠️ {log_prefix} Classification attempt {current_attempt_num} failed. Error: {last_error_for_log}")
+            if current_attempt_num < DEEP_THOUGHT_RETRY_ATTEMPTS: await asyncio.sleep(0.5 + attempt * 0.5)
+
+        # --- If all initial attempts failed, try LLM Re-request to fix format ---
+        if not parsed_json_output:  # Check if we still don't have valid JSON
+            logger.warning(
+                f"{log_prefix} Initial classification attempts failed. Trying LLM re-request to fix format. Last raw output: '{raw_llm_response_for_final_log[:200]}...'")
+            action_analysis_model = self.provider.get_model("router")
+            reformat_prompt_input = {"faulty_llm_output_for_reformat": raw_llm_response_for_final_log}
+            reformat_chain = ChatPromptTemplate.from_template(
+                PROMPT_REFORMAT_TO_ACTION_JSON) | action_analysis_model | StrOutputParser()  # PROMPT_REFORMAT_TO_ACTION_JSON from config
+
+            reformatted_llm_output_text = await asyncio.to_thread(
+                self._call_llm_with_timing, reformat_chain, reformat_prompt_input,
+                interaction_data_for_metrics, priority=ELP0
+            )
+
+            if reformatted_llm_output_text and not (
+                    isinstance(reformatted_llm_output_text, str) and "ERROR" in reformatted_llm_output_text.upper()):
                 logger.info(
-                    f"{log_prefix} Raw LLM output for classification (Attempt {attempts}, len={len(raw_llm_response_text_current_attempt)}):\n>>>>\n{raw_llm_response_text_current_attempt}\n<<<<")
-
-                # --- Robust JSON Extraction from the (already think-stripped) raw response ---
-                cleaned_for_json_extraction = raw_llm_response_text_current_attempt
-
-                # 1. Remove any residual ChatML assistant preamble if model didn't strictly follow "JSON ONLY"
-                cleaned_for_json_extraction = re.sub(
-                    r"^\s*(assistant\s*\n?)?(<\|im_start\|>\s*(system|assistant)\s*\n?)?", "",
-                    cleaned_for_json_extraction, flags=re.IGNORECASE).lstrip()
-                # 2. Remove trailing ChatML end token
-                _CHATML_END_TOKEN = getattr(globals(), 'CHATML_END_TOKEN', '<|im_end|>')  # Get from globals or default
-                if cleaned_for_json_extraction.endswith(_CHATML_END_TOKEN):
-                    cleaned_for_json_extraction = cleaned_for_json_extraction[:-len(_CHATML_END_TOKEN)].strip()
-
-                # 3. Attempt to find JSON block
-                json_markdown_match = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", cleaned_for_json_extraction,
-                                                re.DOTALL)
-                if json_markdown_match:
-                    json_string_to_parse = json_markdown_match.group(1).strip()
-                    logger.trace(f"{log_prefix} Extracted JSON from markdown block: {json_string_to_parse[:200]}...")
-                else:
-                    # Fallback: find the last complete JSON object pattern in the string
-                    # Regex: looks for { ... } which might be followed by whitespace or <|im_end|> or end of string
-                    all_json_candidates = re.findall(r"(\{[\s\S]*?\})(?=\s*$|\s*<\|im_end\|>)",
-                                                     cleaned_for_json_extraction, re.DOTALL)
-                    if all_json_candidates:
-                        json_string_to_parse = all_json_candidates[-1].strip()  # Take the last one found
-                        logger.trace(
-                            f"{log_prefix} Extracted JSON using findall (last candidate): {json_string_to_parse[:200]}...")
-                    else:
-                        # If no clear block, the LLM might have outputted only JSON (ideal after stripping other noise)
-                        # or it's still malformed.
-                        json_string_to_parse = cleaned_for_json_extraction.strip()
-                        if not (json_string_to_parse.startswith("{") and json_string_to_parse.endswith("}")):
+                    f"{log_prefix} Received reformatted output from LLM for classification. Attempting to parse/fix...")
+                json_candidate_from_reformat = self._extract_json_candidate_string(reformatted_llm_output_text,
+                                                                                   log_prefix + "-ReformatExtract")
+                if json_candidate_from_reformat:
+                    parsed_json_output = self._programmatic_json_parse_and_fix(
+                        json_candidate_from_reformat,
+                        JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,  # From config (e.g., 2-3 attempts)
+                        log_prefix + "-ReformatFix"
+                    )
+                    if parsed_json_output and isinstance(parsed_json_output, dict) and \
+                            "classification" in parsed_json_output and "reason" in parsed_json_output:
+                        classification_val = str(parsed_json_output.get("classification", "chat_simple")).lower()
+                        reason_val = str(parsed_json_output.get("reason", "N/A (reformatted)"))
+                        if classification_val not in ["chat_simple", "chat_complex", "agent_task"]:
                             logger.warning(
-                                f"{log_prefix} No clear JSON block found in '{cleaned_for_json_extraction[:100]}...'. Attempting to parse as is.")
-
-                if not json_string_to_parse:  # If string is empty after all cleaning
-                    logger.warning(
-                        f"{log_prefix} After cleaning, string to parse for JSON is empty. Raw LLM was: '{raw_llm_response_text_current_attempt}'")
-                    last_error_for_retry_log = ValueError(
-                        "LLM response for classification was empty after robust cleaning.")
-                    if attempts < DEEP_THOUGHT_RETRY_ATTEMPTS:
-                        await asyncio.sleep(0.5 + attempts * 0.5); continue
-                    else:
-                        break
-
-                    # 4. Parse the extracted JSON string
-                parsed_json_output = json_parser.parse(json_string_to_parse)
-
-                classification_val = str(parsed_json_output.get("classification", "chat_simple")).lower()
-                reason_val = str(parsed_json_output.get("reason", "N/A"))
-                classification_reason_parsed = reason_val  # Store the successfully parsed reason
-
-                if classification_val not in ["chat_simple", "chat_complex", "agent_task"]:
-                    logger.warning(
-                        f"{log_prefix} Classification LLM returned invalid category '{classification_val}'. Defaulting to chat_simple. Parsed from: '{json_string_to_parse}'")
-                    classification_val = "chat_simple"
-
-                interaction_data_for_metrics['classification'] = classification_val
-                interaction_data_for_metrics['classification_reason'] = reason_val
-                logger.info(f"{log_prefix} ✅ Input classified as: '{classification_val}'. Reason: {reason_val}")
-                return classification_val  # Successful classification and parsing
-
-            except TaskInterruptedException as tie:  # If _call_llm_with_timing raises it
-                logger.warning(f"🚦 {log_prefix} Classification LLM call INTERRUPTED: {tie}")
-                # This is a critical interruption, probably best to stop and not retry.
-                interaction_data_for_metrics['classification'] = "chat_simple"  # Fallback
-                interaction_data_for_metrics['classification_reason'] = f"Classification interrupted: {tie}"
-                try:
-                    add_interaction(db, session_id=interaction_data_for_metrics.get("session_id"), mode="chat",
-                                    input_type="log_warning", user_input="[Classify Interrupted]",
-                                    llm_response=str(tie))
-                except:
-                    pass
-                return "chat_simple"  # Return fallback
-            except OutputParserException as ope:  # From json_parser.parse()
-                last_error_for_retry_log = ope
-                logger.warning(
-                    f"⚠️ {log_prefix} Error parsing JSON for classification (Attempt {attempts}): {ope}. String tried: '{json_string_to_parse if json_string_to_parse is not None else 'N/A'}'. Raw LLM (after think strip): '{raw_llm_response_text_current_attempt[:200]}...'")
-            except Exception as e:  # Other errors (e.g., from _call_llm_with_timing if not TaskInterruptedException)
-                last_error_for_retry_log = e
-                logger.warning(
-                    f"⚠️ {log_prefix} Error during classification processing (Attempt {attempts}): {e}. Raw LLM: '{raw_llm_response_text_current_attempt[:200]}...'")
-
-            # If an exception occurred and we haven't returned, prepare for retry or failure
-            if attempts < DEEP_THOUGHT_RETRY_ATTEMPTS:
-                await asyncio.sleep(0.5 + attempts * 0.5)  # Wait before retrying
-            else:  # Max retries reached
+                                f"{log_prefix} Invalid category '{classification_val}' from reformat. Defaulting.")
+                            classification_val = "chat_simple"
+                        interaction_data_for_metrics['classification'] = classification_val
+                        interaction_data_for_metrics['classification_reason'] = reason_val
+                        logger.info(
+                            f"✅ {log_prefix} Reformat & Fix successful: Classified as '{classification_val}'. Reason: {reason_val}")
+                        return classification_val  # Success after reformat and fix
+                else:
+                    logger.error(
+                        f"{log_prefix} Failed to extract any JSON from LLM's reformat attempt. Output: {reformatted_llm_output_text[:200]}")
+            else:
                 logger.error(
-                    f"{log_prefix} ❌ Max retries ({attempts}/{DEEP_THOUGHT_RETRY_ATTEMPTS}) for input classification. Last error: {last_error_for_retry_log}")
-                break  # Exit the while loop
+                    f"{log_prefix} LLM re-request for JSON formatting failed or returned error: {reformatted_llm_output_text}")
 
-        # Fallback after retries or if loop broken due to max retries
+        # --- Fallback if all methods failed ---
         final_fallback_classification = "chat_simple"
-        final_fallback_reason = f"Classification failed after {attempts} retries. Last error: {last_error_for_retry_log}. Last LLM reason attempt: '{classification_reason_parsed}'. Raw output was: {raw_llm_response_text_current_attempt[:200]}..."
+        final_fallback_reason = f"Classification failed after all attempts. Last error: {last_error_for_log}. Last LLM raw: {raw_llm_response_for_final_log[:200]}..."
+        logger.error(
+            f"{log_prefix} ❌ All classification methods failed. Defaulting to '{final_fallback_classification}'. Reason: {final_fallback_reason}")
 
         interaction_data_for_metrics['classification'] = final_fallback_classification
         interaction_data_for_metrics['classification_reason'] = final_fallback_reason
-        try:
-            add_interaction(db, session_id=interaction_data_for_metrics.get("session_id"), mode="chat",
-                            input_type="log_error",
-                            user_input=f"[Classify Max Retries for: {user_input[:100]}]",
-                            llm_response=final_fallback_reason[:4000])  # Log the detailed fallback reason
-        except Exception as db_err_final:
-            logger.error(f"{log_prefix} Failed to log classification max_retries error: {db_err_final}")
-
+        await asyncio.to_thread(add_interaction, db, session_id=current_session_id, mode="chat", input_type="log_error",
+                                user_input=f"[Classify Max Retries for: {user_input[:100]}]",
+                                llm_response=final_fallback_reason[:4000]);
+        await asyncio.to_thread(db.commit)
         return final_fallback_classification
 
 
@@ -4341,217 +4443,126 @@ class AIChat:
             if db:
                  db.close()
 
-    def _analyze_assistant_action(self, db: Session, user_input: str, session_id: str, context: Dict[str, str]) -> \
-            Optional[Dict[str, Any]]:
-        """
-        Calls LLM (ELP0) to check if input implies a macOS action, extracts parameters.
-        Uses a more robust method to find the JSON block, ignoring <think> tags.
-        Handles TaskInterruptedException by re-raising.
-        Retries JSON extraction on other errors. Ensures a valid model key is returned.
-        Logs the input prompt_input dictionary on parsing failure.
-        """
+    async def _analyze_assistant_action(self, db: Session, user_input: str, session_id: str, context: Dict[str, str]) -> \
+    Optional[Dict[str, Any]]:
         request_id_suffix = str(uuid.uuid4())[:8]
         log_prefix = f"🤔 ActionAnalyze|ELP0|{session_id[:8]}-{request_id_suffix}"
-        logger.info(f"{log_prefix} Analyzing input for potential Assistant Action: '{user_input[:50]}...'")
+        logger.info(f"{log_prefix} Analyzing input for action: '{user_input[:50]}...'")
 
-        # prompt_input is the dictionary passed to the Langchain prompt template
         prompt_input = {
-            "input": user_input,
-            "history_summary": context.get("history_summary", "N/A"),
+            "input": user_input, "history_summary": context.get("history_summary", "N/A"),
             "log_context": context.get("log_context", "N/A"),
             "recent_direct_history": context.get("recent_direct_history", "N/A")
         }
-
-        action_analysis_model = self.provider.get_model("router")
+        action_analysis_model = self.provider.get_model("router") or self.provider.get_model("default")
         if not action_analysis_model:
-            logger.warning(f"{log_prefix} Router model not found for action analysis, falling back to default.")
-            action_analysis_model = self.provider.get_model("default")
-
-        if not action_analysis_model:
-            logger.error(f"{log_prefix} ❌ Action analysis model (router/default) not available!")
-            try:
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                                user_input="[Action Analysis Failed - Model Unavailable]",
-                                llm_response="Action analysis model unavailable.")
-                db.commit()
-            except Exception as db_err:
-                logger.error(f"{log_prefix} Failed log action analysis model error: {db_err}")
-                if db: db.rollback()
+            logger.error(f"{log_prefix} ❌ Action analysis model not available!");
             return None
 
-        analysis_chain_raw_output = (
-                ChatPromptTemplate.from_template(PROMPT_ASSISTANT_ACTION_ANALYSIS)
-                | action_analysis_model
-                | StrOutputParser()
-        )
-        json_parser = JsonOutputParser()
-
+        analysis_chain_raw_output = ChatPromptTemplate.from_template(
+            PROMPT_ASSISTANT_ACTION_ANALYSIS) | action_analysis_model | StrOutputParser()
         action_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
-        last_error: Optional[Exception] = None
-        raw_llm_response_full_for_logging = "Error: Analysis LLM call did not produce parsable output."
 
-        for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):
+        raw_llm_output_from_initial_loop: str = "Initial LLM action analysis did not yield parsable output."
+        parsed_action_json: Optional[Dict[str, Any]] = None
+
+        # --- Stage 1: Initial LLM Calls and Parsing Attempts ---
+        for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):  # DEEP_THOUGHT_RETRY_ATTEMPTS from config
             current_attempt_num = attempt + 1
             logger.debug(
-                f"{log_prefix} Assistant Action analysis attempt {current_attempt_num}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
-
-            raw_llm_response_text_current_attempt = ""
-            json_str_to_parse_current_attempt: Optional[str] = None
-            analysis_result_current_attempt: Optional[Dict[str, Any]] = None
-
+                f"{log_prefix} Initial Action analysis LLM call attempt {current_attempt_num}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
             try:
-                raw_llm_response_text_current_attempt = self._call_llm_with_timing(
-                    analysis_chain_raw_output,
-                    prompt_input,
-                    action_timing_data,
-                    priority=ELP0
+                raw_llm_response_text_current_attempt = await asyncio.to_thread(
+                    self._call_llm_with_timing, analysis_chain_raw_output, prompt_input,
+                    action_timing_data, priority=ELP0
                 )
-                raw_llm_response_full_for_logging = raw_llm_response_text_current_attempt
-                logger.trace(
-                    f"{log_prefix} Raw LLM Analysis Response (Attempt {current_attempt_num}):\n{raw_llm_response_text_current_attempt}")
+                raw_llm_output_from_initial_loop = raw_llm_response_text_current_attempt
 
-                text_after_think_removal = re.sub(r'<think>.*?</think>', '', raw_llm_response_text_current_attempt,
-                                                  flags=re.DOTALL | re.IGNORECASE).strip()
-
-                json_markdown_match = re.search(r"```json\s*(.*?)\s*```", text_after_think_removal, re.DOTALL)
-                if json_markdown_match:
-                    json_str_to_parse_current_attempt = json_markdown_match.group(1).strip()
-                else:
-                    first_brace = text_after_think_removal.find('{')
-                    last_brace = text_after_think_removal.rfind('}')
-                    if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
-                        json_str_to_parse_current_attempt = text_after_think_removal[
-                                                            first_brace: last_brace + 1].strip()
-                    else:
-                        json_str_to_parse_current_attempt = text_after_think_removal
-                        if not (json_str_to_parse_current_attempt.startswith(
-                                "{") and json_str_to_parse_current_attempt.endswith("}")):
-                            logger.warning(
-                                f"{log_prefix} No clear JSON block found in (cleaned) '{text_after_think_removal[:100]}...'. LLM output might be non-JSON. Will attempt to parse.")
-
-                if not json_str_to_parse_current_attempt or not json_str_to_parse_current_attempt.strip():
-                    logger.warning(
-                        f"{log_prefix} After cleaning, string to parse for JSON is empty. Raw was: '{raw_llm_response_text_current_attempt}'")
-                    last_error = ValueError("LLM response for action analysis was empty after cleaning.")
-                    logger.debug(
-                        f"{log_prefix} LLM Input that resulted in empty JSON string (Attempt {current_attempt_num}):\nINPUT_START>>>\n{json.dumps(prompt_input, indent=2, default=str)}\n<<<INPUT_END")
-                    try:
-                        add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
-                                        user_input=f"[Action Analysis Empty after Clean Attempt {current_attempt_num}]",
-                                        llm_response=f"Raw: {raw_llm_response_text_current_attempt[:500]}")
-                        db.commit()
-                    except Exception as db_err_empty_json:
-                        logger.error(f"{log_prefix} DB log error for empty JSON: {db_err_empty_json}"); db.rollback()
-                    if current_attempt_num < DEEP_THOUGHT_RETRY_ATTEMPTS:
-                        time.sleep(0.5 + attempt * 0.5); continue
-                    else:
-                        break
-
-                analysis_result_current_attempt = json_parser.parse(json_str_to_parse_current_attempt)
-
-                if isinstance(analysis_result_current_attempt, dict) and \
-                        "action_type" in analysis_result_current_attempt and \
-                        "parameters" in analysis_result_current_attempt:
-                    action_type = analysis_result_current_attempt.get("action_type")
-                    parameters = analysis_result_current_attempt.get("parameters", {})
-                    explanation = analysis_result_current_attempt.get("explanation", "N/A")
-
-                    logger.info(
-                        f"✅ {log_prefix} Assistant Action analysis successful (Attempt {current_attempt_num}): Type='{action_type}', Params={parameters}, Explanation='{explanation[:50]}...'")
-                    try:
-                        add_interaction(db,
-                                        session_id=session_id, mode="chat", input_type="log_info",
-                                        user_input=f"Assistant Action Analysis OK for: {user_input[:100]}...",
-                                        llm_response=f"Action Type: {action_type}, Explanation: {explanation}",
-                                        assistant_action_analysis_json=json.dumps(analysis_result_current_attempt),
-                                        assistant_action_type=action_type,
-                                        assistant_action_params=json.dumps(parameters)
-                                        )
-                        db.commit()
-                    except Exception as db_err_aa_ok:
-                        logger.error(f"{log_prefix} DB log error for AA success: {db_err_aa_ok}"); db.rollback()
-                    return analysis_result_current_attempt if action_type != "no_action" else None
-                else:
-                    logger.warning(
-                        f"{log_prefix} Assistant Action analysis produced invalid JSON structure (Attempt {current_attempt_num}): {analysis_result_current_attempt}. String parsed: '{json_str_to_parse_current_attempt}'")
-                    last_error = ValueError("Invalid JSON structure after parsing for action analysis")
-                    logger.debug(
-                        f"{log_prefix} LLM Input that led to invalid JSON structure (Attempt {current_attempt_num}):\nINPUT_START>>>\n{json.dumps(prompt_input, indent=2, default=str)}\n<<<INPUT_END")
-                    try:
-                        add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
-                                        user_input=f"Action Analysis Invalid Structure (Attempt {current_attempt_num})",
-                                        llm_response=f"Parsed: {str(analysis_result_current_attempt)[:500]}. From: '{json_str_to_parse_current_attempt[:200]}'. Raw: {raw_llm_response_text_current_attempt[:500]}",
-                                        assistant_action_analysis_json=raw_llm_response_text_current_attempt[:4000])
-                        db.commit()
-                    except Exception as db_err_inv_struct:
-                        logger.error(
-                            f"{log_prefix} DB log error for invalid structure: {db_err_inv_struct}"); db.rollback()
-
+                json_candidate_str = _extract_json_candidate_string(raw_llm_response_text_current_attempt, log_prefix)
+                if json_candidate_str:
+                    parsed_action_json = _programmatic_json_parse_and_fix(json_candidate_str, 1,
+                                                                          log_prefix + f"-InitialAttempt{current_attempt_num}")  # Only 1 fix attempt here
+                    if parsed_action_json and isinstance(parsed_action_json, dict) and \
+                            "action_type" in parsed_action_json and "parameters" in parsed_action_json:
+                        action_type = parsed_action_json.get("action_type")
+                        logger.info(
+                            f"✅ {log_prefix} Initial Action analysis successful (Attempt {current_attempt_num}): Type='{action_type}'")
+                        # ... (DB logging for success)
+                        return parsed_action_json if action_type != "no_action" else None
             except TaskInterruptedException as tie:
-                logger.warning(f"🚦 {log_prefix} Action Analysis INTERRUPTED (Attempt {current_attempt_num}): {tie}")
-                raise tie  # Propagate to caller (background_generate)
-            except (json.JSONDecodeError, OutputParserException) as parse_err:
-                last_error = parse_err
+                raise tie  # Propagate immediately
+            except Exception as e_initial:
                 logger.warning(
-                    f"⚠️ {log_prefix} Failed to parse JSON for action analysis (Attempt {current_attempt_num}): {parse_err}. "
-                    f"String tried: '{json_str_to_parse_current_attempt if json_str_to_parse_current_attempt is not None else 'N/A'}'. "
-                    f"Raw LLM (from _call_llm_with_timing): '{raw_llm_response_text_current_attempt[:200]}...'")
-                try:
-                    prompt_input_json_str = json.dumps(prompt_input, indent=2, default=str)
-                    logger.debug(
-                        f"{log_prefix} LLM Input that led to JSON parse failure (Attempt {current_attempt_num}):\nINPUT_START>>>\n{prompt_input_json_str}\n<<<INPUT_END")
-                except Exception as dump_err:
-                    logger.error(f"{log_prefix} Could not serialize prompt_input for debug: {dump_err}")
-                try:
-                    add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
-                                    user_input=f"Action Analysis JSON Parse FAILED (Attempt {current_attempt_num})",
-                                    llm_response=f"Error: {parse_err}. Tried: '{str(json_str_to_parse_current_attempt)[:500]}'. Raw: {raw_llm_response_text_current_attempt[:1000]}",
-                                    assistant_action_analysis_json=raw_llm_response_text_current_attempt[:4000])
-                    db.commit()
-                except Exception as db_err_json:
-                    logger.error(f"{log_prefix} DB log error for JSON parse fail: {db_err_json}"); db.rollback()
-            except Exception as e:
-                last_error = e
-                logger.warning(
-                    f"⚠️ {log_prefix} Error during Action Analysis processing (Attempt {current_attempt_num}): {e}")
-                logger.exception(f"{log_prefix} Action Analysis Attempt {current_attempt_num} Traceback:")
-                try:
-                    prompt_input_json_str = json.dumps(prompt_input, indent=2, default=str)
-                    logger.debug(
-                        f"{log_prefix} LLM Input that led to general error (Attempt {current_attempt_num}):\nINPUT_START>>>\n{prompt_input_json_str}\n<<<INPUT_END")
-                except Exception as dump_err:
-                    logger.error(f"{log_prefix} Could not serialize prompt_input for debug: {dump_err}")
+                    f"⚠️ {log_prefix} Initial Action analysis attempt {current_attempt_num} failed. Error: {e_initial}")
+            if current_attempt_num < DEEP_THOUGHT_RETRY_ATTEMPTS: await asyncio.sleep(0.5 + attempt * 0.5)
 
-                logger.warning(
-                    f"   Type of raw_llm_response_text_current_attempt: {type(raw_llm_response_text_current_attempt)}")
-                logger.warning(f"   Content (snippet): {str(raw_llm_response_text_current_attempt)[:200]}...")
-                try:
-                    add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
-                                    user_input=f"Action Analysis FAILED (Attempt {current_attempt_num})",
-                                    llm_response=f"Error: {e}. Raw: {str(raw_llm_response_text_current_attempt)[:1000]}",
-                                    assistant_action_analysis_json=str(raw_llm_response_text_current_attempt)[:4000])
-                    db.commit()
-                except Exception as db_err_gen:
-                    logger.error(f"{log_prefix} DB log error for general fail: {db_err_gen}"); db.rollback()
+        # --- Stage 2: LLM Re-request for Formatting (if initial attempts failed) ---
+        if not parsed_action_json:  # Check if we still don't have a valid JSON
+            logger.warning(
+                f"{log_prefix} Initial action analysis attempts failed. Trying LLM re-request to fix format. Last raw output: '{raw_llm_output_from_initial_loop[:200]}...'")
+            reformat_prompt_input = {"faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop}
+            reformat_chain = ChatPromptTemplate.from_template(
+                PROMPT_REFORMAT_TO_ACTION_JSON) | action_analysis_model | StrOutputParser()
 
-            if current_attempt_num < DEEP_THOUGHT_RETRY_ATTEMPTS:
-                time.sleep(0.5 + attempt * 0.5)
-            else:  # Max retries reached
+            reformatted_llm_output_text = await asyncio.to_thread(
+                self._call_llm_with_timing, reformat_chain, reformat_prompt_input,
+                action_timing_data, priority=ELP0
+            )
+
+            if reformatted_llm_output_text and not (
+                    isinstance(reformatted_llm_output_text, str) and "ERROR" in reformatted_llm_output_text.upper()):
+                logger.info(
+                    f"{log_prefix} Received reformatted output from LLM. Attempting to parse with fix retries...")
+                json_candidate_from_reformat = _extract_json_candidate_string(reformatted_llm_output_text,
+                                                                              log_prefix + "-ReformatExtract")
+                if json_candidate_from_reformat:
+                    # --- Stage 3: Inner Retry Loop for Parsing/Fixing Reformatted Output ---
+                    parsed_action_json = _programmatic_json_parse_and_fix(
+                        json_candidate_from_reformat,
+                        JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,  # From config
+                        log_prefix + "-ReformatFix"
+                    )
+                    if parsed_action_json and isinstance(parsed_action_json, dict) and \
+                            "action_type" in parsed_action_json and "parameters" in parsed_action_json:
+                        action_type = parsed_action_json.get("action_type")
+                        logger.info(f"✅ {log_prefix} Reformatted Action analysis successful: Type='{action_type}'")
+                        # ... (DB logging for success)
+                        return parsed_action_json if action_type != "no_action" else None
+                else:
+                    logger.error(
+                        f"{log_prefix} Failed to extract any JSON from LLM's reformat attempt. Output: {reformatted_llm_output_text[:200]}")
+            else:
                 logger.error(
-                    f"❌ {log_prefix} Max retries ({DEEP_THOUGHT_RETRY_ATTEMPTS}) reached for Assistant Action analysis. Last error: {last_error}")
-                try:
-                    add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                                    user_input=f"Action Analysis Max Retries for: {user_input[:100]}...",
-                                    llm_response=f"Max retries. Last Error: {last_error}. Last LLM output: {raw_llm_response_full_for_logging[:500]}",
-                                    assistant_action_analysis_json=raw_llm_response_full_for_logging[:4000])
-                    db.commit()
-                except Exception as db_final_err:
-                    logger.error(f"{log_prefix} DB log error for max retries: {db_final_err}"); db.rollback()
-                return None
+                    f"{log_prefix} LLM re-request for JSON formatting failed or returned error: {reformatted_llm_output_text}")
 
-        logger.error(
-            f"{log_prefix} Exited Assistant Action analysis loop after {DEEP_THOUGHT_RETRY_ATTEMPTS} attempts without success. Last error: {last_error}")
-        return None
+        # --- Stage 4: Keyword Fallback ---
+        logger.warning(
+            f"{log_prefix} All action analysis methods failed. Falling back to keyword-based default action for user input: '{user_input[:100]}'")
+        words = re.findall(r'\b\w+\b', user_input.lower())
+        stop_words = {"the", "is", "a", "to", "and", "what", "how", "who", "please", "can", "you", "tell", "me",
+                      "about", "of", "for", "in", "on", "at", "an", "i", "my", "me"}
+        keywords = [word for word in words if len(word) > 2 and word not in stop_words]
+
+        fallback_params = {"original_query": user_input[:200], "extracted_keywords": list(set(keywords))[:7]}
+        logger.info(f"{log_prefix} Extracted keywords for fallback: {fallback_params['extracted_keywords']}")
+
+        final_fallback_action = {
+            "action_type": "keyword_based_response_fallback",
+            "parameters": fallback_params,
+            "explanation": "Automated action analysis failed after multiple attempts. Using keyword-based fallback for general response or search."
+        }
+        try:  # Log this fallback action
+            add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                            user_input=f"[Action Analysis Fallback for: {user_input[:100]}]",
+                            llm_response=json.dumps(final_fallback_action),
+                            assistant_action_analysis_json=json.dumps(final_fallback_action),
+                            assistant_action_type=final_fallback_action["action_type"])
+            db.commit()
+        except Exception as db_log_fallback_err:
+            logger.error(f"{log_prefix} Failed to log keyword fallback action: {db_log_fallback_err}")
+            if db: db.rollback()
+
+        return final_fallback_action  # Return the fallback action dictionary
 
 
 
@@ -4828,167 +4839,131 @@ class AIChat:
             return text
 
     # --- NEW HELPER: Routing ---
-    async def _route_to_specialist(self, db: Session, session_id: str, user_input: str, context: Dict) -> Tuple[
-        str, str, str
-    ]:
-        log_prefix = f"🧠 Route|ELP0|{session_id}"
-        logger.info(f"{log_prefix}: Routing request. Expecting JSON from router model...")
+    async def _route_to_specialist(self, db: Session, session_id: str, user_input_for_routing: str,
+                                   prompt_input_for_router: Dict[str, Any]  # This now contains all contexts
+                                   ) -> Tuple[str, str, str]:  # (chosen_model, refined_query, reasoning)
+
+        log_prefix = f"🧠 Route|ELP0|{session_id}"  # Router typically runs at ELP0
+        logger.info(f"{log_prefix} Routing request for: '{user_input_for_routing[:50]}...'")
 
         router_model = self.provider.get_model("router")
-        default_model_key = "general"  # Fallback model
+        default_model_key = "general"
+        default_reason = "Fell back to default model after routing/parsing issues."
 
         if not router_model:
-            logger.error(f"{log_prefix}: Router model ('router') not available! Falling back to '{default_model_key}'.")
+            logger.error(f"{log_prefix}: Router model ('router') not available! Defaulting to '{default_model_key}'.")
             # Log this failure to DB
-            try:
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                                user_input="[Router Model Unavailable]",
-                                llm_response=f"Router model key 'router' not configured. Defaulting to {default_model_key}.")
-            except Exception as db_err:
-                logger.error(f"{log_prefix} Failed to log router model unavailable: {db_err}")
-            return default_model_key, user_input, "Router model unavailable, using default."
+            await asyncio.to_thread(add_interaction, db, session_id=session_id, mode="chat", input_type="log_error",
+                                    user_input="[Router Model Unavailable]",
+                                    llm_response=f"Router model key 'router' not configured. Defaulting to {default_model_key}.")
+            await asyncio.to_thread(db.commit)
+            return default_model_key, user_input_for_routing, "Router model unavailable, using default."
 
-        prompt_input_router = {
-            "input": user_input,
-            "pending_tot_result": context.get("pending_tot_result", "None."),
-            "recent_direct_history": context.get("recent_direct_history", "None."),
-            "context": context.get("url_context", "None."),
-            "history_rag": context.get("history_rag", "None."),
-            "file_index_context": context.get("file_index_context", "None."),
-            "log_context": context.get("log_context", "None."),
-            "emotion_analysis": context.get("emotion_context_analysis", "N/A."),
-            "imagined_image_vlm_description": context.get("imagined_image_vlm_description", "None.")
-        }
-
-        # Chain to get RAW STRING output first
         router_chain_raw_output = (
-                ChatPromptTemplate.from_template(PROMPT_ROUTER)  # PROMPT_ROUTER instructs to output ONLY JSON
+                ChatPromptTemplate.from_template(PROMPT_ROUTER)  # PROMPT_ROUTER from config
                 | router_model
-                | StrOutputParser()  # Get the raw string
+                | StrOutputParser()
         )
-
-        # JsonOutputParser instance to parse the extracted string later
-        json_parser = JsonOutputParser()
-
         router_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
-        last_error: Optional[Exception] = None
-        raw_llm_response_for_logging = "Router LLM call did not produce parsable output."
 
-        for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):  # DEEP_THOUGHT_RETRY_ATTEMPTS from config
-            current_attempt = attempt + 1
-            logger.debug(f"{log_prefix} Router JSON extraction attempt {current_attempt}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
+        last_error_from_initial_loop: Optional[Exception] = None
+        raw_llm_output_from_initial_loop: str = "Initial router LLM call did not yield parsable JSON."
+        parsed_routing_json: Optional[Dict[str, Any]] = None
 
-            raw_llm_router_response_text = ""
-            json_string_to_parse: Optional[str] = None
-
+        # --- Stage 1: Initial LLM Calls and Parsing Attempts ---
+        for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):
+            current_attempt_num = attempt + 1
+            logger.debug(f"{log_prefix} Router LLM call attempt {current_attempt_num}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
+            raw_llm_text_this_attempt = ""
             try:
-                # Call LLM to get the raw string output
-                raw_llm_router_response_text = await asyncio.to_thread(
-                    self._call_llm_with_timing, router_chain_raw_output, prompt_input_router,
-                    router_timing_data, priority=ELP0  # ELP0 for router
+                raw_llm_text_this_attempt = await asyncio.to_thread(
+                    self._call_llm_with_timing, router_chain_raw_output, prompt_input_for_router,
+                    router_timing_data, priority=ELP0
                 )
-                raw_llm_response_for_logging = raw_llm_router_response_text  # For logging on error
+                raw_llm_output_from_initial_loop = raw_llm_text_this_attempt
                 logger.trace(
-                    f"{log_prefix} Raw LLM Router Output (Attempt {current_attempt}):\n{raw_llm_router_response_text}")
+                    f"{log_prefix} Raw LLM Router Output (Attempt {current_attempt_num}): '{raw_llm_text_this_attempt[:200]}...'")
 
-                # --- Robust JSON Extraction Logic ---
-                # 1. Remove ChatML tokens / assistant preamble if present
-                cleaned_for_json_extraction = raw_llm_router_response_text
-                # Remove common assistant start patterns, case insensitive
-                cleaned_for_json_extraction = re.sub(r"^\s*assistant\s*\n?(<\|im_start\|>)?", "",
-                                                     cleaned_for_json_extraction, flags=re.IGNORECASE).lstrip()
-
-                # 2. Remove <think> tags or other LLM "noise" before JSON
-                cleaned_for_json_extraction = re.sub(r"<think>.*?</think>", "", cleaned_for_json_extraction,
-                                                     flags=re.DOTALL | re.IGNORECASE).strip()
-
-                # 3. Find JSON block (markdown or direct)
-                json_markdown_match = re.search(r"```json\s*(.*?)\s*```", cleaned_for_json_extraction, re.DOTALL)
-                if json_markdown_match:
-                    json_string_to_parse = json_markdown_match.group(1).strip()
-                    logger.trace(f"{log_prefix} Extracted JSON from markdown block: {json_string_to_parse[:200]}...")
-                else:
-                    # Fallback: Find the first '{' and last '}' that form a valid JSON object
-                    # This is more robust than just finding the first/last brace in the whole string
-                    match = re.search(r"(\{.*?\})(?=\s*<\|im_end\|>|\s*$)", cleaned_for_json_extraction, re.DOTALL)
-                    if match:
-                        json_string_to_parse = match.group(1).strip()
-                        logger.trace(
-                            f"{log_prefix} Extracted JSON using regex '{{.*?}}': {json_string_to_parse[:200]}...")
-                    else:
-                        # If no clear block, the LLM might have outputted only JSON (ideal) or malformed output
-                        json_string_to_parse = cleaned_for_json_extraction  # Try parsing the whole cleaned string
-                        logger.warning(
-                            f"{log_prefix} No clear JSON block found via regex, will attempt to parse: '{json_string_to_parse[:100]}...'")
-
-                if not json_string_to_parse or not json_string_to_parse.strip():
-                    logger.warning(
-                        f"{log_prefix} After cleaning, string to parse for JSON is empty. Raw was: '{raw_llm_router_response_text}'")
-                    last_error = ValueError("Router LLM response for JSON was empty after cleaning.")
-                    if current_attempt < DEEP_THOUGHT_RETRY_ATTEMPTS:
-                        time.sleep(0.5 + attempt * 0.5); continue
-                    else:
-                        break  # Max retries
-
-                # 4. Parse the extracted JSON string
-                parsed_json_output = json_parser.parse(json_string_to_parse)  # Use Langchain's parser for consistency
-
-                if isinstance(parsed_json_output, dict) and \
-                        "chosen_model" in parsed_json_output and \
-                        "refined_query" in parsed_json_output:
-
-                    chosen_model = str(parsed_json_output["chosen_model"])
-                    refined_query = str(parsed_json_output["refined_query"])
-                    reasoning = str(parsed_json_output.get("reasoning", "N/A"))
-
-                    valid_model_keys = {"vlm", "latex", "math", "code", "general"}
-                    if chosen_model in valid_model_keys:
+                json_candidate_str = self._extract_json_candidate_string(raw_llm_text_this_attempt,
+                                                                         log_prefix + "-ExtractInitial")
+                if json_candidate_str:
+                    # Try parsing with limited fixes (e.g., 1 attempt for this initial loop)
+                    parsed_routing_json = self._programmatic_json_parse_and_fix(
+                        json_candidate_str, 1, log_prefix + f"-InitialFixAttempt{current_attempt_num}"
+                    )
+                    if parsed_routing_json and isinstance(parsed_routing_json, dict) and \
+                            all(k in parsed_routing_json for k in ["chosen_model", "refined_query", "reasoning"]):
+                        chosen_model = str(parsed_routing_json["chosen_model"])
+                        refined_query = str(parsed_routing_json["refined_query"])
+                        reasoning = str(parsed_routing_json.get("reasoning", "N/A"))
+                        # Basic validation of chosen_model key could be added here
                         logger.info(
-                            f"✅ {log_prefix} Router chose: '{chosen_model}'. Reason: {reasoning}. Query: '{refined_query[:50]}...'")
-                        try:
-                            add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug",
-                                            user_input="[Router Success]",
-                                            llm_response=f"Chose: {chosen_model}, Reason: {reasoning[:100]}",
-                                            classification=f"routed_to_{chosen_model}")
-                        except Exception:
-                            pass
+                            f"✅ {log_prefix} Router successful (Attempt {current_attempt_num}): Chose '{chosen_model}'. Reason: {reasoning[:50]}...")
                         return chosen_model, refined_query, reasoning
-                    else:
-                        last_error = ValueError(f"Router returned invalid model key '{chosen_model}' in JSON.")
-                        logger.warning(f"{log_prefix} {last_error} Full parsed JSON: {parsed_json_output}")
                 else:
-                    last_error = ValueError(
-                        "Router output parsed as JSON, but missing required keys ('chosen_model', 'refined_query').")
-                    logger.warning(f"{log_prefix} {last_error} Parsed JSON: {parsed_json_output}")
+                    last_error_from_initial_loop = ValueError(
+                        f"No JSON candidate extracted from LLM router output: {raw_llm_text_this_attempt[:100]}")
 
-            except TaskInterruptedException as tie:  # If _call_llm_with_timing raises it
-                logger.warning(f"🚦 {log_prefix} Router LLM call INTERRUPTED: {tie}")
-                raise tie  # Propagate to be handled by background_generate's main try-except
-            except OutputParserException as ope:  # From json_parser.parse()
-                last_error = ope
-                logger.warning(
-                    f"⚠️ {log_prefix} Error parsing JSON from router (Attempt {current_attempt}): {ope}. String tried: '{json_string_to_parse if json_string_to_parse is not None else 'N/A'}'. Raw LLM: '{raw_llm_router_response_text[:200]}...'")
-            except Exception as e:  # Other errors during LLM call or processing
-                last_error = e
-                logger.warning(
-                    f"⚠️ {log_prefix} Error during router processing (Attempt {current_attempt}): {e}. Raw LLM: '{raw_llm_router_response_text[:200]}...'")
+            except TaskInterruptedException as tie:
+                raise tie  # Propagate immediately
+            except Exception as e_initial_route:
+                last_error_from_initial_loop = e_initial_route
 
-            if current_attempt < DEEP_THOUGHT_RETRY_ATTEMPTS:
-                await asyncio.sleep(0.5 + attempt * 0.5)  # Use asyncio.sleep for async func
-            else:  # Max retries reached
-                logger.error(f"❌ {log_prefix} Max retries for router. Last error: {last_error}")
-                break
+            logger.warning(
+                f"⚠️ {log_prefix} Router LLM/parse attempt {current_attempt_num} failed. Error: {last_error_from_initial_loop}")
+            if current_attempt_num < DEEP_THOUGHT_RETRY_ATTEMPTS: await asyncio.sleep(0.5 + attempt * 0.5)
 
-                # Fallback after retries
+        # --- Stage 2: LLM Re-request for Formatting (if initial attempts failed) ---
+        if not parsed_routing_json:
+            logger.warning(
+                f"{log_prefix} Initial routing attempts failed. Trying LLM re-request to fix format. Last raw output: '{raw_llm_output_from_initial_loop[:200]}...'")
+
+            reformat_prompt_input = {
+                "faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop,
+                "original_user_input_placeholder": user_input_for_routing  # For the fallback in the reformat prompt
+            }
+            reformat_chain = ChatPromptTemplate.from_template(
+                PROMPT_REFORMAT_TO_ROUTER_JSON) | router_model | StrOutputParser()  # New Prompt
+
+            reformatted_llm_output_text = await asyncio.to_thread(
+                self._call_llm_with_timing, reformat_chain, reformat_prompt_input,
+                router_timing_data, priority=ELP0
+            )
+
+            if reformatted_llm_output_text and not (
+                    isinstance(reformatted_llm_output_text, str) and "ERROR" in reformatted_llm_output_text.upper()):
+                logger.info(f"{log_prefix} Received reformatted output from LLM for router. Attempting to parse/fix...")
+                json_candidate_from_reformat = self._extract_json_candidate_string(reformatted_llm_output_text,
+                                                                                   log_prefix + "-ReformatExtract")
+                if json_candidate_from_reformat:
+                    # --- Stage 3: Parse/Fix Reformatted Output ---
+                    parsed_routing_json = self._programmatic_json_parse_and_fix(
+                        json_candidate_from_reformat,
+                        JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,  # From config
+                        log_prefix + "-ReformatFix"
+                    )
+                    if parsed_routing_json and isinstance(parsed_routing_json, dict) and \
+                            all(k in parsed_routing_json for k in ["chosen_model", "refined_query", "reasoning"]):
+                        chosen_model = str(parsed_routing_json["chosen_model"])
+                        refined_query = str(parsed_routing_json["refined_query"])
+                        reasoning = str(parsed_routing_json.get("reasoning", "N/A (reformatted)"))
+                        logger.info(f"✅ {log_prefix} Reformatted Routing analysis successful: Chose '{chosen_model}'.")
+                        return chosen_model, refined_query, reasoning
+                else:
+                    logger.error(
+                        f"{log_prefix} Failed to extract any JSON from LLM's reformat (router) attempt. Output: {reformatted_llm_output_text[:200]}")
+            else:
+                logger.error(
+                    f"{log_prefix} LLM re-request for router JSON formatting failed or returned error: {reformatted_llm_output_text}")
+
+        # --- Fallback if all methods failed ---
         logger.error(
-            f"{log_prefix} Router failed after {DEEP_THOUGHT_RETRY_ATTEMPTS} attempts. Last error: {last_error}. Defaulting to '{default_model_key}'.")
-        try:
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                            user_input="[Router Failed - Max Retries]",
-                            llm_response=f"Router failed: {last_error}. Raw LLM last attempt: {raw_llm_response_for_logging[:500]}")
-        except Exception:
-            pass
-        return default_model_key, user_input, f"Router failed after retries: {last_error}"
+            f"{log_prefix} ❌ All routing methods failed. Defaulting to '{default_model_key}'. Last error: {last_error_from_initial_loop}. Last raw output: '{raw_llm_output_from_initial_loop[:200]}...'")
+        await asyncio.to_thread(add_interaction, db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input=f"[Router Failed for: {user_input_for_routing[:100]}]",
+                                llm_response=f"All routing attempts failed. Defaulting. Last raw: {raw_llm_output_from_initial_loop[:500]}")
+        await asyncio.to_thread(db.commit)
+        return default_model_key, user_input_for_routing, default_reason
 
     # --- generate method ---
     # app.py -> Inside AIChat class
@@ -6023,133 +5998,247 @@ class AIChat:
             # If `background_generate` was called by `run_self_reflection_loop`, the loop's finally closes it.
             # If called by `handle_openai_chat_completion`'s thread, that thread's finally closes it.
 
-    def _run_tree_of_thought_v2(self, db: Session, input: str,
-                                rag_context_docs: List[Any],
-                                history_rag_interactions: List[Any],
-                                log_context_str: str,
-                                recent_direct_history_str: str,
-                                file_index_context_str: str,
-                                imagined_image_context_str: str,  # From previous response
-                                interaction_data_for_tot_llm_call: Dict[str, Any],  # For _call_llm_with_timing
-                                original_user_input_for_log: str,  # The user input that triggered this ToT
-                                triggering_interaction_id_for_log: int  # ID of the interaction that triggered ToT
-                                ) -> str:  # Returns the ToT result string, but primarily saves it
+    def _is_valid_tot_json(self, parsed_json: Any) -> bool:
+        """Checks if the parsed JSON object has the required ToT structure."""
+        if not isinstance(parsed_json, dict):
+            return False
+        required_keys = {"decomposition", "brainstorming", "evaluation", "synthesis", "confidence_score"}
+        # New optional keys for spawning background task
+        optional_keys_for_spawn = {"requires_background_task", "next_task_input"}
 
-        logger.warning(
-            f"🌳 Running ToT V2 for original input (ID: {triggering_interaction_id_for_log}): '{original_user_input_for_log[:50]}...'")
+        if not required_keys.issubset(parsed_json.keys()):
+            logger.warning(f"ToT JSON missing one or more required keys: {required_keys - set(parsed_json.keys())}")
+            return False
+        if not isinstance(parsed_json["brainstorming"], list):
+            logger.warning("ToT JSON 'brainstorming' field is not a list.")
+            return False
+        if not isinstance(parsed_json["confidence_score"], float):
+            logger.warning("ToT JSON 'confidence_score' field is not a float.")
+            return False
 
-        # interaction_data_for_tot_llm_call is primarily for _call_llm_with_timing's metrics,
-        # not for modifying the original interaction directly with the ToT result.
+        # Check types for new optional fields if they exist
+        if "requires_background_task" in parsed_json and not isinstance(parsed_json["requires_background_task"], bool):
+            logger.warning("ToT JSON 'requires_background_task' is not a boolean.")
+            return False
+        if "next_task_input" in parsed_json and not (
+                parsed_json["next_task_input"] is None or isinstance(parsed_json["next_task_input"], str)):
+            logger.warning("ToT JSON 'next_task_input' is not a string or null.")
+            return False
+        if parsed_json.get("requires_background_task") is True and not parsed_json.get("next_task_input"):
+            logger.warning("ToT JSON 'requires_background_task' is true, but 'next_task_input' is missing or empty.")
+            # This might still be "valid" structurally but logically flawed for spawning.
+            # For validation purposes, we'll allow it, but the spawning logic will skip it.
 
-        url_rag_context_str = self._format_docs(rag_context_docs, source_type="URL Document Context")
-        history_rag_context_str = self._format_docs(history_rag_interactions,
-                                                    source_type="Retrieved History/Reflection Context")
+        return True
 
-        tot_model = self.provider.get_model("general")  # Or a specific ToT model
+    async def _run_tree_of_thought_v2(self, db: Session, input_for_tot: str,
+                                      rag_context_docs: List[Any],
+                                      history_rag_interactions: List[Any],
+                                      log_context_str: str,
+                                      recent_direct_history_str: str,
+                                      file_index_context_str: str,
+                                      imagined_image_context_str: str,
+                                      interaction_data_for_tot_llm_call: Dict[str, Any],  # For _call_llm_with_timing
+                                      original_user_input_for_log: str,
+                                      triggering_interaction_id_for_log: int
+                                      ) -> str:  # Returns the 'synthesis' string
+
+        log_prefix = f"🌳 ToT_v2|ELP0|TrigID:{triggering_interaction_id_for_log}"
+        current_session_id = interaction_data_for_tot_llm_call.get("session_id",
+                                                                   f"tot_session_{triggering_interaction_id_for_log}")
+        logger.info(f"{log_prefix} Starting ToT for original input: '{original_user_input_for_log[:50]}...'")
+
+        tot_model = self.provider.get_model("router")  # Use router model for ToT
         if not tot_model:
-            error_msg = "ToT model ('general') not available for ToT V2 execution."
-            logger.error(error_msg)
-            # Log this failure as a new interaction related to the ToT attempt
+            error_msg = "ToT model ('router') not available for ToT V2 execution."
+            logger.error(f"{log_prefix} {error_msg}")
+            await asyncio.to_thread(add_interaction, db, session_id=current_session_id,
+                                    mode="internal_error", input_type="log_error",
+                                    user_input=f"[ToT V2 Failed - Model Unavailable for TrigID: {triggering_interaction_id_for_log}]",
+                                    llm_response=error_msg);
+            await asyncio.to_thread(db.commit)
+            return f"Error: ToT model unavailable for analysis."
+
+        url_rag_context_str = self._format_docs(rag_context_docs, "URL Context")
+        history_rag_context_str = self._format_docs(history_rag_interactions, "History/Reflection RAG")
+
+        llm_input_for_tot = {
+            "input": original_user_input_for_log, "context": url_rag_context_str,
+            "history_rag": history_rag_context_str, "file_index_context": file_index_context_str,
+            "log_context": log_context_str, "recent_direct_history": recent_direct_history_str,
+            "imagined_image_context": imagined_image_context_str
+        }
+
+        chain = ChatPromptTemplate.from_template(PROMPT_TREE_OF_THOUGHTS_V2) | tot_model | StrOutputParser()
+
+        raw_llm_output_from_initial_loop: str = "Initial ToT LLM call did not yield parsable JSON."
+        parsed_tot_json: Optional[Dict[str, Any]] = None
+        last_error_initial: Optional[Exception] = None
+
+        # --- Stage 1: Initial LLM Call & Parse/Fix ---
+        # For complex ToT JSON, let's keep 1 primary attempt before reformat.
+        initial_llm_attempts_tot = 1
+        for attempt in range(initial_llm_attempts_tot):
+            logger.debug(f"{log_prefix} ToT LLM call attempt {attempt + 1}/{initial_llm_attempts_tot}")
             try:
-                add_interaction(db,
-                                session_id=interaction_data_for_tot_llm_call.get("session_id"),
-                                mode="internal_error",  # Or specific ToT error mode
-                                input_type="log_error",
-                                user_input=f"[ToT V2 Failed - Model Unavailable for Trigger ID: {triggering_interaction_id_for_log}]",
-                                llm_response=error_msg)
-                db.commit()
-            except Exception as db_err:
-                logger.error(f"Failed to log ToT model unavailable error: {db_err}")
-            return f"Error: ToT model unavailable for analysis of '{original_user_input_for_log[:30]}...'."
+                raw_llm_text_this_attempt = await asyncio.to_thread(
+                    self._call_llm_with_timing, chain, llm_input_for_tot,
+                    interaction_data_for_tot_llm_call, priority=ELP0
+                )
+                raw_llm_output_from_initial_loop = raw_llm_text_this_attempt
+                logger.trace(
+                    f"{log_prefix} Raw LLM for ToT (Attempt {attempt + 1}): '{raw_llm_text_this_attempt[:200]}...'")
 
-        # PROMPT_TREE_OF_THOUGHTS_V2 should be designed to take these contexts
-        chain = (ChatPromptTemplate.from_template(PROMPT_TREE_OF_THOUGHTS_V2) | tot_model | StrOutputParser())
-
-        full_tot_result_text = "Error during ToT analysis (V2) - initial value."
-        try:
-            llm_input_for_tot = {
-                "input": original_user_input_for_log,  # Use the original input that needs deep thought
-                "context": url_rag_context_str,
-                "history_rag": history_rag_context_str,
-                "file_index_context": file_index_context_str,
-                "log_context": log_context_str,
-                "recent_direct_history": recent_direct_history_str,
-                "imagined_image_context": imagined_image_context_str  # Context from image generated in previous step
-            }
-
-            # _call_llm_with_timing will use interaction_data_for_tot_llm_call for its own metrics logging
-            # but we won't use its return to update the *original* interaction's llm_response.
-            full_tot_result_text = self._call_llm_with_timing(
-                chain,
-                llm_input_for_tot,
-                interaction_data_for_tot_llm_call,  # For timing and session_id for logging within _call_llm_with_timing
-                priority=ELP0
-            )
-            logger.info(
-                f"🌳 ToT analysis V2 LLM call complete for Trigger ID: {triggering_interaction_id_for_log}. Result length: {len(full_tot_result_text)}")
-
-            # --- SAVE ToT RESULT AS A NEW INTERACTION ---
-            try:
-                tot_result_interaction_data = {
-                    "session_id": interaction_data_for_tot_llm_call.get("session_id"),  # Same session
-                    "mode": "chat",  # Or "internal_analysis"
-                    "input_type": "tot_result",  # Special type for this record
-                    "user_input": f"[ToT Analysis Result for Original Query ID {triggering_interaction_id_for_log}: '{original_user_input_for_log[:100]}...']",
-                    "llm_response": full_tot_result_text,
-                    "classification": "tot_output",
-                    "execution_time_ms": interaction_data_for_tot_llm_call.get("execution_time_ms", 0),
-                    # Time for this ToT LLM call
-                    # Mark as not needing further reflection/ToT itself, unless desired
-                    "reflection_completed": True,
-                    "tot_analysis_requested": False,
-                    "tot_analysis_spawned": False  # This result doesn't spawn another ToT
-                }
-                # Ensure all valid keys for Interaction model
-                valid_keys = {c.name for c in Interaction.__table__.columns}
-                db_kwargs_tot_result = {k: v for k, v in tot_result_interaction_data.items() if k in valid_keys}
-
-                new_tot_interaction = add_interaction(db, **db_kwargs_tot_result)
-                if new_tot_interaction:
-                    db.commit()
-                    logger.success(
-                        f"✅ Saved ToT V2 result as new Interaction ID {new_tot_interaction.id} for original Trigger ID {triggering_interaction_id_for_log}.")
+                json_candidate_str = self._extract_json_candidate_string(raw_llm_text_this_attempt,
+                                                                         log_prefix + "-ExtractInitial")
+                if json_candidate_str:
+                    parsed_tot_json = self._programmatic_json_parse_and_fix(
+                        json_candidate_str, 1, log_prefix + f"-InitialFixAttempt{attempt + 1}"
+                    )
+                    if parsed_tot_json and self._is_valid_tot_json(parsed_tot_json):
+                        logger.info(f"✅ {log_prefix} Initial ToT analysis successful (Attempt {attempt + 1}).")
+                        break  # Success from initial attempt
                 else:
-                    logger.error(
-                        f"❌ Failed to save ToT V2 result as new interaction for Trigger ID {triggering_interaction_id_for_log}.")
-            except Exception as db_save_err:
+                    last_error_initial = ValueError(
+                        f"No JSON candidate from ToT LLM: {raw_llm_text_this_attempt[:100]}")
+
+                if not (parsed_tot_json and self._is_valid_tot_json(parsed_tot_json)):  # If not broken from success
+                    if parsed_tot_json:
+                        last_error_initial = ValueError(f"Invalid ToT JSON structure: {str(parsed_tot_json)[:100]}")
+                    elif not json_candidate_str:
+                        pass  # Error already set if no candidate
+                    else:
+                        last_error_initial = ValueError(
+                            f"Failed to parse/fix ToT JSON candidate: {json_candidate_str[:100]}")
+                    parsed_tot_json = None  # Ensure it's None for next stage
+
+            except TaskInterruptedException as tie:
+                logger.warning(f"🚦 {log_prefix} ToT task INTERRUPTED: {tie}")
+                raise tie  # Propagate to be handled by _run_tot_in_background_wrapper_v2
+            except Exception as e_initial_tot:
+                last_error_initial = e_initial_tot
+
+            if last_error_initial and not parsed_tot_json:
+                logger.warning(f"⚠️ {log_prefix} Initial ToT LLM/parse attempt failed. Error: {last_error_initial}")
+
+        # --- Stage 2: LLM Re-request for Formatting (if initial attempt failed) ---
+        if not (parsed_tot_json and self._is_valid_tot_json(parsed_tot_json)):
+            logger.warning(
+                f"{log_prefix} Initial ToT attempt failed. Trying LLM re-request to fix format. Last raw: '{raw_llm_output_from_initial_loop[:200]}...'")
+
+            reformat_prompt_input = {
+                "faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop,
+                "original_user_input_placeholder": original_user_input_for_log
+            }
+            reformat_chain = ChatPromptTemplate.from_template(
+                PROMPT_REFORMAT_TO_TOT_JSON) | tot_model | StrOutputParser()
+
+            reformatted_llm_output_text = await asyncio.to_thread(
+                self._call_llm_with_timing, reformat_chain, reformat_prompt_input,
+                interaction_data_for_tot_llm_call, priority=ELP0
+            )
+
+            if reformatted_llm_output_text and not (
+                    isinstance(reformatted_llm_output_text, str) and "ERROR" in reformatted_llm_output_text.upper()):
+                logger.info(f"{log_prefix} Received reformatted output from LLM for ToT. Attempting to parse/fix...")
+                json_candidate_from_reformat = self._extract_json_candidate_string(reformatted_llm_output_text,
+                                                                                   log_prefix + "-ReformatExtract")
+                if json_candidate_from_reformat:
+                    parsed_tot_json = self._programmatic_json_parse_and_fix(
+                        json_candidate_from_reformat, JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,
+                        log_prefix + "-ReformatFix"
+                    )
+            else:
                 logger.error(
-                    f"❌ Error saving ToT V2 result to DB for Trigger ID {triggering_interaction_id_for_log}: {db_save_err}")
-                db.rollback()
+                    f"{log_prefix} LLM re-request for ToT JSON formatting failed or returned error: {reformatted_llm_output_text}")
 
-            return full_tot_result_text  # Return the text for potential immediate use if desired by wrapper, but primary is DB save
+        # --- Process Final Result (parsed_tot_json or fallback) ---
+        final_synthesis_for_caller = f"Error: ToT analysis for '{original_user_input_for_log[:30]}...' failed to produce valid structured output."
+        tot_json_to_save_str: Optional[str] = None
 
-        except TaskInterruptedException as tie:
-            logger.warning(f"🚦 ToT V2 for Trigger ID {triggering_interaction_id_for_log} INTERRUPTED: {tie}")
-            # Log this interruption as a new, brief interaction
+        if parsed_tot_json and self._is_valid_tot_json(parsed_tot_json):
+            logger.success(
+                f"✅ {log_prefix} ToT analysis JSON successfully parsed. Synthesis snippet: '{str(parsed_tot_json.get('synthesis'))[:50]}...'")
+            final_synthesis_for_caller = str(parsed_tot_json.get("synthesis", "ToT synthesis missing from JSON."))
             try:
-                add_interaction(db, session_id=interaction_data_for_tot_llm_call.get("session_id"),
-                                mode="internal_error",
-                                input_type="log_warning",
-                                user_input=f"[ToT V2 Interrupted for Trigger ID: {triggering_interaction_id_for_log}]",
-                                llm_response=str(tie))
-                db.commit()
-            except Exception:
-                pass
-            raise tie  # Re-raise for the wrapper to know
-        except Exception as e:
-            err_msg = f"Error during ToT V2 generation (Trigger ID: {triggering_interaction_id_for_log}): {e}"
-            logger.error(f"❌ {err_msg}")
-            # Log this error as a new interaction
+                tot_json_to_save_str = json.dumps(parsed_tot_json, indent=2)
+            except Exception as e_dump:
+                logger.error(f"{log_prefix} Failed to dump parsed_tot_json: {e_dump}"); tot_json_to_save_str = str(
+                    parsed_tot_json)
+
+            # --- New: Check if ToT requires a new background task ---
+            if parsed_tot_json.get("requires_background_task") is True:
+                next_task_input_str = parsed_tot_json.get("next_task_input")
+                if next_task_input_str and isinstance(next_task_input_str, str) and next_task_input_str.strip():
+                    logger.info(
+                        f"{log_prefix} ToT synthesis requires further background task. Input: '{next_task_input_str[:70]}...'")
+                    new_bg_task_session_id = f"sub_task_from_tot_{triggering_interaction_id_for_log}_{str(uuid.uuid4())[:4]}"
+                    # Spawn new background_generate task (don't await it here, let it run truly in background)
+                    asyncio.create_task(
+                        self.background_generate(
+                            db=db,  # Use current DB session for spawning, BG task will get its own
+                            user_input=next_task_input_str,
+                            session_id=new_bg_task_session_id,
+                            classification="chat_complex",  # Assume new task is complex
+                            image_b64=None,
+                            update_interaction_id=None  # It's a new task
+                        )
+                    )
+                    logger.info(
+                        f"{log_prefix} Spawned new background_generate task for session {new_bg_task_session_id}")
+                else:
+                    logger.warning(
+                        f"{log_prefix} ToT indicated 'requires_background_task' but 'next_task_input' was missing or empty.")
+        else:
+            logger.error(
+                f"{log_prefix} ❌ All ToT attempts failed to produce valid JSON. Last raw: '{raw_llm_output_from_initial_loop[:200]}...'")
+            fallback_json_content = {
+                "decomposition": "N/A", "brainstorming": [], "evaluation": "N/A",
+                "synthesis": final_synthesis_for_caller, "confidence_score": 0.0,
+                "self_critique": f"Failed to parse LLM output for ToT. Last raw: {raw_llm_output_from_initial_loop[:200]}",
+                "requires_background_task": False, "next_task_input": None
+            }
             try:
-                add_interaction(db, session_id=interaction_data_for_tot_llm_call.get("session_id"),
-                                mode="internal_error",
-                                input_type="log_error",
-                                user_input=f"[ToT V2 Failed for Trigger ID: {triggering_interaction_id_for_log}]",
-                                llm_response=err_msg)
-                db.commit()
-            except Exception:
-                pass
-            return f"Error during deep analysis (V2) for '{original_user_input_for_log[:30]}...'."
+                tot_json_to_save_str = json.dumps(fallback_json_content, indent=2)
+            except Exception as e_dump_fallback:
+                logger.error(
+                    f"{log_prefix} Failed to dump fallback ToT JSON: {e_dump_fallback}"); tot_json_to_save_str = str(
+                    fallback_json_content)
+
+        # --- Save ToT result (the JSON string) to a new Interaction record ---
+        try:
+            tot_result_interaction_data = {
+                "session_id": current_session_id,
+                "mode": "chat",
+                "input_type": "tot_result",
+                "user_input": f"[ToT Analysis Result for Original Query ID {triggering_interaction_id_for_log}: '{original_user_input_for_log[:100]}...']",
+                "llm_response": tot_json_to_save_str,
+                "classification": "tot_output_json",
+                "execution_time_ms": interaction_data_for_tot_llm_call.get("execution_time_ms", 0),
+                "reflection_completed": True, "tot_analysis_requested": False,
+                "tot_analysis_spawned": parsed_tot_json.get("requires_background_task") if parsed_tot_json else False,
+                # Log if it tried to spawn
+                "tot_delivered": False
+            }
+            valid_keys = {c.name for c in Interaction.__table__.columns}
+            db_kwargs_tot_result = {k: v for k, v in tot_result_interaction_data.items() if
+                                    k in valid_keys and k != 'id'}
+
+            new_tot_interaction = await asyncio.to_thread(add_interaction, db, **db_kwargs_tot_result)
+            if new_tot_interaction and new_tot_interaction.id:
+                await asyncio.to_thread(db.commit)
+                logger.success(
+                    f"✅ {log_prefix} Saved ToT V2 result as Interaction ID {new_tot_interaction.id} for TrigID {triggering_interaction_id_for_log}.")
+            else:
+                logger.error(
+                    f"❌ {log_prefix} Failed to save ToT V2 result for TrigID {triggering_interaction_id_for_log}.")
+                await asyncio.to_thread(db.rollback)
+        except Exception as db_save_err:
+            logger.error(
+                f"❌ {log_prefix} Error saving ToT V2 result to DB for TrigID {triggering_interaction_id_for_log}: {db_save_err}")
+            await asyncio.to_thread(db.rollback)
+
+        return final_synthesis_for_caller
 
     # --- reset Method ---
     def reset(self, db: Session, session_id: str = None):
