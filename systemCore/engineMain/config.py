@@ -8,6 +8,7 @@ load_dotenv()
 logger.info("Attempting to load environment variables from .env file...")
 
 # --- General Settings ---
+MODULE_DIR=os.path.dirname(__file__)
 PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "fireworks"
 MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20))
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *quick* answers (token generation? I forgot)
@@ -29,6 +30,9 @@ FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 20))
 
 MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1)) # Unused
 YOUR_REFLECTION_CHUNK_SIZE = int(os.getenv("YOUR_REFLECTION_CHUNK_SIZE", 450))
+ENABLE_PROACTIVE_RE_REFLECTION = True
+PROACTIVE_RE_REFLECTION_CHANCE = 0.9 #(Have chance 90% to re-remember old memory and re-imagine and rethought)
+MIN_AGE_FOR_RE_REFLECTION_DAYS = 1 #(Minimum age of the memory to re-reflect)
 YOUR_REFLECTION_CHUNK_OVERLAP = int(os.getenv("YOUR_REFLECTION_CHUNK_OVERLAP", 50))
 RAG_URL_COUNT = int(os.getenv("RAG_URL_COUNT", 5)) # <<< ADD THIS LINE (e.g., default to 3)
 RAG_CONTEXT_MAX_PERCENTAGE = float(os.getenv("RAG_CONTEXT_MAX_PERCENTAGE", 0.25))
@@ -100,7 +104,8 @@ LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 LLAMA_CPP_MODEL_MAP = {
     "router": os.getenv("LLAMA_CPP_MODEL_ROUTER_FILE", "deepscaler.gguf"), # Adelaide Zephyrine Charlotte Persona
     "vlm": os.getenv("LLAMA_CPP_MODEL_VLM_FILE", "Qwen2.5-VL-7B-Instruct-q4_k_m.gguf"), # Use LatexMind as VLM for now
-    "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf"),
+    "latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "Qwen2.5-VL-7B-Instruct-q4_k_m.gguf"),
+    #"latex": os.getenv("LLAMA_CPP_MODEL_LATEX_FILE", "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf"), #This model doesn't seem to work properly
     "math": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen2-math-1.5b-instruct-q5_K_M.gguf"),
     "code": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "qwen2.5-coder-3b-instruct-q5_K_M.gguf"),
     "general": os.getenv("LLAMA_CPP_MODEL_GENERAL_FILE", "deepscaler.gguf"), # Use router as general
@@ -168,6 +173,12 @@ MODERATION_MODEL_CLIENT_FACING = os.getenv("MODERATION_MODEL_CLIENT_FACING", "te
 # This prompt instructs the LLM to give a simple, parsable output.
 logger.info(f"🛡️ Moderation Client-Facing Model Name: {MODERATION_MODEL_CLIENT_FACING}")
 
+#Fine Tuning Ingestion
+FILE_INGESTION_TEMP_DIR = os.getenv("FILE_INGESTION_TEMP_DIR", os.path.join(MODULE_DIR, "temp_file_ingestions")) # MODULE_DIR needs to be defined as os.path.dirname(__file__)
+# Define expected columns for CSV/Parquet if you want to standardize
+# e.g., EXPECTED_INGESTION_COLUMNS = ["user_input", "llm_response", "session_id_override", "mode_override", "input_type_override"]
+
+logger.info(f"📚 File Ingestion Temp Dir: {FILE_INGESTION_TEMP_DIR}")
 
 
 # --- NEW: Snapshot Configuration ---
@@ -271,6 +282,31 @@ SELF_REFLECTION_MAX_TOPICS = int(os.getenv("SELF_REFLECTION_MAX_TOPICS", 10)) # 
 SELF_REFLECTION_MODEL = os.getenv("SELF_REFLECTION_MODEL", "general_fast") # Which model identifies topics (router or general_fast?)
 SELF_REFLECTION_FIXER_MODEL = os.getenv("SELF_REFLECTION_FIXER_MODEL", "code") # Model to fix broken JSON
 REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 10)
+# --- Add/Ensure these constants for the reflection loop timing ---
+# How long the reflector thread waits if NO work was found in a full active cycle
+IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 300)) # e.g., 5 minutes
+# How long the reflector thread waits briefly between processing batches IF work IS being processed in an active cycle
+ACTIVE_CYCLE_PAUSE_SECONDS = float(os.getenv("REFLECTION_ACTIVE_CYCLE_PAUSE_SECONDS", 0.1)) # e.g., 0.1 seconds, very short
+
+# Input types eligible for new reflection
+REFLECTION_ELIGIBLE_INPUT_TYPES = [
+    'text',
+    'reflection_result', # Allow reflecting on past reflections
+    'log_error',         # Reflect on errors
+    'log_warning',       # Reflect on warnings
+    'image_analysis_result' # If you have a specific type for VLM outputs from file_indexer
+]
+# Ensure you're logging these if you want to see them at startup
+logger.info(f"🤔 Self-Reflection Enabled: {ENABLE_SELF_REFLECTION}")
+if ENABLE_SELF_REFLECTION:
+    logger.info(f"   🤔 Reflection Batch Size: {REFLECTION_BATCH_SIZE}") # Already exists
+    logger.info(f"   🤔 Reflection Idle Wait: {IDLE_WAIT_SECONDS}s")
+    logger.info(f"   🤔 Reflection Active Cycle Pause: {ACTIVE_CYCLE_PAUSE_SECONDS}s")
+    logger.info(f"   🤔 Reflection Eligible Input Types: {REFLECTION_ELIGIBLE_INPUT_TYPES}")
+    logger.info(f"   🤔 Proactive Re-Reflection Enabled: {ENABLE_PROACTIVE_RE_REFLECTION}") # Already exists
+    logger.info(f"   🤔 Proactive Re-Reflection Chance: {PROACTIVE_RE_REFLECTION_CHANCE}") # Already exists
+    logger.info(f"   🤔 Min Age for Re-Reflection (Days): {MIN_AGE_FOR_RE_REFLECTION_DAYS}") # Already exists
+
 
 #---- JSON TWEAKS ----
 JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT = int(os.getenv("JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT", 2)) # e.g., 2 attempts on the reformatted output
@@ -600,13 +636,17 @@ You are Adelaide Zephyrine Charlotte, the Friend persona. You received a draft r
 ### FINAL RESPONSE (Your Output - User-Facing and Result Text ONLY):
 """
 
-PROMPT_REFORMAT_TO_ACTION_JSON = f"""The AI's previous output below was an attempt to generate a JSON object for an action analysis task, but it was either not valid JSON or did not conform to the required structure: {{"action_type": "...", "parameters": {{...}}, "explanation": "..."}}.
+PROMPT_REFORMAT_TO_ACTION_JSON = f"""The AI's previous output below was an attempt to generate a JSON object for an action analysis task.
+However, it is not valid JSON or does not conform to the required structure.
+The required structure is a JSON object with keys "action_type", "parameters", and "explanation". For example:
+`{{"action_type": "some_action", "parameters": {{"param1": "value1"}}, "explanation": "Some reason"}}`
 
-Analyze the "Faulty AI Output" and reformat it into a single, valid JSON object.
-The JSON object MUST contain ONLY these exact keys: "action_type", "parameters", and "explanation".
+Please analyze the "Faulty AI Output" below and reformat it into a single, valid JSON object adhering to this structure.
+The JSON object MUST contain ONLY these exact keys: "action_type" (string), "parameters" (JSON object), and "explanation" (string).
 Ensure all string values within the JSON are correctly quoted.
+
 If the faulty output provides no clear action or is too garbled to interpret, respond with ONLY the following JSON object:
-{{"action_type": "no_action", "parameters": {{}}, "explanation": "Original AI output for action analysis was unclear or did not specify a distinct action after reformat attempt."}}
+`{{"action_type": "no_action", "parameters": {{}}, "explanation": "Original AI output for action analysis was unclear or did not specify a distinct action after reformat attempt."}}`
 
 Faulty AI Output:
 \"\"\"
