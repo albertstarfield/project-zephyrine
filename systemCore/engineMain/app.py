@@ -36,6 +36,7 @@ import sys
 import time
 import json
 import re
+import pandas as pd
 import asyncio
 import threading # Used by asyncio.to_thread internally
 import subprocess # Used in AgentTools (agent.py)
@@ -97,6 +98,7 @@ except ImportError as e:
 # --- SQLAlchemy Imports ---
 from sqlalchemy.orm import Session, sessionmaker # Import sessionmaker
 from sqlalchemy import update, inspect as sql_inspect, desc
+from sqlalchemy.sql import func
 
 # --- Flask Imports ---
 from flask import Flask, request, Response, g, jsonify # Use Flask imports
@@ -380,244 +382,212 @@ _reflector_thread: Optional[threading.Thread] = None
 _reflector_stop_event = threading.Event()
 _reflector_lock = threading.Lock() # Lock to prevent concurrent reflection cycles if one runs long
 
+
 def run_self_reflection_loop():
     """
-    Main loop for self-reflection. Continuously processes eligible interactions
-    (including previous reflection results) in batches until none are found,
-    then waits minimally before checking again.
+    Main loop for self-reflection. Periodically processes eligible interactions.
+    If no new interactions, may proactively re-queue an old one for re-reflection.
     """
-    global ai_provider, ai_chat # Need access to these instances
+    global ai_provider, ai_chat  # Assuming these are global instances
     thread_name = threading.current_thread().name
-    logger.info(f"✅ {thread_name} started (Continuous Reflection Logic - Minimal Wait).")
+    logger.info(f"✅ {thread_name} started (Continuous Reflection Logic).")
 
     if not ai_provider or not ai_chat:
         logger.error(f"🛑 {thread_name}: AIProvider or AIChat not initialized. Cannot run reflection.")
         return
 
-    # --- Configuration ---
-    # How many interactions to process per DB query (from config)
-    # REFLECTION_BATCH_SIZE = 5 (Example value if not imported)
-    # Max age (optional, uncomment filter below if needed)
-    # MAX_REFLECTION_AGE_DAYS = int(os.getenv("MAX_REFLECTION_AGE_DAYS", 7))
+    logger.info(
+        f"{thread_name}: Config - BatchSize={REFLECTION_BATCH_SIZE}, IdleWait={IDLE_WAIT_SECONDS}s, ActivePause={ACTIVE_CYCLE_PAUSE_SECONDS}s")
+    logger.info(
+        f"{thread_name}: Config - ProactiveReReflect={ENABLE_PROACTIVE_RE_REFLECTION}, Chance={PROACTIVE_RE_REFLECTION_CHANCE}, MinAgeDays={MIN_AGE_FOR_RE_REFLECTION_DAYS}")
+    logger.info(f"{thread_name}: Eligible Input Types for new reflection: {REFLECTION_ELIGIBLE_INPUT_TYPES}")
 
-    # --- MODIFIED: Wait Times ---
-    # How long to wait ONLY if NO work was found in a full active cycle
-    IDLE_WAIT_SECONDS = 5 # Minimal wait to prevent pure busy-looping
-    # How long to wait briefly between batches IF work IS being processed
-    ACTIVE_CYCLE_PAUSE_SECONDS = 0.0 # No pause between batches when active
-    # --- END MODIFICATION ---
-
-    # Input types eligible for reflection
-    reflection_eligible_input_types = ['text', 'reflection_result', 'log_error', 'log_warning', '']
-    logger.info(f"{thread_name}: Config - BatchSize={REFLECTION_BATCH_SIZE}, IdleWait={IDLE_WAIT_SECONDS}s, ActivePause={ACTIVE_CYCLE_PAUSE_SECONDS}s")
-    logger.info(f"{thread_name}: Eligible Input Types: {reflection_eligible_input_types}")
-
-    # --- Main Loop ---
     while not _reflector_stop_event.is_set():
         cycle_start_time = time.monotonic()
         total_processed_this_active_cycle = 0
-        work_found_in_cycle = False # Track if any work was done
+        work_found_in_this_cycle = False
 
         logger.info(f"🤔 {thread_name}: Starting ACTIVE reflection cycle...")
 
-        # --- Attempt to acquire lock ---
         if not _reflector_lock.acquire(blocking=False):
-             logger.warning(f"{thread_name}: Previous reflection cycle lock held? Skipping.")
-             # Short wait if lock held, then try again next outer loop iteration
-             _reflector_stop_event.wait(timeout=1.0)
-             continue
+            logger.warning(f"{thread_name}: Previous reflection cycle lock still held? Skipping this cycle attempt.")
+            _reflector_stop_event.wait(timeout=IDLE_WAIT_SECONDS)  # Wait before trying again
+            continue
 
         db: Optional[Session] = None
         try:
-            # --- Wait if Server Busy (Checks before starting the main work) ---
-            # Use a flag to log only once per busy period start
+            # Wait if server is busy (main API requests are active)
             was_busy_waiting = False
             while server_is_busy_event.is_set():
-                 if not was_busy_waiting:
-                      logger.info(f"🚦 {thread_name}: Server busy, pausing reflection start...")
-                      was_busy_waiting = True
-                 if _reflector_stop_event.is_set(): break
-                 # Check stop event frequently while waiting
-                 if _reflector_stop_event.wait(timeout=0.5): break
-            if was_busy_waiting:
-                 wait_duration = time.monotonic() - cycle_start_time # Approx wait time
-                 logger.info(f"🟢 {thread_name}: Server free after busy wait (~{wait_duration:.1f}s).")
-            if _reflector_stop_event.is_set(): break # Exit main loop if stopped during wait
+                if not was_busy_waiting:
+                    logger.info(f"🚦 {thread_name}: Server busy, pausing reflection start...")
+                    was_busy_waiting = True
+                if _reflector_stop_event.is_set(): break
+                if _reflector_stop_event.wait(timeout=0.5): break
+            if was_busy_waiting: logger.info(f"🟢 {thread_name}: Server free, resuming reflection cycle.")
+            if _reflector_stop_event.is_set(): break
 
-            # --- Create DB session for this active cycle ---
-            try:
-                db = SessionLocal()
-                if not db: raise ValueError("Failed to create DB session.")
-                logger.trace(f"{thread_name}: DB Session created for active cycle.")
-            except Exception as db_err:
-                 logger.error(f"{thread_name}: Failed to get DB session: {db_err}")
-                 _reflector_lock.release() # Release lock if DB fails
-                 _reflector_stop_event.wait(timeout=5) # Wait before retrying cycle
-                 continue
+            db = SessionLocal()  # type: ignore
+            if not db: raise RuntimeError("Failed to create DB session for reflection cycle.")
+            logger.trace(f"{thread_name}: DB Session created for active cycle.")
 
-            # --- Inner Loop: Keep processing batches as long as work is found ---
+            # --- Inner Loop: Process NEW interactions needing reflection ---
             while not _reflector_stop_event.is_set():
-                batch_processed_count = 0
-                interactions_to_reflect = []
+                batch_processed_count_this_inner_loop = 0
+                interactions_to_reflect: List[Interaction] = []
                 try:
-                    # Query for the next batch of eligible interactions
-                    logger.trace(f"{thread_name}: Querying DB for next reflection batch...")
                     query = db.query(Interaction).filter(
                         Interaction.reflection_completed == False,
                         Interaction.mode == 'chat',
-                        Interaction.input_type.in_(reflection_eligible_input_types),
-                        # Optional: Add age limit filter here
-                        # Interaction.timestamp >= datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(days=MAX_REFLECTION_AGE_DAYS)
-                    ).order_by(
-                        Interaction.timestamp.asc() # Process oldest eligible first
-                    ).limit(REFLECTION_BATCH_SIZE)
-
+                        Interaction.input_type.in_(REFLECTION_ELIGIBLE_INPUT_TYPES)
+                    ).order_by(Interaction.timestamp.asc()).limit(REFLECTION_BATCH_SIZE)
                     interactions_to_reflect = query.all()
-                    logger.trace(f"{thread_name}: Query returned {len(interactions_to_reflect)} interactions.")
-
                 except Exception as query_err:
-                    logger.error(f"{thread_name}: Error querying interactions for reflection batch: {query_err}")
-                    _reflector_stop_event.wait(timeout=5) # Wait a bit before exiting inner loop
-                    break # Exit inner loop on query error, will retry after outer loop wait
+                    logger.error(f"{thread_name}: Error querying new interactions for reflection: {query_err}")
+                    _reflector_stop_event.wait(timeout=5)  # Wait before breaking inner loop
+                    break
 
-                # --- Check if any work was found in this batch ---
                 if not interactions_to_reflect:
-                    logger.debug(f"{thread_name}: No more eligible interactions found in this batch/query.")
-                    break # Exit the inner batch-processing loop
+                    logger.debug(f"{thread_name}: No new eligible interactions found in this batch/query.")
+                    break  # Exit the inner batch-processing loop
 
-                # --- Process the found batch ---
-                logger.info(f"{thread_name}: Found {len(interactions_to_reflect)} interaction(s) in batch. Processing...")
-                work_found_in_cycle = True # Mark that we found work in this overall cycle
+                work_found_in_this_cycle = True
+                logger.info(
+                    f"{thread_name}: Found {len(interactions_to_reflect)} new interaction(s) for reflection. Processing batch...")
 
-                for interaction in interactions_to_reflect:
-                    if _reflector_stop_event.is_set():
-                        logger.info(f"{thread_name}: Stop signal received during batch processing.")
-                        break # Exit the 'for interaction' loop
+                for interaction_obj in interactions_to_reflect:  # Renamed to avoid conflict
+                    if _reflector_stop_event.is_set(): logger.info(f"{thread_name}: Stop signal during batch."); break
+                    if server_is_busy_event.is_set(): logger.info(
+                        f"{thread_name}: Server became busy, pausing batch."); break
 
-                    # --- Wait if Server Busy (Check before each item) ---
-                    item_was_busy_waiting = False
-                    while server_is_busy_event.is_set():
-                        if not item_was_busy_waiting:
-                             logger.warning(f"{thread_name}: Server became busy during batch processing. Pausing...")
-                             item_was_busy_waiting = True
-                        if _reflector_stop_event.is_set(): break
-                        if _reflector_stop_event.wait(timeout=0.5): break # Check stop frequently
-                    if item_was_busy_waiting:
-                         logger.info(f"{thread_name}: Server free, resuming batch processing.")
-                    if _reflector_stop_event.is_set(): break # Check stop again after wait
-                    # --- End Wait Logic ---
+                    original_input_text = interaction_obj.user_input or "[Original input missing]"
+                    original_interaction_id = interaction_obj.id
+                    original_input_type_text = interaction_obj.input_type
 
-                    # Extract details for logging and processing
-                    original_input = interaction.user_input or "[Original input missing]"
-                    original_id = interaction.id
-                    original_input_type = interaction.input_type
-                    logger.info(f"{thread_name}: --> Triggering reflection task for Interaction ID {original_id} (Type: {original_input_type}) - Input: '{original_input[:60]}...'")
+                    logger.info(
+                        f"{thread_name}: --> Triggering reflection for Interaction ID {original_interaction_id} (Type: {original_input_type_text}) - Input: '{original_input_text[:60]}...'")
 
-                    # Prepare parameters for background_generate
-                    reflection_session_id = f"reflection_{uuid.uuid4()}" # Unique session for the reflection task log trail
-                    task_launched = False
+                    reflection_session_id_for_bg = f"reflection_{original_interaction_id}_{str(uuid.uuid4())[:4]}"
+                    task_launched_successfully = False
                     try:
-                        # Frame the input clearly for the reflection context
-                        reflection_input = f"[Self-Reflection on Interaction ID {original_id} (Type: {original_input_type})] Make new Ideas or critically assessed this idea with new idea what if and then verify the answer and what can be done: {original_input}"
-
-                        # Run the async background_generate function using asyncio.run()
-                        # This blocks the current (reflector) thread until background_generate completes
-                        # (which is okay as the reflector is dedicated to this)
-                        # background_generate itself uses asyncio internally but runs its core logic
-                        # and saves state before returning.
-                        asyncio.run(
-                            ai_chat.background_generate(
-                                db=db, # Pass the current session
-                                user_input=reflection_input,
-                                session_id=reflection_session_id,
-                                classification="chat_complex", # Force complex for reflection
+                        # background_generate is async, run it and wait for it to complete
+                        # The db session is passed to it.
+                        asyncio.run(  # This blocks the current thread until the async function completes
+                            ai_chat.background_generate(  # type: ignore
+                                db=db,
+                                user_input=original_input_text,  # This is the content to reflect upon
+                                session_id=reflection_session_id_for_bg,
+                                classification="chat_complex",  # Force complex for reflection
                                 image_b64=None,
-                                update_interaction_id=original_id # Tells bg_generate this is reflection
+                                update_interaction_id=original_interaction_id  # Key for reflection
                             )
                         )
-                        # If asyncio.run completes without exception, assume launch was successful
-                        # (background_generate handles its own internal errors and saves state)
-                        logger.info(f"{thread_name}: --> Background reflection task for ID {original_id} completed triggering.")
-                        task_launched = True
-                        batch_processed_count += 1
-
+                        # If asyncio.run completes without exception, assume the core logic of background_generate
+                        # (including its own error handling and DB updates for the original interaction) finished.
+                        logger.info(
+                            f"{thread_name}: --> Background reflection task for ID {original_interaction_id} completed its execution path.")
+                        task_launched_successfully = True  # Indicates background_generate ran
+                        batch_processed_count_this_inner_loop += 1
                     except Exception as trigger_err:
-                        logger.error(f"{thread_name}: Failed to trigger/run background_generate for interaction ID {original_id}: {trigger_err}")
-                        logger.exception(f"{thread_name} Trigger/Run Traceback:")
-                        # If triggering fails, don't mark original as complete, let it retry next cycle
+                        logger.error(
+                            f"{thread_name}: Failed to run/complete background_generate for reflection on ID {original_interaction_id}: {trigger_err}")
+                        logger.exception(f"{thread_name} Background Generate Trigger/Run Traceback:")
+                        # If background_generate itself fails, the original interaction's reflection_completed
+                        # status should ideally remain False due to error handling within background_generate.
+                        # We just log here and continue to the next item in batch.
 
-                    # --- Mark Original Interaction as Completed (if launch succeeded) ---
-                    # This prevents it from being picked up again by the next query.
-                    if task_launched:
-                        try:
-                            logger.debug(f"{thread_name}: Marking original interaction {original_id} as reflection_completed=True.")
-                            stmt = update(Interaction).where(Interaction.id == original_id).values(
-                                reflection_completed=True,
-                                last_modified_db=datetime.datetime.now(datetime.timezone.utc)
-                                )
-                            db.execute(stmt)
-                            db.commit() # Commit this specific update
-                            logger.info(f"{thread_name}: Original interaction {original_id} marked complete.")
-                        except Exception as update_err:
-                            logger.error(f"{thread_name}: Failed to mark interaction {original_id} as reflected: {update_err}")
-                            db.rollback() # Rollback failed update; it might get picked up again.
+                    # No explicit marking of original_interaction.reflection_completed = True here.
+                    # That is now handled *inside* background_generate's finally block.
 
-                    # --- No Pause Between Items in Batch (ACTIVE_CYCLE_PAUSE_SECONDS is 0) ---
-                    # if not _reflector_stop_event.is_set():
-                    #    time.sleep(ACTIVE_CYCLE_PAUSE_SECONDS) # Effectively time.sleep(0)
+                    if not _reflector_stop_event.is_set() and ACTIVE_CYCLE_PAUSE_SECONDS > 0:
+                        _reflector_stop_event.wait(timeout=ACTIVE_CYCLE_PAUSE_SECONDS)
 
-                # --- End of processing items in the current batch ---
-                total_processed_this_active_cycle += batch_processed_count
-                logger.info(f"{thread_name}: Finished processing batch ({batch_processed_count} items). Total this cycle: {total_processed_this_active_cycle}.")
-                if _reflector_stop_event.is_set(): break # Check stop signal after processing batch
+                total_processed_this_active_cycle += batch_processed_count_this_inner_loop
+                logger.info(
+                    f"{thread_name}: Finished processing batch ({batch_processed_count_this_inner_loop} items). Total this cycle: {total_processed_this_active_cycle}.")
+                if _reflector_stop_event.is_set() or server_is_busy_event.is_set(): break
+                # --- End of Inner Loop for NEW interactions ---
 
-                # --- No Pause Between Batches (ACTIVE_CYCLE_PAUSE_SECONDS is 0) ---
-                # if not _reflector_stop_event.is_set():
-                #    time.sleep(ACTIVE_CYCLE_PAUSE_SECONDS) # Effectively time.sleep(0)
+            # --- "Gabut State" - Proactive Re-Reflection Logic ---
+            if not work_found_in_this_cycle and ENABLE_PROACTIVE_RE_REFLECTION and random.random() < PROACTIVE_RE_REFLECTION_CHANCE:
+                logger.info(f"{thread_name}: Gabut State - No new work. Attempting proactive re-reflection.")
+                re_reflected_interaction_id: Optional[int] = None
+                try:
+                    time_threshold = datetime.datetime.now(datetime.timezone.utc) - datetime.timedelta(
+                        days=MIN_AGE_FOR_RE_REFLECTION_DAYS)
 
-            # --- End of Inner Batch Processing Loop (exited because query returned empty or stop signal) ---
+                    # For SQLite ORDER BY RANDOM()
+                    order_by_clause = func.random() if db.bind and db.bind.dialect.name == 'sqlite' else Interaction.timestamp
+                    # For other DBs, random might be different or less efficient. Fallback to oldest.
+                    if db.bind and db.bind.dialect.name != 'sqlite':
+                        logger.warning(
+                            f"{thread_name}: RANDOM() for re-reflection query might be inefficient for {db.bind.dialect.name}. Consider dialect-specific random or oldest.")
 
+                    candidate_for_re_reflection = db.query(Interaction).filter(
+                        Interaction.reflection_completed == True,
+                        Interaction.mode == 'chat',
+                        Interaction.input_type.in_(REFLECTION_ELIGIBLE_INPUT_TYPES),
+                        Interaction.timestamp < time_threshold
+                    ).order_by(order_by_clause).limit(1).first()
+
+                    if candidate_for_re_reflection:
+                        logger.info(
+                            f"{thread_name}: Selected Interaction ID {candidate_for_re_reflection.id} (Type: {candidate_for_re_reflection.input_type}) for proactive re-reflection.")
+
+                        candidate_for_re_reflection.reflection_completed = False
+                        note = f"\n\n[System Re-queued for Reflection ({datetime.datetime.now(datetime.timezone.utc).isoformat()}) due to Gabut State]"
+                        current_resp = candidate_for_re_reflection.llm_response or ""
+                        candidate_for_re_reflection.llm_response = (current_resp + note)[
+                                                                   :getattr(Interaction.llm_response.type, 'length',
+                                                                            4000)]
+                        # last_modified_db will be updated by SQLAlchemy's onupdate if configured, or manually:
+                        # candidate_for_re_reflection.last_modified_db = datetime.datetime.now(datetime.timezone.utc)
+
+                        db.commit()
+                        re_reflected_interaction_id = candidate_for_re_reflection.id
+                        work_found_in_this_cycle = True  # Signal that work was "found" for next cycle logic
+                        logger.info(
+                            f"{thread_name}: Interaction ID {re_reflected_interaction_id} re-queued for reflection.")
+                    else:
+                        logger.info(f"{thread_name}: No suitable old interactions found for proactive re-reflection.")
+                except Exception as e_re_reflect:
+                    logger.error(f"{thread_name}: Error during proactive re-reflection: {e_re_reflect}")
+                    if db: db.rollback()
+            # --- END "Gabut State" Logic ---
+
+        except RuntimeError as rt_err:  # Catch DB session creation failure
+            logger.error(f"💥 {thread_name}: Runtime error in reflection cycle (likely DB session): {rt_err}")
         except Exception as cycle_err:
             logger.error(f"💥 {thread_name}: Unhandled error during active reflection cycle: {cycle_err}")
             logger.exception(f"{thread_name} Cycle Traceback:")
-            if db: # Rollback any potential partial changes
-                try: db.rollback()
-                except Exception as rb_err: logger.error(f"{thread_name}: Error during rollback: {rb_err}")
-
+            if db: db.rollback()
         finally:
-            # --- Close DB Session for the Cycle ---
             if db:
-                try: db.close(); logger.debug(f"{thread_name}: DB session closed for cycle.")
-                except Exception as close_err: logger.error(f"{thread_name}: Error closing DB session: {close_err}")
+                try:
+                    db.close(); logger.debug(f"{thread_name}: DB session closed for cycle.")
+                except Exception as close_err:
+                    logger.error(f"{thread_name}: Error closing DB session: {close_err}")
 
-            # --- Release Lock ---
             try:
-                _reflector_lock.release()
-                logger.trace(f"{thread_name}: Released cycle lock.")
+                _reflector_lock.release(); logger.trace(f"{thread_name}: Released cycle lock.")
             except (threading.ThreadError, RuntimeError) as lk_err:
-                 logger.warning(f"{thread_name}: Lock release issue at end of cycle? {lk_err}")
+                logger.warning(f"{thread_name}: Lock release issue: {lk_err}")
 
-            # --- Log Cycle Finish ---
             cycle_duration = time.monotonic() - cycle_start_time
-            logger.info(f"{thread_name}: ACTIVE reflection cycle finished in {cycle_duration:.2f}s. Processed: {total_processed_this_active_cycle} interaction(s).")
+            logger.info(
+                f"{thread_name}: ACTIVE reflection cycle finished in {cycle_duration:.2f}s. Processed: {total_processed_this_active_cycle} new interaction(s).")
 
-            # --- Minimal Wait Before Next Cycle Check ---
-            # Wait longer only if absolutely no work was found in the entire cycle
-            wait_time_seconds = IDLE_WAIT_SECONDS if not work_found_in_cycle else ACTIVE_CYCLE_PAUSE_SECONDS # Use 0 if work was found
-            if wait_time_seconds > 0:
-                 logger.debug(f"{thread_name}: Waiting {wait_time_seconds:.2f} seconds before next cycle check...")
-                 stopped = _reflector_stop_event.wait(timeout=wait_time_seconds)
-                 if stopped:
-                     logger.info(f"{thread_name}: Stop signal received during wait.")
-                     break # Exit outer while loop
-            else:
-                 # If wait time is 0, immediately check stop event before looping again
-                 if _reflector_stop_event.is_set():
-                      logger.info(f"{thread_name}: Stop signal received.")
-                      break
+        # --- Wait logic before next full cycle check ---
+        wait_time_seconds = IDLE_WAIT_SECONDS if not work_found_in_this_cycle else ACTIVE_CYCLE_PAUSE_SECONDS
+        if wait_time_seconds > 0 and not _reflector_stop_event.is_set():
+            logger.debug(f"{thread_name}: Waiting {wait_time_seconds:.2f} seconds before next cycle check...")
+            stopped_during_wait = _reflector_stop_event.wait(timeout=wait_time_seconds)
+            if stopped_during_wait: logger.info(f"{thread_name}: Stop signal received during idle wait."); break
+        elif _reflector_stop_event.is_set():  # If stop set and no wait needed
+            logger.info(f"{thread_name}: Stop signal detected after active cycle.");
+            break
 
-    # --- End of Outer While Loop ---
-    logger.info(f"🛑 {thread_name}: Exiting.")
+    logger.info(f"🛑 {thread_name}: Exiting self-reflection loop.")
 
 
 def start_self_reflector():
@@ -9809,76 +9779,143 @@ except Exception as e:
 
 ## Fine tuning API Call handler
 
-
 @app.route("/v1/fine_tuning/jobs", methods=["POST"])
-def handle_create_fine_tuning_job():
-    request_id = f"req-ft-create-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received POST /v1/fine_tuning/jobs (Placeholder)")
-    # request_data = request.json # You might want to log this if needed
+async def handle_create_pseudo_fine_tuning_job():
+    start_req_time = time.monotonic()
+    request_id = f"req-pseudo-ft-job-{uuid.uuid4()}"  # Unique ID for this request
+    logger.info(f"🚀 {request_id}: Received POST /v1/fine_tuning/jobs (Pseudo Fine-Tune via Data Ingestion)")
 
-    response_message = (
-        "This system does not perform traditional fine-tuning by retraining model weights. "
-        "Instead, it adapts and learns continuously through mechanisms like: "
-        "1. Self-reflection on past interactions to refine understanding and generate new insights. "
-        "2. Building and utilizing a knowledge base from indexed documents and reflections (Vector Learning/RAG). "
-        "3. Background processing and analysis of complex queries (e.g., Tree of Thoughts). "
-        "No new 'fine-tuning job ID' is created, as these processes are ongoing."
-    )
+    db: Session = g.db  # Get DB session from Flask's g
+    final_status_code: int = 500
+    resp: Optional[Response] = None
 
-    # Mimic a successful creation response with a dummy job object containing the explanation
-    dummy_job_id = f"conceptual_learning_process_{int(time.time())}"
-    response_body = {
-        "id": dummy_job_id,
-        "object": "fine_tuning.job",
-        "model": "adaptive_system",
-        "created_at": int(time.time()),
-        "finished_at": None,
-        "fine_tuned_model": None,
-        "organization_id": "org-placeholder",
-        "result_files": [],
-        "status": "conceptual_learning_active",  # Custom status
-        "validation_file": None,
-        "training_file": "continuous_interaction_stream",
-        "hyperparameters": {
-            "n_epochs": "continuous",
-            "learning_mechanism": "self_reflection_and_rag"
-        },
-        "trained_tokens": None,
-        "message": response_message  # Adding the custom message
-    }
-    logger.info(f"{request_id}: Responding with placeholder information about continuous learning.")
-    return jsonify(response_body), 200
+    # --- Initialize session_id_for_log and try to get from request ---
+    session_id_for_log: str = f"pseudo_ft_req_{request_id}"  # Default session ID
+    raw_request_data: Optional[Dict[str, Any]] = None
+    # ---
 
+    try:
+        raw_request_data = await request.get_json()  # Assumes route is async
+        if not raw_request_data:
+            raise ValueError("Empty JSON payload received.")
+
+        # Attempt to get session_id from the request if provided by client
+        session_id_from_request = raw_request_data.get("session_id")
+        if session_id_from_request and isinstance(session_id_from_request, str):
+            session_id_for_log = session_id_from_request
+
+        # Set for AIChat instance if it were used directly in this specific stub
+        # if ai_chat: ai_chat.current_session_id = session_id_for_log
+
+        training_file_id = raw_request_data.get("training_file")
+        model_requested = raw_request_data.get("model")  # e.g., "gpt-3.5-turbo" - we log this
+
+        if not training_file_id:
+            raise ValueError("'training_file' ID (referring to an ingested data batch) is required.")
+        if not model_requested:
+            raise ValueError("'model' (base model name to associate with this data) is required.")
+
+        logger.info(
+            f"{request_id}: Pseudo fine-tuning job requested. Session: {session_id_for_log}, Training File ID: '{training_file_id}', Base Model: '{model_requested}'.")
+        logger.info(
+            f"{request_id}: Data associated with '{training_file_id}' is intended to be processed by the system's self-reflection loop.")
+
+        # Create a job ID and mimic OpenAI's FineTuningJob object
+        job_id = f"ftjob-reflect-{str(uuid.uuid4())[:12]}"  # Shorter UUID part for job ID
+        current_timestamp = int(time.time())
+
+        # This is the response body we'll build
+        response_body = {
+            "id": job_id,
+            "object": "fine_tuning.job",
+            "model": model_requested,
+            "created_at": current_timestamp,
+            "finished_at": None,
+            "fine_tuned_model": f"custom-model-via-reflection:{current_timestamp}",
+            "organization_id": "org-placeholder",  # Placeholder
+            "result_files": [],
+            "status": "pending_reflection_processing",
+            "validation_file": raw_request_data.get("validation_file"),  # Echo if provided
+            "training_file": training_file_id,
+            "hyperparameters": raw_request_data.get("hyperparameters", {"n_epochs": "continuous_self_reflection"}),
+            "trained_tokens": None,  # Not applicable
+            "message": "Data from training_file has been noted. The system will learn from this data via its ongoing self-reflection and knowledge update processes rather than traditional fine-tuning."
+        }
+
+        # Log this "pseudo fine-tuning job" creation to your interactions database
+        # Now session_id_for_log is defined
+        await asyncio.to_thread(add_interaction, db,
+                                session_id=session_id_for_log,
+                                mode="fine_tune_stub",
+                                input_type="job_creation_request",
+                                user_input=f"Pseudo FT Job Created: file_id={training_file_id}, base_model={model_requested}",
+                                llm_response=json.dumps(
+                                    {"job_id": job_id, "status": response_body.get("status", "unknown_status")}),
+                                classification="pseudo_fine_tune_job_logged"
+                                )
+        await asyncio.to_thread(db.commit)
+
+        final_status_code = 200  # HTTP 200 OK for accepted request
+        resp = Response(json.dumps(response_body), status=final_status_code, mimetype='application/json')
+
+    except ValueError as ve:
+        logger.warning(f"{request_id}: Invalid pseudo fine-tuning request: {ve}")
+        resp_data, final_status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
+                                                                     status_code=400)
+        resp = Response(json.dumps(resp_data), status=final_status_code, mimetype='application/json')
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 Error creating pseudo fine-tuning job:")
+        resp_data, final_status_code = _create_openai_error_response(
+            f"Server error during pseudo fine-tuning job creation: {str(e)}", err_type="server_error", status_code=500)
+        resp = Response(json.dumps(resp_data), status=final_status_code, mimetype='application/json')
+        if db: await asyncio.to_thread(db.rollback)  # Rollback if error after DB interaction started
+    finally:
+        duration_req = (time.monotonic() - start_req_time) * 1000
+        logger.info(
+            f"🏁 /v1/fine_tuning/jobs POST request {request_id} handled in {duration_req:.2f} ms. Status: {final_status_code}")
+        # DB session g.db is closed by @app.teardown_request
+
+    if resp is None:  # Should not happen if try-except is comprehensive
+        logger.error(f"{request_id}: Pseudo FT Job handler logic flaw - response object 'resp' was not assigned!")
+        resp_data, final_status_code = _create_openai_error_response(
+            "Internal error: Handler failed to produce response.", status_code=500)
+        resp = Response(json.dumps(resp_data), status=final_status_code, mimetype='application/json')
+
+    return resp
+
+
+# b) Stubs for other /v1/fine_tuning/jobs/* endpoints
+# These can reuse the logic from response #61, just ensure the message is consistent.
+# (GET /jobs, GET /jobs/{id}, POST /jobs/{id}/cancel, GET /jobs/{id}/events)
+# Example for GET /v1/fine_tuning/jobs:
 
 @app.route("/v1/fine_tuning/jobs", methods=["GET"])
-def handle_list_fine_tuning_jobs():
-    request_id = f"req-ft-list-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received GET /v1/fine_tuning/jobs (Placeholder)")
-
+async def handle_list_pseudo_fine_tuning_jobs():
+    request_id = f"req-pseudo-ft-list-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/fine_tuning/jobs (Pseudo Fine-Tune Info)")
+    # In a real scenario, you might list your "ingestion job" records here.
     response_message = (
-        "This system adapts via continuous self-reflection and knowledge base updates, "
-        "rather than discrete fine-tuning jobs. Therefore, there are no traditional 'jobs' to list. "
-        "System improvements are ongoing."
+        "This system adapts via continuous self-reflection on ingested data and interactions, "
+        "rather than discrete fine-tuning jobs. 'Jobs' here represent batches of data ingested for this learning process."
     )
-
-    # Return an OpenAI-like list structure, but with a custom object explaining the situation
     response_body = {
         "object": "list",
         "data": [
-            {
-                "id": "continuous_learning_main_process",
-                "object": "fine_tuning.job",  # Or a custom object type like "learning_process_status"
-                "model": "adaptive_system",
-                "created_at": int(time.time()),  # Could be app start time
-                "status": "active_and_ongoing",
-                "message": response_message
-            }
+            # Example of what a "job" entry could represent
+            # {
+            #     "id": "ftjob-reflect-example123",
+            #     "object": "fine_tuning.job",
+            #     "model": "gpt-3.5-turbo", # Base model mentioned at ingestion
+            #     "created_at": int(time.time()) - 86400,
+            #     "fine_tuned_model": "custom-model-via-reflection:inprogress",
+            #     "status": "processing_reflection_queue",
+            #     "message": "Data batch 'file-ingest-job-abc' is being processed by self-reflection."
+            # }
         ],
-        "has_more": False
+        "has_more": False,
+        "message": response_message
     }
-    logger.info(f"{request_id}: Responding with placeholder list describing continuous learning.")
     return jsonify(response_body), 200
-
 
 @app.route("/v1/fine_tuning/jobs/<string:fine_tuning_job_id>", methods=["GET"])
 def handle_retrieve_fine_tuning_job(fine_tuning_job_id: str):
@@ -10001,66 +10038,321 @@ def handle_list_fine_tuning_job_events(fine_tuning_job_id: str):
 
 ##v1/files openAI expected to be?
 @app.route("/v1/files", methods=["POST"])
-def handle_upload_file_stub():
-    request_id = f"req-file-upload-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received POST /v1/files (Placeholder)")
+async def handle_upload_and_ingest_file():
+    request_id = f"req-file-ingest-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received POST /v1/files (Data Ingestion for Reflection)")
 
-    # Log the attempt
-    # db: Session = g.db # Assuming g.db is set up by @app.before_request
-    # try:
-    #     # You could log form data or file info if desired, e.g., request.form.get('purpose')
-    #     add_interaction(db, session_id=request_id, mode="api_stub", input_type="file_upload_attempt",
-    #                     user_input="Attempt to upload file via /v1/files.",
-    #                     llm_response="Endpoint is a placeholder explaining local indexing.")
-    #     db.commit()
-    # except Exception as e:
-    #     logger.error(f"{request_id}: DB log error for file upload stub: {e}")
-    #     if db: db.rollback()
+    db: Session = g.db  # Get DB session from Flask's g
+    final_status_code = 500
+    response_body = {}
 
-    response_message = (
-        "File uploads via this API are not supported as Zephy/Adelaide directly indexes and learns from files "
-        "on the local file system based on its configuration. To make a file's content available, "
-        "ensure it is located within the paths monitored by the system's file indexer."
-    )
-    # Mimic a file object structure but with the informational message.
-    # OpenAI typically returns a file object on successful upload.
-    response_body = {
-        "id": f"placeholder_local_indexing_info_{int(time.time())}",
-        "object": "file",
-        "bytes": 0,
-        "created_at": int(time.time()),
-        "filename": "N/A - Local Indexing Active",
-        "purpose": "N/A",  # OpenAI uses 'fine-tune', 'assistants', etc.
-        "status": "processed_by_local_indexer_policy",  # Custom status
-        "status_details": response_message
-    }
-    logger.info(f"{request_id}: Responding with placeholder information about local file indexing.")
-    return jsonify(response_body), 200  # 200 OK with explanation, or 405/501 if you prefer
+    # Ensure temp directory exists
+    # FILE_INGESTION_TEMP_DIR should be imported from config
+    await asyncio.to_thread(os.makedirs, FILE_INGESTION_TEMP_DIR, exist_ok=True)
+
+    try:
+        if 'file' not in request.files:
+            raise ValueError("No file part in the request.")
+
+        file_storage = request.files['file']
+        purpose = request.form.get('purpose')
+
+        if file_storage.filename == '':
+            raise ValueError("No selected file.")
+        if not purpose == 'fine-tune':  # OpenAI requires 'fine-tune' purpose for files used in fine-tuning jobs
+            raise ValueError("Purpose must be 'fine-tune' for data ingestion.")
+
+        filename = secure_filename(file_storage.filename)  # type: ignore
+        temp_file_path = os.path.join(FILE_INGESTION_TEMP_DIR, f"{request_id}-{filename}")
+        await asyncio.to_thread(file_storage.save, temp_file_path)
+        logger.info(f"{request_id}: File '{filename}' saved temporarily to '{temp_file_path}'. Purpose: {purpose}")
+
+        file_ext = os.path.splitext(filename)[1].lower()
+        ingested_interactions_count = 0
+        processed_rows_count = 0  # For CSV/Parquet
+
+        # Define how to map file content to Interaction fields
+        # This is a simplified example; you'll need to adjust based on your data structure.
+        # Expected columns/keys: "user_input", "llm_response"
+        # Optional: "session_id_override", "mode_override", "input_type_override"
+
+        if file_ext == ".jsonl":
+            with open(temp_file_path, 'r', encoding='utf-8') as f_jsonl:
+                for line_num, line in enumerate(f_jsonl):
+                    processed_rows_count += 1
+                    try:
+                        data_entry = json.loads(line.strip())
+
+                        user_input_content = None
+                        assistant_response_content = None
+                        extracted_successfully = False
+
+                        # Try to extract structured data first
+                        messages = data_entry.get("messages")
+                        if isinstance(messages, list) and len(messages) >= 1:  # Allow single message for general data
+                            # Simplified: take first user message as input, first assistant as output
+                            # More sophisticated logic could concatenate or handle various structures
+                            first_user_msg = next((m.get("content") for m in messages if m.get("role") == "user"), None)
+                            first_asst_msg = next((m.get("content") for m in messages if m.get("role") == "assistant"),
+                                                  None)
+
+                            if first_user_msg: user_input_content = first_user_msg
+                            if first_asst_msg: assistant_response_content = first_asst_msg
+
+                            # If only one type of message, decide how to handle
+                            if user_input_content and assistant_response_content:
+                                extracted_successfully = True
+                            elif user_input_content:  # Only user message
+                                assistant_response_content = "[No assistant message in 'messages' array]"
+                                extracted_successfully = True  # Still ingestable
+                            elif assistant_response_content:  # Only assistant message
+                                user_input_content = "[No user message in 'messages' array]"
+                                extracted_successfully = True  # Still ingestable
+                            # If messages array is present but doesn't yield clear pair, it will fall to raw dump
+
+                        elif "prompt" in data_entry and "completion" in data_entry:
+                            user_input_content = data_entry.get("prompt")
+                            assistant_response_content = data_entry.get("completion")
+                            extracted_successfully = True
+                        elif "user_input" in data_entry and "llm_response" in data_entry:
+                            user_input_content = data_entry.get("user_input")
+                            assistant_response_content = data_entry.get("llm_response")
+                            extracted_successfully = True
+                        elif "text" in data_entry:  # Common for generic text datasets
+                            user_input_content = data_entry.get("text")
+                            assistant_response_content = "[No explicit completion field, ingested as text]"
+                            extracted_successfully = True
+
+                        interaction_session_id = data_entry.get("session_id_override", f"ingest_{request_id}")
+                        interaction_mode = data_entry.get("mode_override", "chat")
+
+                        if extracted_successfully and user_input_content is not None:  # At least user_input must exist
+                            interaction_input_type = data_entry.get("input_type_override", "text_ingested_structured")
+                            await asyncio.to_thread(
+                                add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
+                                input_type=interaction_input_type, user_input=str(user_input_content),
+                                llm_response=str(
+                                    assistant_response_content) if assistant_response_content is not None else None,
+                                reflection_completed=False
+                            )
+                            ingested_interactions_count += 1
+                        else:
+                            # Fallback: Dump raw JSON object if specific fields not found
+                            logger.warning(
+                                f"{request_id}: JSONL line {line_num + 1} did not match expected structures. Ingesting as raw data.")
+                            interaction_input_type = data_entry.get("input_type_override", "text_ingested_raw_json")
+                            raw_data_str = json.dumps(data_entry)  # Store the whole JSON object as string
+
+                            await asyncio.to_thread(
+                                add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
+                                input_type=interaction_input_type,
+                                user_input=f"[Raw JSON Ingested from line {line_num + 1} of {filename}]: {raw_data_str[:500]}...",
+                                # Snippet in user_input
+                                llm_response=raw_data_str,  # Store full raw JSON in llm_response
+                                reflection_completed=False
+                            )
+                            ingested_interactions_count += 1  # Count it as ingested
+
+                    except json.JSONDecodeError:
+                        logger.warning(
+                            f"{request_id}: Skipped invalid JSON line {line_num + 1} in '{filename}'. Content: {line.strip()[:100]}")
+
+        elif file_ext in [".csv", ".tsv"]:
+            delimiter = '\t' if file_ext == ".tsv" else ','
+            df = await asyncio.to_thread(pd.read_csv, temp_file_path, delimiter=delimiter)
+            processed_rows_count = len(df)
+            for index, row in df.iterrows():
+                user_input_content = row.get("prompt") or row.get("user_input") or row.get("text")
+                assistant_response_content = row.get("completion") or row.get("llm_response")
+
+                interaction_session_id = row.get("session_id_override", f"ingest_{request_id}")
+                interaction_mode = row.get("mode_override", "chat")
+
+                if user_input_content is not None:  # Require at least some primary text field
+                    interaction_input_type = row.get("input_type_override", "text_ingested_structured")
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
+                        input_type=interaction_input_type, user_input=str(user_input_content),
+                        llm_response=str(
+                            assistant_response_content) if assistant_response_content is not None else None,
+                        reflection_completed=False
+                    )
+                    ingested_interactions_count += 1
+                else:
+                    # Fallback: Dump raw row data
+                    logger.warning(
+                        f"{request_id}: CSV/TSV row {index + 1} did not match expected structures. Ingesting as raw data.")
+                    interaction_input_type = row.get("input_type_override", "text_ingested_raw_tabular")
+                    raw_row_dict = row.to_dict()
+                    raw_data_str = json.dumps(
+                        {k: str(v) for k, v in raw_row_dict.items() if pd.notna(v)})  # Convert row to JSON string
+
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
+                        input_type=interaction_input_type,
+                        user_input=f"[Raw Tabular Ingested from row {index + 1} of {filename}]: {raw_data_str[:500]}...",
+                        llm_response=raw_data_str,
+                        reflection_completed=False
+                    )
+                    ingested_interactions_count += 1
+
+        elif file_ext == ".parquet":
+            df = await asyncio.to_thread(pd.read_parquet, temp_file_path)
+            processed_rows_count = len(df)
+            for index, row in df.iterrows():
+                # Similar logic as CSV/TSV for extracting structured data or falling back to raw
+                user_input_content = row.get("prompt") or row.get("user_input") or row.get("text")
+                assistant_response_content = row.get("completion") or row.get("llm_response")
+
+                interaction_session_id = row.get("session_id_override", f"ingest_{request_id}")
+                interaction_mode = row.get("mode_override", "chat")
+
+                if user_input_content is not None:
+                    interaction_input_type = row.get("input_type_override", "text_ingested_structured")
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
+                        input_type=interaction_input_type, user_input=str(user_input_content),
+                        llm_response=str(
+                            assistant_response_content) if assistant_response_content is not None else None,
+                        reflection_completed=False
+                    )
+                    ingested_interactions_count += 1
+                else:
+                    logger.warning(f"{request_id}: Parquet row {index + 1} did not match. Ingesting as raw.")
+                    interaction_input_type = row.get("input_type_override", "text_ingested_raw_tabular")
+                    raw_row_dict = row.to_dict()
+                    raw_data_str = json.dumps({k: str(v) for k, v in raw_row_dict.items() if pd.notna(v)})
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=interaction_session_id, mode=interaction_mode,
+                        input_type=interaction_input_type,
+                        user_input=f"[Raw Parquet Ingested from row {index + 1} of {filename}]: {raw_data_str[:500]}...",
+                        llm_response=raw_data_str,
+                        reflection_completed=False
+                    )
+                    ingested_interactions_count += 1
+        else:
+            raise ValueError(f"Unsupported file type: '{file_ext}'. Please use JSONL, CSV, or Parquet.")
+
+        await asyncio.to_thread(db.commit)
+        logger.info(
+            f"{request_id}: Successfully ingested {ingested_interactions_count}/{processed_rows_count} entries from '{filename}' into interactions database for self-reflection.")
+
+        # Mimic OpenAI File object response
+        response_body = {
+            "id": f"file-ingest-job-{request_id}",  # Use request_id as a job-like ID
+            "object": "file",
+            "bytes": await asyncio.to_thread(os.path.getsize, temp_file_path),
+            "created_at": int(time.time()),
+            "filename": filename,
+            "purpose": "fine-tune-data-ingested-for-reflection",  # Custom purpose
+            "status": "processed",
+            "status_details": f"Ingested {ingested_interactions_count} interactions from {processed_rows_count} " \
+                              f"rows/lines for self-reflection. Data ready for background processing."
+        }
+        final_status_code = 200
+
+    except ValueError as ve:
+        logger.warning(f"{request_id}: Invalid file upload request: {ve}")
+        response_body, final_status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
+                                                                         status_code=400)
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 Error processing uploaded file for ingestion:")
+        response_body, final_status_code = _create_openai_error_response(f"Server error during file ingestion: {e}",
+                                                                         err_type="server_error", status_code=500)
+        if db: await asyncio.to_thread(db.rollback)
+    finally:
+        if temp_file_path and os.path.exists(temp_file_path):
+            await asyncio.to_thread(os.remove, temp_file_path)
+            logger.info(f"{request_id}: Deleted temporary ingested file: {temp_file_path}")
+        duration_req = (time.monotonic() - start_req_time) * 1000
+        logger.info(
+            f"🏁 /v1/files POST request {request_id} handled in {duration_req:.2f} ms. Status: {final_status_code}")
+
+    return Response(json.dumps(response_body), status=final_status_code, mimetype='application/json')
 
 
 @app.route("/v1/files", methods=["GET"])
-def handle_list_files_stub():
-    request_id = f"req-file-list-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received GET /v1/files (Placeholder)")
-    db: Session = g.db
-
-    response_message = (
-        "This system does not manage 'uploaded files' in the traditional OpenAI API sense. "
-        "It indexes local files. While this endpoint won't list them in OpenAI's format, "
-        "the system's knowledge base is built from files found in paths defined by its configuration. "
-        "You can query the internal 'FileIndex' database table for details on indexed files."
+async def handle_list_files_ingestion_stub():
+    request_id = f"req-file-list-ingest-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/files (Ingestion Info Placeholder)")
+    # In a real scenario, you might query a table of ingestion jobs/batches.
+    # For this stub, return an informative message.
+    message = (
+        "This endpoint normally lists uploaded files. In this system, files are ingested directly into the "
+        "interaction database for self-reflection. There isn't a list of 'files' in the traditional OpenAI sense. "
+        "Consider this a log of data ingestion batches if it were implemented."
     )
-
-    # Return an OpenAI-like list structure with data: [] and the message.
-    # Or, optionally, you could query your FileIndex table and try to format a few entries.
-    # For a simple stub conveying the message:
     response_body = {
         "object": "list",
-        "data": [],  # No "uploaded" files in the OpenAI sense
-        "message": response_message
+        "data": [
+            # Example of what an entry could look like if you tracked ingestion batches
+            # {
+            #     "id": "file-ingest-job-example123",
+            #     "object": "file",
+            #     "bytes": 10240, # Placeholder
+            #     "created_at": int(time.time()) - 3600,
+            #     "filename": "example_training_data.jsonl",
+            #     "purpose": "fine-tune-data-ingested-for-reflection",
+            #     "status": "processed",
+            #     "status_details": "100 interactions ingested."
+            # }
+        ],
+        "message": message
     }
-    logger.info(f"{request_id}: Responding with placeholder list explaining local indexing.")
     return jsonify(response_body), 200
+
+
+@app.route("/v1/files/<string:file_id>", methods=["GET"])
+async def handle_retrieve_file_ingestion_stub(file_id: str):
+    request_id = f"req-file-retrieve-ingest-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/files/{file_id} (Ingestion Info Placeholder)")
+    # Here, file_id would correspond to the ID returned by the POST /v1/files (e.g., "file-ingest-job-...")
+    # You could query a database of ingestion jobs. For now, a stub:
+    message = (
+        f"Retrieval for 'file' ID '{file_id}' (representing an ingestion batch for self-reflection) is not fully implemented. "
+        "This system ingests data directly into its interaction database. "
+        "If this ID corresponds to a past ingestion, its data has been processed for self-reflection."
+    )
+    if file_id.startswith("file-ingest-job-"):
+        response_body = {
+            "id": file_id, "object": "file", "bytes": 0,  # Placeholder
+            "created_at": int(time.time()) - 7200,  # Placeholder
+            "filename": "ingested_dataset_placeholder.jsonl", "purpose": "fine-tune-data-ingested-for-reflection",
+            "status": "processed", "status_details": message
+        }
+        return jsonify(response_body), 200
+    else:
+        resp_data, _ = _create_openai_error_response(
+            f"Ingestion job ID '{file_id}' not found or not in expected format.", code="not_found",
+            err_type="invalid_request_error")
+        return jsonify(resp_data), 404
+
+
+@app.route("/v1/files/<string:file_id>", methods=["DELETE"])
+async def handle_delete_file_ingestion_stub(file_id: str):
+    request_id = f"req-file-delete-ingest-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received DELETE /v1/files/{file_id} (Ingestion Info Placeholder)")
+    # Deleting an "ingestion job" in this context might mean marking its interactions as "ignored_ingestion"
+    # or some other status, rather than deleting them. For now, a stub.
+    message = (
+        f"Deletion of 'file' ID '{file_id}' (representing an ingestion batch) is not supported in a way that removes "
+        "data from the interaction database. Data ingested for self-reflection is integrated into the system's learning process."
+    )
+    response_body = {"id": file_id, "object": "file.deleted_stub", "deleted": True, "message": message}
+    return jsonify(response_body), 200
+
+
+@app.route("/v1/files/<string:file_id>/content", methods=["GET"])
+async def handle_retrieve_file_content_ingestion_stub(file_id: str):
+    request_id = f"req-file-content-ingest-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received GET /v1/files/{file_id}/content (Ingestion Info Placeholder)")
+    message = (
+        f"Retrieving original content for 'file' ID '{file_id}' (ingestion batch) is not supported. "
+        "Data is processed and integrated into the interaction database."
+    )
+    resp_data, _ = _create_openai_error_response(message, code="content_not_available",
+                                                 err_type="invalid_request_error")
+    return jsonify(resp_data), 404  # OpenAI returns 404 if content not retrievable for a file
 
 
 @app.route("/v1/files/<string:file_id>", methods=["GET"])

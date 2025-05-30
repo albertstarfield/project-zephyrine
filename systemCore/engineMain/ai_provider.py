@@ -1168,84 +1168,137 @@ class AIProvider:
 
     def setup_provider(self):
         """Sets up the AI models based on the configured PROVIDER."""
-        logger.info(f"🔌 Configuring provider: {self.provider_name}")
-        start_time = time.time()
+        logger.info(f"🔌 Configuring AI Provider: {self.provider_name}")
+        start_time = time.monotonic()  # Use monotonic for duration
 
         try:
             if self.provider_name == "ollama":
-                logger.error(f"OLLAMA IS NO LONGER SUPPORTED!")
-                sys.exit(1)
+                # This provider is marked as no longer supported in your file.
+                logger.error(f"PROVIDER 'ollama' IS NO LONGER SUPPORTED in this application configuration.")
+                logger.warning("Please switch to a supported provider (e.g., 'llama_cpp').")
+                # Fallback or exit if Ollama was critical
+                # For now, we'll let it proceed but models/embeddings will be None
+                self.models = {}
+                self.embeddings = None
+                # sys.exit("Ollama provider selected but is no longer supported.") # Alternative: exit
+
             elif self.provider_name == "fireworks":
-                logger.error(f"EXTERNAL ENGINE FIREWORK IS NO LONGER SUPPORTED!")
-                sys.exit(1)
+                # This provider is marked as no longer supported in your file.
+                logger.error(f"PROVIDER 'fireworks' IS NO LONGER SUPPORTED in this application configuration.")
+                logger.warning("Please switch to a supported provider (e.g., 'llama_cpp').")
+                self.models = {}
+                self.embeddings = None
+                # sys.exit("Fireworks provider selected but is no longer supported.") # Alternative: exit
 
             elif self.provider_name == "llama_cpp":
-                if not LLAMA_CPP_AVAILABLE: raise ImportError("llama-cpp-python is not installed or failed to import.")
-                self._llama_gguf_dir = LLAMA_CPP_GGUF_DIR
-                self._llama_model_map = LLAMA_CPP_MODEL_MAP
+                if not LLAMA_CPP_AVAILABLE:  # LLAMA_CPP_AVAILABLE global flag from top of ai_provider.py
+                    raise ImportError("llama-cpp-python library is not installed or failed to import.")
+
+                self._llama_gguf_dir = LLAMA_CPP_GGUF_DIR  # From config.py
+                self._llama_model_map = LLAMA_CPP_MODEL_MAP  # From config.py
+                self._python_executable = sys.executable  # Python executable for workers
+
+                if not self._llama_gguf_dir or not os.path.isdir(self._llama_gguf_dir):
+                    raise FileNotFoundError(
+                        f"Llama.cpp GGUF directory not found or not a directory: {self._llama_gguf_dir}")
 
                 # --- Setup Embeddings ---
-                self.EMBEDDINGS_MODEL_NAME = self._llama_model_map.get("embeddings", "N/A")
-                if "embeddings" in self._llama_model_map:
-                     logger.info(f"Setting up llama.cpp embeddings using role 'embeddings' ({self.EMBEDDINGS_MODEL_NAME})")
-                     # The wrapper handles loading the actual model when used
-                     self.embeddings = LlamaCppEmbeddingsWrapper(ai_provider=self)
+                self.EMBEDDINGS_MODEL_NAME = self._llama_model_map.get("embeddings")
+                if self.EMBEDDINGS_MODEL_NAME:
+                    logger.info(
+                        f"Setting up llama.cpp embeddings using role 'embeddings' (File: {self.EMBEDDINGS_MODEL_NAME})")
+                    # The LlamaCppEmbeddingsWrapper handles loading the actual model via _get_loaded_llama_instance when used
+                    self.embeddings = LlamaCppEmbeddingsWrapper(ai_provider=self)
+                    logger.info(f"LlamaCppEmbeddingsWrapper initialized for role 'embeddings'.")
                 else:
-                     logger.error("❌ No GGUF file specified for 'embeddings' role in LLAMA_CPP_MODEL_MAP.")
-                     self.embeddings = None # Disable embeddings
+                    logger.error(
+                        "❌ No GGUF file specified for 'embeddings' role in LLAMA_CPP_MODEL_MAP. Embeddings disabled.")
+                    self.embeddings = None
 
                 # --- Setup Chat Models (Wrappers only) ---
-                # We don't load models here, just create wrappers for each role
                 logger.info("Creating llama.cpp chat wrappers for configured roles...")
-                default_temp = DEFAULT_LLM_TEMPERATURE # Example default temp
-                common_model_kwargs = {"temperature": default_temp, "max_tokens": MAX_TOKENS}
+                default_temp = DEFAULT_LLM_TEMPERATURE  # From config.py
 
-                for role in self._llama_model_map.keys():
-                    if role != "embeddings": # Don't create chat wrapper for embedding model
-                        if role in self.models: # Skip if already set (e.g., by another provider setup - shouldn't happen)
-                            continue
-                        logger.debug(f"  Creating wrapper for role '{role}'...")
-                        self.models[role] = LlamaCppChatWrapper(
-                            ai_provider=self,
-                            model_role=role,
-                            model_kwargs=common_model_kwargs.copy() # Pass relevant defaults
-                        )
+                for role, gguf_filename_in_map in self._llama_model_map.items():
+                    if role == "embeddings":  # Skip embeddings role for chat models
+                        continue
+
+                    # Determine model_kwargs for this role
+                    role_specific_kwargs = {"temperature": default_temp}
+
+                    # For system roles that need to output full JSON/structured data without being cut off
+                    # These roles use the "router" model which is deepscaler.gguf
+                    system_task_roles = ["router", "action_analyzer", "classifier", "tot_json_formatter",
+                                         "deep_translation_analyzer_role"]  # Add other specific system roles as needed
+
+                    if role in system_task_roles:
+                        role_specific_kwargs["max_tokens"] = -1  # -1 for llama.cpp often means "up to context limit"
+                        logger.info(
+                            f"Setting max_tokens=-1 (unlimited within context) for system role: '{role}' (using model file: {gguf_filename_in_map})")
+                    else:
+                        # For general chat, VLM, code, math, translator etc., use the global MAX_TOKENS from config.py
+                        role_specific_kwargs["max_tokens"] = MAX_TOKENS  # MAX_TOKENS from config.py
+                        logger.info(
+                            f"Setting max_tokens={MAX_TOKENS} for role: '{role}' (using model file: {gguf_filename_in_map})")
+
+                    # Add chat format if specified for the role in LLAMA_CPP_MODEL_MAP (e.g., role_chat_format)
+                    # Example: "router_chat_format": "chatml" could be in LLAMA_CPP_MODEL_MAP if needed
+                    # For now, LlamaCppChatWrapper's _call will pass a default to the worker if not in kwargs
+                    # Or, the worker itself has a default chat_format for chat tasks.
+                    # Let's assume chat_format is handled by worker default or passed via kwargs if a model needs a specific one.
+
+                    logger.debug(
+                        f"  Creating LlamaCppChatWrapper for role '{role}' (model file '{gguf_filename_in_map}') with kwargs: {role_specific_kwargs}")
+                    self.models[role] = LlamaCppChatWrapper(
+                        ai_provider=self,  # Pass reference to this AIProvider instance
+                        model_role=role,
+                        model_kwargs=role_specific_kwargs
+                    )
+
                 # Assign the default chat model wrapper explicitly
-                default_chat_role = MODEL_DEFAULT_CHAT_LLAMA_CPP
-                if default_chat_role in self.models:
-                    self.models["default"] = self.models[default_chat_role]
-                    logger.info(f"Assigned role '{default_chat_role}' as the default chat model.")
+                default_chat_role_key = MODEL_DEFAULT_CHAT_LLAMA_CPP  # From config.py, e.g., "general"
+                if default_chat_role_key in self.models:
+                    self.models["default"] = self.models[default_chat_role_key]
+                    logger.info(f"Assigned model for role '{default_chat_role_key}' as the default chat model.")
+                elif "general" in self.models:  # Fallback if MODEL_DEFAULT_CHAT_LLAMA_CPP isn't in models (e.g. typo)
+                    self.models["default"] = self.models["general"]
+                    logger.warning(
+                        f"Default chat role '{default_chat_role_key}' not found, falling back to 'general' as default chat model.")
                 else:
-                    logger.error(f"Default chat role '{default_chat_role}' specified but no GGUF mapping found!")
-
+                    logger.error(
+                        f"Neither default chat role '{default_chat_role_key}' nor 'general' role found in configured models! Default chat will be unavailable.")
             else:
-                raise ValueError(f"❌ Invalid provider specified in config: {self.provider_name}")
+                raise ValueError(
+                    f"❌ Invalid PROVIDER specified in config: '{self.provider_name}'. Supported: 'llama_cpp'.")
 
-            # --- Final Check ---
+            # --- Final Check for essential components ---
             if not self.embeddings:
-                 logger.error("❌ Embeddings model failed to initialize for the selected provider.")
-                 # Decide: raise error or allow continuation without embeddings? Raising is safer.
-                 raise ValueError("Embeddings initialization failed.")
+                logger.error("❌ Embeddings model failed to initialize for the selected provider.")
+                raise ValueError("Embeddings initialization failed.")
             if not self.models.get("default"):
-                 logger.error("❌ Default chat model failed to initialize for the selected provider.")
-                 raise ValueError("Default chat model initialization failed.")
-            if not self.models.get("vlm"):
-                 logger.warning("⚠️ VLM model not configured or failed to initialize for the selected provider.")
+                logger.error("❌ Default chat model failed to initialize for the selected provider.")
+                raise ValueError("Default chat model initialization failed.")
+            if not self.models.get("vlm"):  # VLM is important for image processing
+                logger.warning(
+                    "⚠️ VLM model role ('vlm') not configured or failed to initialize. Image understanding capabilities will be limited.")
+            if not self.models.get("router"):
+                logger.warning(
+                    "⚠️ Router model role ('router') not configured. System routing/classification may use 'default' model.")
 
             logger.success(f"✅ AI Provider '{self.provider_name}' setup complete.")
 
-        except Exception as e:
-            logger.error(f"❌ Error setting up AI provider {self.provider_name}: {e}")
+        except Exception as e_setup:
+            logger.error(f"❌ Error setting up AI Provider '{self.provider_name}': {e_setup}")
             logger.exception("AI Provider Setup Traceback:")
-            # Ensure partial setup doesn't leave inconsistent state
+            # Ensure a clean state if setup fails catastrophically
             self.models = {}
             self.embeddings = None
-            self._loaded_llama_instance = None
-            raise # Re-raise the exception to prevent app startup
+            if hasattr(self, '_loaded_llama_instance'): self._loaded_llama_instance = None  # type: ignore
+            raise  # Re-raise the exception to prevent app startup with a broken provider
 
         finally:
-            duration = (time.time() - start_time) * 1000
-            logger.debug(f"⏱️ AI Provider setup took {duration:.2f} ms")
+            duration_ms = (time.monotonic() - start_time) * 1000
+            logger.debug(f"⏱️ AI Provider setup method took {duration_ms:.2f} ms.")
 
     def get_model(self, model_role: str = "default") -> Optional[Any]:
         """Gets the Langchain model wrapper (Chat or Embeddings)."""
