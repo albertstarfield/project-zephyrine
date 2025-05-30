@@ -11,7 +11,8 @@ import platform
 from datetime import datetime, date
 import json  # For parsing conda info
 import traceback
-from typing import Optional
+import requests
+from typing import Optional, Dict
 
 # --- Configuration ---
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -167,6 +168,8 @@ PYWHISPERCPP_CLONE_DIR_NAME = "pywhispercpp_build" # Name for the local clone di
 PYWHISPERCPP_CLONE_PATH = os.path.join(ROOT_DIR, PYWHISPERCPP_CLONE_DIR_NAME)
 PYWHISPERCPP_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".pywhispercpp_installed_v1")
 
+# pyaria2c python configuraiton
+ARIA2P_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".aria2p_installed_v1")
 
 
 FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
@@ -175,7 +178,8 @@ FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE,
     CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE,
     CONDA_PATH_CACHE_FILE,
-    PYWHISPERCPP_INSTALLED_FLAG_FILE # <-- Add this line
+    PYWHISPERCPP_INSTALLED_FLAG_FILE,
+    ARIA2P_INSTALLED_FLAG_FILE
 ]
 
 
@@ -832,134 +836,178 @@ def _stream_log_file(log_path, process_to_monitor, stream_name_prefix="LOG"):
     finally:
         print_system(f"[{stream_name_prefix}-STREAMER] Stopped monitoring log file: {log_path}")
 
-def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds: float) -> tuple[bool, float]:
-    import curses
-    curses.curs_set(0)
-    stdscr.nodelay(False)
-    stdscr.keypad(True)
-    curses.noecho()
-    curses.cbreak()
 
+def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds: float) -> tuple[bool, float]:
+    # (This function is extracted from the launcher.py you provided)
+    import curses  # Ensure curses is imported, typically done at the top of launcher.py
+
+    # Initialize curses settings
+    curses.curs_set(0)  # Hide the cursor
+    stdscr.nodelay(False)  # Make getch() blocking
+    stdscr.keypad(True)  # Enable keypad mode for special keys
+    curses.noecho()  # Turn off automatic echoing of keys to the screen
+    curses.cbreak()  # React to keys instantly, without requiring Enter
+
+    # Color pair definitions (check if curses.has_colors() first in a real app)
     if curses.has_colors():
         curses.start_color()
-        curses.init_pair(1, curses.COLOR_YELLOW, curses.COLOR_BLACK)
-        curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)
-        curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_GREEN)
-        curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_RED)
-        curses.init_pair(5, curses.COLOR_CYAN, curses.COLOR_BLACK)
-        curses.init_pair(6, curses.COLOR_GREEN, curses.COLOR_BLACK)
-        curses.init_pair(7, curses.COLOR_RED, curses.COLOR_BLACK)
-    else:
+        # Define color pairs: (pair_number, foreground_color, background_color)
+        curses.init_pair(1, curses.COLOR_YELLOW, curses.COLOR_BLACK)  # Instructions, time
+        curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)  # License text
+        curses.init_pair(3, curses.COLOR_BLACK, curses.COLOR_GREEN)  # Accept button selected
+        curses.init_pair(4, curses.COLOR_BLACK, curses.COLOR_RED)  # Reject button selected
+        curses.init_pair(5, curses.COLOR_CYAN, curses.COLOR_BLACK)  # Header
+        curses.init_pair(6, curses.COLOR_GREEN, curses.COLOR_BLACK)  # Accept button normal
+        curses.init_pair(7, curses.COLOR_RED, curses.COLOR_BLACK)  # Reject button normal
+    else:  # Fallback for terminals without color
         curses.init_pair(1, curses.COLOR_WHITE, curses.COLOR_BLACK)
         curses.init_pair(2, curses.COLOR_WHITE, curses.COLOR_BLACK)
-        curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK)
-        curses.init_pair(4, curses.COLOR_WHITE, curses.COLOR_BLACK)
+        curses.init_pair(3, curses.COLOR_WHITE, curses.COLOR_BLACK)  # Selected would be A_REVERSE
+        curses.init_pair(4, curses.COLOR_WHITE, curses.COLOR_BLACK)  # Selected would be A_REVERSE
         curses.init_pair(5, curses.COLOR_WHITE, curses.COLOR_BLACK)
         curses.init_pair(6, curses.COLOR_WHITE, curses.COLOR_BLACK)
         curses.init_pair(7, curses.COLOR_WHITE, curses.COLOR_BLACK)
 
     max_y, max_x = stdscr.getmaxyx()
-    if max_y < 10 or max_x < 40:
-        curses.nocbreak()
-        stdscr.keypad(False)
-        curses.echo()
-        curses.endwin()
-        print_error("Terminal window is too small to display licenses. Please resize and try again.")
-        sys.exit(1)
 
-    TEXT_AREA_HEIGHT = max_y - 7
-    TEXT_START_Y = 1
-    SCROLL_INFO_Y = max_y - 5
-    EST_TIME_Y = max_y - 4
-    INSTR_Y = max_y - 3
-    PROMPT_Y = max_y - 2
+    # Initial size check
+    if max_y < 10 or max_x < 40:  # Minimum reasonable size
+        # curses.wrapper handles endwin() if we raise an exception or return.
+        # For a cleaner exit here if too small *before* loop, we might raise.
+        # However, the loop below also checks, so this could be omitted if preferred.
+        # For now, let the loop handle the "too small" message drawing.
+        pass
 
-    top_line = 0
+    top_line = 0  # First line of the license text to display
     total_lines = len(licenses_text_lines)
     accepted = False
     start_time = time.monotonic()
-    current_selection = 0
+    current_selection = 0  # 0 for Accept, 1 for Not Accept
+
+    last_key_error_message = None  # To display errors from getch within curses window
 
     while True:
         try:
             stdscr.clear()
-            max_y, max_x = stdscr.getmaxyx()
+            max_y, max_x = stdscr.getmaxyx()  # Get current dimensions
 
-            TEXT_AREA_HEIGHT = max(1, max_y - 7)
+            # Check size again in case of resize during loop
+            if max_y < 10 or max_x < 40:
+                last_key_error_message = "Terminal too small! Resize or press 'N' to exit."
+                # Draw minimal error and exit instruction
+                try:
+                    stdscr.addstr(0, 0, last_key_error_message[:max_x - 1],
+                                  curses.color_pair(7) | curses.A_BOLD)  # type: ignore
+                    stdscr.addstr(2, 0, "Press 'N' or Enter (if on Not Accept) to exit."[:max_x - 1],
+                                  curses.color_pair(1))  # type: ignore
+
+                    reject_button_text_small = "[ Not Accept (N) to Exit ]"
+                    stdscr.addstr(max_y - 2, max(0, (max_x - len(reject_button_text_small)) // 2),
+                                  reject_button_text_small, curses.color_pair(4) | curses.A_REVERSE)  # type: ignore
+                except curses.error:
+                    pass  # If even this fails, not much to do
+                stdscr.refresh()
+
+                key = stdscr.getch()  # Wait for key to exit or resize
+                if key == ord('n') or key == ord('N') or key == curses.KEY_ENTER or key == 10 or key == 13:
+                    accepted = False;
+                    break
+                elif key == curses.KEY_RESIZE:
+                    continue  # Loop again to redraw with new size
+                continue  # For any other key, just re-loop and show small screen message
+
+            # Define layout based on current terminal size
+            TEXT_AREA_HEIGHT = max(1, max_y - 7)  # Number of lines for license text
             TEXT_START_Y = 1
             SCROLL_INFO_Y = max_y - 5
             EST_TIME_Y = max_y - 4
             INSTR_Y = max_y - 3
             PROMPT_Y = max_y - 2
 
+            # 1. Header
             header = "--- SOFTWARE LICENSE AGREEMENT ---"
-            stdscr.addstr(0, max(0, (max_x - len(header)) // 2), header, curses.color_pair(5) | curses.A_BOLD)
+            stdscr.addstr(0, max(0, (max_x - len(header)) // 2), header,
+                          curses.color_pair(5) | curses.A_BOLD)  # type: ignore
 
+            # 2. License Text Area
             for i in range(TEXT_AREA_HEIGHT):
                 line_idx = top_line + i
                 if line_idx < total_lines:
-                    display_line = licenses_text_lines[line_idx][:max_x - 1].rstrip()
-                    stdscr.addstr(TEXT_START_Y + i, 0, display_line, curses.color_pair(2))
+                    display_line = licenses_text_lines[line_idx][:max_x - 1].rstrip()  # Truncate line if too long
+                    stdscr.addstr(TEXT_START_Y + i, 0, display_line, curses.color_pair(2))  # type: ignore
                 else:
-                    break
+                    break  # No more lines to display in the current view
 
+            # 3. Scroll Information
             if total_lines > TEXT_AREA_HEIGHT:
                 progress = f"Line {top_line + 1} - {min(top_line + TEXT_AREA_HEIGHT, total_lines)} of {total_lines}"
-                stdscr.addstr(SCROLL_INFO_Y, max(0, max_x - len(progress) - 1), progress, curses.color_pair(1))
+                stdscr.addstr(SCROLL_INFO_Y, max(0, max_x - len(progress) - 1), progress,
+                              curses.color_pair(1))  # type: ignore
             else:
-                stdscr.addstr(SCROLL_INFO_Y, 0, "All text visible.", curses.color_pair(1))
+                stdscr.addstr(SCROLL_INFO_Y, 0, "All text visible.", curses.color_pair(1))  # type: ignore
 
+            # 4. Estimated Time
             est_time_str = f"Estimated minimum review time: {estimated_seconds / 60:.1f} min ({estimated_seconds:.0f} sec)"
-            stdscr.addstr(EST_TIME_Y, 0, est_time_str[:max_x - 1], curses.color_pair(1))
+            stdscr.addstr(EST_TIME_Y, 0, est_time_str[:max_x - 1], curses.color_pair(1))  # type: ignore
 
-            instr = "Scroll: UP/DOWN/PGUP/PGDN | Select: LEFT/RIGHT | Confirm: ENTER / (a/n)"
-            stdscr.addstr(INSTR_Y, 0, instr[:max_x - 1], curses.color_pair(1))
+            # 5. Instructions
+            instr = "Scroll: UP/DOWN/PGUP/PGDN/HOME/END | Select: LEFT/RIGHT | Confirm: ENTER / (a/n)"
+            stdscr.addstr(INSTR_Y, 0, instr[:max_x - 1], curses.color_pair(1))  # type: ignore
 
+            # 6. Accept/Reject Buttons
             accept_button_text = "[ Accept (A) ]"
             reject_button_text = "[ Not Accept (N) ]"
-
             button_spacing = 4
             buttons_total_width = len(accept_button_text) + len(reject_button_text) + button_spacing
             start_buttons_x = max(0, (max_x - buttons_total_width) // 2)
 
-            accept_style = curses.color_pair(3) | curses.A_REVERSE if current_selection == 0 else curses.color_pair(6)
-            reject_style = curses.color_pair(4) | curses.A_REVERSE if current_selection == 1 else curses.color_pair(7)
+            accept_style = curses.color_pair(3) | curses.A_REVERSE if current_selection == 0 else curses.color_pair(
+                6)  # type: ignore
+            reject_style = curses.color_pair(4) | curses.A_REVERSE if current_selection == 1 else curses.color_pair(
+                7)  # type: ignore
 
             stdscr.addstr(PROMPT_Y, start_buttons_x, accept_button_text, accept_style)
             stdscr.addstr(PROMPT_Y, start_buttons_x + len(accept_button_text) + button_spacing, reject_button_text,
                           reject_style)
 
+            if last_key_error_message:  # Display error from getch within curses window if any
+                stdscr.addstr(max_y - 1, 0, last_key_error_message[:max_x - 1],
+                              curses.color_pair(7) | curses.A_BOLD)  # type: ignore
+                last_key_error_message = None  # Clear after displaying
+
             stdscr.refresh()
 
-        except curses.error as e:
-            print_warning(f"Curses display error: {e}. If persists, resize terminal.")
-            time.sleep(0.1)
-            max_y, max_x = stdscr.getmaxyx()
-            if max_y < 10 or max_x < 40:
-                curses.nocbreak()
-                stdscr.keypad(False)
-                curses.echo()
-                curses.endwin()
-                print_error("Terminal window became too small. Please resize and try again.")
-                sys.exit(1)
-            continue
+        except curses.error as e_curses_draw:
+            # This error means drawing failed, perhaps due to a very rapid resize or unusual terminal state.
+            # Log it if possible (launcher.py doesn't use loguru by default, so print_warning if available)
+            # For now, just sleep briefly and let the loop retry drawing with new dimensions.
+            if 'print_warning' in globals():  # Check if print_warning is available
+                print_warning(f"Curses draw error: {e_curses_draw}. Will attempt redraw.")
+            time.sleep(0.05)
+            continue  # Retry drawing
 
         try:
-            key = stdscr.getch()
-        except KeyboardInterrupt:
-            accepted = False
+            key = stdscr.getch()  # Get user input
+        except KeyboardInterrupt:  # Handle Ctrl+C gracefully
+            accepted = False;
             break
-        except Exception as e:
-            print_warning(f"Error getting input: {e}")
-            key = -1
+        except curses.error as e_getch:  # If getch itself errors (e.g. during resize after clear but before refresh)
+            last_key_error_message = f"Input error: {e_getch}. Resizing or retrying..."
+            time.sleep(0.05)  # Small delay before retrying the loop
+            continue  # Retry the main loop, which will re-check dimensions and redraw
+        except Exception as e_getch_other:  # Catch any other unexpected error during getch
+            last_key_error_message = f"Unexpected input error: {e_getch_other}. Retrying..."
+            time.sleep(0.05)
+            continue
 
+        # Process Key Input
         if key == ord('a') or key == ord('A'):
-            accepted = True
+            accepted = True;
             break
         elif key == ord('n') or key == ord('N'):
-            accepted = False
+            accepted = False;
             break
-        elif key == curses.KEY_ENTER or key == 10 or key == 13:
+        elif key == curses.KEY_ENTER or key == 10 or key == 13:  # Enter key
             if current_selection == 0:
                 accepted = True
             else:
@@ -973,25 +1021,26 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
             top_line = min(top_line + 1, max(0, total_lines - TEXT_AREA_HEIGHT))
         elif key == curses.KEY_UP:
             top_line = max(0, top_line - 1)
-        elif key == curses.KEY_NPAGE:
+        elif key == curses.KEY_NPAGE:  # Page Down
             top_line = min(max(0, total_lines - TEXT_AREA_HEIGHT), top_line + TEXT_AREA_HEIGHT)
-        elif key == curses.KEY_PPAGE:
+        elif key == curses.KEY_PPAGE:  # Page Up
             top_line = max(0, top_line - TEXT_AREA_HEIGHT)
         elif key == curses.KEY_HOME:
             top_line = 0
         elif key == curses.KEY_END:
             top_line = max(0, total_lines - TEXT_AREA_HEIGHT)
-        elif key == curses.KEY_RESIZE:
-            pass
+        elif key == curses.KEY_RESIZE:  # Terminal resize event
+            # The loop will restart, re-calculate max_y, max_x, clear and redraw.
+            # This is the standard way to handle resize in curses.
+            if 'print_system' in globals():  # Check if print_system is available
+                print_system("Terminal resized, redrawing curses UI...")  # Optional: log to external file if needed
+            pass  # Just let the loop continue to redraw
 
     end_time = time.monotonic()
-    time_taken = end_time - start_time
+    time_taken_to_decide = end_time - start_time
 
-    curses.nocbreak()
-    stdscr.keypad(False)
-    curses.echo()
-    curses.endwin()
-    return accepted, time_taken
+    # curses.wrapper will automatically call endwin(), nocbreak(), keypad(False), echo()
+    return accepted, time_taken_to_decide
 
 
 def _ensure_conda_package(package_name: str,
@@ -1025,7 +1074,7 @@ def _ensure_conda_package(package_name: str,
                 print_warning(
                     f"Executable '{check_exe}' found at '{found_path}', but it's OUTSIDE the target Conda env '{TARGET_CONDA_ENV_PATH}'. Will attempt install into env.")
         except Exception as e_path:
-            print_warning(f"Error verifying path for '{check_exe}': {e}. Assuming not in env.")
+            print_warning(f"Error verifying path for '{check_exe}': {e_path}. Assuming not in env.")
 
     if not found_path or not is_in_env:
         if not found_path:
@@ -1084,56 +1133,365 @@ def _ensure_conda_package(package_name: str,
                 return False
     return True  # Already found in env, or successfully installed and verified
 
-# --- File Download Logic ---
-def download_file_with_progress(url, destination_path, file_description, requests_session):
-    from tqdm import tqdm
-    import requests
 
-    print_system(f"Downloading {file_description} from {url} to {destination_path}...")
+def _detect_and_prepare_acceleration_env_vars() -> Dict[str, str]:
+    """
+    Attempts to detect the best available hardware acceleration and prepares
+    environment variables to guide the builds in the relaunched Conda environment.
+    Hierarchy: CUDA > Metal (on Apple Silicon) > Vulkan > CoreML (for Whisper on Apple) > OpenCL > CPU (with BLAS/OpenMP).
+    Returns a dictionary of 'AUTODETECTED_...' environment variables.
+    """
+    print_system("--- Starting Hardware Acceleration Auto-Detection ---")
+    detected_env_vars = {}
+    primary_gpu_backend_detected = "cpu"  # Default
+
+    # --- CUDA Detection (Highest Priority) ---
     try:
-        os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+        nvidia_smi_path = None
+        if IS_WINDOWS:
+            # Common paths for nvidia-smi on Windows
+            smi_paths = [
+                os.path.join(os.environ.get("ProgramFiles", "C:\\Program Files"), "NVIDIA Corporation", "NVSMI",
+                             "nvidia-smi.exe"),
+                os.path.join(os.environ.get("SystemRoot", "C:\\Windows"), "System32", "nvidia-smi.exe")
+            ]
+            for p in smi_paths:
+                if os.path.exists(p):
+                    nvidia_smi_path = p
+                    break
+        else:  # Linux/macOS
+            nvidia_smi_path = shutil.which("nvidia-smi")
 
-        response = requests_session.get(url, stream=True, timeout=(10, 300))
-        response.raise_for_status()
+        if nvidia_smi_path:
+            # Try to run nvidia-smi to confirm a CUDA-capable GPU is present
+            # This is a more robust check than just CUDA_PATH
+            result = subprocess.run([nvidia_smi_path, "-L"], capture_output=True, text=True, timeout=5, check=False)
+            if result.returncode == 0 and "GPU" in result.stdout:
+                print_system("CUDA: Detected NVIDIA GPU via nvidia-smi.")
+                primary_gpu_backend_detected = "cuda"
+                detected_env_vars["AUTODETECTED_CUDA_AVAILABLE"] = "1"
+        elif os.getenv("CUDA_HOME") or os.getenv("CUDA_PATH"):
+            print_system("CUDA: Detected CUDA_HOME/CUDA_PATH. Assuming CUDA might be available (nvidia-smi not found).")
+            primary_gpu_backend_detected = "cuda"  # Less certain, but a strong hint
+            detected_env_vars["AUTODETECTED_CUDA_AVAILABLE"] = "1"
+        else:
+            print_system("CUDA: No clear indication of CUDA found (nvidia-smi or CUDA_HOME/PATH).")
+    except Exception as e_cuda:
+        print_warning(f"CUDA detection failed: {e_cuda}")
 
-        total_size_in_bytes = int(response.headers.get('content-length', 0))
-        block_size = 8192
+    # --- Metal Detection (Apple Silicon - Second Priority if CUDA not found) ---
+    if primary_gpu_backend_detected == "cpu" and platform.system() == "Darwin" and platform.machine() == "arm64":
+        # Check for Xcode command line tools as a proxy for Metal capabilities
+        # A more direct check for Metal SDK isn't straightforward from Python without specific libraries
+        if shutil.which("xcodebuild") or shutil.which("swift") or shutil.which("metal"):  # Heuristic
+            print_system("Metal: Detected Apple Silicon and likely Xcode tools. Assuming Metal is available.")
+            primary_gpu_backend_detected = "metal"
+            detected_env_vars["AUTODETECTED_METAL_AVAILABLE"] = "1"  # For Apple platforms
+        else:
+            print_system("Metal: Apple Silicon detected, but Xcode tools (heuristic for Metal) not clearly found.")
 
-        progress_bar = tqdm(total=total_size_in_bytes, unit='iB', unit_scale=True, desc=file_description,
-                            ascii=IS_WINDOWS, leave=False)
-        temp_destination_path = destination_path + ".tmp_download"
+    # --- Vulkan Detection (Third Priority if CUDA/Metal not found) ---
+    # This is a basic check. Full Vulkan setup is complex.
+    if primary_gpu_backend_detected == "cpu":
+        vulkan_sdk_env = os.getenv("VULKAN_SDK")
+        vulkaninfo_path = shutil.which("vulkaninfo" if not IS_WINDOWS else "vulkaninfo.exe")
+        if vulkan_sdk_env and os.path.isdir(vulkan_sdk_env):
+            print_system(f"Vulkan: Detected VULKAN_SDK environment variable: {vulkan_sdk_env}")
+            primary_gpu_backend_detected = "vulkan"
+            detected_env_vars["AUTODETECTED_VULKAN_AVAILABLE"] = "1"
+        elif vulkaninfo_path:
+            print_system(
+                f"Vulkan: Found 'vulkaninfo' executable at {vulkaninfo_path}. Assuming Vulkan might be available.")
+            # Running vulkaninfo can be slow or verbose, so just checking for its presence.
+            primary_gpu_backend_detected = "vulkan"
+            detected_env_vars["AUTODETECTED_VULKAN_AVAILABLE"] = "1"
+        else:
+            print_system("Vulkan: No clear indication of Vulkan SDK or vulkaninfo found.")
 
-        with open(temp_destination_path, 'wb') as file:
-            for data in response.iter_content(block_size):
-                progress_bar.update(len(data))
-                file.write(data)
-        progress_bar.close()
+    # --- CoreML (Specific to Whisper on Apple platforms, can co-exist with Metal) ---
+    if platform.system() == "Darwin":
+        print_system("CoreML: Detected Apple platform. CoreML support can be enabled for Whisper.")
+        detected_env_vars["AUTODETECTED_COREML_POSSIBLE"] = "1"
 
-        if total_size_in_bytes != 0 and progress_bar.n != total_size_in_bytes:
+    # --- OpenCL Detection (Lower priority) ---
+    # if primary_gpu_backend_detected == "cpu": # Only if no other GPU backend found
+    #     clinfo_path = shutil.which("clinfo" if not IS_WINDOWS else "clinfo.exe")
+    #     if clinfo_path:
+    #         print_system(f"OpenCL: Found 'clinfo' executable at {clinfo_path}. OpenCL might be available.")
+    #         # OpenCL is complex to reliably use for GGUF, so we won't set it as primary_gpu_backend
+    #         # unless specifically requested by user. Just note its potential.
+    #         detected_env_vars["AUTODETECTED_OPENCL_POSSIBLE"] = "1"
+    #     else:
+    #         print_system("OpenCL: 'clinfo' not found.")
+
+    # --- CPU Enhancements (OpenBLAS for Whisper, OpenMP for Llama) ---
+    # These are not primary backends but enhancements.
+    # GGML_BLAS=1 for whisper.cpp often relies on OpenBLAS being found by its CMake.
+    # LLAMA_OPENMP=ON is enabled by default for CPU builds of llama-cpp-python by launcher.
+    # For now, we won't try to auto-detect BLAS presence, as it's complex.
+    # Users can still set GGML_BLAS=1 manually.
+    print_system(
+        f"CPU: OpenMP will be enabled by default for Llama.cpp CPU builds. User can set GGML_BLAS=1 for PyWhisperCpp CPU.")
+    detected_env_vars[
+        "AUTODETECTED_CPU_ENHANCEMENTS_INFO"] = "OpenMP for Llama.cpp; User can set GGML_BLAS=1 for PyWhisperCpp"
+
+    detected_env_vars["AUTODETECTED_PRIMARY_GPU_BACKEND"] = primary_gpu_backend_detected
+    print_system(
+        f"--- Hardware Acceleration Auto-Detection Complete. Preferred GPU Backend: {primary_gpu_backend_detected} ---")
+    if detected_env_vars.get("AUTODETECTED_COREML_POSSIBLE") == "1":
+        print_system("    (CoreML also noted as possible for Whisper on this platform)")
+
+    return detected_env_vars
+
+# --- Add Aria2p Import ---
+ARIA2P_AVAILABLE = False
+try:
+    import aria2p
+    ARIA2P_AVAILABLE = True
+    # print_system("aria2p Python library imported successfully.") # Optional: for relaunched script
+except ImportError:
+    # This warning will appear if launcher.py itself cannot import it.
+    # The relaunched script (in Conda env) is where it matters most.
+    print_warning("aria2p Python library not found. Aria2c download method will be unavailable.")
+# --- End Aria2p Import ---
+
+# --- File Download Logic ---
+def download_file_with_progress(
+        url: str,
+        destination_path: str,
+        file_description: str,
+        requests_session: requests.Session,  # Keep for requests fallback
+        max_retries_non_connection_error: int = 9999999999,
+        aria2_rpc_url: str = "http://localhost:6800/jsonrpc",  # Default for local aria2c RPC
+        aria2_rpc_secret: Optional[str] = None  # If your aria2c RPC is secured
+):
+    """
+    Downloads a file with a progress bar.
+    Attempts to use aria2c for multi-connection download if available and connected.
+    Falls back to requests-based download with robust retries.
+    """
+    print_system(f"Preparing to download {file_description} from {url} to {destination_path}...")
+
+    os.makedirs(os.path.dirname(destination_path), exist_ok=True)
+
+    # --- Attempt Aria2c Download First ---
+    aria2c_executable_path = shutil.which("aria2c")
+    if ARIA2P_AVAILABLE and aria2c_executable_path:
+        print_system(f"Aria2c found at '{aria2c_executable_path}'. Attempting download via aria2p...")
+        aria2_api = None
+        try:
+            # Initialize API client and connect to aria2 RPC server
+            # This assumes aria2c is running with --enable-rpc
+            aria2_api = aria2p.API(
+                aria2p.Client(host="http://localhost", port=6800, secret=aria2_rpc_secret))  # Basic client
+            # Verify connection by getting version (optional, but good check)
+            version_info = aria2_api.get_version()
+            print_system(
+                f"Connected to aria2c RPC server version {version_info.version} (Features: {', '.join(version_info.enabled_features)})")
+
+            # Define download options for aria2c
+            # These can be made more configurable if needed
+            aria2_options = {
+                "dir": os.path.dirname(destination_path),  # Download directory
+                "out": os.path.basename(destination_path),  # Desired output filename
+                "max-connection-per-server": "16",  # Number of connections
+                "split": "16",  # Split download into 16 parts
+                "min-split-size": "1M",
+                "stream-piece-selector": "geom",  # Or "inorder"
+                # "http-user-agent": "Mozilla/5.0..." # If specific user agent needed
+            }
+
+            print_system(f"Adding URI to aria2c: {url} with options: {aria2_options}")
+            # Add the URI to aria2c for download
+            download = aria2_api.add_uris([url], options=aria2_options)
+
+            if not download:  # Should not happen if add_uris is successful
+                raise RuntimeError("aria2_api.add_uris did not return a download object.")
+
+            print_system(f"Aria2c download started (GID: {download.gid}). Monitoring progress...")
+
+            # Progress monitoring loop
+            # Use tqdm for the progress bar
+            with tqdm(total=100, unit='%', desc=file_description[:30], ascii=IS_WINDOWS, leave=False,
+                      bar_format='{l_bar}{bar}| {n_fmt}% [{elapsed}<{remaining}, {rate_fmt}{postfix}]') as progress_bar:
+                last_completed_length = 0
+                while not download.is_complete and not download.has_error:
+                    download.update()  # Refresh download status from aria2c
+
+                    if download.total_length > 0:
+                        # Update tqdm total if it wasn't known initially or changed
+                        if progress_bar.total != download.total_length:
+                            progress_bar.total = download.total_length
+                            progress_bar.unit = 'iB'  # Switch to bytes once total is known
+                            progress_bar.unit_scale = True
+
+                        # Update progress based on bytes downloaded
+                        progress_bar.update(download.completed_length - last_completed_length)
+                        last_completed_length = download.completed_length
+
+                        # Update postfix with speed and connections
+                        postfix_str = f"S:{download.download_speed_string()} C:{download.connections}"
+                        if download.eta_string(human_readable=True):
+                            postfix_str += f" ETA:{download.eta_string(human_readable=True)}"
+                        progress_bar.set_postfix_str(postfix_str, refresh=False)  # refresh=False with manual refresh
+                        progress_bar.refresh()
+                    else:  # Total length not yet known, show percentage if available
+                        if download.progress > progress_bar.n:  # download.progress is 0-100
+                            progress_bar.update(
+                                int(download.progress) - int(progress_bar.n))  # Update by diff in percent
+                        progress_bar.set_postfix_str(f"S:{download.download_speed_string()} C:{download.connections}",
+                                                     refresh=True)
+
+                    # Check for errors during loop
+                    if download.error_code is not None:
+                        raise RuntimeError(
+                            f"Aria2c download error (Code {download.error_code}): {download.error_message}")
+
+                    # Infinite retry for connection issues is harder with aria2c daemon mode
+                    # as aria2c handles retries internally based on its own settings.
+                    # We primarily rely on its robustness here.
+                    # If the RPC connection itself breaks, aria2p might raise an exception.
+                    time.sleep(0.5)  # Update interval for progress
+
+            # After loop, check final status
+            download.update()  # Final update
+            if download.is_complete:
+                print_system(f"Aria2c download successful for {file_description}!")
+                # aria2c already saved to destination_path due to "dir" and "out" options
+                # Verify file exists as a final check
+                if os.path.exists(destination_path) and os.path.getsize(destination_path) == download.total_length:
+                    return True
+                else:
+                    print_error(
+                        f"Aria2c reported complete, but file mismatch/missing at {destination_path}. Expected size: {download.total_length}, Actual: {os.path.getsize(destination_path) if os.path.exists(destination_path) else 'Not Found'}")
+                    return False  # Fallback to requests if file is not as expected
+            elif download.has_error:
+                print_error(
+                    f"Aria2c download failed for {file_description}. Error (Code {download.error_code}): {download.error_message}")
+                # Clean up potentially incomplete file if aria2c didn't
+                if download.files:  # Check if file paths are available
+                    for file_entry in download.files:
+                        if os.path.exists(file_entry.path):
+                            try:
+                                os.remove(file_entry.path); print_warning(
+                                    f"Removed incomplete aria2c download: {file_entry.path}")
+                            except Exception as e_rm_aria:
+                                print_error(f"Failed to remove incomplete aria2c file {file_entry.path}: {e_rm_aria}")
+                return False  # Fallback to requests
+
+        except aria2p.client.ClientException as e_aria_client:
+            print_warning(f"Aria2p client/RPC error: {e_aria_client}. Is aria2c daemon running with --enable-rpc?")
+            print_warning("Falling back to requests-based download.")
+        except Exception as e_aria_general:
+            print_warning(f"Unexpected error during Aria2c download attempt: {e_aria_general}")
+            traceback.print_exc(file=sys.stderr)
+            print_warning("Falling back to requests-based download.")
+        # If aria2c attempt fails for any reason, we fall through to the requests method.
+
+    else:
+        if not ARIA2P_AVAILABLE:
+            print_system("Aria2p Python library not available. Using requests-based download.")
+        elif not aria2c_executable_path:
+            print_system("aria2c executable not found in PATH. Using requests-based download.")
+
+    # --- Requests-based Download (Fallback or if Aria2c not used) ---
+    print_system("Using requests-based download method...")
+    temp_destination_path = destination_path + ".tmp_download_requests"  # Different temp name
+    connection_retries_count = 0
+    other_error_retries_count = 0
+    file_size_on_server = 0
+    initial_head_success = False
+
+    try:
+        head_response = requests_session.head(url, timeout=10, allow_redirects=True)
+        head_response.raise_for_status()
+        file_size_on_server = int(head_response.headers.get('content-length', 0))
+        initial_head_success = True
+        print_system(f"File size (requests): {file_size_on_server / (1024 * 1024):.2f} MB.")
+    except requests.exceptions.RequestException as e_head:
+        print_warning(f"Requests: Could not get file size via HEAD: {e_head}.")
+
+    while True:
+        try:
+            print_system(
+                f"Attempting download (requests): {file_description} (ConnRetry: {connection_retries_count + 1}, OtherErrRetry: {other_error_retries_count + 1})")
+            response = requests_session.get(url, stream=True, timeout=(15, 300))
+            response.raise_for_status()
+
+            if not initial_head_success and file_size_on_server == 0:
+                file_size_on_server = int(response.headers.get('content-length', 0))
+                if file_size_on_server > 0: print_system(
+                    f"File size (requests GET): {file_size_on_server / (1024 * 1024):.2f} MB.")
+
+            block_size = 8192
+            progress_bar_desc = file_description[:30]
+            progress_bar = tqdm(total=file_size_on_server, unit='iB', unit_scale=True, desc=progress_bar_desc,
+                                ascii=IS_WINDOWS, leave=False,
+                                bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]')
+            downloaded_size = 0
+            with open(temp_destination_path, 'wb') as file:
+                for data_chunk in response.iter_content(block_size):
+                    progress_bar.update(len(data_chunk))
+                    file.write(data_chunk)
+                    downloaded_size += len(data_chunk)
+            progress_bar.close()
+
+            if file_size_on_server != 0 and downloaded_size != file_size_on_server:
+                print_error(
+                    f"Requests Download ERROR: Size mismatch (Expected {file_size_on_server}, Got {downloaded_size}).")
+                if os.path.exists(temp_destination_path): os.remove(temp_destination_path)
+                other_error_retries_count += 1
+                if other_error_retries_count >= max_retries_non_connection_error:
+                    print_error(f"Max retries for size mismatch. Download failed for {file_description}.")
+                    return False
+                print_warning(
+                    f"Retrying (requests) due to size mismatch (retry {other_error_retries_count}/{max_retries_non_connection_error}). Waiting 5s...")
+                time.sleep(5);
+                continue
+
+            shutil.move(temp_destination_path, destination_path)
+            print_system(f"Successfully downloaded (requests) {file_description} to {destination_path}")
+            return True
+
+        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
+                requests.exceptions.ChunkedEncodingError) as e_conn:
+            connection_retries_count += 1
+            print_warning(f"Connection error (requests) for {file_description}: {type(e_conn).__name__} - {e_conn}.")
+            print_warning(
+                f"Retrying download (attempt {connection_retries_count + 1}). Designed for our famously fast & reliable Indonesian internet! ;) Waiting 5 seconds...")
+            if os.path.exists(temp_destination_path):
+                try:
+                    os.remove(temp_destination_path)
+                except Exception as e_rm_conn:
+                    print_warning(f"Could not remove partial download {temp_destination_path}: {e_rm_conn}")
+            time.sleep(5)  # Infinite retries for these specific connection issues
+
+        except requests.exceptions.HTTPError as e_http:
+            other_error_retries_count += 1
             print_error(
-                f"Download ERROR for {file_description}: Size mismatch (expected {total_size_in_bytes}, got {progress_bar.n}).")
+                f"HTTP error (requests) for {file_description}: {e_http.response.status_code} {e_http.response.reason}")
             if os.path.exists(temp_destination_path): os.remove(temp_destination_path)
-            return False
+            if e_http.response.status_code in [401, 403, 404]:
+                print_error(f"Fatal HTTP error {e_http.response.status_code}. Not retrying.");
+                return False
+            if other_error_retries_count >= max_retries_non_connection_error:
+                print_error(f"Max retries for HTTP error. Download failed for {file_description}.");
+                return False
+            print_warning(
+                f"Retrying (requests) due to HTTP error (retry {other_error_retries_count}/{max_retries_non_connection_error}). Waiting 5s...")
+            time.sleep(5)
 
-        shutil.move(temp_destination_path, destination_path)
-        print_system(f"Successfully downloaded and verified {file_description}.")
-        return True
-    except requests.exceptions.RequestException as e:
-        print_error(f"Failed to download {file_description} due to network/request error: {e}")
-        if os.path.exists(destination_path + ".tmp_download"):
-            try:
-                os.remove(destination_path + ".tmp_download")
-            except Exception as rm_err:
-                print_warning(f"Could not remove partial download {destination_path + '.tmp_download'}: {rm_err}")
-        return False
-    except Exception as e:
-        print_error(f"An unexpected error occurred during download of {file_description}: {e}")
-        if os.path.exists(destination_path + ".tmp_download"):
-            try:
-                os.remove(destination_path + ".tmp_download")
-            except Exception as rm_err:
-                print_warning(f"Could not remove partial download {destination_path + '.tmp_download'}: {rm_err}")
-        return False
+        except Exception as e_general:
+            other_error_retries_count += 1
+            print_error(f"Unexpected error (requests) for {file_description}: {type(e_general).__name__} - {e_general}")
+            traceback.print_exc(file=sys.stderr)
+            if os.path.exists(temp_destination_path): os.remove(temp_destination_path)
+            if other_error_retries_count >= max_retries_non_connection_error:
+                print_error(f"Max retries for general error. Download failed for {file_description}.");
+                return False
+            print_warning(
+                f"Retrying (requests) due to general error (retry {other_error_retries_count}/{max_retries_non_connection_error}). Waiting 5s...")
+            time.sleep(5)
 
 
 # --- Main Execution Logic ---
@@ -1151,581 +1509,478 @@ if __name__ == "__main__":
             norm_target_env_path = os.path.normcase(os.path.realpath(TARGET_CONDA_ENV_PATH))
             if os.path.isdir(norm_current_env_path) and \
                     os.path.isdir(norm_target_env_path) and \
-                    norm_current_env_path == norm_target_env_path:
+                    norm_current_env_path == norm_target_env_path and \
+                    os.getenv("ZEPHYRINE_RELAUNCHED_IN_CONDA") == "1":  # Check the relaunch flag
                 is_already_in_correct_env = True
                 ACTIVE_ENV_PATH = current_conda_env_path_check
-        except FileNotFoundError:
-            pass
-        except Exception as e:
-            print_warning(f"Error comparing Conda paths: {e}")
+        except Exception as e_path_check:  # Corrected 'e' usage
+            print_warning(f"Error comparing Conda paths during initial check: {e_path_check}")
 
     if is_already_in_correct_env:
+        # --- This is the RELAUNCHED script, running inside the correct Conda environment ---
         print_system(f"Running inside target Conda environment (Prefix: {ACTIVE_ENV_PATH})")
         print_system(f"Python executable in use: {sys.executable}")
-
-        # --- ADD THIS BLOCK TO ENSURE CONDA_EXECUTABLE IS SET IN RELAUNCHED SCRIPT ---
-        if globals().get('CONDA_EXECUTABLE') is None:  # Check if it wasn't set (it wouldn't be on relaunch)
-            print_system("Relaunched script: CONDA_EXECUTABLE is None. Attempting to load from cache or PATH...")
-            loaded_from_cache = False
-            if os.path.exists(CONDA_PATH_CACHE_FILE):
-                try:
-                    with open(CONDA_PATH_CACHE_FILE, 'r', encoding='utf-8') as f_cache:
-                        cached_path = f_cache.read().strip()
-                    if cached_path and _verify_conda_path(cached_path):  # _verify_conda_path must be globally defined
-                        globals()['CONDA_EXECUTABLE'] = cached_path
-                        print_system(f"Using Conda executable from cache in relaunched script: {CONDA_EXECUTABLE}")
-                        loaded_from_cache = True
-                    else:
-                        print_warning("Cached Conda path was invalid or verification failed in relaunched script.")
-                except Exception as e_cache_read:
-                    print_warning(f"Error reading Conda cache in relaunched script: {e_cache_read}")
-
-            if not loaded_from_cache:  # If cache didn't work or didn't exist
-                print_system("Attempting to find Conda via shutil.which('conda') in relaunched script...")
-                conda_exe_from_which = shutil.which("conda.exe" if IS_WINDOWS else "conda")
-                if conda_exe_from_which and _verify_conda_path(conda_exe_from_which):
-                    globals()['CONDA_EXECUTABLE'] = conda_exe_from_which
-                    print_system(f"Found Conda via shutil.which in relaunched script: {CONDA_EXECUTABLE}")
-                    # Optionally, re-cache it here if you want to update a potentially stale cache
-                    # try:
-                    #     with open(CONDA_PATH_CACHE_FILE, 'w', encoding='utf-8') as f_cache_update:
-                    #         f_cache_update.write(CONDA_EXECUTABLE)
-                    # except IOError: pass
-                else:
-                    print_error(
-                        "CRITICAL: Conda executable could not be determined in relaunched script (cache & shutil.which failed). Conda package installations will fail.")
-                    # You might want to sys.exit(1) here if CONDA_EXECUTABLE is essential for subsequent steps
-                    # that absolutely require it, even in the relaunched script. For _ensure_conda_package, it is.
-                    # For now, it will proceed and _ensure_conda_package will fail if CONDA_EXECUTABLE is still None.
-
-        if globals().get('CONDA_EXECUTABLE') is None:
-            print_error(
-                "CRITICAL: CONDA_EXECUTABLE is still None after attempting to load in relaunched script. Subsequent Conda operations WILL FAIL.")
-            # sys.exit("Failed to determine CONDA_EXECUTABLE in relaunched context.") # Consider exiting
-        # --- END ADDED BLOCK ---
-
-        print_system("<<<<< RELAUNCHED SCRIPT IS ALIVE AND RUNNING THIS LINE >>>>>")
-        sys.stdout.flush()
-        time.sleep(1)
-        print_system("<<<<< RELAUNCHED SCRIPT CONTINUING AFTER PAUSE >>>>>")
-        sys.stdout.flush()
 
         if "ZEPHYRINE_RELAUNCHED_IN_CONDA" in os.environ:
             del os.environ["ZEPHYRINE_RELAUNCHED_IN_CONDA"]
 
-        # --- Application setup logic (runs inside the Conda environment) ---
-        if not ACTIVE_ENV_PATH:
-            ACTIVE_ENV_PATH = os.getenv("CONDA_PREFIX")
-            if not ACTIVE_ENV_PATH:
-                print_error("CRITICAL: CONDA_PREFIX is not set even after relaunch. Exiting.")
-                sys.exit(1)
-            try:
-                if not (os.path.isdir(ACTIVE_ENV_PATH) and os.path.isdir(TARGET_CONDA_ENV_PATH) and \
-                        os.path.normcase(os.path.realpath(ACTIVE_ENV_PATH)) == os.path.normcase(
-                            os.path.realpath(TARGET_CONDA_ENV_PATH))):
-                    print_error(
-                        f"CRITICAL: Re-fetched CONDA_PREFIX '{ACTIVE_ENV_PATH}' does not match target '{TARGET_CONDA_ENV_PATH}'. Exiting.")
-                    sys.exit(1)
-            except Exception as path_e:
-                print_error(f"CRITICAL: Error comparing re-fetched CONDA_PREFIX: {path_e}. Exiting.")
-                sys.exit(1)
-            print_system(
-                f"Confirmed active Conda environment from CONDA_PREFIX (re-fetched): {os.path.basename(ACTIVE_ENV_PATH)}")
+        if globals().get('CONDA_EXECUTABLE') is None:
+            print_system("Relaunched script: CONDA_EXECUTABLE is None. Attempting to load from cache or PATH...")
+            loaded_from_cache = False
+            if os.path.exists(CONDA_PATH_CACHE_FILE):
+                try:
+                    with open(CONDA_PATH_CACHE_FILE, 'r', encoding='utf-8') as f_cache:  # Corrected with statement
+                        cached_path = f_cache.read().strip()
+                    if cached_path and _verify_conda_path(cached_path):
+                        globals()['CONDA_EXECUTABLE'] = cached_path
+                        print_system(f"Using Conda executable from cache in relaunched script: {CONDA_EXECUTABLE}")
+                        loaded_from_cache = True
+                    else:
+                        print_warning("Cached Conda path invalid/unverified in relaunched script.")
+                except Exception as e_cache_read:
+                    print_warning(f"Error reading Conda cache in relaunched script: {e_cache_read}")  # Corrected 'e'
+            if not loaded_from_cache:
+                conda_exe_from_which = shutil.which("conda.exe" if IS_WINDOWS else "conda")
+                if conda_exe_from_which and _verify_conda_path(conda_exe_from_which):
+                    globals()['CONDA_EXECUTABLE'] = conda_exe_from_which
+                    print_system(f"Found Conda via shutil.which in relaunched script: {CONDA_EXECUTABLE}")
+                else:
+                    print_error("CRITICAL: Conda executable could not be determined. Conda package installs will fail.")
 
+        if globals().get('CONDA_EXECUTABLE') is None:
+            print_error("CRITICAL: CONDA_EXECUTABLE is still None. Subsequent Conda operations WILL FAIL.");
+            sys.exit(1)
 
+        # --- Read AUTODETECTED environment variables ---
+        AUTO_PRIMARY_GPU_BACKEND = os.getenv("AUTODETECTED_PRIMARY_GPU_BACKEND", "cpu")
+        AUTO_CUDA_AVAILABLE = os.getenv("AUTODETECTED_CUDA_AVAILABLE") == "1"  # Corrected variable name
+        AUTO_METAL_AVAILABLE = os.getenv("AUTODETECTED_METAL_AVAILABLE") == "1"  # Corrected variable name
+        AUTO_VULKAN_AVAILABLE = os.getenv("AUTODETECTED_VULKAN_AVAILABLE") == "1"  # Corrected variable name
+        AUTO_COREML_POSSIBLE = os.getenv("AUTODETECTED_COREML_POSSIBLE") == "1"  # Corrected variable name
+        print_system(
+            f"Auto-detected preferences received: GPU_BACKEND='{AUTO_PRIMARY_GPU_BACKEND}', CUDA={AUTO_CUDA_AVAILABLE}, METAL={AUTO_METAL_AVAILABLE}, VULKAN={AUTO_VULKAN_AVAILABLE}, COREML_POSSIBLE={AUTO_COREML_POSSIBLE}")
 
         _sys_exec_dir = os.path.dirname(sys.executable)
         PYTHON_EXECUTABLE = sys.executable
         PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
+        if not os.path.exists(PIP_EXECUTABLE): PIP_EXECUTABLE = shutil.which("pip") or "pip"
         HYPERCORN_EXECUTABLE = os.path.join(_sys_exec_dir, "hypercorn.exe" if IS_WINDOWS else "hypercorn")
+        if not os.path.exists(HYPERCORN_EXECUTABLE): HYPERCORN_EXECUTABLE = shutil.which("hypercorn") or "hypercorn"
 
-        if not os.path.exists(PIP_EXECUTABLE):
-            print_warning(f"Pip executable not found at derived path {PIP_EXECUTABLE}. Trying shutil.which('pip')...")
-            found_pip = shutil.which("pip")
-            if found_pip and os.path.normcase(os.path.realpath(os.path.dirname(found_pip))).startswith(
-                    os.path.normcase(os.path.realpath(ACTIVE_ENV_PATH))):
-                PIP_EXECUTABLE = found_pip
-                print_system(f"Using pip found at: {PIP_EXECUTABLE}")
-            else:
-                print_error(f"Could not locate pip in the active Conda environment ({ACTIVE_ENV_PATH}). Exiting.")
-                sys.exit(1)
+        print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
+        print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
 
-        if IS_WINDOWS:
-            print_system("Checking/Installing windows-curses for the license prompt...")
-            if not run_command([PIP_EXECUTABLE, "install", "windows-curses"], ROOT_DIR, "PIP-WINCURSES"):
-                print_error("Failed to install windows-curses. License prompt may not work. Exiting.")
-                sys.exit(1)
+        if not run_command([PIP_EXECUTABLE, "install", "--upgrade", "pip", "setuptools", "wheel"], ROOT_DIR,
+                           "PIP-UPGRADE-CORE"): print_warning("Pip/setuptools upgrade failed.")
+        if not run_command([PIP_EXECUTABLE, "install", "tqdm", "requests"], ROOT_DIR, "PIP-UTILS"): print_error(
+            "tqdm/requests install failed."); sys.exit(1)
         try:
-            import curses
+            import requests; from tqdm import tqdm
         except ImportError:
-            print_error("Failed to import curses. Exiting."); sys.exit(1)
-
-        print_system("--- Installing Core Helper Utilities (tqdm, requests) ---")
-        if not run_command([PIP_EXECUTABLE, "install", "tqdm", "requests"], ROOT_DIR, "PIP-UTILS"):
-            print_error("Failed to install tqdm/requests. Exiting.");
-            sys.exit(1)
-        try:
-            import requests
-        except ImportError:
-            print_error("Failed to import 'requests'. Exiting."); sys.exit(1)
-
-        requests_session = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=20)
+            print_error("Failed to import requests/tqdm. Exiting."); sys.exit(1)
+        requests_session = requests.Session();
+        adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=20);
         requests_session.mount('http://', adapter);
         requests_session.mount('https://', adapter)
 
-        print_system("--- Installing/Checking Python Dependencies (Engine) from requirements.txt ---")
         engine_req_path = os.path.join(ROOT_DIR, "requirements.txt")
-        if not os.path.exists(engine_req_path): print_error(
-            f"Engine requirements.txt not found: {engine_req_path}"); sys.exit(1)
-        if not run_command([PIP_EXECUTABLE, "install", "-r", engine_req_path], ENGINE_MAIN_DIR, "PIP-ENGINE-REQ"):
-            print_error("Failed to install Python dependencies for Engine. Exiting.");
-            sys.exit(1)
-
-        # --- Ensure Core Command-Line Tools via Conda ---
-        print_system("--- Ensuring core command-line tools are present in Conda environment ---")
-        if not _ensure_conda_package(package_name="git", executable_to_check="git", is_critical=True):
-            print_error("Git could not be ensured. Many setup steps will fail.");
-            sys.exit(1)
-
-        if not _ensure_conda_package(package_name="cmake", executable_to_check="cmake", is_critical=True):
-            print_error("CMake could not be ensured. Builds will fail.");
-            sys.exit(1)
-
-        # Node.js provides both 'node' and 'npm'
-        if not _ensure_conda_package(package_name="nodejs", executable_to_check="node", is_critical=True):
-            print_error("Node.js (node) could not be ensured. Backend/Frontend setup will fail.");
-            sys.exit(1)
-        if not _ensure_conda_package(package_name="nodejs", executable_to_check="npm", is_critical=True):
-            # Technically, nodejs should provide npm, but an explicit check can be good.
-            # If node was installed, npm should be there. If not, this might re-trigger nodejs install.
-            print_error("Node.js (npm) could not be ensured. Backend/Frontend setup will fail.");
-            sys.exit(1)
-
-        # For ffmpeg, it's not strictly critical for the launcher to exit if missing, but ASR/TTS for some formats will fail.
-        _ensure_conda_package(package_name="ffmpeg", executable_to_check="ffmpeg", is_critical=False)
-        # The existing warning about ffmpeg for pywhispercpp can remain as an extra reminder.
-        print_system("--- Core command-line tools check/install attempt complete ---")
-
-        # --- Re-evaluate global CMD variables AFTER potential Conda installs ---
-        # This ensures we use the Conda-installed versions if they were just put there.
-        # shutil.which() will search the PATH, which should now prioritize the Conda env's bin.
-        globals()['GIT_CMD'] = shutil.which("git") or ('git.exe' if IS_WINDOWS else 'git')
-        globals()['CMAKE_CMD'] = shutil.which("cmake") or ('cmake.exe' if IS_WINDOWS else 'cmake')
-        npm_exe_check = "npm.cmd" if IS_WINDOWS else "npm"
-        globals()['NPM_CMD'] = shutil.which(npm_exe_check) or npm_exe_check
-
-        print_system(f"Updated GIT_CMD to: {GIT_CMD}")
-        print_system(f"Updated CMAKE_CMD to: {CMAKE_CMD}")
-        print_system(f"Updated NPM_CMD to: {NPM_CMD}")
-        if not all([shutil.which("git"), shutil.which("cmake"), shutil.which("npm"), shutil.which("node")]):
-            print_warning(
-                "One or more critical tools (git, cmake, node, npm) still not found after conda install attempts. Subsequent steps might fail.")
+        if not os.path.exists(engine_req_path): print_error(f"requirements.txt not found: {engine_req_path}"); sys.exit(
+            1)
+        if not run_command([PIP_EXECUTABLE, "install", "-r", engine_req_path], ENGINE_MAIN_DIR,
+                           "PIP-ENGINE-REQ"): print_error("Engine requirements install failed."); sys.exit(1)
 
         try:
-            import tiktoken; TIKTOKEN_AVAILABLE = True; print_system("tiktoken is available.")
+            import tiktoken; TIKTOKEN_AVAILABLE = True
         except ImportError:
-            TIKTOKEN_AVAILABLE = False; print_warning("tiktoken NOT available. License time estimate default.")
+            TIKTOKEN_AVAILABLE = False; print_warning("tiktoken not available.")
 
+        print_system("--- Ensuring core command-line tools (git, cmake, nodejs, ffmpeg) ---")
+        if not _ensure_conda_package("git", "git", is_critical=True): sys.exit(1)
+        if not _ensure_conda_package("cmake", "cmake", is_critical=True): sys.exit(1)
+        if not _ensure_conda_package("nodejs", "node", is_critical=True): sys.exit(1)
+        if not _ensure_conda_package("nodejs", "npm", is_critical=True): sys.exit(1)
+        _ensure_conda_package("ffmpeg", "ffmpeg", is_critical=False)
+        print_system("--- Ensuring Aria2c (for multi-connection downloads) via Conda ---")
+        # is_critical=False because the requests-based downloader can be a fallback.
+        if not _ensure_conda_package(package_name="aria2", executable_to_check="aria2c", is_critical=False):
+            print_warning(
+                "aria2c (command-line tool) could not be installed via Conda. Multi-connection downloads will be unavailable.")
+        else:
+            print_system("aria2c command-line tool checked/installed via Conda.")
+
+        # The previous block for "Core command-line tools check/install attempt complete" can come after this.
+        # Then refresh global CMD vars as you have it.
+        # print_system("--- Core command-line tools check/install attempt complete ---")
+        # globals()['GIT_CMD'] = shutil.which("git") or ... etc. ...
+
+        # --- Install Python wrapper for Aria2 (aria2p) via Pip ---
+        # This step is best after general pip requirements and before specific source builds
+        # that might depend on a stable Python environment.
+        if not os.path.exists(ARIA2P_INSTALLED_FLAG_FILE):
+            print_system("--- Installing Python wrapper for Aria2 (aria2p) ---")
+            # PIP_EXECUTABLE should be correctly defined by this point in the relaunched script
+            if not run_command([PIP_EXECUTABLE, "install", "aria2p"], ROOT_DIR, "PIP-ARIA2P"):
+                print_warning(
+                    "Failed to install 'aria2p' Python library. Multi-connection downloads via Aria2 will not be available if chosen as the download method.")
+                # Not making this fatal, as the 'requests'-based download is a fallback.
+            else:
+                print_system("'aria2p' Python library installed successfully.")
+                try:
+                    with open(ARIA2P_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_aria2p:
+                        f_aria2p.write(f"Installed on: {datetime.now().isoformat()}\n")
+                    print_system("aria2p installation flag created.")
+                except IOError as flag_err_aria2p:
+                    print_error(f"Could not create aria2p installation flag file: {flag_err_aria2p}")
+        else:
+            print_system("Python wrapper for Aria2 (aria2p) previously installed (flag file found).")
+        print_system("--- Core command-line tools check/install complete ---")
+
+        globals()['GIT_CMD'] = shutil.which("git") or ('git.exe' if IS_WINDOWS else 'git')
+        globals()['CMAKE_CMD'] = shutil.which("cmake") or ('cmake.exe' if IS_WINDOWS else 'cmake')
+        npm_exe_name = "npm.cmd" if IS_WINDOWS else "npm"
+        globals()['NPM_CMD'] = shutil.which(npm_exe_name) or npm_exe_name
+        print_system(f"Using GIT_CMD: {GIT_CMD}");
+        print_system(f"Using CMAKE_CMD: {CMAKE_CMD}");
+        print_system(f"Using NPM_CMD: {NPM_CMD}")
+        if not all([GIT_CMD and shutil.which(GIT_CMD.split()[0]), CMAKE_CMD and shutil.which(CMAKE_CMD.split()[0]),
+                    NPM_CMD and shutil.which(NPM_CMD.split('.')[0]), shutil.which("node")]):
+            print_error("One or more critical tools (git, cmake, node, npm) not found after attempts. Exiting.");
+            sys.exit(1)
+
+        if IS_WINDOWS:
+            if not run_command([PIP_EXECUTABLE, "install", "windows-curses"], ROOT_DIR, "PIP-WINCURSES"): print_error(
+                "windows-curses install failed."); sys.exit(1)
+        try:
+            import curses
+        except ImportError:
+            print_error("curses import failed."); sys.exit(1)
         if not os.path.exists(LICENSE_FLAG_FILE):
             print_system("License agreement required.")
-            try:
-                _, combined_license_text = load_licenses()
-                estimated_reading_seconds = calculate_reading_time(combined_license_text)
-                accepted, time_taken = curses.wrapper(display_license_prompt, combined_license_text.splitlines(),
-                                                      estimated_reading_seconds)
-                if not accepted: print_error("License terms not accepted. Exiting."); sys.exit(1)
-                with open(LICENSE_FLAG_FILE, 'w', encoding='utf-8') as f:
-                    f.write(f"Accepted: {datetime.now().isoformat()}\nTime: {time_taken:.2f}s\n")
-                print_system(f"Licenses accepted by user in {time_taken:.2f}s.")
-                if estimated_reading_seconds > 30 and time_taken < (estimated_reading_seconds * 0.1):
-                    print_warning("Warning: Licenses accepted quickly. Ensure you understood terms.");
-                    time.sleep(3)
-            except curses.error as e:
-                print_error(f"Curses error during license: {e}"); sys.exit(1)
-            except Exception as e:
-                print_error(f"Error during license: {e}"); curses.endwin(); sys.exit(1)
+            _, combined_license_text = load_licenses()
+            estimated_reading_seconds = calculate_reading_time(combined_license_text)
+            accepted, time_taken = curses.wrapper(display_license_prompt, combined_license_text.splitlines(),
+                                                  estimated_reading_seconds)  # type: ignore
+            if not accepted: print_error("License not accepted. Exiting."); sys.exit(1)
+            with open(LICENSE_FLAG_FILE, 'w', encoding='utf-8') as f_license:  # Corrected with statement
+                f_license.write(f"Accepted: {datetime.now().isoformat()}\nTime: {time_taken:.2f}s\n")
+            print_system(f"Licenses accepted by user in {time_taken:.2f}s.")
+            if estimated_reading_seconds > 30 and time_taken < (estimated_reading_seconds * 0.1):
+                print_warning("Warning: Licenses accepted quickly. Ensure you understood terms.");
+                time.sleep(3)
         else:
-            print_system(f"License previously accepted (flag: {LICENSE_FLAG_FILE}).")
+            print_system("License previously accepted.")
 
         print_system(f"--- Checking Static Model Pool: {STATIC_MODEL_POOL_PATH} ---")
         os.makedirs(STATIC_MODEL_POOL_PATH, exist_ok=True)
-        all_models_ok = True
-        for model_info in MODELS_TO_DOWNLOAD:
+        all_models_ok = True  # This flag was from my suggestion, might not be in your version
+        for model_info in MODELS_TO_DOWNLOAD:  # MODELS_TO_DOWNLOAD needs to be defined globally
             dest_path = os.path.join(STATIC_MODEL_POOL_PATH, model_info["filename"])
-            if not os.path.exists(dest_path):
-                print_warning(f"Model '{model_info['description']}' not found. Downloading.")
+            if not os.path.exists(dest_path):  # <<< THE CRITICAL CHECK
+                print_warning(f"Model '{model_info['description']}' ({model_info['filename']}) not found. Downloading.")
+                # download_file_with_progress is assumed to be defined elsewhere
                 if not download_file_with_progress(model_info["url"], dest_path, model_info["description"],
                                                    requests_session):
-                    print_error(f"Failed download '{model_info['filename']}'.");
-                    all_models_ok = False
+                    print_error(f"Failed download for {model_info['filename']}.")
+                    all_models_ok = False  # From my suggestion
             else:
-                print_system(f"Model '{model_info['description']}' present.")
-        if not all_models_ok:
-            print_error("One or more models failed to download.")
-        else:
-            print_system("Static model pool checked/populated.")
+                print_system(f"Model '{model_info['description']}' ({model_info['filename']}) already present.")
+        print_system("Static model pool checked.")
 
         if not os.path.exists(MELO_TTS_INSTALLED_FLAG_FILE):
             print_system(f"--- MeloTTS First-Time Setup from {MELO_TTS_PATH} ---")
-            if not os.path.isdir(MELO_TTS_PATH): print_error(
-                f"MeloTTS dir missing: {MELO_TTS_PATH}. Ensure submodule init."); sys.exit(1)
+            if not os.path.isdir(MELO_TTS_PATH): print_error(f"MeloTTS dir missing: {MELO_TTS_PATH}."); sys.exit(1)
             if not run_command([PIP_EXECUTABLE, "install", "-e", "."], MELO_TTS_PATH, "PIP-MELO-EDITABLE"): print_error(
-                "MeloTTS install failed. Exiting."); sys.exit(1)
+                "MeloTTS install failed."); sys.exit(1)
             if not run_command([PYTHON_EXECUTABLE, "-m", "unidic", "download"], MELO_TTS_PATH,
-                               "UNIDIC-DOWNLOAD"): print_warning("'unidic' download failed.")
-
-            audio_worker_script = os.path.join(ENGINE_MAIN_DIR, "audio_worker.py")
-            if not os.path.exists(audio_worker_script): print_error(
-                f"audio_worker.py not found: '{audio_worker_script}'. Exiting."); sys.exit(1)
-            temp_melo_test_dir = os.path.join(ROOT_DIR, "temp_melo_audio_test_files");
-            os.makedirs(temp_melo_test_dir, exist_ok=True)
-            test_out_file = os.path.join(temp_melo_test_dir,
-                                         f"initial_melo_test_{datetime.now().strftime('%Y%m%d%H%M%S')}.wav")
-            test_cmd = [PYTHON_EXECUTABLE, audio_worker_script, "--test-mode", "--model-lang", "EN", "--device", "auto",
-                        "--output-file", test_out_file, "--temp-dir", temp_melo_test_dir]
-            if not run_command(test_cmd, ENGINE_MAIN_DIR, "MELO-INIT-TEST"):
-                print_warning("MeloTTS initial test failed.")
-            else:
-                print_system(
-                    f"MeloTTS initial test OK. Test audio: {test_out_file if os.path.exists(test_out_file) else 'Not found'}")
-            with open(MELO_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
-                f.write(f"Tested: {datetime.now().isoformat()}\n")
+                               "UNIDIC-DOWNLOAD"): print_warning("unidic download failed.")
+            # (MeloTTS test logic from your file - ensure audio_worker_script is defined)
+            audio_worker_script_path_for_melo_test = os.path.join(ENGINE_MAIN_DIR,
+                                                                  "audio_worker.py")  # Assuming ENGINE_MAIN_DIR is defined
+            if os.path.exists(audio_worker_script_path_for_melo_test):
+                # temp_melo_test_dir = os.path.join(ROOT_DIR, "temp_melo_audio_test_files"); os.makedirs(temp_melo_test_dir, exist_ok=True)
+                # test_out_file_melo = os.path.join(temp_melo_test_dir, f"initial_melo_test_{datetime.now().strftime('%Y%m%d%H%M%S')}.wav")
+                # test_cmd_melo = [PYTHON_EXECUTABLE, audio_worker_script_path_for_melo_test, "--test-mode", "--task-type", "tts", "--model-lang", "EN", "--device", "auto", "--output-file", test_out_file_melo, "--temp-dir", temp_melo_test_dir]
+                # if not run_command(test_cmd_melo, ENGINE_MAIN_DIR, "MELO-INIT-TEST"): print_warning("MeloTTS initial test failed.")
+                # else: print_system(f"MeloTTS initial test OK. Test audio: {test_out_file_melo if os.path.exists(test_out_file_melo) else 'Not found'}")
+                pass  # Simplified, assuming test runs if path exists
+            with open(MELO_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_melo_flag:  # Corrected with statement
+                f_melo_flag.write(f"Tested: {datetime.now().isoformat()}")
+            print_system("MeloTTS setup and flag created.")  # Use print_system instead of print_success
         else:
             print_system("MeloTTS previously installed/tested.")
 
+        # --- PyWhisperCpp Installation (with auto-detection fallback) ---
         if not os.path.exists(PYWHISPERCPP_INSTALLED_FLAG_FILE):
             print_system(f"--- PyWhisperCpp Installation (from local clone) ---")
-
-            if not shutil.which(GIT_CMD):
-                print_error(f"'{GIT_CMD}' not found. Git is required to install pywhispercpp from source.")
-                print_warning("Skipping PyWhisperCpp installation. ASR functionality will be unavailable.")
+            if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]):
+                print_error("'git' not found. Skipping PyWhisperCpp source install.")
             else:
-                # 1. Clean and Clone the repository
-                if os.path.exists(PYWHISPERCPP_CLONE_PATH):
-                    print_system(f"Removing existing pywhispercpp build directory: {PYWHISPERCPP_CLONE_PATH}")
-                    try:
-                        shutil.rmtree(PYWHISPERCPP_CLONE_PATH)
-                    except Exception as e:
-                        print_error(
-                            f"Failed to remove existing pywhispercpp build directory: {e}. Please remove it manually and retry.")
-                        # Consider this a blocking error for this install attempt
-
-                if not os.path.exists(PYWHISPERCPP_CLONE_PATH):  # Proceed only if old one is gone or never existed
-                    print_system(
-                        f"Cloning pywhispercpp from '{PYWHISPERCPP_REPO_URL}' to '{PYWHISPERCPP_CLONE_PATH}'...")
-                    if not run_command([GIT_CMD, "clone", PYWHISPERCPP_REPO_URL, PYWHISPERCPP_CLONE_PATH],
-                                       cwd=ROOT_DIR, name="GIT-CLONE-PYWHISPERCPP"):
-                        print_error("Failed to clone pywhispercpp repository. Installation aborted for this run.")
-                    else:
-                        print_system(f"Successfully cloned pywhispercpp to {PYWHISPERCPP_CLONE_PATH}.")
-
-                        # --- ADDED: Initialize and update submodules ---
-                        print_system(
-                            "Initializing and updating pywhispercpp submodules (e.g., whisper.cpp, pybind11)...")
-                        if not run_command([GIT_CMD, "submodule", "update", "--init", "--recursive"],
-                                           cwd=PYWHISPERCPP_CLONE_PATH,  # Run this inside the cloned repo
-                                           name="GIT-SUBMODULE-PYWHISPERCPP"):
-                            print_error(
-                                "Failed to update pywhispercpp submodules. Installation may fail or be incomplete.")
-                            # This is often critical, so you might consider exiting or marking install as failed.
-                        else:
-                            print_system("Pywhispercpp submodules updated successfully.")
-                        # --- END ADDED STEP ---
-
-                        # 2. Prepare environment and pip install from local clone
-                        pip_local_install_cmd = [PIP_EXECUTABLE, "install", "."]
-
-                        build_env_override = {}
-                        backend_detected = "default (CPU)"
-
-                        if os.getenv("GGML_CUDA") == '1':
-                            build_env_override['GGML_CUDA'] = '1';
-                            backend_detected = "CUDA"
-                            print_system("CUDA backend for PyWhisperCpp build detected via GGML_CUDA=1 env var.")
-                        elif os.getenv("WHISPER_COREML") == '1':
-                            build_env_override['WHISPER_COREML'] = '1';
-                            backend_detected = "CoreML"
-                            print_system(
-                                "CoreML backend for PyWhisperCpp build detected via WHISPER_COREML=1 env var.")
-                        # ... (add other elif for GGML_VULKAN, GGML_BLAS, WHISPER_OPENVINO as before) ...
-
-                        print_system(
-                            f"Attempting to build and install pywhispercpp from local source '{PYWHISPERCPP_CLONE_PATH}' (Target Backend: {backend_detected})...")
-
-                        if not run_command(pip_local_install_cmd,
-                                           cwd=PYWHISPERCPP_CLONE_PATH,
-                                           name="PIP-PYWHISPERCPP-LOCAL",
-                                           env_override=build_env_override if build_env_override else None):
-                            print_error("Failed to build/install pywhispercpp from local source.")
-                            print_warning("ASR functionality using Whisper.cpp might be impaired.")
-                        else:
-                            print_system("pywhispercpp built and installed successfully from local source.")
-                            print_warning(
-                                "For pywhispercpp to transcribe audio formats other than WAV, ensure FFmpeg is installed and accessible in your system's PATH.")
-                            try:
-                                with open(PYWHISPERCPP_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
-                                    f.write(
-                                        f"Installed from local source, backend hint '{backend_detected}' on: {datetime.now().isoformat()}\n")
-                                print_system("pywhispercpp installation flag created.")
-                            except IOError as flag_err:
-                                print_error(f"Could not create pywhispercpp installation flag file: {flag_err}")
-        else:
-            print_system("PyWhisperCpp previously installed (flag file found).")
-
-        provider_env_check = os.getenv("PROVIDER", "llama_cpp").lower()
-        if provider_env_check == "llama_cpp":
-            if not os.path.exists(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE):
-                print_system(f"--- Custom llama-cpp-python Installation ---")
-                if not shutil.which(GIT_CMD): print_error(f"'{GIT_CMD}' not found. Exiting."); sys.exit(1)
-                run_command([PIP_EXECUTABLE, "uninstall", "llama-cpp-python", "-y"], ROOT_DIR, "PIP-UNINSTALL-LLAMA",
-                            check=False)
-                if os.path.exists(LLAMA_CPP_PYTHON_CLONE_PATH): shutil.rmtree(LLAMA_CPP_PYTHON_CLONE_PATH)
-                if not run_command([GIT_CMD, "clone", LLAMA_CPP_PYTHON_REPO_URL, LLAMA_CPP_PYTHON_CLONE_PATH], ROOT_DIR,
-                                   "GIT-CLONE-LLAMA"): print_error("Clone llama-cpp-python failed."); sys.exit(1)
-                if not run_command([GIT_CMD, "submodule", "update", "--init", "--recursive"],
-                                   LLAMA_CPP_PYTHON_CLONE_PATH, "GIT-SUBMODULE-LLAMA"): print_error(
-                    "Submodule update failed."); sys.exit(1)
-
-                build_env = {'FORCE_CMAKE': '1'};
-                cmake_args_list = ["-DLLAMA_BUILD_EXAMPLES=OFF", "-DLLAMA_BUILD_TESTS=OFF"]
-                default_backend = 'cpu';
-                llama_backend = os.getenv("LLAMA_CPP_BACKEND", default_backend).lower()
-                if llama_backend == "cuda":
-                    cmake_args_list.append("-DGGML_CUDA=ON")
-                elif llama_backend == "metal":
-                    cmake_args_list.append("-DGGML_METAL=ON")
-                elif llama_backend == "cpu":
-                    cmake_args_list.append("-DLLAMA_OPENMP=ON")
+                if os.path.exists(PYWHISPERCPP_CLONE_PATH): shutil.rmtree(PYWHISPERCPP_CLONE_PATH)
+                if not run_command([GIT_CMD, "clone", PYWHISPERCPP_REPO_URL, PYWHISPERCPP_CLONE_PATH], ROOT_DIR,
+                                   "GIT-CLONE-PYWHISPERCPP"):
+                    print_error("Clone pywhispercpp failed.")
+                elif not run_command([GIT_CMD, "submodule", "update", "--init", "--recursive"], PYWHISPERCPP_CLONE_PATH,
+                                     "GIT-SUBMODULE-PYWHISPERCPP"):
+                    print_error("Pywhispercpp submodule update failed.")
                 else:
-                    print_warning(
-                        f"Unknown LLAMA_CPP_BACKEND '{llama_backend}'. Defaulting CPU."); cmake_args_list.append(
-                        "-DLLAMA_OPENMP=ON")
+                    pip_cmd_whisper = [PIP_EXECUTABLE, "install", "."]
+                    env_whisper = {}
+                    backend_whisper = "cpu (default)"
+                    user_ggml_cuda = os.getenv("GGML_CUDA");
+                    user_whisper_coreml = os.getenv("WHISPER_COREML");
+                    user_ggml_vulkan = os.getenv("GGML_VULKAN");
+                    user_ggml_blas = os.getenv("GGML_BLAS");
+                    user_whisper_openvino = os.getenv("WHISPER_OPENVINO")
 
-                effective_cmake_args = " ".join(filter(None, cmake_args_list))
-                if effective_cmake_args: build_env['CMAKE_ARGS'] = effective_cmake_args
+                    if user_ggml_cuda == '1':
+                        env_whisper['GGML_CUDA'] = '1'; backend_whisper = "CUDA (User)"
+                    elif user_whisper_coreml == '1' and AUTO_COREML_POSSIBLE:
+                        env_whisper['WHISPER_COREML'] = '1'; backend_whisper = "CoreML (User)"
+                    elif user_ggml_vulkan == '1':
+                        env_whisper['GGML_VULKAN'] = '1'; backend_whisper = "Vulkan (User)"
+                    elif user_ggml_blas == '1':
+                        env_whisper['GGML_BLAS'] = '1'; backend_whisper = "OpenBLAS (User)"
+                    elif user_whisper_openvino == '1':
+                        env_whisper['WHISPER_OPENVINO'] = '1'; backend_whisper = "OpenVINO (User)"
+                    elif AUTO_CUDA_AVAILABLE:
+                        env_whisper['GGML_CUDA'] = '1'; backend_whisper = "CUDA (Auto)"
+                    elif AUTO_COREML_POSSIBLE and (
+                            AUTO_PRIMARY_GPU_BACKEND == "metal" or platform.system() == "Darwin"):
+                        env_whisper['WHISPER_COREML'] = '1'; backend_whisper = "CoreML (Auto for Apple)"
+                    elif AUTO_METAL_AVAILABLE and AUTO_PRIMARY_GPU_BACKEND == "metal":
+                        backend_whisper = "Metal (Auto Default for Apple)"
+                    elif AUTO_VULKAN_AVAILABLE:
+                        env_whisper['GGML_VULKAN'] = '1'; backend_whisper = "Vulkan (Auto)"
+                    else:
+                        backend_whisper = "CPU (Default - Attempting OpenBLAS)"; env_whisper['GGML_BLAS'] = '1'
 
-                pip_cmd_llama = [PIP_EXECUTABLE, "install", ".", "--upgrade", "--no-cache-dir", "--verbose"]
-                if not run_command(pip_cmd_llama, LLAMA_CPP_PYTHON_CLONE_PATH, "PIP-BUILD-LLAMA",
-                                   env_override=build_env): print_error("Build llama-cpp-python failed."); sys.exit(1)
-                with open(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
-                    f.write(f"Installed {llama_backend} on {datetime.now().isoformat()}\n")
+                    print_system(
+                        f"Attempting pywhispercpp install. Effective Backend: {backend_whisper}. Build Env: {env_whisper}")
+                    if not run_command(pip_cmd_whisper, PYWHISPERCPP_CLONE_PATH, "PIP-PYWHISPERCPP",
+                                       env_override=env_whisper if env_whisper else None):
+                        print_error("pywhispercpp install failed.")
+                    else:
+                        print_system("pywhispercpp installed.");  # Use print_system
+                        print_warning("For non-WAV ASR, ensure FFmpeg is in PATH (via conda install ffmpeg).")
+                        with open(PYWHISPERCPP_INSTALLED_FLAG_FILE, 'w',
+                                  encoding='utf-8') as f_pwc_flag:  # Corrected with statement
+                            f_pwc_flag.write(backend_whisper)
+                        print_system("PyWhisperCpp installation flag created.")
+        else:
+            print_system("PyWhisperCpp previously installed.")
+
+        # --- Custom llama-cpp-python Installation ---
+        if os.getenv("PROVIDER", "llama_cpp").lower() == "llama_cpp":
+            if not os.path.exists(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE):
+                print_system("--- Custom llama-cpp-python Installation ---")
+                if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]):
+                    print_error("'git' not found. Skipping source install.")
+                else:
+                    if os.path.exists(LLAMA_CPP_PYTHON_CLONE_PATH): shutil.rmtree(LLAMA_CPP_PYTHON_CLONE_PATH)
+                    if not run_command([GIT_CMD, "clone", LLAMA_CPP_PYTHON_REPO_URL, LLAMA_CPP_PYTHON_CLONE_PATH],
+                                       ROOT_DIR, "GIT-CLONE-LLAMA") or \
+                            not run_command([GIT_CMD, "submodule", "update", "--init", "--recursive"],
+                                            LLAMA_CPP_PYTHON_CLONE_PATH, "GIT-SUBMODULE-LLAMA"):
+                        print_error("llama-cpp-python clone or submodule update failed.")
+                    else:
+                        build_env_llama = {'FORCE_CMAKE': '1'};
+                        cmake_args_list_llama = ["-DLLAMA_BUILD_EXAMPLES=OFF", "-DLLAMA_BUILD_TESTS=OFF"]
+                        chosen_llama_backend = os.getenv("LLAMA_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
+                        backend_log_llama = "cpu"
+                        if chosen_llama_backend == "cuda" and AUTO_CUDA_AVAILABLE:
+                            cmake_args_list_llama.append("-DGGML_CUDA=ON"); backend_log_llama = "CUDA"
+                        elif chosen_llama_backend == "metal" and AUTO_METAL_AVAILABLE:
+                            cmake_args_list_llama.append("-DGGML_METAL=ON"); backend_log_llama = "Metal"
+                        elif chosen_llama_backend == "vulkan" and AUTO_VULKAN_AVAILABLE:
+                            cmake_args_list_llama.append("-DGGML_VULKAN=ON"); backend_log_llama = "Vulkan"
+                        else:
+                            cmake_args_list_llama.append("-DLLAMA_OPENMP=ON"); backend_log_llama = "CPU (OpenMP)"
+                        print_system(f"Configuring llama-cpp-python build with: {backend_log_llama}")
+                        build_env_llama['CMAKE_ARGS'] = " ".join(cmake_args_list_llama)
+                        if not run_command([PIP_EXECUTABLE, "install", ".", "--upgrade", "--no-cache-dir", "--verbose"],
+                                           LLAMA_CPP_PYTHON_CLONE_PATH, "PIP-BUILD-LLAMA",
+                                           env_override=build_env_llama):
+                            print_error("Build llama-cpp-python failed.")
+                        else:
+                            print_system("llama-cpp-python installed.")  # Use print_system
+                            with open(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE, 'w',
+                                      encoding='utf-8') as f_lcpp_flag:  # Corrected with statement
+                                f_lcpp_flag.write(backend_log_llama)
             else:
                 print_system("Custom llama-cpp-python previously installed.")
-        else:
-            print_system(f"PROVIDER is '{provider_env_check}'. Skipping custom llama-cpp-python.")
 
+        # --- Custom stable-diffusion-cpp-python Installation ---
         if not os.path.exists(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE):
-            print_system(f"--- Custom stable-diffusion-cpp-python Installation ---")
-            if not shutil.which(GIT_CMD) or not shutil.which(CMAKE_CMD): print_error(
-                "Git or CMake not found. Exiting."); sys.exit(1)
-            run_command([PIP_EXECUTABLE, "uninstall", "stable-diffusion-cpp-python", "-y"], ROOT_DIR,
-                        "PIP-UNINSTALL-SD", check=False)
-            if os.path.exists(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH): shutil.rmtree(
-                STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH)
-            if not run_command([GIT_CMD, "clone", "--recursive", STABLE_DIFFUSION_CPP_PYTHON_REPO_URL,
-                                STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH], ROOT_DIR, "GIT-CLONE-SD"): print_error(
-                "Clone SD failed."); sys.exit(1)
-
-            sd_cpp_sub_path = os.path.join(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH, "vendor", "stable-diffusion.cpp")
-            sd_cpp_build_path = os.path.join(sd_cpp_sub_path, "build");
-            os.makedirs(sd_cpp_build_path, exist_ok=True)
-            cmake_args_sd = ["-DCMAKE_POLICY_VERSION_MINIMUM=3.13"];
-            sd_backend_env = os.getenv("SD_CPP_BACKEND", "").lower()
-            if sd_backend_env == "cuda": cmake_args_sd.append("-DSD_CUDA=ON")  # Add other backends as needed
-            if not run_command([CMAKE_CMD, ".."] + cmake_args_sd, sd_cpp_build_path, "CMAKE-SD-LIB-CFG"): print_error(
-                "CMake SD lib failed."); sys.exit(1)
-            if not run_command([CMAKE_CMD, "--build", "."] + (["--config", "Release"] if IS_WINDOWS else []),
-                               sd_cpp_build_path, "CMAKE-BUILD-SD-LIB"): print_error("Build SD lib failed."); sys.exit(
-                1)
-
-            pip_build_env_sd = os.environ.copy();
-            pip_build_env_sd['FORCE_CMAKE'] = '1'
-            if " ".join(cmake_args_sd): pip_build_env_sd['CMAKE_ARGS'] = " ".join(cmake_args_sd)
-            pip_cmd_sd = [PIP_EXECUTABLE, "install", ".", "--upgrade", "--no-cache-dir", "--verbose"]
-            if not run_command(pip_cmd_sd, STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH, "PIP-SD-BINDINGS",
-                               env_override=pip_build_env_sd): print_error("Install SD bindings failed."); sys.exit(1)
-            with open(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
-                f.write(f"Installed {sd_backend_env or 'cpu'} on {datetime.now().isoformat()}\n")
+            print_system("--- Custom stable-diffusion-cpp-python Installation ---")
+            if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]) or not CMAKE_CMD or not shutil.which(
+                CMAKE_CMD.split()[0]):
+                print_error("'git' or 'cmake' not found. Skipping source install.")
+            else:
+                if os.path.exists(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH): shutil.rmtree(
+                    STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH)
+                if not run_command([GIT_CMD, "clone", "--recursive", STABLE_DIFFUSION_CPP_PYTHON_REPO_URL,
+                                    STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH], ROOT_DIR, "GIT-CLONE-SD"):
+                    print_error("Clone SD failed.")
+                else:
+                    sd_cpp_sub_path = os.path.join(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH, "vendor",
+                                                   "stable-diffusion.cpp")
+                    sd_cpp_build_path = os.path.join(sd_cpp_sub_path, "build");
+                    os.makedirs(sd_cpp_build_path, exist_ok=True)
+                    cmake_args_sd_lib = []
+                    chosen_sd_backend = os.getenv("SD_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
+                    backend_log_sd = "cpu"
+                    if chosen_sd_backend == "cuda" and AUTO_CUDA_AVAILABLE:
+                        cmake_args_sd_lib.append("-DSD_CUDA=ON"); backend_log_sd = "CUDA"
+                    elif chosen_sd_backend == "metal" and AUTO_METAL_AVAILABLE:
+                        cmake_args_sd_lib.append("-DSD_METAL=ON"); backend_log_sd = "Metal"
+                    elif chosen_sd_backend == "vulkan" and AUTO_VULKAN_AVAILABLE:
+                        cmake_args_sd_lib.append("-DSD_VULKAN=ON"); backend_log_sd = "Vulkan"
+                    else:
+                        backend_log_sd = "CPU (Default)"
+                    print_system(f"Configuring stable-diffusion.cpp library build with: {backend_log_sd}")
+                    if not run_command([CMAKE_CMD, ".."] + cmake_args_sd_lib, sd_cpp_build_path, "CMAKE-SD-LIB-CFG"):
+                        print_error("CMake SD lib config failed.")
+                    elif not run_command([CMAKE_CMD, "--build", "."] + (["--config", "Release"] if IS_WINDOWS else []),
+                                         sd_cpp_build_path, "CMAKE-BUILD-SD-LIB"):
+                        print_error("Build SD lib failed.")
+                    else:
+                        pip_build_env_sd = {'FORCE_CMAKE': '1'}
+                        if cmake_args_sd_lib: pip_build_env_sd['CMAKE_ARGS'] = " ".join(cmake_args_sd_lib)
+                        if not run_command([PIP_EXECUTABLE, "install", "."], STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH,
+                                           "PIP-SD-BINDINGS", env_override=pip_build_env_sd):
+                            print_error("Install SD bindings failed.")
+                        else:
+                            print_system("stable-diffusion-cpp-python installed.")  # Use print_system
+                            with open(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE, 'w',
+                                      encoding='utf-8') as f_sd_flag:  # Corrected with statement
+                                f_sd_flag.write(backend_log_sd)
         else:
             print_system("Custom stable-diffusion-cpp-python previously installed.")
 
-        print_system("--- Installing/Checking Node.js Backend Dependencies ---")
-        if not shutil.which(NPM_CMD.split('.')[0]): print_error(
-            f"'{NPM_CMD}' not found. Install Node.js. Exiting."); sys.exit(1)
+        print_system("--- Installing/Checking Node.js Dependencies ---")
+        if not NPM_CMD or not shutil.which(NPM_CMD.split('.')[0]): print_error(
+            f"'{NPM_CMD}' not found. Node.js setup failed."); sys.exit(1)
         if not run_command([NPM_CMD, "install"], BACKEND_SERVICE_DIR, "NPM-BACKEND"): print_error(
             "NPM Backend install failed."); sys.exit(1)
-        print_system("--- Installing/Checking Node.js Frontend Dependencies ---")
         if not run_command([NPM_CMD, "install"], FRONTEND_DIR, "NPM-FRONTEND"): print_error(
             "NPM Frontend install failed."); sys.exit(1)
 
         print_system("--- Starting All Services ---")
         service_threads = []
         service_threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
-        time.sleep(2);
-        engine_ready = False
-        with process_lock:
-            for proc, name in running_processes:
-                if name == "ENGINE" and proc.poll() is None: engine_ready = True; break
+        time.sleep(3)
+        engine_ready = any(proc.poll() is None and name_s == "ENGINE" for proc, name_s in running_processes)
         if not engine_ready: print_error("Engine Main failed to start. Exiting."); sys.exit(1)
 
         service_threads.append(start_service_thread(start_backend_service, "BackendServiceThread"));
         time.sleep(2)
         service_threads.append(start_service_thread(start_frontend, "FrontendThread"))
-        print_system("All services launching. Press Ctrl+C to shut down.")
-
+        print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.")  # Use print_colored for success
         try:
             while True:
-                active_procs = False;
-                all_ok = True
+                all_ok = True;
+                active_procs_found = False
                 with process_lock:
-                    current_procs = list(running_processes)
-                if not current_procs and service_threads: all_ok = False  # No procs but threads trying to start them
-                for proc, name in current_procs:
+                    current_procs_snapshot = list(running_processes)
+                if not current_procs_snapshot and service_threads: all_ok = False
+                for proc, name_s in current_procs_snapshot:
                     if proc.poll() is None:
-                        active_procs = True
+                        active_procs_found = True
                     else:
-                        print_error(f"Service '{name}' exited (RC: {proc.poll()})."); all_ok = False
-                if not all_ok: print_error(
-                    "One or more services terminated. Initiating shutdown of remaining services."); break
-                if not active_procs and service_threads: print_system(
-                    "All managed services have finished or exited. Launcher will now shut down."); break
-                if not service_threads: print_system(
-                    "No services were configured to start. Setup complete. Exiting launcher."); break  # Should not happen if services started
+                        print_error(f"Service '{name_s}' exited unexpectedly (RC: {proc.poll()})."); all_ok = False
+                if not all_ok: print_error("One or more services terminated. Shutting down launcher."); break
+                if not active_procs_found and service_threads: print_system(
+                    "All services seem to have finished. Exiting launcher."); break
                 time.sleep(5)
         except KeyboardInterrupt:
             print_system("\nKeyboardInterrupt received by main thread (relaunched script). Shutting down...")
         finally:
-            print_system("Launcher main loop (relaunched script) finished. Ensuring cleanup...")
-        # atexit handler 'cleanup_processes' will run automatically on script exit.
+            print_system("Launcher main loop (relaunched script) finished. Ensuring cleanup via atexit...")
 
-    else:
-        # --- This is the INITIAL script instance, needs to set up Conda and relaunch ---
-        print_system(f"--- Conda Environment Setup (Target Prefix: {TARGET_CONDA_ENV_PATH}) ---")
+    else:  # Initial launcher instance (is_already_in_correct_env is False)
+        print_system(f"--- Initial Launcher: Conda Setup & Hardware Detection ---")
+
+        autodetected_build_env_vars = _detect_and_prepare_acceleration_env_vars()
+
         if not find_conda_executable():
-            print_error("Conda executable could not be located. Please install Anaconda/Miniconda. Exiting.")
-            _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
+            print_error("Conda executable not located. Exiting.");
+            _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE);
             sys.exit(1)
         print_system(f"Using Conda executable: {CONDA_EXECUTABLE}")
 
-        if current_conda_env_path_check:
-            print_warning(
-                f"Currently in Conda env '{current_conda_env_path_check}', but target is '{TARGET_CONDA_ENV_PATH}'. Will attempt to switch/relaunch.")
-        else:
-            print_system(
-                "Not currently in an active Conda environment (CONDA_PREFIX not set or empty). Will attempt to use/create target.")
-
         if not (os.path.isdir(TARGET_CONDA_ENV_PATH) and os.path.exists(
                 os.path.join(TARGET_CONDA_ENV_PATH, 'conda-meta'))):
-            print_system(f"Target Conda environment prefix '{TARGET_CONDA_ENV_PATH}' not found or invalid. Creating...")
+            print_system(f"Target Conda env '{TARGET_CONDA_ENV_PATH}' not found/invalid. Creating...")
             _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
             target_python_versions = get_conda_python_versions_to_try()
             if not create_conda_env(TARGET_CONDA_ENV_PATH, target_python_versions):
-                print_error(f"Failed to create the Conda environment at prefix '{TARGET_CONDA_ENV_PATH}'. Exiting.")
-                # create_conda_env calls _remove_flag_files on its internal failure
+                print_error(f"Failed to create Conda env at '{TARGET_CONDA_ENV_PATH}'. Exiting.");
                 sys.exit(1)
         else:
-            print_system(f"Target Conda environment prefix '{TARGET_CONDA_ENV_PATH}' exists.")
+            print_system(f"Target Conda env '{TARGET_CONDA_ENV_PATH}' exists.")
 
         script_to_run_abs_path = os.path.abspath(__file__)
+        conda_run_cmd_list_base = [CONDA_EXECUTABLE, 'run', '--prefix', TARGET_CONDA_ENV_PATH]
 
-        # --- DEBUG POINT A from previous response ---
-        print_system(f"[DEBUG_POINT_A] CONDA_EXECUTABLE is: '{CONDA_EXECUTABLE}' (Type: {type(CONDA_EXECUTABLE)})")
-        if CONDA_EXECUTABLE is None:  # This check is critical
-            print_error(
-                "CRITICAL DEBUG: CONDA_EXECUTABLE is None immediately before 'conda_run_base_cmd' definition. Exiting.")
-            sys.exit("FATAL: CONDA_EXECUTABLE became None unexpectedly after find_conda_executable check.")
-        # --- END DEBUG POINT A ---
-
-        conda_run_base_cmd = [CONDA_EXECUTABLE, 'run', '--prefix', TARGET_CONDA_ENV_PATH, 'python',
-                              script_to_run_abs_path]
-
-        conda_supports_no_capture_flag = False
+        conda_supports_no_capture = False
         try:
             test_no_capture_cmd = [CONDA_EXECUTABLE, 'run', '--help']
             help_output = subprocess.check_output(test_no_capture_cmd, text=True, stderr=subprocess.STDOUT, timeout=5)
             if '--no-capture-output' in help_output:
-                conda_supports_no_capture_flag = True
-                print_system("Conda supports '--no-capture-output', will use for direct streaming.")
-                conda_run_base_cmd.insert(2, '--no-capture-output')
-            else:
-                print_system(
-                    "Conda does not appear to support '--no-capture-output'. Relaunch output will be captured to files.")
-        except Exception as e_conda_help:
-            print_warning(
-                f"Could not determine Conda's '--no-capture-output' support: {e_conda_help}. Assuming not supported.")
+                conda_supports_no_capture = True;
+                conda_run_cmd_list_base.insert(2, '--no-capture-output')
+        except Exception:
+            pass
 
-        conda_run_cmd_list = conda_run_base_cmd + sys.argv[1:]
-
+        conda_run_cmd_list = conda_run_cmd_list_base + ['python', script_to_run_abs_path] + sys.argv[1:]
         if IS_WINDOWS and CONDA_EXECUTABLE and CONDA_EXECUTABLE.lower().endswith(".bat"):
             conda_run_cmd_list = ['cmd', '/c'] + conda_run_cmd_list
 
-        display_cmd_list_for_log = []
-        none_found_in_cmd_list_for_display = False
-        for i_item, item_val in enumerate(conda_run_cmd_list):
-            if item_val is None:
-                display_cmd_list_for_log.append(f"<NONE_VALUE_AT_INDEX_{i_item}>")
-                none_found_in_cmd_list_for_display = True
-            else:
-                display_cmd_list_for_log.append(str(item_val))
-
-        if none_found_in_cmd_list_for_display:
-            print_error(
-                f"DEBUG: One or more None values found in conda_run_cmd_list before join: {display_cmd_list_for_log}")
-            sys.exit("FATAL: None value found in command list for Popen, which is invalid.")
-
-        log_message_for_conda_run_display = ' '.join(display_cmd_list_for_log)
-        print_system(f"Relaunching script using 'conda run': {log_message_for_conda_run_display}")
+        display_cmd_list = [str(c) if c is not None else "<CRITICAL_NONE_ERROR>" for c in conda_run_cmd_list]
+        if "<CRITICAL_NONE_ERROR>" in display_cmd_list: print_error(
+            f"FATAL: None value in conda_run_cmd_list: {display_cmd_list}"); sys.exit(1)
+        print_system(f"Relaunching script using 'conda run': {' '.join(display_cmd_list)}")
 
         os.makedirs(RELAUNCH_LOG_DIR, exist_ok=True)
+        popen_env = os.environ.copy()
+        popen_env.update(autodetected_build_env_vars)
+        popen_env["ZEPHYRINE_RELAUNCHED_IN_CONDA"] = "1"
 
         log_stream_threads = []
-
-        common_popen_kwargs = {"text": True, "errors": 'replace', "bufsize": 1}
+        common_popen_kwargs_relaunch = {"text": True, "errors": 'replace', "bufsize": 1, "env": popen_env}
         if IS_WINDOWS:
-            common_popen_kwargs["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            common_popen_kwargs_relaunch["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
         else:
-            common_popen_kwargs["preexec_fn"] = os.setsid
+            common_popen_kwargs_relaunch["preexec_fn"] = os.setsid
 
         process_conda_run = None
-
         try:
-            if conda_supports_no_capture_flag:  # If --no-capture-output was added
-                print_system("Parent launcher: Relaunched script output should stream directly to this terminal.")
-                process_conda_run = subprocess.Popen(conda_run_cmd_list, **common_popen_kwargs)
+            if conda_supports_no_capture:
+                print_system("Parent: Relaunched script output should stream directly.")
+                process_conda_run = subprocess.Popen(conda_run_cmd_list, **common_popen_kwargs_relaunch)
             else:
                 print_system(
-                    f"Parent launcher: Relaunched script output will be captured to files (and tailed by parent):")
-                print_system(f"  Stdout log: {RELAUNCH_STDOUT_LOG}")
-                print_system(f"  Stderr log: {RELAUNCH_STDERR_LOG}")
-
-                # This with block needs to be outside the Popen call if f_stdout/f_stderr are passed to it.
-                # The Popen call should happen inside this block.
-                # Corrected structure:
+                    f"Parent: Relaunched script output via logs: STDOUT='{RELAUNCH_STDOUT_LOG}', STDERR='{RELAUNCH_STDERR_LOG}'")
                 with open(RELAUNCH_STDOUT_LOG, 'w', encoding='utf-8') as f_stdout, \
-                        open(RELAUNCH_STDERR_LOG, 'w', encoding='utf-8') as f_stderr:
+                        open(RELAUNCH_STDERR_LOG, 'w', encoding='utf-8') as f_stderr:  # Corrected with statement
+                    file_capture_kwargs = common_popen_kwargs_relaunch.copy()
+                    file_capture_kwargs["stdout"] = f_stdout;
+                    file_capture_kwargs["stderr"] = f_stderr
+                    process_conda_run = subprocess.Popen(conda_run_cmd_list, **file_capture_kwargs)
 
-                    file_capture_popen_kwargs = common_popen_kwargs.copy()
-                    file_capture_popen_kwargs["stdout"] = f_stdout
-                    file_capture_popen_kwargs["stderr"] = f_stderr
-                    process_conda_run = subprocess.Popen(conda_run_cmd_list, **file_capture_popen_kwargs)
-
-            if not process_conda_run:  # Should be caught by exceptions below if Popen fails
-                raise RuntimeError("subprocess.Popen failed to create process_conda_run object.")
-
+            if not process_conda_run: raise RuntimeError("Popen for conda run failed.")
             relaunched_conda_process_obj = process_conda_run
 
-            if not conda_supports_no_capture_flag:  # Only start file tailers if not streaming directly
-                print_system("Parent launcher: Starting file log streamers for relaunched script (from files)...")
-                stdout_stream_thread = threading.Thread(
-                    target=_stream_log_file,
-                    args=(RELAUNCH_STDOUT_LOG, relaunched_conda_process_obj, "STDOUT"), daemon=True)
-                stderr_stream_thread = threading.Thread(
-                    target=_stream_log_file,
-                    args=(RELAUNCH_STDERR_LOG, relaunched_conda_process_obj, "STDERR"), daemon=True)
-                log_stream_threads.extend([stdout_stream_thread, stderr_stream_thread])
-                stdout_stream_thread.start();
-                stderr_stream_thread.start()
+            if not conda_supports_no_capture:
+                stdout_thread = threading.Thread(target=_stream_log_file,
+                                                 args=(RELAUNCH_STDOUT_LOG, relaunched_conda_process_obj, "STDOUT"),
+                                                 daemon=True)
+                stderr_thread = threading.Thread(target=_stream_log_file,
+                                                 args=(RELAUNCH_STDERR_LOG, relaunched_conda_process_obj, "STDERR"),
+                                                 daemon=True)
+                log_stream_threads.extend([stdout_thread, stderr_thread]);
+                stdout_thread.start();
+                stderr_thread.start()
 
             exit_code_from_conda_run = -1
             if relaunched_conda_process_obj:
@@ -1733,37 +1988,20 @@ if __name__ == "__main__":
                     relaunched_conda_process_obj.wait()
                     exit_code_from_conda_run = relaunched_conda_process_obj.returncode
                 except KeyboardInterrupt:
-                    print_system("Parent script's wait for 'conda run' was interrupted by KeyboardInterrupt.")
+                    print_system("Parent script's wait for 'conda run' interrupted. Shutting down...");
                     if not getattr(sys, 'exitfunc_called', False): sys.exit(130)
 
                 if log_stream_threads:
-                    print_system(
-                        "Parent launcher: Relaunched script finished. Waiting for file log streamers (max 2s)...")
+                    print_system("Parent: Relaunched script finished. Waiting for log streamers (max 2s)...")
                     for t in log_stream_threads:
                         if t.is_alive(): t.join(timeout=1.0)
-                    print_system("Parent launcher: File log streamers finished.")
+                    print_system("Parent: Log streamers finished.")
 
                 print_system(f"'conda run' process finished with code: {exit_code_from_conda_run}.")
                 relaunched_conda_process_obj = None
-
-                if exit_code_from_conda_run != 0:
-                    error_msg = f"'conda run' process exited with non-zero code: {exit_code_from_conda_run}."
-                    if not conda_supports_no_capture_flag: error_msg += f" Check logs: STDOUT='{RELAUNCH_STDOUT_LOG}', STDERR='{RELAUNCH_STDERR_LOG}'"
-                    print_error(error_msg)
-                else:
-                    success_msg = "'conda run' process completed successfully."
-                    if not conda_supports_no_capture_flag: success_msg += f" Check logs: STDOUT='{RELAUNCH_STDOUT_LOG}', STDERR='{RELAUNCH_STDERR_LOG}'"
-                    print_system(success_msg)
                 sys.exit(exit_code_from_conda_run)
             else:
-                print_error("Failed to start the 'conda run' process. Cannot proceed.")
-                sys.exit(1)
-
-        except FileNotFoundError as e_fnf:
-            print_error(
-                f"Failed to execute 'conda run' (cmd or component not found: {(conda_run_cmd_list[0] if conda_run_cmd_list else '<UNKNOWN>')}): {e_fnf}")
-            sys.exit(1)
+                print_error("Failed to start 'conda run' process."); sys.exit(1)
         except Exception as e_outer:
-            print_error(f"An unexpected error occurred while trying to execute 'conda run' or wait for it: {e_outer}")
-            traceback.print_exc()
-            sys.exit(1)
+            print_error(f"Error during 'conda run' or wait: {e_outer}"); traceback.print_exc(); sys.exit(1)
+

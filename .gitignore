@@ -111,6 +111,7 @@ LiteratureReviewPool/
 **alembic**
 **.db**
 **temp_audio**
+**.aria2p_installed_v1**
 .custom_sd_cpp_python_installed_v1
 zephyimagination_test_image.png
 temp_melo_audio_test_files
