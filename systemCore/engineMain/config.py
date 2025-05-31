@@ -148,9 +148,9 @@ DEFAULT_TRANSLATION_TARGET_LANGUAGE = os.getenv("DEFAULT_TRANSLATION_TARGET_LANG
 # The 'translator' role (e.g., NanoTranslator) is ideal if it supports the required language pairs.
 # Otherwise, 'general_fast' or 'general' could be used.
 TRANSLATION_LLM_ROLE = os.getenv("TRANSLATION_LLM_ROLE", "translator")
-ASR_WORKER_TIMEOUT = int(os.getenv("ASR_WORKER_TIMEOUT", 300)) # Timeout for ASR worker (if not already defined)
-TTS_WORKER_TIMEOUT = int(os.getenv("TTS_WORKER_TIMEOUT", 120)) # Timeout for TTS worker (if not already defined)
-TRANSLATION_LLM_TIMEOUT_MS = int(os.getenv("TRANSLATION_LLM_TIMEOUT_MS", 30000)) # Timeout for the LLM translation step (milliseconds)
+ASR_WORKER_TIMEOUT = int(os.getenv("ASR_WORKER_TIMEOUT", 3600)) # Timeout for ASR worker (if not already defined)
+TTS_WORKER_TIMEOUT = int(os.getenv("TTS_WORKER_TIMEOUT", 3600)) # Timeout for TTS worker (if not already defined)
+TRANSLATION_LLM_TIMEOUT_MS = int(os.getenv("TRANSLATION_LLM_TIMEOUT_MS", 3600000)) # Timeout for the LLM translation step (milliseconds)
 
 logger.info(f"🌐 Audio Translation Client-Facing Model: {AUDIO_TRANSLATION_MODEL_CLIENT_FACING}")
 logger.info(f"   🌐 Default Translation Target Language: {DEFAULT_TRANSLATION_TARGET_LANGUAGE}")

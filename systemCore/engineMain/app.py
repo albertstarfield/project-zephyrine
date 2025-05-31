@@ -9301,7 +9301,7 @@ def handle_openai_tts():
             request_data=worker_request_data,
             priority=ELP1,  # Use ELP1 for user-facing TTS
             worker_cwd=SCRIPT_DIR,
-            timeout=60  # Adjust timeout as needed for TTS generation
+            timeout=TTS_WORKER_TIMEOUT  # Adjust timeout as needed for TTS generation through config.py TTS_WORKER_TIMEOUT
         )
 
         if error_string_from_worker:

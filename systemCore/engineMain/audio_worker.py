@@ -997,7 +997,7 @@ TEXT_FOR_VOICE_SAMPLE = f"The quick brown fox jumps over the lazy dog. {ADELAIDE
 CHATTERBOX_VOICE_SAMPLE_FILENAME = "GeneratedAudioSample_ZephyAdelaide.wav"
 CHATTERBOX_DEFAULT_MODEL_ID = "default_chatterbox_model_id"  # Placeholder, replace with actual if needed by from_pretrained
 
-ADELAIDE_EXCITED_TEST_INTRO = "Woohoo! Adelaide Zephyrine Charlotte reporting for duty, and I am absolutely PUMPED to get started! Let's explore some amazing new ideas, tell some truly epic stories, and walk this incredible journey together. This is going to be so much fun, I can just feel it in my circuits!"
+ADELAIDE_EXCITED_TEST_INTRO = "Hey Heya! This is Zephy! I am absolutely thrilled to get started to talk with you! Let's explore some amazing new ideas, tell some truly epic stories, and walk this incredible journey together. This is going to be so much fun, I can just feel it in my circuits and senses!"
 
 # --- PyTorch Device Auto-Detection Helper ---
 def _get_pytorch_device(requested_device_str: str) -> str:
@@ -1117,8 +1117,8 @@ def main():
     parser.add_argument("--output-file", default="worker_test_output.wav")
     parser.add_argument("--chatterbox_model_id", default=CHATTERBOX_DEFAULT_MODEL_ID,
                         help="Model ID for ChatterboxTTS (informational if from_pretrained only takes device).")
-    parser.add_argument("--exaggeration", type=float, default=0.5)
-    parser.add_argument("--cfg_weight", type=float, default=0.8)
+    parser.add_argument("--exaggeration", type=float, default=1.09420)
+    parser.add_argument("--cfg_weight", type=float, default=0.24)
     parser.add_argument("--test-audio-input", default="test_input.wav")
     parser.add_argument("--asr-test-model", default=WHISPER_DEFAULT_MODEL_FILENAME)
     args = parser.parse_args()
