@@ -11,7 +11,7 @@ import platform
 from datetime import datetime, date
 import json  # For parsing conda info
 import traceback
-import requests
+#import requests #(Don't request at the top) But on the main after conda relaunch to make sure it's installed
 from typing import Optional, Dict
 
 # --- Configuration ---
@@ -1257,16 +1257,23 @@ except ImportError:
     print_warning("aria2p Python library not found. Aria2c download method will be unavailable.")
 # --- End Aria2p Import ---
 
+
+
 # --- File Download Logic ---
+
+# Global placeholder for requests_session, use string literal for type hint here too
+requests_session: Optional['requests.Session'] = None
+ARIA2P_AVAILABLE = False # Assuming this is set based on aria2p import attempt
+
 def download_file_with_progress(
-        url: str,
-        destination_path: str,
-        file_description: str,
-        requests_session: requests.Session,  # For the requests fallback
-        max_retries_non_connection_error: int = 3,  # Default for non-connection errors
-        aria2_rpc_host: str = "localhost",  # Default host for aria2c RPC
-        aria2_rpc_port: int = 6800,  # Default port for aria2c RPC
-        aria2_rpc_secret: Optional[str] = None  # If your aria2c RPC is secured
+    url: str,
+    destination_path: str,
+    file_description: str,
+    requests_session: 'requests.Session', # <<< CORRECTED TYPE HINT
+    max_retries_non_connection_error: int = 3,
+    aria2_rpc_host: str = "localhost",
+    aria2_rpc_port: int = 6800,
+    aria2_rpc_secret: Optional[str] = None
 ):
     """
     Downloads a file with a progress bar.
@@ -1594,6 +1601,8 @@ if __name__ == "__main__":
                            "PIP-UPGRADE-CORE"): print_warning("Pip/setuptools upgrade failed.")
         if not run_command([PIP_EXECUTABLE, "install", "tqdm", "requests"], ROOT_DIR, "PIP-UTILS"): print_error(
             "tqdm/requests install failed."); sys.exit(1)
+
+
         try:
             import requests; from tqdm import tqdm
         except ImportError:
@@ -1602,6 +1611,8 @@ if __name__ == "__main__":
         adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=20);
         requests_session.mount('http://', adapter);
         requests_session.mount('https://', adapter)
+
+
 
         engine_req_path = os.path.join(ROOT_DIR, "requirements.txt")
         if not os.path.exists(engine_req_path): print_error(f"requirements.txt not found: {engine_req_path}"); sys.exit(
