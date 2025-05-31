@@ -1,78 +1,53 @@
 # audio_worker.py
-
+import gc
 import sys
 import os
 import json
 import time
-import tempfile
-import subprocess
 import traceback
 import argparse
+import librosa
 import base64
+import re
 import io
-import numba
-import shutil # For checking ffmpeg
-from typing import Optional, Dict, Any
+import shutil  # For checking ffmpeg and which
+from typing import Optional, Dict, Any, List
+import numpy as np
+import soundfile as sf
+import tempfile  # For ASR ffmpeg conversion temp file
+import subprocess  # For ASR ffmpeg conversion
+import torchaudio.functional as F
+from functools import partial
+from pedalboard import Pedalboard, Reverb, Limiter, Gain, PitchShift, Resample, Chorus, Delay, Distortion
 
-from config import * #import Global Variables
-
+# --- PyTorch and torchaudio imports ---
+TORCH_AUDIO_AVAILABLE = False
+torch = None  # Initialize to allow type checking later
+torchaudio = None  # Initialize
+F_torchaudio = None
 try:
-    from numba import njit
-    NUMBA_AVAILABLE = True
-except ImportError:
-    NUMBA_AVAILABLE = False
-    # Define a dummy njit decorator if Numba is not available
-    def njit(func_or_signature=None, *args, **kwargs):
-        if callable(func_or_signature):
-            return func_or_signature # Return the original function
-        else: # Used as @njit(...)
-            def decorator(func):
-                return func
-            return decorator
-
-# --- MeloTTS and SCLParser Imports (from your provided code) ---
-try:
-    from melo.api import TTS
     import torch
     import torchaudio
-    import torchaudio.functional as F
-    import numpy as np
-    from pedalboard import Pedalboard, Reverb, Limiter, Gain, PitchShift, Resample, Chorus, Delay, Distortion
-    import soundfile as sf
-    import re
-    # from IPython.display import display, Audio # Not needed in worker
-    import librosa
-    from functools import partial
-    import scipy.signal as sig
+    import torchaudio.functional as F_torchaudio
 
-    MELO_AVAILABLE = True
-except ImportError as e:
-    # Write error to stderr so the parent process can see it, then try to send JSON error
-    print(f"[AUDIO_WORKER|ERROR] MeloTTS or its dependencies not found: {e}", file=sys.stderr, flush=True)
-    print(json.dumps({"error": f"Audio worker dependencies missing: {e}"}), flush=True)
-    sys.exit(1)
+    TORCH_AUDIO_AVAILABLE = True
+    print("[AUDIO_WORKER|INFO] PyTorch and Torchaudio imported successfully.", file=sys.stderr, flush=True)
+except ImportError as e_torch:
+    print(f"[AUDIO_WORKER|ERROR] PyTorch or torchaudio not found: {e_torch}. TTS functionality will be impaired.",
+          file=sys.stderr, flush=True)
+    # TTS will likely fail if these are not available.
 
+
+# --- Basic Logging Function (used before full logger setup if needed by SCLParser during import) ---
 def log_worker(level, message):
     """Basic logging to stderr for the worker itself."""
-    print(f"[AUDIO_WORKER|{level}] {message}", file=sys.stderr, flush=True)
-
-# --- PyWhisperCpp Import ---
-PYWHISPERCPP_AVAILABLE = False
-try:
-    from pywhispercpp.model import Model as WhisperModel
-    PYWHISPERCPP_AVAILABLE = True
-    log_worker("INFO", "pywhispercpp imported successfully.")
-except ImportError as e_whisper:
-    log_worker("WARNING", f"pywhispercpp not found: {e_whisper}. ASR task will fail.")
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')} AUDIO_WORKER|{level}] {message}", file=sys.stderr, flush=True)
 
 
-
-# --- SCLParser Class (Paste your full SCLParser class here) ---
-# Ensure all print statements within SCLParser use log_worker or write to stderr
-# For brevity in this response, I'll assume SCLParser is defined as you provided.
-# I will add a log_worker function for its prints.
-
-
+# --- SCLParser Class (User to fill in with their full SCLParser class definition) ---
+# This placeholder is designed to allow _ensure_voice_sample to run without error,
+# assuming the primary goal is to get *some* audio data from MeloTTS for the sample.
+# Your actual SCLParser will have much richer functionality.
 
 # --- SCLParser (Modified to use log_worker) ---
 class SCLParser:
@@ -940,390 +915,529 @@ class SCLParser:
 # --- End SCLParser ---
 
 
+# --- MeloTTS and ChatterboxTTS Imports (after SCLParser placeholder for definition order) ---
+try:
+    if TORCH_AUDIO_AVAILABLE:
+        from melo.api import TTS as ImportedTTS_melo_api
+
+        TTS_melo_class_ref = ImportedTTS_melo_api  # Use this to instantiate MeloTTS
+        if 'SCLParser' in globals() and callable(globals()['SCLParser']) and TTS_melo_class_ref is not None:
+            MELO_AVAILABLE = True
+            log_worker("INFO", "MeloTTS API and local SCLParser class are available for sample generation.")
+        else:
+            if TTS_melo_class_ref is None:
+                raise ImportError("melo.api.TTS could not be imported.")
+            else:
+                raise ImportError("SCLParser class definition not found or not callable.")
+    else:
+        raise ImportError("Torch/Torchaudio not available, MeloTTS cannot be loaded.")
+except ImportError as e_melo_setup_final:
+    log_worker("WARNING", f"MeloTTS setup (for sample gen) not fully available: {e_melo_setup_final}.")
+    MELO_AVAILABLE = False
+    TTS_melo_class_ref = None  # Ensure it's None
+
+try:
+    if TORCH_AUDIO_AVAILABLE:
+        from chatterbox.tts import ChatterboxTTS as ImportedChatterboxTTS_module_class  # User provided import
+
+        ChatterboxTTS_class_ref = ImportedChatterboxTTS_module_class  # Use this to instantiate ChatterboxTTS
+        CHATTERBOX_TTS_AVAILABLE = True
+        log_worker("INFO", "ChatterboxTTS library class imported successfully.")
+    else:
+        raise ImportError("Torch/Torchaudio not available, ChatterboxTTS cannot be loaded.")
+except ImportError as e_cb_final:
+    log_worker("WARNING", f"ChatterboxTTS library not found/imported: {e_cb_final}. Chatterbox TTS unavailable.")
+    CHATTERBOX_TTS_AVAILABLE = False
+    ChatterboxTTS_class_ref = None  # Ensure it's None
+
+# --- torch.load Patch (Applied only if torch is available) ---
+if TORCH_AUDIO_AVAILABLE and torch:  # Check torch explicitly
+    _original_torch_load = torch.load
+
+
+    def _patched_torch_load_audio_worker(*args, **kwargs):
+        # This patch is primarily a placeholder. ChatterboxTTS's `from_pretrained(device=...)`
+        # should ideally handle device mapping correctly. If specific `map_location` is
+        # needed by an internal `torch.load` call within ChatterboxTTS that *doesn't* respect
+        # the main device argument, that would be an issue with the ChatterboxTTS library itself.
+        # We keep the patch as a hook in case it's found to be necessary for a specific model.
+        # log_worker("DEBUG", f"Patched torch.load in audio_worker called. args: {args}, kwargs: {kwargs}")
+        return _original_torch_load(*args, **kwargs)
+
+
+    torch.load = _patched_torch_load_audio_worker
+    log_worker("INFO", "Global torch.load patch applied in audio_worker (passthrough).")
+
+# --- PyWhisperCpp Imports (as before) ---
+# ... (PYWHISPERCPP_AVAILABLE, WhisperModel setup) ...
+PYWHISPERCPP_AVAILABLE = False
+WhisperModel = None
+try:
+    from pywhispercpp.model import Model as ImportedWhisperModel
+
+    WhisperModel = ImportedWhisperModel
+    PYWHISPERCPP_AVAILABLE = True
+    log_worker("INFO", "pywhispercpp imported successfully.")
+except ImportError:
+    log_worker("WARNING", "pywhispercpp library not found. ASR will be unavailable.")
+    PYWHISPERCPP_AVAILABLE = False
+
+# --- Config Import (as before) ---
+try:
+    from config import WHISPER_MODEL_DIR, WHISPER_DEFAULT_MODEL_FILENAME, WHISPER_DEFAULT_LANGUAGE
+except ImportError:
+    log_worker("WARNING", "Could not import ASR defaults from config.py.")
+    WHISPER_MODEL_DIR = "./staticmodelpool"
+    WHISPER_DEFAULT_MODEL_FILENAME = "whisper-large-v3-q8_0.gguf"
+    WHISPER_DEFAULT_LANGUAGE = "auto"
+
+# --- Constants for ChatterboxTTS ---
+ADELAIDE_CASUAL_INTRO = "Sup! It's your girl, Adelaide Zephyrine Charlotte, ready to roll. Not gonna lie, I'm basically programmed to be hyped about sharing some legendary tales, diving into who-knows-what explorations, and generally 'walking together' on this journey with you. Let's get this digital bread before my processors decide to start optimizing your sock drawer – its a weird hobby Im trying to kick."
+TEXT_FOR_VOICE_SAMPLE = f"The quick brown fox jumps over the lazy dog. {ADELAIDE_CASUAL_INTRO}"
+CHATTERBOX_VOICE_SAMPLE_FILENAME = "GeneratedAudioSample_ZephyAdelaide.wav"
+CHATTERBOX_DEFAULT_MODEL_ID = "default_chatterbox_model_id"  # Placeholder, replace with actual if needed by from_pretrained
+
+ADELAIDE_EXCITED_TEST_INTRO = "Woohoo! Adelaide Zephyrine Charlotte reporting for duty, and I am absolutely PUMPED to get started! Let's explore some amazing new ideas, tell some truly epic stories, and walk this incredible journey together. This is going to be so much fun, I can just feel it in my circuits!"
+
+# --- PyTorch Device Auto-Detection Helper ---
+def _get_pytorch_device(requested_device_str: str) -> str:
+    # ... (Function as provided in response #87, using log_worker) ...
+    log_worker("INFO", f"Requested PyTorch device: '{requested_device_str}'")
+    if not TORCH_AUDIO_AVAILABLE or not torch: return "cpu"  # Fallback if torch itself failed
+
+    resolved_device = "cpu"
+    req_dev_lower = requested_device_str.lower()
+
+    if req_dev_lower == "cuda":
+        if torch.cuda.is_available():
+            resolved_device = "cuda"; log_worker("INFO", "CUDA available. Using CUDA.")
+        else:
+            log_worker("WARNING", "CUDA requested but not available.")
+    elif req_dev_lower == "mps":
+        if hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            resolved_device = "mps"; log_worker("INFO", "MPS (Metal) available. Using MPS.")
+        else:
+            log_worker("WARNING", "MPS requested but not available.")
+    elif req_dev_lower == "vulkan":
+        try:
+            if hasattr(torch, 'vulkan') and torch.vulkan.is_available():
+                resolved_device = "vulkan"; log_worker("INFO", "Vulkan available. Attempting Vulkan.")
+            else:
+                log_worker("WARNING", "Vulkan requested but torch.vulkan.is_available() is False.")
+        except Exception as e_vulkan_chk:
+            log_worker("WARNING", f"Vulkan check failed: {e_vulkan_chk}.")
+
+    if resolved_device == "cpu" and req_dev_lower == "auto":
+        log_worker("INFO", "Device 'auto': Detecting best available PyTorch device...")
+        if torch.cuda.is_available():
+            resolved_device = "cuda"; log_worker("INFO", "Auto-detected CUDA.")
+        elif hasattr(torch.backends, "mps") and torch.backends.mps.is_available():
+            resolved_device = "mps"; log_worker("INFO", "Auto-detected MPS (Metal).")
+        elif hasattr(torch, 'vulkan') and torch.vulkan.is_available():
+            resolved_device = "vulkan"; log_worker("INFO", "Auto-detected Vulkan (experimental).")
+        else:
+            resolved_device = "cpu"; log_worker("INFO", "Auto-detection falling back to CPU.")
+    elif resolved_device == "cpu" and req_dev_lower not in ["cpu", "auto"]:
+        log_worker("WARNING", f"Requested device '{requested_device_str}' not available. Using CPU.")
+
+    log_worker("INFO", f"Final PyTorch device for TTS: '{resolved_device}'")
+    return resolved_device
+
+
+# Helper function to ensure the voice sample exists
+def _ensure_voice_sample(
+        args: argparse.Namespace,
+        melo_model_instance: Optional[Any],  # Actually melo.api.TTS
+        scl_parser_instance: Optional[Any],  # Actually SCLParser
+        effective_device_str: str  # The device string determined by _get_pytorch_device
+) -> Optional[str]:
+    # ... (Function as provided in response #87, using log_worker, SCLParser (placeholder now), sf.write) ...
+    # Crucially, it calls scl_parser_instance.parse() and saves the result using sf.write
+    if not CHATTERBOX_TTS_AVAILABLE: log_worker("WARNING",
+                                                "ChatterboxTTS not available, sample not ensured."); return None
+
+    sample_dir = os.path.join(args.temp_dir, "chatterbox_voice_samples")  # Store samples in a sub-directory
+    os.makedirs(sample_dir, exist_ok=True)
+    voice_sample_full_path = os.path.join(sample_dir, CHATTERBOX_VOICE_SAMPLE_FILENAME)
+
+    if os.path.exists(voice_sample_full_path):
+        log_worker("INFO", f"ChatterboxTTS voice sample found: {voice_sample_full_path}")
+        return voice_sample_full_path
+
+    log_worker("INFO",
+               f"ChatterboxTTS voice sample not found. Attempting generation with MeloTTS to: {voice_sample_full_path}")
+    if not MELO_AVAILABLE or not melo_model_instance or not scl_parser_instance:
+        log_worker("ERROR",
+                   "MeloTTS/SCLParser not available for voice sample generation. Cannot proceed if sample is missing.")
+        return None
+
+    try:
+        melo_speaker_for_sample = f"{args.model_lang.upper()}-US"
+        if melo_speaker_for_sample not in scl_parser_instance.speaker_ids:
+            melo_speaker_for_sample = list(scl_parser_instance.speaker_ids.keys())[
+                0] if scl_parser_instance.speaker_ids else "EN-US"
+            log_worker("WARNING", f"Default Melo speaker for sample gen not found, using: {melo_speaker_for_sample}")
+
+        log_worker("INFO",
+                   f"Generating sample with MeloTTS. Speaker: {melo_speaker_for_sample}, Text: '{TEXT_FOR_VOICE_SAMPLE[:50]}...'")
+        # scl_parser_instance.parse returns (audio_data_numpy_array, sample_rate_int)
+        audio_data_np, sample_rate_melo = scl_parser_instance.parse(TEXT_FOR_VOICE_SAMPLE,
+                                                                    speaker=melo_speaker_for_sample)
+
+        if audio_data_np is not None and sample_rate_melo is not None:
+            log_worker("DEBUG",
+                       f"MeloTTS sample generated. Data shape: {audio_data_np.shape}, SR: {sample_rate_melo}. Saving...")
+            # Ensure audio_data_np is suitable for sf.write (e.g. (samples, channels) or (samples,))
+            audio_to_save_sf = audio_data_np
+            if audio_data_np.ndim == 2 and audio_data_np.shape[0] < audio_data_np.shape[1] and audio_data_np.shape[
+                0] <= 2:  # (channels, samples)
+                audio_to_save_sf = audio_data_np.T  # Transpose to (samples, channels) for soundfile
+
+            sf.write(voice_sample_full_path, audio_to_save_sf, sample_rate_melo, format='WAV', subtype='PCM_16')
+            log_worker("INFO", f"Successfully generated and saved ChatterboxTTS voice sample: {voice_sample_full_path}")
+            return voice_sample_full_path
+        else:
+            log_worker("ERROR", "MeloTTS (via SCLParser placeholder) failed to return audio data for voice sample.")
+            return None
+    except Exception as e_sample_gen:
+        log_worker("ERROR", f"Failed to generate/save voice sample with MeloTTS: {e_sample_gen}");
+        log_worker("ERROR", traceback.format_exc())
+        return None
+
+
 # --- Main Worker Logic ---
 def main():
     parser = argparse.ArgumentParser(description="Audio Worker (TTS & ASR)")
-    parser.add_argument("--task-type", required=True, choices=["tts", "asr"], help="Task to perform: 'tts' or 'asr'")
-    parser.add_argument("--model-lang", default="EN",
-                        help="Language for TTS model or ASR (e.g., EN, ES, FR, ZH, JP, KR)")
-    parser.add_argument("--device", default="auto", help="Device for PyTorch (TTS) or backend hint (ASR if supported)")
-    parser.add_argument("--model-dir", required=True,
-                        help="Base directory for ALL models (MeloTTS language data and ASR GGUF)")
-    parser.add_argument("--temp-dir", default=".",
-                        help="Base directory for temporary files (e.g., conversions, TTS output)")
-
-    parser.add_argument("--test-mode", action="store_true", help="Run in test mode. Behavior depends on --task-type.")
-    parser.add_argument("--output-file", default="test_output.wav", help="Output filename for TTS test mode audio.")
-    parser.add_argument("--test-audio-input", default="test_input.wav", help="Input audio filename for ASR test mode.")
-    parser.add_argument("--asr-test-model", default="whisper-large-v3-q8_0.gguf",
-                        help="Whisper model filename for ASR test mode (within --model-dir).")
-
+    parser.add_argument("--task-type", required=True, choices=["tts", "asr"])
+    parser.add_argument("--model-lang", default="EN", help="Lang for MeloTTS sample or ASR")
+    parser.add_argument("--device", default="auto", help="PyTorch device for TTS (auto, cpu, cuda, mps, vulkan)")
+    parser.add_argument("--model-dir", required=True, help="Base dir for ASR GGUF models")
+    parser.add_argument("--temp-dir", default=".", help="Base dir for temporary files")
+    parser.add_argument("--test-mode", action="store_true")
+    parser.add_argument("--output-file", default="worker_test_output.wav")
+    parser.add_argument("--chatterbox_model_id", default=CHATTERBOX_DEFAULT_MODEL_ID,
+                        help="Model ID for ChatterboxTTS (informational if from_pretrained only takes device).")
+    parser.add_argument("--exaggeration", type=float, default=0.5)
+    parser.add_argument("--cfg_weight", type=float, default=0.8)
+    parser.add_argument("--test-audio-input", default="test_input.wav")
+    parser.add_argument("--asr-test-model", default=WHISPER_DEFAULT_MODEL_FILENAME)
     args = parser.parse_args()
-    result_payload: Dict[str, Any] = {"error": f"Worker failed to complete task: {args.task_type}"}
+
+    result_payload: Dict[str, Any] = {"error": f"Worker failed task: {args.task_type}"}
+    effective_pytorch_device_str = "cpu"
+
+    if TORCH_AUDIO_AVAILABLE and torch:
+        effective_pytorch_device_str = _get_pytorch_device(args.device)
+    elif args.task_type == "tts":
+        log_worker("CRITICAL", "PyTorch/Torchaudio not available. Cannot perform TTS.")
+        print(json.dumps({"error": "PyTorch/Torchaudio missing for TTS."}), flush=True);
+        sys.exit(1)
 
     # --- TTS Task ---
     if args.task_type == "tts":
-        # --- [Your existing, confirmed working TTS Logic from response #57] ---
-        # This includes:
-        # - Checking MELO_AVAILABLE and SCLParser
-        # - Loading TTS model and SCLParser instance (corrected without sample_rate in constructor)
-        # - Handling args.test_mode for TTS
-        # - Handling standard TTS mode (reading JSON from stdin, calling SCLParser, format conversion, base64)
-        # - Setting result_payload
-        # - Error handling throughout
-        # For brevity, this full block is not repeated here, but it's the same as your working version.
-        # Ensure the SCLParser instantiation is:
-        # scl_parser_instance = SCLParser(tts_model_instance, device=args.device)
         log_worker("INFO",
-                   f"TTS Task selected. Language: {args.model_lang}, Device: {args.device}, TestMode: {args.test_mode}")
-        if not MELO_AVAILABLE or SCLParser is None:
-            result_payload = {"error": "MeloTTS or SCLParser not available/defined in worker for TTS."}
-            log_worker("ERROR", result_payload["error"])
+                   f"TTS Task. Primary: ChatterboxTTS. Device: '{effective_pytorch_device_str}', Test: {args.test_mode}")
+        if not CHATTERBOX_TTS_AVAILABLE or not ChatterboxTTS_class_ref:
+            result_payload = {"error": "ChatterboxTTS library not available."};
+            log_worker("CRITICAL", result_payload["error"])
             print(json.dumps(result_payload), flush=True);
             sys.exit(1)
 
-        tts_model_instance = None
-        scl_parser_instance = None
+        melo_for_sample: Optional[Any] = None
+        sclparser_for_sample: Optional[SCLParser] = None
+        chatterbox_tts_model: Optional[Any] = None
+        generated_voice_sample_path: Optional[str] = None
+
         try:
-            load_start = time.monotonic()
-            if 'torch' in sys.modules: sys.modules['torch'].set_num_threads(1)
-            tts_model_instance = TTS(language=args.model_lang, device=args.device)
-            scl_parser_instance = SCLParser(tts_model_instance, device=args.device)
-            load_duration = time.monotonic() - load_start
-            log_worker("INFO", f"TTS Model and SCLParser loaded successfully in {load_duration:.2f}s.")
-        except Exception as e_load_tts:
-            log_worker("ERROR", f"TTS Model/SCLParser loading failed: {e_load_tts}");
-            log_worker("ERROR", traceback.format_exc())
-            result_payload = {"error": f"Worker failed to load TTS model/parser: {str(e_load_tts)}"}
-            print(json.dumps(result_payload), flush=True);
-            sys.exit(1)
+            if MELO_AVAILABLE and TTS_melo_class_ref and 'SCLParser' in globals():
+                melo_for_sample = TTS_melo_class_ref(language=args.model_lang.upper(),
+                                                     device=effective_pytorch_device_str)
+                sclparser_for_sample = SCLParser(melo_for_sample, device=effective_pytorch_device_str)
 
-        if args.test_mode:  # TTS Test Mode
-            log_worker("INFO", "Running TTS in TEST MODE.")
-            test_text_tts = "[prosody rate='medium' pitch='0.1']This is a text to speech test from the audio worker test mode.[/prosody]"
-            output_path_tts_test = os.path.join(args.temp_dir, args.output_file)
-            os.makedirs(args.temp_dir, exist_ok=True)
-            try:
-                speaker_for_test = f'{args.model_lang}-US'
-                if speaker_for_test not in scl_parser_instance.speaker_ids:  # type: ignore
-                    first_available_speaker = list(scl_parser_instance.speaker_ids.keys())[
-                        0] if scl_parser_instance.speaker_ids else "EN-US"  # type: ignore
-                    log_worker("WARNING", f"Test speaker {speaker_for_test} not found, using {first_available_speaker}")
-                    speaker_for_test = first_available_speaker
-                audio_data_test, sr_test = scl_parser_instance.parse(test_text_tts,
-                                                                     speaker=speaker_for_test)  # type: ignore
-                if audio_data_test is not None and sr_test is not None:
-                    audio_data_test_to_save = audio_data_test
-                    if audio_data_test.ndim == 2 and audio_data_test.shape[0] < audio_data_test.shape[1] and \
-                            audio_data_test.shape[0] <= 2:
-                        audio_data_test_to_save = audio_data_test.T
-                    sf.write(output_path_tts_test, audio_data_test_to_save, sr_test, format='WAV', subtype='PCM_16')
-                    log_worker("INFO", f"Test TTS audio generated and saved to {output_path_tts_test}")
-                    result_payload = {"result": {"status": "Test TTS audio generated", "file": output_path_tts_test}}
-                else:
-                    result_payload = {"error": "Test TTS generation failed (SCLParser returned no audio data)."}
-            except Exception as e_test_tts:
-                log_worker("ERROR", f"TTS Test mode failed: {e_test_tts}");
-                log_worker("ERROR", traceback.format_exc())
-                result_payload = {"error": f"TTS Test mode execution error: {str(e_test_tts)}"}
-            print(json.dumps(result_payload), flush=True)
-            sys.exit(0)
-        else:  # Standard TTS Mode
-            input_json_str_tts: Optional[str] = None
-            try:
-                log_worker("INFO", "TTS Standard Mode: Waiting for request data on stdin...")
-                input_json_str_tts = sys.stdin.read()
-                if not input_json_str_tts: raise ValueError("Received empty input from stdin for TTS.")
-                request_data = json.loads(input_json_str_tts)
-                log_worker("INFO", "TTS Request data JSON parsed.")
-                text_to_speak = request_data.get("input")
-                speaker_id_req = request_data.get("voice", f'{args.model_lang}-US')
-                output_format_req = request_data.get("response_format", "mp3").lower()
-                if not text_to_speak or not isinstance(text_to_speak, str): raise ValueError(
-                    "Missing or invalid 'input' for TTS.")
-                if not speaker_id_req or not isinstance(speaker_id_req,
-                                                        str) or speaker_id_req not in scl_parser_instance.speaker_ids:  # type: ignore
-                    raise ValueError(
-                        f"Invalid 'voice'. Requested: '{speaker_id_req}'. Available: {list(scl_parser_instance.speaker_ids.keys())}")  # type: ignore
+            log_worker("INFO", f"Loading ChatterboxTTS on device: {effective_pytorch_device_str}")
+            chatterbox_tts_model = ChatterboxTTS_class_ref.from_pretrained(device=effective_pytorch_device_str)
+            if args.chatterbox_model_id != CHATTERBOX_DEFAULT_MODEL_ID:
                 log_worker("INFO",
-                           f"Task: Speak Text='{text_to_speak[:50]}...', Speaker='{speaker_id_req}', Format='{output_format_req}'")
-                task_start_tts = time.monotonic()
-                final_audio_data, final_sample_rate = scl_parser_instance.parse(text_to_speak,
-                                                                                speaker=speaker_id_req)  # type: ignore
-                task_duration_tts = time.monotonic() - task_start_tts
-                log_worker("INFO", f"TTS generation by SCLParser completed in {task_duration_tts:.2f}s.")
-                if final_audio_data is None or final_sample_rate is None: raise RuntimeError(
-                    "SCLParser failed to generate audio.")
-                audio_bytes_io = io.BytesIO();
-                target_mime_type = f"audio/{output_format_req}";
-                audio_to_write_tts = final_audio_data
-                if final_audio_data.ndim == 2 and final_audio_data.shape[0] < final_audio_data.shape[1] and \
-                        final_audio_data.shape[0] <= 2: audio_to_write_tts = final_audio_data.T
-                if output_format_req == "wav":
-                    sf.write(audio_bytes_io, audio_to_write_tts, final_sample_rate, format='WAV', subtype='PCM_16');
-                    target_mime_type = "audio/wav"
-                elif output_format_req == "mp3":
-                    if shutil.which("ffmpeg") is None and shutil.which("ffmpeg.exe") is None:
-                        log_worker("ERROR", "ffmpeg not found. Defaulting to WAV.");
-                        sf.write(audio_bytes_io, audio_to_write_tts, final_sample_rate, format='WAV', subtype='PCM_16');
-                        output_format_req = "wav";
-                        target_mime_type = "audio/wav"
-                    else:
-                        temp_mp3_path = os.path.join(args.temp_dir, f"temp_tts_{os.getpid()}.mp3")
-                        try:
-                            audio_tensor_save = torch.from_numpy(final_audio_data.astype(np.float32))
-                            if audio_tensor_save.ndim == 1:
-                                audio_tensor_save = audio_tensor_save.unsqueeze(0)
-                            elif audio_tensor_save.shape[1] < audio_tensor_save.shape[0] and audio_tensor_save.shape[
-                                1] <= 2:
-                                audio_tensor_save = audio_tensor_save.T
-                            torchaudio.save(temp_mp3_path, audio_tensor_save, final_sample_rate, format="mp3")
-                            with open(temp_mp3_path, "rb") as fmp3:
-                                audio_bytes_io.write(fmp3.read())
-                            target_mime_type = "audio/mpeg"
-                        except Exception as mp3_err:
-                            log_worker("ERROR", f"MP3 conversion error: {mp3_err}. Defaulting to WAV.");
-                            audio_bytes_io = io.BytesIO();
-                            sf.write(audio_bytes_io, audio_to_write_tts, final_sample_rate, format='WAV',
-                                     subtype='PCM_16');
-                            output_format_req = "wav";
-                            target_mime_type = "audio/wav"
-                        finally:
-                            if os.path.exists(temp_mp3_path): os.remove(temp_mp3_path)
-                else:
-                    sf.write(audio_bytes_io, audio_to_write_tts, final_sample_rate, format='WAV',
-                             subtype='PCM_16'); output_format_req = "wav"; target_mime_type = "audio/wav"
-                audio_bytes_io.seek(0);
-                audio_base64 = base64.b64encode(audio_bytes_io.read()).decode('utf-8')
+                           f"Note: --chatterbox_model_id ('{args.chatterbox_model_id}') provided, but from_pretrained for this ChatterboxTTS version might use a default model based on the library's internal logic when only 'device' is passed.")
+            log_worker("INFO", "ChatterboxTTS model loaded.")
+
+            generated_voice_sample_path = _ensure_voice_sample(args, melo_for_sample, sclparser_for_sample,
+                                                               effective_pytorch_device_str)
+            if not generated_voice_sample_path:
+                raise RuntimeError("Critical: Failed to find or generate ChatterboxTTS voice sample.")
+
+            if args.test_mode:
+                log_worker("INFO", "Running TTS Test Mode (ChatterboxTTS with Excited Intro)...")
+                test_text_for_chatterbox = ADELAIDE_EXCITED_TEST_INTRO
+                output_path_test_cb = os.path.join(args.temp_dir, args.output_file)
+                os.makedirs(args.temp_dir, exist_ok=True)
+
+                log_worker("DEBUG",
+                           f"Chatterbox Test: Text='{test_text_for_chatterbox[:50]}...', Sample='{generated_voice_sample_path}', Exag={args.exaggeration}, CFG={args.cfg_weight}")
+                wav_tensor_cb = chatterbox_tts_model.generate(
+                    test_text_for_chatterbox, audio_prompt_path=generated_voice_sample_path,
+                    exaggeration=args.exaggeration, cfg_weight=args.cfg_weight
+                )
+                if wav_tensor_cb.ndim == 1: wav_tensor_cb = wav_tensor_cb.unsqueeze(0)  # Make (1, samples)
+                if wav_tensor_cb.shape[0] == 1: wav_tensor_cb = wav_tensor_cb.repeat(2,
+                                                                                     1)  # Make (2, samples) for stereo
+
+                torchaudio.save(output_path_test_cb, wav_tensor_cb.cpu(), chatterbox_tts_model.sr)
+                log_worker("INFO", f"Test audio (ChatterboxTTS, Stereo) saved to {output_path_test_cb}")
                 result_payload = {
-                    "result": {"audio_base64": audio_base64, "format": output_format_req, "mime_type": target_mime_type,
-                               "sample_rate": final_sample_rate}}
-            except Exception as e_tts_std:
-                log_worker("ERROR", f"TTS Standard Mode failed: {e_tts_std}");
-                if input_json_str_tts: log_worker("ERROR", f"TTS Failing Input: {input_json_str_tts[:500]}")
-                log_worker("ERROR", traceback.format_exc());
-                result_payload = {"error": f"Worker TTS execution error: {str(e_tts_std)}"}
-        # --- End TTS Standard Mode ---
+                    "result": {"status": "Test audio (ChatterboxTTS) generated", "file": output_path_test_cb,
+                               "sample_rate": chatterbox_tts_model.sr}}
+
+            else:  # Standard TTS Mode (from stdin)
+                input_json_str_stdin: Optional[str] = None
+                try:
+                    log_worker("INFO", "TTS Standard Mode (ChatterboxTTS): Reading stdin...")
+                    input_json_str_stdin = sys.stdin.read()
+                    if not input_json_str_stdin: raise ValueError("Empty input from stdin.")
+                    request_data_stdin = json.loads(input_json_str_stdin)
+
+                    text_stdin = request_data_stdin.get("input")
+                    output_format_stdin = request_data_stdin.get("response_format", "mp3").lower()
+                    exaggeration_stdin = float(request_data_stdin.get("exaggeration", args.exaggeration))
+                    cfg_weight_stdin = float(request_data_stdin.get("cfg_weight", args.cfg_weight))
+
+                    if not text_stdin: raise ValueError("Missing 'input' text.")
+                    log_worker("INFO",
+                               f"ChatterboxTTS Task: Text='{text_stdin[:50]}...', Exag={exaggeration_stdin}, CFG={cfg_weight_stdin}, Format='{output_format_stdin}'")
+
+                    wav_output_tensor_stdin = chatterbox_tts_model.generate(text_stdin,
+                                                                            audio_prompt_path=generated_voice_sample_path,
+                                                                            exaggeration=exaggeration_stdin,
+                                                                            cfg_weight=cfg_weight_stdin)
+                    if wav_output_tensor_stdin.ndim == 1: wav_output_tensor_stdin = wav_output_tensor_stdin.unsqueeze(0)
+                    if wav_output_tensor_stdin.shape[0] == 1: wav_output_tensor_stdin = wav_output_tensor_stdin.repeat(
+                        2, 1)  # Stereo
+
+                    audio_bytes_io_obj = io.BytesIO();
+                    cb_sr = chatterbox_tts_model.sr;
+                    mime = f"audio/{output_format_stdin}"
+
+                    if output_format_stdin == "wav":
+                        torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr, format="wav")
+                    elif output_format_stdin == "mp3":
+                        ffmpeg_exe_path_final = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
+                        if not TORCH_AUDIO_AVAILABLE or (
+                                torchaudio.get_audio_backend() != "sox_io" and not ffmpeg_exe_path_final):
+                            log_worker("WARNING",
+                                       "MP3 output needs torchaudio ffmpeg/sox backend or ffmpeg CLI. Defaulting to WAV.")
+                            torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr, format="wav");
+                            output_format_stdin = "wav";
+                            mime = "audio/wav"
+                        else:
+                            try:
+                                torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr, format="mp3")
+                            except Exception as e_mp3_save_direct:
+                                log_worker("WARNING",
+                                           f"Torchaudio MP3 save failed: {e_mp3_save_direct}. Trying ffmpeg CLI.")
+                                if ffmpeg_exe_path_final:
+                                    with tempfile.NamedTemporaryFile(suffix=".wav", dir=args.temp_dir,
+                                                                     delete=False) as tmp_wav_f_final, \
+                                            tempfile.NamedTemporaryFile(suffix=".mp3", dir=args.temp_dir,
+                                                                        delete=False) as tmp_mp3_f_final:
+                                        tmp_wav_path_final = tmp_wav_f_final.name;
+                                        tmp_mp3_path_final = tmp_mp3_f_final.name
+                                    try:
+                                        sf.write(tmp_wav_path_final, wav_output_tensor_stdin.cpu().T.numpy(), cb_sr,
+                                                 format='WAV', subtype='PCM_16')
+                                        subprocess.run(
+                                            [ffmpeg_exe_path_final, "-i", tmp_wav_path_final, "-codec:a", "libmp3lame",
+                                             "-qscale:a", "2", tmp_mp3_path_final], check=True, capture_output=True)
+                                        with open(tmp_mp3_path_final, "rb") as f_conv_mp3_final:
+                                            audio_bytes_io_obj.write(f_conv_mp3_final.read())
+                                    except Exception as e_ffmpeg_cli_final:
+                                        log_worker("ERROR",
+                                                   f"ffmpeg CLI MP3 conversion failed: {e_ffmpeg_cli_final}. Defaulting to WAV.");
+                                        audio_bytes_io_obj = io.BytesIO();
+                                        torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr,
+                                                        format="wav");
+                                        output_format_stdin = "wav";
+                                        mime = "audio/wav"
+                                    finally:
+                                        if os.path.exists(tmp_wav_path_final): os.remove(tmp_wav_path_final)
+                                        if os.path.exists(tmp_mp3_path_final): os.remove(tmp_mp3_path_final)
+                                else:
+                                    log_worker("ERROR", "ffmpeg CLI not found for MP3 fallback. Defaulting to WAV.");
+                                    audio_bytes_io_obj = io.BytesIO();
+                                    torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr,
+                                                    format="wav");
+                                    output_format_stdin = "wav";
+                                    mime = "audio/wav"
+                    else:
+                        log_worker("WARNING", f"Unsupported format '{output_format_stdin}'. Defaulting to WAV.")
+                        torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr, format="wav");
+                        output_format_stdin = "wav";
+                        mime = "audio/wav"
+
+                    audio_bytes_io_obj.seek(0);
+                    audio_base64_final = base64.b64encode(audio_bytes_io_obj.read()).decode('utf-8')
+                    result_payload = {
+                        "result": {"audio_base64": audio_base64_final, "format": output_format_stdin, "mime_type": mime,
+                                   "sample_rate": cb_sr}}
+                except Exception as e_tts_std_inner:
+                    result_payload = {"error": f"Worker ChatterboxTTS error: {e_tts_std_inner}"};
+                    log_worker("ERROR", f"TTS Standard Mode failed: {e_tts_std_inner}");
+                    log_worker("ERROR", traceback.format_exc())
+
+        except Exception as e_tts_task_outer:
+            result_payload = {"error": f"Worker TTS task outer error: {e_tts_task_outer}"};
+            log_worker("ERROR", f"TTS task failed: {e_tts_task_outer}");
+            log_worker("ERROR", traceback.format_exc())
+        finally:
+            log_worker("DEBUG", "TTS Task: Entering finally block for model cleanup.")
+            if chatterbox_tts_model is not None: del chatterbox_tts_model; log_worker("DEBUG",
+                                                                                      "ChatterboxTTS model deleted.")
+            if melo_for_sample is not None: del melo_for_sample; log_worker("DEBUG", "MeloTTS model deleted.")
+            if sclparser_for_sample is not None: del sclparser_for_sample; log_worker("DEBUG", "SCLParser deleted.")
+            gc.collect();
+            log_worker("DEBUG", "Python garbage collection called.")
+            if TORCH_AUDIO_AVAILABLE and torch and effective_pytorch_device_str == "cuda" and torch.cuda.is_available():
+                torch.cuda.empty_cache();
+                log_worker("INFO", "CUDA cache cleared.")
+            elif TORCH_AUDIO_AVAILABLE and torch and effective_pytorch_device_str == "mps" and hasattr(torch.backends,
+                                                                                                       "mps") and torch.backends.mps.is_available():
+                if hasattr(torch.mps, "empty_cache") and callable(torch.mps.empty_cache):
+                    try:
+                        log_worker("INFO", "Attempting to clear PyTorch MPS cache..."); torch.mps.empty_cache()
+                    except Exception as mps_ex:
+                        log_worker("WARNING", f"torch.mps.empty_cache() call failed: {mps_ex}")
+                else:
+                    log_worker("INFO", "MPS: No explicit empty_cache(). Relied on del/gc.collect().")
+            log_worker("DEBUG", "TTS Task: Model cleanup attempts finished.")
 
     # --- ASR Task ---
     elif args.task_type == "asr":
-        log_worker("INFO", f"ASR Task selected. Model dir from args: {args.model_dir}")
-        if not PYWHISPERCPP_AVAILABLE:
-            result_payload = {"error": "pywhispercpp library not available in worker for ASR."}
+        if not PYWHISPERCPP_AVAILABLE or not WhisperModel:
+            result_payload = {"error": "ASR (pywhispercpp) not available."}
             log_worker("ERROR", result_payload["error"])
-            print(json.dumps(result_payload), flush=True);
-            sys.exit(1)
-
-        # Use config variables from config.py (available via 'from config import *')
-        asr_model_directory_from_config = WHISPER_MODEL_DIR
-        default_asr_model_filename_from_config = WHISPER_DEFAULT_MODEL_FILENAME
-        default_asr_language_from_config = WHISPER_DEFAULT_LANGUAGE
-
-        log_worker("INFO",
-                   f"ASR Config Used: Model Dir='{asr_model_directory_from_config}', Default Model='{default_asr_model_filename_from_config}', Default Lang='{default_asr_language_from_config}'")
-
-        temp_converted_wav_path: Optional[str] = None
-        input_audio_path_resolved: Optional[str] = None
-        asr_model_filename_to_load: str = default_asr_model_filename_from_config
-        language_for_transcription: str = default_asr_language_from_config
-
-        # ASR Test Mode
-        if args.test_mode:
-            log_worker("INFO", "Running ASR in TEST MODE.")
-            # Construct path relative to script's temp_dir or model_dir for test input
-            # args.model_dir is the one passed via command line, which should be staticmodelpool
-            input_audio_path_resolved = os.path.join(args.temp_dir, args.test_audio_input)
-            if not os.path.exists(input_audio_path_resolved):
-                input_audio_path_resolved = os.path.join(args.model_dir, args.test_audio_input)
-
-            if not os.path.exists(input_audio_path_resolved):
-                log_worker("ERROR",
-                           f"ASR Test Mode: Test audio file '{args.test_audio_input}' not found in '{args.temp_dir}' or '{args.model_dir}'.")
-                result_payload = {"error": f"ASR test audio file not found: {args.test_audio_input}"}
-                print(json.dumps(result_payload), flush=True);
-                sys.exit(1)
-
-            asr_model_filename_to_load = args.asr_test_model
-            language_arg_for_test = args.model_lang.lower()  # --model-lang is used for ASR lang in test
-            if not language_arg_for_test or language_arg_for_test == "auto":
-                language_for_transcription = "auto"
-            else:
-                language_for_transcription = language_arg_for_test
-
-        # Standard ASR Mode (from stdin) - only if not in test mode
         else:
-            input_json_str_asr: Optional[str] = None
+            log_worker("INFO", "ASR Task executing...")
+            asr_temp_converted_wav_path: Optional[str] = None
+            asr_input_audio_path_resolved: Optional[str] = None
+            asr_language_to_use = args.model_lang
+            asr_model_file_to_load = args.asr_test_model  # Default for test mode
+
             try:
-                log_worker("INFO", "ASR Standard Mode: Waiting for request data on stdin...")
-                input_json_str_asr = sys.stdin.read()
-                if not input_json_str_asr: raise ValueError("ASR task: Received empty input from stdin.")
-                request_data = json.loads(input_json_str_asr)
-                log_worker("INFO", "ASR Request data JSON parsed.")
+                if args.test_mode:
+                    log_worker("INFO", "ASR Test Mode selected.")
+                    asr_input_audio_path_resolved = os.path.join(args.temp_dir, args.test_audio_input)
+                    if not os.path.exists(asr_input_audio_path_resolved):
+                        asr_input_audio_path_resolved = os.path.join(args.model_dir, args.test_audio_input)
+                    if not os.path.exists(asr_input_audio_path_resolved):
+                        raise FileNotFoundError(
+                            f"ASR test audio '{args.test_audio_input}' not found in '{args.temp_dir}' or '{args.model_dir}'.")
+                    # Use args.asr_test_model and args.model_lang (which becomes asr_language_to_use) for test
+                else:  # Standard mode from stdin
+                    log_worker("INFO", "ASR Standard Mode selected. Reading from stdin.")
+                    req_data_asr_stdin = json.loads(sys.stdin.read())
+                    asr_input_audio_path_resolved = req_data_asr_stdin.get("input_audio_path")
+                    asr_model_file_to_load = req_data_asr_stdin.get("whisper_model_name",
+                                                                    WHISPER_DEFAULT_MODEL_FILENAME)  # From config
+                    asr_language_to_use = req_data_asr_stdin.get("language", WHISPER_DEFAULT_LANGUAGE)  # From config
+                    if not asr_input_audio_path_resolved or not os.path.exists(asr_input_audio_path_resolved):
+                        raise FileNotFoundError(
+                            f"ASR input_audio_path '{asr_input_audio_path_resolved}' missing or not found.")
 
-                input_audio_path_resolved = request_data.get("input_audio_path")
-                asr_model_filename_to_load = request_data.get("whisper_model_name",
-                                                              default_asr_model_filename_from_config)
-                language_from_req = request_data.get("language", default_asr_language_from_config)
+                full_whisper_model_path_asr = os.path.join(args.model_dir,
+                                                           asr_model_file_to_load)  # args.model_dir is staticmodelpool
+                if not os.path.exists(full_whisper_model_path_asr):
+                    raise FileNotFoundError(
+                        f"Whisper model file '{asr_model_file_to_load}' not found in '{args.model_dir}'")
 
-                if not language_from_req or language_from_req.strip().lower() == "auto":
-                    language_for_transcription = "auto"
-                else:
-                    language_for_transcription = language_from_req.strip().lower()
+                path_to_transcribe_asr = asr_input_audio_path_resolved
+                ffmpeg_exe_path_asr = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
 
-                if not input_audio_path_resolved: raise ValueError("Missing 'input_audio_path' for ASR task.")
-                if not os.path.exists(input_audio_path_resolved): raise FileNotFoundError(
-                    f"Input audio file not found: {input_audio_path_resolved}")
+                if ffmpeg_exe_path_asr:
+                    log_worker("INFO", f"ffmpeg found at {ffmpeg_exe_path_asr}. Converting audio for ASR...")
+                    asr_conversion_temp_dir_asr = os.path.join(args.temp_dir, "asr_ffmpeg_temp")
+                    os.makedirs(asr_conversion_temp_dir_asr, exist_ok=True)
+                    with tempfile.NamedTemporaryFile(prefix="asr_conv_", suffix=".wav", dir=asr_conversion_temp_dir_asr,
+                                                     delete=False) as tmp_f_asr_conv:
+                        asr_temp_converted_wav_path = tmp_f_asr_conv.name
 
-            except Exception as e_asr_stdin:
-                log_worker("ERROR", f"ASR task failed during stdin processing: {e_asr_stdin}");
-                if input_json_str_asr: log_worker("ERROR", f"ASR Failing Input: {input_json_str_asr[:500]}")
-                log_worker("ERROR", traceback.format_exc())
-                result_payload = {"error": f"Worker ASR input error: {str(e_asr_stdin)}"}
-                print(json.dumps(result_payload), flush=True);
-                sys.exit(1)
+                    ffmpeg_cmd_asr_conv = [
+                        ffmpeg_exe_path_asr, '-i', asr_input_audio_path_resolved,
+                        '-vn', '-acodec', 'pcm_s16le', '-ar', '16000', '-ac', '1',
+                        '-y', asr_temp_converted_wav_path
+                    ]
+                    log_worker("DEBUG", f"Running ffmpeg: {' '.join(ffmpeg_cmd_asr_conv)}")
+                    proc_asr_ffmpeg = subprocess.run(ffmpeg_cmd_asr_conv, capture_output=True, text=True, check=False,
+                                                     timeout=120)
 
-        # --- Common ASR processing for both test and standard mode from here ---
-        try:
-            # Model path construction using args.model_dir (passed by app.py, points to staticmodelpool)
-            model_directory_for_asr_load = args.model_dir
-            full_whisper_model_path = os.path.join(model_directory_for_asr_load, asr_model_filename_to_load)
-
-            if not os.path.exists(full_whisper_model_path):
-                raise FileNotFoundError(
-                    f"Whisper model file '{asr_model_filename_to_load}' not found in '{model_directory_for_asr_load}'")
-
-            path_to_transcribe = input_audio_path_resolved
-            ffmpeg_path = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
-
-            if not ffmpeg_path:
-                log_worker("WARNING",
-                           "ffmpeg command not found. ASR will only work if input audio is already 16kHz mono WAV.")
-            else:
-                log_worker("INFO",
-                           f"Found ffmpeg: {ffmpeg_path}. Attempting audio extraction/conversion to 16kHz mono WAV for: {input_audio_path_resolved}")
-
-                # Create a specific subdirectory within args.temp_dir for ffmpeg conversions
-                asr_conversion_temp_dir = os.path.join(args.temp_dir, "asr_ffmpeg_temp")
-                os.makedirs(asr_conversion_temp_dir, exist_ok=True)
-
-                # Use tempfile to create a uniquely named temporary file for the output
-                with tempfile.NamedTemporaryFile(prefix="asr_converted_", suffix=".wav", dir=asr_conversion_temp_dir,
-                                                 delete=False) as tmp_f:
-                    temp_converted_wav_path = tmp_f.name
-                    # The file is created, now ffmpeg will write to this path.
-
-                ffmpeg_command = [
-                    ffmpeg_path,
-                    '-i', input_audio_path_resolved,  # Input file (can be video or audio)
-                    '-vn',  # Disable video recording (extract audio stream only)
-                    '-acodec', 'pcm_s16le',  # Output audio codec: 16-bit PCM signed little-endian
-                    '-ar', '16000',  # Output audio sample rate: 16kHz
-                    '-ac', '1',  # Output audio channels: 1 (mono)
-                    '-y',  # Overwrite output file without asking
-                    temp_converted_wav_path
-                ]
-                log_worker("INFO", f"Running ffmpeg: {' '.join(ffmpeg_command)}")
-                conversion_start_time = time.monotonic()
-                try:
-                    process = subprocess.run(ffmpeg_command, capture_output=True, text=True, check=False,
-                                             timeout=120)  # 2 min timeout
-                    conversion_duration = time.monotonic() - conversion_start_time
-                    if process.returncode == 0:
-                        log_worker("INFO",
-                                   f"ffmpeg audio extraction/conversion successful in {conversion_duration:.2f}s. Using: {temp_converted_wav_path}")
-                        path_to_transcribe = temp_converted_wav_path
+                    if proc_asr_ffmpeg.returncode == 0:
+                        path_to_transcribe_asr = asr_temp_converted_wav_path
+                        log_worker("INFO", f"ffmpeg conversion successful. Using: {path_to_transcribe_asr}")
                     else:
                         log_worker("ERROR",
-                                   f"ffmpeg audio extraction/conversion failed (RC={process.returncode}). Stderr: {process.stderr.strip()}")
-                        log_worker("WARNING",
-                                   "ASR will attempt original file. May fail if not 16kHz mono WAV or if it's a video format pywhispercpp cannot handle directly.")
-                        if temp_converted_wav_path and os.path.exists(
-                                temp_converted_wav_path):  # Clean up failed conversion
-                            try:
-                                os.remove(temp_converted_wav_path)
-                            except Exception as e_rm_fail:
-                                log_worker("WARNING",
-                                           f"Could not remove temp ffmpeg file {temp_converted_wav_path} after fail: {e_rm_fail}")
-                        temp_converted_wav_path = None  # Mark as not available
-                except subprocess.TimeoutExpired:
-                    log_worker("ERROR", "ffmpeg conversion timed out.");
-                    if temp_converted_wav_path and os.path.exists(temp_converted_wav_path): os.remove(
-                        temp_converted_wav_path)
-                    temp_converted_wav_path = None
-                except Exception as e_ffmpeg_run:
-                    log_worker("ERROR", f"Error running ffmpeg: {e_ffmpeg_run}")
-                    if temp_converted_wav_path and os.path.exists(temp_converted_wav_path): os.remove(
-                        temp_converted_wav_path)
-                    temp_converted_wav_path = None
-
-            log_worker("INFO", f"Loading Whisper model for ASR: {full_whisper_model_path}")
-            # Use model= instead of model_path=
-            whisper_model_instance = WhisperModel(model=full_whisper_model_path, print_realtime=False,
-                                                  print_progress=False)
-
-            log_worker("INFO",
-                       f"Transcribing audio file: {path_to_transcribe} with language: '{language_for_transcription}'")
-            # Prepare parameters for pywhispercpp's transcribe method
-            transcribe_params = {'language': language_for_transcription, 'translate': False}
-            # Add other parameters as needed, e.g.,
-            # transcribe_params['n_threads'] = os.cpu_count() or 4
-            # transcribe_params['prompt'] = "Some initial prompt context" # if provided by request
-
-            task_start_asr = time.monotonic()
-            # Unpack the params dictionary using **
-            segments = whisper_model_instance.transcribe(path_to_transcribe, **transcribe_params)
-            task_duration_asr = time.monotonic() - task_start_asr
-
-            transcribed_text = "".join(segment.text for segment in segments).strip()
-
-            log_worker("INFO",
-                       f"ASR Transcription completed in {task_duration_asr:.2f}s. Text length: {len(transcribed_text)}")
-            log_worker("DEBUG", f"Transcribed text (first 200 chars): {transcribed_text[:200]}")
-            result_payload = {"result": {"text": transcribed_text}}
-
-        except Exception as e_asr_process:
-            log_worker("ERROR", f"ASR processing failed: {e_asr_process}");
-            log_worker("ERROR", traceback.format_exc())
-            result_payload = {"error": f"Worker ASR processing error: {str(e_asr_process)}"}
-        finally:
-            if temp_converted_wav_path and os.path.exists(temp_converted_wav_path):
-                try:
-                    os.remove(temp_converted_wav_path)
-                    log_worker("INFO", f"Cleaned up temporary converted WAV file: {temp_converted_wav_path}")
-                except Exception as e_del_temp:
+                                   f"ASR ffmpeg conversion failed (RC={proc_asr_ffmpeg.returncode}). Stderr: {proc_asr_ffmpeg.stderr.strip()}")
+                        # Keep asr_temp_converted_wav_path as None, so it won't be deleted if it was never valid
+                        asr_temp_converted_wav_path = None
+                        log_worker("WARNING", "Proceeding with original audio file for ASR. This may fail.")
+                else:
                     log_worker("WARNING",
-                               f"Failed to delete temporary WAV file {temp_converted_wav_path}: {e_del_temp}")
-    # --- End ASR Task ---
+                               "ffmpeg not found. ASR will attempt to process original audio directly. Expects 16kHz mono WAV.")
+
+                log_worker("INFO", f"Loading Whisper model: {full_whisper_model_path_asr}")
+                whisper_asr_instance = WhisperModel(model=full_whisper_model_path_asr, print_realtime=False,
+                                                    print_progress=False)
+
+                transcribe_params_asr = {'language': asr_language_to_use.lower(), 'translate': False}
+                log_worker("INFO",
+                           f"Transcribing '{path_to_transcribe_asr}' with lang='{asr_language_to_use.lower()}'...")
+                segments_result_asr = whisper_asr_instance.transcribe(path_to_transcribe_asr, **transcribe_params_asr)
+                transcribed_text_final_asr = "".join(seg.text for seg in segments_result_asr).strip()
+
+                log_worker("INFO",
+                           f"ASR successful. Text len: {len(transcribed_text_final_asr)}. Snippet: '{transcribed_text_final_asr[:70]}...'")
+                result_payload = {"result": {"text": transcribed_text_final_asr}}
+
+            except Exception as e_asr_main_block:
+                result_payload = {"error": f"ASR processing error: {str(e_asr_main_block)}"}
+                log_worker("ERROR", f"ASR task failed: {e_asr_main_block}")
+                log_worker("ERROR", traceback.format_exc())
+            finally:
+                if asr_temp_converted_wav_path and os.path.exists(asr_temp_converted_wav_path):
+                    try:
+                        os.remove(asr_temp_converted_wav_path); log_worker("INFO",
+                                                                           f"Cleaned up temp ASR WAV: {asr_temp_converted_wav_path}")
+                    except Exception as e_del_asr:
+                        log_worker("WARNING",
+                                   f"Failed to delete temp ASR file '{asr_temp_converted_wav_path}': {e_del_asr}")
+
     else:
-        result_payload = {"error": f"Unknown task_type specified to worker: {args.task_type}"}
+        result_payload = {"error": f"Unknown task_type: {args.task_type}"}
         log_worker("ERROR", result_payload["error"])
 
-    # Print final JSON to stdout
+    # --- Print final JSON to stdout ---
     try:
-        output_json = json.dumps(result_payload)
-        log_worker("DEBUG", f"Sending output JSON (len={len(output_json)}): {output_json[:200]}...")
-        print(output_json, flush=True)
-        log_worker("INFO", "Final result/error JSON sent to stdout.")
-    except Exception as e_print:
-        log_worker("CRITICAL", f"Failed to serialize/write final result_payload to stdout: {e_print}")
+        output_json_str_final = json.dumps(result_payload)
+        log_worker("DEBUG", f"Sending output JSON (len={len(output_json_str_final)}): {output_json_str_final[:200]}...")
+        print(output_json_str_final, flush=True)
+        log_worker("INFO", "Final result/error JSON sent.")
+    except Exception as e_final_print_outer:
+        log_worker("CRITICAL", f"Failed to serialize/write final result_payload: {e_final_print_outer}")
         try:
-            print(json.dumps({"error": f"Worker critical: Failed to write result: {str(e_print)}"}), flush=True)
+            print(json.dumps({"error": f"Worker critical: {e_final_print_outer}"}), flush=True)
         except:
             pass
         sys.exit(1)
 
-    log_worker("INFO", f"Audio Worker (PID {os.getpid()}) process finished task: {args.task_type}.")
+    log_worker("INFO", f"Audio Worker PID {os.getpid()} finished task: {args.task_type}.")
     sys.exit(0)
 
 
 if __name__ == "__main__":
-    if not MELO_AVAILABLE and not PYWHISPERCPP_AVAILABLE:
+    # These checks are for when the script is run directly.
+    if not TORCH_AUDIO_AVAILABLE:
+        log_worker("CRITICAL", "Torch/Torchaudio NOT AVAILABLE. Audio worker cannot perform TTS tasks effectively.")
+        # If only ASR is intended, this might be fine, but the script is shared.
+    if not MELO_AVAILABLE and not CHATTERBOX_TTS_AVAILABLE and not PYWHISPERCPP_AVAILABLE:
         log_worker("CRITICAL",
-                   "Neither MeloTTS nor PyWhisperCpp related Python libraries are available. Worker cannot function robustly.")
-
-    if MELO_AVAILABLE and SCLParser is None:
-        log_worker("CRITICAL",
-                   "SCLParser class is not defined or placeholder is used, but MeloTTS seems available. TTS will likely fail or use basic Melo.")
-        SCLParser = SCLParser
-
+                   "No primary audio libraries (Melo for sample, Chatterbox for TTS, PyWhisperCpp for ASR) available. Worker is non-functional.")
+        print(json.dumps({"error": "Core audio libraries missing in worker."}), flush=True)
+        sys.exit(1)  # Exit if none of the core capabilities can be initialized.
     main()

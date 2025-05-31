@@ -1724,6 +1724,32 @@ if __name__ == "__main__":
                 print_system(f"Model '{model_info['description']}' ({model_info['filename']}) already present.")
         print_system("Static model pool checked.")
 
+        # --- ChatterboxTTS Installation (NEW) ---
+        if not os.path.exists(CHATTERBOX_TTS_INSTALLED_FLAG_FILE):
+            print_system(f"--- ChatterboxTTS First-Time Setup from {CHATTERBOX_TTS_PATH} ---")
+            if not os.path.isdir(CHATTERBOX_TTS_PATH):
+                print_error(f"ChatterboxTTS directory not found at: {CHATTERBOX_TTS_PATH}")
+                print_error("Please ensure the submodule/directory exists. Skipping ChatterboxTTS installation.")
+            else:
+                print_system(f"Installing ChatterboxTTS in editable mode from: {CHATTERBOX_TTS_PATH}")
+                # Ensure PIP_EXECUTABLE is defined and valid at this point
+                if not run_command([PIP_EXECUTABLE, "install", "-e", "."], CHATTERBOX_TTS_PATH,
+                                   "PIP-CHATTERBOX-EDITABLE"):
+                    print_error("ChatterboxTTS installation failed. Check pip logs above.")
+                    # Decide if this is a fatal error or if the launcher can continue
+                    # For now, it will continue but ChatterboxTTS might not be available.
+                else:
+                    print_system("ChatterboxTTS installed successfully in editable mode.")
+                    try:
+                        with open(CHATTERBOX_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_chatterbox_flag:
+                            f_chatterbox_flag.write(f"ChatterboxTTS installed on: {datetime.now().isoformat()}\n")
+                        print_system("ChatterboxTTS installation flag created.")
+                    except IOError as flag_err_chatterbox:
+                        print_error(f"Could not create ChatterboxTTS installation flag file: {flag_err_chatterbox}")
+        else:
+            print_system("ChatterboxTTS previously installed (flag file found).")
+        # --- END ChatterboxTTS Installation ---
+
         if not os.path.exists(MELO_TTS_INSTALLED_FLAG_FILE):
             print_system(f"--- MeloTTS First-Time Setup from {MELO_TTS_PATH} ---")
             if not os.path.isdir(MELO_TTS_PATH): print_error(f"MeloTTS dir missing: {MELO_TTS_PATH}."); sys.exit(1)
