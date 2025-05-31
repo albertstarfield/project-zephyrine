@@ -13,15 +13,29 @@
   pointer-events: none; /* Allow clicks through */
 }
 
+@keyframes starEnter {
+  0% {
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  100% {
+    opacity: 0.8; /* Or your desired final opacity */
+    transform: scale(1);
+  }
+}
+
+
 .star {
   position: absolute;
-  width: 1px; /* Set particle width */
-  height: 1px; /* Set particle height */
+  background-color: white; /* Or var(--star-color) */
   border-radius: 50%;
-  opacity: 0.1;
-  background-color: var(--accent); /* Use background for solid color */
-  box-shadow: 0 0 20px 10px var(--accent);
-  animation: twinkling 5s infinite alternate ease-in-out; /* Example animation */
+  box-shadow: 0 0 6px 0.5px white; /* Optional glow */
+  /* Apply the entry animation */
+  animation-name: starEnter;
+  animation-duration: 1s; /* Duration of the entry animation */
+  animation-fill-mode: forwards; /* Keep the state of the last keyframe */
+  animation-timing-function: ease-out;
+  opacity: 0; /* Start invisible, animation will make it visible */
 }
 
 /* Ensure twinkling animation is defined once */

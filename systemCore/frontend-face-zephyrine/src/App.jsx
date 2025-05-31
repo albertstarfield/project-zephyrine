@@ -46,6 +46,9 @@ function App() {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
+  const availableModels = [{id: "default-model", name: "Default Model (Dummy)"}, {id: "other-model", name: "Other Model (Dummy)"}]; // Example
+  const [selectedModel, setSelectedModel] = useState("default-model");
+
   // Effect for handling resize
   useEffect(() => {
     const handleResize = () => {
@@ -85,16 +88,19 @@ function App() {
 
       {/* Star Background */}
       <div id="sky">
-        {stars.map((star) => (
-          <div
-            key={star.id}
-            className="star"
-            style={{
-              left: star.left, top: star.top, width: star.size, height: star.size,
-              animation: `twinkling ${star.animationDuration} infinite ${star.animationDelay}`,
-            }}
-          />
-        ))}
+      {stars && stars.map(star => (
+  // Safeguard: Check if star and star.style exist before accessing animationDelay
+  star && star.style ? (
+    <div
+      key={star.id || Math.random()} // Fallback key
+      className="star"
+      style={{
+        // ... other styles
+        animationDelay: star.style.animationDelay, 
+      }}
+    />
+  ) : null // Or log an error, or render a default star
+))}
       </div>
 
       {/* Logo */}
@@ -118,10 +124,13 @@ function App() {
             toggleSidebar={toggleSidebar}
             user={user} // From dummy AuthContext
             onNewChat={handleNewChat}
-            chatHistory={chatHistory} // From useChatHistory (needs proper fetching)
+            chats={chatHistory} // From useChatHistory (needs proper fetching)
             isLoadingHistory={isLoadingHistory} // Pass loading state
             onRenameChat={handleRenameChat} // From useChatHistory (needs WS call)
             onDeleteChat={handleDeleteChat} // From useChatHistory (needs WS call)
+            availableModels={availableModels} // Pass available models
+            selectedModel={selectedModel}     // Pass current selected model
+            onModelChange={setSelectedModel}  // Pass function to change selected model
             // Removed model selection props
             // Pass WebSocket related functions if needed for rename/delete
           />
@@ -138,7 +147,7 @@ function App() {
                     user={user} // Pass user from dummy AuthContext
                     refreshHistory={fetchChatHistory} // Pass refresh trigger
                     // Pass selectedModel if needed (using a fixed value or state)
-                    selectedModel={"default-model"} // Example fixed value
+                    selectedModel={"Zephyrine Unified Architecture Model"} // Example fixed value
                     // Pass WebSocket instance or send function if needed directly
                   />
                 }
