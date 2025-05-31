@@ -31,6 +31,12 @@ MELO_TTS_SUBMODULE_DIR_NAME = "MeloAudioTTS_SubEngine"
 MELO_TTS_PATH = os.path.join(ENGINE_MAIN_DIR, MELO_TTS_SUBMODULE_DIR_NAME)
 MELO_TTS_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".melo_tts_installed_v1")
 
+# --- ChatterboxTTS Configuration (NEW) ---
+CHATTERBOX_TTS_SUBMODULE_DIR_NAME = "ChatterboxTTS_subengine"
+CHATTERBOX_TTS_PATH = os.path.join(ENGINE_MAIN_DIR, CHATTERBOX_TTS_SUBMODULE_DIR_NAME)
+CHATTERBOX_TTS_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".chatterbox_tts_installed_v1")
+# --- END ChatterboxTTS Configuration ---
+
 # --- Conda Configuration ---
 # CONDA_ENV_NAME is no longer used for creation if prefix is used, but can be a descriptive base for the folder
 CONDA_ENV_FOLDER_NAME = "zephyrineCondaVenv"
@@ -179,7 +185,8 @@ FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE,
     CONDA_PATH_CACHE_FILE,
     PYWHISPERCPP_INSTALLED_FLAG_FILE,
-    ARIA2P_INSTALLED_FLAG_FILE
+    ARIA2P_INSTALLED_FLAG_FILE, # From previous step
+    CHATTERBOX_TTS_INSTALLED_FLAG_FILE  # <<< ADD THIS LINE
 ]
 
 
