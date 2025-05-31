@@ -10,65 +10,138 @@
   src: url("/fonts/Urbanist-VariableFont_wght.ttf");
   font-weight: normal;
 }
-
+/* Default Theme (Dark Mode) */
 :root {
+  /* --- User's New Core Palette (Dark Mode) --- */
   --primary-text: #d1d5db;
   --primary-text-alt: #ececf1;
   --secondary-text: #ffffff80;
-  --background: #34354158;
-  --background-mid: #2c2d30;
-  --background-alt: #202123;
-  --surface: #27272727;
-  --surface-alt: #56586992;
-  --surface-alt-bright: #acacbe;
-  --tertiary: #3e3f4b;
-  --accent: #FFFF00; /* Yellow accent */
-  --oppositeaccent: #ff581b;
-  --secondary: #1a7f64; /* Azure Turquoise Sweet Blue secondary */
-  --error: #ff5d5d;
-  --overlay: rgba(62, 61, 61, 0.676);
-  --hover: hsla(240, 9%, 59%, 0.1);
-  --border: rgb(64, 65, 79);
+  --background: #34354158; /* Main background */
+  --background-mid: #2c2d30; /* Slightly lighter background elements */
+  --background-alt: #202123; /* Darker background elements or accents */
+  --surface: #27272727; /* Cards, modals, distinct surfaces */
+  --surface-alt: #56586992; /* Alternate surface, perhaps for hover or secondary elements */
+  --surface-alt-bright: #acacbe; /* Bright surface accent or text */
+  --tertiary: #3e3f4b; /* Tertiary elements or borders */
+  --accent: #f17b269e; /* Yellow accent */
+  --oppositeaccent: #ff581b; /* Contrasting accent */
+  --secondary: #62c645bd; /* Azure Turquoise Sweet Blue secondary color */
+  --error: #ff5d5d; /* Error color */
+  --overlay: rgba(62, 61, 61, 0.676); /* Overlay color */
+  --hover: hsla(240, 9%, 59%, 0.1); /* Hover effect color */
+  --border: rgb(64, 65, 79); /* Default border color */
+  --sidebar-background: #3a3b43; /* Sidebar specific background */
+
+  /* --- User's New Shadow System (Dark Mode) --- */
   --small-shadow: 0 6px 9px -1px rgba(0, 0, 0, 0.4),
     0 4px 8px -2px rgba(0, 0, 0, 0.4);
-  --rounded-border: 8px;
-  --rounded-button: 25px;
-  --shadow-color: #00000029;
+  --shadow-color: #00000029; /* General shadow color */
   --shadow-color-less-intense: #00000007;
-  --shadow-intensity: 13;
-  --shadow-disperse: 100px;
-  --sidebar-background: #3a3b43; /* Brighter than --background-mid for dark mode */
+  --shadow-intensity: 13; /* For custom shadow calculations if needed */
+  --shadow-disperse: 100px; /* For custom shadow calculations if needed */
+
+  /* --- Adapted Chat Bubble Colors (Dark Mode) --- */
+  --user-message-bg: var(--accent);                 /* Yellow */
+  --user-message-text-color: var(--background-alt); /* Dark text (#202123) for contrast on yellow */
+  --assistant-message-bg: var(--secondary);          /* Azure Turquoise (#1a7f64) */
+  --assistant-message-text-color: var(--primary-text-alt); /* Light text (#ececf1) for contrast */
+  
+  /* --- Preserved/Adapted Layout & Utility Variables --- */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 70px;
+  --header-height: 60px;
+  --input-area-height: 120px;
+
+  --font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-family-mono: 'IBM Plex Mono', 'Courier New', Courier, monospace;
+  --font-family-title: 'TitleFont', var(--font-family-sans);
+
+  /* Using user's new border radius variables and preserving others */
+  --rounded-border: 10px; /* From user's new palette */
+  --rounded-button: 25px; /* From user's new palette */
+  --border-radius-small: 4px;
+  --border-radius-medium: var(--rounded-border); /* Mapped to new var */
+  --border-radius-large: 16px; /* Kept as a distinct size */
+  --border-radius-xl: var(--rounded-button); /* Mapped to new var */
+  --border-radius-pill: 50px;
+
+  /* Preserved Status Colors (Error is from new palette) */
+  --success-color: #4caf50;
+  --warning-color: #ff9800;
+  --info-color: #2196f3;
+
+  /* Scrollbar Colors (Dark Mode) */
+  --scrollbar-thumb-color: var(--surface-alt-bright); /* #acacbe */
+  --scrollbar-track-color: var(--background-mid);   /* #2c2d30 */
+  --scrollbar-thumb-hover-color: var(--accent);     /* Yellow #FFFF00 */
 }
 
+/* Light Mode Theme */
 @media (prefers-color-scheme: light) {
   :root {
-    --primary-text: #383838; /* White text */
+    /* --- User's New Core Palette (Light Mode) --- */
+    --primary-text: #222222; 
     --primary-text-alt: #474748;
     --secondary-text: #2d2d2d80;
-    --background: #ffffff; /* White background */
+    --background: #ffffff;
     --background-mid: #f4f4f4;
     --background-alt: #c5c4c4;
     --surface: #f8f8f81e;
     --surface-alt: #7575755e;
-    --surface-alt-bright: #acacbe;
+    --surface-alt-bright: #acacbe; /* This is a grey, might need adjustment for light text on light bg */
     --tertiary: #f1f1f1;
-    --accent: #FFFF00; /* Yellow accent */
+    --accent: #f17b269e; /* Yellow accent */
     --oppositeaccent: #ff581b;
-    --secondary: #1a7f64; /* Azure Turquoise Sweet Blue secondary */
+    --secondary: #62c645bd; /* Azure Turquoise Sweet Blue secondary */
     --error: #ff5d5d;
-    --overlay: rgba(240, 240, 240, 0.34); /* Light gray overlay */
+    --overlay: rgba(240, 240, 240, 0.34);
     --hover: hsla(240, 9%, 59%, 0.1);
-    --border: #ffffff; /* Light gray border */
+    --border: #dddddd; /* Changed from #ffffff to be visible on white bg */
+    --sidebar-background: #ffffff; 
+
+    /* --- User's New Shadow System (Light Mode) --- */
     --small-shadow: 0 6px 9px -1px rgba(0, 0, 0, 0.1),
       0 4px 8px -2px rgba(0, 0, 0, 0.1);
-    --rounded-border: 8px;
-    --rounded-button: 25px;
     --shadow-color: #00000029;
     --shadow-color-less-intense: #0000000f;
     --shadow-intensity: 13;
     --shadow-disperse: 100px;
-    --contrast-black-overlay: #525252;
-    --sidebar-background: #ffffff; /* White for light mode */
+    --contrast-black-overlay: #525252; /* Specific to light theme from user's snippet */
+
+    /* --- Adapted Chat Bubble Colors (Light Mode) --- */
+    --user-message-bg: var(--accent);      /* Yellow #FFFF00 */
+    --user-message-text-color: var(--primary-text); /* Dark text (#383838) for light mode on yellow */
+    --assistant-message-bg: var(--secondary); /* Azure Turquoise (#1a7f64) */
+    --assistant-message-text-color: #FFFFFF;   /* White text for light mode on turquoise */
+
+    /* --- Preserved/Adapted Layout & Utility Variables (mostly same as dark, defined for completeness) --- */
+    --sidebar-width: 260px;
+    --sidebar-collapsed-width: 70px;
+    --header-height: 60px;
+    --input-area-height: 120px;
+
+    --font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+    --font-family-mono: 'IBM Plex Mono', 'Courier New', Courier, monospace;
+    --font-family-title: 'TitleFont', var(--font-family-sans);
+    
+    /* Using user's new border radius variables */
+    --rounded-border: 8px; 
+    --rounded-button: 25px;
+    --border-radius-small: 4px;
+    --border-radius-medium: var(--rounded-border);
+    --border-radius-large: 16px;
+    --border-radius-xl: var(--rounded-button);
+    --border-radius-pill: 50px;
+
+    /* Preserved Status Colors */
+    --success-color: #4caf50;
+    --warning-color: #ff9800;
+    --info-color: #2196f3;
+
+    /* Scrollbar Colors (Light Mode) */
+    --scrollbar-thumb-color: #b0b0b0; /* Darker grey for light track */
+    --scrollbar-track-color: var(--background-mid);    /* #f4f4f4 */
+    --scrollbar-thumb-hover-color: #909090;      /* Darker grey hover */
   }
 }
 

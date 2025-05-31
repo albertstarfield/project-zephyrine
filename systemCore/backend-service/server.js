@@ -1,533 +1,463 @@
-require("dotenv").config(); // Load .env variables
-const express = require("express");
-const cors = require("cors");
-const Groq = require("groq-sdk");
-const OpenAI = require("openai"); // Import OpenAI library
-const http = require("http"); // Import http module
-const { WebSocketServer } = require("ws"); // Import WebSocketServer
-const sqlite3 = require('sqlite3').verbose(); // Import SQLite library
-const path = require('path'); // Node.js path module for file paths
-const { v4: uuidv4 } = require('uuid'); // For generating message IDs
+// ExternalAnalyzer/backend-service/server.js
+require('dotenv').config(); // Loads environment variables from .env file
+const WebSocket = require('ws');
+const http = require('http');
+const { OpenAI } = require('openai'); // OpenAI SDK for LLM interaction
+const sqlite3 = require('sqlite3').verbose(); // SQLite for database
+const { v4: uuidv4 } = require('uuid'); // For generating unique IDs
 
-const app = express();
-const port = process.env.PORT || 3001;
-const server = http.createServer(app); // Create HTTP server from Express app
-const wss = new WebSocketServer({ server }); // Create WebSocket server
+// Configuration
+const PORT = process.env.PORT || 3001;
+const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL || 'http://localhost:11434/v1'; // Default for local Ollama
+const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'ollama'; // API key, often a placeholder for local models
+const DB_PATH = './project_zephyrine_chats.db'; // Path to SQLite database file
 
-// --- Configuration ---
-const groqApiKey = process.env.GROQ_API_KEY;
-const localLlmApiEndpoint = process.env.LOCAL_LLM_API_ENDPOINT || "http://localhost:11434/v1"; // Default local endpoint
-const useGroq = !!groqApiKey; // Determine which service to use
+// LLM Parameters from environment variables, with defaults
+const LLM_TEMPERATURE = parseFloat(process.env.LLM_TEMPERATURE) || 0.7;
+const LLM_MAX_TOKENS = parseInt(process.env.LLM_MAX_TOKENS) || 2048;
+const LLM_TOP_P = parseFloat(process.env.LLM_TOP_P) || 1.0;
 
-let llmClient; // Will hold either Groq or OpenAI client
-
-// --- SQLite Database Setup ---
-const dbPath = path.resolve(__dirname, 'project_zephyrine_chats.db'); // Database file in the same directory
-console.log(`Attempting to connect to SQLite database at: ${dbPath}`);
-
-const db = new sqlite3.Database(dbPath, sqlite3.OPEN_READWRITE | sqlite3.OPEN_CREATE, (err) => {
-  if (err) {
-    console.error("FATAL ERROR: Could not connect to SQLite database.", err.message);
-    process.exit(1); // Exit if DB connection fails
-  }
-  console.log(`Successfully connected to SQLite database: ${dbPath}`);
+// Initialize OpenAI client for OpenAI-compatible APIs
+const openai = new OpenAI({
+    baseURL: OPENAI_API_BASE_URL,
+    apiKey: OPENAI_API_KEY,
 });
 
-// Ensure required tables exist (run once on startup)
-db.serialize(() => {
-    // Enable WAL mode for better concurrency (optional but recommended)
-    db.run("PRAGMA foreign_keys = ON;"); // Enforce foreign key constraints
-    db.run("PRAGMA journal_mode = WAL;", (err) => {
-        if (err) {
-            console.error("Error setting PRAGMA journal_mode=WAL:", err.message);
-        } else {
-            console.log("SQLite journal_mode set to WAL.");
-        }
-    });
+// Database setup
+const db = new sqlite3.Database(DB_PATH, (err) => {
+    if (err) {
+        console.error('Error opening database', err.message);
+        // Consider exiting if DB connection fails, as it's critical
+        process.exit(1); 
+    } else {
+        console.log('Connected to the SQLite database at', DB_PATH);
+        // Create tables if they don't exist
+        db.serialize(() => {
+            // Chats table to store chat sessions
+            db.run(`CREATE TABLE IF NOT EXISTS chats (
+                id TEXT PRIMARY KEY,
+                user_id TEXT, 
+                title TEXT,
+                created_at DATETIME DEFAULT (datetime('now', 'localtime')),
+                updated_at DATETIME DEFAULT (datetime('now', 'localtime'))
+            )`, (err) => {
+                if (err) console.error("Error creating chats table:", err.message);
+            });
 
-    // Create the 'chats' table if it doesn't exist
-    db.run(`
-        CREATE TABLE IF NOT EXISTS chats (
-            id TEXT PRIMARY KEY NOT NULL,    -- Chat UUID
-            user_id TEXT NOT NULL,           -- User identifier
-            title TEXT,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            updated_at DATETIME DEFAULT CURRENT_TIMESTAMP
-        )
-    `, (err) => {
-        if (err) {
-            console.error("FATAL ERROR: Error creating 'chats' table:", err.message);
-            process.exit(1); // Exit if table creation fails
-        } else {
-            console.log("Table 'chats' is ready.");
-        }
-    });
+            // Messages table to store individual messages within chats
+            // id is TEXT PRIMARY KEY, so we will generate UUIDs for it.
+            db.run(`CREATE TABLE IF NOT EXISTS messages (
+                id TEXT PRIMARY KEY, 
+                chat_id TEXT NOT NULL,
+                user_id TEXT,
+                sender TEXT NOT NULL, -- 'user' or 'assistant'
+                content TEXT NOT NULL,
+                created_at DATETIME DEFAULT (datetime('now', 'localtime')),
+                FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
+            )`, (err) => {
+                if (err) console.error("Error creating messages table:", err.message);
+            });
 
-    // Create the 'messages' table if it doesn't exist
-    db.run(`
-        CREATE TABLE IF NOT EXISTS messages (
-            id TEXT PRIMARY KEY NOT NULL,         -- Message UUID (generated by backend)
-            chat_id TEXT NOT NULL,                -- Foreign key to chats table
-            user_id TEXT NOT NULL,                -- User identifier
-            sender TEXT NOT NULL CHECK(sender IN ('user', 'assistant')), -- 'user' or 'assistant'
-            content TEXT NOT NULL,
-            created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
-            FOREIGN KEY (chat_id) REFERENCES chats(id) ON DELETE CASCADE
-        )
-    `, (err) => {
-        if (err) {
-            console.error("FATAL ERROR: Error creating 'messages' table:", err.message);
-            process.exit(1);
-        } else {
-            console.log("Table 'messages' is ready.");
-        }
-    });
-    // Add index for faster message retrieval by chat_id
-    db.run("CREATE INDEX IF NOT EXISTS idx_messages_chat_id ON messages(chat_id);", (err) => {
-         if (err) console.error("Error creating index on messages(chat_id):", err.message);
-    });
-});
-
-
-// --- Initialize LLM Client ---
-if (useGroq) {
-  console.log("Using Groq API.");
-  llmClient = new Groq({ apiKey: groqApiKey });
-} else {
-  console.log(`Using local OpenAI-compatible API at: ${localLlmApiEndpoint}`);
-  llmClient = new OpenAI({
-    baseURL: localLlmApiEndpoint,
-    apiKey: process.env.LOCAL_LLM_API_KEY || "ollama",
-  });
-}
-
-// --- Middleware ---
-app.use(cors({ origin: "*" }));
-app.use(express.json());
-
-// --- Helper ---
-// Format messages for LLM API
-const formatMessagesForLLM = (messages) => {
-  // Expects messages in the format { sender: 'user'/'assistant', content: '...' }
-  return messages.map((msg) => ({
-    role: msg.sender === "user" ? "user" : "assistant",
-    content: msg.content,
-  }));
-};
-
-// --- Database Interaction Helpers ---
-
-// Saves a single message (user or assistant) to the DB
-// Returns the saved message object with its DB ID or null on error
-const saveMessageToDb = (messageData) => {
-    return new Promise((resolve, reject) => {
-        const { chatId, userId, sender, content } = messageData;
-        if (!chatId || !userId || !sender || typeof content === 'undefined') {
-            console.error("saveMessageToDb: Missing required fields.", messageData);
-            return reject(new Error("Missing required fields for saving message."));
-        }
-
-        const messageId = uuidv4(); // Generate a unique ID for the message
-        const sql = `INSERT INTO messages (id, chat_id, user_id, sender, content, created_at)
-                     VALUES (?, ?, ?, ?, ?, CURRENT_TIMESTAMP)`;
-
-        db.run(sql, [messageId, chatId, userId, sender, content], function(err) {
-            if (err) {
-                console.error(`Error saving ${sender} message to SQLite for chat ${chatId}:`, err.message);
-                reject(err);
-            } else {
-                console.log(`${sender.charAt(0).toUpperCase() + sender.slice(1)} message saved (ID: ${messageId}) for chat ${chatId}.`);
-                // Retrieve the saved message to return it with created_at timestamp
-                db.get("SELECT * FROM messages WHERE id = ?", [messageId], (getErr, row) => {
-                    if (getErr) {
-                        console.error("Error retrieving saved message:", getErr.message);
-                        reject(getErr); // Still reject, but log this specific error
-                    } else {
-                        resolve(row); // Resolve with the full message object from DB
-                    }
-                });
-            }
+            // Optional: Users table (if you plan to implement user accounts)
+            // db.run(\`CREATE TABLE IF NOT EXISTS users (
+            //     id TEXT PRIMARY KEY,
+            //     email TEXT UNIQUE,
+            //     password_hash TEXT, // Store hashed passwords, not plain text
+            //     created_at DATETIME DEFAULT (datetime('now', 'localtime'))
+            // )\`, (err) => {
+            //     if (err) console.error("Error creating users table:", err.message);
+            // });
         });
-    });
-};
-
-// Updates a message's content in the DB
-const updateMessageInDb = (messageId, newContent) => {
-     return new Promise((resolve, reject) => {
-        const sql = `UPDATE messages SET content = ?, created_at = CURRENT_TIMESTAMP WHERE id = ?`;
-        db.run(sql, [newContent, messageId], function(err) {
-            if (err) {
-                console.error(`Error updating message ${messageId} in SQLite:`, err.message);
-                reject(err);
-            } else if (this.changes === 0) {
-                console.warn(`Attempted to update message ${messageId}, but it was not found.`);
-                reject(new Error("Message not found for update."));
-            } else {
-                console.log(`Message ${messageId} updated successfully.`);
-                resolve(this.changes); // Resolve with number of rows affected
-            }
-        });
-    });
-};
-
-
-// --- Title Generation Helper (Using SQLite) ---
-const TITLE_PROMPT =
-  "write a concise three word summary of the title based on the conversation and context below. ONLY THREE WORDS, NO OTHER EXPLANATION OR I WILL KILL YOU";
-
-const generateAndSaveChatTitle = async (
-  chatId,
-  userId,
-  wsClient,
-  firstUserMessageContent,
-  modelName
-) => {
-  if (!chatId || !userId || !firstUserMessageContent) {
-    // Validation logic remains same
-    return;
-  }
-  // Model name fallback remains same
-  modelName = modelName || (useGroq ? "llama3-8b-8192" : "llama3");
-
-  try {
-    // LLM call remains same
-    const groqMessages = [{ role: "system", content: TITLE_PROMPT }, { role: "user", content: firstUserMessageContent }];
-    console.log(`Generating title for chat ${chatId} using model ${modelName}...`);
-    const completion = await llmClient.chat.completions.create({
-      messages: groqMessages, model: modelName, temperature: 0.5, max_tokens: 20, stream: false,
-    });
-    let generatedTitle = completion.choices[0]?.message?.content?.trim() || `Chat ${chatId.substring(0, 8)}`;
-    generatedTitle = generatedTitle.replace(/["']/g, "");
-    console.log(`Generated title for chat ${chatId}: "${generatedTitle}"`);
-
-    // Save/Update title in SQLite 'chats' table
-    const sql = `
-        INSERT INTO chats (id, user_id, title, updated_at)
-        VALUES (?, ?, ?, CURRENT_TIMESTAMP)
-        ON CONFLICT(id) DO UPDATE SET
-            title = excluded.title,
-            user_id = excluded.user_id,
-            updated_at = CURRENT_TIMESTAMP;
-    `;
-    db.run(sql, [chatId, userId, generatedTitle], function(err) {
-        if (err) {
-            console.error(`Error saving title to SQLite for chat ${chatId}:`, err.message);
-        } else {
-            console.log(`Successfully saved title for chat ${chatId} to SQLite. Rows affected: ${this.changes}`);
-            if (wsClient && wsClient.readyState === wsClient.OPEN) {
-                wsClient.send(JSON.stringify({ type: "title_updated", payload: { chatId: chatId, title: generatedTitle } }));
-                console.log(`Sent title_updated confirmation for chat ${chatId}`);
-            }
-        }
-    });
-  } catch (error) {
-    console.error(`Unexpected error during title generation/saving for chat ${chatId}:`, error);
-  }
-};
-
-// --- WebSocket Handling ---
-// Keep track of active streams per client connection if needed for complex scenarios,
-// but for now, one stream per connection seems sufficient.
-// Map to store active stream controllers/iterators if handling multiple concurrent streams per client becomes necessary.
-// const activeStreams = new Map();
-
-wss.on("connection", (ws) => {
-  let currentStreamIterator = null; // Manage the async iterator for cancellation
-  console.log("Client connected via WebSocket");
-
-  ws.on("message", async (message) => {
-    const messageString = message.toString();
-    console.log("Received message:", messageString.substring(0, 200) + (messageString.length > 200 ? "..." : "")); // Log truncated message
-    let requestData;
-
-    try {
-      requestData = JSON.parse(messageString);
-    } catch (error) {
-      console.error("Failed to parse incoming message:", error);
-      ws.send(JSON.stringify({ type: "error", payload: { error: "Invalid message format. Expected JSON." } }));
-      return;
     }
-
-    // Cancel previous stream if a new actionable message arrives
-    const cancelPreviousStream = () => {
-        if (currentStreamIterator) {
-            console.log("Cancelling previous stream due to new request.");
-            currentStreamIterator = null; // Signal the loop to stop
-        }
-    };
-
-    try { // Outer try-catch for message type handling
-        switch (requestData.type) {
-
-            // --- Get Chat History ---
-            case "get_messages": {
-                cancelPreviousStream(); // Cancel any ongoing generation
-                const { chatId } = requestData.payload;
-                if (!chatId) {
-                    ws.send(JSON.stringify({ type: "chat_history_error", payload: { chatId, error: "Missing chat ID." } }));
-                    return;
-                }
-                console.log(`Fetching messages for chat: ${chatId}`);
-                db.all("SELECT * FROM messages WHERE chat_id = ? ORDER BY created_at ASC", [chatId], (err, rows) => {
-                    if (err) {
-                        console.error(`Error fetching messages for chat ${chatId}:`, err.message);
-                        ws.send(JSON.stringify({ type: "chat_history_error", payload: { chatId, error: "Database error fetching messages." } }));
-                    } else {
-                        console.log(`Sending history for chat ${chatId} (${rows.length} messages)`);
-                        ws.send(JSON.stringify({ type: "chat_history", payload: { chatId, messages: rows } }));
-                    }
-                });
-                break;
-            }
-
-            // --- Handle New Chat Message / Regeneration ---
-            case "chat": {
-                cancelPreviousStream(); // Cancel previous generation if any
-                const { messages: history, model, chatId, userId, firstUserMessageContent } = requestData.payload;
-
-                // Validation
-                if (!chatId || !userId || !history || !Array.isArray(history) || !model) {
-                    ws.send(JSON.stringify({ type: "error", payload: { error: "Missing required fields in chat payload." } }));
-                    return;
-                }
-
-                 // Identify and save the new user message (the last one in the history payload)
-                let savedUserMessage = null;
-                const latestMessage = history[history.length - 1];
-                if (latestMessage && latestMessage.sender === 'user') {
-                    try {
-                        // Assume the last user message is the new one to be saved
-                        savedUserMessage = await saveMessageToDb({
-                            chatId,
-                            userId,
-                            sender: 'user',
-                            content: latestMessage.content
-                        });
-                        // Optional: Send confirmation back
-                        // ws.send(JSON.stringify({ type: "message_saved", payload: { id: savedUserMessage.id } }));
-                    } catch (dbError) {
-                         console.error("Failed to save user message before LLM call:", dbError);
-                         ws.send(JSON.stringify({ type: "message_save_error", payload: { error: "Failed to save user message." } }));
-                         return; // Stop processing if user message can't be saved
-                    }
-                }
-
-                // Prepare for LLM call
-                const formattedMsgs = formatMessagesForLLM(history);
-                const activeModel = model;
-                console.log(`Streaming response via WebSocket for model: ${activeModel}, chatId: ${chatId}`);
-
-                // Initiate LLM Stream
-                const stream = await llmClient.chat.completions.create({
-                    messages: formattedMsgs, model: activeModel, temperature: 0.7, max_tokens: 1024, top_p: 1, stream: true,
-                });
-                currentStreamIterator = stream; // Store iterator for cancellation
-
-                let assistantResponseContent = "";
-                let assistantMessageId = null; // Will be generated when saving
-
-                // Stream data back
-                for await (const chunk of stream) {
-                    if (!currentStreamIterator) { // Check for cancellation
-                        console.log(`Stream processing stopped externally for chatId: ${chatId}`);
-                        break;
-                    }
-                    const content = chunk.choices[0]?.delta?.content || "";
-                    if (content) {
-                        assistantResponseContent += content;
-                        if (ws.readyState === ws.OPEN) {
-                            ws.send(JSON.stringify({ type: "chunk", payload: { content } }));
-                        } else {
-                            console.log("WebSocket closed during streaming, stopping.");
-                            currentStreamIterator = null; break;
-                        }
-                    }
-                }
-
-                // Stream finished or stopped
-                if (currentStreamIterator && ws.readyState === ws.OPEN) { // Completed naturally
-                    ws.send(JSON.stringify({ type: "end" }));
-                    console.log(`Stream finished naturally for WebSocket client (chatId: ${chatId}).`);
-
-                    // Save the complete assistant message
-                    if (assistantResponseContent) {
-                        try {
-                            const savedAssistantMessage = await saveMessageToDb({
-                                chatId,
-                                userId, // Assistant message associated with the user of the chat
-                                sender: 'assistant',
-                                content: assistantResponseContent
-                            });
-                             // Optional confirmation
-                            // ws.send(JSON.stringify({ type: "message_saved", payload: { id: savedAssistantMessage.id } }));
-                        } catch (dbError) {
-                             console.error("Failed to save assistant message after stream end:", dbError);
-                             ws.send(JSON.stringify({ type: "message_save_error", payload: { error: "Failed to save assistant message." } }));
-                        }
-                    }
-
-                    // Trigger Title Generation if needed
-                    if (firstUserMessageContent) {
-                        console.log(`First user message detected for chat ${chatId}, triggering title generation.`);
-                        generateAndSaveChatTitle(chatId, userId, ws, firstUserMessageContent, activeModel);
-                    }
-                } else if (!currentStreamIterator) { // Was cancelled
-                    console.log(`Stream cancelled for chatId: ${chatId}. Assistant response (partial): "${assistantResponseContent.substring(0, 50)}..."`);
-                    // Optionally save the partial response here if needed
-                    // If saving partial: saveMessageToDb({ chatId, userId, sender: 'assistant', content: assistantResponseContent });
-                }
-
-                currentStreamIterator = null; // Clear iterator reference
-                break;
-            }
-
-            // --- Handle Edit Message and Regenerate ---
-            case "edit_message": {
-                 cancelPreviousStream(); // Cancel previous generation if any
-                const { messageId, newContent, chatId, userId, historyForRegen, model } = requestData.payload;
-
-                if (!messageId || typeof newContent === 'undefined' || !chatId || !userId || !historyForRegen || !model) {
-                    ws.send(JSON.stringify({ type: "error", payload: { error: "Missing required fields in edit_message payload." } }));
-                    return;
-                }
-
-                try {
-                    // 1. Update the user message in the database
-                    await updateMessageInDb(messageId, newContent);
-                    // Send confirmation (optional)
-                     // ws.send(JSON.stringify({ type: "message_updated", payload: { id: messageId } }));
-
-                    // 2. Trigger regeneration (similar to 'chat' handler logic)
-                    const formattedMsgs = formatMessagesForLLM(historyForRegen);
-                    const activeModel = model;
-                    console.log(`Regenerating response via WebSocket after edit for model: ${activeModel}, chatId: ${chatId}`);
-
-                    const stream = await llmClient.chat.completions.create({
-                        messages: formattedMsgs, model: activeModel, temperature: 0.7, max_tokens: 1024, top_p: 1, stream: true,
-                    });
-                    currentStreamIterator = stream;
-
-                    let assistantResponseContent = "";
-
-                    for await (const chunk of stream) {
-                        if (!currentStreamIterator) { break; }
-                        const content = chunk.choices[0]?.delta?.content || "";
-                        if (content) {
-                            assistantResponseContent += content;
-                            if (ws.readyState === ws.OPEN) {
-                                ws.send(JSON.stringify({ type: "chunk", payload: { content } }));
-                            } else {
-                                console.log("WebSocket closed during edit regeneration streaming, stopping.");
-                                currentStreamIterator = null; break;
-                            }
-                        }
-                    }
-
-                    if (currentStreamIterator && ws.readyState === ws.OPEN) { // Completed naturally
-                        ws.send(JSON.stringify({ type: "end" }));
-                        console.log(`Edit regeneration finished naturally for chatId: ${chatId}.`);
-                        // Save the new assistant message
-                        if (assistantResponseContent) {
-                            try {
-                                await saveMessageToDb({ chatId, userId, sender: 'assistant', content: assistantResponseContent });
-                                // Optional confirmation
-                                // ws.send(JSON.stringify({ type: "message_saved", payload: { /* new assistant message id */ } }));
-                            } catch (dbError) {
-                                 console.error("Failed to save assistant message after edit regeneration:", dbError);
-                                 ws.send(JSON.stringify({ type: "message_save_error", payload: { error: "Failed to save assistant response after edit." } }));
-                            }
-                        }
-                    } else if (!currentStreamIterator) { // Was cancelled
-                        console.log(`Edit regeneration stream cancelled for chatId: ${chatId}.`);
-                        // Optionally save partial assistant response
-                    }
-                    currentStreamIterator = null;
-
-                } catch (dbError) {
-                    console.error(`Failed to update message ${messageId} or regenerate:`, dbError);
-                    ws.send(JSON.stringify({ type: "message_update_error", payload: { error: `Failed to update message: ${dbError.message}` } }));
-                    currentStreamIterator = null; // Ensure stream is cleared on DB error
-                }
-                break;
-            }
-
-            // --- Handle Stop Generation Request ---
-            case "stop": {
-                console.log("Received stop request from client.");
-                if (currentStreamIterator) {
-                    console.log("Signalling current stream to stop processing.");
-                    currentStreamIterator = null; // Signal the active loop to stop
-                    if (ws.readyState === ws.OPEN) {
-                        ws.send(JSON.stringify({ type: "stopped" })); // Send confirmation
-                    }
-                } else {
-                    console.log("No active stream to stop.");
-                }
-                break;
-            }
-
-            default:
-                console.log(`Received unhandled message type: ${requestData.type}`);
-                 if (ws.readyState === ws.OPEN) {
-                     ws.send(JSON.stringify({ type: "error", payload: { error: `Unknown command: ${requestData.type}` } }));
-                 }
-        } // End switch
-    } catch (handlerError) {
-        console.error(`Error handling message type ${requestData?.type}:`, handlerError);
-        currentStreamIterator = null; // Ensure stream is cancelled on handler error
-        if (ws.readyState === ws.OPEN) {
-            ws.send(JSON.stringify({ type: "error", payload: { error: `Internal server error handling command ${requestData?.type}.` } }));
-        }
-    } // End outer try-catch
-
-  }); // End ws.on("message")
-
-  ws.on("close", () => {
-    console.log("Client disconnected");
-    currentStreamIterator = null; // Clear stream reference on disconnect
-  });
-
-  ws.on("error", (error) => {
-    console.error("WebSocket error:", error);
-    currentStreamIterator = null; // Clear stream reference on error
-  });
 });
 
+// Create HTTP server (mainly to host the WebSocket server)
+const server = http.createServer((req, res) => {
+    // Basic HTTP response for health checks or info
+    if (req.url === '/health') {
+        res.writeHead(200, { 'Content-Type': 'application/json' });
+        res.end(JSON.stringify({ status: 'ok', message: 'WebSocket server is healthy' }));
+    } else {
+        res.writeHead(200, { 'Content-Type': 'text/plain' });
+        res.end('Project Zephyrine WebSocket server is running.');
+    }
+});
 
-// --- Graceful Shutdown ---
-const cleanup = (signal) => {
-    console.log(`\n${signal} received. Closing server and SQLite database...`);
-    wss.clients.forEach(client => {
-        if (client.readyState === client.OPEN) { // Use ws constants if available
-             client.close();
+// Initialize WebSocket server
+const wss = new WebSocket.Server({ server });
+console.log(`WebSocket server setup on port ${PORT}`);
+
+// For 'stop' functionality (conceptual, requires AbortController integration with LLM calls)
+// const activeGenerations = new Map(); // Example: Map<chatId, AbortController>
+
+// Handle WebSocket connections
+wss.on('connection', (ws) => {
+    console.log('Client connected via WebSocket');
+
+    ws.on('close', (code, reason) => {
+        console.log(`Client disconnected. Code: ${code}, Reason: ${reason || 'N/A'}`);
+        // Clean up any resources associated with this client if necessary
+        // e.g., if tracking activeGenerations per ws instance
+    });
+
+    ws.on('error', (error) => {
+        console.error('WebSocket error for a client:', error);
+        // ws.terminate() might be needed if the connection is in an unstable state
+    });
+
+    ws.on("message", async (message) => {
+        const messageString = message.toString();
+        // Log truncated message to avoid flooding console with very long messages
+        console.log("Received raw message string (truncated):", messageString.substring(0, 250) + (messageString.length > 250 ? "..." : ""));
+        
+        let parsedMessage;
+        let payload;
+
+        try {
+            parsedMessage = JSON.parse(messageString);
+            payload = parsedMessage.payload || {}; // Ensure payload is at least an empty object
+
+            console.log(`Processing WebSocket message: type = ${parsedMessage.type}, chatId = ${payload.chatId || 'N/A'}`);
+
+            switch (parsedMessage.type) {
+                case 'get_messages':
+                    if (!payload.chatId) {
+                        console.error("Invalid payload for get_messages: Missing chatId.", payload);
+                        ws.send(JSON.stringify({ type: 'error', message: 'Invalid payload for get_messages: Missing chatId.' }));
+                        return;
+                    }
+                    const { chatId: getChatId } = payload;
+                    console.log(`Fetching messages for chat: ${getChatId}`);
+                    try {
+                        const messages = await new Promise((resolve, reject) => {
+                            db.all("SELECT id, chat_id, user_id, sender, content, created_at FROM messages WHERE chat_id = ? ORDER BY created_at ASC", [getChatId], (err, rows) => {
+                                if (err) {
+                                    console.error(`Error fetching messages from SQLite for chat ${getChatId}:`, err.message);
+                                    reject(err);
+                                } else {
+                                    // Map 'sender' to 'role' if frontend expects 'role'
+                                    resolve(rows.map(r => ({...r, role: r.sender }))); 
+                                }
+                            });
+                        });
+                        ws.send(JSON.stringify({ type: 'chat_history', payload: { chatId: getChatId, messages: messages } }));
+                        console.log(`Sending history for chat ${getChatId} (${messages.length} messages)`);
+                    } catch (dbError) {
+                        console.error(`Failed to fetch chat history for ${getChatId}:`, dbError.message);
+                        ws.send(JSON.stringify({ type: 'chat_history_error', message: 'Failed to fetch chat history.', payload: { chatId: getChatId } }));
+                    }
+                    break;
+
+                case 'chat':
+                    if (!payload || !payload.messages || !payload.model || !payload.chatId || !payload.userId) {
+                         console.error("Invalid payload for chat:", payload);
+                         ws.send(JSON.stringify({ type: 'error', message: 'Invalid payload for chat: Missing required fields.' }));
+                         return;
+                    }
+                    const { messages: clientMessages, model, chatId, userId, firstUserMessageContent } = payload;
+
+                    if (!clientMessages || clientMessages.length === 0) {
+                        ws.send(JSON.stringify({ type: 'error', message: 'Received empty messages for chat.' }));
+                        return;
+                    }
+                    const userMessage = clientMessages[clientMessages.length - 1];
+
+                    try {
+                        // 1. Check if chat exists; if not, create it.
+                        const chatExists = await new Promise((resolve, reject) => {
+                            db.get("SELECT id FROM chats WHERE id = ?", [chatId], (err, row) => {
+                                if (err) { console.error("Error checking if chat exists:", err.message); reject(err); } else { resolve(row); }
+                            });
+                        });
+
+                        if (!chatExists) {
+                            console.log(`Chat with ID ${chatId} does not exist. Creating new chat.`);
+                            let chatTitle = `Chat (${model})`; // Default title
+                            const latestUserMsgForTitle = firstUserMessageContent || userMessage.content;
+
+                            // Generate title if it's effectively the first user message in a new chat
+                            if (latestUserMsgForTitle && clientMessages.filter(m => (m.role === 'user' || m.sender === 'user')).length === 1) {
+                                try {
+                                    const titlePrompt = [{ role: "user", content: `Generate a very short, concise title (3-5 words maximum) for a new chat that begins with the following user message: "${latestUserMsgForTitle}"` }];
+                                    const titleCompletion = await openai.chat.completions.create({
+                                        messages: titlePrompt,
+                                        model: model, // Use the model selected by the user, or a specific fast model for titles
+                                        max_tokens: 25,
+                                        temperature: 0.5,
+                                    });
+                                    const generatedTitle = titleCompletion.choices[0]?.message?.content?.trim();
+                                    if (generatedTitle) {
+                                        chatTitle = generatedTitle.replace(/["']/g, ''); // Remove quotes from title
+                                    }
+                                    console.log(`Generated title for new chat ${chatId}: "${chatTitle}"`);
+                                } catch (titleError) {
+                                    console.error("Error generating chat title with LLM:", titleError.message);
+                                    // Fallback to a simpler title if LLM call fails
+                                    chatTitle = `Chat: ${latestUserMsgForTitle.substring(0, 30)}...`;
+                                }
+                            } else if (userMessage.content) { 
+                                // Fallback if not the first message or title generation failed
+                                chatTitle = `Chat: ${userMessage.content.substring(0, 30)}...`;
+                            }
+
+                            await new Promise((resolve, reject) => {
+                                db.run(
+                                    "INSERT INTO chats (id, user_id, title, created_at, updated_at) VALUES (?, ?, ?, datetime('now', 'localtime'), datetime('now', 'localtime'))",
+                                    [chatId, userId, chatTitle],
+                                    function (err) {
+                                        if (err) { console.error("Error inserting new chat into SQLite:", err.message); reject(err); }
+                                        else {
+                                            console.log(`New chat created with ID: ${chatId}, Title: "${chatTitle}"`);
+                                            // Inform client about the new title (optional, frontend might handle this)
+                                            ws.send(JSON.stringify({ type: 'title_updated', payload: { chatId: chatId, title: chatTitle } }));
+                                            resolve(this.lastID);
+                                        }
+                                    }
+                                );
+                            });
+                        }
+
+                        // 2. Save the new user message to the database
+                        if (!userMessage.content || typeof userMessage.content !== 'string') {
+                            ws.send(JSON.stringify({ type: 'error', message: 'User message content is invalid.' }));
+                            return;
+                        }
+                        const userMessageId = uuidv4(); // Generate unique ID for the user's message
+                        await new Promise((resolve, reject) => {
+                            db.run(
+                                "INSERT INTO messages (id, chat_id, user_id, sender, content, created_at) VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+                                [userMessageId, chatId, userId, 'user', userMessage.content],
+                                function(err) {
+                                    if (err) { console.error(`Error saving user message to SQLite for chat ${chatId}:`, err.message); reject(err); }
+                                    else {
+                                        console.log(`User message (ID: ${userMessageId}) saved for chat ${chatId}: "${userMessage.content.substring(0, 50)}..."`);
+                                        resolve(this.lastID);
+                                    }
+                                }
+                            );
+                        });
+
+                        // 3. Call the LLM and stream the response
+                        console.log(`Calling LLM (OpenAI-compatible) for chat ${chatId} with model ${model}`);
+                        // const abortController = new AbortController(); // For 'stop' functionality
+                        // activeGenerations.set(chatId, abortController);
+
+                        const stream = await openai.chat.completions.create({
+                            messages: clientMessages.map(m => ({ role: m.role || m.sender, content: m.content })), // Ensure correct role format
+                            model: model,
+                            stream: true,
+                            temperature: LLM_TEMPERATURE,
+                            max_tokens: LLM_MAX_TOKENS,
+                            top_p: LLM_TOP_P,
+                        }/*, { signal: abortController.signal }*/); // Pass signal if implementing stop
+
+                        let assistantResponse = '';
+                        for await (const chunk of stream) {
+                            // if (abortController.signal.aborted) {
+                            //     console.log(`Stream for chat ${chatId} aborted by client.`);
+                            //     ws.send(JSON.stringify({ type: 'info', message: 'Generation stopped by user.'}));
+                            //     break; 
+                            // }
+                            const content = chunk.choices[0]?.delta?.content || '';
+                            if (content) {
+                                assistantResponse += content;
+                                ws.send(JSON.stringify({ type: 'chunk', payload: { content: content } }));
+                            }
+                        }
+                        ws.send(JSON.stringify({ type: 'end' })); // Signal end of stream
+                        console.log(`LLM stream ended for chat ${chatId}. Full response length: ${assistantResponse.length}`);
+                        // activeGenerations.delete(chatId); // Clean up after stream ends or is aborted
+
+                        // 4. Save the assistant's full response to the database
+                        if (assistantResponse.trim()) {
+                            const assistantMessageId = uuidv4(); // Generate unique ID for the assistant's message
+                            await new Promise((resolve, reject) => {
+                                db.run(
+                                    "INSERT INTO messages (id, chat_id, user_id, sender, content, created_at) VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+                                    [assistantMessageId, chatId, userId, 'assistant', assistantResponse.trim()], // Storing assistant's response
+                                    function(err) {
+                                        if (err) { console.error("Error saving assistant message to SQLite:", err.message); reject(err); } // Don't necessarily need to break client flow
+                                        else {
+                                            console.log(`Assistant message (ID: ${assistantMessageId}) saved for chat ${chatId}: "${assistantResponse.substring(0,50)}..."`);
+                                            resolve(this.lastID);
+                                        }
+                                    }
+                                );
+                            });
+                            // Update chat's updated_at timestamp
+                            db.run("UPDATE chats SET updated_at = datetime('now', 'localtime') WHERE id = ?", [chatId], err => {
+                                if (err) console.error(`Error updating chat timestamp for ${chatId}:`, err.message);
+                            });
+                        }
+
+                    } catch (chatProcessingError) {
+                        console.error(`Error in 'chat' case for chatID ${chatId}:`, chatProcessingError.message, chatProcessingError.stack);
+                        ws.send(JSON.stringify({ type: 'error', message: `Server error processing chat: ${chatProcessingError.message}` }));
+                        // activeGenerations.delete(chatId); // Ensure cleanup on error
+                    }
+                    break;
+
+                case 'edit_message':
+                    if (!payload || !payload.messageId || !payload.newContent || !payload.chatId || !payload.history || !payload.userId || !payload.model) {
+                        console.error("Invalid payload for edit_message:", payload);
+                        ws.send(JSON.stringify({ type: 'error', message: "Invalid payload for edit_message: Missing required fields." }));
+                        return;
+                    }
+                    const { messageId, newContent, chatId: editChatId, history: editHistory, userId: editUserId, model: editModel } = payload;
+                    console.log(`Received edit_message for chat ${editChatId}, message ID ${messageId}`);
+                    try {
+                        // 1. Update the user's message content in the database
+                        await new Promise((resolve, reject) => {
+                            db.run(
+                                "UPDATE messages SET content = ?, created_at = datetime('now', 'localtime') WHERE id = ? AND sender = 'user' AND chat_id = ?",
+                                [newContent, messageId, editChatId],
+                                function(err) {
+                                    if (err) {
+                                        console.error(`Error updating user message ${messageId} in SQLite:`, err.message);
+                                        return reject(err);
+                                    }
+                                    if (this.changes === 0) {
+                                        console.warn(`No message found to update for ID ${messageId}, or sender was not 'user', or chat ID mismatch.`);
+                                        // Potentially reject or inform client if update failed critically
+                                    } else {
+                                        console.log(`User message ${messageId} updated in chat ${editChatId}.`);
+                                    }
+                                    resolve();
+                                }
+                            );
+                        });
+
+                        // 2. Prepare messages for LLM (history up to and including the edited message)
+                        // Ensure the history provided by client is accurate and ends with the newly edited user message.
+                        const messagesForLlm = editHistory.map(m => ({ role: m.role || m.sender, content: m.content }));
+                        
+                        // 3. Call LLM for new assistant response
+                        console.log(`Calling LLM for edited message in chat ${editChatId} with model ${editModel}`);
+                        const editStream = await openai.chat.completions.create({
+                            messages: messagesForLlm,
+                            model: editModel,
+                            stream: true,
+                            temperature: LLM_TEMPERATURE,
+                            max_tokens: LLM_MAX_TOKENS,
+                            top_p: LLM_TOP_P,
+                        });
+
+                        let newAssistantResponse = '';
+                        for await (const chunk of editStream) {
+                            const content = chunk.choices[0]?.delta?.content || '';
+                            if (content) {
+                                newAssistantResponse += content;
+                                ws.send(JSON.stringify({ type: 'chunk', payload: { content: content } }));
+                            }
+                        }
+                        ws.send(JSON.stringify({ type: 'end' }));
+                        console.log(`LLM stream for edited response ended for chat ${editChatId}. Length: ${newAssistantResponse.length}`);
+
+                        // 4. Save the new assistant's response
+                        if (newAssistantResponse.trim()) {
+                            const newAssistantMessageId = uuidv4(); // Generate ID for the new assistant message
+                            await new Promise((resolve, reject) => {
+                                db.run(
+                                    "INSERT INTO messages (id, chat_id, user_id, sender, content, created_at) VALUES (?, ?, ?, ?, ?, datetime('now', 'localtime'))",
+                                    [newAssistantMessageId, editChatId, editUserId, 'assistant', newAssistantResponse.trim()],
+                                    function(err) {
+                                        if (err) { console.error("Error saving new assistant message for edited chat:", err.message); reject(err); }
+                                        else {
+                                            console.log(`New assistant message (ID: ${newAssistantMessageId}) saved for edited chat ${editChatId}.`);
+                                            resolve(this.lastID);
+                                        }
+                                    }
+                                );
+                            });
+                            db.run("UPDATE chats SET updated_at = datetime('now', 'localtime') WHERE id = ?", [editChatId]);
+                        }
+                        // Inform client that edit processing is complete (optional)
+                        ws.send(JSON.stringify({ type: 'message_edit_complete', payload: { chatId: editChatId } }));
+
+
+                    } catch (editError) {
+                        console.error(`Error processing edit_message for chat ${editChatId}:`, editError.message, editError.stack);
+                        ws.send(JSON.stringify({ type: 'error', message: `Server error processing message edit: ${editError.message}` }));
+                    }
+                    break;
+
+                case 'stop':
+                    // Placeholder for full 'stop' functionality.
+                    // Requires AbortController to be passed to the LLM's fetch/stream call.
+                    if (!payload || !payload.chatId) {
+                        console.error("Invalid payload for stop:", payload);
+                        ws.send(JSON.stringify({ type: 'error', message: "Invalid payload for stop: Missing chatId." }));
+                        return;
+                    }
+                    const { chatId: stopChatId } = payload;
+                    console.log(`Received stop request for chat ${stopChatId}. (Functionality placeholder)`);
+                    // const controller = activeGenerations.get(stopChatId);
+                    // if (controller) {
+                    //     controller.abort();
+                    //     console.log(`Aborted generation for chat ${stopChatId}`);
+                    // } else {
+                    //     console.log(`No active generation to stop for chat ${stopChatId}`);
+                    // }
+                    ws.send(JSON.stringify({ type: 'info', message: 'Stop functionality placeholder: Not fully implemented for active streams.' }));
+                    break;
+
+                default:
+                    console.log(`Received unknown message type: ${parsedMessage.type}`);
+                    ws.send(JSON.stringify({ type: 'error', message: `Unknown message type: ${parsedMessage.type}` }));
+            }
+        } catch (error) {
+            // Catch errors from JSON.parse or other synchronous issues before the switch
+            if (error instanceof SyntaxError && error.message.includes("JSON")) {
+                console.error('Error parsing incoming WebSocket message as JSON. Raw string was:', messageString, error);
+                ws.send(JSON.stringify({ type: 'error', message: 'Invalid message format received (not valid JSON).' }));
+            } else {
+                // General error handling for other types of errors within the message handler
+                const typeForError = parsedMessage ? parsedMessage.type : 'unknown/unparsable';
+                console.error(`Critical error processing WebSocket message (type: ${typeForError}). Raw string (truncated): ${messageString.substring(0,200)}. Error:`, error.message, error.stack);
+                ws.send(JSON.stringify({ type: 'error', message: `An unexpected critical error occurred on the server: ${error.message}` }));
+            }
         }
     });
-    server.close(() => {
-        console.log("HTTP server closed.");
-        db.close((err) => {
-            if (err) {
-                console.error('Error closing SQLite database:', err.message);
-                process.exit(1);
-            } else {
-                console.log('SQLite database connection closed.');
+}); // End of wss.on('connection')
+
+
+// Graceful shutdown logic
+const cleanup = (signal) => {
+    console.log(`\nReceived ${signal}. Closing server and database...`);
+    wss.clients.forEach(client => {
+        if (client.readyState === WebSocket.OPEN) {
+            client.close(1001, "Server is shutting down."); // 1001: Going Away
+        }
+    });
+    
+    wss.close(() => {
+        console.log('WebSocket server closed.');
+        server.close(() => {
+            console.log('HTTP server closed.');
+            db.close((err) => {
+                if (err) {
+                    console.error('Error closing database', err.message);
+                } else {
+                    console.log('Database connection closed.');
+                }
+                console.log("Exiting process.");
                 process.exit(0);
-            }
+            });
         });
     });
+
+    // Force exit if cleanup takes too long
     setTimeout(() => {
         console.error("Graceful shutdown timed out. Forcing exit.");
         process.exit(1);
-    }, 5000);
+    }, 5000); // 5 seconds timeout
 };
 
-process.on('SIGINT', () => cleanup('SIGINT'));
-process.on('SIGTERM', () => cleanup('SIGTERM'));
+process.on('SIGINT', () => cleanup('SIGINT')); // Ctrl+C
+process.on('SIGTERM', () => cleanup('SIGTERM')); // kill command
 
-
-// --- Start Server ---
-server.listen(port, () => {
-  const activeService = useGroq ? "Groq" : `Local LLM (${localLlmApiEndpoint})`;
-  console.log(
-    `Backend service (using ${activeService}, DB: SQLite @ ${dbPath}) with WebSocket listening on port ${port}`
-  );
+// Start the HTTP server (which the WebSocket server is attached to)
+server.listen(PORT, () => {
+    console.log(`HTTP and WebSocket server is running on port ${PORT}`);
+    console.log(`OpenAI API Base URL: ${OPENAI_API_BASE_URL}`);
 });

@@ -300,76 +300,7 @@ const SideBar = ({
           </ul>
         </nav>
 
-        {/* Conditionally render GPTs and Projects based on isUserMenuExpanded and !isCollapsed */}
-        {!isCollapsed && isUserMenuExpanded && (
-          <>
-            {/* GPTs Section Placeholder */}
-            <nav className="sidebar-gpts">
-              <h4>GDTs</h4> {/* Title only shown when expanded */}
-              {/* Placeholder for recently used/pinned GPTs */}
-              <ul>
-                <li> {/* Removed title as it's not needed when expanded */}
-                  <button className="sidebar-button">
-                    <span>🌐</span> {/* Keep icon */}
-                    <span>&nbsp;Web Browser</span> {/* Show text */}
-                  </button>
-                </li>
-                <li> {/* Removed title */}
-                  <button className="sidebar-button">
-                    <span>🎨</span> {/* Keep icon */}
-                    <span>&nbsp;Noisy thinking</span> {/* Show text */}
-                  </button>
-                </li>
-              </ul>
-            </nav>
-
-            {/* Projects Section Placeholder */}
-            <nav className="sidebar-projects">
-              {/* Could be a button or a list */}
-              <button
-                className="sidebar-button"
-                // Removed title
-              >
-                {/* Placeholder Icon */}
-                <svg
-                  viewBox="0 0 24 24"
-                  className="sidebar-icon"
-                  fill="none"
-                  xmlns="http://www.w3.org/2000/svg"
-                >
-                  <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-                  <g
-                    id="SVGRepo_tracerCarrier"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  ></g>
-                  <g id="SVGRepo_iconCarrier">
-                    {" "}
-                    <path
-                      d="M9 4H15M9 4C8.44772 4 8 4.44772 8 5V7C8 7.55228 8.44772 8 9 8H15C15.5523 8 16 7.55228 16 7V5C16 4.44772 15.5523 4 15 4M9 4C6.52166 4 4.68603 4.44384 3.50389 5.28131C2.32175 6.11878 2 7.1433 2 9.19234V14.8077C2 16.8567 2.32175 17.8812 3.50389 18.7187C4.68603 19.5562 6.52166 20 9 20H15C17.4783 20 19.314 19.5562 20.4961 18.7187C21.6782 17.8812 22 16.8567 22 14.8077V9.19234C22 7.1433 21.6782 6.11878 20.4961 5.28131C19.314 4.44384 17.4783 4 15 4"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    ></path>{" "}
-                    <path
-                      d="M12 11V17"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    ></path>{" "}
-                    <path
-                      d="M9 14L12 17L15 14"
-                      stroke="currentColor"
-                      strokeWidth="1.5"
-                      strokeLinecap="round"
-                    ></path>{" "}
-                  </g>
-                </svg>
-                <span>Projects</span> {/* Show text */}
-              </button>
-            </nav>
-          </>
-        )}
+       
 
         {/* Spacer to push bottom content down */}
         <div className="sidebar-spacer"></div>

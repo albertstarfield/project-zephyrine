@@ -4,13 +4,13 @@
   display: flex;
   flex-direction: column;
   width: 260px; /* Standard width for sidebars */
-  height: 100%; /* Fill the height of .main-content-area */
+  height: 96%; /* Fill the height of .main-content-area */
   background-color: var(
     --sidebar-background
   ); /* Use the new brighter variable */
   padding: 0.75rem;
   box-sizing: border-box;
-  border-radius: 1rem; /* Match chat area */
+  border-radius: 2rem; /* Match chat area */
 
   flex-shrink: 0; /* Prevent sidebar from shrinking */
   color: var(--text-primary);

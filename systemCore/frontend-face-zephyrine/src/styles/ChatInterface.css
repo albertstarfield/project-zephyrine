@@ -118,13 +118,12 @@
   max-width: 85%; /* Allow slightly wider messages */
   word-wrap: break-word;
   line-height: 1.5; /* Slightly increased line height */
-  box-shadow: var(--small-shadow); /* Add subtle shadow */
   /* Removed flex from here, handled by message-container */
 }
 
 .message-container {
   display: flex;
-  gap: 0.5rem; /* Space between avatar and content */
+  gap: 1.5rem; /* Space between avatar and content */
   width: 100%; /* Ensure container takes full width for alignment */
 }
 
@@ -168,19 +167,18 @@
   max-width: 85%;
   word-wrap: break-word;
   line-height: 1.5;
-  box-shadow: var(--small-shadow);
   position: relative; /* Needed for action button positioning */
 }
 
 .user-bubble .message-content-wrapper {
-  background-color: #ecd3a4; /* Pastel Green */
+  background-color: #4cf1e357; /* Pastel Green */
   color: #1f1f1f; /* Keep dark text for contrast */
   border-bottom-right-radius: 2px; /* Bubble tail */
 }
 
 .assistant-bubble .message-content-wrapper {
-  background-color: #a9e6ae; /* Pastel Blue */
-  color: var(--primary-text); /* Assuming this is dark enough */
+  background-color: #2162275c; /* Pastel Blue */
+  color: var(--primary-text); Assuming this is dark enough */
   border-bottom-left-radius: 2px; /* Bubble tail */
 }
 
