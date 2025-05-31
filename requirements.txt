@@ -95,7 +95,7 @@ cn2an                       # Convert Chinese numbers to Arabic numbers and vice
 jieba                       # Chinese text segmentation
 langcodes
 pedalboard
-#whisper-cpp-python
+peft
 
 # --- Development & UI Tools (from original list) ---
 gradio                      # For creating quick UIs for ML models (if used for testing/demos)
