@@ -1,122 +1,139 @@
+// ExternalAnalyzer/frontend-face-zephyrine/src/hooks/useChatHistory.js
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
-// Removed: import { supabase } from '../utils/supabaseClient'; // No longer using Supabase client
-import { useAuth } from '../contexts/AuthContext'; // Still need user info (now the dummy user)
+import { useAuth } from '../contexts/AuthContext';
 
-// NOTE: This hook now relies on external mechanisms (e.g., WebSocket messages sent
-// by parent components or a dedicated service) to interact with the backend for
-// fetching, renaming, and deleting chats. It primarily manages the local state
-// and optimistic updates.
-
-export function useChatHistory() {
-  const { user } = useAuth(); // Get user from AuthContext (dummy user)
+// getWebSocket: A function that returns the current WebSocket instance (e.g., () => ws.current from App.jsx)
+export function useChatHistory(getWebSocket) { 
+  const { user } = useAuth();
   const navigate = useNavigate();
   const location = useLocation();
   const [chatHistory, setChatHistory] = useState([]);
-  const [isLoadingHistory, setIsLoadingHistory] = useState(true); // Add loading state
+  const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // --- Fetch Chat History ---
-  // This function now primarily serves as a trigger/placeholder.
-  // The actual data fetching needs to happen via WebSocket, likely initiated
-  // by a parent component or service that then updates the chatHistory state.
-  const fetchChatHistory = useCallback(async () => {
-    if (!user) {
+  const fetchChatHistory = useCallback(async (userIdToFetch) => {
+    const currentUserId = userIdToFetch || user?.id;
+    if (!currentUserId) {
+      console.log("useChatHistory: Cannot fetch history, no user ID.");
       setChatHistory([]);
       setIsLoadingHistory(false);
       return;
     }
-    setIsLoadingHistory(true); // Indicate loading starts
-    console.log(`useChatHistory: Triggering fetch for user: ${user.id}`);
-    // --- TODO: Implement Backend Fetch ---
-    // This should involve sending a WebSocket message like:
-    // ws.current.send(JSON.stringify({ type: "get_chat_list", payload: { userId: user.id } }));
-    //
-    // And listening for a response message like "chat_list_update" elsewhere,
-    // which would then call setChatHistory() with the received data.
-    // For now, we'll just simulate finishing loading with potentially empty data.
-    // In a real implementation, you'd wait for the WS response.
-    // Example: If using a context/prop to update:
-    // const historyFromBackend = await someFunctionToGetHistoryViaWS();
-    // setChatHistory(historyFromBackend);
 
-    // Simulate fetch completion (remove this in real implementation)
-    // setChatHistory([]); // Or potentially load from localStorage as fallback?
-    setIsLoadingHistory(false);
+    const ws = getWebSocket && typeof getWebSocket === 'function' ? getWebSocket() : null;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      setIsLoadingHistory(true);
+      console.log(`useChatHistory: Requesting chat history list for user: ${currentUserId}`);
+      ws.send(JSON.stringify({ 
+        type: "get_chat_history_list", 
+        payload: { userId: currentUserId } 
+      }));
+      // Note: The actual setChatHistory(data) will be called by the component 
+      // managing the WebSocket's onmessage handler (e.g., App.jsx or ChatPage.jsx)
+      // after receiving the 'chat_history_list' message.
+      // We can set a timeout to revert isLoadingHistory if no response is received,
+      // or the parent component can call setIsLoadingHistory(false).
+    } else {
+      console.warn("useChatHistory: WebSocket not available or not open to fetch chat history.");
+      // setChatHistory([]); // Optionally clear or leave as is
+      setIsLoadingHistory(false); // Ensure loading stops if WS not available
+    }
+  }, [user, getWebSocket]);
 
-  }, [user]); // Dependency on user
-
-  // Fetch history initially (trigger the process)
   useEffect(() => {
-    fetchChatHistory();
-  }, [fetchChatHistory]); // fetchChatHistory depends on user
+    // Initial fetch is now more reliably triggered by ChatPage on WebSocket open.
+    // This useEffect can be removed if App.jsx/ChatPage handles initial fetch.
+    // Or, it can be a secondary trigger if `user` changes and `getWebSocket` is available.
+    if (user?.id && getWebSocket && typeof getWebSocket() === 'object') { // Check if ws is available
+      // fetchChatHistory(user.id); // Potentially redundant if ChatPage always fetches.
+    } else if (!user?.id) {
+      setChatHistory([]);
+      setIsLoadingHistory(false);
+    }
+  }, [user, fetchChatHistory, getWebSocket]);
 
-  // --- Rename Chat ---
+
   const handleRenameChat = useCallback(async (chatId, newTitle) => {
-    if (!user || !chatId || typeof newTitle === 'undefined') return;
+    if (!user?.id || !chatId || typeof newTitle !== 'string') {
+      console.warn("useChatHistory: Invalid parameters for rename chat.", { chatId, newTitle, userId: user?.id });
+      return;
+    }
 
-    const originalHistory = [...chatHistory];
-    // Optimistically update local state
+    const originalChat = chatHistory.find(chat => chat.id === chatId);
+    const originalTitle = originalChat ? originalChat.title : '';
+
+    // Optimistic update
     setChatHistory(prevHistory =>
       prevHistory.map(chat =>
-        chat.id === chatId ? { ...chat, title: newTitle } : chat
+        chat.id === chatId ? { ...chat, title: newTitle, updated_at: new Date().toISOString() } : chat
       )
     );
+    console.log(`useChatHistory: Renaming chat ${chatId} to "${newTitle}" (optimistic).`);
 
-    console.log(`useChatHistory: Renaming chat ${chatId} to "${newTitle}" (optimistic)`);
-    // --- TODO: Send WebSocket Message to Backend ---
-    // This should involve sending a message like:
-    // ws.current.send(JSON.stringify({
-    //   type: "rename_chat",
-    //   payload: { chatId: chatId, newTitle: newTitle, userId: user.id }
-    // }));
-    //
-    // Consider adding error handling based on potential backend failure response.
-    // If backend sends "rename_chat_error", revert the state:
-    // setChatHistory(originalHistory);
+    const ws = getWebSocket && typeof getWebSocket === 'function' ? getWebSocket() : null;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: "rename_chat",
+        payload: { chatId: chatId, newTitle: newTitle, userId: user.id }
+      }));
+      // The component handling ws.onmessage should listen for 'chat_renamed' or 'rename_chat_error'
+      // and potentially call triggerSidebarRefresh or revert the optimistic update.
+    } else {
+      console.error("useChatHistory: WebSocket not available for rename_chat. Reverting optimistic update.");
+      setChatHistory(prevHistory =>
+        prevHistory.map(chat =>
+          chat.id === chatId ? { ...chat, title: originalTitle } : chat // Revert
+        )
+      );
+      // Optionally show an error to the user
+    }
+  }, [user, chatHistory, getWebSocket, setChatHistory]);
 
-  }, [user, chatHistory]); // Depend on user and history for optimistic update
 
-
-  // --- Delete Chat ---
   const handleDeleteChat = useCallback(async (chatId) => {
-    if (!user || !chatId) return;
+    if (!user?.id || !chatId) {
+      console.warn("useChatHistory: Invalid parameters for delete chat.", { chatId, userId: user?.id });
+      return;
+    }
 
-    const chatToDelete = chatHistory.find(chat => chat.id === chatId);
-    const confirmed = window.confirm(`Are you sure you want to delete "${chatToDelete?.title || 'this chat'}" and all its messages?`);
-    if (!confirmed) return;
+    // Optional: Confirmation dialog (can be handled in SideBar.jsx before calling this)
+    // const chatToDelete = chatHistory.find(chat => chat.id === chatId);
+    // const confirmed = window.confirm(\`Are you sure you want to delete "${chatToDelete?.title || 'this chat'}"?\`);
+    // if (!confirmed) return;
 
     const originalHistory = [...chatHistory];
-    // Optimistically update local state
+    // Optimistic update
     setChatHistory(prevHistory => prevHistory.filter(chat => chat.id !== chatId));
+    console.log(`useChatHistory: Deleting chat ${chatId} (optimistic).`);
 
-    console.log(`useChatHistory: Deleting chat ${chatId} (optimistic)`);
-    // --- TODO: Send WebSocket Message to Backend ---
-    // This should involve sending a message like:
-    // ws.current.send(JSON.stringify({
-    //   type: "delete_chat",
-    //   payload: { chatId: chatId, userId: user.id }
-    // }));
-    //
-    // Consider adding error handling based on potential backend failure response.
-    // If backend sends "delete_chat_error", revert the state:
-    // setChatHistory(originalHistory);
-
-
-    // Navigate away if the current chat was deleted
-    if (location.pathname === `/chat/${chatId}`) {
-      console.log(`Navigating away from deleted chat ${chatId}`);
-      navigate('/', { replace: true });
+    const ws = getWebSocket && typeof getWebSocket === 'function' ? getWebSocket() : null;
+    if (ws && ws.readyState === WebSocket.OPEN) {
+      ws.send(JSON.stringify({
+        type: "delete_chat",
+        payload: { chatId: chatId, userId: user.id }
+      }));
+      // The component handling ws.onmessage should listen for 'chat_deleted' or 'delete_chat_error'
+      // and potentially call triggerSidebarRefresh or revert optimistic update.
+      // If current chat is deleted, navigation should occur.
+      if (location.pathname.includes(`/chat/${chatId}`)) {
+        console.log(`useChatHistory: Navigating away from deleted chat ${chatId}`);
+        navigate('/', { replace: true }); // Navigate to a safe route
+      }
+    } else {
+      console.error("useChatHistory: WebSocket not available for delete_chat. Reverting optimistic update.");
+      setChatHistory(originalHistory); // Revert
+      // Optionally show an error to the user
     }
-  }, [user, chatHistory, location.pathname, navigate]); // Dependencies for optimistic update and navigation
+  }, [user, chatHistory, location, navigate, getWebSocket, setChatHistory]);
 
 
-  // Return state and functions needed by components
-  // Note: Consumers of this hook now need to handle triggering the actual backend communication.
   return {
-      chatHistory,
-      isLoadingHistory, // Expose loading state
-      fetchChatHistory, // Function to trigger refresh (needs implementation)
-      handleRenameChat, // Handles optimistic update (needs WS call)
-      handleDeleteChat  // Handles optimistic update (needs WS call)
+    chatHistory,
+    setChatHistory,     // For App.jsx/ChatPage.jsx to update from WS responses
+    isLoadingHistory,
+    setIsLoadingHistory, // Allow parent to control loading state
+    fetchChatHistory,   // To trigger a get_chat_history_list message
+    handleRenameChat,   // Now sends WS message
+    handleDeleteChat,   // Now sends WS message
   };
 }
