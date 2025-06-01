@@ -1,26 +1,33 @@
+// ExternalAnalyzer/frontend-face-zephyrine/src/components/InputArea.jsx
 import React, { useRef, useEffect } from "react";
+import PropTypes from 'prop-types';
 
-const InputArea = ({ value, onChange, onSend, onStop, isGenerating }) => {
+const InputArea = ({ inputValue, onInputChange, onSend, onStop, isGenerating }) => {
   const textareaRef = useRef(null);
 
   // Auto-resize textarea
   useEffect(() => {
     if (textareaRef.current) {
       textareaRef.current.style.height = "auto";
-      // textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      // Ensure scrollHeight is only applied if it's greater than initial to avoid unnecessary jumps
+      if (textareaRef.current.scrollHeight > textareaRef.current.clientHeight) {
+        textareaRef.current.style.height = `${textareaRef.current.scrollHeight}px`;
+      }
     }
-  }, [value]);
+  }, [inputValue]); // <<<< CORRECTED: Use inputValue
 
   const handleKeyDown = (e) => {
     if (e.key === "Enter" && !e.shiftKey) {
       e.preventDefault();
-      handleSend();
+      // Call internal handleSend which now uses inputValue
+      handleSendInternal(); 
     }
   };
 
-  const handleSend = () => {
-    if (value.trim() && !isGenerating) {
-      onSend(value);
+  // Renamed to avoid confusion with onSend prop, and uses inputValue
+  const handleSendInternal = () => { 
+    if (inputValue && inputValue.trim() && !isGenerating) { // <<<< CORRECTED: Use inputValue
+      onSend(inputValue); // <<<< CORRECTED: Use inputValue
     }
   };
 
@@ -103,15 +110,15 @@ const InputArea = ({ value, onChange, onSend, onStop, isGenerating }) => {
           <textarea
             id="input"
             ref={textareaRef}
-            value={value}
-            onChange={(e) => onChange(e.target.value)}
+            value={inputValue} // <<<< CORRECTED: Use inputValue
+            onChange={(e) => onInputChange(e.target.value)} // <<<< CORRECTED: Use onInputChange
             onKeyDown={handleKeyDown}
             placeholder="Enter a message here..."
             disabled={isGenerating}
             rows={1}
           />
           {isGenerating ? (
-            <button id="stop" onClick={onStop}>
+            <button id="stop" onClick={onStop} title="Stop Generation">
               <svg
                 width="24"
                 height="24"
@@ -123,7 +130,8 @@ const InputArea = ({ value, onChange, onSend, onStop, isGenerating }) => {
               </svg>
             </button>
           ) : (
-            <button id="send" onClick={handleSend} disabled={!value.trim()}>
+            <button id="send" onClick={handleSendInternal} disabled={!inputValue || !inputValue.trim()} title="Send Message"> 
+              {/* ^^^^ CORRECTED: Use inputValue and handleSendInternal */}
               <svg
                 width="24"
                 height="24"
@@ -149,6 +157,15 @@ const InputArea = ({ value, onChange, onSend, onStop, isGenerating }) => {
       </p>
     </div>
   );
+};
+
+// Add PropTypes for type checking
+InputArea.propTypes = {
+  inputValue: PropTypes.string.isRequired,
+  onInputChange: PropTypes.func.isRequired,
+  onSend: PropTypes.func.isRequired,
+  onStop: PropTypes.func.isRequired, // Assuming this is onStopGeneration from ChatPage
+  isGenerating: PropTypes.bool.isRequired,
 };
 
 export default InputArea;

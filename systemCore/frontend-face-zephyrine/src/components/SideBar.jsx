@@ -73,14 +73,14 @@ const CancelIcon = () => ( // Icon to cancel rename
 // --- End Icons ---
 
 
-// Receive user, onNewChat, chatHistory, onRenameChat, onDeleteChat props
+// Receive user, onNewChat, chats, onRenameChat, onDeleteChat props
 const SideBar = ({
   systemInfo,
   isCollapsed,
   toggleSidebar,
   user,
   onNewChat,
-  chatHistory,
+  chats,
   onRenameChat,
   onDeleteChat,
 
@@ -247,7 +247,7 @@ const SideBar = ({
         <nav className="sidebar-history">
           {!isCollapsed && <h4>History</h4>} {/* Hide title when collapsed */}
           <ul>
-          {(chatHistory || []).map(chat => (
+          {(chats || []).map(chat => (
               <li
                 key={chat.id}
                 title={isCollapsed ? chat.title : ""}
@@ -305,41 +305,52 @@ const SideBar = ({
         {/* Spacer to push bottom content down */}
         <div className="sidebar-spacer"></div>
 
+        
+
         {/* Bottom Actions (User, Logout, Settings) */}
         <div className="sidebar-bottom-actions">
+          
+        
+          <div className="sidebar-bottom-actions">
+          {/* Voice Assistant Mode Button */}
+          <button
+            className="sidebar-button voice-assistant-button"
+            title={isCollapsed ? 'Voice Assistant Mode' : ''}
+            onClick={() => console.log("Voice Assistant Mode clicked")}
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="sidebar-icon" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M3 8.25V15.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> <path opacity="0.4" d="M7.5 5.75V18.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> <path d="M12 3.25V20.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> <path opacity="0.4" d="M16.5 5.75V18.25" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> <path d="M21 8.25V15.75" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> </g></svg>
+            {!isCollapsed && <span>Voice Assistant</span>}
+          </button>
+
+          {/* Image Generation Button */}
+          <button
+            className="sidebar-button image-generation-button"
+            title={isCollapsed ? 'Image Generation' : ''}
+            onClick={() => console.log("Image Generation clicked")}
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="sidebar-icon" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M9 22H15C20 22 22 20 22 15V9C22 4 20 2 15 2H9C4 2 2 4 2 9V15C2 20 4 22 9 22Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> <path opacity="0.4" d="M9 10C10.1046 10 11 9.10457 11 8C11 6.89543 10.1046 6 9 6C7.89543 6 7 6.89543 7 8C7 9.10457 7.89543 10 9 10Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> <path opacity="0.4" d="M2.66992 18.9501L7.59992 15.6401C8.38992 15.1101 9.52992 15.1701 10.2399 15.7801L10.5699 16.0701C11.3499 16.7401 12.6099 16.7401 13.3899 16.0701L17.5499 12.5001C18.3299 11.8301 19.5899 11.8301 20.3699 12.5001L21.9999 13.9001" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path> </g></svg>
+            {!isCollapsed && <span>Image Generation</span>}
+          </button>
+
+          {/* Finetuning Knowledge Learning Button */}
+          <button
+            className="sidebar-button finetuning-button"
+            title={isCollapsed ? 'Finetuning Knowledge Learning' : ''}
+            onClick={() => console.log("Finetuning Knowledge Learning clicked")}
+          >
+            <svg viewBox="0 0 24 24" fill="none" className="sidebar-icon" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" strokeWidth="0"></g><g id="SVGRepo_tracerCarrier" strokeLinecap="round" strokeLinejoin="round"></g><g id="SVGRepo_iconCarrier"> <path d="M21.4707 19V5C21.4707 3 20.4707 2 18.4707 2H14.4707C12.4707 2 11.4707 3 11.4707 5V19C11.4707 21 12.4707 22 14.4707 22H18.4707C20.4707 22 21.4707 21 21.4707 19Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"></path> <path opacity="0.4" d="M11.4707 6H16.4707" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"></path> <path opacity="0.4" d="M11.4707 18H15.4707" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"></path> <path opacity="0.4" d="M11.4707 13.9502L16.4707 14.0002" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"></path> <path opacity="0.4" d="M11.4707 10H14.4707" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"></path> <path d="M5.4893 2C3.8593 2 2.5293 3.33 2.5293 4.95V17.91C2.5293 18.36 2.7193 19.04 2.9493 19.43L3.7693 20.79C4.7093 22.36 6.2593 22.36 7.1993 20.79L8.0193 19.43C8.2493 19.04 8.4393 18.36 8.4393 17.91V4.95C8.4393 3.33 7.1093 2 5.4893 2Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"></path> <path opacity="0.4" d="M8.4393 7H2.5293" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round"></path> </g></svg>
+            {!isCollapsed && <span>Knowledge Tuning</span>}
+          </button>
+          
+        </div>
+
           {/* User Button - Display user email */}
           <button
             className="sidebar-button user-button" // Added user-button class for potential styling
             title={isCollapsed ? user?.email : (isUserMenuExpanded ? 'Collapse Menu' : 'Expand Menu')}
             onClick={toggleUserMenu} // Add onClick handler
           >
-            <svg
-              viewBox="0 0 24 24"
-              className="sidebar-icon"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-              <g
-                id="SVGRepo_tracerCarrier"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              ></g>
-              <g id="SVGRepo_iconCarrier">
-                {" "}
-                <path
-                  opacity="0.5"
-                  d="M22 12C22 17.5228 17.5228 22 12 22C6.47715 22 2 17.5228 2 12C2 6.47715 6.47715 2 12 2C17.5228 2 22 6.47715 22 12Z"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                ></path>{" "}
-                <path
-                  d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                ></path>{" "}
-              </g>
-            </svg>
+            <svg viewBox="0 0 24 24" fill="none" className="sidebar-icon" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path opacity="0.4" d="M12.1605 10.87C12.0605 10.86 11.9405 10.86 11.8305 10.87C9.45055 10.79 7.56055 8.84 7.56055 6.44C7.56055 3.99 9.54055 2 12.0005 2C14.4505 2 16.4405 3.99 16.4405 6.44C16.4305 8.84 14.5405 10.79 12.1605 10.87Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M7.1607 14.56C4.7407 16.18 4.7407 18.82 7.1607 20.43C9.9107 22.27 14.4207 22.27 17.1707 20.43C19.5907 18.81 19.5907 16.17 17.1707 14.56C14.4307 12.73 9.9207 12.73 7.1607 14.56Z" stroke="currentColor" stroke-width="1.5" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>
             {!isCollapsed && <span className="user-email">{user?.email}</span>}{' '}
             {/* Display email */}
           </button>
@@ -367,54 +378,12 @@ const SideBar = ({
             {!isCollapsed && <span>Logout</span>}
           </button>
           {/* Settings Button Placeholder */}
+          
           <button
             className="sidebar-button settings-button" // Added settings-button class
-            title={isCollapsed ? 'Settings' : ''}
-          >
-            <svg
-              viewBox="0 0 24 24"
-              className="sidebar-icon"
-              fill="none"
-              xmlns="http://www.w3.org/2000/svg"
-            >
-              <g id="SVGRepo_bgCarrier" strokeWidth="0"></g>
-              <g
-                id="SVGRepo_tracerCarrier"
-                strokeLinecap="round"
-                strokeLinejoin="round"
-              ></g>
-              <g id="SVGRepo_iconCarrier">
-                {" "}
-                <path
-                  d="M16.694 9.506L15.3808 8.1928C14.818 7.63001 14.818 6.70968 15.3808 6.14689L16.694 4.83369C17.2568 4.2709 18.1771 4.2709 18.7399 4.83369L20.0531 6.14689C20.6159 6.70968 20.6159 7.63001 20.0531 8.1928L18.7399 9.506C18.1771 10.0688 17.2568 10.0688 16.694 9.506Z"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                ></path>{" "}
-                <path
-                  d="M16.694 19.1663L15.3808 17.8531C14.818 17.2903 14.818 16.3699 15.3808 15.8071L16.694 14.4939C17.2568 13.9311 18.1771 13.9311 18.7399 14.4939L20.0531 15.8071C20.6159 16.3699 20.6159 17.2903 20.0531 17.8531L18.7399 19.1663C18.1771 19.7291 17.2568 19.7291 16.694 19.1663Z"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                ></path>{" "}
-                <path
-                  d="M8.1928 9.506L6.8796 8.1928C6.31681 7.63001 6.31681 6.70968 6.8796 6.14689L8.1928 4.83369C8.75559 4.2709 9.67592 4.2709 10.2387 4.83369L11.5519 6.14689C12.1147 6.70968 12.1147 7.63001 11.5519 8.1928L10.2387 9.506C9.67592 10.0688 8.75559 10.0688 8.1928 9.506Z"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                ></path>{" "}
-                <path
-                  d="M8.1928 19.1663L6.8796 17.8531C6.31681 17.2903 6.31681 16.3699 6.8796 15.8071L8.1928 14.4939C8.75559 13.9311 9.67592 13.9311 10.2387 14.4939L11.5519 15.8071C12.1147 16.3699 12.1147 17.2903 11.5519 17.8531L10.2387 19.1663C9.67592 19.7291 8.75559 19.7291 8.1928 19.1663Z"
-                  stroke="currentColor"
-                  strokeWidth="1.5"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                ></path>{" "}
-              </g>
-            </svg>
+            title={isCollapsed ? 'Settings' : ''} // AUTHOR: Iconsax Icon
+          > 
+            <svg viewBox="0 0 24 24" className="sidebar-icon" fill="none" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path opacity="0.34" d="M12 15C13.6569 15 15 13.6569 15 12C15 10.3431 13.6569 9 12 9C10.3431 9 9 10.3431 9 12C9 13.6569 10.3431 15 12 15Z" stroke="currentColor" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path> <path d="M2 12.8799V11.1199C2 10.0799 2.85 9.21994 3.9 9.21994C5.71 9.21994 6.45 7.93994 5.54 6.36994C5.02 5.46994 5.33 4.29994 6.24 3.77994L7.97 2.78994C8.76 2.31994 9.78 2.59994 10.25 3.38994L10.36 3.57994C11.26 5.14994 12.74 5.14994 13.65 3.57994L13.76 3.38994C14.23 2.59994 15.25 2.31994 16.04 2.78994L17.77 3.77994C18.68 4.29994 18.99 5.46994 18.47 6.36994C17.56 7.93994 18.3 9.21994 20.11 9.21994C21.15 9.21994 22.01 10.0699 22.01 11.1199V12.8799C22.01 13.9199 21.16 14.7799 20.11 14.7799C18.3 14.7799 17.56 16.0599 18.47 17.6299C18.99 18.5399 18.68 19.6999 17.77 20.2199L16.04 21.2099C15.25 21.6799 14.23 21.3999 13.76 20.6099L13.65 20.4199C12.75 18.8499 11.27 18.8499 10.36 20.4199L10.25 20.6099C9.78 21.3999 8.76 21.6799 7.97 21.2099L6.24 20.2199C5.33 19.6999 5.02 18.5299 5.54 17.6299C6.45 16.0599 5.71 14.7799 3.9 14.7799C2.85 14.7799 2 13.9199 2 12.8799Z" stroke="currentColor" stroke-width="1.5" stroke-miterlimit="10" stroke-linecap="round" stroke-linejoin="round"></path> </g></svg>
             {!isCollapsed && <span>Settings</span>} {/* Hide text */}
           </button>
         </div>

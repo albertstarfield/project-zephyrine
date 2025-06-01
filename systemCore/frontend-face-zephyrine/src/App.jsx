@@ -1,8 +1,8 @@
-import { useState, useEffect, useCallback } from 'react'; // Keep necessary imports
+// ExternalAnalyzer/frontend-face-zephyrine/src/App.jsx
+import { useState, useEffect, useCallback } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from './contexts/AuthContext';
-// Removed: import Auth from './components/Auth'; // Remove if Auth component is no longer used
 import './styles/App.css';
 import SideBar from './components/SideBar';
 import SystemOverlay from './components/SystemOverlay';
@@ -11,99 +11,109 @@ import './styles/ChatInterface.css';
 import './styles/utils/_overlay.css';
 import RedirectToNewChat from './components/RedirectToNewChat';
 
-// Import custom hooks
 import { useStarBackground } from './hooks/useStarBackground';
 import { useSystemInfo } from './hooks/useSystemInfo';
-import { useChatHistory } from './hooks/useChatHistory'; // Keep this hook
+import { useChatHistory } from './hooks/useChatHistory';
 
-// Main App component handles layout, routing, and authentication check
 function App() {
-  // _s(); // REMOVE THIS LINE (was line 32)
+  console.log("<<<<< App.jsx Render/Re-render - TOP >>>>>");
 
-  // Since AuthContext now provides a dummy session immediately, loading should always be false
-  // and session/user should always exist.
-  const { session, user } = useAuth(); // Get dummy auth state
+  const { user } = useAuth();
   const navigate = useNavigate();
 
-  // Use custom hooks for state management
   const systemInfo = useSystemInfo();
   const stars = useStarBackground();
 
-  // useChatHistory hook (Needs adaptation for WebSocket fetching/updates)
   const {
     chatHistory,
-    isLoadingHistory, // Get loading state from the hook
-    fetchChatHistory, // Function to trigger a fetch (needs WS implementation)
-    handleRenameChat, // Needs WS implementation for backend call
-    handleDeleteChat  // Needs WS implementation for backend call
-  } = useChatHistory();
+    isLoadingHistory,
+    fetchChatHistory, // This function should be implemented in useChatHistory to use WebSocket
+    setChatHistory,   // This is the state updater from useChatHistory
+    handleRenameChat,
+    handleDeleteChat
+  } = useChatHistory(); // Assuming useChatHistory does not take ws, App will manage ws calls for history list if needed
 
-  // Sidebar state
-  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(false);
+  // Diagnostic log for functions from useChatHistory
+  useEffect(() => {
+    console.log("App.jsx - DIAGNOSTIC: typeof setChatHistory from useChatHistory:", typeof setChatHistory);
+    console.log("App.jsx - DIAGNOSTIC: typeof fetchChatHistory from useChatHistory:", typeof fetchChatHistory);
+  }, [setChatHistory, fetchChatHistory]);
 
-  // Toggle sidebar function
+
+  const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
+  
+  const availableModels = [
+    {id: "default-model", name: "Default Model (App)"},
+    {id: "Zephyrine Unified fragmented Model Interface", name: "Zephyrine Unified Model"}
+  ];
+  const [selectedModel, setSelectedModel] = useState(availableModels[0]?.id || "default-model"); 
+
   const toggleSidebar = () => {
     setIsSidebarCollapsed(!isSidebarCollapsed);
   };
 
-  const availableModels = [{id: "default-model", name: "Default Model (Dummy)"}, {id: "other-model", name: "Other Model (Dummy)"}]; // Example
-  const [selectedModel, setSelectedModel] = useState("default-model");
-
-  // Effect for handling resize
   useEffect(() => {
-    const handleResize = () => {
-      // Adjust behavior on resize if needed
-    };
+    const handleResize = () => {};
     window.addEventListener("resize", handleResize);
     return () => window.removeEventListener("resize", handleResize);
-  }, []); // Removed dependency on isSidebarCollapsed if not needed inside
+  }, []);
 
-  // Function to handle creating a new chat
   const handleNewChat = () => {
     const newChatId = uuidv4();
-    console.log("Creating new chat with ID:", newChatId);
-    // TODO: Send a message to backend via WebSocket to potentially create
-    // the chat entry in DB immediately? Or wait for first message?
-    // Example: ws.send(JSON.stringify({ type: "create_chat", payload: { chatId: newChatId, userId: user.id } }));
+    console.log("App.jsx: Creating new chat with ID:", newChatId);
     navigate(`/chat/${newChatId}`);
-    // History will be updated when fetchChatHistory is called or based on WS messages
+    // Sidebar will update when ChatPage's WS connection fetches the list or a title_updated event is handled
   };
+  
+  // Memoized callback for triggerSidebarRefresh
+  // This function's purpose is to tell useChatHistory hook to initiate a fetch.
+  // The hook itself would then need to make the WS call.
+  const triggerSidebarRefreshCallback = useCallback(() => {
+    console.log("App.jsx: triggerSidebarRefreshCallback called. User ID:", user?.id);
+    if (user?.id && typeof fetchChatHistory === 'function') {
+      fetchChatHistory(user.id); // This signals the hook to fetch
+    } else {
+      if (typeof fetchChatHistory !== 'function') {
+        console.warn("App.jsx: fetchChatHistory from useChatHistory is not a function in triggerSidebarRefreshCallback!");
+      }
+      if (!user?.id) {
+        console.warn("App.jsx: triggerSidebarRefreshCallback called but no user.id available.");
+      }
+    }
+  }, [user, fetchChatHistory]);
 
-  // No need for the loading check or !session check if using the dummy AuthContext
-  /*
-  if (loading) { // This block can likely be removed
-    return <div style={{ display: 'flex', justifyContent: 'center', alignItems: 'center', height: '100vh' }}>Loading Auth...</div>;
-  }
-  if (!session) { // This block can likely be removed
-    // return <Auth />; // Remove the Auth component import/usage
-    return <div>Please Log In (Auth Component Removed)</div>; // Placeholder if needed
-  }
-  */
+  // This useEffect is for an initial fetch if App were managing a central WebSocket.
+  // Since ChatPage initiates its own WS and fetches the list, this might be redundant for *initial* load
+  // but good for when `user` changes if the app stays mounted.
+  useEffect(() => {
+    if (user?.id) {
+      console.log("App.jsx: User is available. Initial chat list fetch is handled by ChatPage on its WebSocket connection open. This effect could trigger a redundant refresh if not careful.");
+      // triggerSidebarRefreshCallback(); // Potentially call here if ChatPage doesn't fetch on its own
+    }
+  }, [user, triggerSidebarRefreshCallback]);
 
-  // Render the main app using hooks
+  console.log("App.jsx: Props being prepared for ChatPage. typeof setChatHistory:", typeof setChatHistory);
+
   return (
     <div id="content">
-      {/* Overlay for mobile sidebar */}
-      <div className="sidebar-overlay" onClick={toggleSidebar}></div>
-
-      {/* Star Background */}
+      <div className={`sidebar-overlay ${!isSidebarCollapsed ? 'active' : ''}`} onClick={toggleSidebar}></div>
       <div id="sky">
       {stars && stars.map(star => (
-  // Safeguard: Check if star and star.style exist before accessing animationDelay
-  star && star.style ? (
-    <div
-      key={star.id || Math.random()} // Fallback key
-      className="star"
-      style={{
-        // ... other styles
-        animationDelay: star.style.animationDelay, 
-      }}
-    />
-  ) : null // Or log an error, or render a default star
-))}
+        star && star.style ? (
+          <div
+            key={star.id || Math.random()}
+            className="star"
+            style={{
+              left: star.left,
+              top: star.top,
+              width: star.width,
+              height: star.height,
+              animationDelay: star.style.animationDelay, 
+            }}
+          />
+        ) : null 
+      ))}
       </div>
-
-      {/* Logo */}
       <div className="logo">
         <img
           src="/img/ProjectZephy023LogoRenewal.png"
@@ -111,31 +121,22 @@ function App() {
           className="project-logo"
         />
       </div>
-
-      {/* Main Content */}
       <div id="main">
         <SystemOverlay systemInfo={systemInfo} />
-
         <div className={`main-content-area ${isSidebarCollapsed ? "main-content-area--sidebar-collapsed" : ""}`}>
-          {/* Sidebar */}
           <SideBar
-            systemInfo={systemInfo}
             isCollapsed={isSidebarCollapsed}
             toggleSidebar={toggleSidebar}
-            user={user} // From dummy AuthContext
+            user={user} 
             onNewChat={handleNewChat}
-            chats={chatHistory} // From useChatHistory (needs proper fetching)
-            isLoadingHistory={isLoadingHistory} // Pass loading state
-            onRenameChat={handleRenameChat} // From useChatHistory (needs WS call)
-            onDeleteChat={handleDeleteChat} // From useChatHistory (needs WS call)
-            availableModels={availableModels} // Pass available models
-            selectedModel={selectedModel}     // Pass current selected model
-            onModelChange={setSelectedModel}  // Pass function to change selected model
-            // Removed model selection props
-            // Pass WebSocket related functions if needed for rename/delete
+            chats={chatHistory} 
+            isLoadingHistory={isLoadingHistory}
+            onRenameChat={handleRenameChat} // Assumes useChatHistory provides a working version
+            onDeleteChat={handleDeleteChat}   // Assumes useChatHistory provides a working version
+            availableModels={availableModels} 
+            selectedModel={selectedModel}     
+            onModelChange={setSelectedModel}
           />
-
-          {/* Chat Area Wrapper */}
           <div className="chat-area-wrapper">
             <Routes>
               <Route path="/" element={<RedirectToNewChat />} />
@@ -144,15 +145,17 @@ function App() {
                 element={
                   <ChatPage
                     systemInfo={systemInfo}
-                    user={user} // Pass user from dummy AuthContext
-                    refreshHistory={fetchChatHistory} // Pass refresh trigger
-                    // Pass selectedModel if needed (using a fixed value or state)
-                    selectedModel={"Zephyrine Unified Architecture Model"} // Example fixed value
-                    // Pass WebSocket instance or send function if needed directly
+                    user={user} 
+                    refreshHistory={fetchChatHistory} // Keep if ChatPage uses it directly for some reason
+                    selectedModel={selectedModel} 
+                    // --- Crucial Props for Sidebar History ---
+                    updateSidebarHistory={setChatHistory} // Pass the actual setChatHistory function
+                    triggerSidebarRefresh={triggerSidebarRefreshCallback} // Pass the memoized callback
+                    // --- End Crucial Props ---
                   />
                 }
               />
-              <Route path="*" element={<Navigate to="/" replace />} /> {/* Catch-all redirect */}
+              <Route path="*" element={<Navigate to="/" replace />} />
             </Routes>
           </div>
         </div>
