@@ -1,8 +1,4 @@
 <div align = "center">
-<h1>
-    <img src = "https://github.com/0ssamaak0/SiriLLama/blob/main/assets/icon.png?raw=true" width = 200 height = 200>
-<br>
-
 </h1>
 
 <h3>
@@ -10,7 +6,7 @@ Siri LLama
 </h3>
 </div>
 
-Siri LLama is apple shortcut that access locally running LLMs through Siri or the shortcut UI on any apple device connected to the same network of your host machine. It uses Langchain 🦜🔗 and supports open source models from both [Ollama](https://ollama.com/) 🦙 or [Fireworks AI](https://fireworks.ai/) 🎆
+> Siri LLama is apple shortcut that access locally running LLMs through Siri or the shortcut UI on any apple device connected to the same network of your host machine. It uses Langchain 🦜🔗 and supports open source models from both [Ollama](https://ollama.com/) 🦙 or [Fireworks AI](https://fireworks.ai/) 🎆
 
 # Download Shortcut from [HERE](https://www.icloud.com/shortcuts/fd032a4e75cc4d81a6f9a742053d4c18)
 
