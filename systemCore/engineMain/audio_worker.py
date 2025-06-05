@@ -397,7 +397,7 @@ class SCLParser:
                                        tag_content_full: str) -> int:  # tag_content_full is e.g., "pause duration=short"
         attrs = self.parse_attributes(tag_content_full.split(' ', 1)[1] if ' ' in tag_content_full else "")
         duration_attr = attrs.get("duration", list(attrs.values())[0] if attrs else "medium")
-        duration_ms = 0;
+        duration_ms = 0
         pause_compensation_ms = 300
         if isinstance(duration_attr, str):
             val_str = duration_attr.lower().replace("ms", "")
@@ -417,8 +417,8 @@ class SCLParser:
 
     def apply_settings(self, tag_content: str) -> Optional[int]:  # tag_content is e.g., "prosody rate=fast"
         log_worker("DEBUG", f"SCLParser: apply_settings for tag content: '{tag_content}'")
-        parts = tag_content.split(' ', 1);
-        tag_name = parts[0].lower();
+        parts = tag_content.split(' ', 1)
+        tag_name = parts[0].lower()
         params_str = parts[1] if len(parts) > 1 else ""
         attrs = self.parse_attributes(params_str)
 
@@ -433,16 +433,19 @@ class SCLParser:
                                                                                                      "rate"]) else 1.0)))
             if "pitch" in attrs: self.voice_settings['pitch'] = self.parse_pitch(str(attrs["pitch"]))
         elif tag_name == "emphasis":  # Your full emphasis logic from message #91
-            level = str(attrs.get("level", "moderate")).lower();
+            level = str(attrs.get("level", "moderate")).lower()
             base_pitch = self.voice_settings['pitch']
             if level == "strong":
-                self.voice_settings['rate'] *= 0.9; self.voice_settings['pitch'] = base_pitch + self.parse_pitch(
+                self.voice_settings['rate'] *= 0.9
+                self.voice_settings['pitch'] = base_pitch + self.parse_pitch(
                     str(attrs.get("pitch", "high")))
             elif level == "moderate":
-                self.voice_settings['rate'] *= 0.95; self.voice_settings['pitch'] = base_pitch + self.parse_pitch(
+                self.voice_settings['rate'] *= 0.95
+                self.voice_settings['pitch'] = base_pitch + self.parse_pitch(
                     str(attrs.get("pitch", "0.5")))
             elif level == "reduced":
-                self.voice_settings['rate'] *= 1.1; self.voice_settings['pitch'] = base_pitch + self.parse_pitch(
+                self.voice_settings['rate'] *= 1.1
+                self.voice_settings['pitch'] = base_pitch + self.parse_pitch(
                     str(attrs.get("pitch", "low")))
             self.voice_settings['rate'] = max(0.5, min(1.1, self.voice_settings['rate']))  # Clamp rate
         elif tag_name == "zephyloid":  # Your full zephyloid settings update logic
@@ -492,7 +495,7 @@ class SCLParser:
         Relies on the _new_sf_write hook to capture the audio.
         """
         if not self.model or not hasattr(self.model, 'tts_to_file'):
-            log_worker("ERROR", "SCLParser: No MeloTTS model instance available for speak_with_settings.");
+            log_worker("ERROR", "SCLParser: No MeloTTS model instance available for speak_with_settings.")
             return
 
         self._apply_zephyloid_effects(None)  # Apply rate/pitch adjustments from zephyloid settings
@@ -1097,7 +1100,7 @@ def main():
         effective_pytorch_device_str = _get_pytorch_device(args.device)
     elif args.task_type == "tts":
         log_worker("CRITICAL", "PyTorch/Torchaudio not available. Cannot perform TTS.")
-        print(json.dumps({"error": "PyTorch/Torchaudio missing for TTS."}), flush=True);
+        print(json.dumps({"error": "PyTorch/Torchaudio missing for TTS."}), flush=True)
         sys.exit(1)
 
     # --- TTS Task ---
@@ -1105,9 +1108,9 @@ def main():
         log_worker("INFO",
                    f"TTS Task. Primary: ChatterboxTTS. Device: '{effective_pytorch_device_str}', Test: {args.test_mode}")
         if not CHATTERBOX_TTS_AVAILABLE or not ChatterboxTTS_class_ref:
-            result_payload = {"error": "ChatterboxTTS library not available."};
+            result_payload = {"error": "ChatterboxTTS library not available."}
             log_worker("CRITICAL", result_payload["error"])
-            print(json.dumps(result_payload), flush=True);
+            print(json.dumps(result_payload), flush=True)
             sys.exit(1)
 
         # --- Initialize variables used in try/finally for TTS ---
@@ -1185,8 +1188,8 @@ def main():
                     if wav_output_tensor_stdin.shape[0] == 1: wav_output_tensor_stdin = wav_output_tensor_stdin.repeat(
                         2, 1)
 
-                    audio_bytes_io_obj = io.BytesIO();
-                    cb_sr = chatterbox_tts_model_instance.sr;
+                    audio_bytes_io_obj = io.BytesIO()
+                    cb_sr = chatterbox_tts_model_instance.sr
                     mime = f"audio/{output_format_stdin}"  # type: ignore
 
                     if output_format_stdin == "wav":
@@ -1198,8 +1201,8 @@ def main():
                                 torchaudio.get_audio_backend() != "sox_io" and not ffmpeg_exe_path_final):
                             log_worker("WARNING",
                                        "MP3 output needs torchaudio ffmpeg/sox backend or ffmpeg CLI. Defaulting to WAV.")
-                            torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr, format="wav");
-                            output_format_stdin = "wav";
+                            torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr, format="wav")
+                            output_format_stdin = "wav"
                             mime = "audio/wav"  # type: ignore
                         else:
                             try:
@@ -1213,7 +1216,7 @@ def main():
                                                                      delete=False) as tmp_wav_f_final, \
                                             tempfile.NamedTemporaryFile(suffix=".mp3", dir=args.temp_dir,
                                                                         delete=False) as tmp_mp3_f_final:
-                                        tmp_wav_path_final = tmp_wav_f_final.name;
+                                        tmp_wav_path_final = tmp_wav_f_final.name
                                         tmp_mp3_path_final = tmp_mp3_f_final.name
                                     try:
                                         sf.write(tmp_wav_path_final, wav_output_tensor_stdin.cpu().T.numpy(), cb_sr,
@@ -1226,61 +1229,61 @@ def main():
                                             audio_bytes_io_obj.write(f_conv_mp3_final.read())
                                     except Exception as e_ffmpeg_cli_final:
                                         log_worker("ERROR",
-                                                   f"ffmpeg CLI MP3 conversion failed: {e_ffmpeg_cli_final}. Defaulting to WAV.");
-                                        audio_bytes_io_obj = io.BytesIO();
+                                                   f"ffmpeg CLI MP3 conversion failed: {e_ffmpeg_cli_final}. Defaulting to WAV.")
+                                        audio_bytes_io_obj = io.BytesIO()
                                         torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr,
-                                                        format="wav");
-                                        output_format_stdin = "wav";
+                                                        format="wav")
+                                        output_format_stdin = "wav"
                                         mime = "audio/wav"  # type: ignore
                                     finally:
                                         if os.path.exists(tmp_wav_path_final): os.remove(tmp_wav_path_final)
                                         if os.path.exists(tmp_mp3_path_final): os.remove(tmp_mp3_path_final)
                                 else:
-                                    log_worker("ERROR", "ffmpeg CLI not found for MP3 fallback. Defaulting to WAV.");
-                                    audio_bytes_io_obj = io.BytesIO();
+                                    log_worker("ERROR", "ffmpeg CLI not found for MP3 fallback. Defaulting to WAV.")
+                                    audio_bytes_io_obj = io.BytesIO()
                                     torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr,
-                                                    format="wav");
-                                    output_format_stdin = "wav";
+                                                    format="wav")
+                                    output_format_stdin = "wav"
                                     mime = "audio/wav"  # type: ignore
                     else:
                         log_worker("WARNING", f"Unsupported format '{output_format_stdin}'. Defaulting to WAV.")
-                        torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr, format="wav");
-                        output_format_stdin = "wav";
+                        torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr, format="wav")
+                        output_format_stdin = "wav"
                         mime = "audio/wav"  # type: ignore
 
-                    audio_bytes_io_obj.seek(0);
+                    audio_bytes_io_obj.seek(0)
                     audio_base64_final = base64.b64encode(audio_bytes_io_obj.read()).decode('utf-8')
                     result_payload = {
                         "result": {"audio_base64": audio_base64_final, "format": output_format_stdin, "mime_type": mime,
                                    "sample_rate": cb_sr}}
                 except Exception as e_tts_std_inner:
-                    result_payload = {"error": f"Worker ChatterboxTTS error: {e_tts_std_inner}"};
-                    log_worker("ERROR", f"TTS Standard Mode failed: {e_tts_std_inner}");
+                    result_payload = {"error": f"Worker ChatterboxTTS error: {e_tts_std_inner}"}
+                    log_worker("ERROR", f"TTS Standard Mode failed: {e_tts_std_inner}")
                     log_worker("ERROR", traceback.format_exc())
 
         except Exception as e_tts_task_outer:
-            result_payload = {"error": f"Worker TTS task outer error: {e_tts_task_outer}"};
-            log_worker("ERROR", f"TTS task failed: {e_tts_task_outer}");
+            result_payload = {"error": f"Worker TTS task outer error: {e_tts_task_outer}"}
+            log_worker("ERROR", f"TTS task failed: {e_tts_task_outer}")
             log_worker("ERROR", traceback.format_exc())
         finally:
             log_worker("DEBUG", "TTS Task: Entering finally block for model cleanup.")
             if chatterbox_tts_model_instance is not None:  # Use corrected name
-                del chatterbox_tts_model_instance;
+                del chatterbox_tts_model_instance
                 chatterbox_tts_model_instance = None
                 log_worker("DEBUG", "ChatterboxTTS model instance deleted.")
             if melo_model_for_sample_gen is not None:  # Use corrected name
-                del melo_model_for_sample_gen;
+                del melo_model_for_sample_gen
                 melo_model_for_sample_gen = None
                 log_worker("DEBUG", "MeloTTS model (for sample) instance deleted.")
             if sclparser_for_sample_gen is not None:  # Use corrected name
-                del sclparser_for_sample_gen;
+                del sclparser_for_sample_gen
                 sclparser_for_sample_gen = None
                 log_worker("DEBUG", "SCLParser (for sample) instance deleted.")
 
-            gc.collect();
+            gc.collect()
             log_worker("DEBUG", "Python garbage collection called.")
             if TORCH_AUDIO_AVAILABLE and torch and effective_pytorch_device_str == "cuda" and torch.cuda.is_available():
-                torch.cuda.empty_cache();
+                torch.cuda.empty_cache()
                 log_worker("INFO", "CUDA cache cleared.")
             elif TORCH_AUDIO_AVAILABLE and torch and effective_pytorch_device_str == "mps" and hasattr(torch.backends,
                                                                                                        "mps") and torch.backends.mps.is_available():  # type: ignore
@@ -1338,7 +1341,7 @@ def main():
 
                 if ffmpeg_exe_path_asr:
                     log_worker("INFO", f"ffmpeg found at {ffmpeg_exe_path_asr}. Converting audio for ASR...")
-                    asr_conversion_temp_dir_asr = os.path.join(args.temp_dir, "asr_ffmpeg_temp");
+                    asr_conversion_temp_dir_asr = os.path.join(args.temp_dir, "asr_ffmpeg_temp")
                     os.makedirs(asr_conversion_temp_dir_asr, exist_ok=True)
                     with tempfile.NamedTemporaryFile(prefix="asr_conv_", suffix=".wav", dir=asr_conversion_temp_dir_asr,
                                                      delete=False) as tmp_f_asr_conv:
@@ -1367,8 +1370,8 @@ def main():
                            f"ASR successful. Text len: {len(transcribed_text_final_asr)}. Snippet: '{transcribed_text_final_asr[:70]}...'")
                 result_payload = {"result": {"text": transcribed_text_final_asr}}
             except Exception as e_asr_main_block:
-                result_payload = {"error": f"ASR processing error: {str(e_asr_main_block)}"};
-                log_worker("ERROR", f"ASR task failed: {e_asr_main_block}");
+                result_payload = {"error": f"ASR processing error: {str(e_asr_main_block)}"}
+                log_worker("ERROR", f"ASR task failed: {e_asr_main_block}")
                 log_worker("ERROR", traceback.format_exc())
             finally:
                 if asr_temp_converted_wav_path and os.path.exists(asr_temp_converted_wav_path):
