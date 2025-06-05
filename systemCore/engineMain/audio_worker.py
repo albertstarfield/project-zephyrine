@@ -14,12 +14,16 @@ import soundfile as sf
 import tempfile
 import subprocess
 import gc
+import platform
 from typing import Optional, Dict, Any, List, Tuple
 import re
 from functools import partial
 import math
 import wave
 from config import *
+
+# --- Platform Detection ---
+IS_WINDOWS = os.name == 'nt'
 
 # --- Basic Logging Function (defined very early) ---
 def log_worker(level: str, message: str):
@@ -41,6 +45,20 @@ ChatterboxTTS_class_ref: Optional[type] = None # For chatterbox.tts.ChatterboxTT
 
 PYWHISPERCPP_AVAILABLE: bool = False
 WhisperModel: Optional[type] = None         # For pywhispercpp.model.Model class
+
+try:
+    from tqdm import tqdm
+    TQDM_AVAILABLE = True
+except ImportError:
+    TQDM_AVAILABLE = False
+    log_worker("WARNING", "tqdm library not found. Progress bars will be disabled.")
+    # Define a dummy tqdm if not available, so code doesn't break
+    class tqdm:
+        def __init__(self, *args, **kwargs): self.total = kwargs.get("total", 0); self.n = 0
+        def update(self, n=1): self.n += n; # Basic update
+        def close(self): pass
+        def __enter__(self): return self
+        def __exit__(self, *args): self.close()
 
 # --- Attempt Core Imports and Set Availability Flags ---
 try:
@@ -617,184 +635,210 @@ class SCLParser:
         if not PEDALBOARD_LIBROSA_AVAILABLE or not TORCH_AUDIO_AVAILABLE or not torch or not F_torchaudio:
             log_worker("WARNING",
                        "Missing effects libraries (Pedalboard/Librosa or Torch/Torchaudio), skipping SCLParser post-processing.")
-            return audio_np_in  # Return original if effects libs are missing
+            return audio_np_in
 
-        # Ensure input is (channels, samples) float32 numpy array for Pedalboard/TorchAudio effects
         processed_audio_np = audio_np_in.astype(np.float32)
-        if processed_audio_np.ndim == 1:  # Mono (samples,) -> (2, samples) for consistent processing
-            log_worker("TRACE", "SCLParser: post_process promoting mono to stereo for effects.")
+
+        # Ensure input is (channels, samples) for effects
+        if processed_audio_np.ndim == 1:
+            log_worker("TRACE", "SCLParser: post_process promoting mono to stereo (2, samples) for effects.")
             processed_audio_np = np.stack([processed_audio_np, processed_audio_np], axis=0)
         elif processed_audio_np.ndim == 2:
             if processed_audio_np.shape[1] == 2 and processed_audio_np.shape[0] > 2:  # (samples, 2)
                 log_worker("TRACE", "SCLParser: post_process transposing (samples, 2) to (2, samples) for effects.")
-                processed_audio_np = processed_audio_np.T  # -> (2, samples)
+                processed_audio_np = processed_audio_np.T
             elif processed_audio_np.shape[0] == 1 and processed_audio_np.shape[1] > 2:  # (1, samples) mono
                 log_worker("TRACE",
                            "SCLParser: post_process repeating mono channel to stereo (2, samples) for effects.")
-                processed_audio_np = np.repeat(processed_audio_np, 2, axis=0)  # -> (2, samples)
+                processed_audio_np = np.repeat(processed_audio_np, 2, axis=0)
 
-        # Final check for channel count before applying effects that expect 2 channels
         if processed_audio_np.ndim != 2 or processed_audio_np.shape[0] != 2:
             log_worker("ERROR",
-                       f"SCLParser Post-process: Expected 2 channels (2, samples), got shape {processed_audio_np.shape}. Skipping effects.")
-            return audio_np_in  # Return original if shape is still wrong
+                       f"SCLParser Post-process: Expected 2 channels (2, samples), got shape {processed_audio_np.shape}. Skipping effects chain.")
+            return audio_np_in  # Return original if shape is still wrong for subsequent effects
 
-        current_sr = float(input_sample_rate)  # Ensure sr is float for pedalboard
-        audio_tensor_for_effects = torch.from_numpy(processed_audio_np.copy()).to(self.device)
+        current_sr_for_effects = float(input_sample_rate)
+        # Convert to tensor early for DYN, BRE, and potentially noise addition later
+        audio_tensor_intermediate = torch.from_numpy(processed_audio_np.copy()).to(self.device)
 
-        # Apply zephyloid parameter effects that modify the audio directly
-        # DYN (Dynamics)
-        dyn_gain_db = (zephyloid_settings.get('dyn', 64) - 64) / 64.0 * 12.0  # Max +/- 12dB
-        audio_tensor_for_effects = F_torchaudio.gain(audio_tensor_for_effects, dyn_gain_db)
-        log_worker("TRACE", f"SCLParser Post-process: Applied DYN gain: {dyn_gain_db:.2f}dB")
+        # DYN gain
+        dyn_gain_db_val = (zephyloid_settings.get('dyn', 64) - 64) / 64.0 * 12.0
+        audio_tensor_intermediate = F_torchaudio.gain(audio_tensor_intermediate, dyn_gain_db_val)  # type: ignore
+        log_worker("TRACE", f"SCLParser Post-process: Applied DYN gain: {dyn_gain_db_val:.2f}dB")
 
-        # BRE (Breathiness)
-        bre_amount = zephyloid_settings.get('bre', 0) / 127.0 * 0.001  # Max 0.001 noise scale
+        # BRE noise
+        bre_amount = zephyloid_settings.get('bre', 0) / 127.0 * 0.001
         if bre_amount > 0 and TORCH_AUDIO_AVAILABLE and torch:
-            noise_bre_tensor = torch.randn_like(audio_tensor_for_effects) * bre_amount
-            audio_tensor_for_effects = audio_tensor_for_effects + noise_bre_tensor
+            noise_bre_tensor = torch.randn_like(audio_tensor_intermediate) * bre_amount
+            audio_tensor_intermediate = audio_tensor_intermediate + noise_bre_tensor
             log_worker("TRACE", f"SCLParser Post-process: Applied BRE noise. Amount factor: {bre_amount:.5f}")
 
-        # Pedalboard effects (if library available)
-        # Ensure audio is numpy (channels, samples) for Pedalboard
-        audio_for_pedalboard = audio_tensor_for_effects.cpu().numpy()
+        audio_for_pedalboard_np = audio_tensor_intermediate.cpu().numpy()  # (channels, samples) for pedalboard
 
-        # Resample to 44.1kHz for consistent Pedalboard effects if not already
-        if current_sr != 44100.0 and PEDALBOARD_LIBROSA_AVAILABLE:
+        # Resample for Pedalboard if necessary
+        if current_sr_for_effects != 44100.0 and PEDALBOARD_LIBROSA_AVAILABLE and librosa:
             log_worker("TRACE",
-                       f"SCLParser Post-process: Resampling for Pedalboard from {current_sr}Hz to 44100Hz.")
-            # Librosa resample takes mono or (channels, D). Our audio_for_pedalboard is (2, D)
-            resampled_channels = []
-            for ch_idx in range(audio_for_pedalboard.shape[0]):
-                resampled_channels.append(
-                    librosa.resample(y=audio_for_pedalboard[ch_idx], orig_sr=current_sr, target_sr=44100.0,
-                                     res_type='kaiser_fast'))
-            audio_for_pedalboard = np.stack(resampled_channels)
-            current_sr = 44100.0  # Update current_sr for subsequent effects
+                       f"SCLParser Post-process: Resampling for Pedalboard from {current_sr_for_effects}Hz to 44100Hz.")
+            resampled_channels_list = []
+            for ch_idx_pb in range(audio_for_pedalboard_np.shape[0]):  # Iterate over channels
+                resampled_channels_list.append(
+                    librosa.resample(y=audio_for_pedalboard_np[ch_idx_pb], orig_sr=current_sr_for_effects,
+                                     target_sr=44100.0, res_type='kaiser_fast'))
+            audio_for_pedalboard_np = np.stack(resampled_channels_list)  # Stack back into (channels, samples)
+            current_sr_for_effects = 44100.0  # Update sample rate after resampling
             log_worker("TRACE",
-                       f"SCLParser Post-process: Resampled. New shape for Pedalboard: {audio_for_pedalboard.shape}")
+                       f"SCLParser Post-process: Resampled. New shape for Pedalboard: {audio_for_pedalboard_np.shape}")
 
-        board_effects_list = [  # Default effects
-            Reverb(room_size=0.7, damping=0.5, wet_level=0.33, dry_level=0.4),  # Values from your SCLParser
+        board_effects_list = [
+            Reverb(room_size=1.0, damping=0.2, wet_level=0.5069, dry_level=0.4),
             Chorus(rate_hz=0.4, depth=0.25, centre_delay_ms=7.0, feedback=0.0, mix=0.02),
             Delay(delay_seconds=0.5, feedback=0.01, mix=0.0002),
         ]
-        # GWL (Growl) - Distortion
         gwl_amount_factor = zephyloid_settings.get('gwl', 0) / 127.0
         if gwl_amount_factor > 0:
-            drive_db_gwl = gwl_amount_factor * 20.0  # Example scaling
-            board_effects_list.insert(0, Distortion(drive_db=drive_db_gwl))  # Insert distortion early
+            drive_db_gwl = gwl_amount_factor * 20.0
+            board_effects_list.insert(0, Distortion(drive_db=drive_db_gwl))
             log_worker("TRACE",
                        f"SCLParser Post-process: Added GWL (Distortion) to Pedalboard. Drive: {drive_db_gwl:.2f}dB")
 
-        # Apply Pedalboard if effects are added
+        # This is where the original pedalboard processing happened.
+        # We will process with pedalboard, then add noise, then convert to tensor for EQ.
+
+        audio_after_pedalboard_effects_np = audio_for_pedalboard_np  # Initialize with pre-pedalboard audio
+
         if PEDALBOARD_LIBROSA_AVAILABLE:
             try:
-                board = Pedalboard(board_effects_list, sample_rate=current_sr)
+                board = Pedalboard(board_effects_list)
                 log_worker("TRACE", "SCLParser Post-process: Applying Pedalboard effects...")
-                audio_for_pedalboard = board(audio_for_pedalboard)  # Process (channels, samples)
+                audio_after_pedalboard_effects_np = board(audio_for_pedalboard_np, sample_rate=current_sr_for_effects)
                 log_worker("TRACE",
-                           f"SCLParser Post-process: Pedalboard effects applied. Shape: {audio_for_pedalboard.shape}")
-            except Exception as e_pb:
-                log_worker("ERROR", f"SCLParser Post-process: Error applying Pedalboard effects: {e_pb}")
-                # Continue with audio_for_pedalboard as it was before Pedalboard attempt
+                           f"SCLParser Post-process: Pedalboard effects applied. Shape: {audio_after_pedalboard_effects_np.shape}")
+            except Exception as e_pb_apply:
+                log_worker("ERROR", f"SCLParser Post-process: Error applying Pedalboard effects: {e_pb_apply}")
+                # audio_after_pedalboard_effects_np remains the audio *before* pedalboard attempt in case of error
 
-        # Convert back to tensor for torchaudio EQ, ensuring it's on the correct device
-        audio_tensor_for_eq = torch.from_numpy(audio_for_pedalboard.copy()).to(self.device)
+        # --- ADD BROWNIAN-LIKE NOISE ---
+        # This is added *after* the main pedalboard effects (reverb, chorus, delay, distortion)
+        # but *before* the subsequent EQ chain.
+        if TORCH_AUDIO_AVAILABLE and torch and F_torchaudio:
+            log_worker("TRACE", "SCLParser Post-process: Attempting to add Brownian-like noise.")
+            # Convert numpy array (output from pedalboard or pre-pedalboard if PB failed/skipped) to tensor
+            audio_tensor_for_noise_addition = torch.from_numpy(audio_after_pedalboard_effects_np.copy()).to(self.device)
 
-        # EQ (BRI, CLE, OPE, GEN's formant part, XSY) using torchaudio.functional.equalizer_biquad
-        # Ensure current_sr is float for torchaudio functions
-        current_sr_float = float(current_sr)
+            # 1. Generate white noise
+            white_noise_tensor = torch.randn_like(audio_tensor_for_noise_addition)
 
-        # BRI (Brightness)
-        bri_gain_val = (zephyloid_settings.get('bri', 64) - 64) / 64.0 * 6.0  # Max +/- 6dB
-        audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
+            # 2. Filter white noise to make it "brownish" using a strong low-pass filter.
+            # A low cutoff frequency (e.g., 20-60 Hz) will give it a rumbly, low-frequency character.
+            brownian_cutoff_freq = 40.0  # Hz; adjust as needed for desired "color"
+            brownish_noise_tensor = F_torchaudio.lowpass_biquad(
+                white_noise_tensor,
+                sample_rate=current_sr_for_effects,  # Ensure this is the correct SR at this point
+                cutoff_freq=brownian_cutoff_freq
+            )
+
+            # 3. Scale the noise. "0.1 on the wet" is interpreted as a gain factor for the noise.
+            # torch.randn_like produces noise with std=1. A gain of 0.1 means noise std_dev will be 0.1.
+            # This might be quite audible. For subtle realism, much lower values (0.001-0.01) are common.
+            # We'll use 0.1 as requested.
+            brownian_noise_gain = 0.1
+            scaled_brownish_noise_tensor = brownish_noise_tensor * brownian_noise_gain
+
+            # 4. Add the scaled noise to the audio
+            audio_tensor_with_noise = audio_tensor_for_noise_addition + scaled_brownish_noise_tensor
+            log_worker("TRACE",
+                       f"SCLParser Post-process: Brownian-like noise added. Gain: {brownian_noise_gain}, Cutoff: {brownian_cutoff_freq}Hz.")
+
+            # This tensor now goes to the EQ stage
+            audio_tensor_for_eq = audio_tensor_with_noise
+        else:
+            log_worker("WARNING",
+                       "SCLParser Post-process: Torch/Torchaudio not available for Brownian noise generation, skipping noise addition.")
+            # If noise couldn't be added, proceed with the audio as it was after pedalboard
+            audio_tensor_for_eq = torch.from_numpy(audio_after_pedalboard_effects_np.copy()).to(self.device)
+        # --- END BROWNIAN-LIKE NOISE ---
+
+        current_sr_float_for_eq = float(current_sr_for_effects)  # Ensure it's float for F_torchaudio
+
+        # EQ (BRI, CLE, OPE, GEN, XSY, Standard final)
+        bri_gain_val = (zephyloid_settings.get('bri', 64) - 64) / 64.0 * 6.0
+        audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float_for_eq,
                                                             center_freq=8000.0, gain=bri_gain_val, Q=1.0)
         log_worker("TRACE", f"SCLParser Post-process: Applied BRI EQ. Gain: {bri_gain_val:.2f}dB at 8kHz")
 
-        # CLE (Clearness)
-        cle_gain_val = (zephyloid_settings.get('cle', 64) - 64) / 64.0 * 4.0  # Max +/- 4dB
-        audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
+        cle_gain_val = (zephyloid_settings.get('cle', 64) - 64) / 64.0 * 4.0
+        audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float_for_eq,
                                                             center_freq=4000.0, gain=cle_gain_val, Q=1.2)
         log_worker("TRACE", f"SCLParser Post-process: Applied CLE EQ. Gain: {cle_gain_val:.2f}dB at 4kHz")
 
-        # OPE (Opening)
         ope_shift_val = (zephyloid_settings.get('ope', 64) - 64) / 64.0
-        ope_center_freq = 1000.0 + ope_shift_val * 500.0
-        ope_gain = abs(ope_shift_val) * 3.0  # Gain proportional to shift magnitude
+        ope_center_freq = 1000.0 + ope_shift_val * 500.0;
+        ope_gain = abs(ope_shift_val) * 3.0
         if ope_shift_val != 0:
-            audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
+            audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float_for_eq,
                                                                 center_freq=ope_center_freq, gain=ope_gain, Q=1.5)
             log_worker("TRACE",
                        f"SCLParser Post-process: Applied OPE EQ. Freq: {ope_center_freq:.0f}Hz, Gain: {ope_gain:.2f}dB")
 
-        # GEN (Gender Factor - Formant Part)
-        gen_formant_shift_val = (zephyloid_settings.get('gen',
-                                                        64) - 64) / 64.0 * 3.0  # Smaller EQ gain for formant perception
-        gen_center_freq = 1500.0 + (zephyloid_settings.get('gen', 64) - 64) / 64.0 * 200.0  # Shift center freq
+        gen_formant_shift_val = (zephyloid_settings.get('gen', 64) - 64) / 64.0 * 3.0
+        gen_center_freq = 1500.0 + (zephyloid_settings.get('gen', 64) - 64) / 64.0 * 200.0
         if gen_formant_shift_val != 0:
-            audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
+            audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float_for_eq,
                                                                 center_freq=gen_center_freq,
                                                                 gain=abs(gen_formant_shift_val), Q=1.2)
             log_worker("TRACE",
                        f"SCLParser Post-process: Applied GEN (Formant) EQ. Freq: {gen_center_freq:.0f}Hz, Gain: {abs(gen_formant_shift_val):.2f}dB")
 
-        # XSY (Cross-Synthesis EQ)
         xsy_voicebanks_val = zephyloid_settings.get('xsy_voicebanks')
         xsy_blend_val = zephyloid_settings.get('xsy', 0) / 127.0
         if isinstance(xsy_voicebanks_val, list) and len(xsy_voicebanks_val) == 2 and 0 < xsy_blend_val < 1:
             vb1_name, vb2_name = xsy_voicebanks_val
-            profile1 = self.xsy_profiles.get(vb1_name)
+            profile1 = self.xsy_profiles.get(vb1_name);
             profile2 = self.xsy_profiles.get(vb2_name)
             if profile1 and profile2:
                 audio_vb1 = audio_tensor_for_eq.clone()
                 for freq, gain, q_val in profile1["eq_curve"]: audio_vb1 = F_torchaudio.equalizer_biquad(audio_vb1,
-                                                                                                         current_sr_float,
+                                                                                                         current_sr_float_for_eq,
                                                                                                          freq, gain,
                                                                                                          q_val)
                 audio_vb2 = audio_tensor_for_eq.clone()
                 for freq, gain, q_val in profile2["eq_curve"]: audio_vb2 = F_torchaudio.equalizer_biquad(audio_vb2,
-                                                                                                         current_sr_float,
+                                                                                                         current_sr_float_for_eq,
                                                                                                          freq, gain,
                                                                                                          q_val)
                 audio_tensor_for_eq = (1 - xsy_blend_val) * audio_vb1 + xsy_blend_val * audio_vb2
-                log_worker("TRACE",
-                           f"SCLParser Post-process: Applied XSY EQ. Blend: {xsy_blend_val:.2f} between '{vb1_name}' and '{vb2_name}'")
+                log_worker("TRACE", f"SCLParser Post-process: Applied XSY EQ. Blend: {xsy_blend_val:.2f}")
 
-        # Standard final EQ pass (from your SCLParser)
-        final_eq_settings = [(30, 5, 3.4), (100, 4, 1.4), (150, 1.5, 1.4), (250, 2, 1.0), (350, 2, 1.4),
-                             (450, 2, 1.8), (550, -2, 1.4), (2000, 2, 1.0), (2500, 3, 1.4), (3000, 2, 1.4),
-                             (3500, 4, 1.8), (4000, 3, 1.4), (8000, 3, 1.8), (12000, 3, 1.8), (20000, 1, 1.8)]
+        final_eq_settings = [(30, 5, 3.4), (100, 4, 1.4), (150, 1.5, 1.4), (250, 2, 1.0), (350, 2, 1.4), (450, 2, 1.8),
+                             (550, -2, 1.4), (2000, 2, 1.0), (2500, 3, 1.4), (3000, 2, 1.4), (3500, 4, 1.8),
+                             (4000, 3, 1.4), (8000, 3, 1.8), (12000, 3, 1.8), (20000, 1, 1.8)]
         for freq, gain, q_val in final_eq_settings:
-            audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float, freq, gain,
-                                                                q_val)
+            audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float_for_eq, freq,
+                                                                gain, q_val)
         log_worker("TRACE", "SCLParser Post-process: Standard final EQ applied.")
 
-        # Final subtle noise and amplitude modulation (from your SCLParser)
-        if TORCH_AUDIO_AVAILABLE and torch:  # Check again as we are using torch directly here
+        if TORCH_AUDIO_AVAILABLE and torch:
             noise_final_tensor = torch.randn_like(audio_tensor_for_eq) * 0.0002
             audio_tensor_for_eq = audio_tensor_for_eq + noise_final_tensor
-            mod_freq, mod_depth = 1.0, 0.03  # Hz, depth
+            mod_freq, mod_depth = 1.0, 0.03
             t_axis = torch.arange(audio_tensor_for_eq.shape[1],
-                                  device=audio_tensor_for_eq.device) / current_sr_float
-            modulation_tensor = (1 + mod_depth * torch.sin(2 * torch.pi * mod_freq * t_axis)).float()
-            audio_tensor_for_eq = audio_tensor_for_eq * modulation_tensor.unsqueeze(0)  # Apply to both channels
+                                  device=audio_tensor_for_eq.device) / current_sr_float_for_eq
+            modulation_tensor = (1 + mod_depth * torch.sin(2 * torch.pi * mod_freq * t_axis)).float()  # type: ignore
+            audio_tensor_for_eq = audio_tensor_for_eq * modulation_tensor.unsqueeze(0)
             log_worker("TRACE", "SCLParser Post-process: Final noise and amp modulation applied.")
 
-        # Final Limiter (Pedalboard, requires numpy)
         final_audio_numpy_for_limiter = audio_tensor_for_eq.cpu().numpy()
         if PEDALBOARD_LIBROSA_AVAILABLE:
             try:
-                final_limiter_board = Pedalboard(
-                    [Limiter(threshold_db=-1.0, release_ms=50.0)])  # Values from your SCLParser
-                final_audio_numpy_for_limiter = final_limiter_board(final_audio_numpy_for_limiter, current_sr_float)
+                final_limiter_board = Pedalboard([Limiter(threshold_db=-1.0, release_ms=50.0)])
+                final_audio_numpy_for_limiter = final_limiter_board(final_audio_numpy_for_limiter,
+                                                                    sample_rate=current_sr_float_for_eq)
                 log_worker("DEBUG", "SCLParser Post-process: Final Limiter applied.")
-            except Exception as e_final_limiter:
-                log_worker("ERROR", f"SCLParser Post-process: Error applying final Limiter: {e_final_limiter}")
+            except Exception as e_final_limiter_apply:
+                log_worker("ERROR", f"SCLParser Post-process: Error applying final Limiter: {e_final_limiter_apply}")
 
         log_worker("DEBUG",
                    f"SCLParser: post_process: Final audio shape before returning: {final_audio_numpy_for_limiter.shape}")
-        # Ensure output is (channels, samples) numpy array
         return final_audio_numpy_for_limiter
 
     def parse_attributes(self, params_str: str) -> Dict[str, str]:
@@ -924,8 +968,30 @@ TEXT_FOR_VOICE_SAMPLE = f"The quick brown fox jumps over the lazy dog. {ADELAIDE
 CHATTERBOX_VOICE_SAMPLE_FILENAME = "GeneratedAudioSample_ZephyAdelaide.wav"  # Consistent name
 CHATTERBOX_DEFAULT_MODEL_ID = "default_chatterbox_model_id"  # Placeholder, if ChatterboxTTS.from_pretrained uses it
 
-ADELAIDE_EXCITED_TEST_INTRO = "Woohoo! Adelaide Zephyrine Charlotte reporting for duty, and I am absolutely PUMPED to get started! Let's explore some amazing new ideas, tell some truly epic stories, and walk this incredible journey together. This is going to be so much fun, I can just feel it in my circuits!"
 
+
+ADELAIDE_EXCITED_TEST_INTRO = """
+Woohoo! Adelaide Zephyrine Charlotte here, your friendly neighborhood AI, and I am absolutely CHARGED UP!
+Are you ready? Because I'm about to spin a yarn, a legendary tale perfect for drifting off to dreamland, or maybe just for a bit of epic chill.
+
+[pause duration="medium"]
+
+Alright, gather 'round, imagine the pixelated sun setting over the Whispering Woods of Eldoria...
+Our story begins in the cozy little village of Startington, nestled right by the Glimmering Stream – you know the type, right? Cobblestone paths, a bakery that always smells like sweet rolls, and an old, slightly grumpy blacksmith who secretly has a heart of gold.
+Our hero... or maybe just a very enthusiastic apprentice with slightly singed eyebrows from a potion mishap... we'll call them Pip! Pip wasn't known for their brawn, or even particularly for their brains *just yet*, but they had a spark, a real knack for finding trouble, or as Pip liked to call it, 'unforeseen quest opportunities!'
+
+[pause duration="short"]
+
+One evening, as the twin moons of Lumina began to cast long, playful shadows, an old, tattered map practically FLEW into Pip's hands, carried by a gust of wind that smelled suspiciously of dragon sneezes and adventure! Unfurling it, Pip saw a crudely drawn path leading deep into the Forbidden Caves, a place local legends said was guarded by a... well, a rather large, and very, *very* sleepy badger. But also, whispered tales spoke of a legendary artifact hidden within: the Everlasting Goblet of Infinite Hot Cocoa!
+
+[pause duration="medium"]
+
+Pip, fueled by an insatiable curiosity and a sudden craving for superior hot beverages, decided this was IT! Their first real quest! With a patched-up rucksack containing three slightly stale biscuits, a compass that mostly pointed north-ish, and a wooden sword that had seen better days (mostly as a stirring stick for a particularly stubborn stew), Pip set off as the crickets began their nightly serenade... The path was dark, the woods were rustling with unknown sounds, and Pip couldn't help but wonder if those biscuits would be enough...
+
+[pause duration="long"]
+
+...and that, my friend, is just the beginning of Pip's grand adventure. We'll see how they tackle the sleepy badger, navigate the tricky puzzles, and whether that hot cocoa is truly infinite... another time. For now, let the idea of grand quests and cozy villages lull you into a peaceful rest. Sweet dreams of adventure!
+"""
 
 # --- PyTorch Device Auto-Detection Helper ---
 def _get_pytorch_device(requested_device_str: str) -> str:
@@ -1078,313 +1144,456 @@ def _ensure_voice_sample(
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Audio Worker (TTS & ASR)")
-    parser.add_argument("--task-type", required=True, choices=["tts", "asr"])
+    parser = argparse.ArgumentParser(description="Audio Worker Orchestrator (TTS & ASR)")
+    parser.add_argument("--task-type", required=True, choices=["tts", "asr"], help="Task to perform")
     parser.add_argument("--model-lang", default="EN", help="Lang for MeloTTS sample or ASR")
     parser.add_argument("--device", default="auto", help="PyTorch device for TTS (auto, cpu, cuda, mps, vulkan)")
-    parser.add_argument("--model-dir", required=True, help="Base dir for ASR GGUF models")
-    parser.add_argument("--temp-dir", default=".", help="Base dir for temporary files")
+    parser.add_argument("--model-dir", required=True,
+                        help="Base dir for ASR GGUF models")  # Used by ASR thread worker & orchestrator
+    parser.add_argument("--temp-dir", default=".", help="Base dir for temporary files (chunks, samples)")
     parser.add_argument("--test-mode", action="store_true")
-    parser.add_argument("--output-file", default="worker_test_output.wav")
-    parser.add_argument("--chatterbox_model_id", default=CHATTERBOX_DEFAULT_MODEL_ID)  # From constants
+    # TTS Specific for orchestrator (passed to thread worker or used for final output name)
+    parser.add_argument("--output-file", default="orchestrator_test_output.wav",
+                        help="Output for *orchestrator's* TTS test mode (final combined audio)")
+    parser.add_argument("--chatterbox_model_id", default=CHATTERBOX_DEFAULT_MODEL_ID)
     parser.add_argument("--exaggeration", type=float, default=0.5)
     parser.add_argument("--cfg_weight", type=float, default=0.8)
+    # ASR Specific for orchestrator (passed to thread worker)
     parser.add_argument("--test-audio-input", default="test_input.wav")
-    parser.add_argument("--asr-test-model", default=WHISPER_DEFAULT_MODEL_FILENAME_CFG)  # From config/fallback
+    parser.add_argument("--asr-test-model", default=WHISPER_DEFAULT_MODEL_FILENAME_CFG)
     args = parser.parse_args()
 
-    result_payload: Dict[str, Any] = {"error": f"Worker failed task: {args.task_type}"}
-    effective_pytorch_device_str = "cpu"
+    result_payload: Dict[str, Any] = {"error": f"Orchestrator failed task: {args.task_type}"}
 
-    if TORCH_AUDIO_AVAILABLE and torch:
-        effective_pytorch_device_str = _get_pytorch_device(args.device)
-    elif args.task_type == "tts":
-        log_worker("CRITICAL", "PyTorch/Torchaudio not available. Cannot perform TTS.")
-        print(json.dumps({"error": "PyTorch/Torchaudio missing for TTS."}), flush=True)
+    python_executable_for_thread_worker = sys.executable
+    audio_thread_worker_script_path = os.path.join(os.path.dirname(os.path.abspath(__file__)), "audio_thread_worker.py")
+
+    if not os.path.exists(audio_thread_worker_script_path):
+        log_worker("CRITICAL",
+                   f"audio_thread_worker.py not found at {audio_thread_worker_script_path}. Cannot proceed.")
+        print(json.dumps({"error": "Missing audio_thread_worker.py"}), flush=True);
         sys.exit(1)
 
-    # --- TTS Task ---
+    effective_pytorch_device_for_tts_threads = "cpu"  # Default
+    if TORCH_AUDIO_AVAILABLE and torch:  # Check if torch was imported successfully
+        effective_pytorch_device_for_tts_threads = _get_pytorch_device(args.device)
+    elif args.task_type == "tts":  # If TTS requested but torch not available
+        log_worker("CRITICAL", "PyTorch/Torchaudio not available. Cannot perform TTS orchestration.")
+        print(json.dumps({"error": "PyTorch/Torchaudio missing for TTS orchestration."}), flush=True);
+        sys.exit(1)
+
+    # --- TTS Task Orchestration ---
     if args.task_type == "tts":
         log_worker("INFO",
-                   f"TTS Task. Primary: ChatterboxTTS. Device: '{effective_pytorch_device_str}', Test: {args.test_mode}")
-        if not CHATTERBOX_TTS_AVAILABLE or not ChatterboxTTS_class_ref:
-            result_payload = {"error": "ChatterboxTTS library not available."}
-            log_worker("CRITICAL", result_payload["error"])
-            print(json.dumps(result_payload), flush=True)
+                   f"TTS Orchestration. Device for threads: '{effective_pytorch_device_for_tts_threads}', Test: {args.test_mode}")
+        if not CHATTERBOX_TTS_AVAILABLE:
+            result_payload = {"error": "ChatterboxTTS library not available in orchestrator."};
+            log_worker("CRITICAL", result_payload["error"]);
+            print(json.dumps(result_payload), flush=True);
             sys.exit(1)
 
-        # --- Initialize variables used in try/finally for TTS ---
-        melo_model_for_sample_gen: Optional[Any] = None  # Corrected initialization
-        sclparser_for_sample_gen: Optional[SCLParser] = None  # Corrected initialization
-        chatterbox_tts_model_instance: Optional[Any] = None  # Renamed for clarity
-        generated_voice_sample_path: Optional[str] = None
-        # ---
+        melo_for_sample_init_tts: Optional[Any] = None
+        sclparser_for_sample_init_tts: Optional[SCLParser] = None
+        sclparser_for_text_proc_tts: SCLParser = SCLParser(model=None,
+                                                           device=effective_pytorch_device_for_tts_threads)
+        generated_voice_sample_path_tts: Optional[str] = None
+        all_audio_chunks_data_tts: List[np.ndarray] = []
+        final_sr_from_chunks_tts: Optional[int] = None
+
+        # Create a dedicated temp subdir for this TTS job's chunks, relative to args.temp_dir
+        tts_job_temp_dir_path = tempfile.mkdtemp(prefix="tts_orch_job_", dir=args.temp_dir)
+        log_worker("DEBUG", f"Created TTS job temp directory: {tts_job_temp_dir_path}")
+        temp_combined_audio_wav_path: Optional[str] = None  # For disk caching before post-process
 
         try:
+            # 1. Ensure Voice Sample for ChatterboxTTS (uses MeloTTS via SCLParser locally in this orchestrator)
             if MELO_AVAILABLE and TTS_melo_class_ref and SCLParser_class_ref:
-                log_worker("DEBUG", "Loading MeloTTS & SCLParser for potential voice sample generation...")
-                melo_model_for_sample_gen = TTS_melo_class_ref(language=args.model_lang.upper(),
-                                                               device=effective_pytorch_device_str)
-                sclparser_for_sample_gen = SCLParser_class_ref(melo_model_for_sample_gen,
-                                                               device=effective_pytorch_device_str)  # type: ignore
+                melo_for_sample_init_tts = TTS_melo_class_ref(language=args.model_lang.upper(),
+                                                              device=effective_pytorch_device_for_tts_threads)
+                sclparser_for_sample_init_tts = SCLParser_class_ref(melo_for_sample_init_tts,
+                                                                    device=effective_pytorch_device_for_tts_threads)  # type: ignore
 
-            log_worker("INFO",
-                       f"Loading ChatterboxTTS model ('{args.chatterbox_model_id}') on device: {effective_pytorch_device_str}")
-            chatterbox_tts_model_instance = ChatterboxTTS_class_ref.from_pretrained(device=effective_pytorch_device_str)
-            if args.chatterbox_model_id != CHATTERBOX_DEFAULT_MODEL_ID:
-                log_worker("INFO",
-                           f"Note: --chatterbox_model_id ('{args.chatterbox_model_id}') provided, but from_pretrained might use a default.")
-            log_worker("INFO", "ChatterboxTTS model loaded.")
+            generated_voice_sample_path_tts = _ensure_voice_sample(args, melo_for_sample_init_tts,
+                                                                   sclparser_for_sample_init_tts,
+                                                                   effective_pytorch_device_for_tts_threads)
+            if not generated_voice_sample_path_tts:
+                raise RuntimeError("Critical: Failed to ensure ChatterboxTTS voice sample for orchestration.")
 
-            generated_voice_sample_path = _ensure_voice_sample(args, melo_model_for_sample_gen,
-                                                               sclparser_for_sample_gen, effective_pytorch_device_str)
-            if not generated_voice_sample_path:
-                raise RuntimeError("Critical: Failed to find or generate ChatterboxTTS voice sample.")
+            # 2. Get text to synthesize
+            text_for_synthesis: Optional[str] = None
+            request_data_from_stdin_tts: Dict[str, Any] = {}
 
             if args.test_mode:
-                log_worker("INFO", "Running TTS Test Mode (ChatterboxTTS with Excited Intro)...")
-                test_text_for_chatterbox = ADELAIDE_EXCITED_TEST_INTRO
-                output_path_test_cb = os.path.join(args.temp_dir, args.output_file)
-                os.makedirs(args.temp_dir, exist_ok=True)
+                log_worker("INFO", "TTS Orchestrator in TEST MODE.")
+                text_for_synthesis = ADELAIDE_EXCITED_TEST_INTRO  # Use the excited intro for test
+                request_data_from_stdin_tts['exaggeration'] = args.exaggeration  # Use cmd line args for test
+                request_data_from_stdin_tts['cfg_weight'] = args.cfg_weight
+                request_data_from_stdin_tts['response_format'] = "wav"  # Test mode outputs WAV
+            else:  # Standard Mode from stdin
+                log_worker("INFO", "TTS Orchestrator Standard Mode: Reading stdin...")
+                input_json_str_from_stdin_tts = sys.stdin.read()
+                if not input_json_str_from_stdin_tts: raise ValueError("Empty input from stdin for TTS orchestration.")
+                request_data_from_stdin_tts = json.loads(input_json_str_from_stdin_tts)
+                text_for_synthesis = request_data_from_stdin_tts.get("input")
+                if not text_for_synthesis: raise ValueError("Missing 'input' text in TTS request.")
 
+            # 3. Split text into phrases/segments using SCLParser
+            text_segments_with_settings_tts = sclparser_for_text_proc_tts.split_into_segments_for_tts_worker(
+                text_for_synthesis)
+            if not text_segments_with_settings_tts:
+                raise RuntimeError("SCLParser failed to split text into processable segments.")
+            log_worker("INFO", f"Split input into {len(text_segments_with_settings_tts)} segments for TTS processing.")
+
+            # 4. Process each segment with audio_thread_worker.py WITH TQDM
+            progress_bar_tts_segments = None
+            if TQDM_AVAILABLE:  # Check if tqdm was successfully imported
+                progress_bar_tts_segments = tqdm(total=len(text_segments_with_settings_tts),
+                                                 unit="segment",
+                                                 desc="TTS Segments",
+                                                 ascii=IS_WINDOWS if 'IS_WINDOWS' in globals() else False,
+                                                 leave=False)
+
+            for i, segment_info_item_tts in enumerate(text_segments_with_settings_tts):
                 log_worker("DEBUG",
-                           f"Chatterbox Test: Text='{test_text_for_chatterbox[:50]}...', Sample='{generated_voice_sample_path}', Exag={args.exaggeration}, CFG={args.cfg_weight}")
-                wav_tensor_cb = chatterbox_tts_model_instance.generate(
-                    test_text_for_chatterbox, audio_prompt_path=generated_voice_sample_path,
-                    exaggeration=args.exaggeration, cfg_weight=args.cfg_weight
-                )
-                if wav_tensor_cb.ndim == 1: wav_tensor_cb = wav_tensor_cb.unsqueeze(0)
-                if wav_tensor_cb.shape[0] == 1: wav_tensor_cb = wav_tensor_cb.repeat(2, 1)
+                           f"Orchestrator processing TTS segment {i + 1}/{len(text_segments_with_settings_tts)}: Type='{segment_info_item_tts['type']}'")
+                if segment_info_item_tts["type"] == "text":
+                    text_chunk_for_thread = segment_info_item_tts["content"]
+                    chunk_output_filename_tts = f"tts_chunk_{i}_{os.getpid()}.wav"
+                    chunk_output_path_tts = os.path.join(tts_job_temp_dir_path, chunk_output_filename_tts)
 
-                torchaudio.save(output_path_test_cb, wav_tensor_cb.cpu(),
-                                chatterbox_tts_model_instance.sr)  # type: ignore
-                log_worker("INFO", f"Test audio (ChatterboxTTS, Stereo) saved to {output_path_test_cb}")
-                result_payload = {
-                    "result": {"status": "Test audio (ChatterboxTTS) generated", "file": output_path_test_cb,
-                               "sample_rate": chatterbox_tts_model_instance.sr}}  # type: ignore
+                    exaggeration_for_chunk = float(request_data_from_stdin_tts.get("exaggeration", args.exaggeration))
+                    cfg_weight_for_chunk = float(request_data_from_stdin_tts.get("cfg_weight", args.cfg_weight))
 
-            else:  # Standard TTS Mode (from stdin)
-                input_json_str_stdin: Optional[str] = None
-                try:
-                    log_worker("INFO", "TTS Standard Mode (ChatterboxTTS): Reading stdin...")
-                    input_json_str_stdin = sys.stdin.read()
-                    if not input_json_str_stdin: raise ValueError("Empty input from stdin.")
-                    request_data_stdin = json.loads(input_json_str_stdin)
+                    thread_worker_cmd_tts = [
+                        python_executable_for_thread_worker, audio_thread_worker_script_path,
+                        "--task-type", "tts_chunk",
+                        "--device", effective_pytorch_device_for_tts_threads,
+                        "--temp-dir", tts_job_temp_dir_path,
+                        "--text-to-synthesize", text_chunk_for_thread,
+                        "--chatterbox-model-id", args.chatterbox_model_id,
+                        "--voice-prompt-path", generated_voice_sample_path_tts,
+                        "--exaggeration", str(exaggeration_for_chunk),
+                        "--cfg-weight", str(cfg_weight_for_chunk),
+                        "--output-audio-chunk-path", chunk_output_path_tts
+                    ]
 
-                    text_stdin = request_data_stdin.get("input")
-                    output_format_stdin = request_data_stdin.get("response_format", "mp3").lower()
-                    exaggeration_stdin = float(request_data_stdin.get("exaggeration", args.exaggeration))
-                    cfg_weight_stdin = float(request_data_stdin.get("cfg_weight", args.cfg_weight))
+                    current_tts_worker_timeout = TTS_WORKER_TIMEOUT if 'TTS_WORKER_TIMEOUT' in globals() else 120
 
-                    if not text_stdin: raise ValueError("Missing 'input' text.")
-                    log_worker("INFO",
-                               f"ChatterboxTTS Task: Text='{text_stdin[:50]}...', Exag={exaggeration_stdin}, CFG={cfg_weight_stdin}, Format='{output_format_stdin}'")
+                    proc_chunk_tts = subprocess.run(thread_worker_cmd_tts, capture_output=True, text=True, check=False,
+                                                    timeout=current_tts_worker_timeout)
 
-                    wav_output_tensor_stdin = chatterbox_tts_model_instance.generate(text_stdin,
-                                                                                     audio_prompt_path=generated_voice_sample_path,
-                                                                                     exaggeration=exaggeration_stdin,
-                                                                                     cfg_weight=cfg_weight_stdin)  # type: ignore
-                    if wav_output_tensor_stdin.ndim == 1: wav_output_tensor_stdin = wav_output_tensor_stdin.unsqueeze(0)
-                    if wav_output_tensor_stdin.shape[0] == 1: wav_output_tensor_stdin = wav_output_tensor_stdin.repeat(
-                        2, 1)
+                    if proc_chunk_tts.returncode != 0:
+                        if progress_bar_tts_segments: progress_bar_tts_segments.close()
+                        raise RuntimeError(
+                            f"TTS Thread Worker for chunk {i + 1} failed. Stderr: {proc_chunk_tts.stderr.strip()}")
 
-                    audio_bytes_io_obj = io.BytesIO()
-                    cb_sr = chatterbox_tts_model_instance.sr
-                    mime = f"audio/{output_format_stdin}"  # type: ignore
+                    stdout_from_thread_worker = proc_chunk_tts.stdout.strip()
+                    json_start_index = stdout_from_thread_worker.find('{')
+                    if json_start_index == -1:
+                        if progress_bar_tts_segments: progress_bar_tts_segments.close()
+                        raise RuntimeError(
+                            f"TTS Thread Worker for chunk {i + 1} produced no valid JSON start. Output: {stdout_from_thread_worker}")
+                    json_string_to_parse_tts_chunk = stdout_from_thread_worker[json_start_index:]
 
-                    if output_format_stdin == "wav":
-                        torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr,
-                                        format="wav")  # type: ignore
-                    elif output_format_stdin == "mp3":
-                        ffmpeg_exe_path_final = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
-                        if not TORCH_AUDIO_AVAILABLE or not torchaudio or (
-                                torchaudio.get_audio_backend() != "sox_io" and not ffmpeg_exe_path_final):
-                            log_worker("WARNING",
-                                       "MP3 output needs torchaudio ffmpeg/sox backend or ffmpeg CLI. Defaulting to WAV.")
-                            torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr, format="wav")
-                            output_format_stdin = "wav"
-                            mime = "audio/wav"  # type: ignore
-                        else:
-                            try:
-                                torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr,
-                                                format="mp3")  # type: ignore
-                            except Exception as e_mp3_save_direct:
-                                log_worker("WARNING",
-                                           f"Torchaudio MP3 save failed: {e_mp3_save_direct}. Trying ffmpeg CLI.")
-                                if ffmpeg_exe_path_final:
-                                    with tempfile.NamedTemporaryFile(suffix=".wav", dir=args.temp_dir,
-                                                                     delete=False) as tmp_wav_f_final, \
-                                            tempfile.NamedTemporaryFile(suffix=".mp3", dir=args.temp_dir,
-                                                                        delete=False) as tmp_mp3_f_final:
-                                        tmp_wav_path_final = tmp_wav_f_final.name
-                                        tmp_mp3_path_final = tmp_mp3_f_final.name
-                                    try:
-                                        sf.write(tmp_wav_path_final, wav_output_tensor_stdin.cpu().T.numpy(), cb_sr,
-                                                 format='WAV', subtype='PCM_16')
-                                        subprocess.run(
-                                            [ffmpeg_exe_path_final, "-i", tmp_wav_path_final, "-codec:a", "libmp3lame",
-                                             "-qscale:a", "2", "-y", tmp_mp3_path_final], check=True,
-                                            capture_output=True)
-                                        with open(tmp_mp3_path_final, "rb") as f_conv_mp3_final:
-                                            audio_bytes_io_obj.write(f_conv_mp3_final.read())
-                                    except Exception as e_ffmpeg_cli_final:
-                                        log_worker("ERROR",
-                                                   f"ffmpeg CLI MP3 conversion failed: {e_ffmpeg_cli_final}. Defaulting to WAV.")
-                                        audio_bytes_io_obj = io.BytesIO()
-                                        torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr,
-                                                        format="wav")
-                                        output_format_stdin = "wav"
-                                        mime = "audio/wav"  # type: ignore
-                                    finally:
-                                        if os.path.exists(tmp_wav_path_final): os.remove(tmp_wav_path_final)
-                                        if os.path.exists(tmp_mp3_path_final): os.remove(tmp_mp3_path_final)
-                                else:
-                                    log_worker("ERROR", "ffmpeg CLI not found for MP3 fallback. Defaulting to WAV.")
-                                    audio_bytes_io_obj = io.BytesIO()
-                                    torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr,
-                                                    format="wav")
-                                    output_format_stdin = "wav"
-                                    mime = "audio/wav"  # type: ignore
-                    else:
-                        log_worker("WARNING", f"Unsupported format '{output_format_stdin}'. Defaulting to WAV.")
-                        torchaudio.save(audio_bytes_io_obj, wav_output_tensor_stdin.cpu(), cb_sr, format="wav")
-                        output_format_stdin = "wav"
-                        mime = "audio/wav"  # type: ignore
-
-                    audio_bytes_io_obj.seek(0)
-                    audio_base64_final = base64.b64encode(audio_bytes_io_obj.read()).decode('utf-8')
-                    result_payload = {
-                        "result": {"audio_base64": audio_base64_final, "format": output_format_stdin, "mime_type": mime,
-                                   "sample_rate": cb_sr}}
-                except Exception as e_tts_std_inner:
-                    result_payload = {"error": f"Worker ChatterboxTTS error: {e_tts_std_inner}"}
-                    log_worker("ERROR", f"TTS Standard Mode failed: {e_tts_std_inner}")
-                    log_worker("ERROR", traceback.format_exc())
-
-        except Exception as e_tts_task_outer:
-            result_payload = {"error": f"Worker TTS task outer error: {e_tts_task_outer}"}
-            log_worker("ERROR", f"TTS task failed: {e_tts_task_outer}")
-            log_worker("ERROR", traceback.format_exc())
-        finally:
-            log_worker("DEBUG", "TTS Task: Entering finally block for model cleanup.")
-            if chatterbox_tts_model_instance is not None:  # Use corrected name
-                del chatterbox_tts_model_instance
-                chatterbox_tts_model_instance = None
-                log_worker("DEBUG", "ChatterboxTTS model instance deleted.")
-            if melo_model_for_sample_gen is not None:  # Use corrected name
-                del melo_model_for_sample_gen
-                melo_model_for_sample_gen = None
-                log_worker("DEBUG", "MeloTTS model (for sample) instance deleted.")
-            if sclparser_for_sample_gen is not None:  # Use corrected name
-                del sclparser_for_sample_gen
-                sclparser_for_sample_gen = None
-                log_worker("DEBUG", "SCLParser (for sample) instance deleted.")
-
-            gc.collect()
-            log_worker("DEBUG", "Python garbage collection called.")
-            if TORCH_AUDIO_AVAILABLE and torch and effective_pytorch_device_str == "cuda" and torch.cuda.is_available():
-                torch.cuda.empty_cache()
-                log_worker("INFO", "CUDA cache cleared.")
-            elif TORCH_AUDIO_AVAILABLE and torch and effective_pytorch_device_str == "mps" and hasattr(torch.backends,
-                                                                                                       "mps") and torch.backends.mps.is_available():  # type: ignore
-                if hasattr(torch.mps, "empty_cache") and callable(torch.mps.empty_cache):  # type: ignore
                     try:
-                        log_worker("INFO",
-                                   "Attempting to clear PyTorch MPS cache..."); torch.mps.empty_cache()  # type: ignore
-                    except Exception as mps_ex:
-                        log_worker("WARNING", f"torch.mps.empty_cache() call failed: {mps_ex}")
-                else:
-                    log_worker("INFO", "MPS: No explicit empty_cache(). Relied on del/gc.collect().")
-            log_worker("DEBUG", "TTS Task: Model cleanup attempts finished.")
+                        chunk_result_tts = json.loads(json_string_to_parse_tts_chunk)
+                        if chunk_result_tts.get("error"):
+                            raise RuntimeError(
+                                f"TTS Thread Worker for chunk {i + 1} reported error: {chunk_result_tts['error']}")
+                        chunk_file_path_from_worker = chunk_result_tts.get("result", {}).get("audio_chunk_path")
+                        chunk_sr_from_worker = chunk_result_tts.get("result", {}).get("sample_rate")
+                        if not chunk_file_path_from_worker or not os.path.exists(
+                                chunk_file_path_from_worker) or chunk_sr_from_worker is None:
+                            raise RuntimeError(
+                                f"TTS Thread Worker for chunk {i + 1} invalid audio path/SR. Path: '{chunk_file_path_from_worker}'")
+                        audio_chunk_np_data, sr_chunk_read = sf.read(chunk_file_path_from_worker, dtype='float32')
+                        if final_sr_from_chunks_tts is None:
+                            final_sr_from_chunks_tts = sr_chunk_read
+                        elif final_sr_from_chunks_tts != sr_chunk_read:
+                            log_worker("CRITICAL",
+                                       f"SR mismatch! Expected {final_sr_from_chunks_tts}, got {sr_chunk_read}.")
+                        all_audio_chunks_data_tts.append(audio_chunk_np_data)
+                        log_worker("DEBUG",
+                                   f"Processed TTS chunk {i + 1}. Shape: {audio_chunk_np_data.shape}, SR: {sr_chunk_read}")
+                    except json.JSONDecodeError as e_json_decode_tts:
+                        if progress_bar_tts_segments: progress_bar_tts_segments.close()
+                        raise RuntimeError(
+                            f"TTS Thread Worker for chunk {i + 1} invalid JSON. Error: {e_json_decode_tts}. Parsed: '{json_string_to_parse_tts_chunk}'")
 
-    # --- ASR Task ---
-    elif args.task_type == "asr":
-        log_worker("INFO", f"ASR Task selected. Model dir: {args.model_dir}, Test: {args.test_mode}")
-        if not PYWHISPERCPP_AVAILABLE or not WhisperModel:
-            result_payload = {"error": "ASR (pywhispercpp) library or Model class not available in worker."}
-            log_worker("ERROR", result_payload["error"])
-        else:
-            asr_temp_converted_wav_path: Optional[str] = None
-            input_audio_path_resolved: Optional[str] = None
-            asr_model_to_load: str = WHISPER_DEFAULT_MODEL_FILENAME_CFG
-            asr_lang_to_use: str = WHISPER_DEFAULT_LANGUAGE_CFG
+                elif segment_info_item_tts["type"] == "pause" and final_sr_from_chunks_tts:
+                    pause_duration_ms_val = int(segment_info_item_tts["content"])
+                    if pause_duration_ms_val > 0:
+                        silence_num_samples = int(final_sr_from_chunks_tts * pause_duration_ms_val / 1000)
+                        num_channels_for_silence = 2 if all_audio_chunks_data_tts and all_audio_chunks_data_tts[
+                            0].ndim == 2 and all_audio_chunks_data_tts[0].shape[1] == 2 else 1
+                        silence_chunk_data = np.zeros((silence_num_samples,
+                                                       num_channels_for_silence) if num_channels_for_silence == 2 else silence_num_samples,
+                                                      dtype=np.float32)
+                        all_audio_chunks_data_tts.append(silence_chunk_data)
+                        log_worker("DEBUG", f"Added silence chunk of {pause_duration_ms_val}ms.")
 
-            try:
-                if args.test_mode:
-                    log_worker("INFO", "ASR Test Mode selected.")
-                    input_audio_path_resolved = os.path.join(args.temp_dir, args.test_audio_input)
-                    if not os.path.exists(input_audio_path_resolved):
-                        input_audio_path_resolved = os.path.join(args.model_dir, args.test_audio_input)
-                    if not os.path.exists(input_audio_path_resolved):
-                        raise FileNotFoundError(
-                            f"ASR test audio '{args.test_audio_input}' not found in '{args.temp_dir}' or '{args.model_dir}'.")
-                    asr_model_to_load = args.asr_test_model
-                    asr_lang_to_use = args.model_lang
-                else:
-                    log_worker("INFO", "ASR Standard Mode selected. Reading from stdin.")
-                    input_json_str_asr_stdin = sys.stdin.read()
-                    if not input_json_str_asr_stdin: raise ValueError("ASR task: Received empty input from stdin.")
-                    req_data_asr_stdin = json.loads(input_json_str_asr_stdin)
-                    input_audio_path_resolved = req_data_asr_stdin.get("input_audio_path")
-                    asr_model_to_load = req_data_asr_stdin.get("whisper_model_name", WHISPER_DEFAULT_MODEL_FILENAME_CFG)
-                    asr_lang_to_use = req_data_asr_stdin.get("language", WHISPER_DEFAULT_LANGUAGE_CFG)
-                    if not input_audio_path_resolved or not os.path.exists(input_audio_path_resolved):
-                        raise FileNotFoundError(
-                            f"ASR input_audio_path '{input_audio_path_resolved}' missing or not found.")
+                if progress_bar_tts_segments:
+                    progress_bar_tts_segments.update(1)
 
-                full_whisper_model_path_asr = os.path.join(args.model_dir, asr_model_to_load)
-                if not os.path.exists(full_whisper_model_path_asr):
-                    raise FileNotFoundError(f"Whisper model file '{asr_model_to_load}' not found in '{args.model_dir}'")
+            if progress_bar_tts_segments:
+                progress_bar_tts_segments.close()
 
-                path_to_transcribe_asr = input_audio_path_resolved
-                ffmpeg_exe_path_asr = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
+            # 5. Combine and Post-Process Chunks
+            if not all_audio_chunks_data_tts: raise RuntimeError("No audio chunks were generated for TTS.")
+            final_sr_tts = final_sr_from_chunks_tts or sclparser_for_text_proc_tts.sample_rate
+            log_worker("INFO", f"Combining {len(all_audio_chunks_data_tts)} audio chunks at SR {final_sr_tts}...")
+            combined_audio_np_tts = sclparser_for_text_proc_tts.crossfade_segments(all_audio_chunks_data_tts,
+                                                                                   final_sr_tts)
+            if combined_audio_np_tts is None or combined_audio_np_tts.size == 0:
+                raise RuntimeError("SCLParser failed to combine TTS audio chunks or result was empty.")
 
-                if ffmpeg_exe_path_asr:
-                    log_worker("INFO", f"ffmpeg found at {ffmpeg_exe_path_asr}. Converting audio for ASR...")
-                    asr_conversion_temp_dir_asr = os.path.join(args.temp_dir, "asr_ffmpeg_temp")
-                    os.makedirs(asr_conversion_temp_dir_asr, exist_ok=True)
-                    with tempfile.NamedTemporaryFile(prefix="asr_conv_", suffix=".wav", dir=asr_conversion_temp_dir_asr,
-                                                     delete=False) as tmp_f_asr_conv:
-                        asr_temp_converted_wav_path = tmp_f_asr_conv.name
-                    ffmpeg_cmd_asr_conv = [ffmpeg_exe_path_asr, '-i', input_audio_path_resolved, '-vn', '-acodec',
-                                           'pcm_s16le', '-ar', '16000', '-ac', '1', '-y', asr_temp_converted_wav_path]
-                    proc_asr_ffmpeg = subprocess.run(ffmpeg_cmd_asr_conv, capture_output=True, text=True, check=False,
-                                                     timeout=120)
-                    if proc_asr_ffmpeg.returncode == 0:
-                        path_to_transcribe_asr = asr_temp_converted_wav_path; log_worker("INFO",
-                                                                                         f"ffmpeg conversion successful. Using: {path_to_transcribe_asr}")
+            # --- Disk Caching before Post-Process ---
+            temp_combined_audio_wav_path = os.path.join(tts_job_temp_dir_path, f"combined_pre_post_{os.getpid()}.wav")
+            log_worker("INFO", f"Saving combined audio to disk before post-processing: {temp_combined_audio_wav_path}")
+            # Ensure combined_audio_np_tts is (samples, channels) or (samples,) for sf.write
+            audio_to_save_temp_combined = combined_audio_np_tts
+            if combined_audio_np_tts.ndim == 2 and combined_audio_np_tts.shape[0] == 2:  # (2, samples)
+                audio_to_save_temp_combined = combined_audio_np_tts.T  # -> (samples, 2)
+            sf.write(temp_combined_audio_wav_path, audio_to_save_temp_combined, final_sr_tts, format='WAV',
+                     subtype='PCM_16')
+
+            del all_audio_chunks_data_tts  # Free memory from individual chunks
+            del combined_audio_np_tts
+            gc.collect()
+            log_worker("INFO", "Loading combined audio from disk for post-processing...")
+            audio_for_post_processing, sr_for_post_processing = sf.read(temp_combined_audio_wav_path, dtype='float32')
+            if sr_for_post_processing != final_sr_tts:
+                log_worker("CRITICAL",
+                           f"Sample rate mismatch after reloading combined file! Expected {final_sr_tts}, got {sr_for_post_processing}. This should not happen.")
+                # Potentially raise error or try to use sr_for_post_processing
+            # --- End Disk Caching ---
+
+            log_worker("INFO", f"Combined audio shape: {audio_for_post_processing.shape}. Applying post-processing...")
+            post_processed_tts = sclparser_for_text_proc_tts.post_process(audio_for_post_processing, final_sr_tts,
+                                                                          sclparser_for_text_proc_tts.zephyloid_settings)
+            log_worker("INFO", f"Post-processing complete. Final audio shape: {post_processed_tts.shape}")
+
+            # 6. Convert to Target Format and Base64 Encode
+            output_format_final_tts = request_data_from_stdin_tts.get("response_format",
+                                                                      "mp3").lower() if not args.test_mode else "wav"
+            audio_bytes_io_final_tts = io.BytesIO();
+            mime_final_tts = f"audio/{output_format_final_tts}"
+
+            # Prepare for saving (post_processed_tts should be (channels, samples) numpy from SCLParser)
+            audio_to_save_final_tts_torch: Optional[torch.Tensor] = None
+            audio_to_save_final_tts_sf: np.ndarray = np.array([])
+
+            if post_processed_tts.ndim == 2 and post_processed_tts.shape[0] == 2:  # (2, samples) from SCL post_process
+                audio_to_save_final_tts_torch = torch.from_numpy(post_processed_tts.astype(np.float32))
+                audio_to_save_final_tts_sf = post_processed_tts.T  # For soundfile (samples, 2)
+            elif post_processed_tts.ndim == 1:  # Mono (samples,)
+                audio_to_save_final_tts_torch = torch.from_numpy(post_processed_tts.astype(np.float32)).unsqueeze(
+                    0).repeat(2, 1)  # (2, samples)
+                audio_to_save_final_tts_sf = np.stack([post_processed_tts, post_processed_tts], axis=-1)  # (samples, 2)
+            else:
+                raise ValueError(f"Unexpected shape from post_process: {post_processed_tts.shape}")
+
+            if output_format_final_tts == "wav":
+                sf.write(audio_bytes_io_final_tts, audio_to_save_final_tts_sf, final_sr_tts, format='WAV',
+                         subtype='PCM_16')
+            elif output_format_final_tts == "mp3":
+                ffmpeg_exe = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
+                can_torch_save_mp3 = TORCH_AUDIO_AVAILABLE and torchaudio and torchaudio.get_audio_backend() == "sox_io"  # type: ignore
+                if can_torch_save_mp3 and audio_to_save_final_tts_torch is not None:
+                    try:
+                        torchaudio.save(audio_bytes_io_final_tts, audio_to_save_final_tts_torch.cpu(), final_sr_tts,
+                                        format="mp3")  # type: ignore
+                    except Exception as e_mp3_direct:
+                        can_torch_save_mp3 = False; log_worker("WARNING",
+                                                               f"Torchaudio MP3 save failed: {e_mp3_direct}. Trying ffmpeg CLI.")
+                if not can_torch_save_mp3:
+                    if ffmpeg_exe:
+                        with tempfile.NamedTemporaryFile(suffix=".wav", dir=args.temp_dir,
+                                                         delete=False) as tf_w, tempfile.NamedTemporaryFile(
+                                suffix=".mp3", dir=args.temp_dir, delete=False) as tf_m:
+                            p_w, p_m = tf_w.name, tf_m.name
+                        try:
+                            sf.write(p_w, audio_to_save_final_tts_sf, final_sr_tts, format='WAV', subtype='PCM_16');
+                            subprocess.run(
+                                [ffmpeg_exe, "-i", p_w, "-codec:a", "libmp3lame", "-qscale:a", "2", "-y", p_m],
+                                check=True, capture_output=True)
+                            with open(p_m, "rb") as f_m:
+                                audio_bytes_io_final_tts.write(f_m.read())
+                        except Exception as e_ff_mp3:
+                            log_worker("ERROR",
+                                       f"ffmpeg MP3 fail: {e_ff_mp3}"); audio_bytes_io_final_tts = io.BytesIO();sf.write(
+                                audio_bytes_io_final_tts, audio_to_save_final_tts_sf, final_sr_tts, format='WAV',
+                                subtype='PCM_16'); output_format_final_tts = "wav"; mime_final_tts = "audio/wav"
+                        finally:
+                            if os.path.exists(p_w): os.remove(p_w)
+                            if os.path.exists(p_m): os.remove(p_m)
                     else:
                         log_worker("ERROR",
-                                   f"ASR ffmpeg conversion failed (RC={proc_asr_ffmpeg.returncode}). Stderr: {proc_asr_ffmpeg.stderr.strip()}"); asr_temp_converted_wav_path = None
-                else:
-                    log_worker("WARNING", "ffmpeg not found. ASR will attempt to process original audio directly.")
+                                   "ffmpeg CLI not for MP3 fallback."); audio_bytes_io_final_tts = io.BytesIO();sf.write(
+                            audio_bytes_io_final_tts, audio_to_save_final_tts_sf, final_sr_tts, format='WAV',
+                            subtype='PCM_16'); output_format_final_tts = "wav"; mime_final_tts = "audio/wav"
+            else:
+                sf.write(audio_bytes_io_final_tts, audio_to_save_final_tts_sf, final_sr_tts, format='WAV',
+                         subtype='PCM_16'); output_format_final_tts = "wav"; mime_final_tts = "audio/wav"
 
-                log_worker("INFO", f"Loading Whisper model: {full_whisper_model_path_asr}")
-                whisper_asr_instance = WhisperModel(model=full_whisper_model_path_asr, print_realtime=False,
-                                                    print_progress=False)  # type: ignore
-                transcribe_params_asr = {'language': asr_lang_to_use.lower(), 'translate': False}
-                log_worker("INFO", f"Transcribing '{path_to_transcribe_asr}' with lang='{asr_lang_to_use.lower()}'...")
-                segments_result_asr = whisper_asr_instance.transcribe(path_to_transcribe_asr, **transcribe_params_asr)
-                transcribed_text_final_asr = "".join(seg.text for seg in segments_result_asr).strip()
-                log_worker("INFO",
-                           f"ASR successful. Text len: {len(transcribed_text_final_asr)}. Snippet: '{transcribed_text_final_asr[:70]}...'")
-                result_payload = {"result": {"text": transcribed_text_final_asr}}
-            except Exception as e_asr_main_block:
-                result_payload = {"error": f"ASR processing error: {str(e_asr_main_block)}"}
-                log_worker("ERROR", f"ASR task failed: {e_asr_main_block}")
-                log_worker("ERROR", traceback.format_exc())
+            audio_bytes_io_final_tts.seek(0);
+            audio_base64_response = base64.b64encode(audio_bytes_io_final_tts.read()).decode('utf-8')
+            result_payload = {"result": {"audio_base64": audio_base64_response, "format": output_format_final_tts,
+                                         "mime_type": mime_final_tts, "sample_rate": final_sr_tts}}
+            if args.test_mode:
+                final_test_out_path = os.path.join(args.temp_dir, args.output_file)
+                with open(final_test_out_path, "wb") as f_test_final: f_test_final.write(
+                    audio_bytes_io_final_tts.getvalue())
+                result_payload["result"]["file"] = final_test_out_path
+        except Exception as e_tts_orch:
+            result_payload = {"error": f"TTS Orchestration error: {str(e_tts_orch)}"}
+            log_worker("ERROR", f"TTS Orch error: {e_tts_orch}");
+            log_worker("ERROR", traceback.format_exc())
+        finally:
+            if temp_combined_audio_wav_path and os.path.exists(temp_combined_audio_wav_path):
+                try:
+                    os.remove(temp_combined_audio_wav_path); log_worker("INFO",
+                                                                        f"Cleaned up temp combined WAV: {temp_combined_audio_wav_path}")
+                except Exception as e_rm_comb:
+                    log_worker("WARNING",
+                               f"Failed to remove temp combined WAV {temp_combined_audio_wav_path}: {e_rm_comb}")
+            if os.path.isdir(tts_job_temp_dir_path):
+                try:
+                    shutil.rmtree(tts_job_temp_dir_path); log_worker("INFO",
+                                                                     f"Cleaned up TTS job temp directory: {tts_job_temp_dir_path}")
+                except Exception as e_rm_job_dir:
+                    log_worker("WARNING",
+                               f"Failed to clean up TTS job temp dir {tts_job_temp_dir_path}: {e_rm_job_dir}")
+
+            if melo_for_sample_init_tts: del melo_for_sample_init_tts
+            if sclparser_for_sample_init_tts: del sclparser_for_sample_init_tts
+            gc.collect()
+            if TORCH_AUDIO_AVAILABLE and torch and effective_pytorch_device_for_tts_threads == "cuda" and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            elif TORCH_AUDIO_AVAILABLE and torch and effective_pytorch_device_for_tts_threads == "mps" and hasattr(
+                    torch.backends, "mps") and torch.backends.mps.is_available() and hasattr(torch.mps,
+                                                                                             "empty_cache"):  # type: ignore
+                try:
+                    torch.mps.empty_cache(); log_worker("INFO", "MPS cache clear attempted.")  # type: ignore
+                except Exception as mps_e_final:
+                    log_worker("WARNING", f"MPS empty_cache failed: {mps_e_final}")
+
+    # --- ASR Task Orchestration ---
+    elif args.task_type == "asr":
+        log_worker("INFO", f"ASR Orchestration. Model dir: {args.model_dir}, Test: {args.test_mode}")
+        if not PYWHISPERCPP_AVAILABLE:
+            result_payload = {"error": "pywhispercpp not available for ASR orchestration."}
+            log_worker("CRITICAL", result_payload["error"])
+        else:
+            asr_job_temp_dir_path = tempfile.mkdtemp(prefix="asr_orch_job_", dir=args.temp_dir)
+            log_worker("DEBUG", f"Created ASR job temp directory: {asr_job_temp_dir_path}")
+            master_temp_wav_asr: Optional[str] = None
+            all_transcribed_segments_asr: List[str] = []
+            input_audio_path_for_asr_orch: Optional[str] = None
+            asr_model_to_use_orch = WHISPER_DEFAULT_MODEL_FILENAME_CFG
+            asr_lang_to_use_orch = WHISPER_DEFAULT_LANGUAGE_CFG
+            try:
+                if args.test_mode:
+                    log_worker("INFO", "ASR Orchestrator in TEST MODE.")
+                    input_audio_path_for_asr_orch = os.path.join(args.temp_dir, args.test_audio_input)
+                    if not os.path.exists(input_audio_path_for_asr_orch): input_audio_path_for_asr_orch = os.path.join(
+                        args.model_dir, args.test_audio_input)
+                    if not os.path.exists(input_audio_path_for_asr_orch): raise FileNotFoundError(
+                        f"ASR test audio '{args.test_audio_input}' missing.")
+                    asr_model_to_use_orch = args.asr_test_model;
+                    asr_lang_to_use_orch = args.model_lang
+                else:
+                    log_worker("INFO", "ASR Orchestrator Standard Mode: Reading stdin.")
+                    req_data_asr_stdin = json.loads(sys.stdin.read())
+                    input_audio_path_for_asr_orch = req_data_asr_stdin.get("input_audio_path")
+                    asr_model_to_use_orch = req_data_asr_stdin.get("whisper_model_name",
+                                                                   WHISPER_DEFAULT_MODEL_FILENAME_CFG)
+                    asr_lang_to_use_orch = req_data_asr_stdin.get("language", WHISPER_DEFAULT_LANGUAGE_CFG)
+                    if not input_audio_path_for_asr_orch or not os.path.exists(
+                        input_audio_path_for_asr_orch): raise FileNotFoundError(
+                        f"ASR input_audio_path '{input_audio_path_for_asr_orch}' missing.")
+
+                ffmpeg_exe = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
+                if not ffmpeg_exe:
+                    if not str(input_audio_path_for_asr_orch).lower().endswith(".wav"): raise RuntimeError(
+                        "ffmpeg required for non-WAV input to ASR, and ffmpeg not found.")
+                    master_temp_wav_asr = input_audio_path_for_asr_orch
+                else:
+                    master_temp_wav_asr = os.path.join(asr_job_temp_dir_path, f"master_asr_input_{os.getpid()}.wav")
+                    ffmpeg_cmd = [ffmpeg_exe, '-i', input_audio_path_for_asr_orch, '-vn', '-acodec', 'pcm_s16le', '-ar',
+                                  '16000', '-ac', '1', '-y', master_temp_wav_asr]
+                    proc_ffmpeg = subprocess.run(ffmpeg_cmd, capture_output=True, text=True, check=False, timeout=300)
+                    if proc_ffmpeg.returncode != 0: raise RuntimeError(
+                        f"ffmpeg ASR pre-proc failed: {proc_ffmpeg.stderr.strip()}")
+
+                with wave.open(master_temp_wav_asr, 'rb') as wf:
+                    num_channels_asr, sampwidth_asr, framerate_asr, num_frames_asr, _, _ = wf.getparams()
+                    if framerate_asr != 16000 or num_channels_asr != 1 or sampwidth_asr != 2: raise ValueError(
+                        f"Master ASR WAV not 16kHz mono 16-bit PCM.")
+                    chunk_duration_s_asr = 30;
+                    overlap_duration_s_asr = 5
+                    chunk_len_frames_asr = chunk_duration_s_asr * framerate_asr;
+                    overlap_frames_asr = overlap_duration_s_asr * framerate_asr
+                    step_frames_asr = chunk_len_frames_asr - overlap_frames_asr
+                    if step_frames_asr <= 0: step_frames_asr = chunk_len_frames_asr // 2
+                    current_frame_asr = 0;
+                    chunk_index_asr = 0
+                    while current_frame_asr < num_frames_asr:
+                        wf.setpos(current_frame_asr)
+                        frames_to_read_asr = min(chunk_len_frames_asr, num_frames_asr - current_frame_asr)
+                        chunk_data_bytes_asr = wf.readframes(frames_to_read_asr)
+                        if not chunk_data_bytes_asr: break
+                        chunk_fpath_asr = os.path.join(asr_job_temp_dir_path,
+                                                       f"asr_chunk_{chunk_index_asr}_{os.getpid()}.wav")
+                        with wave.open(chunk_fpath_asr, 'wb') as cf_asr:
+                            cf_asr.setnchannels(num_channels_asr); cf_asr.setsampwidth(
+                                sampwidth_asr); cf_asr.setframerate(framerate_asr); cf_asr.writeframes(
+                                chunk_data_bytes_asr)
+
+                        # Using ASR_WORKER_TIMEOUT from config for thread worker timeout
+                        current_asr_worker_timeout = getattr(__import__('config', fromlist=['ASR_WORKER_TIMEOUT']),
+                                                             'ASR_WORKER_TIMEOUT', 300)
+                        thread_cmd_asr = [python_executable_for_thread_worker, audio_thread_worker_script_path,
+                                          "--task-type", "asr_chunk", "--model-dir", args.model_dir,
+                                          "--input-audio-chunk-path", chunk_fpath_asr, "--whisper-model-name",
+                                          asr_model_to_use_orch, "--language", asr_lang_to_use_orch]
+                        proc_asr_chunk = subprocess.run(thread_cmd_asr, capture_output=True, text=True, check=False,
+                                                        timeout=current_asr_worker_timeout)
+                        if proc_asr_chunk.returncode != 0: raise RuntimeError(
+                            f"ASR Thread Worker chunk {chunk_fpath_asr} failed: {proc_asr_chunk.stderr.strip()}")
+                        chunk_res_asr = json.loads(proc_asr_chunk.stdout.strip())
+                        if chunk_res_asr.get("error"): raise RuntimeError(
+                            f"ASR Thread Worker chunk {chunk_fpath_asr} error: {chunk_res_asr['error']}")
+                        all_transcribed_segments_asr.append(chunk_res_asr.get("result", {}).get("text", ""))
+                        if not os.getenv("KEEP_ASR_CHUNKS"):
+                            try:
+                                os.remove(chunk_fpath_asr)
+                            except Exception as e_rm_chunk_asr:
+                                log_worker("WARNING", f"Failed to remove ASR chunk {chunk_fpath_asr}: {e_rm_chunk_asr}")
+                        if current_frame_asr + frames_to_read_asr >= num_frames_asr: break
+                        current_frame_asr += step_frames_asr;
+                        chunk_index_asr += 1
+
+                final_transcribed_text_asr = " ".join(all_transcribed_segments_asr).strip()
+                result_payload = {"result": {"text": final_transcribed_text_asr}}
+            except Exception as e_asr_orch:
+                result_payload = {"error": f"ASR Orch error: {e_asr_orch}"}; log_worker("ERROR",
+                                                                                        f"ASR Orch error: {e_asr_orch}"); log_worker(
+                    "ERROR", traceback.format_exc())
             finally:
-                if asr_temp_converted_wav_path and os.path.exists(asr_temp_converted_wav_path):
+                if master_temp_wav_asr and os.path.exists(
+                        master_temp_wav_asr) and master_temp_wav_asr != input_audio_path_for_asr_orch:
                     try:
-                        os.remove(asr_temp_converted_wav_path); log_worker("INFO",
-                                                                           f"Cleaned up temp ASR WAV: {asr_temp_converted_wav_path}")
-                    except Exception as e_del_asr:
-                        log_worker("WARNING",
-                                   f"Failed to delete temp ASR file '{asr_temp_converted_wav_path}': {e_del_asr}")
+                        os.remove(master_temp_wav_asr)
+                    except:
+                        pass
+                if os.path.isdir(asr_job_temp_dir_path): shutil.rmtree(asr_job_temp_dir_path)
+
     else:
         result_payload = {"error": f"Unknown task_type: {args.task_type}"}
         log_worker("ERROR", result_payload["error"])
 
+    # --- Print final JSON to stdout ---
     try:
         output_json_str_final = json.dumps(result_payload)
         log_worker("DEBUG", f"Sending output JSON (len={len(output_json_str_final)}): {output_json_str_final[:200]}...")
@@ -1397,22 +1606,21 @@ def main():
         except:
             pass
         sys.exit(1)
-    log_worker("INFO", f"Audio Worker PID {os.getpid()} finished task: {args.task_type}.")
+
+    log_worker("INFO", f"Audio Worker Orchestrator PID {os.getpid()} finished task: {args.task_type}.")
     sys.exit(0)
 
 
 if __name__ == "__main__":
-    if not TORCH_AUDIO_AVAILABLE and ('tts' in sys.argv):  # Only critical if TTS is the task
-        log_worker("CRITICAL", "Torch/Torchaudio NOT AVAILABLE. Audio worker cannot perform TTS tasks effectively.")
-        # Let main() handle exit if task is tts
-    if not MELO_AVAILABLE and not CHATTERBOX_TTS_AVAILABLE and not PYWHISPERCPP_AVAILABLE:
-        log_worker("CRITICAL", "No primary audio libraries available for any task. Worker is non-functional.")
+    if not TORCH_AUDIO_AVAILABLE and ('tts' in sys.argv):
+        log_worker("CRITICAL", "Torch/Torchaudio NOT AVAILABLE. Cannot perform TTS tasks.")
+    if not MELO_AVAILABLE and not CHATTERBOX_TTS_AVAILABLE and not PYWHISPERCPP_AVAILABLE:  # If none are available
+        log_worker("CRITICAL", "No primary audio libraries available. Worker is non-functional.")
         print(json.dumps({"error": "No audio libraries available in worker."}), flush=True)
         sys.exit(1)
-    if SCLParser_class_ref is None and (
-            'tts' in sys.argv):  # If SCLParser class wasn't defined (e.g. due to critical error in its block)
-        log_worker("CRITICAL",
-                   "SCLParser class definition is missing or incorrect. Cannot proceed with TTS sample generation.")
-        print(json.dumps({"error": "SCLParser class missing in worker for TTS."}), flush=True)
+    if SCLParser_class_ref is None and ('tts' in sys.argv):
+        log_worker("CRITICAL", "SCLParser class reference is None. Cannot proceed with TTS.")
+        print(json.dumps({"error": "SCLParser class ref not set for TTS."}), flush=True)
         sys.exit(1)
+
     main()
