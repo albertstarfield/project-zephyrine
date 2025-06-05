@@ -611,293 +611,293 @@ class SCLParser:
         log_worker("DEBUG", f"SCLParser: Crossfade result shape: {combined_audio_output.shape}")
         return combined_audio_output  # Should be (total_samples, 2)
 
-        def post_process(self, audio_np_in: np.ndarray, input_sample_rate: int, zephyloid_settings: Dict) -> np.ndarray:
-            log_worker("DEBUG",
-                       f"SCLParser: post_process. Input shape {audio_np_in.shape}, SR: {input_sample_rate}, Zephyloid: {zephyloid_settings}")
-            if not PEDALBOARD_LIBROSA_AVAILABLE or not TORCH_AUDIO_AVAILABLE or not torch or not F_torchaudio:
-                log_worker("WARNING",
-                           "Missing effects libraries (Pedalboard/Librosa or Torch/Torchaudio), skipping SCLParser post-processing.")
-                return audio_np_in  # Return original if effects libs are missing
-
-            # Ensure input is (channels, samples) float32 numpy array for Pedalboard/TorchAudio effects
-            processed_audio_np = audio_np_in.astype(np.float32)
-            if processed_audio_np.ndim == 1:  # Mono (samples,) -> (2, samples) for consistent processing
-                log_worker("TRACE", "SCLParser: post_process promoting mono to stereo for effects.")
-                processed_audio_np = np.stack([processed_audio_np, processed_audio_np], axis=0)
-            elif processed_audio_np.ndim == 2:
-                if processed_audio_np.shape[1] == 2 and processed_audio_np.shape[0] > 2:  # (samples, 2)
-                    log_worker("TRACE", "SCLParser: post_process transposing (samples, 2) to (2, samples) for effects.")
-                    processed_audio_np = processed_audio_np.T  # -> (2, samples)
-                elif processed_audio_np.shape[0] == 1 and processed_audio_np.shape[1] > 2:  # (1, samples) mono
-                    log_worker("TRACE",
-                               "SCLParser: post_process repeating mono channel to stereo (2, samples) for effects.")
-                    processed_audio_np = np.repeat(processed_audio_np, 2, axis=0)  # -> (2, samples)
-
-            # Final check for channel count before applying effects that expect 2 channels
-            if processed_audio_np.ndim != 2 or processed_audio_np.shape[0] != 2:
-                log_worker("ERROR",
-                           f"SCLParser Post-process: Expected 2 channels (2, samples), got shape {processed_audio_np.shape}. Skipping effects.")
-                return audio_np_in  # Return original if shape is still wrong
-
-            current_sr = float(input_sample_rate)  # Ensure sr is float for pedalboard
-            audio_tensor_for_effects = torch.from_numpy(processed_audio_np.copy()).to(self.device)
-
-            # Apply zephyloid parameter effects that modify the audio directly
-            # DYN (Dynamics)
-            dyn_gain_db = (zephyloid_settings.get('dyn', 64) - 64) / 64.0 * 12.0  # Max +/- 12dB
-            audio_tensor_for_effects = F_torchaudio.gain(audio_tensor_for_effects, dyn_gain_db)
-            log_worker("TRACE", f"SCLParser Post-process: Applied DYN gain: {dyn_gain_db:.2f}dB")
-
-            # BRE (Breathiness)
-            bre_amount = zephyloid_settings.get('bre', 0) / 127.0 * 0.001  # Max 0.001 noise scale
-            if bre_amount > 0 and TORCH_AUDIO_AVAILABLE and torch:
-                noise_bre_tensor = torch.randn_like(audio_tensor_for_effects) * bre_amount
-                audio_tensor_for_effects = audio_tensor_for_effects + noise_bre_tensor
-                log_worker("TRACE", f"SCLParser Post-process: Applied BRE noise. Amount factor: {bre_amount:.5f}")
-
-            # Pedalboard effects (if library available)
-            # Ensure audio is numpy (channels, samples) for Pedalboard
-            audio_for_pedalboard = audio_tensor_for_effects.cpu().numpy()
-
-            # Resample to 44.1kHz for consistent Pedalboard effects if not already
-            if current_sr != 44100.0 and PEDALBOARD_LIBROSA_AVAILABLE:
-                log_worker("TRACE",
-                           f"SCLParser Post-process: Resampling for Pedalboard from {current_sr}Hz to 44100Hz.")
-                # Librosa resample takes mono or (channels, D). Our audio_for_pedalboard is (2, D)
-                resampled_channels = []
-                for ch_idx in range(audio_for_pedalboard.shape[0]):
-                    resampled_channels.append(
-                        librosa.resample(y=audio_for_pedalboard[ch_idx], orig_sr=current_sr, target_sr=44100.0,
-                                         res_type='kaiser_fast'))
-                audio_for_pedalboard = np.stack(resampled_channels)
-                current_sr = 44100.0  # Update current_sr for subsequent effects
-                log_worker("TRACE",
-                           f"SCLParser Post-process: Resampled. New shape for Pedalboard: {audio_for_pedalboard.shape}")
-
-            board_effects_list = [  # Default effects
-                Reverb(room_size=0.7, damping=0.5, wet_level=0.33, dry_level=0.4),  # Values from your SCLParser
-                Chorus(rate_hz=0.4, depth=0.25, centre_delay_ms=7.0, feedback=0.0, mix=0.02),
-                Delay(delay_seconds=0.5, feedback=0.01, mix=0.0002),
-            ]
-            # GWL (Growl) - Distortion
-            gwl_amount_factor = zephyloid_settings.get('gwl', 0) / 127.0
-            if gwl_amount_factor > 0:
-                drive_db_gwl = gwl_amount_factor * 20.0  # Example scaling
-                board_effects_list.insert(0, Distortion(drive_db=drive_db_gwl))  # Insert distortion early
-                log_worker("TRACE",
-                           f"SCLParser Post-process: Added GWL (Distortion) to Pedalboard. Drive: {drive_db_gwl:.2f}dB")
-
-            # Apply Pedalboard if effects are added
-            if PEDALBOARD_LIBROSA_AVAILABLE:
-                try:
-                    board = Pedalboard(board_effects_list, sample_rate=current_sr)
-                    log_worker("TRACE", "SCLParser Post-process: Applying Pedalboard effects...")
-                    audio_for_pedalboard = board(audio_for_pedalboard)  # Process (channels, samples)
-                    log_worker("TRACE",
-                               f"SCLParser Post-process: Pedalboard effects applied. Shape: {audio_for_pedalboard.shape}")
-                except Exception as e_pb:
-                    log_worker("ERROR", f"SCLParser Post-process: Error applying Pedalboard effects: {e_pb}")
-                    # Continue with audio_for_pedalboard as it was before Pedalboard attempt
-
-            # Convert back to tensor for torchaudio EQ, ensuring it's on the correct device
-            audio_tensor_for_eq = torch.from_numpy(audio_for_pedalboard.copy()).to(self.device)
-
-            # EQ (BRI, CLE, OPE, GEN's formant part, XSY) using torchaudio.functional.equalizer_biquad
-            # Ensure current_sr is float for torchaudio functions
-            current_sr_float = float(current_sr)
-
-            # BRI (Brightness)
-            bri_gain_val = (zephyloid_settings.get('bri', 64) - 64) / 64.0 * 6.0  # Max +/- 6dB
-            audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
-                                                                center_freq=8000.0, gain=bri_gain_val, Q=1.0)
-            log_worker("TRACE", f"SCLParser Post-process: Applied BRI EQ. Gain: {bri_gain_val:.2f}dB at 8kHz")
-
-            # CLE (Clearness)
-            cle_gain_val = (zephyloid_settings.get('cle', 64) - 64) / 64.0 * 4.0  # Max +/- 4dB
-            audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
-                                                                center_freq=4000.0, gain=cle_gain_val, Q=1.2)
-            log_worker("TRACE", f"SCLParser Post-process: Applied CLE EQ. Gain: {cle_gain_val:.2f}dB at 4kHz")
-
-            # OPE (Opening)
-            ope_shift_val = (zephyloid_settings.get('ope', 64) - 64) / 64.0
-            ope_center_freq = 1000.0 + ope_shift_val * 500.0
-            ope_gain = abs(ope_shift_val) * 3.0  # Gain proportional to shift magnitude
-            if ope_shift_val != 0:
-                audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
-                                                                    center_freq=ope_center_freq, gain=ope_gain, Q=1.5)
-                log_worker("TRACE",
-                           f"SCLParser Post-process: Applied OPE EQ. Freq: {ope_center_freq:.0f}Hz, Gain: {ope_gain:.2f}dB")
-
-            # GEN (Gender Factor - Formant Part)
-            gen_formant_shift_val = (zephyloid_settings.get('gen',
-                                                            64) - 64) / 64.0 * 3.0  # Smaller EQ gain for formant perception
-            gen_center_freq = 1500.0 + (zephyloid_settings.get('gen', 64) - 64) / 64.0 * 200.0  # Shift center freq
-            if gen_formant_shift_val != 0:
-                audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
-                                                                    center_freq=gen_center_freq,
-                                                                    gain=abs(gen_formant_shift_val), Q=1.2)
-                log_worker("TRACE",
-                           f"SCLParser Post-process: Applied GEN (Formant) EQ. Freq: {gen_center_freq:.0f}Hz, Gain: {abs(gen_formant_shift_val):.2f}dB")
-
-            # XSY (Cross-Synthesis EQ)
-            xsy_voicebanks_val = zephyloid_settings.get('xsy_voicebanks')
-            xsy_blend_val = zephyloid_settings.get('xsy', 0) / 127.0
-            if isinstance(xsy_voicebanks_val, list) and len(xsy_voicebanks_val) == 2 and 0 < xsy_blend_val < 1:
-                vb1_name, vb2_name = xsy_voicebanks_val
-                profile1 = self.xsy_profiles.get(vb1_name)
-                profile2 = self.xsy_profiles.get(vb2_name)
-                if profile1 and profile2:
-                    audio_vb1 = audio_tensor_for_eq.clone()
-                    for freq, gain, q_val in profile1["eq_curve"]: audio_vb1 = F_torchaudio.equalizer_biquad(audio_vb1,
-                                                                                                             current_sr_float,
-                                                                                                             freq, gain,
-                                                                                                             q_val)
-                    audio_vb2 = audio_tensor_for_eq.clone()
-                    for freq, gain, q_val in profile2["eq_curve"]: audio_vb2 = F_torchaudio.equalizer_biquad(audio_vb2,
-                                                                                                             current_sr_float,
-                                                                                                             freq, gain,
-                                                                                                             q_val)
-                    audio_tensor_for_eq = (1 - xsy_blend_val) * audio_vb1 + xsy_blend_val * audio_vb2
-                    log_worker("TRACE",
-                               f"SCLParser Post-process: Applied XSY EQ. Blend: {xsy_blend_val:.2f} between '{vb1_name}' and '{vb2_name}'")
-
-            # Standard final EQ pass (from your SCLParser)
-            final_eq_settings = [(30, 5, 3.4), (100, 4, 1.4), (150, 1.5, 1.4), (250, 2, 1.0), (350, 2, 1.4),
-                                 (450, 2, 1.8), (550, -2, 1.4), (2000, 2, 1.0), (2500, 3, 1.4), (3000, 2, 1.4),
-                                 (3500, 4, 1.8), (4000, 3, 1.4), (8000, 3, 1.8), (12000, 3, 1.8), (20000, 1, 1.8)]
-            for freq, gain, q_val in final_eq_settings:
-                audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float, freq, gain,
-                                                                    q_val)
-            log_worker("TRACE", "SCLParser Post-process: Standard final EQ applied.")
-
-            # Final subtle noise and amplitude modulation (from your SCLParser)
-            if TORCH_AUDIO_AVAILABLE and torch:  # Check again as we are using torch directly here
-                noise_final_tensor = torch.randn_like(audio_tensor_for_eq) * 0.0002
-                audio_tensor_for_eq = audio_tensor_for_eq + noise_final_tensor
-                mod_freq, mod_depth = 1.0, 0.03  # Hz, depth
-                t_axis = torch.arange(audio_tensor_for_eq.shape[1],
-                                      device=audio_tensor_for_eq.device) / current_sr_float
-                modulation_tensor = (1 + mod_depth * torch.sin(2 * torch.pi * mod_freq * t_axis)).float()
-                audio_tensor_for_eq = audio_tensor_for_eq * modulation_tensor.unsqueeze(0)  # Apply to both channels
-                log_worker("TRACE", "SCLParser Post-process: Final noise and amp modulation applied.")
-
-            # Final Limiter (Pedalboard, requires numpy)
-            final_audio_numpy_for_limiter = audio_tensor_for_eq.cpu().numpy()
-            if PEDALBOARD_LIBROSA_AVAILABLE:
-                try:
-                    final_limiter_board = Pedalboard(
-                        [Limiter(threshold_db=-1.0, release_ms=50.0)])  # Values from your SCLParser
-                    final_audio_numpy_for_limiter = final_limiter_board(final_audio_numpy_for_limiter, current_sr_float)
-                    log_worker("DEBUG", "SCLParser Post-process: Final Limiter applied.")
-                except Exception as e_final_limiter:
-                    log_worker("ERROR", f"SCLParser Post-process: Error applying final Limiter: {e_final_limiter}")
-
-            log_worker("DEBUG",
-                       f"SCLParser: post_process: Final audio shape before returning: {final_audio_numpy_for_limiter.shape}")
-            # Ensure output is (channels, samples) numpy array
-            return final_audio_numpy_for_limiter
-
-        def parse_attributes(self, params_str: str) -> Dict[str, str]:
-            attributes = {}
-            # Robust attribute parsing for quoted and unquoted values
-            for match in re.finditer(r'(\w+)\s*=\s*(?:"([^"]*)"|([^\s"\']+))',
-                                     params_str):  # Adjusted to also handle unquoted values better
-                key = match.group(1).lower()
-                # Value can be group 2 (quoted) or group 3 (unquoted)
-                value = match.group(2) if match.group(2) is not None else match.group(3)
-                attributes[key] = value
-            log_worker("TRACE", f"SCLParser: parse_attributes: Input='{params_str}', Parsed='{attributes}'")
-            return attributes
-
-        def is_number(self, s_val: Any) -> bool:
-            if isinstance(s_val, (int, float)): return True
-            if isinstance(s_val, str):
-                try:
-                    float(s_val); return True
-                except ValueError:
-                    return False
-            return False
-
-        def parse_pitch(self, pitch_str_val: str) -> float:
-            pitch_str = str(pitch_str_val).strip().lower()
-            log_worker("TRACE", f"SCLParser: parse_pitch called. Input: '{pitch_str}'")
-            if pitch_str.endswith("%"):
-                try:
-                    val = float(pitch_str[:-1]); return val / 100.0 * 12.0  # Convert percentage of octave to semitones
-                except ValueError:
-                    return 0.0
-            elif pitch_str in self.pitch_map:
-                return self.pitch_map[pitch_str]
-            else:
-                try:
-                    return float(pitch_str)  # Assume semitones if number
-                except ValueError:
-                    return 0.0
-
-        def _degrees_from(self, scale: str) -> np.ndarray:
-            if PEDALBOARD_LIBROSA_AVAILABLE and librosa:
-                try:
-                    degrees = librosa.key_to_degrees(scale)
-                    return np.concatenate((degrees, [degrees[0] + 12]))  # SEMITONES_IN_OCTAVE = 12
-                except Exception as e_key_degree:
-                    log_worker("WARNING",
-                               f"SCLParser: Error parsing scale '{scale}' with librosa: {e_key_degree}. Using Cmaj default.")
-            return np.array([0, 2, 4, 5, 7, 9, 11, 12])  # Fallback to C major scale degrees
-
-        def _closest_pitch_from_scale(self, f0: float, scale: str) -> float:
-            if not PEDALBOARD_LIBROSA_AVAILABLE or not librosa or np.isnan(f0) or f0 <= 0: return f0
-            try:
-                degrees = self._degrees_from(scale)
-                midi_note = librosa.hz_to_midi(f0)
-                degree_index_in_octave = midi_note % 12.0  # MIDI note C4 is 60.0. C is 0.
-
-                # Find the closest degree in the scale
-                closest_degree_in_scale = degrees[np.argmin(np.abs(degrees - degree_index_in_octave))]
-
-                degree_difference = degree_index_in_octave - closest_degree_in_scale
-                corrected_midi_note = midi_note - degree_difference
-                return float(librosa.midi_to_hz(corrected_midi_note))
-            except Exception as e_closest_pitch:
-                log_worker("WARNING",
-                           f"SCLParser: Error in _closest_pitch_from_scale for f0={f0}, scale='{scale}': {e_closest_pitch}")
-                return f0  # Return original f0 on error
-
-        def _parse_key(self, key_str_val: str) -> str:
-            log_worker("TRACE", f"SCLParser: _parse_key called. Input: '{key_str_val}'")
-            key_str = str(key_str_val).strip()
-            match = re.match(r"([A-Ga-g][#b♯♭]?)(\s*m(in(or)?)?)?", key_str)  # Simpler regex for tonic + optional minor
-            if not match:
-                log_worker("WARNING", f"SCLParser: Invalid key format: '{key_str}'. Defaulting to Cmaj.")
-                return "C:maj"  # Default to C major if format is unexpected
-
-            tonic = match.group(1).upper().replace("♯", "#").replace("♭", "b")
-            mode_str = match.group(2)  # This will capture " m", " min", " minor" or None
-
-            parsed_mode = "min" if mode_str and "m" in mode_str.lower() else "maj"
-
-            result = f"{tonic}:{parsed_mode}"
-            log_worker("TRACE", f"SCLParser: _parse_key: Returning: '{result}'")
-            return result
-
-        def _closest_pitch(self, f0_val: float) -> float:
-            if PEDALBOARD_LIBROSA_AVAILABLE and librosa and not np.isnan(f0_val) and f0_val > 0:
-                return float(librosa.midi_to_hz(np.around(librosa.hz_to_midi(np.asarray(f0_val)))))
-            return f0_val
-
-        def _autotune(self, audio: np.ndarray, sr: int, f0_contour: np.ndarray, voiced_flags: np.ndarray) -> np.ndarray:
-            log_worker("DEBUG",
-                       f"SCLParser: _autotune. Singing: {self.zephyloid_settings['singing']}, Key: {self.zephyloid_settings['key']}, Method: {self.zephyloid_settings['correction_method']}")
-            if not PEDALBOARD_LIBROSA_AVAILABLE or not librosa or not self.zephyloid_settings.get('singing', False):
-                return audio
-
-            # This is a placeholder for your full, complex autotune logic.
-            # The one from your file involves frame-by-frame processing with PSOLA or librosa.effects.pitch_shift.
-            # For this full script, I'm keeping it simple as a passthrough.
-            # You would replace this with your detailed autotune implementation.
+    def post_process(self, audio_np_in: np.ndarray, input_sample_rate: int, zephyloid_settings: Dict) -> np.ndarray:
+        log_worker("DEBUG",
+                   f"SCLParser: post_process. Input shape {audio_np_in.shape}, SR: {input_sample_rate}, Zephyloid: {zephyloid_settings}")
+        if not PEDALBOARD_LIBROSA_AVAILABLE or not TORCH_AUDIO_AVAILABLE or not torch or not F_torchaudio:
             log_worker("WARNING",
-                       "SCLParser: _autotune (using passthrough for this version). Implement full logic if needed.")
+                       "Missing effects libraries (Pedalboard/Librosa or Torch/Torchaudio), skipping SCLParser post-processing.")
+            return audio_np_in  # Return original if effects libs are missing
+
+        # Ensure input is (channels, samples) float32 numpy array for Pedalboard/TorchAudio effects
+        processed_audio_np = audio_np_in.astype(np.float32)
+        if processed_audio_np.ndim == 1:  # Mono (samples,) -> (2, samples) for consistent processing
+            log_worker("TRACE", "SCLParser: post_process promoting mono to stereo for effects.")
+            processed_audio_np = np.stack([processed_audio_np, processed_audio_np], axis=0)
+        elif processed_audio_np.ndim == 2:
+            if processed_audio_np.shape[1] == 2 and processed_audio_np.shape[0] > 2:  # (samples, 2)
+                log_worker("TRACE", "SCLParser: post_process transposing (samples, 2) to (2, samples) for effects.")
+                processed_audio_np = processed_audio_np.T  # -> (2, samples)
+            elif processed_audio_np.shape[0] == 1 and processed_audio_np.shape[1] > 2:  # (1, samples) mono
+                log_worker("TRACE",
+                           "SCLParser: post_process repeating mono channel to stereo (2, samples) for effects.")
+                processed_audio_np = np.repeat(processed_audio_np, 2, axis=0)  # -> (2, samples)
+
+        # Final check for channel count before applying effects that expect 2 channels
+        if processed_audio_np.ndim != 2 or processed_audio_np.shape[0] != 2:
+            log_worker("ERROR",
+                       f"SCLParser Post-process: Expected 2 channels (2, samples), got shape {processed_audio_np.shape}. Skipping effects.")
+            return audio_np_in  # Return original if shape is still wrong
+
+        current_sr = float(input_sample_rate)  # Ensure sr is float for pedalboard
+        audio_tensor_for_effects = torch.from_numpy(processed_audio_np.copy()).to(self.device)
+
+        # Apply zephyloid parameter effects that modify the audio directly
+        # DYN (Dynamics)
+        dyn_gain_db = (zephyloid_settings.get('dyn', 64) - 64) / 64.0 * 12.0  # Max +/- 12dB
+        audio_tensor_for_effects = F_torchaudio.gain(audio_tensor_for_effects, dyn_gain_db)
+        log_worker("TRACE", f"SCLParser Post-process: Applied DYN gain: {dyn_gain_db:.2f}dB")
+
+        # BRE (Breathiness)
+        bre_amount = zephyloid_settings.get('bre', 0) / 127.0 * 0.001  # Max 0.001 noise scale
+        if bre_amount > 0 and TORCH_AUDIO_AVAILABLE and torch:
+            noise_bre_tensor = torch.randn_like(audio_tensor_for_effects) * bre_amount
+            audio_tensor_for_effects = audio_tensor_for_effects + noise_bre_tensor
+            log_worker("TRACE", f"SCLParser Post-process: Applied BRE noise. Amount factor: {bre_amount:.5f}")
+
+        # Pedalboard effects (if library available)
+        # Ensure audio is numpy (channels, samples) for Pedalboard
+        audio_for_pedalboard = audio_tensor_for_effects.cpu().numpy()
+
+        # Resample to 44.1kHz for consistent Pedalboard effects if not already
+        if current_sr != 44100.0 and PEDALBOARD_LIBROSA_AVAILABLE:
+            log_worker("TRACE",
+                       f"SCLParser Post-process: Resampling for Pedalboard from {current_sr}Hz to 44100Hz.")
+            # Librosa resample takes mono or (channels, D). Our audio_for_pedalboard is (2, D)
+            resampled_channels = []
+            for ch_idx in range(audio_for_pedalboard.shape[0]):
+                resampled_channels.append(
+                    librosa.resample(y=audio_for_pedalboard[ch_idx], orig_sr=current_sr, target_sr=44100.0,
+                                     res_type='kaiser_fast'))
+            audio_for_pedalboard = np.stack(resampled_channels)
+            current_sr = 44100.0  # Update current_sr for subsequent effects
+            log_worker("TRACE",
+                       f"SCLParser Post-process: Resampled. New shape for Pedalboard: {audio_for_pedalboard.shape}")
+
+        board_effects_list = [  # Default effects
+            Reverb(room_size=0.7, damping=0.5, wet_level=0.33, dry_level=0.4),  # Values from your SCLParser
+            Chorus(rate_hz=0.4, depth=0.25, centre_delay_ms=7.0, feedback=0.0, mix=0.02),
+            Delay(delay_seconds=0.5, feedback=0.01, mix=0.0002),
+        ]
+        # GWL (Growl) - Distortion
+        gwl_amount_factor = zephyloid_settings.get('gwl', 0) / 127.0
+        if gwl_amount_factor > 0:
+            drive_db_gwl = gwl_amount_factor * 20.0  # Example scaling
+            board_effects_list.insert(0, Distortion(drive_db=drive_db_gwl))  # Insert distortion early
+            log_worker("TRACE",
+                       f"SCLParser Post-process: Added GWL (Distortion) to Pedalboard. Drive: {drive_db_gwl:.2f}dB")
+
+        # Apply Pedalboard if effects are added
+        if PEDALBOARD_LIBROSA_AVAILABLE:
+            try:
+                board = Pedalboard(board_effects_list, sample_rate=current_sr)
+                log_worker("TRACE", "SCLParser Post-process: Applying Pedalboard effects...")
+                audio_for_pedalboard = board(audio_for_pedalboard)  # Process (channels, samples)
+                log_worker("TRACE",
+                           f"SCLParser Post-process: Pedalboard effects applied. Shape: {audio_for_pedalboard.shape}")
+            except Exception as e_pb:
+                log_worker("ERROR", f"SCLParser Post-process: Error applying Pedalboard effects: {e_pb}")
+                # Continue with audio_for_pedalboard as it was before Pedalboard attempt
+
+        # Convert back to tensor for torchaudio EQ, ensuring it's on the correct device
+        audio_tensor_for_eq = torch.from_numpy(audio_for_pedalboard.copy()).to(self.device)
+
+        # EQ (BRI, CLE, OPE, GEN's formant part, XSY) using torchaudio.functional.equalizer_biquad
+        # Ensure current_sr is float for torchaudio functions
+        current_sr_float = float(current_sr)
+
+        # BRI (Brightness)
+        bri_gain_val = (zephyloid_settings.get('bri', 64) - 64) / 64.0 * 6.0  # Max +/- 6dB
+        audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
+                                                            center_freq=8000.0, gain=bri_gain_val, Q=1.0)
+        log_worker("TRACE", f"SCLParser Post-process: Applied BRI EQ. Gain: {bri_gain_val:.2f}dB at 8kHz")
+
+        # CLE (Clearness)
+        cle_gain_val = (zephyloid_settings.get('cle', 64) - 64) / 64.0 * 4.0  # Max +/- 4dB
+        audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
+                                                            center_freq=4000.0, gain=cle_gain_val, Q=1.2)
+        log_worker("TRACE", f"SCLParser Post-process: Applied CLE EQ. Gain: {cle_gain_val:.2f}dB at 4kHz")
+
+        # OPE (Opening)
+        ope_shift_val = (zephyloid_settings.get('ope', 64) - 64) / 64.0
+        ope_center_freq = 1000.0 + ope_shift_val * 500.0
+        ope_gain = abs(ope_shift_val) * 3.0  # Gain proportional to shift magnitude
+        if ope_shift_val != 0:
+            audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
+                                                                center_freq=ope_center_freq, gain=ope_gain, Q=1.5)
+            log_worker("TRACE",
+                       f"SCLParser Post-process: Applied OPE EQ. Freq: {ope_center_freq:.0f}Hz, Gain: {ope_gain:.2f}dB")
+
+        # GEN (Gender Factor - Formant Part)
+        gen_formant_shift_val = (zephyloid_settings.get('gen',
+                                                        64) - 64) / 64.0 * 3.0  # Smaller EQ gain for formant perception
+        gen_center_freq = 1500.0 + (zephyloid_settings.get('gen', 64) - 64) / 64.0 * 200.0  # Shift center freq
+        if gen_formant_shift_val != 0:
+            audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float,
+                                                                center_freq=gen_center_freq,
+                                                                gain=abs(gen_formant_shift_val), Q=1.2)
+            log_worker("TRACE",
+                       f"SCLParser Post-process: Applied GEN (Formant) EQ. Freq: {gen_center_freq:.0f}Hz, Gain: {abs(gen_formant_shift_val):.2f}dB")
+
+        # XSY (Cross-Synthesis EQ)
+        xsy_voicebanks_val = zephyloid_settings.get('xsy_voicebanks')
+        xsy_blend_val = zephyloid_settings.get('xsy', 0) / 127.0
+        if isinstance(xsy_voicebanks_val, list) and len(xsy_voicebanks_val) == 2 and 0 < xsy_blend_val < 1:
+            vb1_name, vb2_name = xsy_voicebanks_val
+            profile1 = self.xsy_profiles.get(vb1_name)
+            profile2 = self.xsy_profiles.get(vb2_name)
+            if profile1 and profile2:
+                audio_vb1 = audio_tensor_for_eq.clone()
+                for freq, gain, q_val in profile1["eq_curve"]: audio_vb1 = F_torchaudio.equalizer_biquad(audio_vb1,
+                                                                                                         current_sr_float,
+                                                                                                         freq, gain,
+                                                                                                         q_val)
+                audio_vb2 = audio_tensor_for_eq.clone()
+                for freq, gain, q_val in profile2["eq_curve"]: audio_vb2 = F_torchaudio.equalizer_biquad(audio_vb2,
+                                                                                                         current_sr_float,
+                                                                                                         freq, gain,
+                                                                                                         q_val)
+                audio_tensor_for_eq = (1 - xsy_blend_val) * audio_vb1 + xsy_blend_val * audio_vb2
+                log_worker("TRACE",
+                           f"SCLParser Post-process: Applied XSY EQ. Blend: {xsy_blend_val:.2f} between '{vb1_name}' and '{vb2_name}'")
+
+        # Standard final EQ pass (from your SCLParser)
+        final_eq_settings = [(30, 5, 3.4), (100, 4, 1.4), (150, 1.5, 1.4), (250, 2, 1.0), (350, 2, 1.4),
+                             (450, 2, 1.8), (550, -2, 1.4), (2000, 2, 1.0), (2500, 3, 1.4), (3000, 2, 1.4),
+                             (3500, 4, 1.8), (4000, 3, 1.4), (8000, 3, 1.8), (12000, 3, 1.8), (20000, 1, 1.8)]
+        for freq, gain, q_val in final_eq_settings:
+            audio_tensor_for_eq = F_torchaudio.equalizer_biquad(audio_tensor_for_eq, current_sr_float, freq, gain,
+                                                                q_val)
+        log_worker("TRACE", "SCLParser Post-process: Standard final EQ applied.")
+
+        # Final subtle noise and amplitude modulation (from your SCLParser)
+        if TORCH_AUDIO_AVAILABLE and torch:  # Check again as we are using torch directly here
+            noise_final_tensor = torch.randn_like(audio_tensor_for_eq) * 0.0002
+            audio_tensor_for_eq = audio_tensor_for_eq + noise_final_tensor
+            mod_freq, mod_depth = 1.0, 0.03  # Hz, depth
+            t_axis = torch.arange(audio_tensor_for_eq.shape[1],
+                                  device=audio_tensor_for_eq.device) / current_sr_float
+            modulation_tensor = (1 + mod_depth * torch.sin(2 * torch.pi * mod_freq * t_axis)).float()
+            audio_tensor_for_eq = audio_tensor_for_eq * modulation_tensor.unsqueeze(0)  # Apply to both channels
+            log_worker("TRACE", "SCLParser Post-process: Final noise and amp modulation applied.")
+
+        # Final Limiter (Pedalboard, requires numpy)
+        final_audio_numpy_for_limiter = audio_tensor_for_eq.cpu().numpy()
+        if PEDALBOARD_LIBROSA_AVAILABLE:
+            try:
+                final_limiter_board = Pedalboard(
+                    [Limiter(threshold_db=-1.0, release_ms=50.0)])  # Values from your SCLParser
+                final_audio_numpy_for_limiter = final_limiter_board(final_audio_numpy_for_limiter, current_sr_float)
+                log_worker("DEBUG", "SCLParser Post-process: Final Limiter applied.")
+            except Exception as e_final_limiter:
+                log_worker("ERROR", f"SCLParser Post-process: Error applying final Limiter: {e_final_limiter}")
+
+        log_worker("DEBUG",
+                   f"SCLParser: post_process: Final audio shape before returning: {final_audio_numpy_for_limiter.shape}")
+        # Ensure output is (channels, samples) numpy array
+        return final_audio_numpy_for_limiter
+
+    def parse_attributes(self, params_str: str) -> Dict[str, str]:
+        attributes = {}
+        # Robust attribute parsing for quoted and unquoted values
+        for match in re.finditer(r'(\w+)\s*=\s*(?:"([^"]*)"|([^\s"\']+))',
+                                 params_str):  # Adjusted to also handle unquoted values better
+            key = match.group(1).lower()
+            # Value can be group 2 (quoted) or group 3 (unquoted)
+            value = match.group(2) if match.group(2) is not None else match.group(3)
+            attributes[key] = value
+        log_worker("TRACE", f"SCLParser: parse_attributes: Input='{params_str}', Parsed='{attributes}'")
+        return attributes
+
+    def is_number(self, s_val: Any) -> bool:
+        if isinstance(s_val, (int, float)): return True
+        if isinstance(s_val, str):
+            try:
+                float(s_val); return True
+            except ValueError:
+                return False
+        return False
+
+    def parse_pitch(self, pitch_str_val: str) -> float:
+        pitch_str = str(pitch_str_val).strip().lower()
+        log_worker("TRACE", f"SCLParser: parse_pitch called. Input: '{pitch_str}'")
+        if pitch_str.endswith("%"):
+            try:
+                val = float(pitch_str[:-1]); return val / 100.0 * 12.0  # Convert percentage of octave to semitones
+            except ValueError:
+                return 0.0
+        elif pitch_str in self.pitch_map:
+            return self.pitch_map[pitch_str]
+        else:
+            try:
+                return float(pitch_str)  # Assume semitones if number
+            except ValueError:
+                return 0.0
+
+    def _degrees_from(self, scale: str) -> np.ndarray:
+        if PEDALBOARD_LIBROSA_AVAILABLE and librosa:
+            try:
+                degrees = librosa.key_to_degrees(scale)
+                return np.concatenate((degrees, [degrees[0] + 12]))  # SEMITONES_IN_OCTAVE = 12
+            except Exception as e_key_degree:
+                log_worker("WARNING",
+                           f"SCLParser: Error parsing scale '{scale}' with librosa: {e_key_degree}. Using Cmaj default.")
+        return np.array([0, 2, 4, 5, 7, 9, 11, 12])  # Fallback to C major scale degrees
+
+    def _closest_pitch_from_scale(self, f0: float, scale: str) -> float:
+        if not PEDALBOARD_LIBROSA_AVAILABLE or not librosa or np.isnan(f0) or f0 <= 0: return f0
+        try:
+            degrees = self._degrees_from(scale)
+            midi_note = librosa.hz_to_midi(f0)
+            degree_index_in_octave = midi_note % 12.0  # MIDI note C4 is 60.0. C is 0.
+
+            # Find the closest degree in the scale
+            closest_degree_in_scale = degrees[np.argmin(np.abs(degrees - degree_index_in_octave))]
+
+            degree_difference = degree_index_in_octave - closest_degree_in_scale
+            corrected_midi_note = midi_note - degree_difference
+            return float(librosa.midi_to_hz(corrected_midi_note))
+        except Exception as e_closest_pitch:
+            log_worker("WARNING",
+                       f"SCLParser: Error in _closest_pitch_from_scale for f0={f0}, scale='{scale}': {e_closest_pitch}")
+            return f0  # Return original f0 on error
+
+    def _parse_key(self, key_str_val: str) -> str:
+        log_worker("TRACE", f"SCLParser: _parse_key called. Input: '{key_str_val}'")
+        key_str = str(key_str_val).strip()
+        match = re.match(r"([A-Ga-g][#b♯♭]?)(\s*m(in(or)?)?)?", key_str)  # Simpler regex for tonic + optional minor
+        if not match:
+            log_worker("WARNING", f"SCLParser: Invalid key format: '{key_str}'. Defaulting to Cmaj.")
+            return "C:maj"  # Default to C major if format is unexpected
+
+        tonic = match.group(1).upper().replace("♯", "#").replace("♭", "b")
+        mode_str = match.group(2)  # This will capture " m", " min", " minor" or None
+
+        parsed_mode = "min" if mode_str and "m" in mode_str.lower() else "maj"
+
+        result = f"{tonic}:{parsed_mode}"
+        log_worker("TRACE", f"SCLParser: _parse_key: Returning: '{result}'")
+        return result
+
+    def _closest_pitch(self, f0_val: float) -> float:
+        if PEDALBOARD_LIBROSA_AVAILABLE and librosa and not np.isnan(f0_val) and f0_val > 0:
+            return float(librosa.midi_to_hz(np.around(librosa.hz_to_midi(np.asarray(f0_val)))))
+        return f0_val
+
+    def _autotune(self, audio: np.ndarray, sr: int, f0_contour: np.ndarray, voiced_flags: np.ndarray) -> np.ndarray:
+        log_worker("DEBUG",
+                   f"SCLParser: _autotune. Singing: {self.zephyloid_settings['singing']}, Key: {self.zephyloid_settings['key']}, Method: {self.zephyloid_settings['correction_method']}")
+        if not PEDALBOARD_LIBROSA_AVAILABLE or not librosa or not self.zephyloid_settings.get('singing', False):
             return audio
-            # --- END SCLParser Class ---
+
+        # This is a placeholder for your full, complex autotune logic.
+        # The one from your file involves frame-by-frame processing with PSOLA or librosa.effects.pitch_shift.
+        # For this full script, I'm keeping it simple as a passthrough.
+        # You would replace this with your detailed autotune implementation.
+        log_worker("WARNING",
+                   "SCLParser: _autotune (using passthrough for this version). Implement full logic if needed.")
+        return audio
+        # --- END SCLParser Class ---
 
 SCLParser_class_ref = SCLParser  # Assign the defined class for type hinting if used elsewhere early
 
