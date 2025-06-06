@@ -8,6 +8,7 @@ import gc
 import numpy as np
 import soundfile as sf
 import tempfile
+import hashlib
 import threading  # For the monitoring thread
 
 # --- Psutil for memory monitoring ---
@@ -27,6 +28,7 @@ torchaudio = None
 try:
     import torch
     import torchaudio
+    import torch.compiler
 
     TORCH_AUDIO_AVAILABLE = True
 except ImportError:
@@ -56,8 +58,8 @@ current_device_global = "cpu"  # Default, will be set by worker_config
 # --- Memory Monitoring Thread Control ---
 memory_monitor_thread = None
 stop_memory_monitor_event = threading.Event()
-MEMORY_MONITOR_INTERVAL_SECONDS = 5  # Log memory usage this often
-PERIODIC_CACHE_CLEAR_INTERVAL_SECONDS = 3  # Attempt cache clear this often
+MEMORY_MONITOR_INTERVAL_SECONDS = 30  # Log memory usage this often
+PERIODIC_CACHE_CLEAR_INTERVAL_SECONDS = 5  # Attempt cache clear this often
 last_cache_clear_time = 0  # Keep track of when cache was last cleared
 
 
@@ -89,6 +91,33 @@ def _try_clear_pytorch_caches(device_type_str):
     gc.collect()
     log_thread_worker("DEBUG", "[CacheClear] Performed gc.collect().")
 
+
+# --- torch.compile Artifact Cache ---
+# The orchestrator should provide a base cache directory.
+# Example: <base_cache_dir>/tts_chatterbox/<device>/<torch_version>/<model_hash_or_id>/artifact.ptc
+COMPILE_CACHE_BASE_DIR = None  # To be set from worker_config
+
+
+def get_compile_artifact_path(model_name_key: str, model_identifier: str, device: str, backend: str):
+    """Generates a path for torch.compile artifacts."""
+    if not COMPILE_CACHE_BASE_DIR:
+        return None
+
+    torch_version_str = torch.__version__.replace('.', '_') if TORCH_AUDIO_AVAILABLE and torch else "unknown_torch"
+    # Create a somewhat stable hash for the model identifier (e.g., model class name or a version string)
+    model_hash = hashlib.md5(model_identifier.encode()).hexdigest()[:8]
+
+    # Path: <base>/<model_key>/<device>/<backend>/<torch_ver>/<model_hash>/artifact.ptc
+    artifact_dir = os.path.join(
+        COMPILE_CACHE_BASE_DIR,
+        model_name_key,
+        device.replace(':', '_'),  # Sanitize device string for path
+        backend,
+        torch_version_str,
+        model_hash
+    )
+    os.makedirs(artifact_dir, exist_ok=True)
+    return os.path.join(artifact_dir, "artifact.ptc")
 
 def monitor_memory_usage():
     """
@@ -244,11 +273,75 @@ def initialize_models(worker_config):
                 CHATTERBOX_TTS_AVAILABLE_THREAD = True  # Assume import success initially
                 if ChatterboxTTS_class_ref_thread:
                     log_thread_worker("INFO",
-                                      f"Loading ChatterboxTTS model on effective device: {effective_tts_device_for_chatterbox}...")
-                    chatterbox_model_instance_global = ChatterboxTTS_class_ref_thread.from_pretrained(
+                                      f"Loading ChatterboxTTS model on: {effective_tts_device_for_chatterbox}...")
+                    # Step 1: Load the original model
+                    original_tts_model = ChatterboxTTS_class_ref_thread.from_pretrained(
                         device=effective_tts_device_for_chatterbox
                     )
-                    log_thread_worker("INFO", "ChatterboxTTS model loaded successfully.")
+                    log_thread_worker("INFO", "ChatterboxTTS original model loaded.")
+                    chatterbox_model_instance_global = original_tts_model  # Default to uncompiled
+
+                    # Step 2: Apply torch.compile if configured and possible
+                    if worker_config.get("use_torch_compile_tts", False) and hasattr(torch, 'compiler'):
+                        log_thread_worker("INFO", "[TorchCompile] torch.compile enabled for TTS.")
+                        # Determine artifact path (needs model identifier)
+                        # Using class name as a simple identifier. A version string would be better.
+                        model_id_for_cache = ChatterboxTTS_class_ref_thread.__name__
+                        compile_backend = worker_config.get("tts_compile_backend", "inductor")
+
+                        artifact_path = None
+                        if COMPILE_CACHE_BASE_DIR:  # Only try caching if base dir is set
+                            artifact_path = get_compile_artifact_path("tts_chatterbox", model_id_for_cache,
+                                                                      effective_tts_device_for_chatterbox,
+                                                                      compile_backend)
+
+                        loaded_from_cache = False
+                        if artifact_path and os.path.exists(artifact_path):
+                            try:
+                                log_thread_worker("INFO", f"[TorchCompile] Loading artifacts from: {artifact_path}")
+                                with open(artifact_path, "rb") as f:
+                                    artifact_bytes = f.read()
+                                torch.compiler.load_cache_artifacts(artifact_bytes)  # type: ignore
+                                log_thread_worker("INFO", "[TorchCompile] Artifacts loaded successfully.")
+                                loaded_from_cache = True
+                            except Exception as e:
+                                log_thread_worker("WARNING",
+                                                  f"[TorchCompile] Failed to load artifacts from {artifact_path}: {e}. Will recompile.")
+                                # Potentially delete corrupted artifact: os.remove(artifact_path)
+
+                        try:
+                            log_thread_worker("INFO",
+                                              f"[TorchCompile] Compiling ChatterboxTTS model with backend '{compile_backend}'...")
+                            # Make sure the model is on the correct device BEFORE compiling
+                            model_to_compile = original_tts_model.to(effective_tts_device_for_chatterbox)
+
+                            compiled_tts_model = torch.compile(model_to_compile, backend=compile_backend,
+                                                               fullgraph=False)  # Try fullgraph=True for more speed if it works
+                            chatterbox_model_instance_global = compiled_tts_model  # Use compiled model
+                            log_thread_worker("INFO", "[TorchCompile] Model compiled successfully.")
+
+                            if artifact_path and not loaded_from_cache:  # Save if newly compiled
+                                log_thread_worker("INFO",
+                                                  f"[TorchCompile] Saving new compile artifacts to: {artifact_path}")
+                                try:
+                                    new_artifact_bytes = torch.compiler.save_cache_artifacts()  # type: ignore
+                                    with open(artifact_path, "wb") as f:
+                                        f.write(new_artifact_bytes)
+                                    log_thread_worker("INFO", "[TorchCompile] New artifacts saved.")
+                                except Exception as e_save:
+                                    log_thread_worker("WARNING",
+                                                      f"[TorchCompile] Failed to save artifacts to {artifact_path}: {e_save}")
+                        except Exception as e_compile:
+                            log_thread_worker("ERROR",
+                                              f"[TorchCompile] Compilation failed: {e_compile}. Using uncompiled model.")
+                            chatterbox_model_instance_global = original_tts_model  # Fallback
+                    else:
+                        if not hasattr(torch, 'compiler'):
+                            log_thread_worker("INFO",
+                                              "[TorchCompile] torch.compiler module not available. Skipping compilation.")
+                        else:
+                            log_thread_worker("INFO",
+                                              "[TorchCompile] use_torch_compile_tts is false. Using uncompiled model.")
                     # TTS Warmup
                     try:
                         dummy_text = "Chatterbox TTS warm-up sequence initiated."
