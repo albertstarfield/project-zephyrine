@@ -15,8 +15,8 @@ ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *qui
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", 16384)) # Default token limit for LLM calls
 #DEFAULT_LLM_TEMPERATURE = 0.8
 DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", 0.8))
-CHUNCK_SIZE = int(os.getenv("CHUNCK_SIZE", 400)) # For URL Chroma store
-CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 200)) # For URL Chroma store
+CHUNCK_SIZE = int(os.getenv("CHUNCK_SIZE", 512)) # For URL Chroma store
+CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 256)) # For URL Chroma store
 RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 10))
 DEEP_THOUGHT_RETRY_ATTEMPTS = int(os.getenv("DEEP_THOUGHT_RETRY_ATTEMPTS", 3))
@@ -483,25 +483,6 @@ Faulty AI Output:
 Corrected JSON Output (ONLY the JSON object itself):
 """
 
-PROMPT_REFORMAT_TO_ACTION_JSON = f"""The AI's previous output (see "Faulty AI Output" below) was an attempt to generate a JSON object for an action analysis task.
-However, it was either not valid JSON or did not conform to the required structure.
-{ACTION_JSON_STRUCTURE_EXAMPLE}
-
-Please analyze the "Faulty AI Output", understand the intended action and parameters, and reformat it into a single, valid JSON object precisely matching the structure described above.
-The JSON object MUST contain ONLY these exact keys: "action_type" (string), "parameters" (JSON object), and "explanation" (string).
-Ensure all string values within the JSON are correctly quoted.
-
-If the faulty output provides no clear action or is too garbled to interpret, respond with ONLY the following JSON object (ensure it is valid JSON):
-{NO_ACTION_FALLBACK_JSON_EXAMPLE}
-
-Faulty AI Output:
-\"\"\"
-{{faulty_llm_output_for_reformat}}
-\"\"\"
-
-Corrected JSON Output (ONLY the JSON object itself, no other text, no markdown, no wrappers):
-"""
-
 PROMPT_ROUTER = """Analyze the user's query, conversation history, and context (including file search results) to determine the best specialized model to handle the request.
 
 Available Models:
@@ -789,32 +770,34 @@ Emotion/Context Analysis of current input: {{emotion_analysis}}
 PROMPT_EXTRACT_JSON = """Given the following text, which may contain reasoning within <think> tags or other natural language explanations, extract ONLY the valid JSON object present within the text. Output nothing else, just the JSON object itself.
 
 Input Text:
-{raw_llm_output}
+{{raw_llm_output}}
 ====
 JSON Object:
 """
 
-PROMPT_GENERATE_FILE_SEARCH_QUERY = """Generate a concise search query suitable for searching a local file index (file paths and contents).
-Based on the user's query and recent conversation history below, extract the most relevant keywords, filenames, entities, or concepts.
+PROMPT_GENERATE_FILE_SEARCH_QUERY = """Your goal is to help the user refine their search intent for a local file index (file paths and contents).
+Based on the user's query and recent conversation history below, formulate one or two concise clarifying questions.
+These questions should help the user articulate:
+1. The specific underlying question they are trying to answer with their search.
+2. What a good or ideal answer/result would look like, or what kind of information they expect to find.
 
-Output ONLY the essential search query terms, separated by spaces. Be brief and direct.
-Do NOT include explanations, reasoning (like <think> tags), or any conversational text.
+Output ONLY the clarifying question(s) for the user. Be brief and direct.
+Do NOT include explanations, reasoning (like <think> tags), or any conversational text beyond the question(s) themselves.
 
-User Query: {input}
+User Query: {{input}}
 Recent History:
-{recent_direct_history}
+{{recent_direct_history}}
 ===============================
 
-
-Search Query Terms:"""
+Clarifying Question(s) for User:"""
 
 PROMPT_COMPLEXITY_CLASSIFICATION = """Analyze the following user query and the recent conversation context. Classify the query into ONE of the following categories based on how it should be processed:
 1.  `chat_simple`: Straightforward question/statement, direct answer needed.
 2.  `chat_complex`: Requires deeper thought/analysis (ToT simulation), but still conversational.
 3.  `agent_task`: Requires external actions using tools (files, commands, etc.).
 
-User Query: {input}
-Conversation Context: {history_summary}
+User Query: {{input}}
+Conversation Context: {{history_summary}}
 ---
 Your response MUST be a single, valid JSON object and nothing else.
 The JSON object must contain exactly two keys: "classification" (string: "chat_simple", "chat_complex", or "agent_task") and "reason" (a brief explanation string).
@@ -918,11 +901,11 @@ PROMPT_GENERATE_APPLESCRIPT = """You are an developer. Your task is to generate 
 **CRITICAL OUTPUT FORMAT:** Respond ONLY with the raw AppleScript code block. Do NOT include any explanations, comments outside the script, or markdown formatting like ```applescript ... ```. Start directly with 'use AppleScript version...' or the first line of the script.
 
 **Action Details:**
-Action Type: {action_type}
-Parameters (JSON): {parameters_json}
+Action Type: {{action_type}}
+Parameters (JSON): {{parameters_json}}
 
 **Past Attempts (for context, most recent first):**
-{past_attempts_context}
+{{past_attempts_context}}
 
 Generate AppleScript:
 """
@@ -937,8 +920,8 @@ PROMPT_REFINE_APPLESCRIPT = """You are an macOS AppleScript debugger. An AppleSc
 5.  **Output ONLY Raw Code:** Respond ONLY with the raw, corrected AppleScript code block. Do NOT include explanations, comments outside the script, or markdown formatting like ```applescript ... ```.
 
 **Original Request:**
-Action Type: {action_type}
-Parameters (JSON): {parameters_json}
+Action Type: {{action_type}}
+Parameters (JSON): {{parameters_json}}
 
 **Failed Script:**
 ```applescript
@@ -952,7 +935,7 @@ Stdout: {stdout}
 Error Summary: {error_summary}
 
 **Past Attempts (for context, most recent first):**
-{past_attempts_context}
+{{past_attempts_context}}
 Why is this failing? Write and fix the issue!
 
 YOU MUST MAKE DIFFERENT SCRIPT!
