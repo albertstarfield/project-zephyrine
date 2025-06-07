@@ -19,11 +19,23 @@ CHUNCK_SIZE = int(os.getenv("CHUNCK_SIZE", 512)) # For URL Chroma store
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 256)) # For URL Chroma store
 RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 10))
+FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 512)) #Extreme or vanquish
+FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
+
+
+
+
+
 DEEP_THOUGHT_RETRY_ATTEMPTS = int(os.getenv("DEEP_THOUGHT_RETRY_ATTEMPTS", 3))
 RESPONSE_TIMEOUT_MS = 15000 # Timeout for potential multi-step process
 # Similarity threshold for reusing previous ToT results (requires numpy/embeddings)
 TOT_SIMILARITY_THRESHOLD = float(os.getenv("TOT_SIMILARITY_THRESHOLD", 0.1))
 # Fuzzy search threshold for history RAG (0-100, higher is stricter) - Requires thefuzz
+
+OCR_TARGET_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.tiff', '.tif', '.bmp', '.gif', '.avif'}
+VLM_TARGET_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.avif'} # VLM can be a subset of OCR targets
+
+
 
 FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 20))
 
