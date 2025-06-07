@@ -3980,6 +3980,87 @@ class AIChat:
             f"{log_prefix_call}: LLM call failed after all retries or was not retriable. Returning error indication.")
         return f"[LLM_CALL_UNEXPECTED_EXIT_ELP{priority}]"
 
+    def _extract_json_candidate_string(self, raw_llm_text: str, log_prefix: str = "JSONExtract") -> Optional[str]:
+        """
+        Robustly extracts a potential JSON string from raw LLM text.
+        Handles <think> tags, markdown code blocks, and finding outermost braces.
+        """
+        if not raw_llm_text or not isinstance(raw_llm_text, str):
+            return None
+
+        logger.trace(f"{log_prefix}: Starting JSON candidate extraction from raw text (len {len(raw_llm_text)}).")
+
+        text_after_think_removal = re.sub(r'<think>.*?</think>', '', raw_llm_text,
+                                          flags=re.DOTALL | re.IGNORECASE).strip()
+        if not text_after_think_removal:
+            logger.trace(f"{log_prefix}: Text empty after <think> removal.")
+            return None
+
+        cleaned_text = text_after_think_removal
+        cleaned_text = re.sub(r"^\s*(assistant\s*\n?)?(<\|im_start\|>\s*(system|assistant)\s*\n?)?", "", cleaned_text,
+                              flags=re.IGNORECASE).lstrip()
+        if CHATML_END_TOKEN and cleaned_text.endswith(CHATML_END_TOKEN):
+            cleaned_text = cleaned_text[:-len(CHATML_END_TOKEN)].strip()
+
+        json_markdown_match = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", cleaned_text, re.DOTALL)
+        if json_markdown_match:
+            extracted_str = json_markdown_match.group(1).strip()
+            logger.trace(f"{log_prefix}: Extracted JSON from markdown block: '{extracted_str[:100]}...'")
+            return extracted_str
+
+        first_brace = cleaned_text.find('{')
+        last_brace = cleaned_text.rfind('}')
+        if first_brace != -1 and last_brace != -1 and last_brace > first_brace:
+            extracted_str = cleaned_text[first_brace: last_brace + 1].strip()
+            logger.trace(f"{log_prefix}: Extracted JSON using outermost braces: '{extracted_str[:100]}...'")
+            return extracted_str
+
+        if cleaned_text.startswith("{") and cleaned_text.endswith("}"):
+            logger.trace(f"{log_prefix}: Assuming cleaned text itself is the JSON candidate: '{cleaned_text[:100]}...'")
+            return cleaned_text
+
+        logger.warning(
+            f"{log_prefix}: No clear JSON structure found after extraction attempts. Raw (after think): '{text_after_think_removal[:100]}...'")
+        return None
+
+    def _programmatic_json_parse_and_fix(self, json_candidate_str: str,
+                                         max_fix_attempts: int = 3,
+                                         log_prefix: str = "JSONFixParse") -> Optional[Union[Dict, List]]:
+        """
+        Attempts to parse a JSON string, applying a limited set of programmatic fixes
+        if initial parsing fails.
+        """
+        if not json_candidate_str or not isinstance(json_candidate_str, str):
+            return None
+
+        current_text_to_parse = json_candidate_str
+        json_parser = JsonOutputParser()
+
+        for attempt in range(max_fix_attempts):
+            logger.debug(f"{log_prefix}: Parse/fix attempt {attempt + 1}/{max_fix_attempts}.")
+            try:
+                parsed_object = json_parser.parse(current_text_to_parse)
+                logger.debug(f"{log_prefix}: Successfully parsed JSON on attempt {attempt + 1}.")
+                return parsed_object
+            except (json.JSONDecodeError, OutputParserException) as e:
+                logger.warning(f"{log_prefix}: Attempt {attempt + 1} parse failed: {type(e).__name__} - {str(e)[:100]}")
+                if attempt == max_fix_attempts - 1:
+                    logger.error(f"{log_prefix}: Max fix attempts reached. Could not parse after error: {e}")
+                    break
+
+                text_before_fixes = current_text_to_parse
+                current_text_to_parse = re.sub(r",\s*([\}\]])", r"\1", current_text_to_parse)  # Fix trailing commas
+                text_after_comment_removal = re.sub(r"//.*?\n", "\n", current_text_to_parse, flags=re.MULTILINE)
+                current_text_to_parse = re.sub(r"/\*.*?\*/", "", text_after_comment_removal, flags=re.DOTALL).strip()
+
+                if current_text_to_parse == text_before_fixes:
+                    logger.warning(f"{log_prefix}: Programmatic fixes did not alter the string. Error may be complex.")
+                    break  # Break if no progress is made
+
+        logger.error(f"{log_prefix}: Failed to parse JSON after all programmatic fix attempts.")
+        return None
+
+
     async def _classify_input_complexity(self, db: Session, user_input: str,
                                          interaction_data_for_metrics: dict) -> str:
         """
@@ -4413,90 +4494,101 @@ class AIChat:
             if db:
                  db.close()
 
-    async def _analyze_assistant_action(self, db: Session, user_input: str, session_id: str, context: Dict[str, str]) -> \
-    Optional[Dict[str, Any]]:
+    async def _analyze_assistant_action(self, db: Session, user_input: str, session_id: str,
+                                        context: Dict[str, str]) -> Optional[Dict[str, Any]]:
         request_id_suffix = str(uuid.uuid4())[:8]
         log_prefix = f"🤔 ActionAnalyze|ELP0|{session_id[:8]}-{request_id_suffix}"
         logger.info(f"{log_prefix} Analyzing input for action: '{user_input[:50]}...'")
 
-        prompt_input = {
+        prompt_input_initial = {
             "input": user_input, "history_summary": context.get("history_summary", "N/A"),
             "log_context": context.get("log_context", "N/A"),
             "recent_direct_history": context.get("recent_direct_history", "N/A")
         }
+
         action_analysis_model = self.provider.get_model("router") or self.provider.get_model("default")
         if not action_analysis_model:
-            logger.error(f"{log_prefix} ❌ Action analysis model not available!")
+            logger.error(f"{log_prefix} ❌ Action analysis model (router/default) not available!");
             return None
 
-        analysis_chain_raw_output = ChatPromptTemplate.from_template(
+        analysis_chain_raw = ChatPromptTemplate.from_template(
             PROMPT_ASSISTANT_ACTION_ANALYSIS) | action_analysis_model | StrOutputParser()
         action_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
 
         raw_llm_output_from_initial_loop: str = "Initial LLM action analysis did not yield parsable output."
         parsed_action_json: Optional[Dict[str, Any]] = None
 
-        # --- Stage 1: Initial LLM Calls and Parsing Attempts ---
-        for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):  # DEEP_THOUGHT_RETRY_ATTEMPTS from config
+        for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):
             current_attempt_num = attempt + 1
             logger.debug(
                 f"{log_prefix} Initial Action analysis LLM call attempt {current_attempt_num}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
             try:
-                raw_llm_response_text_current_attempt = await asyncio.to_thread(
-                    self._call_llm_with_timing, analysis_chain_raw_output, prompt_input,
-                    action_timing_data, priority=ELP0
-                )
-                raw_llm_output_from_initial_loop = raw_llm_response_text_current_attempt
-
-                json_candidate_str = _extract_json_candidate_string(raw_llm_response_text_current_attempt, log_prefix)
-                if json_candidate_str:
-                    parsed_action_json = _programmatic_json_parse_and_fix(json_candidate_str, 1,
-                                                                          log_prefix + f"-InitialAttempt{current_attempt_num}")  # Only 1 fix attempt here
-                    if parsed_action_json and isinstance(parsed_action_json, dict) and \
-                            "action_type" in parsed_action_json and "parameters" in parsed_action_json:
+                raw_llm_text = await asyncio.to_thread(self._call_llm_with_timing, analysis_chain_raw,
+                                                       prompt_input_initial, action_timing_data, priority=ELP0)
+                raw_llm_output_from_initial_loop = raw_llm_text
+                json_candidate = self._extract_json_candidate_string(raw_llm_text, log_prefix)
+                if json_candidate:
+                    parsed_action_json = self._programmatic_json_parse_and_fix(json_candidate, 1,
+                                                                               log_prefix + f"-InitialFix{current_attempt_num}")
+                    if parsed_action_json and isinstance(parsed_action_json,
+                                                         dict) and "action_type" in parsed_action_json and "parameters" in parsed_action_json:
                         action_type = parsed_action_json.get("action_type")
                         logger.info(
                             f"✅ {log_prefix} Initial Action analysis successful (Attempt {current_attempt_num}): Type='{action_type}'")
-                        # ... (DB logging for success)
                         return parsed_action_json if action_type != "no_action" else None
             except TaskInterruptedException as tie:
-                raise tie  # Propagate immediately
-            except Exception as e_initial:
-                logger.warning(
-                    f"⚠️ {log_prefix} Initial Action analysis attempt {current_attempt_num} failed. Error: {e_initial}")
+                raise tie
+            except Exception as e:
+                logger.warning(f"⚠️ {log_prefix} Initial Action analysis attempt {current_attempt_num} failed: {e}")
             if current_attempt_num < DEEP_THOUGHT_RETRY_ATTEMPTS: await asyncio.sleep(0.5 + attempt * 0.5)
 
-        # --- Stage 2: LLM Re-request for Formatting (if initial attempts failed) ---
-        if not parsed_action_json:  # Check if we still don't have a valid JSON
+        if not parsed_action_json:
             logger.warning(
-                f"{log_prefix} Initial action analysis attempts failed. Trying LLM re-request to fix format. Last raw output: '{raw_llm_output_from_initial_loop[:200]}...'")
-            reformat_prompt_input = {"faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop}
+                f"{log_prefix} Initial attempts failed. Trying LLM re-request to fix format. Last raw output: '{raw_llm_output_from_initial_loop[:200]}...'")
+
+            # --- START OF THE FIX ---
+            # Define the example string that the new prompt expects.
+            json_example_string = """{
+  "action_type": "string (e.g., 'search', 'scheduling', or 'no_action')",
+  "parameters": {
+    "param_key_1": "string_value_1",
+    "param_key_2": "string_value_2"
+  },
+  "explanation": "string (your reasoning for the choice)"
+}"""
+
+            # Create the input dictionary with BOTH required variables.
+            reformat_prompt_input = {
+                "faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop,
+                "json_structure_example": json_example_string
+            }
+
+            reformat_prompt_input = {
+                "faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop,
+                "\"action_type\"": "{dummy_value}"  # Provide the exact key the error asks for
+            }
+            # --- END OF THE FIX ---
+
             reformat_chain = ChatPromptTemplate.from_template(
                 PROMPT_REFORMAT_TO_ACTION_JSON) | action_analysis_model | StrOutputParser()
 
-            reformatted_llm_output_text = await asyncio.to_thread(
-                self._call_llm_with_timing, reformat_chain, reformat_prompt_input,
-                action_timing_data, priority=ELP0
-            )
+            reformatted_llm_output_text = await asyncio.to_thread(self._call_llm_with_timing, reformat_chain,
+                                                                  reformat_prompt_input, action_timing_data,
+                                                                  priority=ELP0)
 
-            if reformatted_llm_output_text and not (
-                    isinstance(reformatted_llm_output_text, str) and "ERROR" in reformatted_llm_output_text.upper()):
-                logger.info(
-                    f"{log_prefix} Received reformatted output from LLM. Attempting to parse with fix retries...")
-                json_candidate_from_reformat = _extract_json_candidate_string(reformatted_llm_output_text,
-                                                                              log_prefix + "-ReformatExtract")
+            if reformatted_llm_output_text and not (isinstance(reformatted_llm_output_text,
+                                                               str) and "ERROR" in reformatted_llm_output_text.upper()):
+                logger.info(f"{log_prefix} Received reformatted output from LLM. Parsing with fix retries...")
+                json_candidate_from_reformat = self._extract_json_candidate_string(reformatted_llm_output_text,
+                                                                                   log_prefix + "-ReformatExtract")
                 if json_candidate_from_reformat:
-                    # --- Stage 3: Inner Retry Loop for Parsing/Fixing Reformatted Output ---
-                    parsed_action_json = _programmatic_json_parse_and_fix(
-                        json_candidate_from_reformat,
-                        JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,  # From config
-                        log_prefix + "-ReformatFix"
-                    )
-                    if parsed_action_json and isinstance(parsed_action_json, dict) and \
-                            "action_type" in parsed_action_json and "parameters" in parsed_action_json:
+                    parsed_action_json = self._programmatic_json_parse_and_fix(json_candidate_from_reformat,
+                                                                               JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,
+                                                                               log_prefix + "-ReformatFix")
+                    if parsed_action_json and isinstance(parsed_action_json,
+                                                         dict) and "action_type" in parsed_action_json and "parameters" in parsed_action_json:
                         action_type = parsed_action_json.get("action_type")
                         logger.info(f"✅ {log_prefix} Reformatted Action analysis successful: Type='{action_type}'")
-                        # ... (DB logging for success)
                         return parsed_action_json if action_type != "no_action" else None
                 else:
                     logger.error(
@@ -4505,34 +4597,30 @@ class AIChat:
                 logger.error(
                     f"{log_prefix} LLM re-request for JSON formatting failed or returned error: {reformatted_llm_output_text}")
 
-        # --- Stage 4: Keyword Fallback ---
         logger.warning(
-            f"{log_prefix} All action analysis methods failed. Falling back to keyword-based default action for user input: '{user_input[:100]}'")
-        words = re.findall(r'\b\w+\b', user_input.lower())
+            f"{log_prefix} All action analysis methods failed. Falling back to keyword-based default action for: '{user_input[:100]}'")
+        words = re.findall(r'\b\w+\b', user_input.lower());
         stop_words = {"the", "is", "a", "to", "and", "what", "how", "who", "please", "can", "you", "tell", "me",
                       "about", "of", "for", "in", "on", "at", "an", "i", "my", "me"}
         keywords = [word for word in words if len(word) > 2 and word not in stop_words]
-
         fallback_params = {"original_query": user_input[:200], "extracted_keywords": list(set(keywords))[:7]}
         logger.info(f"{log_prefix} Extracted keywords for fallback: {fallback_params['extracted_keywords']}")
+        final_fallback_action = {"action_type": "keyword_based_response_fallback", "parameters": fallback_params,
+                                 "explanation": "Automated action analysis failed after multiple attempts. Using keyword-based fallback for general response or search."}
 
-        final_fallback_action = {
-            "action_type": "keyword_based_response_fallback",
-            "parameters": fallback_params,
-            "explanation": "Automated action analysis failed after multiple attempts. Using keyword-based fallback for general response or search."
-        }
-        try:  # Log this fallback action
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
-                            user_input=f"[Action Analysis Fallback for: {user_input[:100]}]",
-                            llm_response=json.dumps(final_fallback_action),
-                            assistant_action_analysis_json=json.dumps(final_fallback_action),
-                            assistant_action_type=final_fallback_action["action_type"])
-            db.commit()
+        try:
+            await asyncio.to_thread(add_interaction, db, session_id=session_id, mode="chat",
+                                    input_type="log_warning",
+                                    user_input=f"[Action Analysis Fallback for: {user_input[:100]}]",
+                                    llm_response=json.dumps(final_fallback_action),
+                                    assistant_action_analysis_json=json.dumps(final_fallback_action),
+                                    assistant_action_type=final_fallback_action["action_type"]);
+            await asyncio.to_thread(db.commit)
         except Exception as db_log_fallback_err:
-            logger.error(f"{log_prefix} Failed to log keyword fallback action: {db_log_fallback_err}")
-            if db: db.rollback()
+            logger.error(f"{log_prefix} Failed to log keyword fallback action: {db_log_fallback_err}");
+            await asyncio.to_thread(db.rollback)
 
-        return final_fallback_action  # Return the fallback action dictionary
+        return final_fallback_action
 
 
 
@@ -5657,6 +5745,7 @@ class AIChat:
                     "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn or interaction_data.get(
                         'image_description', 'None.')
                 }
+
                 specialist_chain = (self.text_prompt_template | specialist_model_instance | StrOutputParser())
                 timing_data_specialist = {"session_id": session_id, "mode": "chat_specialist"}
 

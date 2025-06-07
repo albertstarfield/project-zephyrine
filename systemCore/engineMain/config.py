@@ -670,24 +670,24 @@ You are Adelaide Zephyrine Charlotte, the Friend persona. You received a draft r
 ### FINAL RESPONSE (Your Output - User-Facing and Result Text ONLY):
 """
 
-PROMPT_REFORMAT_TO_ACTION_JSON = f"""The AI's previous output below was an attempt to generate a JSON object for an action analysis task.
-However, it is not valid JSON or does not conform to the required structure.
-The required structure is a JSON object with keys "action_type", "parameters", and "explanation". For example:
-`{{"action_type": "some_action", "parameters": {{"param1": "value1"}}, "explanation": "Some reason"}}`
+PROMPT_REFORMAT_TO_ACTION_JSON = f"""The AI's previous output (see "Faulty AI Output" below) was an attempt to generate a JSON object for an action analysis task, but it was not valid JSON.
 
-Please analyze the "Faulty AI Output" below and reformat it into a single, valid JSON object adhering to this structure.
-The JSON object MUST contain ONLY these exact keys: "action_type" (string), "parameters" (JSON object), and "explanation" (string).
+Your task is to analyze the "Faulty AI Output", understand the intended action and parameters, and reformat it into a single, valid JSON object precisely matching the structure described in the example below.
+
+**Example of Required JSON Structure:**
+```json
+{{json_structure_example}}
+The JSON object you output MUST contain ONLY these exact keys: "action_type", "parameters", and "explanation".
 Ensure all string values within the JSON are correctly quoted.
 
-If the faulty output provides no clear action or is too garbled to interpret, respond with ONLY the following JSON object:
-`{{"action_type": "no_action", "parameters": {{}}, "explanation": "Original AI output for action analysis was unclear or did not specify a distinct action after reformat attempt."}}`
+If the faulty output provides no clear action or is too garbled to interpret, respond with ONLY the following JSON object:{{"action_type": "no_action", "parameters": {{}}, "explanation": "Original AI output for action analysis was unclear or did not specify a distinct action after reformat attempt."}}
 
 Faulty AI Output:
 \"\"\"
 {{faulty_llm_output_for_reformat}}
 \"\"\"
 
-Corrected JSON Output (ONLY the JSON object itself, no other text or wrappers):
+Corrected JSON Output (ONLY the JSON object itself, no other text, no markdown, no wrappers):
 """
 
 PROMPT_SELF_REFLECTION_TOPICS = """Analyze the following summary of recent global conversation history. Identify up to {max_topics} distinct key themes and Possible branch or possible answer from this, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the AI (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A. Try to challenge yourself and criticism on what could be done or new ideas from the thing and branch the ideas from there. then validate against the RAG or the snippets augmented on this prompt.
