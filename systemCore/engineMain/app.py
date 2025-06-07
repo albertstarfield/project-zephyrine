@@ -104,7 +104,7 @@ from sqlalchemy.sql import func
 from flask import Flask, request, Response, g, jsonify # Use Flask imports
 
 try:
-    from shared_state import server_is_busy_event
+    from shared_state import TaskInterruptedException, server_is_busy_event
 except ImportError:
     logger.critical("Failed to import shared_state. Server busy signaling disabled.")
     # Create a dummy event if import fails to avoid crashing later code
@@ -985,13 +985,6 @@ def setup_assistant_proxy():
             logger.error(f"❌ Error copying proxy app to /Applications: {e}")
             return False
     # Temporary directory tmpdir is automatically cleaned up
-
-
-
-class TaskInterruptedException(Exception):
-    """Custom exception raised when an ELP0 task is interrupted."""
-    pass
-
 
 
 # === AI Chat Logic (Amaryllis - SQLite RAG with Fuzzy Search) ===

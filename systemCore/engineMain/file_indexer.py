@@ -23,6 +23,8 @@ from langchain_chroma import Chroma
 import argparse # For __main__
 import shutil
 import subprocess
+import fitz
+import pytesseract
 
 
 from langchain_core.messages import HumanMessage
@@ -78,7 +80,13 @@ except ImportError:
     # Exit if DB cannot be imported
     # sys.exit("Indexer failed: Database components missing.") # Comment out for potential testing
 
+class TaskInterruptedException(Exception):
+    """Custom exception raised when a lower-priority task is interrupted by a higher-priority one."""
+    pass
+
 # --- NEW: Import the custom lock ---
+
+from shared_state import TaskInterruptedException, server_is_busy_event
 
 from priority_lock import ELP0, ELP1 # Ensure these are imported
 interruption_error_marker = "Worker task interrupted by higher priority request" # Define consistently
@@ -113,6 +121,10 @@ OFFICE_EXTENSIONS = {'.docx', '.doc', '.xls', '.xlsx', '.pptx', '.ppt'} # Added 
 # --- File types we want to embed ---
 EMBEDDABLE_EXTENSIONS = TEXT_EXTENSIONS.union(DOC_EXTENSIONS).union({'.csv'}) # Explicitly add csv here if not in TEXT_EXTENSIONS
 
+
+def log_worker(level: str, message: str):
+    """Basic logging to stderr for the worker itself."""
+    print(f"[{time.strftime('%Y-%m-%d %H:%M:%S')} AUDIO_WORKER(PID:{os.getpid()})|{level}] {message}", file=sys.stderr, flush=True)
 
 
 class FileIndexer:
@@ -157,6 +169,58 @@ class FileIndexer:
         if waited and log_wait:
              logger.info(f"� {self.thread_name}: Server is free, resuming indexing.")
         return False # Indicate processing can continue
+
+    def _extract_text_with_ocr_fallback(self, file_path: str, file_ext: str) -> str:
+        """
+        Extracts text from a file. For PDFs, it checks for a text layer and
+        falls back to OCR. for standard image types, it performs OCR directly.
+        """
+        log_prefix = f"TextExtract|{os.path.basename(file_path)[:15]}"
+
+        try:
+            # --- PDF Specific Logic with OCR Fallback ---
+            if file_ext == '.pdf':
+                doc = fitz.open(file_path)
+                full_text = ""
+                is_image_based = True
+                for page in doc:
+                    if page.get_text("text").strip():
+                        is_image_based = False
+                        break
+
+                if not is_image_based:
+                    log_worker("INFO", f"{log_prefix}: PDF has text layer, extracting directly.")
+                    full_text = "\n".join([page.get_text() for page in doc])
+                else:  # Scanned PDF, perform OCR
+                    log_worker("INFO", f"{log_prefix}: PDF has no text layer, performing OCR...")
+                    ocr_texts = []
+                    for page_num, page in enumerate(doc):
+                        pix = page.get_pixmap(dpi=300)
+                        img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
+                        try:
+                            ocr_texts.append(pytesseract.image_to_string(img))
+                        except pytesseract.TesseractNotFoundError:
+                            log_worker("ERROR", f"{log_prefix}: Tesseract OCR engine not found. Cannot OCR PDF.")
+                            return "[OCR Error: Tesseract engine not found]"
+                    full_text = "\n\n--- Page Break ---\n\n".join(ocr_texts)
+                doc.close()
+                return full_text
+
+            # --- Direct OCR for Standard Image Types ---
+            elif file_ext in OCR_TARGET_EXTENSIONS:
+                log_worker("INFO", f"{log_prefix}: Performing OCR on image file: {file_path}")
+                try:
+                    return pytesseract.image_to_string(Image.open(file_path))
+                except pytesseract.TesseractNotFoundError:
+                    log_worker("ERROR", f"{log_prefix}: Tesseract OCR engine not found. Cannot OCR image.")
+                    return "[OCR Error: Tesseract engine not found]"
+
+        except Exception as e:
+            log_worker("ERROR", f"{log_prefix}: Failed to extract text/OCR from '{file_path}': {e}")
+            return f"[Error extracting text/OCR: {e}]"
+
+        # Fallback if file type is not handled by this function
+        return ""
 
     def _convert_office_to_pdf(self, office_path: str) -> Optional[str]:
         """
@@ -757,298 +821,121 @@ class FileIndexer:
 
     def _process_file_phase1(self, file_path: str, db_session: Session):
         """
-        Phase 1: Gets metadata, hash. Extracts text for PDFs and standard text files.
-        Embeds extracted text using ELP0. Marks PDFs and Office files for later VLM processing.
-        Handles ELP0 interruptions during embedding.
+        Phase 1 processing for a single file. Handles metadata, change detection,
+        text/OCR extraction, embedding, and database updates. It will re-process
+        unchanged files if their text content is missing in the database.
         """
-        if self._wait_if_server_busy(log_wait=False):
-            logger.trace(f"Yielding file processing due to busy server: {file_path}")
-            return
         if self.stop_event.is_set():
-            logger.trace(f"File processing interrupted by stop signal: {file_path}")
             return
 
-        logger.trace(f"Phase 1 Processing: {file_path}")
-        file_name = os.path.basename(file_path)
-        status = 'pending'
-        content: Optional[str] = None  # This will hold the text to be stored in indexed_content
-        error_message: Optional[str] = None
-        embedding_json_str: Optional[str] = None
-        current_md5_hash: Optional[str] = None
-        vlm_processing_status_to_set: Optional[str] = None
-        should_update_db = True
-        existing_record: Optional[FileIndex] = None
-        size_bytes: int = -1
-        mtime_os: Optional[datetime.datetime] = None
-        mime_type: Optional[str] = None
+        log_prefix = f"P1-File|{os.path.basename(file_path)[:20]}"
 
+        # 1. Initial Checks (File Size, Server Busy)
         try:
-            size_bytes_stat, mtime_os_stat, mime_type_stat = self._get_file_metadata(file_path)
-            if size_bytes_stat is None and mtime_os_stat is None:  # File likely vanished or permission issue during stat
-                status = 'error_permission';
-                error_message = "Permission denied or file vanished during stat."
-            else:
-                size_bytes = size_bytes_stat if size_bytes_stat is not None else -1
-                mtime_os = mtime_os_stat;
-                mime_type = mime_type_stat
-
-            if status == 'pending':  # Only proceed if no error yet
-                try:
-                    current_md5_hash = self._calculate_md5(file_path, size_bytes)
-                    if current_md5_hash is None and size_bytes >= 0 and size_bytes <= MAX_HASH_FILE_SIZE_BYTES:
-                        status = 'error_hash';
-                        error_message = "Failed to calculate MD5 hash (returned None for hashable file)."
-                except PermissionError:
-                    raise  # Let outer handler catch this
-                except Exception as hash_err:  # Catch other errors during _calculate_md5 call
-                    status = 'error_hash';
-                    error_message = f"Error during hashing call: {hash_err}";
-                    current_md5_hash = None
-
-            if status == 'pending':
-                try:
-                    existing_record = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
-                    if existing_record:
-                        hashes_match = (current_md5_hash is not None and existing_record.md5_hash == current_md5_hash)
-                        large_timestamps_match = (current_md5_hash is None and size_bytes > MAX_HASH_FILE_SIZE_BYTES and
-                                                  existing_record.md5_hash is None and mtime_os and existing_record.last_modified_os and
-                                                  mtime_os <= existing_record.last_modified_os)  # type: ignore
-
-                        if hashes_match or large_timestamps_match:
-                            should_update_db = False
-                            file_ext_check = os.path.splitext(existing_record.file_name)[1].lower()
-                            is_pdf_or_office = file_ext_check == '.pdf' or file_ext_check in OFFICE_EXTENSIONS
-
-                            if self.vlm_model and self.latex_model and is_pdf_or_office and \
-                                    (existing_record.vlm_processing_status is None or \
-                                     existing_record.vlm_processing_status in ['pending_vlm', 'pending_conversion',
-                                                                               'error_vlm', 'error_conversion',
-                                                                               'skipped_vlm_no_model']):
-                                vlm_processing_status_to_set = 'pending_vlm' if file_ext_check == '.pdf' else 'pending_conversion'
-                                should_update_db = True  # Force DB update just for VLM status
-                                logger.trace(
-                                    f"Content unchanged, but VLM status needs update for {file_path} to {vlm_processing_status_to_set}")
-
-                            if not should_update_db:
-                                logger.trace(f"Skipping (Content & VLM status OK/not applicable): {file_path}")
-                        else:
-                            logger.trace(f"Needs update (Changed Hash/Timestamp or New): {file_path}")
-                except SQLAlchemyError as db_check_err:
-                    logger.error(f"DB check failed for {file_path}: {db_check_err}")
-                    status = 'error_read';
-                    error_message = f"Database check failed: {db_check_err}";
-                    should_update_db = False
-
-            if should_update_db and status == 'pending':  # Only process content if DB update is needed and no prior critical errors
-                file_ext = os.path.splitext(file_name)[1].lower()
-                is_pdf_target = file_ext == '.pdf'
-                is_office_target_for_vlm = file_ext in OFFICE_EXTENSIONS  # Imported from config.py
-                is_general_text_target = file_ext in TEXT_EXTENSIONS or (mime_type and mime_type.startswith('text/'))
-
-                extracted_text_for_embedding: Optional[str] = None  # Text that will be embedded
-
-                if is_pdf_target:
-                    logger.trace(f"PDF detected: {file_path}. Initial text extraction & embedding pass.")
-                    extracted_text_for_embedding = self._extract_pdf(file_path)  # Can raise PermissionError
-                    if extracted_text_for_embedding:
-                        status = 'indexed_text'
-                        content = extracted_text_for_embedding  # Store for DB
-                        logger.trace(f"Extracted ~{len(content)} chars from PDF: {file_path}")
-                    else:  # Text extraction failed or returned None/empty
-                        status = 'error_read';
-                        error_message = "PDF text extraction failed."
-                        content = None  # Ensure content is None if extraction fails
-                        logger.warning(error_message + f" File: {file_path}")
-
-                    # Mark for VLM processing in Phase 2 regardless of text extraction success for PDF (unless permission error)
-                    if self.vlm_model and self.latex_model:
-                        vlm_processing_status_to_set = 'pending_vlm'
-                    else:
-                        vlm_processing_status_to_set = 'skipped_vlm_no_model'
-
-                elif is_office_target_for_vlm:
-                    logger.trace(f"Office file: {file_path}. Marking for Phase 2 VLM (conversion & analysis).")
-                    status = 'indexed_meta'
-                    content = None;
-                    extracted_text_for_embedding = None;
-                    embedding_json_str = None
-                    if self.vlm_model and self.latex_model:
-                        vlm_processing_status_to_set = 'pending_conversion'
-                    else:
-                        vlm_processing_status_to_set = 'skipped_vlm_no_model'
-
-                elif is_general_text_target:
-                    if size_bytes <= MAX_TEXT_FILE_SIZE_BYTES:
-                        extracted_text_for_embedding = self._extract_text(file_path,
-                                                                          size_bytes)  # Can raise PermissionError
-                        if extracted_text_for_embedding is None:
-                            status = 'error_read'; error_message = "Text extraction failed"; content = None
-                        else:
-                            status = 'indexed_text'; content = extracted_text_for_embedding
-                    else:
-                        status = 'skipped_size';
-                        error_message = f"Text file too large (>{MAX_TEXT_FILE_SIZE_MB}MB)";
-                        content = None
-
-                else:  # Not PDF, not Office, not recognized text
-                    status = 'indexed_meta';
-                    content = None;
-                    extracted_text_for_embedding = None
-                    logger.trace(f"Metadata only for {file_path} (Type: {mime_type or file_ext})")
-
-                # --- Generate Embedding for successfully extracted text ---
-                if extracted_text_for_embedding and status == 'indexed_text':
-                    if self.embedding_model:
-                        logger.debug(f"🧠 Phase 1 Embedding content for: {file_path} (PRIORITY: ELP0)")
-                        try:
-                            if hasattr(self.embedding_model, '_embed_texts') and callable(
-                                    getattr(self.embedding_model, '_embed_texts')):
-                                embedding_list = self.embedding_model._embed_texts([extracted_text_for_embedding],
-                                                                                   priority=ELP1)  # type: ignore (changed to ELP1 because it ran once and required to have the knowledge for zephy)
-                                if embedding_list and len(embedding_list) > 0:
-                                    embedding_json_str = json.dumps(embedding_list[0])
-                                    logger.trace(f"Content embedding successful for {file_path}")
-                                else:
-                                    status = 'error_embedding';
-                                    error_message = (error_message or "") + " Content embedding returned no vector."
-                                    embedding_json_str = None;
-                                    logger.error(f"Embedding returned no vector for {file_path}")
-                            else:
-                                status = 'error_embedding';
-                                error_message = (
-                                                            error_message or "") + " Embedding model misconfigured (no _embed_texts)."
-                                embedding_json_str = None;
-                                logger.error(f"Embedding model misconfig for {file_path}")
-                        except Exception as emb_err:
-                            if interruption_error_marker in str(emb_err):
-                                logger.warning(f"🚦 Content embedding for {file_path} INTERRUPTED. Resetting status.")
-                                status = 'pending';
-                                error_message = "Embedding interrupted";
-                                embedding_json_str = None;
-                                content = None
-                            else:
-                                status = 'error_embedding';
-                                error_message = (error_message or "") + f" Content embedding failed: {emb_err}"
-                                embedding_json_str = None;
-                                logger.error(f"Embedding failed for {file_path}: {emb_err}")
-                    else:  # No embedding model
-                        logger.warning(
-                            f"No embedding model available for content: {file_path}. Status remains '{status}'.")
-                        # embedding_json_str remains None, status is 'indexed_text' but without embedding
-
-                # If content extraction failed, status would be 'error_read' or 'skipped_size'.
-                # If embedding failed, status would be 'error_embedding'.
-                # Ensure 'content' is None if embedding failed or wasn't performed on extracted text.
-                if status != 'indexed_text' or embedding_json_str is None:
-                    if status == 'indexed_text' and embedding_json_str is None:  # Text extracted but not embedded
-                        logger.debug(f"File {file_path} has text content but no embedding. Will store text.")
-                    else:  # Any other error status, or if status is indexed_text but content was reset (e.g. due to interrupt)
-                        pass  # Content might already be None or holds the extracted text if embedding failed but text is ok.
-
-                # Final status consolidation if it was left as 'pending' by interruption logic but there's no VLM path
-                if status == 'pending' and not (is_pdf_target or is_office_target_for_vlm):
-                    status = 'indexed_meta'
-
-
-        except PermissionError:
-            status = 'error_permission';
-            error_message = "Permission denied during file processing."
-            content = None;
-            embedding_json_str = None;
-            current_md5_hash = None;
-            should_update_db = True
-            logger.warning(f"Permission error processing {file_path}")
-        except Exception as proc_err:  # Catch-all for other unexpected errors
-            status = 'error_read';
-            error_message = f"Unexpected processing error: {proc_err}"
-            content = None;
-            embedding_json_str = None;
-            current_md5_hash = None;
-            should_update_db = True
-            logger.error(f"Error processing file {file_path}: {proc_err}", exc_info=True)
-
-        # --- Database Update ---
-        if should_update_db:
-            final_status = status
-            if status == 'pending':  # Ensure 'pending' isn't written if no further action is planned
-                final_status = 'indexed_meta'  # Default if no specific processing path was hit or error occurred
-                if (
-                        is_pdf_target or is_office_target_for_vlm) and vlm_processing_status_to_set and 'pending' in vlm_processing_status_to_set:
-                    final_status = 'indexed_meta'  # Store meta, VLM status will indicate next step
-                elif extracted_text_for_embedding and not embedding_json_str:  # Text was extracted, but not embedded
-                    final_status = 'indexed_text'  # Still useful to save the text
-
-            logger.debug(
-                f"Phase 1 DB Update for: {file_path} -> FinalStatus: {final_status}, VLM_Next: {vlm_processing_status_to_set}, HasContent: {content is not None}, HasEmb: {embedding_json_str is not None}")
-
-            record_data: Dict[str, Any] = {
-                'file_name': file_name, 'size_bytes': size_bytes, 'mime_type': mime_type,
-                'last_modified_os': mtime_os, 'index_status': final_status,
-                'md5_hash': current_md5_hash,
-                'processing_error': error_message[:1000] if error_message else None,
-                'last_indexed_db': datetime.datetime.now(datetime.timezone.utc)
-            }
-            if content is not None:  # Store extracted text if available
-                record_data['indexed_content'] = (content[:DB_TEXT_TRUNCATE_LEN] + '...[truncated]') if len(
-                    content) > DB_TEXT_TRUNCATE_LEN else content  # Use DB_TEXT_TRUNCATE_LEN from config
-            if embedding_json_str is not None:
-                record_data['embedding_json'] = embedding_json_str
-            if vlm_processing_status_to_set is not None:
-                record_data['vlm_processing_status'] = vlm_processing_status_to_set
-                if vlm_processing_status_to_set in ['pending_vlm', 'pending_conversion']:
-                    record_data['latex_representation'] = None  # Clear old VLM data if re-queueing
-                    record_data['latex_explanation'] = None
-
-            try:
-                if existing_record:
-                    update_values = {k: v for k, v in record_data.items() if
-                                     k != 'file_name' or getattr(existing_record,
-                                                                 k) != v}  # Avoid re-setting file_name unless changed, etc.
-                    # More careful update: only set fields if they have a new value or are explicitly being cleared
-                    final_update_values = {}
-                    for k, v_new in record_data.items():
-                        v_old = getattr(existing_record, k, None)
-                        if v_new is not None or k in ['indexed_content', 'embedding_json', 'processing_error',
-                                                      'latex_representation', 'latex_explanation',
-                                                      'vlm_processing_status']:  # these can be set to None explicitly
-                            if v_new != v_old:  # only update if changed or explicitly set
-                                final_update_values[k] = v_new
-                    if 'last_indexed_db' not in final_update_values:  # Always update last_indexed_db
-                        final_update_values['last_indexed_db'] = record_data['last_indexed_db']
-
-                    if final_update_values:  # Only execute update if there are changes
-                        stmt = update(FileIndex).where(FileIndex.id == existing_record.id).values(**final_update_values)
-                        db_session.execute(stmt)
-                        logger.trace(
-                            f"Phase 1 Updated DB ID {existing_record.id} for {file_path} with fields: {list(final_update_values.keys())}")
-                    else:
-                        logger.trace(
-                            f"Phase 1 No changes to update in DB for existing record ID {existing_record.id} ({file_path})")
-                else:  # New record
-                    new_record_obj = FileIndex(file_path=file_path, **record_data)  # type: ignore
-                    db_session.add(new_record_obj)
-                    logger.trace(f"Phase 1 Added new DB record for {file_path}")
-                db_session.commit()
-            except SQLAlchemyError as db_err:
-                logger.error(f"Phase 1 DB update/insert FAILED for {file_path}: {db_err}", exc_info=True)
-                db_session.rollback()
-        elif existing_record:  # should_update_db was false, but we might need to update just VLM status if it was re-queued by hash/timestamp check
-            if vlm_processing_status_to_set and existing_record.vlm_processing_status != vlm_processing_status_to_set:
+            file_size = os.path.getsize(file_path)
+            if file_size > FILE_INDEX_MAX_SIZE_MB * 1024 * 1024:
                 logger.debug(
-                    f"Content unchanged, but updating VLM status for {file_path} from '{existing_record.vlm_processing_status}' to '{vlm_processing_status_to_set}'")
+                    f"{log_prefix}: Skipping large file ({file_size / 1024 ** 2:.1f}MB > {FILE_INDEX_MAX_SIZE_MB}MB)")
+                return
+            if file_size < FILE_INDEX_MIN_SIZE_KB * 1024:
+                logger.trace(
+                    f"{log_prefix}: Skipping small file ({file_size / 1024:.1f}KB < {FILE_INDEX_MIN_SIZE_KB}KB)")
+                return
+        except OSError as e_stat:
+            logger.warning(f"{log_prefix}: Could not get file size for {file_path}: {e_stat}")
+            return
+
+        if self._wait_if_server_busy():
+            return
+
+        # 2. Calculate Hash and Get DB Record
+        current_md5 = self._calculate_md5(file_path)
+        if not current_md5:
+            logger.warning(f"{log_prefix}: Could not calculate MD5 hash, skipping.")
+            return
+
+        existing_record = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
+        values_to_update: Dict[str, Any] = {'md5_hash': current_md5}
+
+        # 3. Determine if Processing is Needed
+        needs_processing = False
+        if not existing_record:
+            logger.info(f"-> {log_prefix}: New file detected, proceeding with indexing.")
+            needs_processing = True
+        elif existing_record.md5_hash != current_md5:
+            logger.info(f"-> {log_prefix}: File has been modified (hash changed). Re-processing.")
+            needs_processing = True
+        elif not existing_record.indexed_content:
+            logger.info(
+                f"-> {log_prefix}: File is unchanged but text content is missing. Re-processing to backfill text/OCR.")
+            needs_processing = True
+        else:  # Hash matches and content exists
+            logger.trace(f"{log_prefix}: File is unchanged and already indexed. Skipping.")
+            return  # Exit the function, no further action needed
+
+        # 4. If processing is needed, extract content
+        if needs_processing:
+            content_to_embed: Optional[str] = None
+            file_ext = os.path.splitext(file_path)[1].lower()
+
+            is_ocr_target = file_ext in OCR_TARGET_EXTENSIONS  # From config
+            is_vlm_target = file_ext in VLM_TARGET_EXTENSIONS  # From config
+
+            if is_ocr_target:
+                # This generalized helper handles PDFs, scanned PDFs, and standard images
+                content_to_embed = self._extract_text_with_ocr_fallback(file_path, file_ext)
+                if is_vlm_target:
+                    values_to_update['vlm_processing_status'] = 'pending_vlm'
+            elif file_ext in TEXT_EXTENSIONS:
+                content_to_embed = self._extract_text(file_path)
+            elif file_ext in OFFICE_EXTENSIONS:
+                content_to_embed = self._extract_office_text(file_path)
+                if is_vlm_target:
+                    values_to_update['vlm_processing_status'] = 'pending_vlm'
+
+            # 5. Generate Embedding if content was extracted
+            if content_to_embed:
+                logger.info(f"{log_prefix}: Extracted ~{len(content_to_embed)} chars. Generating embedding...")
+                truncated_content = content_to_embed[:DB_TEXT_TRUNCATE_LEN]  # From config
+                values_to_update['indexed_content'] = truncated_content
+
                 try:
-                    update_vlm_data = {'vlm_processing_status': vlm_processing_status_to_set,
-                                       'last_indexed_db': datetime.datetime.now(datetime.timezone.utc)}
-                    if vlm_processing_status_to_set in ['pending_vlm', 'pending_conversion']:
-                        update_vlm_data['latex_representation'] = None;
-                        update_vlm_data['latex_explanation'] = None
-                    stmt = update(FileIndex).where(FileIndex.id == existing_record.id).values(**update_vlm_data)
-                    db_session.execute(stmt);
-                    db_session.commit()
-                except SQLAlchemyError as db_vlm_err:
-                    logger.error(f"DB VLM status only update FAILED for {file_path}: {db_vlm_err}");
-                    db_session.rollback()
-    # --- END MODIFIED: _process_file_phase1 ---
+                    # Use ELP1 for this initial embedding to prioritize responsiveness
+                    embedding = self.embedding_model.embed_query(truncated_content, priority=ELP1)  # type: ignore
+                    if embedding:
+                        values_to_update['embedding'] = embedding
+                        values_to_update['index_status'] = 'indexed_phase1'
+                        logger.info(f"{log_prefix}: Successfully generated embedding.")
+                except TaskInterruptedException as tie:
+                    logger.warning(f"{log_prefix}: Embedding interrupted by ELP0. Will retry later. {tie}")
+                    values_to_update['index_status'] = 'pending_embedding'
+                except Exception as e_embed:
+                    logger.error(f"{log_prefix}: Failed to generate embedding: {e_embed}")
+                    values_to_update['index_status'] = 'error_embedding'
+                    values_to_update['processing_error'] = str(e_embed)[:255]
+            else:
+                logger.debug(f"{log_prefix}: No text content extracted, or file was empty.")
+                values_to_update['index_status'] = 'indexed_meta_only'
+
+        # 6. Update Database
+        values_to_update['last_indexed_db'] = datetime.datetime.now(datetime.timezone.utc)
+        if existing_record:
+            # Clear old VLM data if re-processing
+            if 'vlm_processing_status' in values_to_update and values_to_update[
+                'vlm_processing_status'] == 'pending_vlm':
+                values_to_update['latex_representation'] = None
+                values_to_update['latex_explanation'] = None
+
+            db_session.execute(update(FileIndex).where(FileIndex.id == existing_record.id).values(**values_to_update))
+            logger.debug(
+                f"{log_prefix}: Updating existing DB record ID {existing_record.id} with keys: {list(values_to_update.keys())}")
+        else:  # New record
+            file_metadata = self._get_file_metadata(file_path)
+            new_record_data = {**file_metadata, **values_to_update}
+            db_session.add(FileIndex(**new_record_data))  # type: ignore
+            logger.debug(f"{log_prefix}: Creating new DB record.")
+
+        db_session.commit()
 
 
     def _process_pending_vlm_files(self, db_session: Session):
