@@ -1,5 +1,4 @@
-// ExternalAnalyzer/frontend-face-zephyrine/src/App.jsx
-import { useState, useEffect, useCallback } from 'react';
+import { useState, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
 import { useAuth } from './contexts/AuthContext';
@@ -10,153 +9,167 @@ import ChatPage from './components/ChatPage';
 import './styles/ChatInterface.css';
 import './styles/utils/_overlay.css';
 import RedirectToNewChat from './components/RedirectToNewChat';
+import VoiceAssistantOverlay from './components/VoiceAssistantOverlay';
 
 import { useStarBackground } from './hooks/useStarBackground';
 import { useSystemInfo } from './hooks/useSystemInfo';
 import { useChatHistory } from './hooks/useChatHistory';
 
-function App() {
-  console.log("<<<<< App.jsx Render/Re-render - TOP >>>>>");
+const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001";
 
+function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
+  const ws = useRef(null); // Central WebSocket instance ref
 
   const systemInfo = useSystemInfo();
   const stars = useStarBackground();
+  
+  // A stable function to provide access to the WebSocket instance
+  const getWsInstance = useCallback(() => ws.current, []); 
 
   const {
     chatHistory,
     isLoadingHistory,
-    fetchChatHistory, // This function should be implemented in useChatHistory to use WebSocket
-    setChatHistory,   // This is the state updater from useChatHistory
+    fetchChatHistory,
+    setChatHistory,
+    setIsLoadingHistory,
     handleRenameChat,
     handleDeleteChat
-  } = useChatHistory(); // Assuming useChatHistory does not take ws, App will manage ws calls for history list if needed
-
-  // Diagnostic log for functions from useChatHistory
-  useEffect(() => {
-    console.log("App.jsx - DIAGNOSTIC: typeof setChatHistory from useChatHistory:", typeof setChatHistory);
-    console.log("App.jsx - DIAGNOSTIC: typeof fetchChatHistory from useChatHistory:", typeof fetchChatHistory);
-  }, [setChatHistory, fetchChatHistory]);
-
+  } = useChatHistory(getWsInstance); // Pass the getter function to the hook
 
   const [isSidebarCollapsed, setIsSidebarCollapsed] = useState(true);
-  
+  const [isVoiceModeActive, setIsVoiceModeActive] = useState(false);
+  const [isConnected, setIsConnected] = useState(false);
+
   const availableModels = [
-    {id: "default-model", name: "Default Model (App)"},
-    {id: "Zephyrine Unified fragmented Model Interface", name: "Zephyrine Unified Model"}
+    { id: "default-model", name: "Default Model (App)" },
+    { id: "Zephyrine Unified fragmented Model Interface", name: "Zephyrine Unified Model" }
   ];
-  const [selectedModel, setSelectedModel] = useState(availableModels[0]?.id || "default-model"); 
+  const [selectedModel, setSelectedModel] = useState(availableModels[0]?.id || "default-model");
 
-  const toggleSidebar = () => {
-    setIsSidebarCollapsed(!isSidebarCollapsed);
-  };
-
+  // Centralized WebSocket management
   useEffect(() => {
-    const handleResize = () => {};
-    window.addEventListener("resize", handleResize);
-    return () => window.removeEventListener("resize", handleResize);
-  }, []);
+    if (!user?.id) {
+      ws.current?.close();
+      return;
+    }
+
+    if (!ws.current || ws.current.readyState === WebSocket.CLOSED) {
+      console.log("App.jsx: Connecting global WebSocket...");
+      ws.current = new WebSocket(WEBSOCKET_URL);
+      setIsConnected(false);
+
+      ws.current.onopen = () => {
+        console.log("App.jsx: Global WebSocket Connected.");
+        setIsConnected(true);
+        // Initial history fetch is now handled here, by the hook, using the new WS instance
+        fetchChatHistory(user.id);
+      };
+
+      ws.current.onmessage = (event) => {
+        const parsedMessage = JSON.parse(event.data);
+        console.log("App.jsx: Global WS Message Received:", parsedMessage.type);
+
+        // This handler now processes GLOBAL messages that affect the whole app, like the chat list
+        switch (parsedMessage.type) {
+          case 'chat_history_list':
+            setChatHistory(parsedMessage.payload.chats || []);
+            setIsLoadingHistory(false);
+            break;
+          case 'chat_renamed':
+          case 'chat_deleted':
+          case 'title_updated':
+            console.log(`App.jsx: Received '${parsedMessage.type}', refreshing chat list.`);
+            fetchChatHistory(user.id);
+            break;
+          case 'rename_chat_error':
+          case 'delete_chat_error':
+            console.error(`App.jsx: Error with ${parsedMessage.type}:`, parsedMessage.payload?.error);
+            fetchChatHistory(user.id); // Re-fetch to ensure UI consistency
+            break;
+        }
+      };
+
+      ws.current.onerror = (error) => {
+        console.error("App.jsx: Global WebSocket Error:", error);
+        setIsConnected(false);
+        setIsLoadingHistory(false);
+      };
+
+      ws.current.onclose = () => {
+        console.log("App.jsx: Global WebSocket Disconnected.");
+        setIsConnected(false);
+        ws.current = null;
+        setIsLoadingHistory(false);
+      };
+    }
+    
+    // The cleanup should be handled when the App unmounts or the user logs out
+    return () => {
+      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+        console.log("App.jsx: Closing WebSocket connection on cleanup.");
+        ws.current.close();
+      }
+    };
+  }, [user, fetchChatHistory, setChatHistory, setIsLoadingHistory]);
+
+  const toggleSidebar = () => setIsSidebarCollapsed(!isSidebarCollapsed);
 
   const handleNewChat = () => {
     const newChatId = uuidv4();
     console.log("App.jsx: Creating new chat with ID:", newChatId);
     navigate(`/chat/${newChatId}`);
-    // Sidebar will update when ChatPage's WS connection fetches the list or a title_updated event is handled
   };
-  
-  // Memoized callback for triggerSidebarRefresh
-  // This function's purpose is to tell useChatHistory hook to initiate a fetch.
-  // The hook itself would then need to make the WS call.
-  const triggerSidebarRefreshCallback = useCallback(() => {
-    console.log("App.jsx: triggerSidebarRefreshCallback called. User ID:", user?.id);
-    if (user?.id && typeof fetchChatHistory === 'function') {
-      fetchChatHistory(user.id); // This signals the hook to fetch
-    } else {
-      if (typeof fetchChatHistory !== 'function') {
-        console.warn("App.jsx: fetchChatHistory from useChatHistory is not a function in triggerSidebarRefreshCallback!");
-      }
-      if (!user?.id) {
-        console.warn("App.jsx: triggerSidebarRefreshCallback called but no user.id available.");
-      }
-    }
-  }, [user, fetchChatHistory]);
 
-  // This useEffect is for an initial fetch if App were managing a central WebSocket.
-  // Since ChatPage initiates its own WS and fetches the list, this might be redundant for *initial* load
-  // but good for when `user` changes if the app stays mounted.
-  useEffect(() => {
-    if (user?.id) {
-      console.log("App.jsx: User is available. Initial chat list fetch is handled by ChatPage on its WebSocket connection open. This effect could trigger a redundant refresh if not careful.");
-      // triggerSidebarRefreshCallback(); // Potentially call here if ChatPage doesn't fetch on its own
-    }
-  }, [user, triggerSidebarRefreshCallback]);
-
-  console.log("App.jsx: Props being prepared for ChatPage. typeof setChatHistory:", typeof setChatHistory);
+  const activateVoiceMode = () => setIsVoiceModeActive(true);
+  const deactivateVoiceMode = () => setIsVoiceModeActive(false);
 
   return (
     <div id="content">
       <div className={`sidebar-overlay ${!isSidebarCollapsed ? 'active' : ''}`} onClick={toggleSidebar}></div>
-      <div id="sky">
-      {stars && stars.map(star => (
-        star && star.style ? (
-          <div
-            key={star.id || Math.random()}
-            className="star"
-            style={{
-              left: star.left,
-              top: star.top,
-              width: star.width,
-              height: star.height,
-              animationDelay: star.style.animationDelay, 
-            }}
-          />
-        ) : null 
-      ))}
-      </div>
-      <div className="logo">
-        <img
-          src="/img/ProjectZephy023LogoRenewal.png"
-          alt="Project Zephyrine Logo"
-          className="project-logo"
-        />
-      </div>
-      <div id="main">
-        <SystemOverlay systemInfo={systemInfo} />
-        <div className={`main-content-area ${isSidebarCollapsed ? "main-content-area--sidebar-collapsed" : ""}`}>
-          <SideBar
-            isCollapsed={isSidebarCollapsed}
-            toggleSidebar={toggleSidebar}
-            user={user} 
-            onNewChat={handleNewChat}
-            chats={chatHistory} 
-            isLoadingHistory={isLoadingHistory}
-            onRenameChat={handleRenameChat} // Assumes useChatHistory provides a working version
-            onDeleteChat={handleDeleteChat}   // Assumes useChatHistory provides a working version
-            availableModels={availableModels} 
-            selectedModel={selectedModel}     
-            onModelChange={setSelectedModel}
-          />
-          <div className="chat-area-wrapper">
-            <Routes>
-              <Route path="/" element={<RedirectToNewChat />} />
-              <Route
-                path="/chat/:chatId"
-                element={
-                  <ChatPage
-                    systemInfo={systemInfo}
-                    user={user} 
-                    refreshHistory={fetchChatHistory} // Keep if ChatPage uses it directly for some reason
-                    selectedModel={selectedModel} 
-                    // --- Crucial Props for Sidebar History ---
-                    updateSidebarHistory={setChatHistory} // Pass the actual setChatHistory function
-                    triggerSidebarRefresh={triggerSidebarRefreshCallback} // Pass the memoized callback
-                    // --- End Crucial Props ---
-                  />
-                }
-              />
-              <Route path="*" element={<Navigate to="/" replace />} />
-            </Routes>
+      {isVoiceModeActive && <VoiceAssistantOverlay onExit={deactivateVoiceMode} />}
+      <div id="main-app-content" style={{ filter: isVoiceModeActive ? 'blur(4px)' : 'none' }}>
+        <div id="sky">
+          {stars && stars.map(star => star && star.style ? <div key={star.id || Math.random()} className="star" style={{ ...star, animationDelay: star.style.animationDelay }} /> : null)}
+        </div>
+        <div className="logo"><img src="/img/ProjectZephy023LogoRenewal.png" alt="Project Zephyrine Logo" className="project-logo"/></div>
+        <div id="main">
+          <SystemOverlay systemInfo={systemInfo} />
+          <div className={`main-content-area ${isSidebarCollapsed ? "main-content-area--sidebar-collapsed" : ""}`}>
+            <SideBar
+              isCollapsed={isSidebarCollapsed}
+              toggleSidebar={toggleSidebar}
+              user={user} 
+              onNewChat={handleNewChat}
+              chats={chatHistory} 
+              isLoadingHistory={isLoadingHistory}
+              onRenameChat={handleRenameChat}
+              onDeleteChat={handleDeleteChat}
+              availableModels={availableModels} 
+              selectedModel={selectedModel}     
+              onModelChange={setSelectedModel}
+              onActivateVoiceMode={activateVoiceMode}
+            />
+            <div className="chat-area-wrapper">
+              <Routes>
+                <Route path="/" element={<RedirectToNewChat />} />
+                <Route
+                  path="/chat/:chatId"
+                  element={
+                    <ChatPage
+                      systemInfo={systemInfo}
+                      user={user} 
+                      selectedModel={selectedModel} 
+                      // Pass the WebSocket getter function to ChatPage
+                      getWsInstance={getWsInstance}
+                      isConnected={isConnected} // Pass connection status
+                    />
+                  }
+                />
+                <Route path="*" element={<Navigate to="/" replace />} />
+              </Routes>
+            </div>
           </div>
         </div>
       </div>

@@ -5,20 +5,20 @@ import PropTypes from 'prop-types';
 import { v4 as uuidv4 } from "uuid";
 import ChatFeed from "./ChatFeed";
 import InputArea from "./InputArea";
-// Removed direct import of Copy, RefreshCw as ChatFeed should handle its own icons/actions
 import "../styles/ChatInterface.css";
 import "../styles/utils/_overlay.css";
 
 const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001";
 
+// Using JavaScript default parameters in the function signature.
+// This is the modern way and replaces the static defaultProps block.
 function ChatPage({ 
   systemInfo = { assistantName: "Zephyrine" }, 
   user = null, 
-  // refreshHistory is kept if used, but triggerSidebarRefresh is the main mechanism now
-  refreshHistory = () => console.warn("ChatPage: 'refreshHistory' prop was called but its primary use is now via triggerSidebarRefresh."), 
+  refreshHistory = () => console.warn("ChatPage: 'refreshHistory' prop was called but not provided."), 
   selectedModel = "default-model",
-  updateSidebarHistory = () => console.warn("ChatPage: 'updateSidebarHistory' (default) called. Prop from App.jsx might be missing or App.jsx is stale."), 
-  triggerSidebarRefresh = () => console.warn("ChatPage: 'triggerSidebarRefresh' (default) called. Prop from App.jsx might be missing or App.jsx is stale.")
+  updateSidebarHistory = () => console.warn("ChatPage: 'updateSidebarHistory' prop was called but not passed by App.jsx."), 
+  triggerSidebarRefresh = () => console.warn("ChatPage: 'triggerSidebarRefresh' prop was called but not passed by App.jsx.")
 }) {
   const { chatId } = useParams();
   const [messages, setMessages] = useState([]);
@@ -28,7 +28,7 @@ function ChatPage({
   const [showPlaceholder, setShowPlaceholder] = useState(false);
   const [error, setError] = useState(null);
   const [streamingAssistantMessage, setStreamingAssistantMessage] = useState(null);
-  const [localCopySuccessId, setLocalCopySuccessId] = useState(''); 
+  const [localCopySuccessId, setLocalCopySuccessId] = useState('');
   const bottomRef = useRef(null);
   const ws = useRef(null);
   const currentAssistantMessageId = useRef(null);
@@ -45,11 +45,8 @@ function ChatPage({
       if (ws.current && ws.current.readyState === WebSocket.OPEN) {
          console.log("ChatPage: WebSocket already connected. Requesting messages and sidebar history.");
          requestMessagesForChat(chatId);
-         if (user && user.id && typeof updateSidebarHistory === 'function') { // Ensure prop is function before sending
-            console.log("ChatPage: Requesting chat history list for sidebar (existing WS connection).");
+         if (user && user.id) {
             ws.current.send(JSON.stringify({ type: 'get_chat_history_list', payload: { userId: user.id } }));
-         } else if (user && user.id) {
-            console.warn("ChatPage: updateSidebarHistory is not a function when trying to request history list (existing WS).");
          }
          return;
       }
@@ -58,15 +55,13 @@ function ChatPage({
       ws.current = new WebSocket(WEBSOCKET_URL);
 
       ws.current.onopen = () => {
-        console.log("ChatPage: WebSocket Connected.");
+        console.log("ChatPage: WebSocket Connected");
         isConnected.current = true;
         setError(null);
         requestMessagesForChat(chatId);
-        if (user && user.id && typeof updateSidebarHistory === 'function') { // Ensure prop is function
+        if (user && user.id) {
           console.log("ChatPage: Requesting chat history list for sidebar (new WS connection).");
           ws.current.send(JSON.stringify({ type: 'get_chat_history_list', payload: { userId: user.id } }));
-        } else if (user && user.id) {
-            console.warn("ChatPage: updateSidebarHistory is not a function when trying to request history list (new WS).");
         }
       };
 
@@ -120,7 +115,7 @@ function ChatPage({
       ws.current?.close();
       isConnected.current = false;
     };
-  }, [chatId, user, updateSidebarHistory]); // Added user and updateSidebarHistory to dependencies
+  }, [chatId, user]);
 
   useEffect(() => {
     if (bottomRef.current) {
@@ -131,7 +126,6 @@ function ChatPage({
   const handleWebSocketMessage = useCallback((data) => {
     try {
       const message = JSON.parse(data);
-      // console.log("ChatPage: WS Message Received:", message.type);
 
       switch (message.type) {
         case "chat_history":
@@ -188,10 +182,9 @@ function ChatPage({
                 }
             });
             const userMessagesInHistory = messages.filter(m => m.sender === 'user' && !m.id?.startsWith('temp-')).length;
-            // Check if this is the first pair of messages (1 user, 0 assistant previously)
             if (userMessagesInHistory === 1 && messages.filter(m => m.sender === 'assistant' && !m.isLoading).length === 0) {
                  console.log("ChatPage: First assistant response complete, calling triggerSidebarRefresh.");
-                 triggerSidebarRefresh(); // Call the prop passed from App.jsx
+                 triggerSidebarRefresh();
             }
           }
           setStreamingAssistantMessage(null);
@@ -200,18 +193,17 @@ function ChatPage({
           break;
         case "title_updated":
           console.log("ChatPage: Received title_updated:", message.payload);
-          triggerSidebarRefresh(); // Call the prop passed from App.jsx
+          triggerSidebarRefresh(); 
           break;
         case "chat_history_list":
           console.log("ChatPage: Received chat_history_list for sidebar", message.payload.chats);
-          updateSidebarHistory(message.payload.chats || []); // Call the prop passed from App.jsx
+          updateSidebarHistory(message.payload.chats || []); 
           break;
         case "message_saved":
-            // console.log(`ChatPage: Message saved confirmation received: ID ${message.payload.id}`);
             break;
         case "message_updated":
             console.log(`ChatPage: Message updated confirmation received: ID ${message.payload.id}`);
-             if (refreshHistory) refreshHistory(); // Fallback if specific update logic needed
+             if (refreshHistory) refreshHistory();
             break;
         case "message_save_error":
             console.error("ChatPage: Backend error saving message:", message.message || message.payload?.error);
@@ -244,17 +236,15 @@ function ChatPage({
       currentAssistantMessageId.current = null;
       setIsLoadingHistory(false);
     }
-  }, [chatId, refreshHistory, messages, streamingAssistantMessage, updateSidebarHistory, triggerSidebarRefresh, user]); // CRITICAL: Added updateSidebarHistory, triggerSidebarRefresh, user
+  }, [chatId, refreshHistory, messages, streamingAssistantMessage, updateSidebarHistory, triggerSidebarRefresh, user]); // CRITICAL FIX: Ensure all external props/state used are listed here
 
-  const sendMessageOrRegenerate = async (contentToSend, isRegeneration = false ) => {
+  const sendMessageOrRegenerate = async (contentToSend, isRegeneration = false) => {
     if (!chatId) {
       setError("Cannot send message: No active chat selected.");
-      console.error("sendMessageOrRegenerate called without chatId");
       return;
     }
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
       setError("WebSocket is not connected. Cannot send message.");
-      console.error("WebSocket is not open. ReadyState:", ws.current?.readyState);
       return;
     }
     if (!contentToSend.trim() || (isGenerating && !isRegeneration)) return;
@@ -293,13 +283,13 @@ function ChatPage({
     
     const historyForBackendPayload = currentMessagesForHistory
         .slice(-20) 
-        .map(m => ({ sender: m.sender, content: m.content }));
+        .map(m => ({ sender: m.sender || m.role, content: m.content }));
 
     let finalMessagesForPayload = [...historyForBackendPayload];
     if (!isRegeneration) {
         if (finalMessagesForPayload.length === 0 || 
-            finalMessagesForPayload[finalMessagesForPayload.length -1].content !== currentUserMessageForPayload.content ||
-            finalMessagesForPayload[finalMessagesForPayload.length -1].sender !== "user") {
+            finalMessagesForPayload[finalMessagesForPayload.length - 1].content !== currentUserMessageForPayload.content ||
+            finalMessagesForPayload[finalMessagesForPayload.length - 1].sender !== "user") {
             finalMessagesForPayload.push(currentUserMessageForPayload);
         }
     }
@@ -529,15 +519,10 @@ function ChatPage({
   );
 }
 
-// Using JavaScript default parameters in function signature, so ChatPage.defaultProps is removed.
-// PropTypes are still useful for type checking.
+// Keep PropTypes for documentation and type checking
 ChatPage.propTypes = {
-  systemInfo: PropTypes.shape({
-    assistantName: PropTypes.string,
-  }),
-  user: PropTypes.shape({
-    id: PropTypes.string,
-  }),
+  systemInfo: PropTypes.shape({ assistantName: PropTypes.string }),
+  user: PropTypes.shape({ id: PropTypes.string }),
   refreshHistory: PropTypes.func,
   selectedModel: PropTypes.string,
   updateSidebarHistory: PropTypes.func,
