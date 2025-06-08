@@ -48,6 +48,25 @@
   box-sizing: border-box; /* Include padding in width calculation */
 }
 
+.input-action-button.mic-active {
+  color: var(--accent, #FFFF00); /* Use your theme's accent color */
+  background-color: var(--hover, hsla(240, 9%, 59%, 0.1));
+  box-shadow: 0 0 8px var(--accent, #FFFF00);
+  animation: pulse-mic 1.5s infinite;
+}
+
+@keyframes pulse-mic {
+  0% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 0, 0.7);
+  }
+  70% {
+    box-shadow: 0 0 0 10px rgba(255, 255, 0, 0);
+  }
+  100% {
+    box-shadow: 0 0 0 0 rgba(255, 255, 0, 0);
+  }
+}
+
 .input-field {
   /* ... (styles for the inner field remain the same) ... */
   display: flex;

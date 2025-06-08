@@ -1,3 +1,4 @@
+// ExternalAnalyzer/frontend-face-zephyrine/src/App.jsx
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { Routes, Route, useNavigate, Navigate } from 'react-router-dom';
 import { v4 as uuidv4 } from 'uuid';
@@ -20,7 +21,7 @@ const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001
 function App() {
   const { user } = useAuth();
   const navigate = useNavigate();
-  const ws = useRef(null); // Central WebSocket instance ref
+  const ws = useRef(null); // Ref to hold the single WebSocket instance
 
   const systemInfo = useSystemInfo();
   const stars = useStarBackground();
@@ -34,6 +35,7 @@ function App() {
     fetchChatHistory,
     setChatHistory,
     setIsLoadingHistory,
+    updateSidebarHistory, // This function is returned by the hook
     handleRenameChat,
     handleDeleteChat
   } = useChatHistory(getWsInstance); // Pass the getter function to the hook
@@ -42,86 +44,106 @@ function App() {
   const [isVoiceModeActive, setIsVoiceModeActive] = useState(false);
   const [isConnected, setIsConnected] = useState(false);
 
-  const availableModels = [
-    { id: "default-model", name: "Default Model (App)" },
-    { id: "Zephyrine Unified fragmented Model Interface", name: "Zephyrine Unified Model" }
-  ];
-  const [selectedModel, setSelectedModel] = useState(availableModels[0]?.id || "default-model");
-
   // Centralized WebSocket management
   useEffect(() => {
+    // 1. If there is no user, ensure the WebSocket is closed and exit.
     if (!user?.id) {
-      ws.current?.close();
+      if (ws.current) {
+        console.log("App.jsx: No user, closing global WebSocket.");
+        ws.current.close();
+        ws.current = null;
+      }
       return;
     }
 
+    // 2. If the WebSocket doesn't exist or is closed, create a new one.
+    //    This part only runs when absolutely necessary.
     if (!ws.current || ws.current.readyState === WebSocket.CLOSED) {
       console.log("App.jsx: Connecting global WebSocket...");
       ws.current = new WebSocket(WEBSOCKET_URL);
-      setIsConnected(false);
-
-      ws.current.onopen = () => {
-        console.log("App.jsx: Global WebSocket Connected.");
-        setIsConnected(true);
-        // Initial history fetch is now handled here, by the hook, using the new WS instance
-        fetchChatHistory(user.id);
-      };
-
-      ws.current.onmessage = (event) => {
-        const parsedMessage = JSON.parse(event.data);
-        console.log("App.jsx: Global WS Message Received:", parsedMessage.type);
-
-        // This handler now processes GLOBAL messages that affect the whole app, like the chat list
-        switch (parsedMessage.type) {
-          case 'chat_history_list':
-            setChatHistory(parsedMessage.payload.chats || []);
-            setIsLoadingHistory(false);
-            break;
-          case 'chat_renamed':
-          case 'chat_deleted':
-          case 'title_updated':
-            console.log(`App.jsx: Received '${parsedMessage.type}', refreshing chat list.`);
-            fetchChatHistory(user.id);
-            break;
-          case 'rename_chat_error':
-          case 'delete_chat_error':
-            console.error(`App.jsx: Error with ${parsedMessage.type}:`, parsedMessage.payload?.error);
-            fetchChatHistory(user.id); // Re-fetch to ensure UI consistency
-            break;
-        }
-      };
-
-      ws.current.onerror = (error) => {
-        console.error("App.jsx: Global WebSocket Error:", error);
-        setIsConnected(false);
-        setIsLoadingHistory(false);
-      };
-
-      ws.current.onclose = () => {
-        console.log("App.jsx: Global WebSocket Disconnected.");
-        setIsConnected(false);
-        ws.current = null;
-        setIsLoadingHistory(false);
-      };
+      setIsConnected(false); // Set connecting state
     }
-    
-    // The cleanup should be handled when the App unmounts or the user logs out
-    return () => {
-      if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-        console.log("App.jsx: Closing WebSocket connection on cleanup.");
-        ws.current.close();
+
+    // 3. Always re-assign event handlers to prevent stale closures.
+    //    This ensures they always use the latest version of any functions from state or props.
+    console.log("App.jsx: Attaching WebSocket event handlers.");
+
+    ws.current.onopen = () => {
+      console.log("App.jsx: Global WebSocket Connected.");
+      setIsConnected(true);
+      // Use the fetch function from the hook to get initial history
+      if (typeof fetchChatHistory === 'function') {
+        fetchChatHistory(user.id);
       }
     };
+
+    ws.current.onmessage = (event) => {
+      const parsedMessage = JSON.parse(event.data);
+      console.log("App.jsx: Global WS Message Received:", parsedMessage.type);
+
+      // This handler now safely uses the latest functions
+      switch (parsedMessage.type) {
+        case 'chat_history_list':
+          if (typeof setChatHistory === 'function') {
+            setChatHistory(parsedMessage.payload.chats || []);
+          }
+          if (typeof setIsLoadingHistory === 'function') {
+            setIsLoadingHistory(false);
+          }
+          break;
+        case 'chat_renamed':
+        case 'chat_deleted':
+        case 'title_updated':
+          console.log(`App.jsx: Received '${parsedMessage.type}', refreshing chat list.`);
+          if (typeof fetchChatHistory === 'function') {
+            fetchChatHistory(user.id);
+          }
+          break;
+        case 'rename_chat_error':
+        case 'delete_chat_error':
+          console.error(`App.jsx: Error with ${parsedMessage.type}:`, parsedMessage.payload?.error);
+          if (typeof fetchChatHistory === 'function') {
+            fetchChatHistory(user.id);
+          }
+          break;
+      }
+    };
+
+    ws.current.onerror = (error) => {
+      console.error("App.jsx: Global WebSocket Error:", error);
+      setIsConnected(false);
+      if (typeof setIsLoadingHistory === 'function') {
+        setIsLoadingHistory(false);
+      }
+    };
+    
+    ws.current.onclose = () => {
+      console.log("App.jsx: Global WebSocket Disconnected.");
+      setIsConnected(false);
+      ws.current = null; // Set to null so it can be re-created
+    };
+    
+    // 4. The cleanup function runs when the user changes or the component unmounts.
+    //    It's good practice to remove handlers to prevent memory leaks,
+    //    though closing the connection on user logout is the most critical part.
+    return () => {
+        if (ws.current) {
+            console.log("App.jsx: Detaching WebSocket handlers during cleanup.");
+            ws.current.onopen = null;
+            ws.current.onmessage = null;
+            ws.current.onerror = null;
+            // The onclose logic will handle the rest
+        }
+    };
+    
+  // The dependency array correctly triggers this effect when the user or a function changes.
   }, [user, fetchChatHistory, setChatHistory, setIsLoadingHistory]);
 
+
+  const availableModels = [{ id: "default-model", name: "Default Model (App)" }, { id: "Zephyrine Unified fragmented Model Interface", name: "Zephyrine Unified Model" }];
+  const [selectedModel, setSelectedModel] = useState(availableModels[0]?.id || "default-model");
   const toggleSidebar = () => setIsSidebarCollapsed(!isSidebarCollapsed);
-
-  const handleNewChat = () => {
-    const newChatId = uuidv4();
-    console.log("App.jsx: Creating new chat with ID:", newChatId);
-    navigate(`/chat/${newChatId}`);
-  };
-
+  const handleNewChat = () => { navigate(`/chat/${uuidv4()}`); };
   const activateVoiceMode = () => setIsVoiceModeActive(true);
   const deactivateVoiceMode = () => setIsVoiceModeActive(false);
 
@@ -137,20 +159,21 @@ function App() {
         <div id="main">
           <SystemOverlay systemInfo={systemInfo} />
           <div className={`main-content-area ${isSidebarCollapsed ? "main-content-area--sidebar-collapsed" : ""}`}>
-            <SideBar
-              isCollapsed={isSidebarCollapsed}
-              toggleSidebar={toggleSidebar}
-              user={user} 
-              onNewChat={handleNewChat}
-              chats={chatHistory} 
-              isLoadingHistory={isLoadingHistory}
-              onRenameChat={handleRenameChat}
-              onDeleteChat={handleDeleteChat}
-              availableModels={availableModels} 
-              selectedModel={selectedModel}     
-              onModelChange={setSelectedModel}
-              onActivateVoiceMode={activateVoiceMode}
-            />
+          <SideBar
+            isCollapsed={isSidebarCollapsed}
+            toggleSidebar={toggleSidebar}
+            user={user} 
+            onNewChat={handleNewChat}
+            chats={chatHistory} 
+            isLoadingHistory={isLoadingHistory}
+            onRenameChat={handleRenameChat} 
+            onDeleteChat={handleDeleteChat}   
+            availableModels={availableModels} 
+            selectedModel={selectedModel}     
+            onModelChange={setSelectedModel}
+            onActivateVoiceMode={activateVoiceMode}
+            isConnected={isConnected} // <<<<< ADD THIS LINE
+          />
             <div className="chat-area-wrapper">
               <Routes>
                 <Route path="/" element={<RedirectToNewChat />} />
@@ -161,9 +184,10 @@ function App() {
                       systemInfo={systemInfo}
                       user={user} 
                       selectedModel={selectedModel} 
-                      // Pass the WebSocket getter function to ChatPage
-                      getWsInstance={getWsInstance}
-                      isConnected={isConnected} // Pass connection status
+                      getWsInstance={getWsInstance} 
+                      isConnected={isConnected} 
+                      updateSidebarHistory={setChatHistory} 
+                      triggerSidebarRefresh={() => fetchChatHistory(user.id)} // Add this line
                     />
                   }
                 />

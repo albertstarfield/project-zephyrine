@@ -51,10 +51,10 @@ const SideBar = ({
   toggleSidebar,
   user,
   onNewChat,
-  chatHistory,
+  chats, // <<<<< THIS IS THE ONLY CHANGE NEEDED. Changed from `chatHistory` to `chats`.
   onRenameChat,
   onDeleteChat,
-  onActivateVoiceMode, // Added prop for voice mode
+  onActivateVoiceMode,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -140,7 +140,7 @@ const SideBar = ({
         <nav className="sidebar-history">
           {!isCollapsed && <h4>History</h4>}
           <ul>
-          {(chatHistory || []).map(chat => (
+          {(chats || []).map(chat => (
               <li key={chat.id} title={isCollapsed ? chat.title : ""} className={`history-item ${editingChatId === chat.id ? 'editing' : ''} ${chat.id === currentChatId ? 'active' : ''}`}>
                 {editingChatId === chat.id ? (
                   <div className="history-item-edit-container">

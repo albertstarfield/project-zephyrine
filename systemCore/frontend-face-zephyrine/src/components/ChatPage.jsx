@@ -1,4 +1,3 @@
-// ExternalAnalyzer/frontend-face-zephyrine/src/components/ChatPage.jsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import PropTypes from 'prop-types';
@@ -10,8 +9,7 @@ import "../styles/utils/_overlay.css";
 
 const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001";
 
-// Using JavaScript default parameters in the function signature.
-// This is the modern way and replaces the static defaultProps block.
+// Using default parameters in the function signature for props.
 function ChatPage({ 
   systemInfo = { assistantName: "Zephyrine" }, 
   user = null, 
@@ -28,6 +26,7 @@ function ChatPage({
   const [showPlaceholder, setShowPlaceholder] = useState(false);
   const [error, setError] = useState(null);
   const [streamingAssistantMessage, setStreamingAssistantMessage] = useState(null);
+  const [fileData, setFileData] = useState(null); // <<<<<<<<<<<< NEW STATE for file data
   const [localCopySuccessId, setLocalCopySuccessId] = useState('');
   const bottomRef = useRef(null);
   const ws = useRef(null);
@@ -200,6 +199,7 @@ function ChatPage({
           updateSidebarHistory(message.payload.chats || []); 
           break;
         case "message_saved":
+            // Optional: You can add logic here if needed for when a message is confirmed saved.
             break;
         case "message_updated":
             console.log(`ChatPage: Message updated confirmation received: ID ${message.payload.id}`);
@@ -236,108 +236,97 @@ function ChatPage({
       currentAssistantMessageId.current = null;
       setIsLoadingHistory(false);
     }
-  }, [chatId, refreshHistory, messages, streamingAssistantMessage, updateSidebarHistory, triggerSidebarRefresh, user]); // CRITICAL FIX: Ensure all external props/state used are listed here
+  }, [chatId, refreshHistory, messages, streamingAssistantMessage, updateSidebarHistory, triggerSidebarRefresh, user]); // <<<<<<<<<<<< CRITICAL FIX IS HERE
 
   const sendMessageOrRegenerate = async (contentToSend, isRegeneration = false) => {
-    if (!chatId) {
-      setError("Cannot send message: No active chat selected.");
-      return;
-    }
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      setError("WebSocket is not connected. Cannot send message.");
+      setError("WebSocket is not connected.");
       return;
     }
-    if (!contentToSend.trim() || (isGenerating && !isRegeneration)) return;
+    // Allow sending if there's text OR a file selected
+    if (!contentToSend?.trim() && !fileData) return;
     setError(null);
 
-    let currentMessagesForHistory = messages.filter(m => !m.isLoading && !m.id?.startsWith('temp-'));
-    let userMessageId = null;
-    let currentUserMessageForPayload = { sender: "user", content: contentToSend };
-
-    if (!isRegeneration) {
-      setInputValue("");
-      const optimisticUserMessage = {
-        sender: "user",
-        content: contentToSend,
-        chat_id: chatId,
-        user_id: user?.id,
-        created_at: new Date().toISOString(),
-        id: `temp-user-${uuidv4()}`,
-      };
-      userMessageId = optimisticUserMessage.id;
-      setMessages(prev => [...prev, optimisticUserMessage]); 
-      setShowPlaceholder(false);
-    } else {
-      const lastUserMsgIndex = currentMessagesForHistory.findLastIndex(msg => msg.sender === "user");
-       if (lastUserMsgIndex > -1) {
-           currentUserMessageForPayload = {
-              sender: "user",
-              content: currentMessagesForHistory[lastUserMsgIndex].content 
-           };
-           currentMessagesForHistory = currentMessagesForHistory.slice(0, lastUserMsgIndex + 1);
-       } else {
-          setError("Cannot regenerate: No previous user message found in history.");
-          return;
-       }
-    }
+    const userMessageContent = [];
     
-    const historyForBackendPayload = currentMessagesForHistory
-        .slice(-20) 
-        .map(m => ({ sender: m.sender || m.role, content: m.content }));
+    // 1. Handle text content
+    if (contentToSend && contentToSend.trim()) {
+      userMessageContent.push({
+        type: 'text',
+        text: contentToSend,
+      });
+    }
 
-    let finalMessagesForPayload = [...historyForBackendPayload];
-    if (!isRegeneration) {
-        if (finalMessagesForPayload.length === 0 || 
-            finalMessagesForPayload[finalMessagesForPayload.length - 1].content !== currentUserMessageForPayload.content ||
-            finalMessagesForPayload[finalMessagesForPayload.length - 1].sender !== "user") {
-            finalMessagesForPayload.push(currentUserMessageForPayload);
+    // 2. Handle file content
+    let submittedFileData = fileData; // Copy file data to use in this send, then clear it
+    if (submittedFileData) {
+      if (submittedFileData.type.startsWith("image/")) {
+        // Format for OpenAI Vision API
+        userMessageContent.push({
+          type: "image_url",
+          image_url: {
+            url: submittedFileData.content, // The base64 data URL
+          },
+        });
+      } else if (submittedFileData.type === "text/plain") {
+        // Prepend text file content to the user's message
+        const fileText = `--- START OF FILE: ${submittedFileData.name} ---\n${submittedFileData.content}\n--- END OF FILE ---`;
+        // Check if there's already a text part, if so, append. If not, add one.
+        let textPart = userMessageContent.find(p => p.type === 'text');
+        if (textPart) {
+          textPart.text = `${fileText}\n\n${textPart.text}`;
+        } else {
+          userMessageContent.unshift({ type: 'text', text: fileText });
         }
+      }
     }
+
+    if (userMessageContent.length === 0) {
+      console.error("Attempted to send but no content was available.");
+      return;
+    }
+
+    // Use the content array for the payload
+    const finalUserMessagePayload = { role: 'user', content: userMessageContent };
     
+    // Optimistic UI update
+    setInputValue("");
+    setFileData(null); // Clear the staged file
+    const optimisticUserMessage = {
+      id: `temp-user-${uuidv4()}`,
+      sender: "user",
+      // For display, we can show a summary
+      content: contentToSend + (submittedFileData ? `\n[File: ${submittedFileData.name}]` : ''),
+      isLoading: true,
+    };
+    setMessages(prev => [...prev, optimisticUserMessage]);
+    setShowPlaceholder(false);
+
+    // Prepare history for backend
+    const historyForBackend = messages
+      .filter(m => !m.isLoading && !m.id?.startsWith('temp-'))
+      .slice(-20)
+      .map(m => ({ role: m.sender || m.role, content: m.content }));
+      
     try {
       const messagePayload = {
-        messages: finalMessagesForPayload,
-        model: selectedModel || "default",
+        messages: [...historyForBackend, finalUserMessagePayload],
+        model: selectedModel || "default-model",
         chatId: chatId,
         userId: user?.id,
-        firstUserMessageContent:
-          messages.filter((m) => m.sender === "user" && !m.id?.startsWith('temp-')).length === 0 && !isRegeneration
-            ? contentToSend
-            : undefined,
       };
 
-      if (!messagePayload.messages || messagePayload.messages.length === 0) {
-          console.error("ChatPage: Attempting to send empty messages payload!", messagePayload);
-          setError("Error: Cannot send an empty message list to the assistant.");
-          if (!isRegeneration && userMessageId) {
-            setMessages(prev => prev.filter(m => m.id !== userMessageId));
-          }
-          return;
-      }
-
-      console.log("ChatPage: Sending WS 'chat' message:", JSON.stringify(messagePayload, null, 2));
+      console.log("ChatPage: Sending WS 'chat' message with file data:", messagePayload);
       ws.current.send(JSON.stringify({ type: "chat", payload: messagePayload }));
 
       setIsGenerating(true);
       accumulatedContentRef.current = "";
       currentAssistantMessageId.current = `temp-assistant-${uuidv4()}`;
-      setStreamingAssistantMessage({
-        id: currentAssistantMessageId.current,
-        sender: "assistant",
-        content: "",
-        chat_id: chatId,
-        created_at: new Date().toISOString(),
-        isLoading: true,
-      });
-
+      setStreamingAssistantMessage({ id: currentAssistantMessageId.current, sender: "assistant", content: "", isLoading: true });
     } catch (sendError) {
       console.error("ChatPage: WebSocket send error:", sendError);
       setError("Failed to communicate with the assistant.");
       setIsGenerating(false);
-      setStreamingAssistantMessage(null);
-       if (!isRegeneration && userMessageId) {
-         setMessages(prev => prev.filter(m => m.id !== userMessageId));
-       }
     }
   };
 
@@ -404,8 +393,8 @@ function ChatPage({
     }
   };
 
-  const handleSendMessage = (text) => {
-    sendMessageOrRegenerate(text, false);
+  const handleSendMessage = () => {
+    sendMessageOrRegenerate(inputValue, false);
   };
 
   const handleRegenerate = () => {
@@ -487,11 +476,7 @@ function ChatPage({
         {!isLoadingHistory && (
             <ChatFeed
               messages={messages}
-              streamingMessage={streamingAssistantMessage ? { 
-                  id: streamingAssistantMessage.id,
-                  content: streamingAssistantMessage.content,
-                  isLoading: streamingAssistantMessage.isLoading,
-              } : null }
+              streamingMessage={streamingAssistantMessage}
               showPlaceholder={showPlaceholder}
               isGenerating={isGenerating}
               onExampleClick={handleExampleClick}
@@ -511,6 +496,8 @@ function ChatPage({
           onSend={handleSendMessage}
           onStopGeneration={handleStopGeneration}
           isGenerating={isGenerating}
+          onFileSelect={setFileData} // <<<<<<<<<<<< PASS THE SETTER
+          selectedFile={fileData}    // <<<<<<<<<<<< PASS THE CURRENT FILE DATA
           selectedModel={selectedModel}
           disabled={isLoadingHistory || !isConnected.current}
         />
@@ -519,10 +506,13 @@ function ChatPage({
   );
 }
 
-// Keep PropTypes for documentation and type checking
 ChatPage.propTypes = {
-  systemInfo: PropTypes.shape({ assistantName: PropTypes.string }),
-  user: PropTypes.shape({ id: PropTypes.string }),
+  systemInfo: PropTypes.shape({
+    assistantName: PropTypes.string,
+  }),
+  user: PropTypes.shape({
+    id: PropTypes.string,
+  }),
   refreshHistory: PropTypes.func,
   selectedModel: PropTypes.string,
   updateSidebarHistory: PropTypes.func,

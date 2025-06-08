@@ -1,4 +1,3 @@
-// ExternalAnalyzer/frontend-face-zephyrine/src/hooks/useChatHistory.js
 import { useState, useCallback, useEffect } from 'react';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useAuth } from '../contexts/AuthContext';
@@ -11,7 +10,6 @@ export function useChatHistory(getWebSocket) {
   const [chatHistory, setChatHistory] = useState([]);
   const [isLoadingHistory, setIsLoadingHistory] = useState(false);
 
-  // This function is now just a signal to App.jsx that a refresh is needed.
   const fetchChatHistory = useCallback((userIdToFetch) => {
     const currentUserId = userIdToFetch || user?.id;
     if (!currentUserId) {
