@@ -1,4 +1,4 @@
-// systemCore/frontend-face-zephyrine/vite.config.js
+// externalAnalyzer/frontend-face-zephyrine/vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 import { VitePWA } from 'vite-plugin-pwa'; // Import the plugin
@@ -64,11 +64,16 @@ export default defineConfig({
             type: 'image/png',
             purpose: 'maskable'
           }
-        ],
+        ]
       },
       devOptions: {
         enabled: true, // Enable PWA features in development mode
       },
     }),
   ],
+  server: { // This 'server' block has been moved here, outside of 'VitePWA' and 'manifest'
+    proxy: {
+      '/api': 'http://localhost:3001' // Proxy /api requests to your backend server
+    }
+  }
 });

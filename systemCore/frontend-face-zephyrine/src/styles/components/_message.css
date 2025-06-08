@@ -9,6 +9,49 @@
   gap: 15px; 
 }
 
+.message-avatar {
+  /* Ensure the avatar container is a fixed size and circular */
+  width: 40px; /* Adjust as needed */
+  height: 40px; /* Adjust as needed */
+  border-radius: 50%; /* Makes the container circular */
+  background-color: var(--secondary-background); /* Or a specific avatar background color */
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  flex-shrink: 0; /* Prevents avatar from shrinking */
+  overflow: hidden; /* Ensures the image doesn't overflow the circular shape */
+}
+
+.message-avatar .avatar-image {
+  width: 100%; /* Make the image take up the full width of its parent (.message-avatar) */
+  height: 100%; /* Make the image take up the full height of its parent */
+  border-radius: 50%; /* Ensure the image itself is also circular */
+  object-fit: cover; /* This is crucial: it scales the image to cover the entire area while maintaining aspect ratio, cropping if necessary */
+  /* If your image has transparency or you want a border: */
+  /* border: 1px solid var(--border-color); */
+}
+
+/* You might want to adjust margin/padding on the .message itself or .message-content-container
+   to ensure proper spacing around the avatar. */
+.message.user .message-avatar {
+    /* Styles for user avatar (e.g., background color, if different) */
+    background-color: var(--accent-color); /* Example */
+    color: var(--primary-text);
+}
+
+.message.assistant .message-avatar {
+    /* Styles for assistant avatar container, if needed */
+    /* background-color: var(--assistant-avatar-bg); */
+}
+
+/* Example for the initial 'U' text avatar if it's still used for user */
+.message-avatar:not(:has(.avatar-image)) {
+    font-weight: bold;
+    color: var(--primary-text);
+    font-size: 1.2em; /* Adjust font size for 'U' or 'A' */
+}
+
+
 .message {
   display: flex; 
   gap: 10px; 

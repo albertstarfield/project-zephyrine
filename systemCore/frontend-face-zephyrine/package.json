@@ -22,7 +22,12 @@
     "sqlite3": "^5.1.7",
     "vite-plugin-pwa":"^1.0.0",
     "rehype-raw":"^7.0.0",
-    "@ricky0123/vad-web":"^0.0.24"
+    "@ricky0123/vad-web":"^0.0.24",
+    "remark-math": "^6.0.0",
+    "rehype-katex": "^7.0.1",
+    "remark-mermaidjs": "^7.0.0",
+    "katex": "^0.16.22",
+    "mermaid": "^11.6.0"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
