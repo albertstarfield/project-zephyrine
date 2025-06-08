@@ -37,6 +37,11 @@ CHATTERBOX_TTS_PATH = os.path.join(ENGINE_MAIN_DIR, CHATTERBOX_TTS_SUBMODULE_DIR
 CHATTERBOX_TTS_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".chatterbox_tts_installed_v1")
 # --- END ChatterboxTTS Configuration ---
 
+# --- LaTeX-OCR Local Sub-Engine Configuration ---
+LATEX_OCR_SUBMODULE_DIR_NAME = "LaTeX_OCR-SubEngine"
+LATEX_OCR_PATH = os.path.join(ENGINE_MAIN_DIR, LATEX_OCR_SUBMODULE_DIR_NAME)
+LATEX_OCR_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".latex_ocr_subengine_installed_v1")
+
 # --- Conda Configuration ---
 # CONDA_ENV_NAME is no longer used for creation if prefix is used, but can be a descriptive base for the folder
 CONDA_ENV_FOLDER_NAME = "zephyrineCondaVenv"
@@ -186,7 +191,8 @@ FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     CONDA_PATH_CACHE_FILE,
     PYWHISPERCPP_INSTALLED_FLAG_FILE,
     ARIA2P_INSTALLED_FLAG_FILE, # From previous step
-    CHATTERBOX_TTS_INSTALLED_FLAG_FILE  # <<< ADD THIS LINE
+    CHATTERBOX_TTS_INSTALLED_FLAG_FILE,
+    LATEX_OCR_INSTALLED_FLAG_FILE
 ]
 
 
@@ -1764,6 +1770,7 @@ if __name__ == "__main__":
             print_system("ChatterboxTTS previously installed (flag file found).")
         # --- END ChatterboxTTS Installation ---
 
+        # --- start of MELOTTS ---
         if not os.path.exists(MELO_TTS_INSTALLED_FLAG_FILE):
             print_system(f"--- MeloTTS First-Time Setup from {MELO_TTS_PATH} ---")
             if not os.path.isdir(MELO_TTS_PATH): print_error(f"MeloTTS dir missing: {MELO_TTS_PATH}."); sys.exit(1)
@@ -1846,6 +1853,36 @@ if __name__ == "__main__":
                         print_system("PyWhisperCpp installation flag created.")
         else:
             print_system("PyWhisperCpp previously installed.")
+
+
+        # ---
+        # --- Install Local LaTeX-OCR Sub-Engine ---
+        if not os.path.exists(LATEX_OCR_INSTALLED_FLAG_FILE):
+            print_system(f"--- First-Time Setup for local LaTeX_OCR-SubEngine ---")
+
+            # Check if the local directory for your fork exists
+            if not os.path.isdir(LATEX_OCR_PATH):
+                print_error(f"LaTeX-OCR Sub-Engine directory not found at: {LATEX_OCR_PATH}")
+                print_error("Please ensure the submodule/directory exists. Skipping LaTeX-OCR installation.")
+            else:
+                print_system(f"Installing local LaTeX-OCR in editable mode from: {LATEX_OCR_PATH}")
+
+                # The command for editable install from a local directory
+                pip_cmd_latex_ocr_local = [PIP_EXECUTABLE, "install", "-e", "."]
+
+                if not run_command(pip_cmd_latex_ocr_local, LATEX_OCR_PATH, "PIP-LATEX-OCR-LOCAL"):
+                    print_error(
+                        "Failed to install local LaTeX-OCR Sub-Engine. This functionality will be unavailable.")
+                else:
+                    print_system("Local LaTeX-OCR Sub-Engine installed successfully.")
+                    try:
+                        with open(LATEX_OCR_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
+                            f.write(f"Installed from local Sub-Engine on: {datetime.now().isoformat()}\n")
+                        print_system("Local LaTeX-OCR installation flag created.")
+                    except IOError as flag_err:
+                        print_error(f"Could not create local LaTeX-OCR installation flag file: {flag_err}")
+        else:
+            print_system("Local LaTeX-OCR Sub-Engine previously installed (flag file found).")
 
         # --- Custom llama-cpp-python Installation ---
         if os.getenv("PROVIDER", "llama_cpp").lower() == "llama_cpp":
