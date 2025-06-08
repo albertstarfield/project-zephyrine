@@ -98,6 +98,7 @@
   transition: background-color 0.2s ease, color 0.2s ease;
   overflow: hidden;
   white-space: nowrap;
+  text-decoration: none; /* <--- ADD THIS LINE */
 }
 
 .sidebar-button:hover {

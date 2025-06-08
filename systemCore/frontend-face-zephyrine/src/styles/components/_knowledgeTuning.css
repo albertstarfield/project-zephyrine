@@ -1,0 +1,163 @@
+@keyframes fadeInUp {
+    from {
+      opacity: 0;
+      transform: translateY(20px);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0);
+    }
+  }
+  
+  .knowledge-tuning-container {
+    padding: 2rem 4rem;
+    color: var(--primary-text);
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 2rem;
+    overflow-y: auto;
+    animation: fadeInUp 0.5s ease-out;
+  }
+  
+  .tuning-page-logo {
+    height: 80px;
+    margin-bottom: 1rem;
+    filter: drop-shadow(0 4px 10px rgba(0,0,0,0.4));
+  }
+  
+  .tuning-header {
+    text-align: center;
+  }
+  
+  .tuning-header h1 {
+    font-size: 2.5rem;
+    margin-bottom: 0.5rem;
+    color: var(--primary-text-alt);
+  }
+  
+  .tuning-header p {
+    color: var(--secondary-text);
+    font-size: 1.1rem;
+  }
+  
+  .drop-zone {
+    width: 100%;
+    max-width: 900px;
+    border: 2px dashed var(--border);
+    border-radius: var(--rounded-border);
+    padding: 3rem;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    text-align: center;
+    background-color: rgba(255, 255, 255, 0.02);
+    transition: background-color 0.2s, border-color 0.2s;
+  }
+  
+  .drop-zone.dragging {
+    border-color: var(--accent);
+    background-color: color-mix(in srgb, var(--accent) 10%, transparent);
+  }
+  
+  .drop-zone-prompt p {
+    font-size: 1.2rem;
+    margin: 0 0 0.5rem 0;
+  }
+  
+  .drop-zone-prompt span {
+    color: var(--secondary-text);
+    margin-bottom: 1rem;
+    display: block;
+  }
+  
+  .browse-button {
+    padding: 0.6rem 1.5rem;
+    font-size: 1rem;
+    background-color: var(--accent);
+    color: white;
+    border: none;
+    border-radius: var(--rounded-button);
+    cursor: pointer;
+    transition: filter 0.2s;
+  }
+  
+  .browse-button:hover {
+    filter: brightness(1.1);
+  }
+  
+  .file-list-container {
+    width: 100%;
+    max-width: 1200px;
+    background-color: var(--surface);
+    padding: 1.5rem;
+    border-radius: var(--rounded-border);
+    border: 1px solid var(--border);
+    box-shadow: var(--small-shadow);
+  }
+  
+  .file-list-container h2 {
+    margin: 0 0 1.5rem 0;
+    padding-bottom: 0.5rem;
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .file-list-table {
+    width: 100%;
+    border-collapse: collapse;
+  }
+  
+  .file-list-table th, .file-list-table td {
+    padding: 1rem;
+    text-align: left;
+    border-bottom: 1px solid var(--border);
+  }
+  
+  .file-list-table th {
+    color: var(--secondary-text);
+    font-size: 0.9rem;
+    text-transform: uppercase;
+    letter-spacing: 1px;
+  }
+  
+  .file-list-table tbody tr:last-child td {
+    border-bottom: none;
+  }
+  
+  .empty-list-message {
+    text-align: center;
+    padding: 3rem;
+    color: var(--secondary-text);
+  }
+  
+  .progress-bar-container {
+    width: 100px;
+    height: 8px;
+    background-color: var(--tertiary);
+    border-radius: 4px;
+    overflow: hidden;
+    display: inline-block;
+    margin-right: 0.5rem;
+  }
+  
+  .progress-bar {
+    height: 100%;
+    background-color: var(--secondary);
+    border-radius: 4px;
+    transition: width 0.3s ease;
+  }
+  
+  .status-pill {
+    padding: 0.3rem 0.6rem;
+    border-radius: var(--border-radius-pill);
+    font-size: 0.8rem;
+    font-weight: bold;
+    color: white;
+  }
+  
+  .status-pill.queued { background-color: var(--surface-alt); }
+  .status-pill.uploading { background-color: var(--info-color); }
+  .status-pill.finished { background-color: var(--success-color); }
+  .status-pill.processing { background-color: var(--warning-color); }
+  .status-pill.error { background-color: var(--error); }
