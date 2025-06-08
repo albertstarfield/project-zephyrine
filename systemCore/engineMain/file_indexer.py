@@ -173,54 +173,61 @@ class FileIndexer:
     def _extract_text_with_ocr_fallback(self, file_path: str, file_ext: str) -> str:
         """
         Extracts text from a file. For PDFs, it checks for a text layer and
-        falls back to OCR. for standard image types, it performs OCR directly.
+        falls back to OCR. For standard image types, it performs OCR directly.
         """
         log_prefix = f"TextExtract|{os.path.basename(file_path)[:15]}"
 
         try:
-            # --- PDF Specific Logic with OCR Fallback ---
             if file_ext == '.pdf':
-                doc = fitz.open(file_path)
+                # Add type hint for the 'doc' object for clarity
+                doc: fitz.Document = fitz.open(file_path)
                 full_text = ""
                 is_image_based = True
+
+                # First pass: check for a text layer
+                # --- CORRECTED LINE: Added type hint for 'page' ---
+                page: fitz.Page
                 for page in doc:
-                    if page.get_text("text").strip():
+                    # --- END CORRECTION ---
+                    text_from_page = page.get_text("text")  # IDE now knows this method exists
+                    if text_from_page and len(text_from_page.strip()) > 20:
                         is_image_based = False
                         break
 
                 if not is_image_based:
                     log_worker("INFO", f"{log_prefix}: PDF has text layer, extracting directly.")
                     full_text = "\n".join([page.get_text() for page in doc])
-                else:  # Scanned PDF, perform OCR
+                else:
                     log_worker("INFO", f"{log_prefix}: PDF has no text layer, performing OCR...")
                     ocr_texts = []
+                    # --- CORRECTED LINE: Added type hint for 'page' ---
+                    page: fitz.Page
                     for page_num, page in enumerate(doc):
-                        pix = page.get_pixmap(dpi=300)
+                        # --- END CORRECTION ---
+                        pix = page.get_pixmap(dpi=300)  # IDE now knows this method exists
                         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                         try:
                             ocr_texts.append(pytesseract.image_to_string(img))
                         except pytesseract.TesseractNotFoundError:
-                            log_worker("ERROR", f"{log_prefix}: Tesseract OCR engine not found. Cannot OCR PDF.")
+                            log_worker("ERROR", f"{log_prefix}: Tesseract OCR engine not found.")
                             return "[OCR Error: Tesseract engine not found]"
                     full_text = "\n\n--- Page Break ---\n\n".join(ocr_texts)
                 doc.close()
                 return full_text
 
-            # --- Direct OCR for Standard Image Types ---
             elif file_ext in OCR_TARGET_EXTENSIONS:
                 log_worker("INFO", f"{log_prefix}: Performing OCR on image file: {file_path}")
                 try:
                     return pytesseract.image_to_string(Image.open(file_path))
                 except pytesseract.TesseractNotFoundError:
-                    log_worker("ERROR", f"{log_prefix}: Tesseract OCR engine not found. Cannot OCR image.")
+                    log_worker("ERROR", f"{log_prefix}: Tesseract OCR engine not found.")
                     return "[OCR Error: Tesseract engine not found]"
 
         except Exception as e:
             log_worker("ERROR", f"{log_prefix}: Failed to extract text/OCR from '{file_path}': {e}")
             return f"[Error extracting text/OCR: {e}]"
 
-        # Fallback if file type is not handled by this function
-        return ""
+        return ""  # Fallback for unhandled file types
 
     def _convert_office_to_pdf(self, office_path: str) -> Optional[str]:
         """
@@ -493,25 +500,18 @@ class FileIndexer:
         logger.info(f"Root paths for scanning: {paths}")
         return paths
 
-    def _get_file_metadata(self, path: str) -> tuple[Optional[int], Optional[datetime.datetime], Optional[str]]:
-        """Safely gets file size and modification time."""
+    def _get_file_metadata(self, file_path: str) -> Dict[str, Any]:
+        """Gets file metadata and returns it as a dictionary."""
         try:
-            stat_result = os.stat(path)
-            size = stat_result.st_size
-            # Convert timestamp to datetime (naive, as OS provides)
-            mtime_ts = stat_result.st_mtime
-            mtime_dt = datetime.datetime.fromtimestamp(mtime_ts)
-            mime_type, _ = mimetypes.guess_type(path)
-            return size, mtime_dt, mime_type
-        except FileNotFoundError:
-            logger.warning(f"Metadata failed: File not found at {path}")
-            return None, None, None
-        except PermissionError:
-            logger.warning(f"Metadata failed: Permission denied for {path}")
-            return None, None, None
-        except Exception as e:
-            logger.error(f"Metadata failed: Unexpected error for {path}: {e}")
-            return None, None, None
+            stat_result = os.stat(file_path)
+            return {
+                'size_bytes': stat_result.st_size,
+                'last_modified_os': datetime.datetime.fromtimestamp(stat_result.st_mtime, tz=datetime.timezone.utc),
+                'mime_type': mimetypes.guess_type(file_path)[0]
+            }
+        except (FileNotFoundError, PermissionError) as e:
+            logger.warning(f"Metadata read error for {file_path}: {e}")
+            return {'size_bytes': None, 'last_modified_os': None, 'mime_type': None}
 
     def _extract_text(self, file_path: str, size_bytes: int) -> Optional[str]:
         """Attempts to read content from presumed text files."""
@@ -732,7 +732,7 @@ class FileIndexer:
                 for skip_abs_path in absolute_skip_dirs_resolved:
                     if norm_current_dir_for_abs_match == skip_abs_path or \
                             norm_current_dir_for_abs_match.startswith(skip_abs_path + os.sep):
-                        should_skip_dir = True;
+                        should_skip_dir = True
                         break
 
                 if not should_skip_dir and current_dir_basename_lower_for_rel_match in relative_skip_dir_names_lower:
@@ -798,8 +798,8 @@ class FileIndexer:
                             rate = files_since_last_report / report_interval_seconds if report_interval_seconds > 0 else files_since_last_report
                             logger.info(
                                 f"⏳ [Phase 1 Report] In '{os.path.basename(root_path)}' last {report_interval_seconds}s: {files_since_last_report} files (~{rate:.1f}/s), {errors_since_last_report} errors. Root Total: {total_processed_this_root_scan}")
-                            last_report_time = current_time_monotonic;
-                            files_since_last_report = 0;
+                            last_report_time = current_time_monotonic
+                            files_since_last_report = 0
                             errors_since_last_report = 0
 
                         if YIELD_SLEEP_SECONDS > 0: time.sleep(YIELD_SLEEP_SECONDS)
@@ -886,19 +886,18 @@ class FileIndexer:
             return f"[Error extracting text from Office file: {e}]"
 
     def _process_file_phase1(self, file_path: str, db_session: Session):
-        """
-        Phase 1 processing for a single file. Handles metadata, change detection,
-        text/OCR extraction, embedding, and database updates. It will re-process
-        unchanged files if their text content is missing in the database.
-        """
         if self.stop_event.is_set():
             return
 
         log_prefix = f"P1-File|{os.path.basename(file_path)[:20]}"
 
-        # 1. Initial Checks (File Size, Server Busy)
         try:
-            file_size = os.path.getsize(file_path)
+            file_metadata = self._get_file_metadata(file_path)
+            file_size = file_metadata.get('size_bytes')
+
+            if file_size is None:
+                raise OSError("Could not retrieve file metadata (size is None).")
+
             if file_size > FILE_INDEX_MAX_SIZE_MB * 1024 * 1024:
                 logger.debug(
                     f"{log_prefix}: Skipping large file ({file_size / 1024 ** 2:.1f}MB > {FILE_INDEX_MAX_SIZE_MB}MB)")
@@ -908,95 +907,98 @@ class FileIndexer:
                     f"{log_prefix}: Skipping small file ({file_size / 1024:.1f}KB < {FILE_INDEX_MIN_SIZE_KB}KB)")
                 return
         except OSError as e_stat:
-            logger.warning(f"{log_prefix}: Could not get file size for {file_path}: {e_stat}")
+            logger.warning(f"{log_prefix}: Could not get file stats for {file_path}: {e_stat}. Skipping.")
             return
 
         if self._wait_if_server_busy():
             return
 
-        # 2. Calculate Hash and Get DB Record
         current_md5 = self._calculate_md5(file_path, file_size)
         if not current_md5:
-            logger.warning(f"{log_prefix}: Could not calculate MD5 hash, skipping.")
-            return
+            if file_size <= MAX_HASH_FILE_SIZE_BYTES:
+                logger.warning(f"{log_prefix}: Could not calculate MD5 hash for {file_path}, skipping.")
+                return
+            else:
+                logger.trace(f"{log_prefix}: MD5 hash not calculated for large file, will rely on timestamp.")
 
         existing_record = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
         values_to_update: Dict[str, Any] = {'md5_hash': current_md5}
 
-        # 3. Determine if Processing is Needed
         needs_processing = False
         if not existing_record:
             logger.info(f"-> {log_prefix}: New file detected, proceeding with indexing.")
             needs_processing = True
-        elif existing_record.md5_hash != current_md5:
-            logger.info(f"-> {log_prefix}: File has been modified (hash changed). Re-processing.")
-            needs_processing = True
-        elif not existing_record.indexed_content:
-            logger.info(
-                f"-> {log_prefix}: File is unchanged but text content is missing. Re-processing to backfill text/OCR.")
-            needs_processing = True
-        else:  # Hash matches and content exists
-            logger.trace(f"{log_prefix}: File is unchanged and already indexed. Skipping.")
-            return  # Exit the function, no further action needed
+        else:
+            mtime_os_check = file_metadata.get('last_modified_os')
+            hashes_match = (current_md5 is not None and existing_record.md5_hash == current_md5)
+            large_file_is_unchanged = (
+                    current_md5 is None and existing_record.md5_hash is None and
+                    existing_record.size_bytes == file_size and
+                    mtime_os_check and existing_record.last_modified_os and
+                    mtime_os_check <= existing_record.last_modified_os
+            )
 
-        # 4. If processing is needed, extract content
+            if hashes_match or large_file_is_unchanged:
+                if not existing_record.indexed_content:
+                    logger.info(
+                        f"-> {log_prefix}: File is unchanged but text content is missing. Re-processing to backfill text/OCR.")
+                    needs_processing = True
+                else:
+                    logger.trace(f"{log_prefix}: File is unchanged and already indexed with text. Skipping.")
+                    return
+            else:
+                logger.info(f"-> {log_prefix}: File has been modified. Re-processing.")
+                needs_processing = True
+
         if needs_processing:
             content_to_embed: Optional[str] = None
             file_ext = os.path.splitext(file_path)[1].lower()
 
-            is_ocr_target = file_ext in OCR_TARGET_EXTENSIONS  # From config
-            is_vlm_target = file_ext in VLM_TARGET_EXTENSIONS  # From config
+            is_ocr_target = file_ext in OCR_TARGET_EXTENSIONS
+            is_vlm_target = file_ext in VLM_TARGET_EXTENSIONS
 
             if is_ocr_target:
-                # This generalized helper handles PDFs, scanned PDFs, and standard images
                 content_to_embed = self._extract_text_with_ocr_fallback(file_path, file_ext)
                 if is_vlm_target:
                     values_to_update['vlm_processing_status'] = 'pending_vlm'
             elif file_ext in TEXT_EXTENSIONS:
-                content_to_embed = self._extract_text(file_path)
+                content_to_embed = self._extract_text(file_path, file_size)  # Pass file_size
             elif file_ext in OFFICE_EXTENSIONS:
                 content_to_embed = self._extract_office_text(file_path)
                 if is_vlm_target:
                     values_to_update['vlm_processing_status'] = 'pending_vlm'
 
-            # 5. Generate Embedding if content was extracted
             if content_to_embed:
                 logger.info(f"{log_prefix}: Extracted ~{len(content_to_embed)} chars. Generating embedding...")
-                truncated_content = content_to_embed[:DB_TEXT_TRUNCATE_LEN]  # From config
+                truncated_content = content_to_embed[:DB_TEXT_TRUNCATE_LEN]
                 values_to_update['indexed_content'] = truncated_content
-
                 try:
-                    # Use ELP1 for this initial embedding to prioritize responsiveness
                     embedding = self.embedding_model.embed_query(truncated_content, priority=ELP1)  # type: ignore
                     if embedding:
                         values_to_update['embedding'] = embedding
-                        values_to_update['index_status'] = 'indexed_meta'
+                        values_to_update['index_status'] = 'indexed_phase1'
                         logger.info(f"{log_prefix}: Successfully generated embedding.")
                 except TaskInterruptedException as tie:
-                    logger.warning(f"{log_prefix}: Embedding interrupted by ELP0. Will retry later. {tie}")
+                    logger.warning(f"{log_prefix}: Embedding interrupted by ELP0. {tie}")
                     values_to_update['index_status'] = 'pending_embedding'
                 except Exception as e_embed:
                     logger.error(f"{log_prefix}: Failed to generate embedding: {e_embed}")
                     values_to_update['index_status'] = 'error_embedding'
                     values_to_update['processing_error'] = str(e_embed)[:255]
             else:
-                logger.debug(f"{log_prefix}: No text content extracted, or file was empty.")
-                values_to_update['index_status'] = 'indexed_meta_only'
+                logger.debug(f"{log_prefix}: No text content extracted, or file was not a processable type.")
+                values_to_update['index_status'] = 'indexed_meta'
 
-        # 6. Update Database
         values_to_update['last_indexed_db'] = datetime.datetime.now(datetime.timezone.utc)
         if existing_record:
-            # Clear old VLM data if re-processing
             if 'vlm_processing_status' in values_to_update and values_to_update[
                 'vlm_processing_status'] == 'pending_vlm':
                 values_to_update['latex_representation'] = None
                 values_to_update['latex_explanation'] = None
-
             db_session.execute(update(FileIndex).where(FileIndex.id == existing_record.id).values(**values_to_update))
             logger.debug(
                 f"{log_prefix}: Updating existing DB record ID {existing_record.id} with keys: {list(values_to_update.keys())}")
-        else:  # New record
-            file_metadata = self._get_file_metadata(file_path)
+        else:
             new_record_data = {**file_metadata, **values_to_update}
             db_session.add(FileIndex(**new_record_data))  # type: ignore
             logger.debug(f"{log_prefix}: Creating new DB record.")
@@ -1096,7 +1098,7 @@ class FileIndexer:
                 file_path = record.file_path # This is the ORIGINAL path (PDF or Office)
                 record_id = record.id
                 logger.info(f"Phase 2b Processing file ID {record_id}: {file_path}")
-                current_status = 'processing'; final_latex_code = None; final_explanation = None;
+                current_status = 'processing'; final_latex_code = None; final_explanation = None
                 vlm_error_occurred_this_file = False # Track errors for this specific file
                 temp_pdf_to_process = None
                 is_converted_office_file = False
@@ -1359,10 +1361,10 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
                 current_stage_start_time_s2: float = time.monotonic()
                 db_session = SessionLocal()  # type: ignore
                 if not db_session:  # Should not happen if SessionLocal is configured by init_db
-                    task_status = "error_db_session_rebuild";
+                    task_status = "error_db_session_rebuild"
                     task_message = "Failed to create DB session for rebuild phase."
-                    logger.error(task_message);
-                    initialization_succeeded_or_known_empty = True;
+                    logger.error(task_message)
+                    initialization_succeeded_or_known_empty = True
                     global_file_index_vectorstore = None
                     if not _file_index_vs_initialized_event.is_set(): _file_index_vs_initialized_event.set()
                     return {"status": task_status, "message": task_message}
@@ -1382,8 +1384,8 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
                                                            embedding_function=provider_ref.embeddings,
                                                            persist_directory=_persist_dir_to_use)
                     # Persistence is handled by chromadb client when persist_directory is set
-                    task_status = "success_empty_db_rebuild";
-                    task_message = "Init (rebuild): No files with embeddings in SQL. Created empty VS.";
+                    task_status = "success_empty_db_rebuild"
+                    task_message = "Init (rebuild): No files with embeddings in SQL. Created empty VS."
                     initialization_succeeded_or_known_empty = True
                 else:
                     current_stage_start_time_s3: float = time.monotonic()
@@ -1391,7 +1393,7 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
                         f">>> FileIndex VS Init: Stage 3: Processing {total_records_from_db} DB records for Chroma... <<<")
                     texts_for_vs, embeddings_for_vs, metadatas_for_vs, ids_for_vs = [], [], [], []
                     processed_records_for_chroma = 0
-                    report_interval = max(1, total_records_from_db // 20) if total_records_from_db > 0 else 1;
+                    report_interval = max(1, total_records_from_db // 20) if total_records_from_db > 0 else 1
                     report_interval = min(report_interval, 2000)
                     time_last_report_s3, recs_since_report_s3 = time.monotonic(), 0
 
@@ -1429,8 +1431,8 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
 
                         recs_since_report_s3 += 1
                         if recs_since_report_s3 >= report_interval or (record_idx + 1) == total_records_from_db:
-                            now_s3 = time.monotonic();
-                            batch_dur_s3 = now_s3 - time_last_report_s3;
+                            now_s3 = time.monotonic()
+                            batch_dur_s3 = now_s3 - time_last_report_s3
                             loop_dur_s3 = now_s3 - current_stage_start_time_s3
                             rate_b = recs_since_report_s3 / batch_dur_s3 if batch_dur_s3 > 0 else float('inf')
                             rate_t = processed_records_for_chroma / loop_dur_s3 if loop_dur_s3 > 0 else float('inf')
@@ -1438,7 +1440,7 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
                                         processed_records_for_chroma / total_records_from_db * 100) if total_records_from_db > 0 else 0
                             logger.info(
                                 f"  Prep {processed_records_for_chroma}/{total_records_from_db} for VS ({prog_pct:.1f}%). Batch: {recs_since_report_s3} in {batch_dur_s3:.2f}s (~{rate_b:.0f}r/s). Loop: {loop_dur_s3:.2f}s (~{rate_t:.0f}r/s avg).")
-                            recs_since_report_s3 = 0;
+                            recs_since_report_s3 = 0
                             time_last_report_s3 = now_s3
 
                     logger.info(
@@ -1492,21 +1494,21 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
                         logger.success(
                             task_message + f" Stage 4 took {time.monotonic() - current_stage_start_time_s4:.3f}s.")
                     else:
-                        logger.warning("No valid data with embeddings from SQL. Creating empty persistent VS.");
+                        logger.warning("No valid data with embeddings from SQL. Creating empty persistent VS.")
                         global_file_index_vectorstore = Chroma(collection_name=_collection_name_to_use,
                                                                embedding_function=provider_ref.embeddings,
                                                                persist_directory=_persist_dir_to_use)
-                        task_status = "success_no_valid_data_rebuild";
-                        task_message = "Init (rebuild): No valid data from SQL. Created empty VS.";
+                        task_status = "success_no_valid_data_rebuild"
+                        task_message = "Init (rebuild): No valid data from SQL. Created empty VS."
                         initialization_succeeded_or_known_empty = True
             # End of should_rebuild_from_sql block
 
         except Exception as e_init_critical:
-            task_status = "critical_error_overall_init";
+            task_status = "critical_error_overall_init"
             task_message = f"CRITICAL ERROR FileIndex VS init: {e_init_critical}"
-            logger.error(task_message);
+            logger.error(task_message)
             logger.exception("FileIndex VS Init Traceback (critical):")
-            global_file_index_vectorstore = None;
+            global_file_index_vectorstore = None
             initialization_succeeded_or_known_empty = False
 
         finally:
