@@ -819,6 +819,72 @@ class FileIndexer:
             logger.warning(
                 f"⏹️ Phase 1 Scan for {root_path} interrupted. Processed in this root-cycle: {total_processed_this_root_scan}, Errors: {total_errors_this_root_scan}")
 
+    def _extract_office_text(self, file_path: str) -> Optional[str]:
+        """
+        Extracts text content from Microsoft Office files (.docx, .pptx, .xlsx, .xls).
+        """
+        log_prefix = f"OfficeExtract|{os.path.basename(file_path)[:15]}"
+        file_ext = os.path.splitext(file_path)[1].lower()
+        extracted_content = []
+
+        try:
+            # --- Word Documents (.docx) ---
+            if file_ext == '.docx':
+                # Ensure 'python-docx' is installed
+                import docx
+                doc = docx.Document(file_path)
+                for para in doc.paragraphs:
+                    if para.text.strip():
+                        extracted_content.append(para.text)
+                # You can also extract text from tables if needed
+                for table in doc.tables:
+                    for row in table.rows:
+                        for cell in row.cells:
+                            if cell.text.strip():
+                                extracted_content.append(cell.text)
+
+            # --- PowerPoint Presentations (.pptx) ---
+            elif file_ext == '.pptx':
+                # Ensure 'python-pptx' is installed
+                import pptx
+                prs = pptx.Presentation(file_path)
+                for slide in prs.slides:
+                    for shape in slide.shapes:
+                        if hasattr(shape, "text"):
+                            if shape.text.strip():
+                                extracted_content.append(shape.text)
+                        if hasattr(shape, "has_table") and shape.has_table:
+                            for row in shape.table.rows:
+                                for cell in row.cells:
+                                    if cell.text.strip():
+                                        extracted_content.append(cell.text)
+
+            # --- Excel Spreadsheets (.xlsx, .xls) ---
+            elif file_ext in ['.xlsx', '.xls']:
+                # Ensure 'pandas' and its engines ('openpyxl', 'xlrd') are installed
+                import pandas as pd
+                # Read all sheets into a dictionary of DataFrames
+                xls = pd.ExcelFile(file_path)
+                for sheet_name in xls.sheet_names:
+                    df = pd.read_excel(xls, sheet_name=sheet_name, header=None)
+                    # Convert all data in the sheet to string and join
+                    sheet_text = ' '.join(df.applymap(lambda x: str(x) if pd.notna(x) else '').values.flatten())
+                    if sheet_text.strip():
+                        extracted_content.append(f"--- Sheet: {sheet_name} ---\n{sheet_text}")
+
+            else:
+                log_worker("WARNING", f"{log_prefix}: Unsupported Office file type for text extraction: {file_ext}")
+                return None
+
+            full_text = "\n\n".join(extracted_content)
+            logger.info(
+                f"{log_prefix}: Successfully extracted ~{len(full_text)} characters from {os.path.basename(file_path)}.")
+            return full_text
+
+        except Exception as e:
+            logger.error(f"{log_prefix}: Failed to extract text from Office file '{file_path}': {e}")
+            return f"[Error extracting text from Office file: {e}]"
+
     def _process_file_phase1(self, file_path: str, db_session: Session):
         """
         Phase 1 processing for a single file. Handles metadata, change detection,
@@ -849,7 +915,7 @@ class FileIndexer:
             return
 
         # 2. Calculate Hash and Get DB Record
-        current_md5 = self._calculate_md5(file_path)
+        current_md5 = self._calculate_md5(file_path, file_size)
         if not current_md5:
             logger.warning(f"{log_prefix}: Could not calculate MD5 hash, skipping.")
             return
@@ -904,7 +970,7 @@ class FileIndexer:
                     embedding = self.embedding_model.embed_query(truncated_content, priority=ELP1)  # type: ignore
                     if embedding:
                         values_to_update['embedding'] = embedding
-                        values_to_update['index_status'] = 'indexed_phase1'
+                        values_to_update['index_status'] = 'indexed_meta'
                         logger.info(f"{log_prefix}: Successfully generated embedding.")
                 except TaskInterruptedException as tie:
                     logger.warning(f"{log_prefix}: Embedding interrupted by ELP0. Will retry later. {tie}")
