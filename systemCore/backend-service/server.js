@@ -24,9 +24,11 @@ const LLM_TOP_P = parseFloat(process.env.LLM_TOP_P) || 1.0;
 const ALLOWED_FINE_TUNING_FILE_TYPES = [
   'text/plain',
   'application/jsonl',
+  'application/json',
   'text/csv',
   'text/tab-separated-values',
   'application/x-parquet',
+  'application/parquet',
   'application/vnd.openxmlformats-officedocument.spreadsheetml.sheet',
   'application/vnd.ms-excel',
 ];

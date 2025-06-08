@@ -102,6 +102,7 @@ from sqlalchemy.sql import func
 
 # --- Flask Imports ---
 from flask import Flask, request, Response, g, jsonify # Use Flask imports
+from flask_cors import CORS
 
 try:
     from shared_state import TaskInterruptedException, server_is_busy_event
@@ -778,6 +779,16 @@ def _programmatic_json_parse_and_fix(
 # --- Flask App Setup ---
 app = Flask(__name__) # Use Flask app
 
+#Allowing recieving big dataset
+#app.config['MAX_CONTENT_LENGTH'] = 2 ** 63
+app.config['MAX_CONTENT_LENGTH'] = None
+#app.config['MAX_CONTENT_LENGTH'] = 3 * 1024 * 1024 * 1024 + 500 * 1024 * 1024
+
+
+#This is important for Zephy GUI to work
+#CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
+CORS(app) #Allow all origin
+
 # --- Request Context Functions for DB ---
 @app.before_request
 def setup_and_log_request():
@@ -827,6 +838,16 @@ def setup_and_log_request():
     except Exception as log_err:
         logger.error(f"!!! Error during incoming request logging: {log_err}")
         # Continue processing the request anyway
+
+@app.after_request
+def add_cors_headers(response):
+    # Only add headers for the specified origin
+    # You can add more complex logic here if needed (e.g., checking request.origin)
+    response.headers['Access-Control-Allow-Origin'] = '*' #everywhere
+    response.headers['Access-Control-Allow-Headers'] = 'Content-Type,Authorization' # Add any other headers your frontend might send
+    response.headers['Access-Control-Allow-Methods'] = 'GET,PUT,POST,DELETE,OPTIONS' # Add all methods your frontend uses
+    response.headers['Access-Control-Allow-Credentials'] = 'true' # If you send cookies/credentials
+    return response
 
 @app.after_request
 def log_and_clear_busy(response: Response) -> Response:
@@ -10173,7 +10194,7 @@ async def handle_upload_and_ingest_file():
 
         common_ingest_session_id = f"ingest_batch_{request_id}"
 
-        if file_ext == ".jsonl":
+        if file_ext == ".jsonl" or file_ext == ".json":
             with open(temp_file_path, 'r', encoding='utf-8') as f_jsonl:
                 for line_num, line in enumerate(f_jsonl):
                     processed_rows_or_lines += 1
@@ -10259,7 +10280,48 @@ async def handle_upload_and_ingest_file():
                                             user_input=f"[Raw {file_ext.upper()} row {index + 1} from {filename}]",
                                             llm_response=json.dumps(raw_row_dict), reflection_completed=False)
                     ingested_interactions_count += 1
+        elif file_ext == ".txt":
+            with open(temp_file_path, 'r', encoding='utf-8', errors='ignore') as f_txt:
+                full_text_content = f_txt.read()
+                # You might split by lines, or treat as one large text block
+                # For simplicity, let's treat as one interaction for the whole file
+                await asyncio.to_thread(add_interaction, db,
+                                        session_id=common_ingest_session_id,
+                                        mode="text_ingested",
+                                        input_type="text_ingested_txt",
+                                        user_input=f"[Ingested text file: {filename}]",
+                                        llm_response=full_text_content,
+                                        reflection_completed=False)
+                ingested_interactions_count += 1
+                processed_rows_or_lines = 1  # Or len(lines) if you split by lines
+        elif file_ext in [".xlsx", ".xls"]:
+            df = await asyncio.to_thread(pd.read_excel, temp_file_path)  # Assumes openpyxl or xlrd is installed
+            processed_rows_or_lines = len(df)
+            for index, row in df.iterrows():
+                user_input_content = row.get("prompt") or row.get("user_input") or row.get("text")
+                assistant_response_content = row.get("completion") or row.get("llm_response")
 
+                if user_input_content is not None:
+                    await asyncio.to_thread(add_interaction, db,
+                                            session_id=row.get("session_id_override", common_ingest_session_id),
+                                            mode=row.get("mode_override", "chat_ingested"),
+                                            input_type=row.get("input_type_override", f"text_ingested_excel"),
+                                            user_input=str(user_input_content),
+                                            llm_response=str(
+                                                assistant_response_content) if assistant_response_content is not None else None,
+                                            reflection_completed=False)
+                    ingested_interactions_count += 1
+                else:
+                    # Fallback to ingest raw row if primary text fields are missing
+                    raw_row_dict = {k: str(v) for k, v in row.to_dict().items() if pd.notna(v)}
+                    await asyncio.to_thread(add_interaction, db,
+                                            session_id=row.get("session_id_override", common_ingest_session_id),
+                                            mode=row.get("mode_override", "data_ingestion"),
+                                            input_type=f"raw_ingested_excel_row",
+                                            user_input=f"[Raw Excel row {index + 1} from {filename}]",
+                                            llm_response=json.dumps(raw_row_dict),
+                                            reflection_completed=False)
+                    ingested_interactions_count += 1
         elif file_ext == ".parquet":
             df = await asyncio.to_thread(pd.read_parquet, temp_file_path)  # type: ignore
             processed_rows_or_lines = len(df)

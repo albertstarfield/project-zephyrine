@@ -453,7 +453,17 @@ def start_service_process(command, cwd, name, use_shell_windows=False):
 
 def start_engine_main():
     name = "ENGINE"
-    command = [HYPERCORN_EXECUTABLE, "app:app", "--bind", "127.0.0.1:11434", "--workers", "1", "--log-level", "info"]
+    MAX_UPLOAD_SIZE_BYTES = 2 ** 63  # Set this to 2 to the power of 63
+    command = [
+        HYPERCORN_EXECUTABLE,
+        "app:app",
+        "--bind", "127.0.0.1:11434",
+        "--workers", "1",
+        "--log-level", "info"
+    ]
+    hypercorn_env = {
+        "HYPERCORN_MAX_REQUEST_SIZE": str(MAX_UPLOAD_SIZE_BYTES)
+    }
     start_service_process(command, ENGINE_MAIN_DIR, name)
 
 
