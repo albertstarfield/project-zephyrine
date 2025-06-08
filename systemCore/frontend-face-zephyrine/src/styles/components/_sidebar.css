@@ -3,19 +3,17 @@
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: 260px; /* Standard width for sidebars */
-  height: 96%; /* Fill the height of .main-content-area */
-  background-color: var(
-    --sidebar-background
-  ); /* Use the new brighter variable */
+  width: 260px;
+  height: 96%; /* Changed from 96% to fill container */
+  background-color: var(--sidebar-background);
   padding: 0.75rem;
   box-sizing: border-box;
-  border-radius: 2rem; /* Match chat area */
-
-  flex-shrink: 0; /* Prevent sidebar from shrinking */
-  color: var(--text-primary);
-  transition: transform 0.3s ease; /* Only transition transform (for mobile slide-in) */
-  position: relative; /* Needed for absolute positioning of toggle button */
+  border-radius: 1rem; /* Matched my previous suggestion, adjust if needed */
+  flex-shrink: 0;
+  color: var(--primary-text);
+  transition: width 0.3s ease, transform 0.3s ease; /* Added width transition */
+  position: relative;
+  border: 1px solid var(--border);
 }
 
 /* --- Toggle Buttons --- */
@@ -23,19 +21,19 @@
 .sidebar-hamburger-button {
   background: none;
   border: none;
-  color: var(--text-secondary);
+  color: var(--secondary-text);
   cursor: pointer;
   padding: 0.5rem;
-  display: flex; /* Use flex for centering icon */
+  display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.3rem;
+  border-radius: 0.5rem; /* More rounding */
 }
 
 .sidebar-toggle-button:hover,
 .sidebar-hamburger-button:hover {
-  background-color: var(--background-hover);
-  color: var(--text-primary);
+  background-color: var(--hover);
+  color: var(--primary-text);
 }
 
 .sidebar-toggle-button svg,
@@ -44,38 +42,41 @@
   height: 1.2em;
 }
 
-/* Desktop toggle button specific positioning */
 .sidebar-toggle-desktop {
   position: absolute;
-  top: 0.75rem;
-  left: 1.4rem; /* Position inside the sidebar, aligned with padding */
-  background-color: var(--background-light);
-  border: 1px solid var(--border-color);
-  z-index: 10; /* Ensure it's above content */
-  opacity: 0; /* Hidden by default, show on hover */
-  transition: opacity 0.2s ease, background-color 0.2s ease;
+  top: 1rem;
+  right: -14px; /* Position it outside the sidebar slightly */
+  background-color: var(--background-mid);
+  border: 1px solid var(--border);
+  border-radius: 50%;
+  width: 28px;
+  height: 28px;
+  z-index: 10;
+  opacity: 0;
+  transition: opacity 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
 .sidebar:hover .sidebar-toggle-desktop,
 .sidebar--collapsed .sidebar-toggle-desktop {
-  /* Show when sidebar hovered or collapsed */
   opacity: 1;
 }
+.sidebar--collapsed .sidebar-toggle-desktop {
+  transform: translateX(-8px); /* Adjust position when collapsed */
+}
 
-/* Mobile hamburger button - hidden by default */
+
 .sidebar-hamburger-button {
   display: none;
-  position: fixed; /* Position relative to viewport */
+  position: fixed;
   top: 1rem;
   left: 1rem;
-  z-index: 1201; /* Above sidebar (1200) and overlay */
-  background-color: var(--background-medium); /* Make it visible */
+  z-index: 1201;
+  background-color: var(--background-mid);
 }
 
 .sidebar-top-actions {
-  margin-top: 3rem;
+  padding: 0.25rem;
   margin-bottom: 1rem;
-  /* Ensure buttons stack correctly when collapsed */
   display: flex;
   flex-direction: column;
   gap: 0.5rem;
@@ -85,109 +86,76 @@
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 0.6rem 0.8rem;
-  border-radius: 0.5rem;
+  padding: 0.75rem;
+  border-radius: var(--rounded-border);
   background-color: transparent;
   border: none;
-  color: var(--text-primary);
+  color: var(--primary-text);
   font-size: 0.9rem;
+  font-weight: 500;
   text-align: left;
   cursor: pointer;
-  transition: background-color 0.2s ease, padding 0.3s ease; /* Add padding transition */
-  overflow: hidden; /* Prevent text overflow during transition */
-  white-space: nowrap; /* Keep text on one line */
+  transition: background-color 0.2s ease, color 0.2s ease;
+  overflow: hidden;
+  white-space: nowrap;
 }
 
 .sidebar-button:hover {
-  background-color: var(--background-hover);
+  background-color: var(--hover);
 }
 
 .sidebar-icon {
   width: 1.2em;
   height: 1.2em;
   margin-right: 0.8rem;
-  stroke-width: 1.5; /* Adjust icon stroke */
-  flex-shrink: 0; /* Prevent icon from shrinking */
+  stroke-width: 1.5;
+  flex-shrink: 0;
 }
 
 .new-chat-button {
-  /* Specific styles if needed, e.g., border */
-  border: 1px solid var(--border-color);
-  /* margin-bottom removed, using gap in parent */
+  background-color: var(--tertiary);
+}
+.new-chat-button:hover {
+  background-color: var(--surface-alt);
 }
 
-/* Styles for the model selector placeholder */
-.model-selector-placeholder {
-  justify-content: space-between; /* Push arrow to the right */
-  cursor: pointer; /* Indicate it's clickable */
-  /* Inherits .sidebar-button styles for padding, alignment etc. */
-  /* margin-top removed, using gap in parent */
-  border: 1px solid transparent; /* Add border space for consistency on hover */
-}
 
-.model-selector-placeholder:hover {
-  background-color: var(--background-hover);
-  border-color: var(--border-color); /* Show border on hover */
-}
-
-.model-selector-placeholder span {
-  font-weight: 500; /* Make model name slightly bolder */
-}
-
-.dropdown-arrow {
-  width: 1em; /* Adjust size as needed */
-  height: 1em;
-  stroke: var(--text-secondary); /* Lighter color for arrow */
-  margin-left: 0.5rem; /* Space between text and arrow */
-}
-
-/* --- Model Selector Styles --- */
+/* --- Model Selector --- */
 .model-selector-container {
-  position: relative; /* For positioning the custom arrow */
+  position: relative;
   width: 100%;
 }
 
 .model-selector-dropdown {
-  /* Inherit base button styles */
-  appearance: none; /* Remove default browser arrow */
-  -webkit-appearance: none;
-  -moz-appearance: none;
-  width: 100%;
-  cursor: pointer;
-  padding-right: 2rem; /* Make space for the custom arrow */
-  background-color: var(--background-light); /* Match sidebar */
-  border: 1px solid var(--border-color); /* Add border */
+  /* This custom dropdown styling is complex, using a select is simpler if acceptable */
 }
-
-.model-selector-dropdown:hover {
-  border-color: var(--border-color-hover);
-  background-color: var(--background-hover);
-}
-
 .model-selector-container .dropdown-arrow {
   position: absolute;
   right: 0.8rem;
   top: 50%;
   transform: translateY(-50%);
-  pointer-events: none; /* Allow clicks to pass through to the select */
-  stroke: var(--text-secondary);
+  pointer-events: none;
+  stroke: var(--secondary-text);
   width: 1em;
   height: 1em;
 }
 
+/* --- History Section --- */
 .sidebar-history {
-  flex-grow: 1; /* Takes up available space */
-  overflow-y: auto; /* Scroll history if needed */
+  flex-grow: 1;
+  overflow-y: auto;
   margin-bottom: 1rem;
+  display: flex;
+  flex-direction: column;
 }
 
 .sidebar-history h4 {
   font-size: 0.75rem;
-  color: var(--text-secondary);
+  color: var(--secondary-text);
   text-transform: uppercase;
   padding: 0 0.8rem;
   margin-bottom: 0.5rem;
-  transition: opacity 0.3s ease; /* Fade out title */
+  font-weight: 600;
 }
 
 .sidebar-history ul {
@@ -196,78 +164,65 @@
   margin: 0;
 }
 
-.sidebar-history li {
-  /* Add transition for potential icon display later */
+.history-item {
+  position: relative; /* For hover actions positioning */
+  border-radius: var(--rounded-border);
 }
 
-.sidebar-history li button {
-  font-size: 0.85rem;
-  width: 100%;
-  justify-content: flex-start; /* Align text left */
-  background-color: var(--background-primary); /* Make background white */
-  border: 1px solid var(--border-color-light); /* Subtle border */
-  margin-bottom: 0.3rem; /* Add some space between history items */
-  border-radius: 0.4rem; /* Slightly rounded corners */
-  color: var(--text-primary); /* Ensure text color is standard */
-  padding: 0.5rem 0.8rem; /* Adjust padding slightly */
-  position: relative; /* Needed for absolute positioning of actions */
-  overflow: hidden; /* Prevent text overflow */
-  text-overflow: ellipsis; /* Add ellipsis for long titles */
-  white-space: nowrap; /* Keep title on one line */
-}
-
-/* Use the more specific class from JSX */
+/* --- HIGHLIGHT EFFECT STYLES --- */
 .history-item-button {
-  display: flex; /* Use flex to align title and actions */
-  justify-content: space-between; /* Push actions to the right */
+  display: flex;
+  justify-content: space-between;
   align-items: center;
   width: 100%;
-  /* Inherit styles from .sidebar-history li button */
-  font-size: inherit;
-  background-color: inherit;
-  border: inherit;
-  margin-bottom: inherit;
-  border-radius: inherit;
-  color: inherit;
-  padding: inherit;
+  font-size: 0.9rem;
+  background-color: transparent; /* No background by default */
+  border: none;
+  color: var(--primary-text);
+  padding: 0.75rem;
+  border-radius: var(--rounded-border);
   text-align: left;
   cursor: pointer;
+  transition: background-color 0.2s ease;
+  text-decoration: none; /* <<<<<<<<<<<< REMOVED UNDERLINE */
 }
 
+/* HOVER EFFECT: Highlight with background color */
 .history-item-button:hover {
-  background-color: var(--background-hover); /* Use standard hover */
-  border-color: var(--border-color); /* Slightly darker border on hover */
+  background-color: var(--hover); /* <<<<<<<<<<<< HIGHLIGHT ON HOVER */
 }
+
+/* ACTIVE LINK EFFECT: Persistent highlight */
+.history-item.active .history-item-button {
+  background-color: var(--tertiary); /* <<<<<<<<<<<< HIGHLIGHT FOR ACTIVE LINK */
+  color: var(--primary-text-alt);
+  font-weight: 600;
+}
+
 
 .history-item-title {
-  flex-grow: 1; /* Allow title to take available space */
+  flex-grow: 1;
   overflow: hidden;
   text-overflow: ellipsis;
   white-space: nowrap;
-  margin-right: 0.5rem; /* Space between title and actions */
+  margin-right: 0.5rem;
 }
 
-/* Container for edit/delete icons */
 .history-item-actions {
   display: flex;
   align-items: center;
   gap: 0.3rem;
-  opacity: 0; /* Hidden by default */
+  opacity: 0;
   transition: opacity 0.2s ease;
-  /* Position absolutely if needed, but flex space-between might be enough */
-  /* position: absolute; */
-  /* right: 0.5rem; */
-  /* top: 50%; */
-  /* transform: translateY(-50%); */
-  background-color: var(--background-primary); /* Match button background */
+  background-color: inherit; /* Inherit the button's current background color */
+  padding: 0 0.2rem;
+  border-radius: var(--rounded-border);
 }
 
-/* Show actions on hover of the list item */
 .history-item:hover .history-item-actions {
-  opacity: 1;
+  opacity: 1; /* Show actions on hover of the entire list item */
 }
 
-/* Styling for the small icon buttons */
 .icon-button {
   background: none;
   border: none;
@@ -277,21 +232,17 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.2rem;
-  color: var(--text-secondary);
+  border-radius: 0.3rem;
+  color: var(--secondary-text);
 }
 
 .icon-button:hover {
-  background-color: var(--background-medium);
-  color: var(--text-primary);
-}
-
-.sidebar-action-icon {
-  /* Size is set inline on SVG */
+  background-color: var(--surface-alt);
+  color: var(--primary-text-alt);
 }
 
 .sidebar-action-icon.delete-icon:hover {
-  color: var(--color-danger); /* Red color for delete on hover */
+  color: var(--error);
 }
 
 /* --- Styles for Editing State --- */
@@ -299,11 +250,10 @@
   display: flex;
   align-items: center;
   width: 100%;
-  padding: 0.1rem 0.2rem; /* Minimal padding around input */
-  background-color: var(--background-primary); /* Match button background */
-  border: 1px solid var(--border-color); /* Border like hover state */
-  border-radius: 0.4rem; /* Match button radius */
-  margin-bottom: 0.3rem; /* Match button margin */
+  padding: 0.25rem 0.5rem;
+  background-color: var(--background);
+  border: 1px solid var(--accent); /* Highlight with accent color when editing */
+  border-radius: var(--rounded-border);
 }
 
 .history-item-input {
@@ -311,9 +261,9 @@
   border: none;
   outline: none;
   background-color: transparent;
-  color: var(--text-primary);
-  font-size: 0.85rem; /* Match button text */
-  padding: 0.4rem 0.6rem; /* Match button padding vertically */
+  color: var(--primary-text);
+  font-size: 0.9rem;
+  padding: 0.5rem;
   margin-right: 0.3rem;
 }
 
@@ -323,180 +273,97 @@
   gap: 0.2rem;
 }
 
-/* Hide button text content (spans, direct text) when collapsed */
-.sidebar--collapsed .sidebar-button > span,
-.sidebar--collapsed .sidebar-history li button {
-  opacity: 0;
-  width: 0; /* Collapse width */
-  margin-right: 0; /* Remove margin next to icon */
-}
 
-/* Styles for GPTs and Projects sections */
-.sidebar-gpts,
-.sidebar-projects {
-  margin-top: 1rem; /* Space above these sections */
+/* --- Other Sidebar Sections --- */
+.sidebar-section {
+  margin-top: 1rem;
 }
-
-.sidebar-gpts h4,
-.sidebar-projects h4 {
-  /* Shared heading style if Projects uses h4 */
+.sidebar-section-title {
   font-size: 0.75rem;
-  color: var(--text-secondary);
+  color: var(--secondary-text);
   text-transform: uppercase;
   padding: 0 0.8rem;
   margin-bottom: 0.5rem;
-  transition: opacity 0.3s ease; /* Fade out title */
+  font-weight: 600;
 }
-
-.sidebar-gpts ul,
-.sidebar-projects ul {
-  /* Shared list style if Projects uses ul */
+.sidebar-list {
   list-style: none;
   padding: 0;
   margin: 0;
-}
-
-.sidebar-gpts li button,
-.sidebar-projects li button {
-  /* Shared list item button style */
-  font-size: 0.85rem;
-}
-
-/* Specific style for the single Projects button example */
-.sidebar-projects .sidebar-button {
-  font-size: 0.85rem; /* Match history/gpts list items */
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 .sidebar-spacer {
-  flex-grow: 1; /* Pushes bottom actions down */
+  flex-grow: 1;
 }
 
 .sidebar-bottom-actions {
-  margin-top: auto; /* Stick to bottom */
+  margin-top: auto;
   padding-top: 1rem;
-  border-top: 1px solid var(--border-color);
+  border-top: 1px solid var(--border);
+  display: flex;
+  flex-direction: column;
+  gap: 0.25rem;
 }
 
 /* --- Collapsed State Styles --- */
 .sidebar--collapsed {
-  width: 80px; /* Width when collapsed */
-  padding: 0.75rem 0.5rem; /* Adjust padding */
-}
-
-.sidebar--collapsed .sidebar-top-actions {
-  gap: 0.75rem; /* Adjust gap */
+  width: 80px;
+  padding: 0.75rem;
 }
 
 .sidebar--collapsed .sidebar-button {
-  justify-content: center; /* Center icon */
-  padding: 0.6rem 0; /* Adjust padding for icon only */
-}
-
-.sidebar--collapsed .sidebar-icon {
-  margin-right: 0; /* No margin needed when text is hidden */
-}
-
-/* Hide elements fully when collapsed */
-.sidebar--collapsed .model-selector-placeholder,
-.sidebar--collapsed .sidebar-history h4,
-.sidebar--collapsed .sidebar-gpts h4,
-.sidebar--collapsed .sidebar-projects h4 {
-  display: none;
-}
-
-.sidebar--collapsed .sidebar-history li button {
-  /* Specific adjustments for history items if needed */
   justify-content: center;
 }
 
-.sidebar--collapsed .sidebar-gpts li button span:last-child, /* Hide text span in GPTs */
-.sidebar--collapsed .sidebar-projects .sidebar-button span:last-child, /* Hide text span in Projects */
-.sidebar--collapsed .sidebar-bottom-actions .sidebar-button span:last-child {
-  /* Hide text span in bottom actions */
+.sidebar--collapsed .sidebar-icon {
+  margin-right: 0;
+}
+
+.sidebar--collapsed .sidebar-button > span,
+.sidebar--collapsed .sidebar-section-title {
   display: none;
 }
 
-.sidebar--collapsed .sidebar-toggle-desktop {
-  /* left: 0.75rem; */ /* Position remains the same when collapsed */
+.sidebar--collapsed .history-item-title,
+.sidebar--collapsed .history-item-actions {
+  display: none;
 }
 
-/* --- Responsive adjustments for sidebar (Mobile) --- */
+.sidebar--collapsed .history-item-button {
+  justify-content: center;
+}
+
+/* Add a placeholder for text when collapsed */
+.sidebar--collapsed .history-item-button::before {
+  content: "#"; /* Example placeholder for collapsed history items */
+  color: var(--secondary-text);
+  font-weight: 600;
+}
+
+
+/* --- Responsive (Mobile) --- */
 @media (max-width: 767px) {
-  /* Hide desktop toggle */
   .sidebar-toggle-desktop {
     display: none;
   }
-
-  /* Show mobile hamburger */
   .sidebar-hamburger-button {
-    display: flex; /* Show the button */
+    display: flex;
   }
-
-  /* Sidebar positioning and visibility for mobile */
   .sidebar {
-    position: fixed; /* Take out of flow */
+    position: fixed;
     left: 0;
     top: 0;
-    height: 100%; /* Full height */
-    z-index: 1200; /* Ensure above overlay (999) */
-    transform: translateX(-100%); /* Hidden off-screen by default */
-    width: 260px; /* Full width when open */
-    border-radius: 0 1rem 1rem 0; /* Adjust border radius for slide-in */
-    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1); /* Add shadow */
-    background-color: var(
-      --sidebar-background
-    ); /* Use the new brighter variable on mobile */
-  }
-
-  /* State when sidebar should be visible on mobile */
-  .sidebar:not(.sidebar--collapsed) {
-    /* When expanded (isCollapsed is false) */
-    transform: translateX(0); /* Slide in */
-  }
-
-  /* --- Mobile specific overrides when sidebar is OPEN --- */
-  .sidebar:not(.sidebar--collapsed) {
-    /* Ensure full width and padding are applied */
+    height: 100%;
+    z-index: 1200;
+    transform: translateX(-100%);
     width: 260px;
-    padding: 0.75rem;
+    border-radius: 0 1rem 1rem 0;
+    box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
   }
-
-  .sidebar:not(.sidebar--collapsed) .sidebar-button {
-    justify-content: flex-start; /* Align items left */
-    padding: 0.6rem 0.8rem; /* Restore padding */
+  .sidebar:not(.sidebar--collapsed) {
+    transform: translateX(0);
   }
-
-  .sidebar:not(.sidebar--collapsed) .sidebar-icon {
-    margin-right: 0.8rem; /* Restore margin */
-  }
-
-  /* Show text elements when open on mobile */
-  .sidebar:not(.sidebar--collapsed) .sidebar-button > span,
-  .sidebar:not(.sidebar--collapsed) .sidebar-history li button,
-  .sidebar:not(.sidebar--collapsed) .sidebar-gpts li button span:last-child,
-  .sidebar:not(.sidebar--collapsed)
-    .sidebar-projects
-    .sidebar-button
-    span:last-child,
-  .sidebar:not(.sidebar--collapsed)
-    .sidebar-bottom-actions
-    .sidebar-button
-    span:last-child {
-    display: inline; /* Or block, depending on original */
-    opacity: 1;
-    width: auto;
-  }
-
-  .sidebar:not(.sidebar--collapsed) .model-selector-placeholder,
-  .sidebar:not(.sidebar--collapsed) .sidebar-history h4,
-  .sidebar:not(.sidebar--collapsed) .sidebar-gpts h4,
-  .sidebar:not(.sidebar--collapsed) .sidebar-projects h4 {
-    display: block; /* Or initial */
-  }
-
-  /* --- Mobile specific overrides when sidebar is CLOSED --- */
-  /* (Styles are handled by the default hidden state via transform: translateX(-100%)) */
-
-  /* Adjust main content area when sidebar is open/closed? */
-  /* This might need to be handled in _main.css or App.jsx */
 }

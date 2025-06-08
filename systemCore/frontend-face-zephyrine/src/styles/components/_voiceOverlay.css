@@ -1,0 +1,152 @@
+/* ExternalAnalyzer/frontend-face-zephyrine/src/styles/components/_voiceOverlay.css */
+
+.voice-overlay-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: var(--background-alt, #202123);
+    z-index: 9999; /* <<<<<<<<<<<< INCREASED Z-INDEX TO ENSURE IT'S ON TOP */
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    color: var(--primary-text, #d1d5db);
+    opacity: 0;
+    animation: fadeInOverlay 0.5s ease-in-out forwards;
+    padding: 80px 20px 20px;
+    box-sizing: border-box;
+  }
+  
+  @keyframes fadeInOverlay {
+    from { opacity: 0; transform: scale(0.98); }
+    to { opacity: 1; transform: scale(1); }
+  }
+  
+  .voice-overlay-exit-button {
+    position: absolute;
+    top: 25px;
+    right: 30px;
+    background: none;
+    border: none;
+    color: var(--secondary-text, #ffffff80);
+    cursor: pointer;
+    padding: 10px;
+    border-radius: 50%;
+    transition: background-color 0.2s ease, color 0.2s ease;
+  }
+  
+  .voice-overlay-exit-button:hover {
+    background-color: var(--hover, hsla(240, 9%, 59%, 0.1));
+    color: var(--primary-text, #d1d5db);
+  }
+  
+  .voice-overlay-content {
+    width: 100%;
+    max-width: 800px;
+    height: 100%;
+    display: flex;
+    flex-direction: column;
+    justify-content: flex-end;
+    align-items: center;
+    gap: 2rem;
+  }
+  
+  /* --- Conversation Log Styles --- */
+  .voice-conversation-log {
+    flex-grow: 1;
+    width: 100%;
+    overflow-y: auto;
+    display: flex;
+    flex-direction: column-reverse; /* Newest items at the bottom */
+    padding: 1rem;
+  }
+  
+  .voice-conversation-turn {
+    margin-bottom: 1.5rem;
+    animation: fadeInTurn 0.5s ease-out forwards;
+  }
+  
+  @keyframes fadeInTurn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+  }
+  
+  .voice-turn-bubble {
+    padding: 1rem 1.5rem;
+    border-radius: 25px;
+    max-width: 80%;
+    line-height: 1.6;
+  }
+  
+  .voice-turn-bubble .voice-turn-speaker {
+    font-weight: 600;
+    font-size: 0.9rem;
+    display: block;
+    margin-bottom: 0.5rem;
+    opacity: 0.8;
+  }
+  
+  .voice-turn-bubble.user {
+    background-color: var(--tertiary, #3e3f4b);
+    color: var(--primary-text, #d1d5db);
+    border-bottom-right-radius: 8px;
+    align-self: flex-end;
+    text-align: right;
+  }
+  
+  .voice-turn-bubble.assistant {
+    background-color: var(--background-mid, #2c2d30);
+    color: var(--primary-text-alt, #ececf1);
+    border-bottom-left-radius: 8px;
+    align-self: flex-start;
+    text-align: left;
+  }
+  
+  /* --- Visualizer & Status Styles --- */
+  .voice-visualizer-container {
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    height: 100px; /* Fixed height for visualizer area */
+    position: relative;
+    width: 100%;
+  }
+  
+  .voice-visualizer-pulse {
+    position: absolute;
+    width: 80px;
+    height: 80px;
+    border-radius: 50%;
+    background-color: var(--accent, #FFFF00);
+    opacity: 0;
+    transform: scale(0.5);
+  }
+  
+  .voice-visualizer-pulse.active {
+    animation: pulse 2s infinite ease-in-out;
+  }
+  
+  @keyframes pulse {
+    0% {
+      transform: scale(0.5);
+      opacity: 0;
+    }
+    50% {
+      opacity: 0.3;
+    }
+    100% {
+      transform: scale(1.5);
+      opacity: 0;
+    }
+  }
+  
+  .voice-status-indicator {
+    font-size: 1.25rem;
+    color: var(--primary-text-alt, #ececf1);
+    height: 50px; /* Fixed height to prevent layout shifts */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+  }
