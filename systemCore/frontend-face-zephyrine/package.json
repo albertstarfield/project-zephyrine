@@ -21,7 +21,8 @@
     "openai":"^4.97.0",
     "sqlite3": "^5.1.7",
     "vite-plugin-pwa":"^1.0.0",
-    "rehype-raw":"^7.0.0"
+    "rehype-raw":"^7.0.0",
+    "@ricky0123/vad-web":"^0.0.24"
   },
   "devDependencies": {
     "@vitejs/plugin-react": "^4.2.1",
