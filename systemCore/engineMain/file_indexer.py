@@ -63,6 +63,18 @@ except ImportError:
     PDF2IMAGE_AVAILABLE = False
     logger.warning("pdf2image or poppler not installed. PDF -> Image conversion disabled.")
 
+
+PIX2TEX_AVAILABLE = False
+try:
+    # Assuming the package installed from GitHub is importable as 'pix2tex'
+    from pix2tex import cli as pix2tex
+    PIX2TEX_AVAILABLE = True
+    logger.info("Pix2Tex (Latex-OCR) library imported successfully.")
+except ImportError:
+    logger.warning("pix2tex library not found. Latex-OCR functionality will be disabled.")
+    pix2tex = None # Define as None to avoid Unresolved reference errors
+
+
 # Database imports
 try:
     from database import SessionLocal, FileIndex, add_interaction, init_db # Import add_interaction if logging indexer status
@@ -153,6 +165,17 @@ class FileIndexer:
 
         if not self.embedding_model: logger.warning("⚠️ Embeddings disabled.")
         if not self.vlm_model or not self.latex_model: logger.warning("⚠️ VLM->LaTeX processing disabled (one or both models missing).")
+        # Initialize LatexOCR model once
+        self.latex_ocr_model = None
+        if PIX2TEX_AVAILABLE and pix2tex:
+            try:
+                logger.info("Initializing LatexOCR model for file indexer...")
+                # This will download the model weights on first run
+                self.latex_ocr_model = pix2tex.LatexOCR()
+                logger.success("LatexOCR model initialized successfully.")
+            except Exception as e_pix2tex_init:
+                logger.error(f"Failed to initialize LatexOCR model: {e_pix2tex_init}")
+                self.latex_ocr_model = None
     # --- END MODIFICATION ---
 
     def _wait_if_server_busy(self, check_interval=0.5, log_wait=True):
@@ -169,6 +192,24 @@ class FileIndexer:
         if waited and log_wait:
              logger.info(f"� {self.thread_name}: Server is free, resuming indexing.")
         return False # Indicate processing can continue
+
+    def _get_latex_from_image(self, image: Image.Image) -> Optional[str]:
+        """Uses pix2tex LatexOCR to extract math LaTeX from a PIL Image."""
+        if not self.latex_ocr_model:
+            logger.warning("LatexOCR model not available, skipping math extraction.")
+            return None
+
+        try:
+            log_worker("TRACE", "Extracting math using LatexOCR model...")
+            # The model call is synchronous/blocking
+            math_latex = self.latex_ocr_model(image)
+            if math_latex and math_latex.strip():
+                log_worker("DEBUG", f"LatexOCR extracted math: {math_latex.strip()[:100]}...")
+                return math_latex.strip()
+            return None  # Return None if OCR produces no text
+        except Exception as e_latex_ocr:
+            log_worker("ERROR", f"Error during LatexOCR processing: {e_latex_ocr}")
+            return f"[LatexOCR Error: {e_latex_ocr}]"
 
     def _extract_text_with_ocr_fallback(self, file_path: str, file_ext: str) -> str:
         """
@@ -819,6 +860,107 @@ class FileIndexer:
             logger.warning(
                 f"⏹️ Phase 1 Scan for {root_path} interrupted. Processed in this root-cycle: {total_processed_this_root_scan}, Errors: {total_errors_this_root_scan}")
 
+    async def _embed_and_update_vector_store(self, record: FileIndex, db_session: Session):
+        """
+        Takes a FileIndex record, combines its text fields, chunks, embeds,
+        and updates the Chroma vector store. This is the final step for any file.
+        """
+        log_prefix = f"Embed|{os.path.basename(record.file_path)[:15]}"
+        logger.info(f"--> {log_prefix}: Starting final embedding process for File ID {record.id}")
+
+        if not self.embedding_model:
+            logger.error(
+                f"{log_prefix}: Embedding model not available. Cannot complete indexing for File ID {record.id}.")
+            record.index_status = 'error_embedding'
+            record.processing_error = "Embedding model not available at final stage."
+            db_session.commit()
+            return
+
+        # 1. Combine all available text fields into a master document
+        # We add headers to give the embedding model context about the source of the text.
+        master_document_text = ""
+        if record.indexed_content:
+            master_document_text += f"--- Raw Text Content ---\n{record.indexed_content}\n\n"
+        if record.latex_explanation:  # This holds the VLM description
+            master_document_text += f"--- Visual Description (VLM Analysis) ---\n{record.latex_explanation}\n\n"
+        if record.latex_representation:  # This holds the LaTeX-OCR math
+            master_document_text += f"--- Extracted Mathematical Notation (LaTeX-OCR) ---\n{record.latex_representation}\n\n"
+
+        master_document_text = master_document_text.strip()
+
+        if not master_document_text:
+            logger.warning(
+                f"{log_prefix}: No text content found to embed for File ID {record.id}. Marking as indexed_meta.")
+            record.index_status = 'indexed_meta'
+            db_session.commit()
+            return
+
+        # 2. Chunk the combined text
+        try:
+            # RecursiveCharacterTextSplitter is initialized in self.vector_store_init_and_load
+            # Assuming self.text_splitter is available
+            chunks = self.text_splitter.split_text(master_document_text)  # type: ignore
+            logger.info(f"{log_prefix}: Split combined document into {len(chunks)} chunks.")
+            if not chunks:
+                raise ValueError("Text splitter produced no chunks.")
+        except Exception as e_split:
+            logger.error(f"{log_prefix}: Failed to split text for File ID {record.id}: {e_split}")
+            record.index_status = 'error_embedding'
+            record.processing_error = f"Text splitting failed: {e_split}"
+            db_session.commit()
+            return
+
+        # 3. Embed the chunks
+        try:
+            # Use a lower priority for this background embedding task
+            chunk_embeddings = await asyncio.to_thread(
+                self.embedding_model.embed_documents, chunks, priority=ELP0  # type: ignore
+            )
+            if not chunk_embeddings or len(chunk_embeddings) != len(chunks):
+                raise ValueError("Embedding model returned empty or mismatched number of vectors.")
+
+            # 4. Update ChromaDB: Delete old entries and add new chunks
+            logger.info(f"{log_prefix}: Embedding successful. Updating vector store for {len(chunks)} chunks...")
+
+            # Delete any existing vectors for this file ID to avoid duplicates
+            await asyncio.to_thread(
+                self.vectorstore.delete,  # type: ignore
+                where={"file_id": record.id}
+            )
+
+            # Create new IDs for each chunk, but use the same metadata
+            chunk_ids = [f"file_{record.id}_chunk_{i}" for i in range(len(chunks))]
+            chunk_metadatas = [{
+                "file_id": record.id,
+                "file_path": record.file_path,
+                "file_name": record.file_name,
+                "chunk_index": i
+            } for i in range(len(chunks))]
+
+            await asyncio.to_thread(
+                self.vectorstore.add_embeddings,  # type: ignore
+                embeddings=chunk_embeddings,
+                metadatas=chunk_metadatas,
+                ids=chunk_ids
+            )
+
+            record.index_status = 'indexed_complete'  # New final status
+            record.processing_error = None  # Clear previous errors if successful
+            logger.success(
+                f"✅ {log_prefix}: Successfully indexed and embedded {len(chunks)} chunks for File ID {record.id}.")
+
+        except TaskInterruptedException as tie:
+            logger.warning(
+                f"{log_prefix}: Embedding for File ID {record.id} was interrupted: {tie}. Will remain as 'pending_embedding'.")
+            record.index_status = 'pending_embedding'  # Re-queue for next cycle
+        except Exception as e_embed_update:
+            logger.error(
+                f"{log_prefix}: Failed to embed or update vector store for File ID {record.id}: {e_embed_update}")
+            record.index_status = 'error_embedding'
+            record.processing_error = f"Final embedding/Chroma update failed: {e_embed_update}"
+
+        db_session.commit()
+
     def _extract_office_text(self, file_path: str) -> Optional[str]:
         """
         Extracts text content from Microsoft Office files (.docx, .pptx, .xlsx, .xls).
@@ -886,118 +1028,87 @@ class FileIndexer:
             return f"[Error extracting text from Office file: {e}]"
 
     def _process_file_phase1(self, file_path: str, db_session: Session):
-        if self.stop_event.is_set():
-            return
-
+        """
+        Phase 1: Gets metadata, hash, and extracts raw text/OCR.
+        Saves text to DB and marks file for embedding or VLM processing.
+        DOES NOT generate embeddings itself.
+        """
+        if self.stop_event.is_set(): return
         log_prefix = f"P1-File|{os.path.basename(file_path)[:20]}"
 
         try:
             file_metadata = self._get_file_metadata(file_path)
             file_size = file_metadata.get('size_bytes')
-
-            if file_size is None:
-                raise OSError("Could not retrieve file metadata (size is None).")
-
-            if file_size > FILE_INDEX_MAX_SIZE_MB * 1024 * 1024:
-                logger.debug(
-                    f"{log_prefix}: Skipping large file ({file_size / 1024 ** 2:.1f}MB > {FILE_INDEX_MAX_SIZE_MB}MB)")
-                return
-            if file_size < FILE_INDEX_MIN_SIZE_KB * 1024:
-                logger.trace(
-                    f"{log_prefix}: Skipping small file ({file_size / 1024:.1f}KB < {FILE_INDEX_MIN_SIZE_KB}KB)")
-                return
+            if file_size is None: raise OSError("Could not retrieve file metadata.")
+            if file_size > FILE_INDEX_MAX_SIZE_MB * 1024 * 1024: return
+            if file_size < FILE_INDEX_MIN_SIZE_KB * 1024: return
         except OSError as e_stat:
-            logger.warning(f"{log_prefix}: Could not get file stats for {file_path}: {e_stat}. Skipping.")
+            logger.warning(f"{log_prefix}: Stat failed: {e_stat}. Skipping.")
             return
 
-        if self._wait_if_server_busy():
-            return
+        if self._wait_if_server_busy(): return
 
         current_md5 = self._calculate_md5(file_path, file_size)
-        if not current_md5:
-            if file_size <= MAX_HASH_FILE_SIZE_BYTES:
-                logger.warning(f"{log_prefix}: Could not calculate MD5 hash for {file_path}, skipping.")
-                return
-            else:
-                logger.trace(f"{log_prefix}: MD5 hash not calculated for large file, will rely on timestamp.")
+        if not current_md5 and file_size <= MAX_HASH_FILE_SIZE_BYTES:
+            logger.warning(f"{log_prefix}: MD5 failed for hashable file, skipping.")
+            return
 
         existing_record = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
         values_to_update: Dict[str, Any] = {'md5_hash': current_md5}
 
         needs_processing = False
         if not existing_record:
-            logger.info(f"-> {log_prefix}: New file detected, proceeding with indexing.")
             needs_processing = True
+            logger.info(f"-> {log_prefix}: New file detected.")
         else:
             mtime_os_check = file_metadata.get('last_modified_os')
             hashes_match = (current_md5 is not None and existing_record.md5_hash == current_md5)
             large_file_is_unchanged = (
-                    current_md5 is None and existing_record.md5_hash is None and
-                    existing_record.size_bytes == file_size and
-                    mtime_os_check and existing_record.last_modified_os and
-                    mtime_os_check <= existing_record.last_modified_os
-            )
-
+                        current_md5 is None and existing_record.md5_hash is None and existing_record.size_bytes == file_size and mtime_os_check and existing_record.last_modified_os and mtime_os_check <= existing_record.last_modified_os)
             if hashes_match or large_file_is_unchanged:
-                if not existing_record.indexed_content:
-                    logger.info(
-                        f"-> {log_prefix}: File is unchanged but text content is missing. Re-processing to backfill text/OCR.")
+                if not existing_record.indexed_content and not existing_record.index_status == 'error_read':
                     needs_processing = True
+                    logger.info(f"-> {log_prefix}: Unchanged file is missing text content. Re-processing.")
                 else:
-                    logger.trace(f"{log_prefix}: File is unchanged and already indexed with text. Skipping.")
-                    return
+                    logger.trace(f"{log_prefix}: Unchanged and already processed. Skipping."); return
             else:
-                logger.info(f"-> {log_prefix}: File has been modified. Re-processing.")
                 needs_processing = True
+                logger.info(f"-> {log_prefix}: File modified. Re-processing.")
 
         if needs_processing:
-            content_to_embed: Optional[str] = None
+            content: Optional[str] = None
             file_ext = os.path.splitext(file_path)[1].lower()
 
-            is_ocr_target = file_ext in OCR_TARGET_EXTENSIONS
-            is_vlm_target = file_ext in VLM_TARGET_EXTENSIONS
-
-            if is_ocr_target:
-                content_to_embed = self._extract_text_with_ocr_fallback(file_path, file_ext)
-                if is_vlm_target:
+            if file_ext in OCR_TARGET_EXTENSIONS:
+                content = self._extract_text_with_ocr_fallback(file_path, file_ext)
+                if file_ext in VLM_TARGET_EXTENSIONS:
                     values_to_update['vlm_processing_status'] = 'pending_vlm'
+                    values_to_update['index_status'] = 'pending_embedding'  # Will be embedded after VLM
+                else:
+                    values_to_update['index_status'] = 'pending_embedding'  # OCR-only images go straight to embedding
             elif file_ext in TEXT_EXTENSIONS:
-                content_to_embed = self._extract_text(file_path, file_size)  # Pass file_size
+                content = self._extract_text(file_path, file_size)
+                values_to_update['index_status'] = 'pending_embedding'
             elif file_ext in OFFICE_EXTENSIONS:
-                content_to_embed = self._extract_office_text(file_path)
-                if is_vlm_target:
+                content = self._extract_office_text(file_path)
+                if file_ext in VLM_TARGET_EXTENSIONS:
                     values_to_update['vlm_processing_status'] = 'pending_vlm'
-
-            if content_to_embed:
-                logger.info(f"{log_prefix}: Extracted ~{len(content_to_embed)} chars. Generating embedding...")
-                truncated_content = content_to_embed[:DB_TEXT_TRUNCATE_LEN]
-                values_to_update['indexed_content'] = truncated_content
-                try:
-                    embedding = self.embedding_model.embed_query(truncated_content, priority=ELP1)  # type: ignore
-                    if embedding:
-                        values_to_update['embedding'] = embedding
-                        values_to_update['index_status'] = 'indexed_phase1'
-                        logger.info(f"{log_prefix}: Successfully generated embedding.")
-                except TaskInterruptedException as tie:
-                    logger.warning(f"{log_prefix}: Embedding interrupted by ELP0. {tie}")
+                    values_to_update['index_status'] = 'pending_embedding'  # Will be embedded after VLM
+                else:
                     values_to_update['index_status'] = 'pending_embedding'
-                except Exception as e_embed:
-                    logger.error(f"{log_prefix}: Failed to generate embedding: {e_embed}")
-                    values_to_update['index_status'] = 'error_embedding'
-                    values_to_update['processing_error'] = str(e_embed)[:255]
-            else:
-                logger.debug(f"{log_prefix}: No text content extracted, or file was not a processable type.")
+
+            if content:
+                values_to_update['indexed_content'] = content[:DB_TEXT_TRUNCATE_LEN]
+            else:  # No content extracted, mark as meta only and we're done with this file.
                 values_to_update['index_status'] = 'indexed_meta'
 
         values_to_update['last_indexed_db'] = datetime.datetime.now(datetime.timezone.utc)
         if existing_record:
-            if 'vlm_processing_status' in values_to_update and values_to_update[
-                'vlm_processing_status'] == 'pending_vlm':
+            if values_to_update.get('vlm_processing_status') == 'pending_vlm':  # Reset VLM fields if re-processing
                 values_to_update['latex_representation'] = None
                 values_to_update['latex_explanation'] = None
             db_session.execute(update(FileIndex).where(FileIndex.id == existing_record.id).values(**values_to_update))
-            logger.debug(
-                f"{log_prefix}: Updating existing DB record ID {existing_record.id} with keys: {list(values_to_update.keys())}")
+            logger.debug(f"{log_prefix}: Updating DB record ID {existing_record.id}")
         else:
             new_record_data = {**file_metadata, **values_to_update}
             db_session.add(FileIndex(**new_record_data))  # type: ignore
@@ -1005,246 +1116,372 @@ class FileIndexer:
 
         db_session.commit()
 
+    def _cleanup_llm_output(self, text: str, replacement_char: str = ' ') -> str:
+        """
+        Cleans up raw text output from the LLM, removing special tokens
+        and extraneous whitespace.
+        """
+        if not isinstance(text, str):
+            return ""
 
-    def _process_pending_vlm_files(self, db_session: Session):
-        """Phase 2: Converts Office files, then processes all pending PDFs/converted files using VLM."""
+        # This cleanup logic should match the one in app.py's AIChat class for consistency
+        sanitized = text.strip()
+
+        # Use config variables if they are available, otherwise use defaults
+        start_token = CHATML_START_TOKEN if 'CHATML_START_TOKEN' in globals() else "<|im_start|>"
+        end_token = CHATML_END_TOKEN if 'CHATML_END_TOKEN' in globals() else "<|im_end|>"
+
+        # Remove start/end tokens and any "assistant\n" preamble
+        if sanitized.startswith(start_token):
+            sanitized = sanitized[len(start_token):].lstrip()
+        if sanitized.endswith(end_token):
+            sanitized = sanitized[:-len(end_token)].rstrip()
+
+        # A regex to remove "assistant" only if it's at the very beginning of the string,
+        # potentially with some whitespace.
+        sanitized = re.sub(r"^\s*assistant\s*\n?", "", sanitized, flags=re.IGNORECASE)
+
+        # Replace multiple spaces/newlines with a single character
+        # The 'r' prefix makes it a raw string, preventing SyntaxWarning for '\s'
+        sanitized = re.sub(rf'[{re.escape(replacement_char)}\s]+', replacement_char, sanitized)
+
+        return sanitized.strip()
+
+    async def _get_initial_vlm_description_async(self, image: Image.Image, session_id_for_log: str) -> Tuple[
+        Optional[str], Optional[str]]:
+        """
+        Calls the general 'vlm' model to get an initial textual description of an image.
+        Returns (description, error_message_if_any).
+        """
+        # Check for stop events before processing
+        if self._wait_if_server_busy(): return None, "[VLM Description Skipped - Server Busy]"
+        if self.stop_event.is_set(): return None, "[VLM Description Skipped - Stop Requested]"
+
         if not self.vlm_model:
-             logger.warning("Skipping Phase 2 VLM processing: VLM model not available.")
-             return
+            log_worker("WARNING", "VLM model ('vlm' role) not available for initial description.")
+            return None, "[VLM Model Unavailable]"
 
-        logger.info("🔬 Starting Phase 2 Cycle...")
-        processed_count = 0; error_count = 0; converted_count = 0; vlm_processed_count = 0
-        last_report_time = time.monotonic()
-        interrupted = False # Flag for interruption
+        log_prefix = f"VLMDesc|ELP0|{session_id_for_log[:8]}"
+        logger.trace(f"{log_prefix}: Getting initial VLM description for image...")
 
-        # --- Sub-Phase 2a: Convert Office Files ---
-        logger.info("--- Phase 2a: Checking for Office files pending conversion ---")
-        while not self.stop_event.is_set() and not interrupted:
-            files_to_convert: List[FileIndex] = []
-            try:
-                files_to_convert = db_session.query(FileIndex).filter(
-                    FileIndex.vlm_processing_status == 'pending_conversion'
-                ).limit(5).all() # Convert in small batches
-            except SQLAlchemyError as db_err: logger.error(f"Phase 2a DB query error: {db_err}"); time.sleep(30); continue
+        description_output: Optional[str] = None
+        error_output: Optional[str] = None
 
-            if not files_to_convert: logger.info("--- Phase 2a: No more files pending conversion found. ---"); break
+        try:
+            # 1. Convert PIL Image to base64 data URI for the VLM prompt
+            buffered = BytesIO()
+            image.save(buffered, format="PNG")  # PNG is a good lossless format for this
+            img_b64_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
+            image_uri = f"data:image/png;base64,{img_b64_str}"
 
-            logger.info(f"Phase 2a: Found {len(files_to_convert)} Office file(s) to convert...")
-            for record in files_to_convert:
-                if self.stop_event.is_set(): logger.info("Phase 2a conversion interrupted by stop_event."); interrupted=True; break
-                if self._wait_if_server_busy(): interrupted=True; break # Stop batch if busy
+            # 2. Prepare the prompt and messages for the VLM
+            # PROMPT_VLM_INITIAL_ANALYSIS should be defined in config.py
+            # e.g., PROMPT_VLM_INITIAL_ANALYSIS = "Describe this image, focusing on text, formulas, or diagrams."
+            image_content = {"type": "image_url", "image_url": {"url": image_uri}}
+            text_content = {"type": "text", "text": PROMPT_VLM_INITIAL_ANALYSIS}
+            vlm_messages = [HumanMessage(content=[image_content, text_content])]
 
-                input_path = record.file_path
-                record_id = record.id
-                temp_pdf_path = self._convert_office_to_pdf(input_path) # Call new helper
+            # 3. Create the Langchain chain
+            vlm_chain = self.vlm_model | StrOutputParser()
 
-                new_status = 'error_conversion' # Assume failure
-                if temp_pdf_path:
-                    new_status = 'pending_vlm' # Mark for VLM processing in next sub-phase
-                    converted_count += 1
-                    logger.info(f"Conversion successful for ID {record_id}, marked as 'pending_vlm'. Temp PDF: {temp_pdf_path}")
-                    # Clean up the temp PDF path now, as it's not directly used by _process_single_pdf_for_vlm
-                    # _process_single_pdf_for_vlm will re-convert if it's an office file.
-                    # This is inefficient but safer than managing temp file state across phases.
-                    # A better long-term solution would be to pass the temp_pdf_path to _process_single_pdf_for_vlm
-                    # or have _convert_office_to_pdf return the content directly.
-                    # For now, we delete the temp PDF created *here*.
-                    try:
-                        if os.path.exists(temp_pdf_path): os.remove(temp_pdf_path)
-                    except Exception as e_rem_temp:
-                        logger.warning(f"Could not remove temp PDF '{temp_pdf_path}' after conversion marking: {e_rem_temp}")
-                else:
-                    error_count += 1 # Conversion failed
+            # 4. Call the LLM (VLM)
+            # _call_llm_with_timing is synchronous, so wrap it for our async context
+            timing_data = {"session_id": session_id_for_log, "mode": "vlm_initial_description", "execution_time_ms": 0}
 
-                # Update DB status after conversion attempt
-                try:
-                    stmt = update(FileIndex).where(FileIndex.id == record_id).values(
-                        vlm_processing_status=new_status,
-                        latex_representation=None, # Clear LaTeX fields
-                        latex_explanation=None,
-                        last_indexed_db=datetime.datetime.now(datetime.timezone.utc)
-                    )
-                    db_session.execute(stmt); db_session.commit()
-                except SQLAlchemyError as db_conv_err:
-                     logger.error(f"Phase 2a DB update failed for ID {record_id}: {db_conv_err}"); db_session.rollback()
-                     error_count += 1
+            response_text = await asyncio.to_thread(
+                self.provider._call_llm_with_timing,  # type: ignore
+                vlm_chain,
+                vlm_messages,  # Pass messages directly as input to the model in the chain
+                timing_data,
+                priority=ELP0  # This is a background task
+            )
 
-                if not self.stop_event.is_set() and not interrupted: time.sleep(1.0) # Longer delay after conversion attempt
+            if response_text and not (
+                    isinstance(response_text, str) and "ERROR" in response_text and "Traceback" in response_text):
+                description_output = self._cleanup_llm_output(response_text.strip())
+                logger.trace(f"{log_prefix}: VLM description successful. Snippet: '{description_output[:100]}...'")
+            else:
+                error_output = f"[VLM description call failed or returned error: {response_text}]"
+                logger.warning(f"{log_prefix} {error_output}")
 
-            if self.stop_event.is_set() or self._wait_if_server_busy() or interrupted: break # Exit outer loop if needed
+        except TaskInterruptedException as tie:
+            logger.warning(f"🚦 {log_prefix} VLM description INTERRUPTED: {tie}")
+            error_output = "[VLM Description Interrupted]"
+        except Exception as e:
+            logger.error(f"{log_prefix} VLM description call failed: {e}", exc_info=True)
+            error_output = f"[VLM Description Error: {str(e)[:100]}]"
 
-        if interrupted: logger.info("Phase 2a (Conversion) loop exited due to interruption/stop.");
+        return description_output, error_output
 
-        # --- Sub-Phase 2b: Process Pending VLM Files (PDFs and Successfully Converted) ---
-        logger.info("--- Phase 2b: Checking for files pending VLM analysis ---")
-        interrupted = False # Reset interruption flag for this phase
-        while not self.stop_event.is_set() and not interrupted:
-            batch_start_time = time.monotonic()
+    async def _process_pending_vlm_files(self, db_session: Session):
+        """
+        Phase 2: Processes files marked as 'pending_vlm' or 'pending_conversion'.
+        1. Converts files to images if necessary (e.g., Office docs).
+        2. Runs general VLM for description and LaTeX-OCR for math on each page image.
+        3. Saves this new text to the database.
+        4. Calls the final embedding helper to create and store vectors for the combined text.
+        """
+        if not self.vlm_model and not self.latex_ocr_model:
+            logger.warning("Skipping Phase 2 processing: VLM and/or LatexOCR models are not available.")
+            return
+
+        logger.info("🔬 Starting Phase 2 VLM/OCR Cycle...")
+
+        # Process a limited number of files per cycle to avoid getting stuck on a long task
+        # and to allow the main scan loop to run periodically.
+        processed_in_cycle = 0
+        max_to_process_in_cycle = 50
+
+        while not self.stop_event.is_set() and processed_in_cycle < max_to_process_in_cycle:
+            if self._wait_if_server_busy():
+                logger.info("Phase 2: Pausing due to busy server.")
+                break
+
             pending_vlm_files: List[FileIndex] = []
             try:
-                # Query for files ready for VLM
+                # Query for files needing VLM processing
                 pending_vlm_files = db_session.query(FileIndex).filter(
-                    FileIndex.vlm_processing_status == 'pending_vlm'
-                ).limit(10).all() # Process in batches
-            except SQLAlchemyError as db_err: logger.error(f"Phase 2b DB query error: {db_err}"); time.sleep(30); continue
+                    FileIndex.vlm_processing_status.in_(['pending_vlm', 'pending_conversion'])
+                ).limit(10).all()  # Process in batches of 10
+            except Exception as e_query:
+                logger.error(f"Phase 2: Error querying for pending VLM files: {e_query}")
+                break
 
-            if not pending_vlm_files: logger.info("--- Phase 2b: No more files pending VLM analysis found. ---"); break
+            if not pending_vlm_files:
+                logger.info("Phase 2: No more files pending VLM/OCR processing in this batch.")
+                break  # Exit cycle if no more files are found
 
-            logger.info(f"Phase 2b: Found {len(pending_vlm_files)} file(s) for VLM analysis...")
             for record in pending_vlm_files:
-                if self.stop_event.is_set(): logger.info("Phase 2b VLM analysis interrupted by stop_event."); interrupted=True; break
-                if self._wait_if_server_busy(): interrupted=True; break # Stop batch
+                if self.stop_event.is_set():
+                    logger.info("Phase 2: Stop signal received during batch processing.")
+                    break
 
-                file_path = record.file_path # This is the ORIGINAL path (PDF or Office)
-                record_id = record.id
-                logger.info(f"Phase 2b Processing file ID {record_id}: {file_path}")
-                current_status = 'processing'; final_latex_code = None; final_explanation = None
-                vlm_error_occurred_this_file = False # Track errors for this specific file
-                temp_pdf_to_process = None
-                is_converted_office_file = False
+                processed_in_cycle += 1
+                log_prefix = f"P2-VLM|{os.path.basename(record.file_path)[:15]}"
+                logger.info(f"--> {log_prefix}: Starting Phase 2 processing for File ID {record.id}")
 
-                # Determine the actual PDF path to process
-                file_ext = os.path.splitext(file_path)[1].lower()
-                if file_ext == '.pdf':
-                    temp_pdf_to_process = file_path
-                elif file_ext in OFFICE_EXTENSIONS:
-                    logger.info(f"Phase 2b: Office file ID {record_id} needs conversion to temp PDF for VLM.")
-                    temp_pdf_to_process = self._convert_office_to_pdf(file_path)
-                    if not temp_pdf_to_process:
-                        logger.error(f"Phase 2b: Office to PDF conversion failed for {file_path}. Skipping VLM."); current_status = 'error_conversion'; error_count += 1
-                    else:
-                        is_converted_office_file = True
-                        logger.info(f"Phase 2b: Converted Office file to temp PDF: {temp_pdf_to_process}")
-                else:
-                    logger.error(f"Phase 2b: File ID {record_id} has 'pending_vlm' but isn't PDF/Office ({file_ext}). Skipping."); current_status = 'error_type'; error_count += 1
+                images: Optional[List[Image.Image]] = None
+                temp_pdf_to_process: Optional[str] = None
 
-                # --- Process the PDF (original or temporary) ---
-                if temp_pdf_to_process:
-                    images = self._convert_pdf_to_images(temp_pdf_to_process)
-                    if images:
-                        num_pages = len(images); page_latex_results = []; page_expl_results = []
-                        logger.info(f"  📄 Processing {num_pages} pages from PDF for file ID {record_id}.")
-
-                        for i, page_image in enumerate(images):
-                            page_num = i + 1
-                            if self.stop_event.is_set() or interrupted: current_status = 'pending_vlm'; interrupted=True; break
-                            logger.info(f"  🧠 Phase 2b: Analyzing page {page_num}/{num_pages} for file ID {record_id} (VLM/LaTeX - ELP0)...")
-
-                            # --- Step 1: Get Initial Description ---
-                            initial_desc, vlm_err_msg = self._get_initial_vlm_description(page_image)
-
-                            if vlm_err_msg: # Check for errors or interruption from VLM step
-                                page_expl_results.append(f"## Page {page_num}\nInitial Analysis Failed: {vlm_err_msg}")
-                                if "[VLM Interrupted]" in vlm_err_msg or "[LaTeX Model Skipped - Server Busy]" in vlm_err_msg or "[VLM Skipped - Stop Requested]" in vlm_err_msg:
-                                    interrupted=True; current_status='pending_vlm'; break
-                                vlm_error_occurred_this_file = True # Mark general error
-                                continue # Skip refinement if initial failed
-
-                            # --- Step 2: Refine to LaTeX/TikZ (if initial desc obtained) ---
-                            refined_latex, refined_expl_msg = self._refine_to_latex_tikz(page_image, initial_desc or "")
-
-                            if refined_expl_msg and ("[LaTeX Refinement Interrupted]" in refined_expl_msg or "[LaTeX Model Skipped - Server Busy]" in refined_expl_msg or "[LaTeX Model Skipped - Stop Requested]" in refined_expl_msg):
-                                interrupted=True; current_status='pending_vlm'; break
-                            elif refined_expl_msg and "[LaTeX Refinement Error:" in refined_expl_msg:
-                                page_expl_results.append(f"## Page {page_num}\nLaTeX Refinement Failed: {refined_expl_msg}")
-                                vlm_error_occurred_this_file = True # Mark general error
-                            else:
-                                # Success for this page
-                                if refined_latex: page_latex_results.append(f"% Page {page_num}\n{refined_latex}")
-                                page_expl_results.append(f"## Page {page_num}\n{refined_expl_msg or '(No explanation provided)'}")
-
-                        # --- After processing all pages (or interruption) ---
-                        if not interrupted: # Determine final status only if not stopped/interrupted
-                            if vlm_error_occurred_this_file: # If any page had an error (VLM or LaTeX)
-                                current_status = 'partial_vlm_error' if (page_latex_results or page_expl_results) else 'error_vlm'
-                            else:
-                                current_status = 'success'
-                        # Else: status was already set to 'pending_vlm' during interruption
-
-                        final_latex_code = "\n\n".join(page_latex_results) if page_latex_results else None
-                        final_explanation = "\n\n".join(page_expl_results) if page_expl_results else None
-
-                    else: # PDF conversion failed
-                        logger.error(f"Phase 2b Skipping file ID {record_id}: PDF to image conversion failed for '{temp_pdf_to_process}'.")
-                        current_status = 'error_conversion'
-                        error_count +=1
-
-                # --- Clean up temporary PDF if created from Office file ---
-                if is_converted_office_file and temp_pdf_to_process and os.path.exists(temp_pdf_to_process):
-                    try: os.remove(temp_pdf_to_process); logger.trace(f"Cleaned up temporary PDF: {temp_pdf_to_process}")
-                    except Exception as e: logger.warning(f"Failed to clean up temp PDF '{temp_pdf_to_process}': {e}")
-
-                # --- Update DB Record for this file ---
                 try:
-                    stmt = update(FileIndex).where(FileIndex.id == record_id).values(
-                        vlm_processing_status=current_status,
-                        latex_representation=final_latex_code,
-                        latex_explanation=final_explanation,
-                        last_indexed_db=datetime.datetime.now(datetime.timezone.utc))
-                    db_session.execute(stmt); db_session.commit()
-                    vlm_processed_count += 1
-                    logger.info(f"Phase 2b DB Updated ID {record_id}. Status: {current_status}.")
-                except SQLAlchemyError as db_upd_err:
-                    logger.error(f"Phase 2b DB Update FAILED ID {record_id}: {db_upd_err}"); db_session.rollback(); error_count += 1
+                    # Step 1: Convert file to a list of PIL Images
+                    if record.file_ext == '.pdf':
+                        images = await asyncio.to_thread(self._convert_pdf_to_images, record.file_path)
+                    elif record.file_ext in OFFICE_EXTENSIONS:
+                        temp_pdf_to_process = await asyncio.to_thread(self._convert_office_to_pdf, record.file_path)
+                        if temp_pdf_to_process and os.path.exists(temp_pdf_to_process):
+                            images = await asyncio.to_thread(self._convert_pdf_to_images, temp_pdf_to_process)
+                    elif record.file_ext in VLM_TARGET_EXTENSIONS:  # For single images like PNG, JPG
+                        images = [Image.open(record.file_path)]
 
-                if not self.stop_event.is_set() and not interrupted: time.sleep(0.5) # Small delay
+                    if not images:
+                        raise ValueError("Failed to convert or load file into images for VLM/OCR processing.")
 
-            if self.stop_event.is_set() or self._wait_if_server_busy() or interrupted: break # Exit outer VLM loop
-            if not pending_vlm_files: time.sleep(5) # Pause if queue empty
+                    page_vlm_descriptions: List[str] = []
+                    page_latex_ocr_outputs: List[str] = []
+                    page_errors: List[str] = []
 
-        # --- End of outer Phase 2b while loop ---
-        if interrupted: logger.info("Phase 2b (VLM Analysis) loop exited due to interruption/stop.");
-        total_duration = time.monotonic() - last_report_time
-        logger.success(f"✅ Finished Phase 2 Cycle. Converted: {converted_count}, VLM Processed: {vlm_processed_count}, Errors: {error_count}. Duration: {total_duration:.2f}s")
+                    # Step 2: Process each page/image with VLM and LaTeX-OCR
+                    for page_num, page_image in enumerate(images):
+                        session_id_for_page = f"p2_vlm_{record.id}_p{page_num}"
+
+                        # Get general description from main VLM model
+                        if self.vlm_model:
+                            vlm_description, vlm_err = await self._get_initial_vlm_description_async(page_image,
+                                                                                                     session_id_for_page)
+                            if vlm_err: page_errors.append(f"Page {page_num + 1} VLM Error: {vlm_err}")
+                            if vlm_description: page_vlm_descriptions.append(vlm_description)
+
+                        # Get LaTeX math from specialized LatexOCR model
+                        if self.latex_ocr_model:
+                            latex_math = await asyncio.to_thread(self._get_latex_from_image, page_image)
+                            if latex_math:
+                                if "[LatexOCR Error:" not in latex_math:
+                                    page_latex_ocr_outputs.append(latex_math)
+                                else:
+                                    page_errors.append(f"Page {page_num + 1} LatexOCR Error: {latex_math}")
+
+                    # Step 3: Combine results and update the record in the database session
+                    final_vlm_desc = "\n\n--- Page Break ---\n\n".join(
+                        page_vlm_descriptions).strip() if page_vlm_descriptions else None
+                    final_latex_math = "\n\n".join(page_latex_ocr_outputs).strip() if page_latex_ocr_outputs else None
+                    final_errors = "\n".join(page_errors) if page_errors else None
+
+                    record.latex_representation = final_latex_math  # Column for specialized math OCR
+                    record.latex_explanation = final_vlm_desc  # Column for general VLM description
+                    record.processing_error = final_errors
+
+                    if final_vlm_desc or final_latex_math:
+                        record.vlm_processing_status = 'success_vlm_ocr' if not page_errors else 'partial_vlm_ocr_error'
+                    else:
+                        record.vlm_processing_status = 'error_vlm_ocr'
+
+                    logger.info(
+                        f"{log_prefix}: VLM/OCR text extraction complete. Status: {record.vlm_processing_status}. Proceeding to final embedding.")
+
+                    # Step 4: Call the unified embedding function now that all text is available
+                    # This function will handle chunking, embedding, updating Chroma, and setting final status.
+                    await self._embed_and_update_vector_store(record, db_session)
+                    # The commit is handled inside _embed_and_update_vector_store
+
+                except Exception as e_vlm_process:
+                    error_message = f"Failed during Phase 2 processing loop: {str(e_vlm_process)}"
+                    logger.error(f"{log_prefix}: {error_message}", exc_info=True)
+                    # Update DB with error status for this record
+                    db_session.execute(update(FileIndex).where(FileIndex.id == record.id).values(
+                        vlm_processing_status='error_vlm_ocr',
+                        processing_error=error_message[:1000],
+                        last_indexed_db=datetime.datetime.now(datetime.timezone.utc)
+                    ))
+                    db_session.commit()
+                finally:
+                    # Clean up temporary PDF from Office conversion if it exists
+                    if temp_pdf_to_process and os.path.exists(temp_pdf_to_process):
+                        try:
+                            os.remove(temp_pdf_to_process)
+                        except Exception as e_rm_tmp:
+                            logger.warning(
+                                f"{log_prefix}: Could not remove temp PDF '{temp_pdf_to_process}': {e_rm_tmp}")
+
+            if self.stop_event.is_set(): break  # Exit outer while loop if stopped during batch
+
+        logger.info("Phase 2 VLM/OCR Cycle Finished.")
+
+    async def _process_pending_embeddings(self, db_session: Session):
+        """
+        Phase 3: Processes files marked as 'pending_embedding'.
+        These are files that have had their text extracted and are ready for the
+        final combined embedding and vector store update. This typically includes
+        plain text files or OCR'd images that did not require VLM analysis.
+        """
+        logger.info("🔬 Starting Phase 3 Final Embedding Cycle...")
+        processed_in_cycle = 0
+        max_to_process_in_cycle = 100  # Process up to 100 files per cycle
+
+        while not self.stop_event.is_set() and processed_in_cycle < max_to_process_in_cycle:
+            if self._wait_if_server_busy():
+                logger.info("Phase 3: Pausing due to busy server.")
+                break
+
+            pending_embedding_files: List[FileIndex] = []
+            try:
+                # Query for files that are ready for the final embedding step
+                pending_embedding_files = db_session.query(FileIndex).filter(
+                    FileIndex.index_status == 'pending_embedding'
+                ).limit(20).all()  # Process in batches of 20
+            except Exception as e_query_embed:
+                logger.error(f"Phase 3: Error querying for pending embedding files: {e_query_embed}")
+                break
+
+            if not pending_embedding_files:
+                logger.info("Phase 3: No more files pending final embedding in this batch.")
+                break
+
+            for record in pending_embedding_files:
+                if self.stop_event.is_set():
+                    logger.info("Phase 3: Stop signal received during batch processing.")
+                    break
+
+                processed_in_cycle += 1
+                log_prefix = f"P3-Embed|{os.path.basename(record.file_path)[:15]}"
+                logger.info(f"--> {log_prefix}: Starting final embedding for File ID {record.id}")
+
+                try:
+                    # Call the unified embedding helper function. This function handles
+                    # combining text, chunking, embedding, and updating ChromaDB.
+                    await self._embed_and_update_vector_store(record, db_session)
+                except Exception as e_final_embed:
+                    logger.error(
+                        f"{log_prefix}: Unhandled error during final embedding process for File ID {record.id}: {e_final_embed}",
+                        exc_info=True)
+                    record.index_status = 'error_embedding'
+                    record.processing_error = f"Final embedding orchestration failed: {str(e_final_embed)[:255]}"
+                    db_session.commit()
+
+            if self.stop_event.is_set(): break
+
+        logger.info("Phase 3 Final Embedding Cycle Finished.")
 
     # --- (Existing run method - orchestrates Phase 1 then Phase 2) ---
     def run(self):
-        """Main execution loop: Runs Phase 1 scan, then Phase 2 VLM, then waits."""
-        logger.info(f"✅ {self.thread_name} started.")
-        db: Optional[Session] = None # Initialize db to Optional[Session]
+        """
+        The main loop for the file indexer thread. This method is the target for the
+        threading.Thread object created in app.py. It orchestrates scanning,
+        VLM processing, and final embedding in sequential cycles.
+        """
+        logger.info(f"✅ {self.thread_name} started (Multi-Phase Indexing Logic).")
+
+        # This is a background thread, so we need to set up a new asyncio event loop for it to use.
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+
+        # Perform an initial check for the vector store
+        try:
+            loop.run_until_complete(self.vector_store_init_and_load())
+        except Exception as e_init_vs:
+            logger.error(
+                f"CRITICAL: Initial vector store loading failed in {self.thread_name}: {e_init_vs}. Thread will exit.")
+            return
 
         while not self.stop_event.is_set():
             cycle_start_time = time.monotonic()
-            # --- Phase 1: File Scanning ---
-            logger.info(f"--- {self.thread_name}: Starting Scan Cycle (Phase 1) ---")
+            db_session: Optional[Session] = None
+
             try:
-                db = SessionLocal() # type: ignore
-                if db is None: raise Exception("Failed to create DB session for Phase 1")
-                root_paths = self._get_root_paths()
-                for root in root_paths:
-                    if self.stop_event.is_set(): break
-                    self._scan_directory(root, db) # Executes Phase 1 logic
-            except Exception as e:
-                logger.error(f"💥 Unhandled error during Phase 1: {e}", exc_info=True)
+                db_session = SessionLocal()  # type: ignore
+                if not db_session:
+                    raise RuntimeError("Failed to create database session for indexer cycle.")
+
+                # --- Run the full pipeline sequentially in each cycle ---
+
+                # Phase 1: Scan for new/modified files and do initial text extraction
+                logger.info(f"--- {self.thread_name}: Starting Phase 1 (Scan & Text Extraction) ---")
+                # This calls the async _scan_directory method
+                loop.run_until_complete(self._scan_directory_and_process_phase1(db_session))
+                if self.stop_event.is_set(): break
+
+                # Phase 2: Process files needing VLM/LaTeX-OCR analysis
+                logger.info(f"--- {self.thread_name}: Starting Phase 2 (VLM & LaTeX-OCR) ---")
+                loop.run_until_complete(self._process_pending_vlm_files(db_session))
+                if self.stop_event.is_set(): break
+
+                # Phase 3: Process files ready for final embedding
+                logger.info(f"--- {self.thread_name}: Starting Phase 3 (Final Embedding) ---")
+                loop.run_until_complete(self._process_pending_embeddings(db_session))
+                if self.stop_event.is_set(): break
+
+            except Exception as e_cycle:
+                logger.error(f"💥 Unhandled error in {self.thread_name} main run loop: {e_cycle}")
+                logger.exception(f"{self.thread_name} main loop traceback:")
+                if db_session:
+                    try:
+                        db_session.rollback()
+                    except:
+                        pass
             finally:
-                if db: db.close(); db = None # Close session after Phase 1
-            if self.stop_event.is_set(): break
-            phase1_duration = time.monotonic() - cycle_start_time
-            logger.info(f"--- {self.thread_name}: Phase 1 Scan Cycle completed in {phase1_duration:.2f} seconds ---")
+                if db_session:
+                    try:
+                        db_session.close()
+                    except:
+                        pass
 
-            # --- Phase 2: VLM/LaTeX Processing ---
-            logger.info(f"--- {self.thread_name}: Starting VLM/LaTeX Cycle (Phase 2) ---")
-            phase2_start_time = time.monotonic()
-            try:
-                db = SessionLocal() # type: ignore
-                if db is None: raise Exception("Failed to create DB session for Phase 2")
-                self._process_pending_vlm_files(db) # Executes Phase 2 logic
-            except Exception as e:
-                 logger.error(f"💥 Unhandled error during Phase 2: {e}", exc_info=True)
-            finally:
-                 if db: db.close(); db = None # Close session after Phase 2
-            if self.stop_event.is_set(): break
-            phase2_duration = time.monotonic() - phase2_start_time
-            logger.info(f"--- {self.thread_name}: Phase 2 VLM/LaTeX Cycle completed in {phase2_duration:.2f} seconds ---")
+            cycle_duration = time.monotonic() - cycle_start_time
+            logger.info(f"--- {self.thread_name}: Full pipeline cycle finished in {cycle_duration:.2f} seconds. ---")
 
-            # --- Wait for Next Cycle ---
-            total_cycle_duration = time.monotonic() - cycle_start_time
-            wait_time = max(10, SCAN_INTERVAL_SECONDS - total_cycle_duration)
-            logger.info(f"{self.thread_name}: Full cycle complete ({total_cycle_duration:.1f}s). Waiting {wait_time:.1f}s...")
-            self.stop_event.wait(timeout=wait_time)
+            # Wait before starting the next full cycle
+            wait_time = FILE_INDEXER_IDLE_WAIT_SECONDS  # From config.py
+            logger.debug(f"{self.thread_name} waiting for {wait_time}s before next full cycle...")
+            stopped = self.stop_event.wait(timeout=wait_time)
+            if stopped:
+                logger.info(f"{self.thread_name} received stop signal during idle wait.")
+                break
 
-        logger.info(f"🛑 {self.thread_name} received stop signal and is exiting.")
-    # --- END MODIFIED Run Method ---
+        try:
+            loop.close()
+        except Exception as e_loop_close:
+            logger.warning(f"Error closing asyncio loop in {self.thread_name}: {e_loop_close}")
+
+        logger.info(f"🛑 {self.thread_name} has been shut down.")
 
 
 def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
