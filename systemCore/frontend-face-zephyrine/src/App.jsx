@@ -11,10 +11,13 @@ import './styles/ChatInterface.css';
 import './styles/utils/_overlay.css';
 import RedirectToNewChat from './components/RedirectToNewChat';
 import VoiceAssistantOverlay from './components/VoiceAssistantOverlay';
+import ImageGenerationPage from './components/ImageGenerationPage'; 
+import KnowledgeTuningPage from './components/KnowledgeTuningPage';
 
 import { useStarBackground } from './hooks/useStarBackground';
 import { useSystemInfo } from './hooks/useSystemInfo';
 import { useChatHistory } from './hooks/useChatHistory';
+
 
 const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001";
 
@@ -191,6 +194,8 @@ function App() {
                     />
                   }
                 />
+                <Route path="/knowledge-tuning" element={<KnowledgeTuningPage />} />
+                <Route path="/images" element={<ImageGenerationPage />} />
                 <Route path="*" element={<Navigate to="/" replace />} />
               </Routes>
             </div>
