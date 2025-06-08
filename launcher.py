@@ -1624,9 +1624,23 @@ if __name__ == "__main__":
         engine_req_path = os.path.join(ROOT_DIR, "requirements.txt")
         if not os.path.exists(engine_req_path): print_error(f"requirements.txt not found: {engine_req_path}"); sys.exit(
             1)
-        if not run_command([PIP_EXECUTABLE, "install", "-r", engine_req_path], ENGINE_MAIN_DIR,
-                           "PIP-ENGINE-REQ"): print_error("Engine requirements install failed."); sys.exit(1)
+        pip_install_success = False
+        # You could make MAX_PIP_RETRIES a constant or configurable
+        MAX_PIP_RETRIES = int(os.getenv("PIP_INSTALL_RETRIES", 99999))  # Get from env or default
+        PIP_RETRY_DELAY_SECONDS = 5  # Delay between retries
 
+        for attempt in range(MAX_PIP_RETRIES):
+            if run_command([PIP_EXECUTABLE, "install", "-r", engine_req_path], ENGINE_MAIN_DIR, "PIP-ENGINE-REQ"):
+                pip_install_success = True
+                break  # Exit loop on success
+            else:
+                print_warning(
+                    f"pip install failed on attempt {attempt + 1}/{MAX_PIP_RETRIES}. Retrying in {PIP_RETRY_DELAY_SECONDS} seconds due to unreliable connection...")
+                time.sleep(PIP_RETRY_DELAY_SECONDS)
+
+        if not pip_install_success:
+            print_error(f"Failed to install Python dependencies for Engine after {MAX_PIP_RETRIES} attempts. Exiting.")
+            sys.exit(1)
         try:
             import tiktoken; TIKTOKEN_AVAILABLE = True
         except ImportError:
