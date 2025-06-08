@@ -59,16 +59,16 @@ setuptools.setup(
         'opencv_python_headless>=4.1.1.26',
         'requests>=2.22.0',
         'einops>=0.3.0',
-        'x_transformers=>0.15.0',
+        'x_transformers>=0.15.0',  # Corrected
         'transformers>=4.18.0',
         'tokenizers>=0.13.0',
         'numpy>=1.19.5',
         'Pillow>=9.1.0',
         'PyYAML>=5.4.1',
         'pandas>=1.0.0',
-        'timm=>0.5.4',
-        'albumentations>=0.5.2,<=1.4.24',
-        'pyreadline3>=3.4.1',
+        'timm>=0.5.4',  # Corrected
+        'albumentations>=0.5.2',
+        'pyreadline3>=3.4.1'  # Consider if this is needed on macOS, it's typically for Windows
     ],
     extras_require={
         'all': gui+api+train+highlight,
