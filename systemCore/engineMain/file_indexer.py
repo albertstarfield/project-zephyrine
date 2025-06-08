@@ -65,7 +65,8 @@ except ImportError:
 
 
 PIX2TEX_AVAILABLE = False
-try:
+#Let's comment this first because it's having error or crashing the program
+"""try:
     # Assuming the package installed from GitHub is importable as 'pix2tex'
     from pix2tex import cli as pix2tex
     PIX2TEX_AVAILABLE = True
@@ -73,7 +74,8 @@ try:
 except ImportError:
     logger.warning("pix2tex library not found. Latex-OCR functionality will be disabled.")
     pix2tex = None # Define as None to avoid Unresolved reference errors
-
+"""
+pix2tex = None
 
 # Database imports
 try:
