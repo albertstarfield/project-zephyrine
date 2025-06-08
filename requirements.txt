@@ -14,58 +14,59 @@ pandas
 pyarrow
 frontend
 fastparquet
-fitz
+# fitz # This is the import name for PyMuPDF; PyMuPDF below is the package to install
 pytesseract
 PyMuPDF
+
 # --- Core Web Framework & ASGI/WSGI Server ---
-Flask>=2.0                  # Core web framework
-hypercorn>=0.14             # ASGI server (primary choice for app.py)
-# uvicorn>=0.15             # Alternative ASGI server (optional)
-werkzeug                    # Flask dependency (usually installed with Flask)
+Flask
+hypercorn
+# uvicorn>=0.15             # Alternative ASGI server (optional) - Kept commented
+werkzeug
 
 # --- AI & Language Model Libraries ---
 # Core Langchain
-langchain-core>=0.1         # Base Langchain functionalities
-langchain-community>=0.0.20 # Community integrations (vector stores, tools, etc.)
+langchain-core
+langchain-community
 
 # LLM Provider Integrations
-langchain-ollama>=0.0.2     # For Ollama provider
-langchain-fireworks>=0.0.1  # For Fireworks AI provider
-llama-cpp-python            # For local GGUF model execution via llama.cpp
+langchain-ollama
+langchain-fireworks
+llama-cpp-python
                             # Note: Custom build might be handled by launcher.py
 
 # Vector Store
-chromadb>=0.4               # For RAG capabilities and local vector storage
+chromadb
 langchain-chroma
 
 # --- Database & Migrations ---
-SQLAlchemy>=1.4             # Object-Relational Mapper (ORM)
-alembic>=1.7                # For database schema migrations (SQLite)
+SQLAlchemy
+alembic
 
 # --- Web Interaction, Scraping & Parsing ---
-requests>=2.25              # HTTP library for making requests
-beautifulsoup4>=4.9         # For parsing HTML and XML
-selenium>=4.0               # Browser automation for web scraping
-webdriver-manager>=3.5      # Automated management of WebDriver binaries (e.g., chromedriver)
-lxml>=4.6                   # Efficient XML and HTML parsing (often used by BeautifulSoup)
+# requests # Duplicate of above, removed for clarity
+beautifulsoup4
+selenium
+webdriver-manager
+lxml
 
 # --- Data Handling, Utilities & Logging ---
-python-dotenv>=0.19         # For loading environment variables from .env files
-loguru>=0.5                 # Powerful and easy-to-use logging library
-Pillow>=8.0                 # Python Imaging Library (Fork) for image manipulation
-numpy>=1.20                 # Fundamental package for numerical computation (common AI/ML dependency)
-python-Levenshtein>=0.12    # Improves performance of fuzzywuzzy/thefuzz (C implementation)
-thefuzz>=0.19               # For fuzzy string matching (e.g., RAG fallback)
-zstandard>=0.15             # For Zstandard compression (used for database archiving)
+python-dotenv
+loguru
+Pillow
+numpy
+python-Levenshtein
+thefuzz
+zstandard
 datasets
 
 # --- Document Processing & Text Extraction ---
 xlrd
-pypdf>=3.0                  # For PDF text extraction and manipulation (replaces PyPDF2)
-python-docx>=0.8            # For reading and writing Microsoft Word (.docx) files
-openpyxl>=3.0               # For reading and writing Excel 2010 xlsx/xlsm/xltx/xltm files
-python-pptx>=0.6            # For creating and updating PowerPoint (.pptx) files
-pdf2image>=1.16             # Converts PDF pages to PIL Image objects
+pypdf
+python-docx
+openpyxl
+python-pptx
+pdf2image
                             # Requires Poppler utilities to be installed on the system:
                             #   - Linux: sudo apt-get install poppler-utils
                             #   - macOS: brew install poppler
@@ -74,49 +75,59 @@ pdf2image>=1.16             # Converts PDF pages to PIL Image objects
 # --- Text-to-Speech & Speech-to-Text Related (from original list) ---
 # Note: These seem extensive and might be for a specific TTS/STT pipeline.
 # Verify if all are strictly needed for the current core functionality.
-txtsplit                    # Text splitting utility (often for TTS)
-torch                       # PyTorch, deep learning framework (heavy dependency if only for TTS/STT)
-torchaudio                  # PyTorch library for audio
-cached_path                 # Utility for downloading and caching files
-transformers                # Hugging Face Transformers (models for NLP, Speech, Vision)
-num2words                   # Convert numbers to words
-unidic-lite                 # Small Japanese dictionary for MeCab
-unidic                      # Full Japanese dictionary for MeCab
-mecab-python3               # Japanese morphological analyzer
-pykakasi                    # Japanese Kana-Kanji-Romaji converter
-fugashi                     # Cython wrapper for MeCab + UniDic
-g2p_en                      # English Grapheme-to-Phoneme converter
-anyascii                    # Unicode to ASCII transliteration
-jamo                        # Korean Jamo (syllable) decomposition/composition
-gruut[de,es,fr]             # Multilingual grapheme-to-phoneme (pre-built for de, es, fr)
-g2pkk                       # Korean Grapheme-to-Phoneme converter
-librosa                     # Python library for audio and music analysis
-pydub                       # Manipulate audio with a simple and easy high-level interface
-eng_to_ipa                  # English to IPA (International Phonetic Alphabet)
-inflect                     # Correctly generate plurals, singular nouns, ordinals, indefinite articles
-unidecode                   # ASCII transliterations of Unicode text
-pypinyin                    # Convert Chinese hanzi to pinyin
-cn2an                       # Convert Chinese numbers to Arabic numbers and vice versa
-jieba                       # Chinese text segmentation
+txtsplit
+torch
+torchaudio
+cached_path
+transformers
+num2words
+unidic-lite
+unidic
+mecab-python3
+pykakasi
+fugashi
+g2p_en
+anyascii
+jamo
+gruut[de,es,fr]
+g2pkk
+librosa
+pydub
+eng_to_ipa
+inflect
+unidecode
+pypinyin
+cn2an
+jieba
 langcodes
 pedalboard
 peft
 
 # --- Development & UI Tools (from original list) ---
-gradio                      # For creating quick UIs for ML models (if used for testing/demos)
-langid                      # Language identification
-tqdm                        # Fast, extensible progress bar for loops
-tensorboard                 # TensorFlow's visualization toolkit (often with PyTorch too)
-colorama                  # Removed as launcher.py was modified to not use it directly
+gradio
+langid
+# tqdm # Duplicate of above, removed for clarity
+tensorboard
+#colorama                  # Removed as launcher.py was modified to not use it directly
 tiktoken
 
 # --- High-Performance Computing & Scientific Libraries ---
 # These are often for specific numerical tasks or model optimization.
-numba                       # JIT compiler for Python numerical functions
-numpy                     # Already listed under Data Handling
-matplotlib                  # Plotting library (for visualization, if needed)
-scikit-learn                # Machine learning library (broad set of tools)
+numba
+# numpy # Duplicate of above, removed for clarity
+matplotlib
+scikit-learn
 
+# --- Added from LaTeX_OCR-SubEngine (pix2tex) ---
+munch
+opencv_python_headless
+einops
+x_transformers
+tokenizers
+PyYAML
+timm
+albumentations
+pyreadline3 # Note: Primarily for Windows compatibility
 
 ################################################################################
 #                            Notes & Considerations                            #
@@ -132,7 +143,7 @@ scikit-learn                # Machine learning library (broad set of tools)
 # 3. Poppler (for pdf2image): This is a system dependency. See notes above.    #
 #                                                                              #
 # 4. TTS/STT Dependencies: The large block of TTS/STT related packages seems   #
-#    quite specific. If they are not core to the LLM/agent functionality,     #
+#    quite specific. If they are not core to the LLM/agent functionality,      #
 #    consider moving them to an optional requirements file (e.g.,              #
 #    `requirements_speech.txt`) to keep the core setup lighter.                #
 #                                                                              #
