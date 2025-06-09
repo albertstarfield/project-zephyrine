@@ -6,10 +6,13 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Copy, RefreshCw, Edit3 as Edit, Check, X } from "lucide-react";
 import rehypeRaw from 'rehype-raw';
+import ErrorBoundary from './ErrorBoundary'; // 1. Import the ErrorBoundary
+
 
 // New Imports for Math and Mermaid
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
+import remarkGfm from 'remark-gfm'; 
 import remarkMermaid from 'remark-mermaidjs'; // Ensure you installed remark-mermaidjs correctly
 
 // Note: You might need to initialize Mermaid directly if remark-mermaidjs doesn't
@@ -102,9 +105,10 @@ const ChatFeed = ({
 
   const renderMessageContent = (contentToRender) => {
     return (
+      <ErrorBoundary>
       <ReactMarkdown
         // Add remark plugins for math and mermaid
-        remarkPlugins={[remarkMath, remarkMermaid]}
+        remarkPlugins={[remarkGfm, remarkMath, remarkMermaid]}
         // Add rehype plugins for raw HTML (for <think> blocks) and KaTeX
         rehypePlugins={[rehypeRaw, rehypeKatex]}
         components={{
@@ -139,6 +143,7 @@ const ChatFeed = ({
       >
         {processMessageContent(contentToRender)}
       </ReactMarkdown>
+      </ErrorBoundary>
     );
   };
 

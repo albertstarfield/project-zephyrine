@@ -168,6 +168,7 @@ class Interaction(Base):
     reflection_indexed_in_vs = Column(Boolean, nullable=False, server_default=text("0"),
                                       index=True)  # <<< CORRECTLY ADDED WITH SERVER_DEFAULT
     is_indexed_for_rag = Column(Boolean, nullable=False, server_default=text("0"), index=True)
+    embedding_json = Column(Text, nullable=True)
 
 
     __table_args__ = (

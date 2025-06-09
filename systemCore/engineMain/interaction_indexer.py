@@ -1,15 +1,16 @@
-# interaction_indexer.py
+# Replace the entire content of interaction_indexer.py with this corrected version:
+
 import os
 import time
 import threading
-from typing import Optional, List, Any
+import json
+from typing import Optional, List
 from loguru import logger
 from sqlalchemy.orm import Session
 from sqlalchemy import update
 from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
-# Assuming these are accessible
 from database import Interaction, SessionLocal
 from ai_provider import AIProvider
 from config import *
@@ -31,13 +32,57 @@ def initialize_global_interaction_vectorstore(provider: AIProvider):
     with _interaction_vs_init_lock:
         if _interaction_vs_initialized_event.is_set():
             return
+
         try:
             os.makedirs(INTERACTION_VS_PERSIST_DIR, exist_ok=True)
-            global_interaction_vectorstore = Chroma(
-                collection_name=INTERACTION_COLLECTION_NAME,
-                persist_directory=INTERACTION_VS_PERSIST_DIR,
-                embedding_function=provider.embeddings
-            )
+
+            # Check if a Chroma DB already exists at the path
+            if os.path.exists(os.path.join(INTERACTION_VS_PERSIST_DIR, "chroma.sqlite3")):
+                logger.info(f"Loading existing persisted Interaction Chroma DB from: {INTERACTION_VS_PERSIST_DIR}")
+                global_interaction_vectorstore = Chroma(
+                    collection_name=INTERACTION_COLLECTION_NAME,
+                    persist_directory=INTERACTION_VS_PERSIST_DIR,
+                    embedding_function=provider.embeddings
+                )
+            else:
+                # If no persistent store, rebuild it from the main SQLite DB backups
+                logger.info(f"No persisted Interaction Chroma DB found. Rebuilding from main database...")
+                db_session = SessionLocal()
+                try:
+                    interactions_with_backup = db_session.query(Interaction).filter(
+                        Interaction.embedding_json.isnot(None)).all()
+                    if interactions_with_backup:
+                        logger.info(
+                            f"Found {len(interactions_with_backup)} interactions with embedding backups to rebuild.")
+                        texts = [f"User: {i.user_input or ''}\nAI: {i.llm_response or ''}" for i in
+                                 interactions_with_backup]
+                        embeddings = [json.loads(i.embedding_json) for i in interactions_with_backup]
+                        metadatas = [{"interaction_id": i.id, "session_id": i.session_id, "timestamp": str(i.timestamp)}
+                                     for i in interactions_with_backup]
+                        ids = [f"int_{i.id}_chunk_0" for i in
+                               interactions_with_backup]  # Assuming one backup embedding per interaction
+
+                        global_interaction_vectorstore = Chroma.from_embeddings(
+                            embeddings=embeddings,
+                            embedding_function=provider.embeddings,
+                            documents=texts,  # Pass original texts for context
+                            metadatas=metadatas,
+                            ids=ids,
+                            collection_name=INTERACTION_COLLECTION_NAME,
+                            persist_directory=INTERACTION_VS_PERSIST_DIR
+                        )
+                        logger.success(
+                            f"Rebuilt and persisted Interaction Vector Store with {len(interactions_with_backup)} records.")
+                    else:
+                        logger.info("No interactions with backups found. Creating new empty vector store.")
+                        global_interaction_vectorstore = Chroma(
+                            collection_name=INTERACTION_COLLECTION_NAME,
+                            persist_directory=INTERACTION_VS_PERSIST_DIR,
+                            embedding_function=provider.embeddings
+                        )
+                finally:
+                    db_session.close()
+
             logger.success("✅ InteractionIndexer: Global interaction vector store initialized.")
             _interaction_vs_initialized_event.set()
         except Exception as e:
@@ -46,7 +91,9 @@ def initialize_global_interaction_vectorstore(provider: AIProvider):
 
 
 def get_global_interaction_vectorstore() -> Optional[Chroma]:
-    _interaction_vs_initialized_event.wait(timeout=60)
+    if not _interaction_vs_initialized_event.wait(timeout=60):
+        logger.error("Timeout waiting for interaction vector store initialization.")
+        return None
     return global_interaction_vectorstore
 
 
@@ -61,79 +108,75 @@ class InteractionIndexer(threading.Thread):
             chunk_overlap=200,
             length_function=len,
         )
-        if not _interaction_vs_initialized_event.is_set():
-            logger.warning("InteractionIndexer created, but the global vector store is not yet initialized.")
 
     def run(self):
         logger.info("🚀 Starting Interaction Indexer thread...")
         while not self.stop_event.is_set():
             try:
-                # Wait for the vector store to be ready
                 if not _interaction_vs_initialized_event.wait(timeout=10):
                     logger.warning("InteractionIndexer: Timed out waiting for VS initialization. Retrying next cycle.")
                     continue
 
                 db_session = SessionLocal()
-                if not db_session:
-                    logger.error("InteractionIndexer: Could not create DB session.")
-                    continue
-
                 try:
                     self._index_new_interactions(db_session)
                 finally:
                     db_session.close()
-
             except Exception as e:
                 logger.error(f"Error in Interaction Indexer loop: {e}")
 
-            # Wait for 5 minutes before the next cycle
-            self.stop_event.wait(5 * 60)
+            self.stop_event.wait(300)  # Wait 5 minutes
         logger.info("🛑 Interaction Indexer thread has been shut down.")
 
     def _index_new_interactions(self, db_session: Session):
-        if global_interaction_vectorstore is None:
-            logger.error("InteractionIndexer: Global interaction vector store is None. Cannot index.")
+        if global_interaction_vectorstore is None or global_interaction_vectorstore._collection is None:
+            logger.error("InteractionIndexer: Vector store or its collection is not available. Cannot index.")
             return
 
         unindexed_interactions = db_session.query(Interaction).filter(
             Interaction.is_indexed_for_rag == False
-        ).all()
+        ).limit(100).all()
 
         if not unindexed_interactions:
-            logger.info("InteractionIndexer: No new interactions to index.")
             return
 
         logger.info(f"InteractionIndexer: Found {len(unindexed_interactions)} new interactions to index.")
-        texts_to_embed = []
-        metadatas = []
-        ids_to_update = []
 
         for interaction in unindexed_interactions:
-            # Combine user input and AI response for a complete conversational turn context
-            content = f"User: {interaction.user_input or ''}\n\nAssistant: {interaction.llm_response or ''}"
-            chunks = self.text_splitter.split_text(content)
+            try:
+                content = f"User: {interaction.user_input or ''}\n\nAssistant: {interaction.llm_response or ''}"
+                if not content.strip():
+                    interaction.is_indexed_for_rag = True
+                    continue
 
-            for i, chunk in enumerate(chunks):
-                texts_to_embed.append(chunk)
-                metadatas.append({
-                    "interaction_id": interaction.id,
-                    "session_id": interaction.session_id,
-                    "timestamp": str(interaction.timestamp),
-                    "input_type": interaction.input_type,
-                    "chunk_index": i
-                })
-            ids_to_update.append(interaction.id)
+                main_embedding = self.embedding_model.embed_query(content)
+                interaction.embedding_json = json.dumps(main_embedding)
 
-        if texts_to_embed:
-            with _interaction_vs_write_lock:
-                logger.info(f"InteractionIndexer: Adding {len(texts_to_embed)} new text chunks to the vector store.")
-                global_interaction_vectorstore.add_texts(texts=texts_to_embed, metadatas=metadatas)
+                chunks = self.text_splitter.split_text(content)
+                if not chunks:
+                    interaction.is_indexed_for_rag = True
+                    continue
 
-            # Update the database records to mark them as indexed
-            db_session.execute(
-                update(Interaction)
-                .where(Interaction.id.in_(ids_to_update))
-                .values(is_indexed_for_rag=True)
-            )
-            db_session.commit()
-            logger.success(f"InteractionIndexer: Successfully indexed {len(unindexed_interactions)} interactions.")
+                chunk_embeddings = self.embedding_model.embed_documents(chunks)
+
+                metadatas = [{"interaction_id": interaction.id, "session_id": interaction.session_id,
+                              "timestamp": str(interaction.timestamp)} for _ in chunks]
+                ids = [f"int_{interaction.id}_chunk_{i}" for i in range(len(chunks))]
+
+                with _interaction_vs_write_lock:
+                    global_interaction_vectorstore._collection.add(
+                        embeddings=chunk_embeddings,
+                        documents=chunks,
+                        metadatas=metadatas,
+                        ids=ids
+                    )
+
+                interaction.is_indexed_for_rag = True
+
+            except Exception as e:
+                logger.error(f"Failed to process interaction {interaction.id}: {e}")
+                interaction.is_indexed_for_rag = True
+
+        db_session.commit()
+        logger.success(
+            f"InteractionIndexer: Successfully processed a batch of {len(unindexed_interactions)} interactions.")
