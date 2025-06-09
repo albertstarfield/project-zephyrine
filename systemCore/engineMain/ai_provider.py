@@ -381,14 +381,14 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
         super().__init__()
         self.ai_provider = ai_provider
 
-    def embed_documents(self, texts: List[str]) -> List[List[float]]:
+    def embed_documents(self, texts: List[str], priority: int = ELP0) -> List[List[float]]:
         provider_logger = getattr(self.ai_provider, 'logger', logger)
         # This call will use the default priority (ELP0) set in _embed_texts's signature
         provider_logger.debug(f"EmbedWrapper.embed_documents: Standard call for {len(texts)} texts (delegating to _embed_texts with its default ELP0).")
         return self._embed_texts(texts) # Default priority ELP0 will be used by _embed_texts
 
     # Standard Langchain interface method - uses default priority ELP0
-    def embed_query(self, text: str) -> List[float]:
+    def embed_query(self, text: str, priority: int = ELP1) -> List[float]:
         provider_logger = getattr(self.ai_provider, 'logger', logger)
         provider_logger.debug(f"EmbedWrapper.embed_query: Standard call for query '{text[:30]}...' (delegating to _embed_texts with its default ELP0).")
         results = self._embed_texts([text]) # Default priority ELP0 will be used by _embed_texts

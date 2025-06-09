@@ -126,6 +126,8 @@ temp_melo_audio_test_files
 **zephyrineCondaVenv**
 **chroma_reflection_store**
 **chroma_vector_store**
+**chroma_interaction_store**
 /systemCore/engineMain/chroma_reflection_store
 .pywhispercpp_installed_v1
 .chatterbox_tts_installed_v1
+*.db
