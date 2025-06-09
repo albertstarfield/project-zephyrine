@@ -90,6 +90,28 @@ logger.debug("SessionLocal factory structure created (unbound initially).")
 
 
 # --- Database Models (Interaction, AppleScriptAttempt, FileIndex) ---
+class UploadedFileRecord(Base):
+    __tablename__ = "uploaded_file_records"
+    id = Column(Integer, primary_key=True)
+    ingestion_id = Column(String, unique=True, index=True, nullable=False) # UUID from app.py
+    original_filename = Column(String, nullable=False)
+    stored_path = Column(String, nullable=False) # Full path to the temporarily stored file
+    purpose = Column(String, nullable=False) # e.g., "fine-tune"
+    status = Column(String, default="received", nullable=False) # "received", "queued_for_processing", "processing", "completed", "failed"
+    processed_entries_count = Column(Integer, default=0) # Number of rows/lines processed
+    spawned_tasks_count = Column(Integer, default=0) # Number of background_generate tasks spawned
+    processing_error = Column(Text, nullable=True)
+    created_at = Column(DateTime(timezone=True), server_default=func.now(), nullable=False)
+    updated_at = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
+
+    __table_args__ = (
+        Index('ix_uploaded_file_records_status', 'status'),
+    )
+
+    def __repr__(self):
+        return f"<UploadedFileRecord(id={self.id}, filename='{self.original_filename}', status='{self.status}')>"
+
+
 # (Keep your existing model definitions here - unchanged from previous version)
 class Interaction(Base):
     __tablename__ = "interactions"
