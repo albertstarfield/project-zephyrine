@@ -119,6 +119,7 @@ class Interaction(Base):
     timestamp = Column(DateTime(timezone=True), server_default=func.now())
     session_id = Column(String, index=True, nullable=True)
 
+
     # Ensuring server_default for string columns if they are NOT NULL and have a Python default
     mode = Column(String, nullable=False, server_default="chat", index=True)
     input_type = Column(String, nullable=False, server_default="text")
@@ -166,6 +167,8 @@ class Interaction(Base):
 
     reflection_indexed_in_vs = Column(Boolean, nullable=False, server_default=text("0"),
                                       index=True)  # <<< CORRECTLY ADDED WITH SERVER_DEFAULT
+    is_indexed_for_rag = Column(Boolean, nullable=False, server_default=text("0"), index=True)
+
 
     __table_args__ = (
         Index('ix_interactions_session_mode_timestamp', 'session_id', 'mode', 'timestamp'),
@@ -173,6 +176,7 @@ class Interaction(Base):
         Index('ix_interactions_action_type_time', 'assistant_action_type', 'timestamp'),
         Index('ix_interactions_reflection_pending', 'reflection_completed', 'mode', 'input_type', 'timestamp'),
         Index('ix_interactions_reflection_indexed_vs', 'reflection_indexed_in_vs', 'input_type', 'timestamp'),
+        Index('ix_interactions_is_indexed_for_rag', 'is_indexed_for_rag', 'timestamp'),
     # Index for new field
     )
 
@@ -319,6 +323,9 @@ def _decompress_db(source_path: str, target_path: str) -> bool:
 
 
 # --- END Compression/Decompression Helpers ---
+
+
+
 
 # --- NEW: Read-Only Check ---
 def _is_db_readonly(db_path: str) -> bool:
@@ -1246,6 +1253,17 @@ def check_and_apply_migrations() -> bool:
 
 # --- END Migration Application ---
 
+def add_interaction_no_commit(db_session: Session, **kwargs) -> Optional[Interaction]:
+    """Adds an interaction to the session without committing, allowing for batch operations."""
+    try:
+        # _core_add_interaction_to_session already adds to the session without committing
+        interaction_instance = _core_add_interaction_to_session(db_session, **kwargs)
+        return interaction_instance
+    except Exception as e:
+        logger.error(f"add_interaction_no_commit: Failed to add interaction to session: {e}")
+        # Re-raise the exception so the calling transaction can be rolled back
+        raise
+
 def start_log_batch_writer():
     global _log_writer_thread
     if not (_log_writer_thread and _log_writer_thread.is_alive()):
@@ -1552,8 +1570,8 @@ def get_recent_interactions(db: Session, limit=5, session_id=None, mode="chat", 
         base_query = db.query(Interaction).filter(Interaction.mode == mode)
         if session_id: base_query = base_query.filter(Interaction.session_id == session_id)
         if not include_logs:
-            log_types_to_exclude = ['log_warning', 'log_error', 'log_debug', 'log_info', 'error', 'system', 'url',
-                                    'image', 'latex_analysis_result']
+            log_types_to_exclude = ['log_warning', 'log_error', 'log_debug', 'log_info', 'url',
+                                    'image', 'latex_analysis_result'] #controls on direct_generate can see
             base_query = base_query.filter(Interaction.input_type.notin_(log_types_to_exclude))
         results = base_query.order_by(desc(Interaction.timestamp)).limit(limit).all()
         results.reverse()
