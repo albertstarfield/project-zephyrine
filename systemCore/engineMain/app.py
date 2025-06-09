@@ -196,7 +196,7 @@ try:
         init_db, queue_interaction_for_batch_logging, add_interaction, get_recent_interactions, # <<< REMOVED get_db
         get_past_tot_interactions, Interaction, SessionLocal, AppleScriptAttempt, # Added AppleScriptAttempt if needed here
         get_global_recent_interactions, get_pending_tot_result, mark_tot_delivered,
-        get_past_applescript_attempts, FileIndex, search_file_index # Added new DB function
+        get_past_applescript_attempts, FileIndex, search_file_index, UploadedFileRecord # Added new DB function
     )
     # Import all config variables (prompts, settings, etc.)
     from config import * # Ensure this includes the SQLite DATABASE_URL and all prompts/models
@@ -238,6 +238,10 @@ except ImportError as e:
     # You might want to sys.exit(1) here if priority locking is critical
     sys.exit(1)
 interruption_error_marker = "Worker task interrupted by higher priority request" # Define consistently
+
+#background_generate semaphore
+background_generate_task_semaphore = threading.Semaphore(MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS)
+
 
 # --- End Local Imports ---
 
@@ -4522,7 +4526,7 @@ class AIChat:
 
         action_analysis_model = self.provider.get_model("router") or self.provider.get_model("default")
         if not action_analysis_model:
-            logger.error(f"{log_prefix} ❌ Action analysis model (router/default) not available!");
+            logger.error(f"{log_prefix} ❌ Action analysis model (router/default) not available!")
             return None
 
         analysis_chain_raw = ChatPromptTemplate.from_template(
@@ -4613,7 +4617,7 @@ class AIChat:
 
         logger.warning(
             f"{log_prefix} All action analysis methods failed. Falling back to keyword-based default action for: '{user_input[:100]}'")
-        words = re.findall(r'\b\w+\b', user_input.lower());
+        words = re.findall(r'\b\w+\b', user_input.lower())
         stop_words = {"the", "is", "a", "to", "and", "what", "how", "who", "please", "can", "you", "tell", "me",
                       "about", "of", "for", "in", "on", "at", "an", "i", "my", "me"}
         keywords = [word for word in words if len(word) > 2 and word not in stop_words]
@@ -4628,10 +4632,10 @@ class AIChat:
                                     user_input=f"[Action Analysis Fallback for: {user_input[:100]}]",
                                     llm_response=json.dumps(final_fallback_action),
                                     assistant_action_analysis_json=json.dumps(final_fallback_action),
-                                    assistant_action_type=final_fallback_action["action_type"]);
+                                    assistant_action_type=final_fallback_action["action_type"])
             await asyncio.to_thread(db.commit)
         except Exception as db_log_fallback_err:
-            logger.error(f"{log_prefix} Failed to log keyword fallback action: {db_log_fallback_err}");
+            logger.error(f"{log_prefix} Failed to log keyword fallback action: {db_log_fallback_err}")
             await asyncio.to_thread(db.rollback)
 
         return final_fallback_action
@@ -5474,421 +5478,114 @@ class AIChat:
             # Neither vector nor fuzzy search yielded results
             return "No relevant file content found via vector or fuzzy search for the query."
 
-    async def background_generate(self, db: Session, user_input: str, session_id: str = None,  # type: ignore
-                                  classification: str = "chat_simple", image_b64: Optional[str] = None,
-                                  update_interaction_id: Optional[int] = None,  # For reflection tasks
-                                  stop_event_for_bg: Optional[threading.Event] = None):  # For external stop signal
+    async def _describe_image_async(self, db: Session, session_id: str, image_b64: str,
+                                    prompt_type: str = "initial_description", priority: int = ELP0) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Generic async helper to send a base64 image to the VLM and get a textual description.
+        Returns (description, error_message_if_any).
+        `prompt_type` can be "initial_description" or "describe_generated_image".
+        """
+        req_id = f"vlm_desc-{uuid.uuid4()}"
+        log_prefix = f"🖼️ {req_id}|ELP{priority}"
+        logger.info(f"{log_prefix} Requesting VLM description (type: {prompt_type}) for image (session {session_id}).")
 
-        request_id = f"bgen-{uuid.uuid4()}"
-        is_reflection_task = update_interaction_id is not None
-        log_prefix_base = "🔄 REFLECT" if is_reflection_task else "💬 BGEN"
-        log_prefix = f"{log_prefix_base} {request_id}|ELP0"
-
-        if not session_id:
-            session_id = f"session_{int(time.monotonic())}" if not is_reflection_task else f"reflection_on_{update_interaction_id}_{str(uuid.uuid4())[:4]}"
-
-        original_chat_session_id = self.current_session_id
-        self.current_session_id = session_id
-
-        logger.info(
-            f"{log_prefix} Async Background Generate (ELP0 Pipeline) START --> Session: {session_id}, "
-            f"Initial Class: '{classification}', Input: '{user_input[:50]}...', Img: {'Yes' if image_b64 else 'N'}, "
-            f"Reflection Target ID: {update_interaction_id if is_reflection_task else 'N/A'}"
-        )
-        request_start_time = time.monotonic()
-
-        interaction_data: Dict[str, Any] = {
-            "session_id": session_id, "mode": "chat", "input_type": "text",
-            "user_input": user_input, "llm_response": "[Processing background task...]",
-            "execution_time_ms": 0, "classification": classification, "classification_reason": None,
-            "rag_history_ids": None, "rag_source_url": None,
-            "requires_deep_thought": (classification == "chat_complex") or is_reflection_task,
-            "deep_thought_reason": None, "tot_analysis_requested": False,
-            "tot_analysis_spawned": False, "tot_result": None, "tot_delivered": False,
-            "emotion_context_analysis": None, "image_description": None,
-            "assistant_action_analysis_json": None, "assistant_action_type": None,
-            "assistant_action_params": None, "assistant_action_executed": False,
-            "assistant_action_result": None,
-            "image_data": image_b64[:20] + "..." if image_b64 and isinstance(image_b64, str) else None,
-            "imagined_image_prompt": None, "imagined_image_b64": None,
-            "imagined_image_vlm_description": None,
-            "reflection_completed": False,  # For original interaction if this is a reflection
-            "reflection_indexed_in_vs": False
-        }
-        if image_b64: interaction_data["input_type"] = "image+text"
-
-        final_response_text_for_this_turn = "Error: Background processing did not complete as expected."
-        saved_initial_interaction: Optional[Interaction] = None
-        original_interaction_to_update_for_reflection: Optional[Interaction] = None
-        interrupted_flag = False
-
-        if not user_input and not image_b64:
-            logger.warning(f"{log_prefix} Empty input (no text, no image). Aborting background_generate.")
-            self.current_session_id = original_chat_session_id
-            return
-
-        if is_reflection_task:
+        vlm_model = self.provider.get_model("vlm")
+        if vlm_model is None:
+            error_msg = f"VLM model not available for image description (type: {prompt_type})."
+            logger.error(f"❌ {log_prefix}: {error_msg}")
+            # Attempt to log this error to DB (best effort, don't re-raise to crash caller if possible)
             try:
-                original_interaction_to_update_for_reflection = await asyncio.to_thread(
-                    db.query(Interaction).filter(Interaction.id == update_interaction_id).first
-                )
-                if not original_interaction_to_update_for_reflection:
-                    logger.error(
-                        f"{log_prefix}: CRITICAL - Original reflection target ID {update_interaction_id} not found.")
-                    self.current_session_id = original_chat_session_id
-                    return
-                interaction_data["classification_reason"] = "Self-reflection task, proceeding with deep analysis."
-                logger.info(f"{log_prefix}: Loaded original interaction {update_interaction_id} for reflection.")
-            except Exception as e_load_orig:
-                logger.error(f"{log_prefix}: Error loading reflection target ID {update_interaction_id}: {e_load_orig}")
-                self.current_session_id = original_chat_session_id
-                return
-
-        if not is_reflection_task:
-            try:
-                initial_save_data = interaction_data.copy()
-                initial_save_data['llm_response'] = "[Background task initiated... Processing...]"
-                initial_save_data['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
-                valid_keys_init = {c.name for c in Interaction.__table__.columns}
-                db_kwargs_init = {k: v for k, v in initial_save_data.items() if k in valid_keys_init and k != 'id'}
-                saved_initial_interaction = await asyncio.to_thread(add_interaction, db, **db_kwargs_init)
-                await asyncio.to_thread(db.commit)
-                if saved_initial_interaction and saved_initial_interaction.id:
-                    logger.info(
-                        f"{log_prefix}: Saved initial 'pending' Interaction ID {saved_initial_interaction.id} for this background task.")
-                else:
-                    logger.error(f"{log_prefix}: Failed to save initial 'pending' interaction to DB.")
-            except Exception as e_initial_save:
-                logger.error(f"{log_prefix}: Error saving initial 'pending' interaction: {e_initial_save}")
-                if db: await asyncio.to_thread(db.rollback)
-
-        current_input_for_llm_analysis = user_input
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input=f"[VLM Desc Failed - Model Unavailable - {prompt_type}]",
+                                llm_response=error_msg)
+            except Exception as db_log_err:
+                logger.error(f"Failed to log VLM unavailable error: {db_log_err}")
+            return None, error_msg
 
         try:
-            # --- VLM Preprocessing ---
-            if image_b64:
-                logger.info(f"{log_prefix} User image provided. Requesting VLM description (ELP0)...")
-                vlm_model_user = self.provider.get_model("vlm")
-                if vlm_model_user:
-                    try:
-                        user_img_uri = f"data:image/png;base64,{image_b64}"
-                        img_content_part = {"type": "image_url", "image_url": {"url": user_img_uri}}
-                        vlm_desc_prompt = "Describe this image concisely for conversational context."
-                        vlm_messages = [
-                            HumanMessage(content=[img_content_part, {"type": "text", "text": vlm_desc_prompt}])]
-                        vlm_chain = vlm_model_user | StrOutputParser()
-                        timing_data_vlm = {"session_id": session_id, "mode": "vlm_preprocessing",
-                                           "execution_time_ms": 0}
+            # 1. Convert PIL Image to base64 data URI for the VLM prompt
+            # Assuming image_b64 is already a valid base64 string from the user or previous step
+            image_uri = f"data:image/png;base64,{image_b64}" # Assuming PNG or similar
 
-                        description = await asyncio.to_thread(  # _call_llm_with_timing is sync
-                            self._call_llm_with_timing, vlm_chain, vlm_messages, timing_data_vlm, ELP0
-                        )
-                        interaction_data['image_description'] = description
-                        current_input_for_llm_analysis = f"[Image Description (User Provided): {description}]\n\nUser Query: {user_input or '(User queried about the image)'}"
-                        logger.info(
-                            f"{log_prefix}: VLM desc obtained. New input for analysis: '{current_input_for_llm_analysis[:70]}...'")
-                    except TaskInterruptedException as tie_vlm:
-                        logger.warning(f"{log_prefix}: VLM preprocessing interrupted: {tie_vlm}")
-                        interaction_data['image_description'] = "[VLM Preprocessing Interrupted]"
-                        if not user_input: raise tie_vlm
-                    except Exception as e_vlm_user:
-                        logger.error(f"{log_prefix}: Error VLM preprocessing: {e_vlm_user}")
-                        interaction_data['image_description'] = f"[VLM Error: {e_vlm_user}]"
-                else:
-                    interaction_data['image_description'] = "[VLM Model Unavailable]"
-                    logger.error(f"{log_prefix}: VLM model unavailable.")
-
-            # --- Initial Classification (if not reflection) ---
-            classification_for_current_task = classification  # Use initial if reflection
-            if not is_reflection_task:
-                logger.info(f"{log_prefix}: Classifying input for background task (ELP0)...")
-                classification_data_for_bg = {"session_id": session_id, "mode": "chat",
-                                              "input_type": "bg_classification"}
-                # ** CORRECTED CALL: Direct await for async helper **
-                classification_for_current_task = await self._classify_input_complexity(
-                    db, current_input_for_llm_analysis or user_input, classification_data_for_bg
-                )
-                logger.info(
-                    f"{log_prefix}: Input classified as '{classification_for_current_task}'. Reason: {classification_data_for_bg.get('classification_reason', 'N/A')}")
-                interaction_data['classification'] = classification_for_current_task
-                interaction_data['classification_reason'] = classification_data_for_bg.get('classification_reason')
-
-            # --- Gather Contexts (RAG, History, Logs, Emotion, Files) ---
-            logger.debug(f"{log_prefix}: Gathering contexts (ELP0 for sub-tasks)...")
-            # (Ensure your full context gathering logic is here, using `await asyncio.to_thread` for sync DB/file ops
-            # and direct `await` for async helpers like `_generate_file_search_query_async` and `_get_vector_search_file_index_context`)
-            # For brevity, this part is condensed. It populates:
-            # hist_summary_action, log_ctx_prompt, direct_hist_prompt,
-            # url_ctx_for_router, sess_refl_router, file_ctx_for_router,
-            # url_ctx_untruncated, sess_refl_rag_untrunc, main_dynamic_ctx_block_for_llm,
-            # emotion_analysis_str, imagined_img_vlm_desc_this_turn (from interaction_data)
-            # Placeholder values for demonstration:
-            hist_summary_action = await asyncio.to_thread(self._get_history_summary, db, MEMORY_SIZE)
-            temp_global_hist_kw = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-            direct_hist_prompt = self._format_direct_history(temp_global_hist_kw)
-            keyword_file_query = await self._generate_file_search_query_async(db, current_input_for_llm_analysis,
-                                                                              direct_hist_prompt, session_id)
-            kw_file_results_list_res = await asyncio.to_thread(search_file_index, db, keyword_file_query,
-                                                               RAG_FILE_INDEX_COUNT) if search_file_index and keyword_file_query else []
-            kw_file_ctx_untrunc = self._format_file_index_results(kw_file_results_list_res)
-            vec_file_ctx_result_str = await self._get_vector_search_file_index_context(current_input_for_llm_analysis,
-                                                                                       ELP0, stop_event_for_bg)
-            log_entries_list_res = await asyncio.to_thread(get_recent_interactions, db, RAG_HISTORY_COUNT * 2,
-                                                           session_id, "chat", True)
-            log_ctx_prompt = self._format_log_history(log_entries_list_res)
-            emotion_analysis_str = await asyncio.to_thread(self._run_emotion_analysis, db, user_input,
-                                                           interaction_data)  # This _run_emotion_analysis itself is sync
-            imagined_img_vlm_desc_this_turn = interaction_data.get('image_description')  # VLM of user image
-
-            # RAG retrievers (sync setup, async invoke if retriever supports it)
-            wrapped_rag_res = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db,
-                                                      current_input_for_llm_analysis or user_input, ELP0)
-            url_ret_obj, sess_hist_ret_obj, refl_chunk_ret_obj, sess_chat_rag_ids = None, None, None, ""
-            if wrapped_rag_res.get("status") == "success":
-                url_ret_obj, sess_hist_ret_obj, refl_chunk_ret_obj, sess_chat_rag_ids = wrapped_rag_res["data"]
-            elif wrapped_rag_res.get("status") == "interrupted":
-                raise TaskInterruptedException(wrapped_rag_res.get("error_message"))
+            # 2. Prepare the prompt based on type
+            vlm_prompt_text = ""
+            if prompt_type == "initial_description":
+                vlm_prompt_text = PROMPT_VLM_INITIAL_ANALYSIS # From config.py
+            elif prompt_type == "describe_generated_image":
+                vlm_prompt_text = PROMPT_VLM_DESCRIBE_GENERATED_IMAGE # From config.py
             else:
-                raise RuntimeError(f"RAG retriever init failed: {wrapped_rag_res.get('error_message')}")
-            interaction_data['rag_history_ids'] = sess_chat_rag_ids
-            if hasattr(self, 'vectorstore_url') and self.vectorstore_url: interaction_data['rag_source_url'] = getattr(
-                self.vectorstore_url, '_source_url', None)
+                logger.warning(f"{log_prefix}: Unknown prompt_type '{prompt_type}'. Using default description prompt.")
+                vlm_prompt_text = "Describe this image."
 
-            url_docs, session_docs, reflection_docs = [], [], []
-            if url_ret_obj: url_docs = await asyncio.to_thread(url_ret_obj.invoke,
-                                                               current_input_for_llm_analysis or user_input)
-            if sess_hist_ret_obj: session_docs = await asyncio.to_thread(sess_hist_ret_obj.invoke,
-                                                                         current_input_for_llm_analysis or user_input)
-            if refl_chunk_ret_obj: reflection_docs = await asyncio.to_thread(refl_chunk_ret_obj.invoke,
-                                                                             current_input_for_llm_analysis or user_input)
+            # 3. Prepare the messages for the VLM (multi-modal input)
+            image_content_part = {"type": "image_url", "image_url": {"url": image_uri}}
+            text_content_part = {"type": "text", "text": vlm_prompt_text}
+            vlm_messages = [HumanMessage(content=[image_content_part, text_content_part])]
 
-            url_ctx_untruncated = self._format_docs(url_docs, "URL Context")
-            sess_refl_rag_untrunc = self._format_docs(session_docs + reflection_docs, "Session/Reflection RAG")
-            # Token budgeting as in your file to prepare main_dynamic_ctx_block_for_llm
-            # and context_for_router (url_ctx_for_router, sess_refl_router, file_ctx_for_router)
-            # This logic is complex and omitted here for brevity but should be present
-            main_dynamic_ctx_block_for_llm = "[Placeholder for combined, truncated dynamic context]"
-            url_ctx_for_router = url_ctx_untruncated[:500]  # Placeholder
-            sess_refl_router = sess_refl_rag_untrunc[:500]  # Placeholder
-            file_ctx_for_router = kw_file_ctx_untrunc[:500] + vec_file_ctx_result_str[:500]  # Placeholder
-            logger.debug(f"{log_prefix}: Contexts gathered and formatted.")
+            # 4. Create the Langchain chain
+            vlm_chain = vlm_model | StrOutputParser()
 
-            # --- Action Analysis ---
-            action_payload_context = {"history_summary": hist_summary_action, "log_context": log_ctx_prompt,
-                                      "recent_direct_history": direct_hist_prompt,
-                                      "file_index_context": file_ctx_for_router}
-            logger.info(f"{log_prefix}: Calling _analyze_assistant_action (ELP0)...")
-            # ** CORRECTED CALL: Direct await for async helper **
-            action_details = await self._analyze_assistant_action(
-                db, current_input_for_llm_analysis, session_id, action_payload_context
+            # 5. Call the LLM (VLM) via the timing helper
+            timing_data = {"session_id": session_id, "mode": f"vlm_description_{prompt_type}", "execution_time_ms": 0}
+
+            # _call_llm_with_timing is synchronous, so wrap it for our async context
+            response_text = await asyncio.to_thread(
+                self._call_llm_with_timing, # Use the AIChat's internal LLM call helper
+                vlm_chain,
+                vlm_messages, # Pass messages directly as input to the model in the chain
+                timing_data,
+                priority=priority # Use the provided priority
             )
-            detected_action_type = action_details.get("action_type", "no_action") if action_details and isinstance(
-                action_details, dict) else "no_action"
-            if action_details and isinstance(action_details, dict):
-                interaction_data.update({
-                    'assistant_action_analysis_json': json.dumps(action_details),
-                    'assistant_action_type': detected_action_type,
-                    'assistant_action_params': json.dumps(action_details.get("parameters", {}))
-                })
-            logger.info(f"{log_prefix}: Action analysis complete. Type: '{detected_action_type}'.")
 
-            # --- Main Logic Flow (Action / Imagine / Standard LLM response) ---
-            if detected_action_type == "imagine" and action_details:
-                interaction_data['assistant_action_executed'] = True
-                idea_to_viz = action_details.get("parameters", {}).get("idea_to_visualize", user_input)
-                # _generate_image_generation_prompt_async is async
-                img_prompt = await self._generate_image_generation_prompt_async(db, session_id, user_input, idea_to_viz,
-                                                                                sess_refl_router, file_ctx_for_router,
-                                                                                direct_hist_prompt, url_ctx_for_router,
-                                                                                log_ctx_prompt)
-                interaction_data['imagined_image_prompt'] = img_prompt
-                if img_prompt:
-                    # provider.generate_image_async is async
-                    img_data_list, img_err = await self.provider.generate_image_async(img_prompt, None, ELP0)
-                    if img_err:
-                        final_response_text_for_this_turn = f"Imagine Error: {img_err}"
-                    elif img_data_list and img_data_list[0].get("b64_json"):
-                        interaction_data['imagined_image_b64'] = img_data_list[0]["b64_json"]
-                        # _describe_generated_image_async is async
-                        desc = await self._describe_generated_image_async(db, session_id, img_data_list[0]["b64_json"])
-                        interaction_data['imagined_image_vlm_description'] = desc
-                        imagined_img_vlm_desc_this_turn = desc  # Update for subsequent LLM if any
-                        final_response_text_for_this_turn = f"I've imagined that: {desc or 'Generated an image.'}"
-                    else:
-                        final_response_text_for_this_turn = "Imagine Error: No image data."
-                else:
-                    final_response_text_for_this_turn = "Imagine Error: Prompt gen failed."
-                interaction_data['assistant_action_result'] = final_response_text_for_this_turn
-
-            elif detected_action_type != "no_action" and action_details:
-                target_interaction_for_action = saved_initial_interaction if not is_reflection_task else original_interaction_to_update_for_reflection
-                if target_interaction_for_action:
-                    # _execute_assistant_action is async
-                    final_response_text_for_this_turn = await self._execute_assistant_action(db, session_id,
-                                                                                             action_details,
-                                                                                             target_interaction_for_action)  # type: ignore
-                else:
-                    final_response_text_for_this_turn = "Error: Missing interaction context for action."
-                interaction_data['assistant_action_result'] = final_response_text_for_this_turn
-
-            else:  # Standard LLM response
-                router_payload_llm_for_specialist = {  # Renamed to avoid conflict
-                    "input": current_input_for_llm_analysis, "recent_direct_history": direct_hist_prompt,
-                    "context": url_ctx_for_router, "history_rag": sess_refl_router,
-                    "file_index_context": file_ctx_for_router, "log_context": log_ctx_prompt,
-                    "emotion_analysis": emotion_analysis_str,
-                    "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn or interaction_data.get(
-                        'image_description', 'None.')  # Use VLM desc of user image if any
-                }
-                # _route_to_specialist is async
-                chosen_model_role, refined_query_for_specialist, route_reason_str = await self._route_to_specialist(
-                    db, session_id, current_input_for_llm_analysis, router_payload_llm_for_specialist
-                )
-                interaction_data['classification_reason'] = f"Routed to {chosen_model_role}: {route_reason_str}"
-
-                specialist_model_instance = self.provider.get_model(chosen_model_role)
-                if not specialist_model_instance: raise ValueError(
-                    f"Specialist model for role '{chosen_model_role}' unavailable.")
-
-                specialist_payload_final_llm = {  # Prepare full context for specialist
-                    "input": refined_query_for_specialist, "emotion_analysis": emotion_analysis_str,
-                    "context": url_ctx_untruncated, "history_rag": sess_refl_rag_untrunc,
-                    "file_index_context": main_dynamic_ctx_block_for_llm,  # Fuller context for specialist
-                    "log_context": log_ctx_prompt, "recent_direct_history": direct_hist_prompt,
-                    "pending_tot_result": interaction_data.get("tot_result", "None."),  # Pass ToT result if available
-                    "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn or interaction_data.get(
-                        'image_description', 'None.')
-                }
-
-                specialist_chain = (self.text_prompt_template | specialist_model_instance | StrOutputParser())
-                timing_data_specialist = {"session_id": session_id, "mode": "chat_specialist"}
-
-                draft_response = await asyncio.to_thread(  # _call_llm_with_timing is sync
-                    self._call_llm_with_timing, specialist_chain, {}, specialist_payload_final_llm,
-                    timing_data_specialist, priority=ELP0
-                )
-
-                # _correct_response is async
-                final_response_text_for_this_turn = await self._correct_response(
-                    db, session_id, current_input_for_llm_analysis, specialist_payload_final_llm, draft_response
-                )
-
-            # --- ToT Spawning (using classification_for_current_task) ---
-            if not is_reflection_task and \
-                    (classification_for_current_task == "chat_complex" or interaction_data.get(
-                        "requires_deep_thought")):
-                trigger_id_for_tot = saved_initial_interaction.id if saved_initial_interaction else None
-                if trigger_id_for_tot:
-                    logger.info(f"{log_prefix} Spawning background ToT for Interaction ID: {trigger_id_for_tot}.")
-                    # Ensure all necessary context variables for ToT are defined here from the context gathering phase
-                    # Example: url_docs_for_prompt_list, session_hist_docs_for_prompt_list, reflection_chunk_docs_for_prompt_list
-                    # main_dynamic_ctx_block_for_llm, imagined_img_vlm_desc_this_turn or interaction_data.get('image_description')
-                    # These need to be correctly passed to _run_tot_in_background_wrapper_v2
-                    tot_payload = {
-                        "db_session_factory": SessionLocal,
-                        "original_input_for_tot": current_input_for_llm_analysis,  # Or user_input
-                        "rag_context_docs": url_docs,  # Ensure these are populated from RAG results
-                        "history_rag_interactions": session_docs + reflection_docs,  # Ensure populated
-                        "log_context_str": log_ctx_prompt,
-                        "recent_direct_history_str": direct_hist_prompt,
-                        "file_index_context_str": main_dynamic_ctx_block_for_llm,  # Or specific file contexts
-                        "imagined_image_context_str": imagined_img_vlm_desc_this_turn or interaction_data.get(
-                            'image_description') or "None.",
-                        "triggering_interaction_id": trigger_id_for_tot,
-                    }
-                    asyncio.create_task(self._run_tot_in_background_wrapper_v2(**tot_payload))  # type: ignore
-                    interaction_data['tot_analysis_spawned'] = True
-                    # Update the triggering interaction to note ToT was spawned
-                    trigger_interaction_for_tot_update = await asyncio.to_thread(
-                        db.query(Interaction).filter(Interaction.id == trigger_id_for_tot).first)
-                    if trigger_interaction_for_tot_update:
-                        trigger_interaction_for_tot_update.tot_analysis_spawned = True  # type: ignore
-                        trigger_interaction_for_tot_update.requires_deep_thought = True  # type: ignore
-                        trigger_interaction_for_tot_update.deep_thought_reason = interaction_data.get(
-                            'classification_reason', 'Complex query, ToT spawned.')  # type: ignore
-                        await asyncio.to_thread(db.commit)
-
+            # 6. Process the response
+            if response_text and not (isinstance(response_text, str) and "ERROR" in response_text.upper() and "TRACEBACK" in response_text.upper()):
+                description_output = self._cleanup_llm_output(response_text.strip())
+                logger.trace(f"{log_prefix}: VLM description successful. Snippet: '{description_output[:100]}...'")
+                # Log success to DB
+                try:
+                    add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug",
+                                    user_input=f"[VLM Desc Success - {prompt_type}]",
+                                    llm_response=f"VLM Desc ({prompt_type}): {description_output[:500]}")
+                except Exception as db_log_err:
+                    logger.error(f"Failed to log VLM success: {db_log_err}")
+                return description_output, None # Return description, no error
+            else:
+                error_output = f"[VLM description call failed or returned error: {response_text}]"
+                logger.warning(f"{log_prefix} {error_output}")
+                # Log failure to DB
+                try:
+                    add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                    user_input=f"[VLM Desc Failed - {prompt_type}]",
+                                    llm_response=error_output)
+                except Exception as db_log_err:
+                    logger.error(f"Failed to log VLM failure: {db_log_err}")
+                return None, error_output
 
         except TaskInterruptedException as tie:
-            # ... (existing TaskInterruptedException handling) ...
-            logger.warning(f"🚦 {log_prefix} Background Generate Task INTERRUPTED: {tie}")
-            interrupted_flag = True
-            final_response_text_for_this_turn = f"[Background task interrupted by higher priority request: {tie}]"
-            interaction_data.update(
-                {'llm_response': final_response_text_for_this_turn, 'classification': "task_failed_interrupted",
-                 'input_type': 'log_warning'})
-        except Exception as e_bg_gen:
-            # ... (existing general Exception handling) ...
-            logger.error(f"❌❌ {log_prefix} UNHANDLED exception in background_generate: {e_bg_gen}")
-            logger.exception(f"{log_prefix} Background Generate Main Traceback:")
-            final_response_text_for_this_turn = f"Error during background processing: {type(e_bg_gen).__name__} - {str(e_bg_gen)}"
-            interaction_data.update({'llm_response': final_response_text_for_this_turn[:4000], 'input_type': 'error'})
-
-        finally:
-            # --- Final DB Update Logic ---
-            final_db_data_to_save = interaction_data.copy()
-            final_response_text_cleaned = self._cleanup_llm_output(final_response_text_for_this_turn)
-            final_db_data_to_save['llm_response'] = final_response_text_cleaned
-            final_db_data_to_save['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
-            if 'last_modified_db' in final_db_data_to_save: del final_db_data_to_save['last_modified_db']
-            if final_db_data_to_save.get('imagined_image_b64') and len(
-                    final_db_data_to_save['imagined_image_b64']) > 1000000:
-                final_db_data_to_save['imagined_image_b64'] = final_db_data_to_save['imagined_image_b64'][
-                                                              :100] + f"...[base64_truncated]"
-
-            logger.debug(
-                f"{log_prefix}: Preparing to save final DB state. Interrupted: {interrupted_flag}. Is Reflection: {is_reflection_task}.")
+            logger.warning(f"🚦 {log_prefix} VLM description INTERRUPTED: {tie}")
+            error_output = "[VLM Description Interrupted]"
+            # Log interruption to DB
             try:
-                if is_reflection_task and original_interaction_to_update_for_reflection:
-                    if interrupted_flag or final_db_data_to_save.get('input_type') == 'error':
-                        original_interaction_to_update_for_reflection.reflection_completed = False
-                        note = f"\n\n--- Reflection Task (ID: {request_id}) {'Interrupted' if interrupted_flag else 'Errored'} ({datetime.datetime.now(datetime.timezone.utc).isoformat()}): {final_response_text_cleaned} ---"
-                        current_resp = getattr(original_interaction_to_update_for_reflection, 'llm_response', "") or ""
-                        original_interaction_to_update_for_reflection.llm_response = (current_resp + note)[:getattr(
-                            Interaction.llm_response.type, 'length', 4000)]
-                    else:
-                        original_interaction_to_update_for_reflection.reflection_completed = True
-                    await asyncio.to_thread(db.commit)
-                    logger.info(
-                        f"{log_prefix}: Updated original interaction {update_interaction_id} for reflection state.")
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
+                                user_input=f"[VLM Desc Interrupted - {prompt_type}]",
+                                llm_response=str(tie))
+            except Exception as db_log_err:
+                logger.error(f"Failed to log VLM interruption: {db_log_err}")
+            raise # Re-raise to propagate interruption
 
-                    if not (interrupted_flag or final_db_data_to_save.get('input_type') == 'error'):
-                        new_reflection_data = final_db_data_to_save.copy()
-                        new_reflection_data.update({'input_type': "reflection_result",
-                                                    'user_input': f"[Reflection for OrigID {update_interaction_id}]",
-                                                    'classification': "reflection_output", 'reflection_completed': True,
-                                                    'tot_analysis_spawned': final_db_data_to_save.get(
-                                                        'tot_analysis_spawned', False)})
-                        valid_keys_refl = {c.name for c in Interaction.__table__.columns}
-                        db_kwargs_refl = {k: v for k, v in new_reflection_data.items() if
-                                          k in valid_keys_refl and k != 'id'}
-                        reflection_record = await asyncio.to_thread(add_interaction, db, **db_kwargs_refl)  # Commits
-                        if reflection_record and reflection_record.id and self.provider and self.provider.embeddings:
-                            await asyncio.to_thread(index_single_reflection, reflection_record, self.provider, db,
-                                                    ELP0)  # index_single_reflection is sync
+        except Exception as e:
+            logger.error(f"{log_prefix} VLM description call failed: {e}", exc_info=True)
+            error_output = f"[VLM Description Error: {type(e).__name__} - {str(e)[:100]}]"
+            # Log general error to DB
+            try:
+                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
+                                user_input=f"[VLM Desc Error - {prompt_type}]",
+                                llm_response=error_output)
+            except Exception as db_log_err:
+                logger.error(f"Failed to log VLM error: {db_log_err}")
+            return None, error_output
 
-                elif not is_reflection_task and saved_initial_interaction:
-                    logger.debug(
-                        f"{log_prefix}: Updating initial interaction {saved_initial_interaction.id} with final results.")
-                    for key, value in final_db_data_to_save.items():
-                        if hasattr(saved_initial_interaction, key) and key != 'id':
-                            setattr(saved_initial_interaction, key, value)
-                    await asyncio.to_thread(db.commit)
-                elif not is_reflection_task and not saved_initial_interaction:  # Initial save failed
-                    logger.warning(f"{log_prefix}: Initial placeholder save failed. Saving final state as new record.")
-                    valid_keys_final_new = {c.name for c in Interaction.__table__.columns}
-                    db_kwargs_final_new = {k: v for k, v in final_db_data_to_save.items() if
-                                           k in valid_keys_final_new and k != 'id'}
-                    await asyncio.to_thread(add_interaction, db, **db_kwargs_final_new)
-            except Exception as final_db_save_err:
-                logger.error(f"❌ {log_prefix}: CRITICAL error during final DB save/update: {final_db_save_err}")
-                if db: await asyncio.to_thread(db.rollback)
-
-            self.current_session_id = original_chat_session_id
-            logger.info(
-                f"{log_prefix} Async Background Generate (ELP0 Pipeline) END. Duration: {final_db_data_to_save.get('execution_time_ms', 0):.2f}ms")
-            # The DB session `db` is managed by the caller (e.g., run_background_task_with_new_loop or run_self_reflection_loop)
-            # and should be closed there.
+    
 
     def _is_valid_tot_json(self, parsed_json: Any) -> bool:
         """Checks if the parsed JSON object has the required ToT structure."""
@@ -6418,6 +6115,589 @@ class AIChat:
             add_interaction(db, **db_kwargs)
             return result_msg
 
+    async def background_generate(self, db: Session, user_input: str, session_id: str = None,  # type: ignore
+                                  classification: str = "chat_simple", image_b64: Optional[str] = None,
+                                  update_interaction_id: Optional[int] = None,  # For reflection tasks
+                                  stop_event_for_bg: Optional[threading.Event] = None):  # For external stop signal
+
+        request_id = f"bgen-{uuid.uuid4()}"
+        is_reflection_task = update_interaction_id is not None
+        log_prefix_base = "🔄 REFLECT" if is_reflection_task else "💬 BGEN"
+        log_prefix = f"{log_prefix_base} {request_id}|ELP0"
+
+        # 1. Initialization and Setup
+        # ----------------------------------------------------------------------
+        if session_id is None:
+            session_id = (f"session_{int(time.monotonic())}" if not is_reflection_task
+                          else f"reflection_on_{update_interaction_id}_{str(uuid.uuid4())[:4]}")
+
+        original_chat_session_id = self.current_session_id
+        self.current_session_id = session_id  # Temporarily set for logging within this task
+
+        logger.info(
+            f"{log_prefix} Async Background Generate START --> Session: {session_id}, "
+            f"Initial Class: '{classification}', Input: '{user_input[:50]}...', Img: {'Yes' if image_b64 else 'No'}, "
+            f"Reflection Target ID: {update_interaction_id if is_reflection_task else 'N/A'}"
+        )
+        request_start_time = time.monotonic()
+
+        interaction_data: Dict[str, Any] = {
+            "session_id": session_id, "mode": "chat", "input_type": "text",
+            "user_input": user_input, "llm_response": "[Processing background task...]",
+            "execution_time_ms": 0, "classification": classification, "classification_reason": None,
+            "rag_history_ids": None, "rag_source_url": None,
+            "requires_deep_thought": (classification == "chat_complex") or is_reflection_task,
+            "deep_thought_reason": None, "tot_analysis_requested": False,
+            "tot_analysis_spawned": False, "tot_result": None, "tot_delivered": False,
+            "emotion_context_analysis": None, "image_description": None,
+            "assistant_action_analysis_json": None, "assistant_action_type": None,
+            "assistant_action_params": None, "assistant_action_executed": False,
+            "assistant_action_result": None,
+            "image_data": image_b64[:20] + "..." if image_b64 and isinstance(image_b64, str) else None,
+            "imagined_image_prompt": None, "imagined_image_b64": None,
+            "imagined_image_vlm_description": None,
+            "reflection_completed": False,
+            "reflection_indexed_in_vs": False
+        }
+        if image_b64:
+            interaction_data["input_type"] = "image+text"
+
+        final_response_text_for_this_turn = "Error: Background processing did not complete as expected."
+        saved_initial_interaction: Optional[Interaction] = None
+        original_interaction_to_update_for_reflection: Optional[Interaction] = None
+        task_completed_successfully = False  # Overall task success across retries
+
+        max_retries_for_bg_task = LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES
+        retry_delay_seconds = LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY
+
+        # 2. Input Validation
+        # ----------------------------------------------------------------------
+        if not user_input and not image_b64:
+            logger.warning(f"{log_prefix} Empty input (no text, no image). Aborting.")
+            self.current_session_id = original_chat_session_id  # Restore before early exit
+            return
+
+        # 3. Pre-computation / Initial DB Operations
+        # ----------------------------------------------------------------------
+        if is_reflection_task:
+            try:
+                original_interaction_to_update_for_reflection = await asyncio.to_thread(
+                    db.query(Interaction).filter(Interaction.id == update_interaction_id).first
+                )
+                if original_interaction_to_update_for_reflection is None:
+                    logger.error(
+                        f"{log_prefix} CRITICAL - Reflection target ID {update_interaction_id} not found. Aborting.")
+                    self.current_session_id = original_chat_session_id
+                    return
+                interaction_data["classification_reason"] = "Self-reflection task, proceeding with deep analysis."
+                logger.info(f"{log_prefix} Loaded original interaction {update_interaction_id} for reflection.")
+            except Exception as e_load_orig:
+                logger.error(
+                    f"{log_prefix} Error loading reflection target ID {update_interaction_id}: {e_load_orig}. Aborting.")
+                self.current_session_id = original_chat_session_id
+                return
+        else:  # Not a reflection task, create initial placeholder
+            try:
+                initial_save_data = interaction_data.copy()
+                initial_save_data['llm_response'] = "[Background task initiated... Processing...]"
+                initial_save_data['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
+                valid_keys_init = {c.name for c in Interaction.__table__.columns}
+                db_kwargs_init = {k: v for k, v in initial_save_data.items() if k in valid_keys_init and k != 'id'}
+
+                saved_initial_interaction = await asyncio.to_thread(add_interaction, db, **db_kwargs_init)
+                await asyncio.to_thread(db.commit)  # Commit after adding
+
+                if saved_initial_interaction and saved_initial_interaction.id:
+                    logger.info(f"{log_prefix} Saved initial 'pending' Interaction ID {saved_initial_interaction.id}.")
+                else:
+                    logger.error(f"{log_prefix} Failed to save initial 'pending' interaction.")
+            except Exception as e_initial_save:
+                logger.error(f"{log_prefix} Error saving initial 'pending' interaction: {e_initial_save}")
+                if db: await asyncio.to_thread(db.rollback)
+                # Not returning here, will attempt processing and save final result as new if this failed.
+
+        # 4. Main Processing Block with Semaphore and Retries
+        # ----------------------------------------------------------------------
+        semaphore_acquired_for_task = False
+        try:
+            logger.debug(f"{log_prefix} Attempting to acquire background_generate_task_semaphore...")
+            try:
+                # `acquire()` is blocking. To make it awaitable with a timeout, use asyncio.to_thread.
+                # If `acquire()` is called directly without `to_thread`, it blocks the entire event loop.
+                # Given this is meant for a background task, calling it via `to_thread` makes sense
+                # to allow the main loop (if this were called by an ELP1) to remain responsive.
+                # However, if this entire `background_generate` function is already running in its own
+                # dedicated background thread (e.g., via `threading.Thread` and `asyncio.run`),
+                # then `semaphore.acquire()` directly is fine as it only blocks *that specific thread*.
+                # Based on `run_self_reflection_loop` calling `asyncio.run(ai_chat.background_generate(...))`,
+                # this entire function runs within `asyncio.run` in a dedicated thread.
+                # So, `acquire()` blocking is acceptable here for this specific thread.
+
+                # If you need a timeout *on the blocking acquire*, it should be:
+                # acquired_success = await asyncio.to_thread(background_generate_task_semaphore.acquire, timeout=SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS)
+                # if not acquired_success: raise asyncio.TimeoutError(...)
+
+                background_generate_task_semaphore.acquire()  # This will block until a slot is available
+                semaphore_acquired_for_task = True
+                logger.info(f"{log_prefix} Acquired background_generate_task_semaphore.")
+
+            except Exception as e_acquire:  # Catch any unexpected error during acquire
+                logger.error(f"❌ {log_prefix} Error acquiring semaphore: {e_acquire}. Aborting task.")
+                final_response_text_for_this_turn = f"Error: Semaphore acquisition failed: {e_acquire}."
+                interaction_data.update(
+                    {'llm_response': final_response_text_for_this_turn, 'classification': "task_failed_semaphore_error",
+                     'input_type': 'error'}
+                )
+                # Task not completed, semaphore not acquired, proceed to outer finally.
+                raise  # Re-raise to skip main logic and go to outer finally
+
+            # --- Politeness Check (Wait if server is busy) ---
+            MAX_POLITENESS_WAIT_SECONDS = 300
+            POLITENESS_CHECK_INTERVAL_SECONDS = 1.0
+            politeness_wait_start_time = time.monotonic()
+            was_busy_waiting = False
+            while server_is_busy_event.is_set():
+                if stop_event_for_bg and stop_event_for_bg.is_set():
+                    logger.warning(f"🛑 {log_prefix} Stop signal received during politeness wait. Aborting task.")
+                    raise TaskInterruptedException("Background task stopped during politeness wait.")
+                if not was_busy_waiting:
+                    logger.info(f"🚦 {log_prefix} Server busy, pausing background task start...")
+                    was_busy_waiting = True
+
+                await asyncio.sleep(POLITENESS_CHECK_INTERVAL_SECONDS)
+                if (time.monotonic() - politeness_wait_start_time) > MAX_POLITENESS_WAIT_SECONDS:
+                    logger.warning(f"{log_prefix} Max politeness wait exceeded. Proceeding despite busy server.")
+                    break
+            if was_busy_waiting: logger.info(f"🟢 {log_prefix} Server free, resuming background task.")
+
+            # --- Core Logic Retry Loop ---
+            current_attempt = 0
+            while current_attempt <= max_retries_for_bg_task:
+                current_attempt += 1
+                attempt_successful = False  # Flag for success of this specific attempt
+
+                if stop_event_for_bg and stop_event_for_bg.is_set():
+                    logger.warning(
+                        f"🛑 {log_prefix} Stop signal received before attempt {current_attempt}. Aborting task.")
+                    raise TaskInterruptedException("Background task stopped by external signal before attempt.")
+
+                if current_attempt > 1:
+                    logger.info(
+                        f"{log_prefix} Attempt {current_attempt}/{max_retries_for_bg_task + 1}: Retrying after delay.")
+                    await asyncio.sleep(retry_delay_seconds)
+
+                try:
+                    # Reset response text for this attempt
+                    final_response_text_for_this_turn = "Error: Attempt did not complete as expected."
+                    current_input_for_llm_analysis = user_input  # Initialize for each attempt
+                    imagined_img_vlm_desc_this_turn = interaction_data.get('imagined_image_vlm_description', 'None.')
+
+                    # --- VLM Preprocessing (if image_b64) ---
+                    if image_b64:
+                        logger.info(f"{log_prefix} Attempt {current_attempt}: VLM processing for user image...")
+                        vlm_desc, vlm_err = await self._describe_image_async(db, session_id, image_b64,
+                                                                             "initial_description", ELP0)
+                        if vlm_err:
+                            logger.error(f"{log_prefix} Attempt {current_attempt}: VLM error: {vlm_err}")
+                            interaction_data['image_description'] = f"[VLM Error: {vlm_err}]"
+                        else:
+                            interaction_data['image_description'] = vlm_desc
+                            current_input_for_llm_analysis = f"[Image: {vlm_desc}]\nUser: {user_input or '(query about image)'}"
+                            imagined_img_vlm_desc_this_turn = vlm_desc
+                        logger.info(
+                            f"{log_prefix} Attempt {current_attempt}: VLM done. Input for LLM: '{current_input_for_llm_analysis[:70]}...'")
+
+                    # --- Classification (if not reflection) ---
+                    classification_for_current_task = classification
+                    if not is_reflection_task:
+                        logger.info(f"{log_prefix} Attempt {current_attempt}: Classifying input...")
+                        clf_data = {"session_id": session_id, "mode": "chat", "input_type": "classification_bg"}
+                        classification_for_current_task = await asyncio.to_thread(self._classify_input_complexity, db,
+                                                                                  current_input_for_llm_analysis,
+                                                                                  clf_data)
+                        interaction_data['classification'] = classification_for_current_task
+                        interaction_data['classification_reason'] = clf_data.get('classification_reason')
+                        logger.info(
+                            f"{log_prefix} Attempt {current_attempt}: Classified as '{classification_for_current_task}'.")
+
+                    interaction_data['requires_deep_thought'] = (
+                                                                            classification_for_current_task == "chat_complex") or is_reflection_task
+
+                    # --- Context Gathering ---
+                    logger.debug(f"{log_prefix} Attempt {current_attempt}: Gathering contexts...")
+
+                    global_hist = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
+                    direct_hist_prompt = self._format_direct_history(global_hist)
+                    log_entries = await asyncio.to_thread(get_recent_interactions, db, RAG_HISTORY_COUNT * 2,
+                                                          session_id, "chat", True)
+                    log_ctx_prompt = self._format_log_history(log_entries)
+                    emotion_analysis_str = await asyncio.to_thread(self._run_emotion_analysis, db, user_input,
+                                                                   interaction_data)  # Correctly wrapped in to_thread
+
+                    keyword_file_query = await self._generate_file_search_query_async(db,
+                                                                                      current_input_for_llm_analysis,
+                                                                                      direct_hist_prompt, session_id)
+                    vec_file_ctx_result_str = await self._get_vector_search_file_index_context(keyword_file_query, ELP0,
+                                                                                               stop_event_for_bg)
+
+                    wrapped_rag_res = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db,
+                                                              current_input_for_llm_analysis, ELP0)
+
+                    url_docs, session_docs, reflection_docs = [], [], []  # Ensure these are always lists
+                    sess_chat_rag_ids = ""
+
+                    if wrapped_rag_res.get("status") == "success":
+                        rag_data_tuple = wrapped_rag_res.get("data")
+                        if isinstance(rag_data_tuple, tuple) and len(rag_data_tuple) == 4:
+                            url_ret_obj, sess_hist_ret_obj, refl_chunk_ret_obj, sess_chat_rag_ids = rag_data_tuple
+                            interaction_data['rag_history_ids'] = sess_chat_rag_ids
+                            if hasattr(self, 'vectorstore_url') and self.vectorstore_url:
+                                interaction_data['rag_source_url'] = getattr(self.vectorstore_url, '_source_url', None)
+                        else:
+                            raise RuntimeError(f"RAG wrapper malformed data: {rag_data_tuple}")
+                    elif wrapped_rag_res.get("status") == "interrupted":
+                        raise TaskInterruptedException(
+                            wrapped_rag_res.get("error_message", "RAG retrieval interrupted"))
+                    else:  # Error
+                        raise RuntimeError(
+                            f"RAG retrieval failed: {wrapped_rag_res.get('error_message', 'Unknown RAG error')}")
+
+                    # Conditionally invoke retrievers and ensure results are lists
+                    if url_ret_obj:
+                        try:
+                            url_docs = await asyncio.to_thread(url_ret_obj.invoke, current_input_for_llm_analysis)
+                        except Exception as e_url_rag:
+                            logger.warning(
+                                f"{log_prefix} Attempt {current_attempt}: URL RAG invoke error: {e_url_rag}"); url_docs = []
+                    if sess_hist_ret_obj:
+                        try:
+                            session_docs = await asyncio.to_thread(sess_hist_ret_obj.invoke,
+                                                                   current_input_for_llm_analysis)
+                        except Exception as e_sess_rag:
+                            logger.warning(
+                                f"{log_prefix} Attempt {current_attempt}: Session RAG invoke error: {e_sess_rag}"); session_docs = []
+                    if refl_chunk_ret_obj:
+                        try:
+                            reflection_docs = await asyncio.to_thread(refl_chunk_ret_obj.invoke,
+                                                                      current_input_for_llm_analysis)
+                        except Exception as e_refl_rag:
+                            logger.warning(
+                                f"{log_prefix} Attempt {current_attempt}: Reflection RAG invoke error: {e_refl_rag}"); reflection_docs = []
+
+                    url_ctx_untruncated = self._format_docs(url_docs, "URL Context")
+                    sess_refl_rag_untrunc = self._format_docs(session_docs + reflection_docs, "Session/Reflection RAG")
+
+                    # Token budgeting as in your file to prepare main_dynamic_ctx_block_for_llm
+                    # and context_for_router (url_ctx_for_router, sess_refl_router, file_ctx_for_router)
+                    # This logic is complex and omitted here for brevity but should be present
+                    MODEL_CONTEXT_WINDOW = LLAMA_CPP_N_CTX  # From config
+                    BUFFER_TOKENS_FOR_RESPONSE = 512  # From config or defined
+                    FIXED_PROMPT_OVERHEAD = 100  # From config or defined
+
+                    est_input_tokens = self._count_tokens(current_input_for_llm_analysis)
+                    est_direct_hist_tokens = self._count_tokens(direct_hist_prompt)
+                    est_log_tokens = self._count_tokens(log_ctx_prompt)
+
+                    available_context_tokens = MODEL_CONTEXT_WINDOW - est_input_tokens - est_direct_hist_tokens - est_log_tokens - BUFFER_TOKENS_FOR_RESPONSE - FIXED_PROMPT_OVERHEAD
+                    if available_context_tokens < 100: available_context_tokens = 100  # Minimum safety buffer
+
+                    # Truncate RAG contexts based on remaining budget
+                    main_dynamic_ctx_block_for_llm = self._truncate_rag_context(
+                        f"{url_ctx_untruncated}\n\n{sess_refl_rag_untrunc}\n\n{vec_file_ctx_result_str}",
+                        available_context_tokens)
+                    # Smaller subsets for router if needed, otherwise use `main_dynamic_ctx_block_for_llm`
+                    url_ctx_for_router = self._truncate_rag_context(url_ctx_untruncated, available_context_tokens // 2)
+                    sess_refl_router = self._truncate_rag_context(sess_refl_rag_untrunc, available_context_tokens // 2)
+                    file_ctx_for_router = self._truncate_rag_context(vec_file_ctx_result_str,
+                                                                     available_context_tokens // 2)
+
+                    logger.debug(f"{log_prefix} Attempt {current_attempt}: Contexts gathered.")
+
+                    # --- Action Analysis ---
+                    logger.info(f"{log_prefix} Attempt {current_attempt}: Analyzing assistant action...")
+                    action_payload_ctx = {"history_summary": emotion_analysis_str, "log_context": log_ctx_prompt,
+                                          "recent_direct_history": direct_hist_prompt,
+                                          "file_index_context": file_ctx_for_router}
+                    action_details = await self._analyze_assistant_action(db, current_input_for_llm_analysis,
+                                                                          session_id, action_payload_ctx)
+                    detected_action_type = action_details.get("action_type",
+                                                              "no_action") if action_details and isinstance(
+                        action_details, dict) else "no_action"
+                    if action_details:
+                        interaction_data.update({
+                            'assistant_action_analysis_json': json.dumps(action_details),
+                            'assistant_action_type': detected_action_type,
+                            'assistant_action_params': json.dumps(action_details.get("parameters", {}))
+                        })
+                    logger.info(
+                        f"{log_prefix} Attempt {current_attempt}: Action analysis type: '{detected_action_type}'.")
+
+                    # --- Main Logic Flow (Action, Image Gen, Standard LLM) ---
+                    if detected_action_type == "imagine" and action_details:
+                        interaction_data['assistant_action_executed'] = True
+                        idea_to_viz = action_details.get("parameters", {}).get("idea_to_visualize", user_input)
+                        img_prompt = await self._generate_image_generation_prompt_async(db, session_id, user_input,
+                                                                                        idea_to_viz, sess_refl_router,
+                                                                                        file_ctx_for_router,
+                                                                                        direct_hist_prompt,
+                                                                                        url_ctx_for_router,
+                                                                                        log_ctx_prompt)
+                        interaction_data['imagined_image_prompt'] = img_prompt
+                        if img_prompt:
+                            img_data_list, img_err = await self.provider.generate_image_async(prompt=img_prompt,
+                                                                                              image_base64=None,
+                                                                                              priority=ELP0)
+                            if img_err:
+                                final_response_text_for_this_turn = f"Imagine Error: {img_err}"
+                            elif img_data_list and img_data_list[0].get("b64_json"):
+                                img_b64_gen = img_data_list[0]["b64_json"]
+                                interaction_data['imagined_image_b64'] = img_b64_gen[:20] + "...[trunc]"
+                                gen_vlm_desc, _ = await self._describe_image_async(db, session_id, img_b64_gen,
+                                                                                   "describe_generated_image", ELP0)
+                                interaction_data['imagined_image_vlm_description'] = gen_vlm_desc
+                                imagined_img_vlm_desc_this_turn = gen_vlm_desc
+                                final_response_text_for_this_turn = f"I've imagined: {gen_vlm_desc or 'Generated an image.'}"
+                            else:
+                                final_response_text_for_this_turn = "Imagine Error: No image data."
+                        else:
+                            final_response_text_for_this_turn = "Imagine Error: Prompt gen failed."
+                        interaction_data['assistant_action_result'] = final_response_text_for_this_turn
+
+                    elif detected_action_type != "no_action" and action_details:
+                        target_interaction = saved_initial_interaction if not is_reflection_task else original_interaction_to_update_for_reflection
+                        if target_interaction:
+                            final_response_text_for_this_turn = await self._execute_assistant_action(db, session_id,
+                                                                                                     action_details,
+                                                                                                     target_interaction)  # type: ignore
+                        else:
+                            final_response_text_for_this_turn = "Error: Missing interaction context for action."
+                        interaction_data['assistant_action_result'] = final_response_text_for_this_turn
+                        interaction_data['assistant_action_executed'] = True
+
+                    else:  # Standard LLM response
+                        router_payload = {"input": current_input_for_llm_analysis,
+                                          "recent_direct_history": direct_hist_prompt, "context": url_ctx_for_router,
+                                          "history_rag": sess_refl_router, "file_index_context": file_ctx_for_router,
+                                          "log_context": log_ctx_prompt, "emotion_analysis": emotion_analysis_str,
+                                          "pending_tot_result": interaction_data.get("tot_result", "None."),
+                                          "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn}
+                        role, query, reason = await self._route_to_specialist(db, session_id,
+                                                                              current_input_for_llm_analysis,
+                                                                              router_payload)
+                        interaction_data['classification_reason'] = f"Routed to {role}: {reason}"
+
+                        specialist_model = self.provider.get_model(role)
+                        if not specialist_model: raise ValueError(f"Specialist model '{role}' not found.")
+
+                        specialist_payload = {"input": query, "emotion_analysis": emotion_analysis_str,
+                                              "context": url_ctx_untruncated, "history_rag": sess_refl_rag_untrunc,
+                                              "file_index_context": main_dynamic_ctx_block_for_llm,
+                                              "log_context": log_ctx_prompt,
+                                              "recent_direct_history": direct_hist_prompt,
+                                              "pending_tot_result": interaction_data.get("tot_result", "None."),
+                                              "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn}
+                        specialist_chain = (self.text_prompt_template | specialist_model | StrOutputParser())
+                        timing_data = {"session_id": session_id, "mode": f"chat_specialist_{role}"}
+
+                        draft_response = await asyncio.to_thread(
+                            self._call_llm_with_timing, specialist_chain, specialist_payload, timing_data, priority=ELP0
+                        )
+                        final_response_text_for_this_turn = await self._correct_response(db, session_id,
+                                                                                         current_input_for_llm_analysis,
+                                                                                         specialist_payload,
+                                                                                         draft_response)
+
+                    # --- Tree of Thought (ToT) Spawning ---
+                    if not is_reflection_task and \
+                            (classification_for_current_task == "chat_complex" or interaction_data.get(
+                                "requires_deep_thought")):
+                        trigger_id_for_tot = saved_initial_interaction.id if saved_initial_interaction else None
+                        if trigger_id_for_tot:
+                            logger.info(
+                                f"{log_prefix} Attempt {current_attempt}: Spawning ToT for Interaction ID: {trigger_id_for_tot}.")
+                            tot_payload = {"db_session_factory": SessionLocal,
+                                           "original_input_for_tot": current_input_for_llm_analysis,
+                                           "rag_context_docs": url_docs,
+                                           "history_rag_interactions": session_docs + reflection_docs,
+                                           "log_context_str": log_ctx_prompt,
+                                           "recent_direct_history_str": direct_hist_prompt,
+                                           "file_index_context_str": main_dynamic_ctx_block_for_llm,
+                                           # Ensure this is available and correct
+                                           "imagined_image_context_str": imagined_img_vlm_desc_this_turn or interaction_data.get(
+                                               'image_description', 'None.'),
+                                           "interaction_data_for_tot_llm_call": {},  # Placeholder
+                                           "original_user_input_for_log": user_input,  # Original for logging
+                                           "triggering_interaction_id_for_log": trigger_id_for_tot}
+
+                            asyncio.create_task(self._run_tot_in_background_wrapper_v2(**tot_payload))  # type: ignore
+                            interaction_data['tot_analysis_spawned'] = True
+                            # Update triggering interaction in DB immediately (if possible and desirable)
+                            try:
+                                tr_interaction = await asyncio.to_thread(
+                                    db.query(Interaction).filter(Interaction.id == trigger_id_for_tot).first)
+                                if tr_interaction:
+                                    tr_interaction.tot_analysis_spawned = True
+                                    tr_interaction.requires_deep_thought = True
+                                    # Ensure deep_thought_reason is set from classification if available
+                                    tr_interaction.deep_thought_reason = interaction_data.get('classification_reason',
+                                                                                              'Complex query, ToT spawned.')
+                                    await asyncio.to_thread(db.commit)
+                            except Exception as e_tot_update:
+                                logger.error(
+                                    f"{log_prefix} Failed to update triggering interaction for ToT: {e_tot_update}")
+                                await asyncio.to_thread(db.rollback)
+                        else:
+                            logger.warning(
+                                f"{log_prefix} Attempt {current_attempt}: Could not spawn ToT, no trigger ID.")
+
+                    attempt_successful = True  # Mark this attempt as successful
+                    task_completed_successfully = True  # Mark overall task success
+                    break  # Exit retry loop on success
+
+                except TaskInterruptedException as tie:
+                    logger.warning(f"� {log_prefix} Attempt {current_attempt} INTERRUPTED: {tie}")
+                    final_response_text_for_this_turn = f"[Task interrupted: {tie}]"
+                    interaction_data.update({'llm_response': final_response_text_for_this_turn,
+                                             'classification': "task_failed_interrupted", 'input_type': 'log_warning'})
+                    if current_attempt >= max_retries_for_bg_task:  # Check if max retries exhausted
+                        logger.error(f"{log_prefix} Max retries for interruption reached. Giving up.")
+                        task_completed_successfully = False  # Ensure it's marked as failed overall
+                        break  # Exit retry loop
+                    # else, loop will continue for next attempt
+
+                except Exception as e_inner:
+                    logger.error(
+                        f"❌❌ {log_prefix} Attempt {current_attempt} FAILED with unhandled exception: {e_inner}")
+                    logger.exception(f"{log_prefix} Attempt {current_attempt} Traceback:")
+                    final_response_text_for_this_turn = f"Error in processing: {type(e_inner).__name__} - {str(e_inner)}"
+                    interaction_data.update(
+                        {'llm_response': final_response_text_for_this_turn[:4000], 'input_type': 'error'})
+                    task_completed_successfully = False  # Mark as failed overall
+                    break  # Exit retry loop on unhandled error for this attempt
+
+            # End of retry loop (inner while loop)
+            if not task_completed_successfully and current_attempt > max_retries_for_bg_task:
+                logger.error(
+                    f"{log_prefix} All {current_attempt - 1} attempts failed or were interrupted. Task will be marked as failed.")
+
+
+        except asyncio.TimeoutError:  # From semaphore acquisition. This is for the `await asyncio.wait_for` if you were using it.
+            # The current structure has `background_generate_task_semaphore.acquire()` without a timeout as a blocking call.
+            # This `except asyncio.TimeoutError` will not be hit by the direct acquire unless it's wrapped.
+            # The error path `if not acquired:` handles the timeout result from `acquire()`.
+            pass  # This pass is fine, as other exceptions/returns handle it.
+        except TaskInterruptedException as tie_outer:  # From politeness check or before retry loop
+            logger.warning(f"🚦 {log_prefix} Task INTERRUPTED (outer): {tie_outer}")
+            final_response_text_for_this_turn = f"[Task interrupted externally: {tie_outer}]"
+            interaction_data.update({'llm_response': final_response_text_for_this_turn,
+                                     'classification': "task_failed_interrupted_outer", 'input_type': 'log_warning'})
+            task_completed_successfully = False
+        except Exception as e_outer:
+            logger.critical(f"🔥🔥 {log_prefix} CRITICAL UNHANDLED exception in background_generate (outer): {e_outer}")
+            logger.exception(f"{log_prefix} Outer Traceback:")
+            if final_response_text_for_this_turn == "Error: Background processing did not complete as expected.":  # Ensure it's updated
+                final_response_text_for_this_turn = f"Critical Error: {type(e_outer).__name__} - {str(e_outer)}"
+            interaction_data.update({'llm_response': final_response_text_for_this_turn[:4000], 'input_type': 'error'})
+            task_completed_successfully = False
+
+        finally:
+            # 5. Finalization: Semaphore Release, DB Update, Session ID Restore
+            # ----------------------------------------------------------------------
+            if semaphore_acquired_for_task:  # Only release if it was successfully acquired at the start
+                background_generate_task_semaphore.release()
+                logger.info(f"{log_prefix} Released background_generate_task_semaphore.")
+
+            if task_completed_successfully:
+                logger.info(f"{log_prefix} Overall task completed successfully after {current_attempt} attempt(s).")
+            else:
+                logger.error(f"{log_prefix} Overall task failed or was incomplete after {current_attempt} attempt(s).")
+
+            final_db_data_to_save = interaction_data.copy()
+            final_db_data_to_save['llm_response'] = self._cleanup_llm_output(final_response_text_for_this_turn)
+            final_db_data_to_save['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000.0
+            if 'last_modified_db' in final_db_data_to_save: del final_db_data_to_save['last_modified_db']
+
+            # Truncate large image data (safety)
+            img_b64_key = 'imagined_image_b64'
+            if final_db_data_to_save.get(img_b64_key) and len(final_db_data_to_save[img_b64_key]) > 1000000:
+                final_db_data_to_save[img_b64_key] = final_db_data_to_save[img_b64_key][
+                                                     :100] + "...[base64_too_large_for_db]"
+
+            logger.debug(
+                f"{log_prefix} Preparing to save final DB state. Reflection: {is_reflection_task}, Success: {task_completed_successfully}")
+
+            try:
+                if is_reflection_task and original_interaction_to_update_for_reflection:
+                    # Determine if reflection task itself completed successfully or failed/interrupted
+                    was_interrupted_or_errored = final_db_data_to_save.get('classification', '').startswith(
+                        "task_failed") or \
+                                                 final_db_data_to_save.get('input_type') == 'error'
+
+                    if was_interrupted_or_errored:
+                        original_interaction_to_update_for_reflection.reflection_completed = False
+                        note = (f"\n\n--- Reflection Task (ID: {request_id}) "
+                                f"{'Interrupted/Errored'} ({datetime.datetime.now(datetime.timezone.utc).isoformat()}): "
+                                f"{final_db_data_to_save['llm_response']} ---")
+                        current_resp = getattr(original_interaction_to_update_for_reflection, 'llm_response', "") or ""
+                        original_interaction_to_update_for_reflection.llm_response = (current_resp + note)[:getattr(
+                            Interaction.llm_response.type, 'length', 4000)]
+                    else:  # Successful reflection task execution
+                        original_interaction_to_update_for_reflection.reflection_completed = True
+
+                    await asyncio.to_thread(db.commit)  # Commit changes to the original interaction
+                    logger.info(
+                        f"{log_prefix} Updated original interaction {update_interaction_id} for reflection state.")
+
+                    # Only create a *new* reflection_result record if the reflection task itself completed successfully
+                    if task_completed_successfully and not was_interrupted_or_errored:
+                        new_reflection_data = final_db_data_to_save.copy()
+                        new_reflection_data.update({
+                            'input_type': "reflection_result",
+                            'user_input': f"[Reflection for OrigID {update_interaction_id}] {user_input[:100]}",
+                            # Add some original context
+                            'classification': "reflection_output",
+                            'reflection_completed': True,  # This new record is the completed reflection
+                            # tot_analysis_spawned might be set if reflection itself decided to spawn one
+                        })
+                        valid_keys_refl = {c.name for c in Interaction.__table__.columns}
+                        db_kwargs_refl = {k: v for k, v in new_reflection_data.items() if
+                                          k in valid_keys_refl and k != 'id'}
+                        reflection_record = await asyncio.to_thread(add_interaction, db, **db_kwargs_refl)
+                        await asyncio.to_thread(db.commit)  # Commit new reflection record
+
+                        if reflection_record and reflection_record.id and self.provider and self.provider.embeddings and ENABLE_SELF_REFLECTION:
+                            await asyncio.to_thread(index_single_reflection, reflection_record, self.provider, db, ELP0)
+                            logger.info(f"{log_prefix} Indexed new reflection record ID {reflection_record.id}.")
+
+
+                elif not is_reflection_task:  # Standard chat interaction initiated by handle_openai_chat_completion etc.
+                    if saved_initial_interaction and saved_initial_interaction.id:
+                        logger.debug(
+                            f"{log_prefix} Updating initial interaction {saved_initial_interaction.id} with final results.")
+                        for key, value in final_db_data_to_save.items():
+                            if hasattr(saved_initial_interaction, key) and key != 'id':
+                                setattr(saved_initial_interaction, key, value)
+                        await asyncio.to_thread(db.commit)
+                    else:  # Initial save failed, or was skipped somehow. Save as new.
+                        logger.warning(
+                            f"{log_prefix} Initial placeholder interaction not available/saved. Saving final state as new record.")
+                        valid_keys_final_new = {c.name for c in Interaction.__table__.columns}
+                        db_kwargs_final_new = {k: v for k, v in final_db_data_to_save.items() if
+                                               k in valid_keys_final_new and k != 'id'}
+                        await asyncio.to_thread(add_interaction, db, **db_kwargs_final_new)
+                        await asyncio.to_thread(db.commit)  # Commit new record
+
+            except Exception as final_db_save_err:
+                logger.error(f"❌ {log_prefix} CRITICAL error during final DB save/update: {final_db_save_err}")
+                if db: await asyncio.to_thread(db.rollback)
+
+            # Restore the original session_id for this AIChat instance.
+            self.current_session_id = original_chat_session_id
+            logger.info(
+                f"{log_prefix} Async Background Generate END. Duration: {final_db_data_to_save.get('execution_time_ms', 0):.2f}ms. "
+                f"Success: {task_completed_successfully}"
+            )
+
     def extract_text_from_url(self, url):
         """Extracts text from URL content (synchronous)."""
         logger.debug(f"🌐 Fetching content from {url}")
@@ -6473,6 +6753,246 @@ class AIChat:
             logger.error(f"❌ Failed Chroma create: {e}")
             logger.exception("Chroma Traceback:")
             self.vectorstore_url = None
+
+    async def _parse_ingested_text_content(self, data_entry: Dict[str, Any]) -> Tuple[
+        Optional[str], Optional[str], bool]:
+        """
+        Parses a single data entry (dict) to extract user_input_content and assistant_response_content.
+        This helper is needed by the ingestion function.
+        """
+        user_input_content, assistant_response_content = None, None
+        extracted_successfully = False
+
+        messages = data_entry.get("messages")
+        if isinstance(messages, list) and len(messages) >= 1:
+            first_user_msg = next((m.get("content") for m in messages if m.get("role") == "user"), None)
+            first_asst_msg = next((m.get("content") for m in messages if m.get("role") == "assistant"), None)
+            if first_user_msg: user_input_content = first_user_msg
+            if first_asst_msg: assistant_response_content = first_asst_msg
+            if user_input_content or assistant_response_content: extracted_successfully = True
+        elif "prompt" in data_entry and "completion" in data_entry:
+            user_input_content = data_entry.get("prompt")
+            assistant_response_content = data_entry.get("completion")
+            extracted_successfully = True
+        elif "user_input" in data_entry and "llm_response" in data_entry:
+            user_input_content = data_entry.get("user_input")
+            assistant_response_content = data_entry.get("llm_response")
+            extracted_successfully = True
+        elif "text" in data_entry:  # Fallback for generic text entries
+            user_input_content = data_entry.get("text")
+            assistant_response_content = "[Ingested as single text entry]"
+            extracted_successfully = True
+
+        return user_input_content, assistant_response_content, extracted_successfully
+
+    async def _initiate_file_ingestion_and_reflection(self,
+                                                      db_session: Session,  # Session from the calling route handler
+                                                      uploaded_file_record_id: int  # The ID of the UploadedFileRecord
+                                                      ):
+        """
+        Centralized helper function to read an uploaded file, parse its content,
+        and spawn background_generate tasks for reflection.
+        This function runs in the background (via asyncio.create_task in the caller).
+        """
+        # This function needs its own dedicated DB session because it's a background task.
+        # It's important to use SessionLocal() here, not the db_session_param directly,
+        # as db_session_param belongs to the main request lifecycle.
+        bg_db_session: Optional[Session] = None
+        current_job_id = f"ingest_proc_{uploaded_file_record_id}"
+        logger.info(f"🚀 {current_job_id}: Starting background file ingestion and reflection.")
+
+        # Re-import `UploadedFileRecord` here to ensure it's available in this async context
+        from database import UploadedFileRecord  # Assuming database.py is set up for this
+
+        try:
+            bg_db_session = SessionLocal()  # Create a new session for this background job
+            if bg_db_session is None:
+                raise RuntimeError("Failed to create background DB session for ingestion.")
+
+            # Fetch the UploadedFileRecord to get file path and update status
+            uploaded_record = bg_db_session.query(UploadedFileRecord).filter(
+                UploadedFileRecord.id == uploaded_file_record_id
+            ).first()
+
+            if uploaded_record is None:
+                logger.error(f"{current_job_id}: UploadedFileRecord ID {uploaded_file_record_id} not found.")
+                return  # Cannot proceed
+
+            file_path = uploaded_record.stored_path
+            original_filename = uploaded_record.original_filename
+            file_ext = os.path.splitext(original_filename)[1].lower()
+
+            logger.info(f"{current_job_id}: Processing file '{original_filename}' ({file_path}) for ingestion.")
+
+            # Update status to processing
+            uploaded_record.status = "processing"
+            uploaded_record.updated_at = func.now()
+            bg_db_session.commit()
+
+            ingested_interactions_count = 0
+            processed_rows_or_lines = 0
+
+            # --- File type processing logic (copied from original /v1/files) ---
+            if file_ext == ".jsonl" or file_ext == ".json":
+                with open(file_path, 'r', encoding='utf-8') as f_ingest:
+                    if file_ext == ".jsonl":
+                        for line_num, line in enumerate(f_ingest):
+                            processed_rows_or_lines += 1
+                            if not line.strip(): continue
+                            try:
+                                data_entry = json.loads(line.strip())
+                                user_input_content, assistant_response_content, _ = self._parse_ingested_text_content(
+                                    data_entry)
+                                bg_user_input = user_input_content or "Analyze this JSONL entry: " + json.dumps(
+                                    data_entry, ensure_ascii=False)
+                                bg_session_id = data_entry.get("session_id_override",
+                                                               f"ingest_{uploaded_record.ingestion_id}_line_{line_num + 1}")
+                                asyncio.create_task(
+                                    self.background_generate(  # Use self.background_generate
+                                        db=bg_db_session,  # Pass the BG session
+                                        user_input=bg_user_input,
+                                        session_id=bg_session_id,
+                                        classification="ingested_reflection_task",
+                                        image_b64=None,
+                                        update_interaction_id=None
+                                    )
+                                )
+                                ingested_interactions_count += 1
+                            except json.JSONDecodeError:
+                                logger.warning(f"{current_job_id}: Skipped invalid JSON line {line_num + 1}.")
+                            except Exception as e_proc_line:
+                                logger.error(
+                                    f"{current_job_id}: Error processing JSONL line {line_num + 1}: {e_proc_line}")
+
+                    elif file_ext == ".json":
+                        full_json_data = json.load(f_ingest)
+                        if isinstance(full_json_data, list):
+                            for item_num, data_entry in enumerate(full_json_data):
+                                processed_rows_or_lines += 1
+                                if not isinstance(data_entry, dict):
+                                    logger.warning(
+                                        f"{current_job_id}: Skipping non-object item {item_num + 1} in JSON array.")
+                                    continue
+                                user_input_content, assistant_response_content, _ = self._parse_ingested_text_content(
+                                    data_entry)
+                                bg_user_input = user_input_content or "Analyze this JSON entry: " + json.dumps(
+                                    data_entry, ensure_ascii=False)
+                                bg_session_id = data_entry.get("session_id_override",
+                                                               f"ingest_{uploaded_record.ingestion_id}_item_{item_num + 1}")
+                                asyncio.create_task(
+                                    self.background_generate(
+                                        db=bg_db_session,
+                                        user_input=bg_user_input,
+                                        session_id=bg_session_id,
+                                        classification="ingested_reflection_task",
+                                        image_b64=None,
+                                        update_interaction_id=None
+                                    )
+                                )
+                                ingested_interactions_count += 1
+                        elif isinstance(full_json_data, dict):
+                            processed_rows_or_lines = 1
+                            user_input_content, assistant_response_content, _ = self._parse_ingested_text_content(
+                                full_json_data)
+                            bg_user_input = user_input_content or "Analyze this JSON object: " + json.dumps(
+                                full_json_data, ensure_ascii=False)
+                            bg_session_id = full_json_data.get("session_id_override",
+                                                               f"ingest_{uploaded_record.ingestion_id}_single_obj")
+                            asyncio.create_task(
+                                self.background_generate(
+                                    db=bg_db_session,
+                                    user_input=bg_user_input,
+                                    session_id=bg_session_id,
+                                    classification="ingested_reflection_task",
+                                    image_b64=None,
+                                    update_interaction_id=None
+                                )
+                            )
+                            ingested_interactions_count += 1
+                        else:
+                            logger.warning(
+                                f"{current_job_id}: JSON file content is neither an object nor an array. Skipping.")
+
+            elif file_ext == ".txt":
+                with open(file_path, 'r', encoding='utf-8', errors='ignore') as f_txt:
+                    for line_num, line in enumerate(f_txt):
+                        processed_rows_or_lines += 1
+                        if not line.strip(): continue
+                        bg_user_input = "Analyze this text line: " + line.strip()
+                        bg_session_id = f"ingest_{uploaded_record.ingestion_id}_txt_line_{line_num + 1}"
+                        asyncio.create_task(
+                            self.background_generate(
+                                db=bg_db_session,
+                                user_input=bg_user_input,
+                                session_id=bg_session_id,
+                                classification="ingested_reflection_task",
+                                image_b64=None,
+                                update_interaction_id=None
+                            )
+                        )
+                        ingested_interactions_count += 1
+
+            elif file_ext in [".csv", ".tsv", ".parquet", ".xlsx", ".xls"]:
+                delimiter = '\t' if file_ext == ".tsv" else ','
+                if file_ext == ".csv" or file_ext == ".tsv":
+                    df = await asyncio.to_thread(pd.read_csv, file_path, delimiter=delimiter)
+                elif file_ext == ".parquet":
+                    df = await asyncio.to_thread(pd.read_parquet, file_path)
+                elif file_ext in [".xlsx", ".xls"]:
+                    df = await asyncio.to_thread(pd.read_excel, file_path)
+
+                for index, row in df.iterrows():
+                    processed_rows_or_lines += 1
+                    data_entry = row.to_dict()
+                    user_input_content, assistant_response_content, _ = self._parse_ingested_text_content(data_entry)
+                    bg_user_input = user_input_content or "Analyze this data row: " + json.dumps(
+                        {k: str(v) for k, v in row.to_dict().items() if pd.notna(v)})
+                    bg_session_id = data_entry.get("session_id_override",
+                                                   f"ingest_{uploaded_record.ingestion_id}_row_{index + 1}")
+                    asyncio.create_task(
+                        self.background_generate(
+                            db=bg_db_session,
+                            user_input=bg_user_input,
+                            session_id=bg_session_id,
+                            classification="ingested_reflection_task",
+                            image_b64=None,
+                            update_interaction_id=None
+                        )
+                    )
+                    ingested_interactions_count += 1
+            else:
+                raise ValueError(f"Unsupported file type for ingestion: '{file_ext}'.")
+
+            # Update the record status to completed/failed and counts
+            uploaded_record.status = "completed"
+            uploaded_record.processed_entries_count = processed_rows_or_lines
+            uploaded_record.spawned_tasks_count = ingested_interactions_count
+            uploaded_record.updated_at = func.now()
+            bg_db_session.commit()
+            logger.success(
+                f"{current_job_id}: File ingestion completed. Processed {processed_rows_or_lines} entries, spawned {ingested_interactions_count} tasks.")
+
+        except Exception as e:
+            logger.error(f"{current_job_id}: Error during file ingestion process: {e}")
+            uploaded_record.status = "failed"
+            uploaded_record.processing_error = str(e)[:1000]  # Truncate for DB
+            uploaded_record.updated_at = func.now()
+            bg_db_session.commit()  # Commit error status
+        finally:
+            if bg_db_session:
+                try:
+                    bg_db_session.close()
+                    logger.debug(f"{current_job_id}: Background DB session closed.")
+                except Exception as close_err:
+                    logger.error(f"{current_job_id}: Error closing DB session: {close_err}")
+
+            # Clean up the temporarily stored file after processing (or if failed)
+            if os.path.exists(file_path):
+                try:
+                    os.remove(file_path)
+                    logger.info(f"{current_job_id}: Cleaned up temporary uploaded file: {file_path}")
+                except Exception as e_del:
+                    logger.warning(f"{current_job_id}: Failed to delete temporary file '{file_path}': {e_del}")
 
 
 def sanitize_filename(name: str, max_length: int = 200, replacement_char: str = '_') -> str:
@@ -6631,6 +7151,7 @@ def format_sse(data: Dict[str, Any], event_type: Optional[str] = None) -> str:
     return sse_string + "\n"
 
 
+
 # --- OpenAI Response Formatting Helpers ---
 
 def _create_openai_error_response(message: str, err_type="internal_error", code=None, status_code=500):
@@ -6642,6 +7163,33 @@ def _create_openai_error_response(message: str, err_type="internal_error", code=
         "code": code,
     }
     return {"error": error_obj}, status_code
+
+def _parse_ingested_text_content(data_entry: Dict[str, Any]) -> Tuple[Optional[str], Optional[str], bool]:
+    user_input_content, assistant_response_content = None, None
+    extracted_successfully = False
+
+    messages = data_entry.get("messages")
+    if isinstance(messages, list) and len(messages) >= 1:
+        first_user_msg = next((m.get("content") for m in messages if m.get("role") == "user"), None)
+        first_asst_msg = next((m.get("content") for m in messages if m.get("role") == "assistant"), None)
+        if first_user_msg: user_input_content = first_user_msg
+        if first_asst_msg: assistant_response_content = first_asst_msg
+        if user_input_content or assistant_response_content: extracted_successfully = True
+    elif "prompt" in data_entry and "completion" in data_entry:
+        user_input_content = data_entry.get("prompt")
+        assistant_response_content = data_entry.get("completion")
+        extracted_successfully = True
+    elif "user_input" in data_entry and "llm_response" in data_entry:
+        user_input_content = data_entry.get("user_input")
+        assistant_response_content = data_entry.get("llm_response")
+        extracted_successfully = True
+    elif "text" in data_entry: # Fallback for generic text entries
+        user_input_content = data_entry.get("text")
+        assistant_response_content = "[Ingested as single text entry]"
+        extracted_successfully = True
+
+    return user_input_content, assistant_response_content, extracted_successfully
+
 
 def _format_openai_chat_response(response_text: str, model_name: str = "Amaryllis-Adelaide-IdioticRecursiveLearner-LegacyMoEArch") -> Dict[str, Any]:
     """Formats a simple text response into OpenAI ChatCompletion structure."""
@@ -9887,46 +10435,87 @@ except Exception as e:
 @app.route("/v1/fine_tuning/jobs", methods=["POST"])
 async def handle_create_pseudo_fine_tuning_job():
     start_req_time = time.monotonic()
-    request_id = f"req-pseudo-ft-job-{uuid.uuid4()}"  # Unique ID for this request
+    request_id = f"req-pseudo-ft-job-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received POST /v1/fine_tuning/jobs (Pseudo Fine-Tune via Data Ingestion)")
 
-    db: Session = g.db  # Get DB session from Flask's g
+    db: Session = g.db
     final_status_code: int = 500
     resp: Optional[Response] = None
-
-    # --- Initialize session_id_for_log and try to get from request ---
-    session_id_for_log: str = f"pseudo_ft_req_{request_id}"  # Default session ID
+    session_id_for_log: str = f"pseudo_ft_req_{request_id}"  # Default session ID for this job's logs
     raw_request_data: Optional[Dict[str, Any]] = None
-    # ---
 
     try:
-        raw_request_data = await request.get_json()  # Assumes route is async
+        raw_request_data = await request.get_json()
         if not raw_request_data:
             raise ValueError("Empty JSON payload received.")
 
-        # Attempt to get session_id from the request if provided by client
-        session_id_from_request = raw_request_data.get("session_id")
-        if session_id_from_request and isinstance(session_id_from_request, str):
-            session_id_for_log = session_id_from_request
-
-        # Set for AIChat instance if it were used directly in this specific stub
-        # if ai_chat: ai_chat.current_session_id = session_id_for_log
-
-        training_file_id = raw_request_data.get("training_file")
+        # The 'training_file' now refers to the 'ingestion_id' returned by /v1/files
+        training_file_ingestion_id = raw_request_data.get("training_file")
         model_requested = raw_request_data.get("model")  # e.g., "gpt-3.5-turbo" - we log this
 
-        if not training_file_id:
-            raise ValueError("'training_file' ID (referring to an ingested data batch) is required.")
+        if not training_file_ingestion_id or not isinstance(training_file_ingestion_id, str):
+            raise ValueError(
+                "'training_file' ID (which is the ingestion_id from /v1/files) is required and must be a string.")
         if not model_requested:
             raise ValueError("'model' (base model name to associate with this data) is required.")
 
+        # Look up the uploaded file record
+        uploaded_record = db.query(UploadedFileRecord).filter(
+            UploadedFileRecord.ingestion_id == training_file_ingestion_id
+        ).first()
+
+        if uploaded_record is None:
+            raise ValueError(
+                f"Uploaded file record with ingestion_id '{training_file_ingestion_id}' not found. Please upload the file first via /v1/files.")
+
+        if uploaded_record.status == "processing" or uploaded_record.status == "queued_for_processing" or uploaded_record.status == "completed":
+            logger.warning(
+                f"{request_id}: File ingestion for ID '{training_file_ingestion_id}' is already {uploaded_record.status}. Not re-triggering.")
+            response_message = f"File ingestion for ID '{training_file_ingestion_id}' is already {uploaded_record.status}. No new processing initiated."
+
+            # Mimic OpenAI's FineTuningJob object structure for response
+            response_body = {
+                "id": f"ftjob-reflect-{uploaded_record.ingestion_id}",
+                "object": "fine_tuning.job",
+                "model": model_requested,
+                "created_at": int(uploaded_record.created_at.timestamp()),
+                "finished_at": None,
+                "fine_tuned_model": f"custom-model-via-reflection:{int(uploaded_record.created_at.timestamp())}",
+                "organization_id": "org-placeholder",
+                "result_files": [],
+                "status": uploaded_record.status,  # Report current status
+                "validation_file": raw_request_data.get("validation_file"),
+                "training_file": training_file_ingestion_id,
+                "hyperparameters": raw_request_data.get("hyperparameters", {"n_epochs": "continuous_self_reflection"}),
+                "trained_tokens": None,
+                "message": response_message
+            }
+            final_status_code = 200  # Indicate it's successfully acknowledged
+            resp = Response(json.dumps(response_body), status=final_status_code, mimetype='application/json')
+            return resp
+
         logger.info(
-            f"{request_id}: Pseudo fine-tuning job requested. Session: {session_id_for_log}, Training File ID: '{training_file_id}', Base Model: '{model_requested}'.")
+            f"{request_id}: Pseudo fine-tuning job requested. Session: {session_id_for_log}, Training File ID: '{training_file_ingestion_id}', Base Model: '{model_requested}'.")
         logger.info(
-            f"{request_id}: Data associated with '{training_file_id}' is intended to be processed by the system's self-reflection loop.")
+            f"{request_id}: Triggering background file ingestion and reflection for file at '{uploaded_record.stored_path}'.")
+
+        # Update status to queued_for_processing
+        uploaded_record.status = "queued_for_processing"
+        uploaded_record.updated_at = func.now()
+        db.commit()  # Commit the status change
+
+        # Trigger the background processing helper.
+        # It's crucial to call this via asyncio.create_task to run in the background
+        # and not block the API response.
+        asyncio.create_task(
+            ai_chat._initiate_file_ingestion_and_reflection(
+                db_session=db,  # Pass the session from the route, the helper will create its own
+                uploaded_file_record_id=uploaded_record.id
+            )
+        )
 
         # Create a job ID and mimic OpenAI's FineTuningJob object
-        job_id = f"ftjob-reflect-{str(uuid.uuid4())[:12]}"  # Shorter UUID part for job ID
+        job_id = f"ftjob-reflect-{uploaded_record.ingestion_id}"
         current_timestamp = int(time.time())
 
         # This is the response body we'll build
@@ -9934,57 +10523,55 @@ async def handle_create_pseudo_fine_tuning_job():
             "id": job_id,
             "object": "fine_tuning.job",
             "model": model_requested,
-            "created_at": current_timestamp,
-            "finished_at": None,
-            "fine_tuned_model": f"custom-model-via-reflection:{current_timestamp}",
-            "organization_id": "org-placeholder",  # Placeholder
+            "created_at": int(uploaded_record.created_at.timestamp()),  # Use file's creation timestamp
+            "finished_at": None,  # Not finished yet
+            "fine_tuned_model": None,  # Will be set once processing is complete conceptuallly
+            "organization_id": "org-placeholder",
             "result_files": [],
-            "status": "pending_reflection_processing",
-            "validation_file": raw_request_data.get("validation_file"),  # Echo if provided
-            "training_file": training_file_id,
+            "status": "queued",  # Report that it's queued for processing
+            "validation_file": raw_request_data.get("validation_file"),
+            "training_file": training_file_ingestion_id,
             "hyperparameters": raw_request_data.get("hyperparameters", {"n_epochs": "continuous_self_reflection"}),
-            "trained_tokens": None,  # Not applicable
-            "message": "Data from training_file has been noted. The system will learn from this data via its ongoing self-reflection and knowledge update processes rather than traditional fine-tuning."
+            "trained_tokens": None,
+            "message": "File processing for self-reflection has been queued in the background. Check /v1/fine_tuning/jobs/{id} for status updates."
         }
 
         # Log this "pseudo fine-tuning job" creation to your interactions database
-        # Now session_id_for_log is defined
         await asyncio.to_thread(add_interaction, db,
                                 session_id=session_id_for_log,
                                 mode="fine_tune_stub",
                                 input_type="job_creation_request",
-                                user_input=f"Pseudo FT Job Created: file_id={training_file_id}, base_model={model_requested}",
+                                user_input=f"Pseudo FT Job Created: file_id={training_file_ingestion_id}, base_model={model_requested}",
                                 llm_response=json.dumps(
                                     {"job_id": job_id, "status": response_body.get("status", "unknown_status")}),
                                 classification="pseudo_fine_tune_job_logged"
                                 )
-        await asyncio.to_thread(db.commit)
+        await asyncio.to_thread(db.commit)  # Commit the summary log entry
 
-        final_status_code = 200  # HTTP 200 OK for accepted request
+        final_status_code = 200
         resp = Response(json.dumps(response_body), status=final_status_code, mimetype='application/json')
 
     except ValueError as ve:
         logger.warning(f"{request_id}: Invalid pseudo fine-tuning request: {ve}")
-        resp_data, final_status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
-                                                                     status_code=400)
-        resp = Response(json.dumps(resp_data), status=final_status_code, mimetype='application/json')
+        response_body, final_status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
+                                                                         status_code=400)
+        resp = Response(json.dumps(response_body), status=final_status_code, mimetype='application/json')
     except Exception as e:
         logger.exception(f"{request_id}: 🔥🔥 Error creating pseudo fine-tuning job:")
-        resp_data, final_status_code = _create_openai_error_response(
+        response_body, final_status_code = _create_openai_error_response(
             f"Server error during pseudo fine-tuning job creation: {str(e)}", err_type="server_error", status_code=500)
-        resp = Response(json.dumps(resp_data), status=final_status_code, mimetype='application/json')
+        resp = Response(json.dumps(response_body), status=final_status_code, mimetype='application/json')
         if db: await asyncio.to_thread(db.rollback)  # Rollback if error after DB interaction started
     finally:
         duration_req = (time.monotonic() - start_req_time) * 1000
         logger.info(
             f"🏁 /v1/fine_tuning/jobs POST request {request_id} handled in {duration_req:.2f} ms. Status: {final_status_code}")
-        # DB session g.db is closed by @app.teardown_request
 
-    if resp is None:  # Should not happen if try-except is comprehensive
+    if resp is None:
         logger.error(f"{request_id}: Pseudo FT Job handler logic flaw - response object 'resp' was not assigned!")
-        resp_data, final_status_code = _create_openai_error_response(
+        response_body, final_status_code = _create_openai_error_response(
             "Internal error: Handler failed to produce response.", status_code=500)
-        resp = Response(json.dumps(resp_data), status=final_status_code, mimetype='application/json')
+        resp = Response(json.dumps(response_body), status=final_status_code, mimetype='application/json')
 
     return resp
 
@@ -10144,227 +10731,64 @@ def handle_list_fine_tuning_job_events(fine_tuning_job_id: str):
 ##v1/files openAI expected to be?
 @app.route("/v1/files", methods=["POST"])
 async def handle_upload_and_ingest_file():
-    start_req_time = time.monotonic()  # For overall request timing
-    request_id = f"req-file-ingest-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received POST /v1/files (Data Ingestion for Reflection)")
+    start_req_time = time.monotonic()
+    request_id = f"req-file-upload-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received POST /v1/files (File Upload Only)")
 
-    db: Session = g.db
+    db: Session = g.db  # Use the DB session from Flask's g context
     final_status_code: int = 500
-    response_body: Dict[str, Any] = {}  # Initialize for consistent return type
-    temp_file_path: Optional[str] = None  # <<< Initialize temp_file_path to None HERE
-
-    # Ensure base temporary directory for ingestions exists
-    # FILE_INGESTION_TEMP_DIR should be imported from config.py
-    # Ensure SCRIPT_DIR is defined if FILE_INGESTION_TEMP_DIR uses it
-    try:
-        # This creates the base directory if it doesn't exist.
-        # Individual files will get unique names within it.
-        await asyncio.to_thread(os.makedirs, FILE_INGESTION_TEMP_DIR, exist_ok=True)
-    except Exception as e_mkdir:
-        logger.error(
-            f"{request_id}: Critical error creating base ingestion directory '{FILE_INGESTION_TEMP_DIR}': {e_mkdir}")
-        response_body, final_status_code = _create_openai_error_response(
-            f"Server setup error: Could not create temporary directory for file ingestion.",
-            err_type="server_error", status_code=500
-        )
-        return Response(json.dumps(response_body), status=final_status_code, mimetype='application/json')
+    response_body: Dict[str, Any] = {}
+    temp_file_path: Optional[str] = None
+    original_filename: str = "unknown_file"
+    file_upload_ingestion_id = f"file-upload-{uuid.uuid4()}"  # Unique ID for this specific upload
 
     try:
         if 'file' not in request.files:
             raise ValueError("No file part in the request. Please upload a file using the 'file' field.")
 
         file_storage = request.files['file']
-        purpose = request.form.get('purpose')
+        purpose = request.form.get('purpose')  # Still accept purpose, but processing is triggered by /fine_tuning/jobs
 
-        if not file_storage or not file_storage.filename:  # Check if filename is not None or empty
+        if not file_storage or not file_storage.filename:
             raise ValueError("No file selected or file has no name.")
-        if purpose != 'fine-tune':  # OpenAI API requires 'fine-tune' for files used in fine-tuning jobs
-            raise ValueError(
-                "Invalid 'purpose'. Must be 'fine-tune' for data ingestion to be used by the reflection system.")
+        if not purpose:
+            raise ValueError("'purpose' field is required (e.g., 'fine-tune').")
 
-        filename = secure_filename(file_storage.filename)
-        # temp_file_path is assigned here, after initial checks
-        temp_file_path = os.path.join(FILE_INGESTION_TEMP_DIR, f"{request_id}-{filename}")
+        original_filename = secure_filename(file_storage.filename)
+
+        # Ensure base temporary directory for ingestions exists
+        os.makedirs(FILE_INGESTION_TEMP_DIR, exist_ok=True)  # FILE_INGESTION_TEMP_DIR from config.py
+
+        # Create a unique temporary path for the uploaded file
+        # Use a more descriptive prefix for temporary files
+        temp_file_path = os.path.join(FILE_INGESTION_TEMP_DIR, f"{file_upload_ingestion_id}_{original_filename}")
         await asyncio.to_thread(file_storage.save, temp_file_path)
-        logger.info(f"{request_id}: File '{filename}' saved temporarily to '{temp_file_path}'. Purpose: {purpose}")
+        logger.info(f"{request_id}: File '{original_filename}' saved temporarily to '{temp_file_path}'.")
 
-        file_ext = os.path.splitext(filename)[1].lower()
-        ingested_interactions_count = 0
-        processed_rows_or_lines = 0
+        # Create a record in UploadedFileRecord table
+        uploaded_record = UploadedFileRecord(
+            ingestion_id=file_upload_ingestion_id,
+            original_filename=original_filename,
+            stored_path=temp_file_path,
+            purpose=purpose,
+            status="received"  # Initial status
+        )
+        db.add(uploaded_record)
+        db.commit()  # Commit the record to get its ID
+        db.refresh(uploaded_record)  # Refresh to get the generated ID
 
-        common_ingest_session_id = f"ingest_batch_{request_id}"
-
-        if file_ext == ".jsonl" or file_ext == ".json":
-            with open(temp_file_path, 'r', encoding='utf-8') as f_jsonl:
-                for line_num, line in enumerate(f_jsonl):
-                    processed_rows_or_lines += 1
-                    if not line.strip(): continue  # Skip empty lines
-                    try:
-                        data_entry = json.loads(line.strip())
-                        user_input_content, assistant_response_content = None, None
-                        extracted_successfully = False
-
-                        messages = data_entry.get("messages")
-                        if isinstance(messages, list) and len(messages) >= 1:
-                            first_user_msg = next((m.get("content") for m in messages if m.get("role") == "user"), None)
-                            first_asst_msg = next((m.get("content") for m in messages if m.get("role") == "assistant"),
-                                                  None)
-                            if first_user_msg: user_input_content = first_user_msg
-                            if first_asst_msg: assistant_response_content = first_asst_msg
-                            if user_input_content or assistant_response_content: extracted_successfully = True
-                        elif "prompt" in data_entry and "completion" in data_entry:
-                            user_input_content = data_entry.get("prompt")
-                            assistant_response_content = data_entry.get("completion")
-                            extracted_successfully = True
-                        elif "user_input" in data_entry and "llm_response" in data_entry:
-                            user_input_content = data_entry.get("user_input")
-                            assistant_response_content = data_entry.get("llm_response")
-                            extracted_successfully = True
-                        elif "text" in data_entry:  # Fallback for generic text entries
-                            user_input_content = data_entry.get("text")
-                            assistant_response_content = "[Ingested as single text entry]"
-                            extracted_successfully = True
-
-                        if extracted_successfully and user_input_content is not None:
-                            await asyncio.to_thread(add_interaction, db,
-                                                    session_id=data_entry.get("session_id_override",
-                                                                              common_ingest_session_id),
-                                                    mode=data_entry.get("mode_override", "chat_ingested"),
-                                                    input_type=data_entry.get("input_type_override",
-                                                                              "text_ingested_jsonl"),
-                                                    user_input=str(user_input_content),
-                                                    llm_response=str(
-                                                        assistant_response_content) if assistant_response_content is not None else None,
-                                                    reflection_completed=False)
-                            ingested_interactions_count += 1
-                        else:  # Fallback: Dump raw JSON object
-                            logger.warning(
-                                f"{request_id}: JSONL line {line_num + 1} did not match expected structures. Ingesting raw.")
-                            await asyncio.to_thread(add_interaction, db,
-                                                    session_id=data_entry.get("session_id_override",
-                                                                              common_ingest_session_id),
-                                                    mode=data_entry.get("mode_override", "data_ingestion"),
-                                                    input_type="raw_ingested_json_line",
-                                                    user_input=f"[Raw JSON from line {line_num + 1} of {filename}]",
-                                                    llm_response=json.dumps(data_entry), reflection_completed=False)
-                            ingested_interactions_count += 1
-                    except json.JSONDecodeError:
-                        logger.warning(f"{request_id}: Skipped invalid JSON line {line_num + 1} in '{filename}'.")
-
-        elif file_ext in [".csv", ".tsv"]:
-            delimiter = '\t' if file_ext == ".tsv" else ','
-            df = await asyncio.to_thread(pd.read_csv, temp_file_path, delimiter=delimiter)  # type: ignore
-            processed_rows_or_lines = len(df)
-            for index, row in df.iterrows():  # type: ignore
-                user_input_content = row.get("prompt") or row.get("user_input") or row.get("text")
-                assistant_response_content = row.get("completion") or row.get("llm_response")
-
-                if user_input_content is not None:
-                    await asyncio.to_thread(add_interaction, db,
-                                            session_id=row.get("session_id_override", common_ingest_session_id),
-                                            mode=row.get("mode_override", "chat_ingested"),
-                                            input_type=row.get("input_type_override", f"text_ingested_{file_ext[1:]}"),
-                                            user_input=str(user_input_content),
-                                            llm_response=str(
-                                                assistant_response_content) if assistant_response_content is not None else None,
-                                            reflection_completed=False)
-                    ingested_interactions_count += 1
-                else:  # Fallback for CSV/TSV row
-                    logger.warning(
-                        f"{request_id}: {file_ext.upper()} row {index + 1} missing primary text field. Ingesting raw.")
-                    raw_row_dict = {k: str(v) for k, v in row.to_dict().items() if pd.notna(v)}  # type: ignore
-                    await asyncio.to_thread(add_interaction, db,
-                                            session_id=row.get("session_id_override", common_ingest_session_id),
-                                            mode=row.get("mode_override", "data_ingestion"),
-                                            input_type=f"raw_ingested_tabular_row",
-                                            user_input=f"[Raw {file_ext.upper()} row {index + 1} from {filename}]",
-                                            llm_response=json.dumps(raw_row_dict), reflection_completed=False)
-                    ingested_interactions_count += 1
-        elif file_ext == ".txt":
-            with open(temp_file_path, 'r', encoding='utf-8', errors='ignore') as f_txt:
-                full_text_content = f_txt.read()
-                # You might split by lines, or treat as one large text block
-                # For simplicity, let's treat as one interaction for the whole file
-                await asyncio.to_thread(add_interaction, db,
-                                        session_id=common_ingest_session_id,
-                                        mode="text_ingested",
-                                        input_type="text_ingested_txt",
-                                        user_input=f"[Ingested text file: {filename}]",
-                                        llm_response=full_text_content,
-                                        reflection_completed=False)
-                ingested_interactions_count += 1
-                processed_rows_or_lines = 1  # Or len(lines) if you split by lines
-        elif file_ext in [".xlsx", ".xls"]:
-            df = await asyncio.to_thread(pd.read_excel, temp_file_path)  # Assumes openpyxl or xlrd is installed
-            processed_rows_or_lines = len(df)
-            for index, row in df.iterrows():
-                user_input_content = row.get("prompt") or row.get("user_input") or row.get("text")
-                assistant_response_content = row.get("completion") or row.get("llm_response")
-
-                if user_input_content is not None:
-                    await asyncio.to_thread(add_interaction, db,
-                                            session_id=row.get("session_id_override", common_ingest_session_id),
-                                            mode=row.get("mode_override", "chat_ingested"),
-                                            input_type=row.get("input_type_override", f"text_ingested_excel"),
-                                            user_input=str(user_input_content),
-                                            llm_response=str(
-                                                assistant_response_content) if assistant_response_content is not None else None,
-                                            reflection_completed=False)
-                    ingested_interactions_count += 1
-                else:
-                    # Fallback to ingest raw row if primary text fields are missing
-                    raw_row_dict = {k: str(v) for k, v in row.to_dict().items() if pd.notna(v)}
-                    await asyncio.to_thread(add_interaction, db,
-                                            session_id=row.get("session_id_override", common_ingest_session_id),
-                                            mode=row.get("mode_override", "data_ingestion"),
-                                            input_type=f"raw_ingested_excel_row",
-                                            user_input=f"[Raw Excel row {index + 1} from {filename}]",
-                                            llm_response=json.dumps(raw_row_dict),
-                                            reflection_completed=False)
-                    ingested_interactions_count += 1
-        elif file_ext == ".parquet":
-            df = await asyncio.to_thread(pd.read_parquet, temp_file_path)  # type: ignore
-            processed_rows_or_lines = len(df)
-            for index, row in df.iterrows():  # type: ignore
-                user_input_content = row.get("prompt") or row.get("user_input") or row.get("text")
-                assistant_response_content = row.get("completion") or row.get("llm_response")
-
-                if user_input_content is not None:
-                    await asyncio.to_thread(add_interaction, db,
-                                            session_id=row.get("session_id_override", common_ingest_session_id),
-                                            mode=row.get("mode_override", "chat_ingested"),
-                                            input_type=row.get("input_type_override", "text_ingested_parquet"),
-                                            user_input=str(user_input_content),
-                                            llm_response=str(
-                                                assistant_response_content) if assistant_response_content is not None else None,
-                                            reflection_completed=False)
-                    ingested_interactions_count += 1
-                else:  # Fallback for Parquet row
-                    logger.warning(f"{request_id}: Parquet row {index + 1} missing primary text field. Ingesting raw.")
-                    raw_row_dict = {k: str(v) for k, v in row.to_dict().items() if pd.notna(v)}  # type: ignore
-                    await asyncio.to_thread(add_interaction, db,
-                                            session_id=row.get("session_id_override", common_ingest_session_id),
-                                            mode=row.get("mode_override", "data_ingestion"),
-                                            input_type="raw_ingested_tabular_row",
-                                            user_input=f"[Raw Parquet row {index + 1} from {filename}]",
-                                            llm_response=json.dumps(raw_row_dict), reflection_completed=False)
-                    ingested_interactions_count += 1
-        else:
-            raise ValueError(f"Unsupported file type: '{file_ext}'. Please use JSONL, CSV, TSV, or Parquet.")
-
-        await asyncio.to_thread(db.commit)
-        ingestion_summary = f"Ingested {ingested_interactions_count}/{processed_rows_or_lines} entries from '{filename}' into interactions database for self-reflection."
-        logger.info(f"{request_id}: {ingestion_summary}")
+        logger.success(
+            f"{request_id}: File upload record created in DB (ID: {uploaded_record.id}, Ingestion ID: {uploaded_record.ingestion_id}).")
 
         response_body = {
-            "id": f"file-ingest-job-{request_id}",
+            "id": uploaded_record.ingestion_id,  # Return the unique ingestion ID
             "object": "file",
-            "bytes": await asyncio.to_thread(os.path.getsize,
-                                             temp_file_path) if temp_file_path and await asyncio.to_thread(
-                os.path.exists, temp_file_path) else 0,
-            "created_at": int(time.time()), "filename": filename,
-            "purpose": "fine-tune-data-ingested-for-reflection",
-            "status": "processed", "status_details": ingestion_summary
+            "bytes": await asyncio.to_thread(os.path.getsize, temp_file_path),
+            "created_at": int(uploaded_record.created_at.timestamp()),
+            "filename": original_filename,
+            "purpose": purpose,
+            "status": "uploaded",
+            "message": "File successfully uploaded and awaiting processing. Use this ID for fine-tuning job creation."
         }
         final_status_code = 200
 
@@ -10372,25 +10796,26 @@ async def handle_upload_and_ingest_file():
         logger.warning(f"{request_id}: Invalid file upload request: {ve}")
         response_body, final_status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
                                                                          status_code=400)
-    except ImportError as ie:  # Catch pandas import error specifically
-        logger.error(
-            f"{request_id}: Missing library for file processing: {ie}. Please ensure pandas and pyarrow/fastparquet are installed.")
-        response_body, final_status_code = _create_openai_error_response(f"Server missing library for file type: {ie}",
-                                                                         err_type="server_error", status_code=501)
-    except Exception as e:
-        logger.exception(f"{request_id}: 🔥🔥 Error processing uploaded file for ingestion:")
-        response_body, final_status_code = _create_openai_error_response(
-            f"Server error during file ingestion: {str(e)}", err_type="server_error", status_code=500)
-        if db: await asyncio.to_thread(db.rollback)
-    finally:
-        # temp_file_path is defined at the start of the function (initialized to None)
-        if temp_file_path and await asyncio.to_thread(os.path.exists, temp_file_path):
+        # Attempt to delete the partial file if an error occurred after saving but before record creation
+        if temp_file_path and os.path.exists(temp_file_path):
             try:
                 await asyncio.to_thread(os.remove, temp_file_path)
-                logger.info(f"{request_id}: Deleted temporary ingested file: {temp_file_path}")
             except Exception as e_del:
-                logger.error(f"{request_id}: Failed to delete temporary ingested file '{temp_file_path}': {e_del}")
+                logger.warning(f"Failed to clean up partial file {temp_file_path}: {e_del}")
 
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 Error processing uploaded file:")
+        response_body, final_status_code = _create_openai_error_response(
+            f"Server error during file upload: {str(e)}", err_type="server_error", status_code=500
+        )
+        if db: await asyncio.to_thread(db.rollback)  # Rollback in case of DB error
+        # Attempt to delete the partial file if an error occurred after saving
+        if temp_file_path and os.path.exists(temp_file_path):
+            try:
+                await asyncio.to_thread(os.remove, temp_file_path)
+            except Exception as e_del:
+                logger.warning(f"Failed to clean up partial file {temp_file_path}: {e_del}")
+    finally:
         duration_req = (time.monotonic() - start_req_time) * 1000
         logger.info(
             f"🏁 /v1/files POST request {request_id} handled in {duration_req:.2f} ms. Status: {final_status_code}")
