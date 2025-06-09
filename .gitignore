@@ -131,3 +131,5 @@ temp_melo_audio_test_files
 .pywhispercpp_installed_v1
 .chatterbox_tts_installed_v1
 *.db
+systemCore/backend-service/project_zephyrine_chats.db
+systemCore/engineMain/chroma_interaction_store/chroma.sqlite3
