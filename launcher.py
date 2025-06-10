@@ -933,7 +933,7 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
 
                 key = stdscr.getch()  # Wait for key to exit or resize
                 if key == ord('n') or key == ord('N') or key == curses.KEY_ENTER or key == 10 or key == 13:
-                    accepted = False;
+                    accepted = False
                     break
                 elif key == curses.KEY_RESIZE:
                     continue  # Loop again to redraw with new size
@@ -1012,7 +1012,7 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
         try:
             key = stdscr.getch()  # Get user input
         except KeyboardInterrupt:  # Handle Ctrl+C gracefully
-            accepted = False;
+            accepted = False
             break
         except curses.error as e_getch:  # If getch itself errors (e.g. during resize after clear but before refresh)
             last_key_error_message = f"Input error: {e_getch}. Resizing or retrying..."
@@ -1025,10 +1025,10 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
 
         # Process Key Input
         if key == ord('a') or key == ord('A'):
-            accepted = True;
+            accepted = True
             break
         elif key == ord('n') or key == ord('N'):
-            accepted = False;
+            accepted = False
             break
         elif key == curses.KEY_ENTER or key == 10 or key == 13:  # Enter key
             if current_selection == 0:
@@ -1402,7 +1402,8 @@ def download_file_with_progress(
                     for file_entry in download_task.files:  # Clean up potentially incomplete files
                         if os.path.exists(file_entry.path):
                             try:
-                                os.remove(file_entry.path); print_warning(
+                                os.remove(file_entry.path)
+                                print_warning(
                                     f"Removed incomplete aria2c download: {file_entry.path}")
                             except Exception as e_rm_aria:
                                 print_error(f"Failed to remove incomplete aria2c file {file_entry.path}: {e_rm_aria}")
@@ -1598,7 +1599,7 @@ if __name__ == "__main__":
                     print_error("CRITICAL: Conda executable could not be determined. Conda package installs will fail.")
 
         if globals().get('CONDA_EXECUTABLE') is None:
-            print_error("CRITICAL: CONDA_EXECUTABLE is still None. Subsequent Conda operations WILL FAIL.");
+            print_error("CRITICAL: CONDA_EXECUTABLE is still None. Subsequent Conda operations WILL FAIL.")
             sys.exit(1)
 
         # --- Read AUTODETECTED environment variables ---
@@ -1620,7 +1621,7 @@ if __name__ == "__main__":
         print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
         print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
 
-        if not run_command([PIP_EXECUTABLE, "install", "--upgrade", "pip", "setuptools", "wheel"], ROOT_DIR,
+        if not run_command([PIP_EXECUTABLE, "install", "pip", "setuptools", "wheel"], ROOT_DIR,
                            "PIP-UPGRADE-CORE"): print_warning("Pip/setuptools upgrade failed.")
         if not run_command([PIP_EXECUTABLE, "install", "tqdm", "requests"], ROOT_DIR, "PIP-UTILS"): print_error(
             "tqdm/requests install failed."); sys.exit(1)
@@ -1630,9 +1631,9 @@ if __name__ == "__main__":
             import requests; from tqdm import tqdm
         except ImportError:
             print_error("Failed to import requests/tqdm. Exiting."); sys.exit(1)
-        requests_session = requests.Session();
-        adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=20);
-        requests_session.mount('http://', adapter);
+        requests_session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=20)
+        requests_session.mount('http://', adapter)
         requests_session.mount('https://', adapter)
 
 
@@ -1707,12 +1708,12 @@ if __name__ == "__main__":
         globals()['CMAKE_CMD'] = shutil.which("cmake") or ('cmake.exe' if IS_WINDOWS else 'cmake')
         npm_exe_name = "npm.cmd" if IS_WINDOWS else "npm"
         globals()['NPM_CMD'] = shutil.which(npm_exe_name) or npm_exe_name
-        print_system(f"Using GIT_CMD: {GIT_CMD}");
-        print_system(f"Using CMAKE_CMD: {CMAKE_CMD}");
+        print_system(f"Using GIT_CMD: {GIT_CMD}")
+        print_system(f"Using CMAKE_CMD: {CMAKE_CMD}")
         print_system(f"Using NPM_CMD: {NPM_CMD}")
         if not all([GIT_CMD and shutil.which(GIT_CMD.split()[0]), CMAKE_CMD and shutil.which(CMAKE_CMD.split()[0]),
                     NPM_CMD and shutil.which(NPM_CMD.split('.')[0]), shutil.which("node")]):
-            print_error("One or more critical tools (git, cmake, node, npm) not found after attempts. Exiting.");
+            print_error("One or more critical tools (git, cmake, node, npm) not found after attempts. Exiting.")
             sys.exit(1)
 
         if IS_WINDOWS:
@@ -1733,7 +1734,7 @@ if __name__ == "__main__":
                 f_license.write(f"Accepted: {datetime.now().isoformat()}\nTime: {time_taken:.2f}s\n")
             print_system(f"Licenses accepted by user in {time_taken:.2f}s.")
             if estimated_reading_seconds > 30 and time_taken < (estimated_reading_seconds * 0.1):
-                print_warning("Warning: Licenses accepted quickly. Ensure you understood terms.");
+                print_warning("Warning: Licenses accepted quickly. Ensure you understood terms.")
                 time.sleep(3)
         else:
             print_system("License previously accepted.")
@@ -1821,10 +1822,10 @@ if __name__ == "__main__":
                     pip_cmd_whisper = [PIP_EXECUTABLE, "install", "."]
                     env_whisper = {}
                     backend_whisper = "cpu (default)"
-                    user_ggml_cuda = os.getenv("GGML_CUDA");
-                    user_whisper_coreml = os.getenv("WHISPER_COREML");
-                    user_ggml_vulkan = os.getenv("GGML_VULKAN");
-                    user_ggml_blas = os.getenv("GGML_BLAS");
+                    user_ggml_cuda = os.getenv("GGML_CUDA")
+                    user_whisper_coreml = os.getenv("WHISPER_COREML")
+                    user_ggml_vulkan = os.getenv("GGML_VULKAN")
+                    user_ggml_blas = os.getenv("GGML_BLAS")
                     user_whisper_openvino = os.getenv("WHISPER_OPENVINO")
 
                     if user_ggml_cuda == '1':
@@ -1855,7 +1856,7 @@ if __name__ == "__main__":
                                        env_override=env_whisper if env_whisper else None):
                         print_error("pywhispercpp install failed.")
                     else:
-                        print_system("pywhispercpp installed.");  # Use print_system
+                        print_system("pywhispercpp installed.")  # Use print_system
                         print_warning("For non-WAV ASR, ensure FFmpeg is in PATH (via conda install ffmpeg).")
                         with open(PYWHISPERCPP_INSTALLED_FLAG_FILE, 'w',
                                   encoding='utf-8') as f_pwc_flag:  # Corrected with statement
@@ -1908,7 +1909,7 @@ if __name__ == "__main__":
                                             LLAMA_CPP_PYTHON_CLONE_PATH, "GIT-SUBMODULE-LLAMA"):
                         print_error("llama-cpp-python clone or submodule update failed.")
                     else:
-                        build_env_llama = {'FORCE_CMAKE': '1'};
+                        build_env_llama = {'FORCE_CMAKE': '1'}
                         cmake_args_list_llama = ["-DLLAMA_BUILD_EXAMPLES=OFF", "-DLLAMA_BUILD_TESTS=OFF"]
                         chosen_llama_backend = os.getenv("LLAMA_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
                         backend_log_llama = "cpu"
@@ -1922,7 +1923,7 @@ if __name__ == "__main__":
                             cmake_args_list_llama.append("-DLLAMA_OPENMP=ON"); backend_log_llama = "CPU (OpenMP)"
                         print_system(f"Configuring llama-cpp-python build with: {backend_log_llama}")
                         build_env_llama['CMAKE_ARGS'] = " ".join(cmake_args_list_llama)
-                        if not run_command([PIP_EXECUTABLE, "install", ".", "--upgrade", "--no-cache-dir", "--verbose"],
+                        if not run_command([PIP_EXECUTABLE, "install", ".", "--verbose"],
                                            LLAMA_CPP_PYTHON_CLONE_PATH, "PIP-BUILD-LLAMA",
                                            env_override=build_env_llama):
                             print_error("Build llama-cpp-python failed.")
@@ -1949,7 +1950,7 @@ if __name__ == "__main__":
                 else:
                     sd_cpp_sub_path = os.path.join(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH, "vendor",
                                                    "stable-diffusion.cpp")
-                    sd_cpp_build_path = os.path.join(sd_cpp_sub_path, "build");
+                    sd_cpp_build_path = os.path.join(sd_cpp_sub_path, "build")
                     os.makedirs(sd_cpp_build_path, exist_ok=True)
                     cmake_args_sd_lib = []
                     chosen_sd_backend = os.getenv("SD_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
@@ -1997,13 +1998,13 @@ if __name__ == "__main__":
         engine_ready = any(proc.poll() is None and name_s == "ENGINE" for proc, name_s in running_processes)
         if not engine_ready: print_error("Engine Main failed to start. Exiting."); sys.exit(1)
 
-        service_threads.append(start_service_thread(start_backend_service, "BackendServiceThread"));
+        service_threads.append(start_service_thread(start_backend_service, "BackendServiceThread"))
         time.sleep(2)
         service_threads.append(start_service_thread(start_frontend, "FrontendThread"))
         print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.")  # Use print_colored for success
         try:
             while True:
-                all_ok = True;
+                all_ok = True
                 active_procs_found = False
                 with process_lock:
                     current_procs_snapshot = list(running_processes)
@@ -2028,8 +2029,8 @@ if __name__ == "__main__":
         autodetected_build_env_vars = _detect_and_prepare_acceleration_env_vars()
 
         if not find_conda_executable():
-            print_error("Conda executable not located. Exiting.");
-            _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE);
+            print_error("Conda executable not located. Exiting.")
+            _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
             sys.exit(1)
         print_system(f"Using Conda executable: {CONDA_EXECUTABLE}")
 
@@ -2039,7 +2040,7 @@ if __name__ == "__main__":
             _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
             target_python_versions = get_conda_python_versions_to_try()
             if not create_conda_env(TARGET_CONDA_ENV_PATH, target_python_versions):
-                print_error(f"Failed to create Conda env at '{TARGET_CONDA_ENV_PATH}'. Exiting.");
+                print_error(f"Failed to create Conda env at '{TARGET_CONDA_ENV_PATH}'. Exiting.")
                 sys.exit(1)
         else:
             print_system(f"Target Conda env '{TARGET_CONDA_ENV_PATH}' exists.")
@@ -2052,7 +2053,7 @@ if __name__ == "__main__":
             test_no_capture_cmd = [CONDA_EXECUTABLE, 'run', '--help']
             help_output = subprocess.check_output(test_no_capture_cmd, text=True, stderr=subprocess.STDOUT, timeout=5)
             if '--no-capture-output' in help_output:
-                conda_supports_no_capture = True;
+                conda_supports_no_capture = True
                 conda_run_cmd_list_base.insert(2, '--no-capture-output')
         except Exception:
             pass
@@ -2089,7 +2090,7 @@ if __name__ == "__main__":
                 with open(RELAUNCH_STDOUT_LOG, 'w', encoding='utf-8') as f_stdout, \
                         open(RELAUNCH_STDERR_LOG, 'w', encoding='utf-8') as f_stderr:  # Corrected with statement
                     file_capture_kwargs = common_popen_kwargs_relaunch.copy()
-                    file_capture_kwargs["stdout"] = f_stdout;
+                    file_capture_kwargs["stdout"] = f_stdout
                     file_capture_kwargs["stderr"] = f_stderr
                     process_conda_run = subprocess.Popen(conda_run_cmd_list, **file_capture_kwargs)
 
@@ -2103,8 +2104,8 @@ if __name__ == "__main__":
                 stderr_thread = threading.Thread(target=_stream_log_file,
                                                  args=(RELAUNCH_STDERR_LOG, relaunched_conda_process_obj, "STDERR"),
                                                  daemon=True)
-                log_stream_threads.extend([stdout_thread, stderr_thread]);
-                stdout_thread.start();
+                log_stream_threads.extend([stdout_thread, stderr_thread])
+                stdout_thread.start()
                 stderr_thread.start()
 
             exit_code_from_conda_run = -1
@@ -2113,7 +2114,7 @@ if __name__ == "__main__":
                     relaunched_conda_process_obj.wait()
                     exit_code_from_conda_run = relaunched_conda_process_obj.returncode
                 except KeyboardInterrupt:
-                    print_system("Parent script's wait for 'conda run' interrupted. Shutting down...");
+                    print_system("Parent script's wait for 'conda run' interrupted. Shutting down...")
                     if not getattr(sys, 'exitfunc_called', False): sys.exit(130)
 
                 if log_stream_threads:
