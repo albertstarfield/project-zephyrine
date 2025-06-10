@@ -60,6 +60,7 @@ systemCore/bin/**/*make*
 !example.exp
 systemCore/bin/universalBinarySystemPrompt.txt
 **syncthing**
+
 systemCore/engine_component/ModelReintegration/datasetPool/nonSFT_UMA_dataset.txt
 systemCore/engine_component/ModelReintegration/datasetPool/SFT_Interaction_Instruction_dataset.txt
 systemCore/*.gguf
@@ -111,6 +112,7 @@ LiteratureReviewPool/
 *.zst
 **__pycache__**
 **alembic**
+**chroma.sqlite3**
 **.db**
 **temp_audio**
 **.aria2p_installed_v1**
@@ -134,3 +136,4 @@ temp_melo_audio_test_files
 systemCore/backend-service/project_zephyrine_chats.db
 systemCore/engineMain/chroma_interaction_store/chroma.sqlite3
 systemCore/engineMain/chroma_interaction_store/chroma.sqlite3
+systemCore/backend-service/project_zephyrine_chats.db
