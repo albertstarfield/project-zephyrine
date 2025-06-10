@@ -25,7 +25,7 @@ import shutil
 import subprocess
 import fitz
 import pytesseract
-
+from chromadb.config import Settings
 
 from langchain_core.messages import HumanMessage
 from langchain_core.output_parsers import StrOutputParser
@@ -1619,9 +1619,12 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
 
                 if not indexed_files:
                     logger.warning("No files with embeddings in SQL DB to rebuild. Creating empty persistent VS.")
-                    global_file_index_vectorstore = Chroma(collection_name=_collection_name_to_use,
-                                                           embedding_function=provider_ref.embeddings,
-                                                           persist_directory=_persist_dir_to_use)
+                    global_file_index_vectorstore = Chroma(
+                        collection_name=_collection_name_to_use,
+                        embedding_function=provider_ref.embeddings,
+                        persist_directory=_persist_dir_to_use,
+                        client_settings=Settings(anonymized_telemetry=False)
+                    )
                     # Persistence is handled by chromadb client when persist_directory is set
                     task_status = "success_empty_db_rebuild"
                     task_message = "Init (rebuild): No files with embeddings in SQL. Created empty VS."
@@ -1734,9 +1737,12 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
                             task_message + f" Stage 4 took {time.monotonic() - current_stage_start_time_s4:.3f}s.")
                     else:
                         logger.warning("No valid data with embeddings from SQL. Creating empty persistent VS.")
-                        global_file_index_vectorstore = Chroma(collection_name=_collection_name_to_use,
-                                                               embedding_function=provider_ref.embeddings,
-                                                               persist_directory=_persist_dir_to_use)
+                        global_file_index_vectorstore = Chroma(
+                            collection_name=_collection_name_to_use,
+                            embedding_function=provider_ref.embeddings,
+                            persist_directory=_persist_dir_to_use,
+                            client_settings=Settings(anonymized_telemetry=False)
+                        )
                         task_status = "success_no_valid_data_rebuild"
                         task_message = "Init (rebuild): No valid data from SQL. Created empty VS."
                         initialization_succeeded_or_known_empty = True

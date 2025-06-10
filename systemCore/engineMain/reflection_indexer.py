@@ -14,6 +14,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter  # Or your pr
 import argparse # For __main__
 import asyncio # For running async init in __main__
 import datetime
+from chromadb.config import Settings
+
 
 # Assuming these are accessible or passed in
 from database import Interaction, init_db, SessionLocal  # The SQLAlchemy model for interactions
@@ -83,18 +85,20 @@ def initialize_global_reflection_vectorstore(provider: AIProvider,
                 logger.info(
                     f"ReflectionIndexer Init: Loading existing persisted Reflection Chroma DB from: {REFLECTION_INDEX_CHROMA_PERSIST_DIR}")
                 global_reflection_vectorstore = Chroma(
-                    collection_name=REFLECTION_INDEX_CHROMA_COLLECTION_NAME,  # Use imported constant
-                    persist_directory=REFLECTION_INDEX_CHROMA_PERSIST_DIR,  # Use imported constant
-                    embedding_function=provider.embeddings
+                    collection_name=REFLECTION_INDEX_CHROMA_COLLECTION_NAME,
+                    persist_directory=REFLECTION_INDEX_CHROMA_PERSIST_DIR,
+                    embedding_function=provider.embeddings,
+                    client_settings=Settings(anonymized_telemetry=False)
                 )
                 logger.success("ReflectionIndexer Init: Successfully loaded persisted Global Reflection vector store.")
             else:
                 logger.info(
                     f"ReflectionIndexer Init: No persisted Reflection Chroma DB at {REFLECTION_INDEX_CHROMA_PERSIST_DIR}. Creating new.")
                 global_reflection_vectorstore = Chroma(
-                    collection_name=REFLECTION_INDEX_CHROMA_COLLECTION_NAME,  # Use imported constant
+                    collection_name=REFLECTION_INDEX_CHROMA_COLLECTION_NAME,
                     embedding_function=provider.embeddings,
-                    persist_directory=REFLECTION_INDEX_CHROMA_PERSIST_DIR  # Use imported constant
+                    persist_directory=REFLECTION_INDEX_CHROMA_PERSIST_DIR,
+                    client_settings=Settings(anonymized_telemetry=False)
                 )
                 if REFLECTION_INDEX_CHROMA_PERSIST_DIR and hasattr(global_reflection_vectorstore, 'persist'):
                     logger.info(

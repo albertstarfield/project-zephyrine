@@ -1543,7 +1543,10 @@ class AIChat:
                                                                                   priority=priority)
                     if embedding_result_list: rag_query_vector = embedding_result_list[0]
                 else:
-                    rag_query_vector = self.provider.embeddings.embed_query(user_input_for_rag_query)
+                    rag_query_vector = self.provider.embeddings.embed_query(
+                        user_input_for_rag_query,
+                        priority=priority
+                    ) #hah finally found the culprit of the ELP slowdowns
                 if not rag_query_vector:
                     logger.error(f"{log_prefix} Main RAG query embedding resulted in None.")
 
