@@ -14,6 +14,8 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 from database import Interaction, SessionLocal
 from ai_provider import AIProvider
 from config import *
+import chromadb
+from chromadb.config import Settings
 
 # --- Globals for this module ---
 global_interaction_vectorstore: Optional[Chroma] = None
@@ -42,7 +44,8 @@ def initialize_global_interaction_vectorstore(provider: AIProvider):
                 global_interaction_vectorstore = Chroma(
                     collection_name=INTERACTION_COLLECTION_NAME,
                     persist_directory=INTERACTION_VS_PERSIST_DIR,
-                    embedding_function=provider.embeddings
+                    embedding_function=provider.embeddings,
+                    client_settings=Settings(anonymized_telemetry=False)
                 )
             else:
                 # If no persistent store, rebuild it from the main SQLite DB backups
