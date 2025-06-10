@@ -133,3 +133,4 @@ temp_melo_audio_test_files
 *.db
 systemCore/backend-service/project_zephyrine_chats.db
 systemCore/engineMain/chroma_interaction_store/chroma.sqlite3
+systemCore/engineMain/chroma_interaction_store/chroma.sqlite3
