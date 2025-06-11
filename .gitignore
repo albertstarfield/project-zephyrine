@@ -100,6 +100,7 @@ systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3.zip
 .latex_ocr_subengine_installed_v1
 **.mp3**
 
+
 # Amaryllis generated files/folders
 RuntimeNotebook.md
 ToolCheck/
@@ -121,6 +122,7 @@ zephyimagination_test_image.png
 temp_melo_audio_test_files
 .custom_llama_cpp_installed_v1_conda
 .custom_sd_cpp_python_installed_v1_conda
+.CUDA_Toolkit_Installed
 **logs**
 **StellaIcarus_Cache**
 .conda_executable_path_cache.txt
