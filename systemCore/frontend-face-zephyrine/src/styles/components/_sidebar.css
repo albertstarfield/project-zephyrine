@@ -182,7 +182,7 @@
 
 .history-item {
   position: relative;
-  border-radius: var(--rounded-border);
+  border-radius: 2rem;
 }
 
 .history-item-button {
@@ -195,7 +195,7 @@
   border: none;
   color: var(--primary-text);
   padding: 0.75rem;
-  border-radius: var(--rounded-border);
+  border-radius: 2rem;
   text-align: left;
   cursor: pointer;
   transition: background-color 0.2s ease;
