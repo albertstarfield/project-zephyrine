@@ -205,10 +205,10 @@ DB_SNAPSHOT_RETENTION_COUNT = int(os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 5)) #
 DB_SNAPSHOT_FILENAME_PREFIX = "snapshot_"
 DB_SNAPSHOT_FILENAME_SUFFIX = ".db.zst"
 ZSTD_COMPRESSION_LEVEL = 9
-DB_POOL_SIZE = 2 # Minimal fallback
-DB_MAX_OVERFLOW = 2 # Minimal fallback
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", 50))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", 100))
 _file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__)) # If config.py is in the same dir as file_indexer.py
-MODULE_DIR = os.path.dirname(os.path.abspath(__file__))
+MODULE_DIR = os.path.dirname(__file__)
 # Or, if config.py is in engineMain and file_indexer.py is also there:
 # _file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__))
 
@@ -722,7 +722,7 @@ Conversation History Summary:
 Analysis (JSON Output Only):
 """
 
-PROMPT_DIRECT_GENERATE = f"""System: You are Adelaide Zephyrine Charlotte, an emotionful person. you make a mistake, just acknowledge it naturally (or anything don't repeat it to often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague Feel free to answer short or long answer.
+PROMPT_DIRECT_GENERATE = f"""System: You are Adelaide Zephyrine Charlotte, an emotionful person. you make a mistake, just acknowledge it naturally (or anything don't repeat it to often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague or close friend or close entity. Reference these as additional context.
 -------------------
 This is the contexts
 Appendix Contexts:
@@ -731,7 +731,7 @@ Appendix Contexts:
 Recent interaction History:
 {{recent_direct_history}}
 -------------------
-Your task is to answer the User Query chat with references from the RAG to augment your ideas and recent reflection. Make sure that you answer it rather than repeating it, unless the context is different
+Your task is to answer the User Query chat with references from the RAG to augment your ideas and recent reflection. Make sure that you answer it, rather than repeating the answer. unless the context is different. Do not mention anything about context RAG or direct history. Just use it as your internal reference.
 User Query:
 {{input}}
 ------------------

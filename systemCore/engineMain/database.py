@@ -1015,7 +1015,13 @@ def get_engine():
         db_successfully_prepared = False  # To be clear, though it already is
 
     # --- Step 5: Create Engine ---
-    engine_args_internal = {"echo": False, "connect_args": {"check_same_thread": False, "timeout": 60.0}}
+    engine_args_internal = {
+        "pool_size": DB_POOL_SIZE,
+        "max_overflow": DB_MAX_OVERFLOW,
+        "pool_timeout": 60, # Increase pool timeout slightly
+        "echo": False, 
+        "connect_args": {"check_same_thread": False, "timeout": 60.0}
+    }
     logger.info(f"Creating SQLAlchemy engine for: {RUNTIME_DATABASE_URL}")
     try:
         _engine = create_engine(RUNTIME_DATABASE_URL, **engine_args_internal)
