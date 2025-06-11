@@ -1508,45 +1508,97 @@ class AIChat:
                 k=k_val
             )
 
-    def _get_rag_retriever(self, db: Session, user_input_for_rag_query: str, priority: int = ELP0) -> Tuple[
-        Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], str
+
+
+    def _build_on_the_fly_retriever(self, interactions: List[Interaction], query: str, query_vector: List[float], priority: int) -> List[Document]:
+        """Helper to perform vector and fuzzy search on a list of interactions."""
+        log_prefix = f"OnTheFlyRAG|ELP{priority}|{self.current_session_id or 'NoSession'}"
+        retrieved_docs: List[Document] = []
+
+        # Vector search part
+        texts_to_embed = []
+        metadata_map = []
+        interaction_map = {} # Map text content back to interaction object
+        for interaction in interactions:
+            content = f"User: {interaction.user_input or ''}\nAI: {interaction.llm_response or ''}"
+            if content.strip():
+                texts_to_embed.append(content)
+                metadata_map.append({"source": "on_the_fly_session", "interaction_id": interaction.id})
+                interaction_map[content] = interaction
+
+        if texts_to_embed:
+            # Manually embed with priority, then create the Chroma store
+            embeddings = self.provider.embeddings.embed_documents(texts_to_embed, priority=priority)
+            if embeddings and len(embeddings) == len(texts_to_embed):
+                temp_vs = Chroma.from_embeddings(
+                    texts=texts_to_embed, 
+                    embeddings=embeddings, 
+                    embedding_function=self.provider.embeddings, 
+                    metadatas=metadata_map
+                )
+                vector_results = temp_vs.similarity_search_by_vector(query_vector, k=RAG_HISTORY_COUNT // 2)
+                retrieved_docs.extend(vector_results)
+                logger.info(f"{log_prefix} On-the-fly vector search found {len(vector_results)} docs.")
+            else:
+                logger.error(f"{log_prefix} On-the-fly embedding failed or returned mismatched vectors.")
+
+        # Fuzzy search part
+        if FUZZY_AVAILABLE and len(retrieved_docs) < RAG_HISTORY_COUNT // 2:
+            processed_ids = {doc.metadata.get("interaction_id") for doc in retrieved_docs if doc.metadata}
+            fuzzy_matches: List[Tuple[Interaction, int]] = []
+            
+            for interaction in interactions:
+                if interaction.id in processed_ids:
+                    continue
+                
+                text_to_match = f"{interaction.user_input or ''} {interaction.llm_response or ''}"
+                if text_to_match.strip():
+                    score = fuzz.partial_ratio(query.lower(), text_to_match.lower())
+                    if score >= FUZZY_SEARCH_THRESHOLD_APP:
+                        fuzzy_matches.append((interaction, score))
+            
+            if fuzzy_matches:
+                fuzzy_matches.sort(key=lambda x: x[1], reverse=True)
+                needed_count = max(0, (RAG_HISTORY_COUNT // 2) - len(retrieved_docs))
+                
+                for interaction, score in fuzzy_matches[:needed_count]:
+                    content = f"User: {interaction.user_input or ''}\nAI: {interaction.llm_response or ''}"
+                    doc = Document(
+                        page_content=content,
+                        metadata={
+                            "source": "on_the_fly_fuzzy", 
+                            "interaction_id": interaction.id, 
+                            "score": score
+                        }
+                    )
+                    retrieved_docs.append(doc)
+                logger.info(f"{log_prefix} On-the-fly fuzzy search added {len(fuzzy_matches[:needed_count])} docs.")
+        
+        return retrieved_docs
+
+    def _get_rag_retriever(self, db: Session, user_input_for_rag_query: str, priority: int = ELP1) -> Tuple[
+    Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], str
     ]:
         """
         Hybrid RAG Retriever (Corrected Implementation):
-        1.  Processes URLs from the current session.
-        2.  Queries three history sources:
-            a. On-the-fly vector search of very recent, un-indexed interactions.
-            b. On-the-fly fuzzy search of the same recent interactions.
-            c. Vector search of the persistent, indexed global interaction history.
-        3.  Combines all history results into a single retriever.
-        4.  Queries the persistent, indexed global reflection history.
-        Returns the expected 4-element tuple.
+        Ensures all on-the-fly embedding operations respect the incoming priority level.
         """
         log_prefix = f"RAGRetriever|ELP{priority}|{self.current_session_id or 'NoSession'}"
-        logger.info(
-            f"Hybrid RAG Retriever: Combining on-the-fly session with persistent stores for query: '{user_input_for_rag_query[:30]}...'")
+        logger.info(f"Hybrid RAG Retriever: Combining on-the-fly session with persistent stores for query: '{user_input_for_rag_query[:30]}...'")
 
         # Initialize all return values
         url_retriever: Optional[VectorStoreRetriever] = None
         session_history_retriever: Optional[VectorStoreRetriever] = None
         reflection_chunks_retriever: Optional[VectorStoreRetriever] = None
         session_history_ids_str: str = ""
-
+        
         rag_query_vector: Optional[List[float]] = None
-
+        
         try:
             # --- Step 0: Pre-embed the RAG query ---
             if user_input_for_rag_query and self.provider and self.provider.embeddings:
-                logger.debug(f"{log_prefix} Pre-embedding main RAG query...")
-                if hasattr(self.provider.embeddings, '_embed_texts'):
-                    embedding_result_list = self.provider.embeddings._embed_texts([user_input_for_rag_query],
-                                                                                  priority=priority)
-                    if embedding_result_list: rag_query_vector = embedding_result_list[0]
-                else:
-                    rag_query_vector = self.provider.embeddings.embed_query(
-                        user_input_for_rag_query,
-                        priority=priority
-                    ) #hah finally found the culprit of the ELP slowdowns
+                logger.debug(f"{log_prefix} Pre-embedding main RAG query with priority ELP{priority}...")
+                rag_query_vector = self.provider.embeddings.embed_query(user_input_for_rag_query, priority=priority)
                 if not rag_query_vector:
                     logger.error(f"{log_prefix} Main RAG query embedding resulted in None.")
 
@@ -1557,51 +1609,31 @@ class AIChat:
                     search_kwargs={"k": RAG_URL_COUNT},
                     vector_to_search=rag_query_vector
                 )
-
+            
             # --- Step 2: Hybrid Interaction History Retriever ---
             all_history_docs: List[Document] = []
-
-            # 2a. On-the-fly search for the MOST RECENT, UNINDEXED interactions
-            recent_unindexed_interactions = db.query(Interaction).filter(
-                Interaction.session_id == self.current_session_id,
-                Interaction.is_indexed_for_rag == False
-            ).order_by(desc(Interaction.timestamp)).limit(RAG_HISTORY_COUNT * 2).all()
+            
+            # 2a. On-the-fly search for recent, unindexed interactions
+            recent_unindexed_interactions = get_recent_interactions(
+                db, RAG_HISTORY_COUNT * 4, self.current_session_id, "chat", False
+            )
+            recent_unindexed_interactions = [inter for inter in recent_unindexed_interactions if not inter.is_indexed_for_rag]
             recent_unindexed_interactions.reverse()
-
+            
             if recent_unindexed_interactions and rag_query_vector:
                 # Vector search on recent items
-                on_the_fly_docs = []
-                recent_texts_to_embed = []
-                for interaction in recent_unindexed_interactions:
-                    content = f"User: {interaction.user_input or ''}\nAI: {interaction.llm_response or ''}"
-                    recent_texts_to_embed.append(content)
-
+                recent_texts_to_embed = [f"User: {i.user_input or ''}\nAI: {i.llm_response or ''}" for i in recent_unindexed_interactions]
                 if recent_texts_to_embed:
-                    temp_vs = Chroma.from_texts(recent_texts_to_embed, self.provider.embeddings)
+                    # FIX: Manually embed with correct priority before creating Chroma store
+                    on_the_fly_embeddings = self.provider.embeddings.embed_documents(recent_texts_to_embed, priority=priority)
+                    
+                    temp_vs = Chroma.from_embeddings(
+                        embeddings=on_the_fly_embeddings,
+                        embedding_function=self.provider.embeddings,
+                        documents=recent_texts_to_embed # Provide original texts for the store
+                    )
                     on_the_fly_docs = temp_vs.similarity_search(user_input_for_rag_query, k=RAG_HISTORY_COUNT // 2)
                     all_history_docs.extend(on_the_fly_docs)
-                    logger.info(f"{log_prefix} On-the-fly vector search found {len(on_the_fly_docs)} docs.")
-
-                # Fuzzy search fallback on recent items
-                if FUZZY_AVAILABLE and len(on_the_fly_docs) < RAG_HISTORY_COUNT // 2:
-                    processed_ids = {doc.metadata.get("interaction_id") for doc in on_the_fly_docs if doc.metadata}
-                    fuzzy_matches = []
-                    for interaction in recent_unindexed_interactions:
-                        if interaction.id in processed_ids: continue
-                        text_to_match = f"{interaction.user_input or ''} {interaction.llm_response or ''}"
-                        if text_to_match.strip():
-                            score = fuzz.partial_ratio(user_input_for_rag_query.lower(), text_to_match.lower())
-                            if score >= FUZZY_SEARCH_THRESHOLD_APP:
-                                fuzzy_matches.append((interaction, score))
-
-                    fuzzy_matches.sort(key=lambda x: x[1], reverse=True)
-                    needed_count = max(0, (RAG_HISTORY_COUNT // 2) - len(on_the_fly_docs))
-                    for interaction, score in fuzzy_matches[:needed_count]:
-                        doc = Document(
-                            page_content=f"User: {interaction.user_input or ''}\nAI: {interaction.llm_response or ''}",
-                            metadata={"source": "session_history_fuzzy", "interaction_id": interaction.id})
-                        all_history_docs.append(doc)
-                    logger.info(f"{log_prefix} On-the-fly fuzzy search added {len(fuzzy_matches[:needed_count])} docs.")
 
             # 2b. Search the persistent, indexed interaction history
             interaction_vs = get_global_interaction_vectorstore()
@@ -1613,17 +1645,23 @@ class AIChat:
                 )
                 persistent_docs = persistent_retriever.invoke(user_input_for_rag_query)
                 all_history_docs.extend(persistent_docs or [])
-                logger.info(
-                    f"{log_prefix} Persistent interaction store search found {len(persistent_docs or [])} docs.")
 
-            # 2c. Combine all history results into a single retriever for this request
+            # 2c. Combine all history results into a single retriever
             if all_history_docs:
-                # De-duplicate based on content to ensure variety
                 unique_docs = {doc.page_content: doc for doc in all_history_docs}.values()
-                temp_combined_vs = Chroma.from_documents(list(unique_docs), self.provider.embeddings)
+                
+                # FIX: Manually embed the combined unique documents with the correct priority
+                combined_texts = [doc.page_content for doc in unique_docs]
+                combined_metadatas = [doc.metadata for doc in unique_docs]
+                combined_embeddings = self.provider.embeddings.embed_documents(combined_texts, priority=priority)
+
+                temp_combined_vs = Chroma.from_embeddings(
+                    embeddings=combined_embeddings,
+                    embedding_function=self.provider.embeddings,
+                    documents=combined_texts,
+                    metadatas=combined_metadatas
+                )
                 session_history_retriever = temp_combined_vs.as_retriever(search_kwargs={"k": RAG_HISTORY_COUNT})
-                logger.debug(
-                    f"{log_prefix} Combined all {len(unique_docs)} unique history docs into a single retriever.")
 
             # --- Step 3: Persistent Reflection Retriever ---
             reflection_vs = get_global_reflection_vectorstore()
@@ -1634,12 +1672,14 @@ class AIChat:
                     vector_to_search=rag_query_vector
                 )
 
-            return (url_retriever, session_history_retriever, reflection_chunks_retriever, session_history_ids_str)
+            return (url_retriever, session_history_retriever, reflection_chunks_retriever, "")
 
         except Exception as e:
             logger.error(f"❌ UNHANDLED EXCEPTION in Hybrid RAG retriever: {e}")
             logger.exception("Hybrid RAG Retriever Traceback:")
             return None, None, None, ""
+        
+
 
     async def _generate_file_search_query_async(self, db: Session, user_input_for_analysis: str, recent_direct_history_str: str, session_id: str) -> str:
         """
