@@ -140,3 +140,5 @@ systemCore/engineMain/chroma_interaction_store/chroma.sqlite3
 systemCore/engineMain/chroma_interaction_store/chroma.sqlite3
 systemCore/backend-service/project_zephyrine_chats.db
 *.sqlite3
+*.db
+*.sqlite3
