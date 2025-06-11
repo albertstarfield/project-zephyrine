@@ -13,15 +13,23 @@ export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
     const savedTheme = localStorage.getItem('theme');
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-    return savedTheme || (systemPrefersDark ? 'dark' : 'light');
+
+    // A. Check if a valid theme is explicitly saved in localStorage
+    if (savedTheme === 'dark' || savedTheme === 'light') {
+      return savedTheme; // Use the user's saved preference
+    }
+
+    // B. If no valid saved theme, check the system preference
+    return systemPrefersDark ? 'dark' : 'light'; // Use system preference
   });
 
   useEffect(() => {
     const root = window.document.documentElement;
-    const oldTheme = theme === 'dark' ? 'light' : 'dark';
-    root.classList.remove(oldTheme);
+    // Remove both classes first to avoid potential conflicts
+    root.classList.remove('light', 'dark');
+    // Add the current theme class
     root.classList.add(theme);
-    localStorage.setItem('theme', theme);
+    localStorage.setItem('theme', theme); // Always save the current theme to localStorage
   }, [theme]);
 
   const toggleTheme = () => {
@@ -38,7 +46,7 @@ export const ThemeProvider = ({ children }) => {
 
 /**
  * 3. Create and export the custom hook.
- * This is the named export 'useTheme' that the error message is looking for.
+ * This is the named export 'useTheme' that components will use to access the theme context.
  * It's a clean way for components to get the context value.
  */
 export const useTheme = () => {
