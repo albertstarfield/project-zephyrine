@@ -75,7 +75,7 @@ CMAKE_CMD = 'cmake.exe' if IS_WINDOWS else 'cmake'
 TIKTOKEN_AVAILABLE = False
 
 # --- Static Model Pool Configuration ---
-STATIC_MODEL_POOL_DIR_NAME = "staticModelPool"
+STATIC_MODEL_POOL_DIR_NAME = "staticmodelpool"
 STATIC_MODEL_POOL_PATH = os.path.join(ENGINE_MAIN_DIR, STATIC_MODEL_POOL_DIR_NAME)
 MODELS_TO_DOWNLOAD = [
     {
