@@ -21,6 +21,7 @@ BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "backend-service")
 FRONTEND_DIR = os.path.join(ROOT_DIR, "systemCore", "frontend-face-zephyrine")
 LICENSE_DIR = os.path.join(ROOT_DIR, "licenses")
 LICENSE_FLAG_FILE = os.path.join(ROOT_DIR, ".license_accepted_v1")
+CUDA_TOOLKIT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".CUDA_Toolkit_Installed")
 # Near the top with other path configurations
 RELAUNCH_LOG_DIR = os.path.join(ROOT_DIR, "logs") # Or any preferred log directory
 RELAUNCH_STDOUT_LOG = os.path.join(RELAUNCH_LOG_DIR, "relaunched_launcher_stdout.log")
@@ -154,7 +155,7 @@ MODELS_TO_DOWNLOAD = [
         "description": "FLUX.1 T5 XXL GGUF (Q2_K)"
     },
     #https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q5_0.gguf?download=true
-{
+    {
         "filename": "sd-refinement.gguf",
         "url": "https://huggingface.co/second-state/stable-diffusion-v1-5-GGUF/resolve/main/stable-diffusion-v1-5-pruned-emaonly-Q5_0.gguf?download=true",
         "description": "Stable Diffusion Refinement PostFlux"
@@ -1739,6 +1740,9 @@ if __name__ == "__main__":
         else:
             print_system("License previously accepted.")
 
+
+
+
         print_system(f"--- Checking Static Model Pool: {STATIC_MODEL_POOL_PATH} ---")
         os.makedirs(STATIC_MODEL_POOL_PATH, exist_ok=True)
         all_models_ok = True  # This flag was from my suggestion, might not be in your version
@@ -2045,8 +2049,62 @@ if __name__ == "__main__":
         else:
             print_system(f"Target Conda env '{TARGET_CONDA_ENV_PATH}' exists.")
 
+
+        # --- (NEW) Conda install NVIDIA CUDA Toolkit if detected ---
+        # This runs in the initial launcher instance, preparing the environment for the relaunched script.
+        if autodetected_build_env_vars.get("AUTODETECTED_CUDA_AVAILABLE") == "1":
+            print_system("CUDA acceleration detected by initial launcher.")
+            if not os.path.exists(CUDA_TOOLKIT_INSTALLED_FLAG_FILE):
+                print_warning("NVIDIA CUDA Toolkit not yet marked as installed in the Conda environment. Attempting installation...")
+                print_warning("This may take several minutes and download a significant amount of data (>2 GB).")
+
+                # We use the 'cuda' metapackage from the 'nvidia' channel. It's the recommended way.
+                cuda_install_cmd = [
+                    CONDA_EXECUTABLE, 'install', '--yes',
+                    '--prefix', TARGET_CONDA_ENV_PATH,
+                    '-c', 'nvidia',
+                    'cuda-toolkit' # Using the official cuda-toolkit package
+                ]
+                
+                # Handle the case where the conda executable is a .bat file on Windows
+                if IS_WINDOWS and CONDA_EXECUTABLE and CONDA_EXECUTABLE.lower().endswith(".bat"):
+                    cuda_install_cmd = ['cmd', '/c'] + cuda_install_cmd
+
+                print_system(f"Executing: {' '.join(cuda_install_cmd)}")
+                try:
+                    # Use a similar streaming process as env creation for consistent output
+                    process = subprocess.Popen(cuda_install_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors='replace')
+                    stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, "CUDA-INSTALL-OUT"), daemon=True)
+                    stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, "CUDA-INSTALL-ERR"), daemon=True)
+                    stdout_thread.start()
+                    stderr_thread.start()
+
+                    process.wait() # This can be a long-running process
+                    stdout_thread.join(timeout=5)
+                    stderr_thread.join(timeout=5)
+
+                    if process.returncode == 0:
+                        print_system("NVIDIA CUDA Toolkit successfully installed into Conda environment.")
+                        # Create the flag file on success
+                        with open(CUDA_TOOLKIT_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_flag:
+                            f_flag.write(f"Installed on: {datetime.now().isoformat()}\n")
+                    else:
+                        print_error(f"Failed to install NVIDIA CUDA Toolkit (return code: {process.returncode}).")
+                        print_error("The launcher will continue, but builds requiring 'nvcc' will likely fail.")
+                        print_error("Please check the 'CUDA-INSTALL-ERR' logs above for details.")
+                        # We don't exit, allowing fallback to other backends.
+
+                except Exception as e_cuda_install:
+                    print_error(f"An exception occurred during CUDA toolkit installation: {e_cuda_install}")
+                    print_error("The launcher will continue, but CUDA support will likely be unavailable.")
+            else:
+                print_system("NVIDIA CUDA Toolkit is already marked as installed in Conda environment (flag file found).")
+        # --- END (NEW) Conda install NVIDIA CUDA Toolkit ---
+
         script_to_run_abs_path = os.path.abspath(__file__)
         conda_run_cmd_list_base = [CONDA_EXECUTABLE, 'run', '--prefix', TARGET_CONDA_ENV_PATH]
+
+
 
         conda_supports_no_capture = False
         try:
