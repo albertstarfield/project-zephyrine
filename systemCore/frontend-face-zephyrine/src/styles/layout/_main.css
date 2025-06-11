@@ -51,6 +51,10 @@
   background-color: var(--background); /* Background for the chat area */
   border-radius: 1rem; /* Rounded corners */
   position: relative; /* For positioning elements like InputArea */
+  backdrop-filter: blur(27px); /* Adjust the pixel value for more or less blur */
+  -webkit-backdrop-filter: blur(27px); /* For Safari compatibility */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); /* Adjust values as needed */
+
 }
 
 #feed {

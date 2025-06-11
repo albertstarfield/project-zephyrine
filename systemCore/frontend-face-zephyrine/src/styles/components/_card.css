@@ -5,9 +5,9 @@
   width: 100%;
   max-width: 700px; /* Default max-width */
   background-color: rgba(46, 46, 53, 0.041); /* Use variables if possible */
-  border-radius: 12px;
+  border-radius: 2rem;
   padding: 1.5rem; /* Default padding */
-  backdrop-filter: blur(10px);
+  backdrop-filter: blur(9px);
   box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
   transition: transform 0.2s ease, box-shadow 0.2s ease;
   display: flex;

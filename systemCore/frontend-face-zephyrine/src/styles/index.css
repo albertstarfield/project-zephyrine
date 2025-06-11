@@ -30,7 +30,9 @@
   --overlay: rgba(62, 61, 61, 0.676); /* Overlay color */
   --hover: hsla(240, 9%, 59%, 0.1); /* Hover effect color */
   --border: rgb(64, 65, 79); /* Default border color */
-  --sidebar-background: #3a3b43; /* Sidebar specific background */
+  --sidebar-background: #3a3b438c; /* Sidebar specific background */
+  --secondary-background-rgb: var(--secondary); /* If --secondary-background is #242424 */
+  --accent-color-rgb: var(--accent); /* If --accent-color is #6a0ded */
 
   /* --- User's New Shadow System (Dark Mode) --- */
   --small-shadow: 0 6px 9px -1px rgba(0, 0, 0, 0.4),
@@ -83,7 +85,7 @@
     --primary-text: #222222; 
     --primary-text-alt: #474748;
     --secondary-text: #2d2d2d80;
-    --background: #ffffff;
+    --background: #ffffff8a;
     --background-mid: #f4f4f4;
     --background-alt: #c5c4c4;
     --surface: #f8f8f81e;
@@ -97,7 +99,9 @@
     --overlay: rgba(240, 240, 240, 0.34);
     --hover: hsla(240, 9%, 59%, 0.1);
     --border: #dddddd; /* Changed from #ffffff to be visible on white bg */
-    --sidebar-background: #ffffff; 
+    --sidebar-background: #ffffff8c; 
+    --secondary-background-rgb: var(--secondary); /* If --secondary-background is #242424 */
+    --accent-color-rgb: var(--accent); /* If --accent-color is #6a0ded */
 
     /* --- User's New Shadow System (Light Mode) --- */
     --small-shadow: 0 6px 9px -1px rgba(0, 0, 0, 0.1),

@@ -1,19 +1,23 @@
-/* styles/components/_sidebar.css */
+/* externalAnalyzer/frontend-face-zephyrine/src/styles/components/_sidebar.css */
 
+/* Base Sidebar Styles (applies to both collapsed and expanded) */
 .sidebar {
   display: flex;
   flex-direction: column;
-  width: 260px;
-  height: 96%; /* Changed from 96% to fill container */
+  width: 260px; /* Default width (expanded) */
+  height: 96%;
   background-color: var(--sidebar-background);
   padding: 0.75rem;
   box-sizing: border-box;
-  border-radius: 1rem; /* Matched my previous suggestion, adjust if needed */
+  border-radius: 2rem;
   flex-shrink: 0;
   color: var(--primary-text);
-  transition: width 0.3s ease, transform 0.3s ease; /* Added width transition */
+  transition: width 0.3s ease, transform 0.3s ease, opacity 0.3s ease; /* Added opacity transition */
   position: relative;
   border: 1px solid var(--border);
+  backdrop-filter: blur(27px); /* Adjust the pixel value for more or less blur */
+  -webkit-backdrop-filter: blur(27px); /* For Safari compatibility */
+  box-shadow: 0 2px 6px rgba(0, 0, 0, 0.3); /* Adjust values as needed */
 }
 
 /* --- Toggle Buttons --- */
@@ -27,7 +31,8 @@
   display: flex;
   align-items: center;
   justify-content: center;
-  border-radius: 0.5rem; /* More rounding */
+  border-radius: 0.5rem;
+  transition: background-color 0.2s, color 0.2s;
 }
 
 .sidebar-toggle-button:hover,
@@ -45,7 +50,7 @@
 .sidebar-toggle-desktop {
   position: absolute;
   top: 1rem;
-  right: -14px; /* Position it outside the sidebar slightly */
+  right: -14px;
   background-color: var(--background-mid);
   border: 1px solid var(--border);
   border-radius: 50%;
@@ -56,14 +61,24 @@
   transition: opacity 0.2s ease, background-color 0.2s ease, transform 0.2s ease;
 }
 
-.sidebar:hover .sidebar-toggle-desktop,
-.sidebar--collapsed .sidebar-toggle-desktop {
+/* Show desktop toggle button when expanded or hovered open */
+.sidebar:not(.sidebar--collapsed):hover .sidebar-toggle-desktop,
+.sidebar.sidebar--expanded-visual .sidebar-toggle-desktop { /* Apply for expanded visual */
   opacity: 1;
-}
-.sidebar--collapsed .sidebar-toggle-desktop {
-  transform: translateX(-8px); /* Adjust position when collapsed */
+  transform: translateX(0);
 }
 
+/* Show desktop toggle button when sidebar is manually collapsed */
+.sidebar--collapsed .sidebar-toggle-desktop {
+  opacity: 1;
+  transform: translateX(-8px);
+}
+
+@media (max-width: 767px) {
+  .sidebar-toggle-desktop {
+    display: none;
+  }
+}
 
 .sidebar-hamburger-button {
   display: none;
@@ -72,6 +87,12 @@
   left: 1rem;
   z-index: 1201;
   background-color: var(--background-mid);
+}
+
+@media (max-width: 767px) {
+  .sidebar-hamburger-button {
+    display: flex;
+  }
 }
 
 .sidebar-top-actions {
@@ -96,9 +117,10 @@
   text-align: left;
   cursor: pointer;
   transition: background-color 0.2s ease, color 0.2s ease;
-  overflow: hidden;
-  white-space: nowrap;
-  text-decoration: none; /* <--- ADD THIS LINE */
+  text-decoration: none;
+  /* These will be overridden by .sidebar--collapsed for hiding */
+  overflow: visible; /* Default for expanded */
+  white-space: normal; /* Default for expanded */
 }
 
 .sidebar-button:hover {
@@ -108,7 +130,7 @@
 .sidebar-icon {
   width: 1.2em;
   height: 1.2em;
-  margin-right: 0.8rem;
+  margin-right: 0.8rem; /* Default margin when expanded */
   stroke-width: 1.5;
   flex-shrink: 0;
 }
@@ -120,15 +142,9 @@
   background-color: var(--surface-alt);
 }
 
-
-/* --- Model Selector --- */
 .model-selector-container {
   position: relative;
   width: 100%;
-}
-
-.model-selector-dropdown {
-  /* This custom dropdown styling is complex, using a select is simpler if acceptable */
 }
 .model-selector-container .dropdown-arrow {
   position: absolute;
@@ -141,7 +157,6 @@
   height: 1em;
 }
 
-/* --- History Section --- */
 .sidebar-history {
   flex-grow: 1;
   overflow-y: auto;
@@ -166,18 +181,17 @@
 }
 
 .history-item {
-  position: relative; /* For hover actions positioning */
+  position: relative;
   border-radius: var(--rounded-border);
 }
 
-/* --- HIGHLIGHT EFFECT STYLES --- */
 .history-item-button {
   display: flex;
   justify-content: space-between;
   align-items: center;
   width: 100%;
   font-size: 0.9rem;
-  background-color: transparent; /* No background by default */
+  background-color: transparent;
   border: none;
   color: var(--primary-text);
   padding: 0.75rem;
@@ -185,27 +199,27 @@
   text-align: left;
   cursor: pointer;
   transition: background-color 0.2s ease;
-  text-decoration: none; /* <<<<<<<<<<<< REMOVED UNDERLINE */
+  text-decoration: none;
+  /* These will be overridden by .sidebar--collapsed for hiding */
+  overflow: visible; /* Default for expanded */
+  white-space: normal; /* Default for expanded */
 }
 
-/* HOVER EFFECT: Highlight with background color */
 .history-item-button:hover {
-  background-color: var(--hover); /* <<<<<<<<<<<< HIGHLIGHT ON HOVER */
+  background-color: var(--hover);
 }
 
-/* ACTIVE LINK EFFECT: Persistent highlight */
 .history-item.active .history-item-button {
-  background-color: var(--tertiary); /* <<<<<<<<<<<< HIGHLIGHT FOR ACTIVE LINK */
+  background-color: var(--tertiary);
   color: var(--primary-text-alt);
   font-weight: 600;
 }
 
-
 .history-item-title {
   flex-grow: 1;
-  overflow: hidden;
+  overflow: hidden; /* Default for expanded, ellipsis will apply if needed */
   text-overflow: ellipsis;
-  white-space: nowrap;
+  white-space: nowrap; /* Default for expanded, will be 'normal' if sidebar is wide */
   margin-right: 0.5rem;
 }
 
@@ -215,13 +229,13 @@
   gap: 0.3rem;
   opacity: 0;
   transition: opacity 0.2s ease;
-  background-color: inherit; /* Inherit the button's current background color */
+  background-color: inherit;
   padding: 0 0.2rem;
   border-radius: var(--rounded-border);
 }
 
 .history-item:hover .history-item-actions {
-  opacity: 1; /* Show actions on hover of the entire list item */
+  opacity: 1;
 }
 
 .icon-button {
@@ -246,14 +260,13 @@
   color: var(--error);
 }
 
-/* --- Styles for Editing State --- */
 .history-item-edit-container {
   display: flex;
   align-items: center;
   width: 100%;
   padding: 0.25rem 0.5rem;
   background-color: var(--background);
-  border: 1px solid var(--accent); /* Highlight with accent color when editing */
+  border: 1px solid var(--accent);
   border-radius: var(--rounded-border);
 }
 
@@ -274,8 +287,6 @@
   gap: 0.2rem;
 }
 
-
-/* --- Other Sidebar Sections --- */
 .sidebar-section {
   margin-top: 1rem;
 }
@@ -309,50 +320,94 @@
   gap: 0.25rem;
 }
 
-/* --- Collapsed State Styles --- */
+/* --- Collapsed State Styles (when isCollapsed is true AND NOT Hovering) --- */
 .sidebar--collapsed {
-  width: 80px;
-  padding: 0.75rem;
+  width: 80px; /* Collapsed width */
 }
 
-.sidebar--collapsed .sidebar-button {
-  justify-content: center;
+/* Hide text and adjust layout when in collapsed state */
+.sidebar--collapsed .sidebar-button > span,
+.sidebar--collapsed .sidebar-section-title,
+.sidebar--collapsed .history-item-title {
+  display: none; /* Explicitly hide text */
 }
 
 .sidebar--collapsed .sidebar-icon {
-  margin-right: 0;
+  margin-right: 0; /* Remove margin when text is hidden */
 }
 
-.sidebar--collapsed .sidebar-button > span,
-.sidebar--collapsed .sidebar-section-title {
-  display: none;
-}
-
-.sidebar--collapsed .history-item-title,
-.sidebar--collapsed .history-item-actions {
-  display: none;
-}
-
+.sidebar--collapsed .sidebar-button,
 .sidebar--collapsed .history-item-button {
-  justify-content: center;
+  justify-content: center; /* Center icon only */
+  overflow: hidden; /* Ensure text is clipped */
+  white-space: nowrap; /* Ensure text stays on one line */
 }
 
-/* Add a placeholder for text when collapsed */
-.sidebar--collapsed .history-item-button::before {
-  content: "#"; /* Example placeholder for collapsed history items */
+/* Optional: Placeholder for collapsed history item titles */
+.sidebar--collapsed .history-item-button .history-item-title::before {
+  content: "#";
   color: var(--secondary-text);
   font-weight: 600;
+  display: inline-block;
+}
+
+/* Hide actions when collapsed */
+.sidebar--collapsed .history-item-actions {
+  opacity: 0;
+  pointer-events: none;
+}
+
+
+/* --- Expanded Visual State Styles (Applied when manually expanded OR hover-expanded) --- */
+.sidebar--expanded-visual {
+  width: 260px; /* Full expanded width */
+}
+
+/* Show text and adjust layout when in expanded visual state */
+.sidebar--expanded-visual .sidebar-button > span,
+.sidebar--expanded-visual .sidebar-section-title,
+.sidebar--expanded-visual .history-item-title {
+  display: inline-block; /* Or block/flex as appropriate */
+}
+
+.sidebar--expanded-visual .sidebar-icon {
+  margin-right: 0.8rem; /* Restore margin to icons */
+}
+
+.sidebar--expanded-visual .sidebar-button,
+.sidebar--expanded-visual .history-item-button {
+  justify-content: flex-start; /* Align content to start */
+  overflow: visible; /* Allow text to be fully visible */
+  white-space: normal; /* Allow text to wrap if it's too long */
+}
+
+.sidebar--expanded-visual .history-item-button .history-item-title::before {
+  content: none; /* Hide placeholder if it was used */
+}
+
+.sidebar--expanded-visual .history-item-actions {
+  opacity: 1; /* Ensure actions are visible */
+  pointer-events: auto; /* Enable interaction */
+}
+
+/* Adjust desktop toggle button position when expanded */
+.sidebar--expanded-visual .sidebar-toggle-desktop {
+    transform: translateX(-14px); /* Original position when expanded */
+    opacity: 1;
 }
 
 
 /* --- Responsive (Mobile) --- */
 @media (max-width: 767px) {
+  /* Hide desktop toggle button on mobile */
   .sidebar-toggle-desktop {
     display: none;
   }
+  /* Show hamburger button on mobile */
   .sidebar-hamburger-button {
     display: flex;
   }
+  /* Mobile sidebar is fixed and slides in/out */
   .sidebar {
     position: fixed;
     left: 0;
@@ -364,7 +419,34 @@
     border-radius: 0 1rem 1rem 0;
     box-shadow: 2px 0 10px rgba(0, 0, 0, 0.1);
   }
-  .sidebar:not(.sidebar--collapsed) {
+  /* When sidebar has 'open' class (manually toggled open on mobile) */
+  .sidebar.open {
     transform: translateX(0);
+  }
+
+  /* For mobile, disable hover-to-expand as it's not a common pattern */
+  /* Ensure the sidebar stays collapsed on hover if manually collapsed on mobile */
+  .sidebar.sidebar--collapsed:hover {
+      width: 80px; /* Keep collapsed width on hover for mobile */
+  }
+  /* Keep content hidden on hover for mobile in collapsed state */
+  .sidebar.sidebar--collapsed:hover .sidebar-button > span,
+  .sidebar.sidebar--collapsed:hover .sidebar-section-title,
+  .sidebar.sidebar--collapsed:hover .history-item-title {
+    display: none;
+  }
+  .sidebar.sidebar--collapsed:hover .sidebar-icon {
+    margin-right: 0;
+  }
+  .sidebar.sidebar--collapsed:hover .sidebar-button,
+  .sidebar.sidebar--collapsed:hover .history-item-button {
+    justify-content: center;
+  }
+  .sidebar.sidebar--collapsed:hover .history-item-button::before {
+    content: "#";
+  }
+  .sidebar.sidebar--collapsed:hover .history-item-actions {
+    opacity: 0;
+    pointer-events: none;
   }
 }

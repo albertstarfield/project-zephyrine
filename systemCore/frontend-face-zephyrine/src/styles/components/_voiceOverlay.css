@@ -1,152 +1,222 @@
-/* ExternalAnalyzer/frontend-face-zephyrine/src/styles/components/_voiceOverlay.css */
+/* externalAnalyzer/frontend-face-zephyrine/src/styles/components/_voiceOverlay.css */
 
-.voice-overlay-container {
-    position: fixed;
-    top: 0;
-    left: 0;
-    width: 100vw;
-    height: 100vh;
-    background-color: var(--background-alt, #202123);
-    z-index: 9999; /* <<<<<<<<<<<< INCREASED Z-INDEX TO ENSURE IT'S ON TOP */
-    display: flex;
-    flex-direction: column;
-    align-items: center;
-    justify-content: center;
-    color: var(--primary-text, #d1d5db);
-    opacity: 0;
-    animation: fadeInOverlay 0.5s ease-in-out forwards;
-    padding: 80px 20px 20px;
-    box-sizing: border-box;
+/* Main Overlay Container with Glassmorphism */
+.voice-assistant-overlay {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  z-index: 1000;
+  background-color: var(--component-background);
+  color: var(--text-primary);
+  border: 1px solid var(--component-border-color);
+  box-shadow: var(--component-shadow);
+  backdrop-filter: blur(15px); /* Blurry background effect */
+  -webkit-backdrop-filter: blur(15px); /* For Safari compatibility */
+  opacity: 0;
+  visibility: hidden;
+  transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+.voice-assistant-overlay.visible {
+  opacity: 1;
+  visibility: visible;
+}
+
+.overlay-content {
+  position: relative;
+  background-color: rgba(var(--component-background), 0.4); /* Transparent surface color */
+  border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle white border */
+  border-radius: 2rem;
+  box-shadow: 0 8px 32px 0 rgba(0, 0, 0, 0.6); /* Stronger shadow for glass effect */
+  padding: 40px;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  color: var(--background);
+  text-align: center;
+  width: 90%;
+  max-width: 500px;
+  transform: translateY(20px);
+  opacity: 0;
+  transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.voice-assistant-overlay.visible .overlay-content {
+  transform: translateY(0);
+  opacity: 1;
+}
+
+.close-overlay-button {
+  position: absolute;
+  top: 15px;
+  right: 15px;
+  background: none;
+  border: none;
+  color: var(--secondary-text);
+  cursor: pointer;
+  padding: 5px;
+  border-radius: 50%;
+  transition: background-color 0.2s, color 0.2s;
+}
+
+.close-overlay-button:hover {
+  background-color: rgba(255, 255, 255, 0.1);
+  color: var(--primary-text);
+}
+
+.main-icon {
+  margin-bottom: 20px;
+  color: var(--highlight-color); /* Use your theme's highlight color */
+}
+
+.overlay-title {
+  font-size: 2.2em;
+  margin-bottom: 10px;
+  color: var(--primary-text-alt); /* Use a brighter text color for titles */
+}
+
+.overlay-status {
+  font-size: 1.1em;
+  color: var(--secondary-text);
+  margin-bottom: 30px;
+}
+
+/* Audio Visualization Pills */
+.audio-pills-container {
+  display: flex;
+  gap: 10px;
+  margin-bottom: 30px;
+  height: 20px; /* Define height for pills to animate within */
+  align-items: flex-end; /* Align pills to bottom within their container */
+}
+
+.audio-pill {
+  width: 12px;
+  height: 12px;
+  border-radius: 50%;
+  /* Glassmorphism for pills */
+  background-color: rgba(255, 255, 255, 0.6); /* Lighter transparent base */
+  border: 1px solid rgba(255, 255, 255, 0.15);
+  box-shadow: 0 2px 4px rgba(0, 0, 0, 0.9);
+  transition: all 0.2s ease-in-out; /* Smooth transition for size/position changes */
+}
+
+/* Idle Animation (Subtle Pulse) */
+.audio-pill.idle {
+  animation: pulse 1.5s infinite ease-in-out alternate;
+  /* Add individual delays for a staggered effect */
+  animation-delay: calc(0.1s * var(--pill-index)); /* Requires --pill-index variable in JSX */
+}
+
+@keyframes pulse {
+  0% { transform: scale(1); opacity: 0.8; }
+  100% { transform: scale(1.1); opacity: 1; }
+}
+
+/* Active Animation (Voice Activity) */
+.audio-pill.active {
+  animation: wave 1s infinite ease-in-out;
+  /* Add individual delays for a wave effect */
+  animation-delay: calc(0.15s * var(--pill-index));
+  background-color: var(--highlight-color); /* Change color when active */
+  width: 16px; /* Slightly larger when active */
+  height: 16px;
+}
+
+@keyframes wave {
+  0%, 100% { transform: translateY(0) scale(1); opacity: 1; }
+  25% { transform: translateY(-8px) scale(1.2); opacity: 0.9; } /* Peaks */
+  50% { transform: translateY(0) scale(1); opacity: 1; }
+  75% { transform: translateY(-4px) scale(1.1); opacity: 0.95; } /* Secondary peak */
+}
+
+
+.transcript-display {
+  background-color: rgba(0, 0, 0, 0.2);
+  border-radius: 10px;
+  padding: 15px 20px;
+  min-height: 80px;
+  width: 100%;
+  margin-bottom: 30px;
+  border: 1px solid rgba(255, 255, 255, 0.08);
+  font-size: 1.1em;
+  line-height: 1.5;
+  white-space: pre-wrap; /* Preserve formatting */
+  word-wrap: break-word; /* Break long words */
+  overflow-y: auto; /* Enable scrolling if content exceeds height */
+}
+
+.overlay-actions {
+  display: flex;
+  gap: 20px;
+}
+
+.mic-button,
+.send-button {
+  background-color: var(--accent); /* Your accent color */
+  color: white;
+  border: none;
+  border-radius: 15px; /* Pill-shaped buttons */
+  padding: 15px 30px;
+  font-size: 1.1em;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  transition: background-color 0.2s ease, filter 0.2s ease;
+}
+
+.mic-button:hover,
+.send-button:hover {
+  filter: brightness(1.1);
+}
+
+.mic-button:disabled,
+.send-button:disabled {
+  background-color: var(--disabled-background);
+  color: var(--disabled-text);
+  cursor: not-allowed;
+  opacity: 0.7;
+}
+
+/* Media Queries for Responsiveness */
+@media (max-width: 600px) {
+  .overlay-content {
+    padding: 20px;
+    max-width: 95%;
   }
-  
-  @keyframes fadeInOverlay {
-    from { opacity: 0; transform: scale(0.98); }
-    to { opacity: 1; transform: scale(1); }
+  .overlay-title {
+    font-size: 1.8em;
   }
-  
-  .voice-overlay-exit-button {
-    position: absolute;
-    top: 25px;
-    right: 30px;
-    background: none;
-    border: none;
-    color: var(--secondary-text, #ffffff80);
-    cursor: pointer;
-    padding: 10px;
-    border-radius: 50%;
-    transition: background-color 0.2s ease, color 0.2s ease;
+  .overlay-status {
+    font-size: 1em;
   }
-  
-  .voice-overlay-exit-button:hover {
-    background-color: var(--hover, hsla(240, 9%, 59%, 0.1));
-    color: var(--primary-text, #d1d5db);
+  .mic-button,
+  .send-button {
+    padding: 12px 20px;
+    font-size: 1em;
+    border-radius: 2rem;
   }
-  
-  .voice-overlay-content {
-    width: 100%;
-    max-width: 800px;
-    height: 100%;
-    display: flex;
-    flex-direction: column;
-    justify-content: flex-end;
-    align-items: center;
-    gap: 2rem;
+  .audio-pills-container {
+    gap: 8px;
   }
-  
-  /* --- Conversation Log Styles --- */
-  .voice-conversation-log {
-    flex-grow: 1;
-    width: 100%;
-    overflow-y: auto;
-    display: flex;
-    flex-direction: column-reverse; /* Newest items at the bottom */
-    padding: 1rem;
+  .audio-pill {
+    width: 10px;
+    height: 10px;
   }
-  
-  .voice-conversation-turn {
-    margin-bottom: 1.5rem;
-    animation: fadeInTurn 0.5s ease-out forwards;
+  .audio-pill.active {
+    width: 14px;
+    height: 14px;
   }
-  
-  @keyframes fadeInTurn {
-    from { opacity: 0; transform: translateY(10px); }
-    to { opacity: 1; transform: translateY(0); }
-  }
-  
-  .voice-turn-bubble {
-    padding: 1rem 1.5rem;
-    border-radius: 25px;
-    max-width: 80%;
-    line-height: 1.6;
-  }
-  
-  .voice-turn-bubble .voice-turn-speaker {
-    font-weight: 600;
-    font-size: 0.9rem;
-    display: block;
-    margin-bottom: 0.5rem;
-    opacity: 0.8;
-  }
-  
-  .voice-turn-bubble.user {
-    background-color: var(--tertiary, #3e3f4b);
-    color: var(--primary-text, #d1d5db);
-    border-bottom-right-radius: 8px;
-    align-self: flex-end;
-    text-align: right;
-  }
-  
-  .voice-turn-bubble.assistant {
-    background-color: var(--background-mid, #2c2d30);
-    color: var(--primary-text-alt, #ececf1);
-    border-bottom-left-radius: 8px;
-    align-self: flex-start;
-    text-align: left;
-  }
-  
-  /* --- Visualizer & Status Styles --- */
-  .voice-visualizer-container {
-    display: flex;
-    justify-content: center;
-    align-items: center;
-    height: 100px; /* Fixed height for visualizer area */
-    position: relative;
-    width: 100%;
-  }
-  
-  .voice-visualizer-pulse {
-    position: absolute;
-    width: 80px;
-    height: 80px;
-    border-radius: 50%;
-    background-color: var(--accent, #FFFF00);
-    opacity: 0;
-    transform: scale(0.5);
-  }
-  
-  .voice-visualizer-pulse.active {
-    animation: pulse 2s infinite ease-in-out;
-  }
-  
-  @keyframes pulse {
-    0% {
-      transform: scale(0.5);
-      opacity: 0;
-    }
-    50% {
-      opacity: 0.3;
-    }
-    100% {
-      transform: scale(1.5);
-      opacity: 0;
-    }
-  }
-  
-  .voice-status-indicator {
-    font-size: 1.25rem;
-    color: var(--primary-text-alt, #ececf1);
-    height: 50px; /* Fixed height to prevent layout shifts */
-    display: flex;
-    align-items: center;
-    justify-content: center;
-  }
+}
+
+.overlay-logo {
+  height: 60px; /* Adjust size as needed */
+  margin-bottom: 20px;
+  filter: drop-shadow(0 0 5px rgba(0,0,0,0.5)); /* Optional: add a subtle shadow */
+}

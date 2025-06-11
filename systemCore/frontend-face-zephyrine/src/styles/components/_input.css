@@ -77,7 +77,7 @@
   backdrop-filter: blur(8px);
   box-shadow: 0 0 var(--shadow-disperse, 6px)
     var(--shadow-color, rgba(0, 0, 0, 0.1));
-  border-radius: 1.275rem;
+  border-radius: 1.5rem;
   border: solid 1px var(--hover);
   pointer-events: all;
   margin: 0;
