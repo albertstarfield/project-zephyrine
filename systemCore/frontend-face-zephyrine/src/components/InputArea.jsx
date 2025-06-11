@@ -156,8 +156,7 @@ const InputArea = ({
         </div>
       </div>
       <p className="disclaimer-text">
-        Pre-Alpha Developmental Version! Instabilities may occur! Use with
-        caution! -Zephyrine Foundation (2025)
+      Pre-Alpha Developmental Version! Instabilities, Repeating, Unexpected Behaviour, or Self-awareness incident may occour! Use it with caution!
       </p>
     </div>
   );

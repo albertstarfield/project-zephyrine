@@ -23,7 +23,10 @@
 @import "components/_logo.css";
 @import "components/_message.css";
 @import "components/_tab.css";
-/* @import "components/_titlebar.css"; Optional */
+@import "components/_titlebar.css";
+@import 'components/_cloudiaSky.css'; /* Day Themed */
+@import 'components/_nightSky.css'; /* Dark Themed */
+
 
 /* 6. Views / Page-specific styles */
 @import "views/_welcomeScreen.css";

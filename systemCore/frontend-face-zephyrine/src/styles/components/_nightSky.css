@@ -1,0 +1,159 @@
+/*
+ * Night Sky Background Styles
+ * Applies a dark blue gradient background with twinkling stars
+ * when the 'dark-mode' class is present on the body.
+ */
+
+ body.dark-mode {
+    /* Blue gradient for the night sky */
+    background: linear-gradient(
+      180deg,
+      #0a0a20 0%,   /* Very dark blue at the top */
+      #21215e 50%,  /* Mid-dark blue in the middle */
+      #1a1a9b 100%  /* Slightly lighter dark blue at the bottom */
+    );
+    background-size: 100% 100%; /* Ensure gradient covers the whole background */
+    overflow: hidden; /* Prevent scrollbars if stars extend beyond viewport */
+    position: relative; /* Needed for positioning pseudo-elements */
+  }
+  
+  /*
+   * Twinkling Animation Keyframes
+   * Changes the opacity of the stars to create a twinkling effect.
+   */
+  @keyframes twinkle {
+    0%, 100% { opacity: 0.7; transform: scale(1); }
+    50% { opacity: 0.2; transform: scale(0.8); }
+  }
+  
+  /*
+   * Stars/Sparkles using box-shadow
+   * This creates a large number of white dots without adding extra DOM elements.
+   * Each value in the box-shadow is a star.
+   *
+   * This technique is efficient for creating a starry background:
+   * - A single element (or pseudo-element)
+   * - Multiple shadows defined by `box-shadow`
+   * - Each shadow represents a star, with x-offset, y-offset, and blur-radius (for glow).
+   */
+  .stars {
+    width: 1px;
+    height: 1px;
+    background: transparent;
+    position: absolute;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    /* Use transform for hardware acceleration and smooth animation */
+    transform: rotateZ(45deg); /* Optional: Slightly rotate the star field */
+    pointer-events: none; /* Ensure stars don't interfere with mouse events */
+  
+    /* Apply the twinkling animation */
+    animation: twinkle 5s infinite alternate;
+  }
+  
+  /* Creating the actual stars using multiple box-shadows */
+  /* Each line represents a star with x y offset and blur (for sparkle) */
+  .stars::before,
+  .stars::after {
+    content: '';
+    position: absolute;
+    background: transparent;
+    border-radius: 50%; /* Make them round (sparkle/star shape) */
+    box-shadow:
+      /* Large stars */
+      100px 30px 4px 1px #fff,
+      200px 80px 3px 0.5px #fff,
+      300px 120px 5px 1.5px #fff,
+      400px 50px 3px 0.5px #fff,
+      500px 150px 4px 1px #fff,
+      600px 90px 3px 0.5px #fff,
+      700px 180px 5px 1.5px #fff,
+      800px 20px 4px 1px #fff,
+      900px 100px 3px 0.5px #fff,
+      1000px 70px 5px 1.5px #fff,
+  
+      /* Medium stars */
+      50px 250px 2px 0.5px #fff,
+      150px 320px 2px 0.5px #fff,
+      250px 180px 3px 0.8px #fff,
+      350px 280px 2px 0.5px #fff,
+      450px 350px 3px 0.8px #fff,
+      550px 220px 2px 0.5px #fff,
+      650px 300px 3px 0.8px #fff,
+      750px 250px 2px 0.5px #fff,
+      850px 380px 2px 0.5px #fff,
+      950px 150px 3px 0.8px #fff,
+  
+      /* Small stars/sparkles */
+      10px 10px 1px #fff,
+      30px 60px 1px #fff,
+      80px 90px 1px #fff,
+      120px 20px 1px #fff,
+      170px 110px 1px #fff,
+      220px 40px 1px #fff,
+      280px 70px 1px #fff,
+      330px 10px 1px #fff,
+      390px 130px 1px #fff,
+      440px 50px 1px #fff,
+      490px 80px 1px #fff,
+      540px 120px 1px #fff,
+      590px 30px 1px #fff,
+      640px 140px 1px #fff,
+      690px 60px 1px #fff,
+      740px 90px 1px #fff,
+      790px 20px 1px #fff,
+      840px 100px 1px #fff,
+      890px 40px 1px #fff,
+      940px 70px 1px #fff,
+      990px 10px 1px #fff,
+      50px 500px 1px #fff,
+      100px 550px 1px #fff,
+      150px 480px 1px #fff,
+      200px 520px 1px #fff,
+      250px 580px 1px #fff,
+      300px 490px 1px #fff,
+      350px 530px 1px #fff,
+      400px 590px 1px #fff,
+      450px 470px 1px #fff,
+      500px 510px 1px #fff,
+      550px 560px 1px #fff,
+      600px 480px 1px #fff,
+      650px 540px 1px #fff,
+      700px 500px 1px #fff,
+      750px 570px 1px #fff,
+      800px 460px 1px #fff,
+      850px 520px 1px #fff,
+      900px 580px 1px #fff,
+      950px 490px 1px #fff,
+      1000px 530px 1px #fff,
+      1050px 590px 1px #fff,
+      1100px 470px 1px #fff;
+  }
+  
+  /* Further sets of stars for density and variety */
+  .stars::before {
+    top: 0;
+    left: 0;
+    animation-delay: 0.5s; /* Stagger animation for more natural look */
+  }
+  
+  .stars::after {
+    top: 50%; /* Position second set of stars differently */
+    left: 50%;
+    animation-delay: 1.2s; /* Stagger animation for more natural look */
+  }
+  
+  
+  /* Optional: Responsive adjustments for very small screens if needed */
+  @media (max-width: 768px) {
+    /* Adjust star density or sizes for smaller screens */
+    .stars::before,
+    .stars::after {
+      /* You might want to reduce the number of box-shadow entries here
+         or reduce their blur/size for better performance on mobile.
+         For now, leaving as is, but keep in mind for optimization. */
+    }
+  }
+  

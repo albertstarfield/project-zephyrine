@@ -46,6 +46,13 @@ const AppContent = () => {
   const backgroundRef = useRef(null); // Create a ref for the background container
   useThemedBackground(backgroundRef); // Use the new theme-aware background hook
 
+  useEffect(() => {
+    console.log('Current App theme:', theme);
+    if (backgroundRef.current) {
+      console.log('Background container ref exists:', backgroundRef.current);
+    }
+  }, [theme, backgroundRef]);
+
   // useCallback to provide a stable getter for the WebSocket instance, passed to child components/hooks.
   const getWsInstance = useCallback(() => ws.current, []); 
 
@@ -236,7 +243,14 @@ const AppContent = () => {
             <div className="cloud c3"></div>
           </div>
         )}
+
+        {/* Render stars when the theme is 'dark' */}
+        {theme === 'dark' && (
+          <div className="stars"></div>
+        )}
       </div>
+
+
 
       {/* Overlay that appears when sidebar is open on mobile, closes sidebar on click */}
       <div className={`sidebar-overlay ${!isSidebarOpen ? 'active' : ''}`} onClick={toggleSidebar}></div>
