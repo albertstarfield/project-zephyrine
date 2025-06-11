@@ -10,6 +10,7 @@
   },
   "dependencies": {
     "@ricky0123/vad-web": "^0.0.24",
+    "onnxruntime-web": "^1.22.0",
     "dotenv": "^16.4.7",
     "katex": "^0.16.11",
     "lucide-react": "^0.484.0",
