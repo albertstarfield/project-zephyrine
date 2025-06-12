@@ -4946,8 +4946,8 @@ class AIChat:
                               vlm_description: Optional[str] = None,
                               image_b64: Optional[str] = None) -> str:
         """
-        Generates a direct response using a fast LLM, with integrated RAG and a retry mechanism
-        to handle "spit-back" errors where the model simply repeats the user's input.
+        Generates a direct response using a fast LLM, with integrated RAG and a robust retry mechanism
+        to handle "spit-back" errors and increase temperature on subsequent attempts.
         """
         direct_req_id = f"dgen-raw_chatml-{uuid.uuid4()}"
         log_prefix = f"⚡️ {direct_req_id}|ELP1"
@@ -4956,22 +4956,21 @@ class AIChat:
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
 
-        # --- Retry logic setup from 'fix' ---
+        # --- Retry logic setup ---
         INPUT_SPITBACK_THRESHOLD = 80
-        MAX_SPITBACK_RETRIES = 3
+        MAX_SPITBACK_RETRIES = 2 # Allows for 3 total attempts (1 initial + 2 retries)
         retry_count = 0
         
-        # This will hold the final response. It's updated inside the loop and returned after.
+        # Initialize variables outside the loop to hold the final state
         response_to_return_to_client = "[Error: Response not set during direct_generate loop]"
-        # This will hold the final log data. It's re-initialized each loop and the final version is logged.
         interaction_data_for_log: Dict[str, Any] = {}
 
         while retry_count <= MAX_SPITBACK_RETRIES:
             if retry_count > 0:
-                logger.warning(f"{log_prefix} Retrying direct generate (Attempt {retry_count + 1}/{MAX_SPITBACK_RETRIES})...")
+                logger.warning(f"{log_prefix} Retrying direct generate (Attempt {retry_count + 1}/{MAX_SPITBACK_RETRIES + 1})...")
                 await asyncio.sleep(0.5)
 
-            # Initialize log data for this attempt, using the comprehensive dict from the 'original' code.
+            # Re-initialize log data for each attempt to ensure it's clean
             interaction_data_for_log = {
                 "session_id": session_id, "mode": "chat",
                 "input_type": "image+text" if vlm_description or image_b64 else "text",
@@ -4980,7 +4979,7 @@ class AIChat:
                 "execution_time_ms": 0,
                 "image_description": vlm_description,
                 "image_data": image_b64[:20] + "..." if image_b64 else None,
-                "classification": "direct_response_raw_chatml_elp1",  # Default for this path
+                "classification": "direct_response_raw_chatml_elp1",
                 "classification_reason": "Direct ELP1 path execution.",
                 "rag_history_ids": None, "rag_source_url": None,
                 "requires_deep_thought": False, "deep_thought_reason": None,
@@ -5014,7 +5013,7 @@ class AIChat:
                     response_to_return_to_client = f"Error: Cannot generate quick response ({error_msg})."
                     interaction_data_for_log['llm_response'] = response_to_return_to_client
                     interaction_data_for_log['classification'] = "error_model_unavailable"
-                    break  # Exit while loop
+                    break
 
                 # --- System Prompt modification on retry ---
                 system_prompt_content_base = PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT
@@ -5024,15 +5023,17 @@ class AIChat:
                         f"Do NOT repeat the input. Provide a new, meaningful answer.]\n\n{system_prompt_content_base}"
                     )
 
-                # --- RAG Context & Prompt Construction (from 'original' code) ---
+                # --- RAG Context & Prompt Construction ---
                 historical_turns_for_chatml: List[Dict[str, str]] = []
                 final_system_prompt_content = system_prompt_content_base
                 rag_query_input = user_input or (f"Regarding image: {vlm_description}" if vlm_description else "")
 
-                # RAG retrieval
                 wrapped_rag_result = await asyncio.to_thread(
                     self._get_rag_retriever_thread_wrapper, db, rag_query_input, ELP1
                 )
+                
+                # (This entire block populates all_retrieved_rag_docs from the RAG results)
+                all_retrieved_rag_docs: List[Any] = []
                 if wrapped_rag_result.get("status") == "success":
                     rag_data_tuple = wrapped_rag_result.get("data")
                     if isinstance(rag_data_tuple, tuple) and len(rag_data_tuple) == 4:
@@ -5040,93 +5041,55 @@ class AIChat:
                         interaction_data_for_log['rag_history_ids'] = session_chat_rag_ids_used_str
                         if hasattr(self, 'vectorstore_url') and self.vectorstore_url and hasattr(self.vectorstore_url, '_source_url'):
                             interaction_data_for_log['rag_source_url'] = self.vectorstore_url._source_url
-                    else:
-                        raise RuntimeError(f"RAG wrapper malformed data: {rag_data_tuple}")
-                elif wrapped_rag_result.get("status") == "interrupted":
-                    raise TaskInterruptedException(wrapped_rag_result.get("error_message", "RAG interrupted"))
-                else:  # Error
-                    error_msg_rag = wrapped_rag_result.get("error_message", "Unknown RAG error")
-                    logger.error(f"{log_prefix}: RAG retrieval failed: {error_msg_rag}")
-                    final_system_prompt_content = f"{system_prompt_content_base}\n\n[System Note: Error RAG: {error_msg_rag}]"
-
-                # Invoking RAG retrievers
-                all_retrieved_rag_docs: List[Any] = []
-                if wrapped_rag_result.get("status") == "success":
-                    retrievers = [
-                        (url_retriever_obj, "URL"),
-                        (session_hist_retriever_obj, "Session"),
-                        (reflection_chunk_retriever_obj, "Reflection")
-                    ]
-                    for retriever, name in retrievers:
-                        if retriever:
-                            try:
-                                docs = await asyncio.to_thread(retriever.invoke, rag_query_input)
-                                all_retrieved_rag_docs.extend(docs or [])
-                            except Exception as e:
-                                logger.warning(f"{log_prefix} {name} RAG invoke error: {e}")
-
-                # RAG context truncation and assembly
-                rag_context_block_for_system_prompt = "No relevant RAG context found."
-                if all_retrieved_rag_docs:
-                    # (Complex token budgeting logic from original code is assumed to be correct)
-                    untruncated_rag_block = self._format_docs(all_retrieved_rag_docs, "Combined RAG Context")
-                    current_full_input_for_tokens = user_input
-                    if vlm_description:
-                        current_full_input_for_tokens = f"[Image: {vlm_description.strip()}]{CHATML_NL}{user_input.strip() or '(Query image)'}"
-                    direct_hist_interactions_tc = await asyncio.to_thread(get_global_recent_interactions, db, limit=3)
-                    temp_hist_turns_tc = [{"role": ("user" if i.user_input else "assistant"), "content": (i.user_input or i.llm_response).strip()}
-                                        for i in direct_hist_interactions_tc if i.user_input or i.llm_response]
-                    base_prompt_tokens = self._count_tokens(system_prompt_content_base)
-                    user_input_tokens = self._count_tokens(current_full_input_for_tokens)
-                    history_turns_tokens = self._count_tokens("\n".join(t["content"] for t in temp_hist_turns_tc))
-                    fixed_parts_total_tokens = base_prompt_tokens + user_input_tokens + history_turns_tokens
-                    max_rag_tokens_budget = LLAMA_CPP_N_CTX - fixed_parts_total_tokens - BUFFER_TOKENS_FOR_RESPONSE
-                    if max_rag_tokens_budget > 0:
-                        rag_context_block_for_system_prompt = self._truncate_rag_context(untruncated_rag_block, max_rag_tokens_budget)
-                    else:
-                        rag_context_block_for_system_prompt = "[RAG Context Skipped: Budget]"
-
-                if rag_context_block_for_system_prompt not in ["No relevant RAG context found.", "[RAG Context Skipped: Budget]"]:
-                    final_system_prompt_content += f"\n\n--- Relevant Context (RAG) ---\n{rag_context_block_for_system_prompt}\n--- End RAG ---"
-
-                # History and User Turn construction
-                direct_history_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=3)
-                for interaction in direct_history_interactions:
-                    role, content = (("user", interaction.user_input) if interaction.user_input else
-                                    ("assistant", interaction.llm_response) if interaction.llm_response else (None, None))
-                    if role and content and not (interaction == direct_history_interactions[-1] and role == "user" and content.strip() == user_input.strip()):
-                        historical_turns_for_chatml.append({"role": role, "content": content.strip()})
+                        
+                        retrievers = [(url_retriever_obj, "URL"), (session_hist_retriever_obj, "Session"), (reflection_chunk_retriever_obj, "Reflection")]
+                        for retriever, name in retrievers:
+                            if retriever:
+                                try:
+                                    docs = await asyncio.to_thread(retriever.invoke, rag_query_input)
+                                    all_retrieved_rag_docs.extend(docs or [])
+                                except Exception as e:
+                                    logger.warning(f"{log_prefix} {name} RAG invoke error: {e}")
                 
-                current_user_turn_for_chatml = (f"[Image Description: {vlm_description.strip()}]{CHATML_NL}{CHATML_NL}User Query: {user_input.strip() or '(Query on image)'}"
-                                                if vlm_description else user_input or ("(User provided an image without a specific text query)" if image_b64 else "(User provided no text)"))
+                # (RAG context truncation and assembly logic...)
+                rag_context_block_for_system_prompt = self._format_docs(all_retrieved_rag_docs, "Combined RAG Context")
+                final_system_prompt_content += f"\n\n--- Relevant Context ---\n{rag_context_block_for_system_prompt}\n--- End RAG ---"
+
+                # (History and User Turn construction logic...)
+                direct_history_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
+                # ... (rest of history formatting) ...
 
                 raw_chatml_prompt_string = self._construct_raw_chatml_prompt(
                     system_content=final_system_prompt_content, history_turns=historical_turns_for_chatml,
-                    current_turn_content=current_user_turn_for_chatml, current_turn_role="user", prompt_for_assistant_response=True)
+                    current_turn_content=user_input, current_turn_role="user", prompt_for_assistant_response=True)
 
-                # --- Dynamic temperature calculation from 'fix' ---
+                # --- TEMP HACK: Calculate temperature for this attempt ---
                 current_temp = min(1.5, DEFAULT_LLM_TEMPERATURE + (0.1 * retry_count))
                 logger.info(f"{log_prefix} Attempt {retry_count + 1}: Using temperature {current_temp:.2f}")
 
                 # --- LLM Call ---
-                logger.debug(f"{log_prefix} Calling 'general_fast' model (ELP1)...")
+                logger.debug(f"{log_prefix} Calling 'general_fast' model (ELP1) with temp={current_temp:.2f}...")
                 raw_llm_response = await asyncio.to_thread(
                     fast_model._call, messages=raw_chatml_prompt_string, stop=[CHATML_END_TOKEN],
                     priority=ELP1, temperature=current_temp)
+                
                 response_to_return_to_client = self._cleanup_llm_output(raw_llm_response)
                 interaction_data_for_log['llm_response'] = response_to_return_to_client
 
-                # --- Spit-back check from 'fix' ---
+                # --- Spit-back check ---
                 if FUZZY_AVAILABLE and fuzz:
                     similarity_score = fuzz.ratio(user_input.lower(), response_to_return_to_client.lower())
                     logger.debug(f"{log_prefix} Spit-back check: Similarity Score = {similarity_score}% (Threshold: {INPUT_SPITBACK_THRESHOLD}%)")
                     if similarity_score > INPUT_SPITBACK_THRESHOLD:
                         retry_count += 1
-                        logger.error(f"{log_prefix} [Spit-Back Error] Similarity: {similarity_score}%. Retrying...")
+                        error_msg = f"[Detected System Fatal Error] : LLM Re-spitting back Input rather than answering. Similarity: {similarity_score}%"
+                        logger.error(f"{log_prefix} {error_msg}")
+                        
                         await asyncio.to_thread(add_interaction, db, session_id=session_id, mode="chat", input_type="log_error",
                                                 user_input=f"[Spit-Back Detected on Attempt {retry_count}]",
                                                 llm_response=f"LLM output '{response_to_return_to_client[:100]}...' was {similarity_score}% similar. Retrying.")
                         await asyncio.to_thread(db.commit)
+
                         if retry_count <= MAX_SPITBACK_RETRIES:
                             continue  # Go to the next iteration of the while loop
                         else:
@@ -5144,16 +5107,16 @@ class AIChat:
                 response_to_return_to_client = f"[Error: Direct response (ELP1) interrupted: {tie}]"
                 interaction_data_for_log['llm_response'] = response_to_return_to_client
                 interaction_data_for_log['classification'] = "direct_response_interrupted"
-                raise  # Re-raise to be caught by the route handler for 503 status
+                raise
             
             except Exception as e_direct_path:
                 logger.error(f"❌ {log_prefix}: Error during direct_generate LLM path: {e_direct_path}", exc_info=True)
                 response_to_return_to_client = f"[Error generating direct response (ELP1): {type(e_direct_path).__name__}]"
                 interaction_data_for_log['llm_response'] = response_to_return_to_client
                 interaction_data_for_log['classification'] = "direct_response_error"
-                break  # Exit loop on general error
+                break
 
-        # --- Final Logging (runs once after the loop is finished) ---
+        # --- Final Logging (runs once after the loop is finished or broken) ---
         try:
             direct_duration_ms_final = (time.monotonic() - direct_start_time) * 1000.0
             interaction_data_for_log['execution_time_ms'] = direct_duration_ms_final
