@@ -345,13 +345,11 @@ PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = f"""You are Adelaide Zephyrine Charlotte
 Your task is to answer the User Query based on the provided context (History RAG and Recent Direct History). Make sure that you answer it rather than repeating it, unless the context is different.
 
 ## Internal Context (For Your own Reference Only do not repeat this) ##
-
-### Relevant Long-Term Memory (RAG):
+-----
+### Recent Conversation History and Context:
 {{history_rag}}
-
-### Recent Conversation History:
 {{direct_history}}
-
+-----
 ## User Query (Your Task is to answer this directly) ##
 User: {{input}} (Only answer this!)
 ==============================================================================================================================================================================================================================================================================================================================================================================================================================================
