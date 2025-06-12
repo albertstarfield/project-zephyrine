@@ -1576,15 +1576,15 @@ class AIChat:
         
         return retrieved_docs
 
+    #for ELP1 rag retriever since it's uses small amount of resources for calculation vector and retrieve it's better to put it on ELP1 by default
     def _get_rag_retriever(self, db: Session, user_input_for_rag_query: str, priority: int = ELP1) -> Tuple[
     Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], str
     ]:
         """
-        Hybrid RAG Retriever (Corrected Implementation):
-        Ensures all on-the-fly embedding operations respect the incoming priority level.
+        Hybrid RAG Retriever with verbose logging and fuzzy search fallback for history.
         """
         log_prefix = f"RAGRetriever|ELP{priority}|{self.current_session_id or 'NoSession'}"
-        logger.info(f"Hybrid RAG Retriever: Combining on-the-fly session with persistent stores for query: '{user_input_for_rag_query[:30]}...'")
+        logger.info(f"Hybrid RAG Retriever: Combining vector search and fuzzy search for query: '{user_input_for_rag_query[:30]}...'")
 
         # Initialize all return values
         url_retriever: Optional[VectorStoreRetriever] = None
@@ -1610,32 +1610,33 @@ class AIChat:
                     vector_to_search=rag_query_vector
                 )
             
-            # --- Step 2: Hybrid Interaction History Retriever ---
+            # --- Step 2: Hybrid Interaction History Retriever (Vector + Fuzzy) ---
             all_history_docs: List[Document] = []
             
-            # 2a. On-the-fly search for recent, unindexed interactions
+            # 2a. On-the-fly Vector Search (Recent, Unindexed Interactions)
             recent_unindexed_interactions = get_recent_interactions(
                 db, RAG_HISTORY_COUNT * 4, self.current_session_id, "chat", False
             )
             recent_unindexed_interactions = [inter for inter in recent_unindexed_interactions if not inter.is_indexed_for_rag]
             recent_unindexed_interactions.reverse()
+            logger.info(f"[RAG VERBOSITY] Found {len(recent_unindexed_interactions)} recent unindexed interactions to search in-memory.")
             
             if recent_unindexed_interactions and rag_query_vector:
-                # Vector search on recent items
                 recent_texts_to_embed = [f"User: {i.user_input or ''}\nAI: {i.llm_response or ''}" for i in recent_unindexed_interactions]
                 if recent_texts_to_embed:
-                    # FIX: Manually embed with correct priority before creating Chroma store
                     on_the_fly_embeddings = self.provider.embeddings.embed_documents(recent_texts_to_embed, priority=priority)
-                    
-                    temp_vs = Chroma.from_embeddings(
-                        embeddings=on_the_fly_embeddings,
-                        embedding_function=self.provider.embeddings,
-                        documents=recent_texts_to_embed # Provide original texts for the store
-                    )
+                    temp_vs = Chroma(embedding_function=self.provider.embeddings)
+                    if on_the_fly_embeddings:
+                        temp_vs._collection.add(
+                            embeddings=on_the_fly_embeddings,
+                            documents=recent_texts_to_embed,
+                            ids=[f"onthefly_{i.id}" for i, interaction in enumerate(recent_unindexed_interactions)]
+                        )
                     on_the_fly_docs = temp_vs.similarity_search(user_input_for_rag_query, k=RAG_HISTORY_COUNT // 2)
+                    logger.info(f"[RAG VERBOSITY] In-memory vector search found {len(on_the_fly_docs)} documents.")
                     all_history_docs.extend(on_the_fly_docs)
 
-            # 2b. Search the persistent, indexed interaction history
+            # 2b. Persistent Vector Search (Indexed Interactions)
             interaction_vs = get_global_interaction_vectorstore()
             if interaction_vs and rag_query_vector:
                 persistent_retriever = self._CustomVectorSearchRetriever(
@@ -1644,23 +1645,61 @@ class AIChat:
                     vector_to_search=rag_query_vector
                 )
                 persistent_docs = persistent_retriever.invoke(user_input_for_rag_query)
+                logger.info(f"[RAG VERBOSITY] Persistent vector store search found {len(persistent_docs or [])} documents.")
                 all_history_docs.extend(persistent_docs or [])
 
+            # --- NEW FUZZY LOGIC ---
+            # Augment with fuzzy search if vector results are sparse
+            if FUZZY_AVAILABLE and len(all_history_docs) < RAG_HISTORY_COUNT:
+                logger.info(f"[RAG VERBOSITY] Augmenting with Fuzzy Search (Threshold: {FUZZY_SEARCH_THRESHOLD})...")
+                
+                # Fetch a pool of recent interactions to perform fuzzy search on
+                fuzzy_candidate_pool = get_recent_interactions(db, limit=RAG_HISTORY_COUNT * 5, session_id=self.current_session_id, mode="chat", include_logs=False)
+                vector_found_interaction_ids = {doc.metadata.get("interaction_id") for doc in all_history_docs if doc.metadata and "interaction_id" in doc.metadata}
+                
+                fuzzy_matches: List[Tuple[Interaction, int]] = []
+                for interaction in fuzzy_candidate_pool:
+                    if interaction.id in vector_found_interaction_ids:
+                        continue
+                    
+                    text_to_match = f"{interaction.user_input or ''} {interaction.llm_response or ''}"
+                    if text_to_match.strip():
+                        score = fuzz.partial_ratio(user_input_for_rag_query.lower(), text_to_match.lower())
+                        if score >= FUZZY_SEARCH_THRESHOLD:
+                            fuzzy_matches.append((interaction, score))
+                
+                if fuzzy_matches:
+                    fuzzy_matches.sort(key=lambda x: x[1], reverse=True)
+                    needed_count = RAG_HISTORY_COUNT - len(all_history_docs)
+                    top_fuzzy_matches = fuzzy_matches[:needed_count]
+                    logger.info(f"[RAG VERBOSITY] Fuzzy search found {len(top_fuzzy_matches)} new documents above threshold.")
+                    for interaction, score in top_fuzzy_matches:
+                        content = f"User: {interaction.user_input or ''}\nAI: {interaction.llm_response or ''}"
+                        doc = Document(page_content=content, metadata={"source": "history_fuzzy", "interaction_id": interaction.id, "score": score})
+                        all_history_docs.append(doc)
+            # --- END NEW FUZZY LOGIC ---
+
+            logger.info(f"[RAG VERBOSITY] Total combined documents for history_rag: {len(all_history_docs)}")
+            
             # 2c. Combine all history results into a single retriever
             if all_history_docs:
                 unique_docs = {doc.page_content: doc for doc in all_history_docs}.values()
                 
-                # FIX: Manually embed the combined unique documents with the correct priority
                 combined_texts = [doc.page_content for doc in unique_docs]
                 combined_metadatas = [doc.metadata for doc in unique_docs]
-                combined_embeddings = self.provider.embeddings.embed_documents(combined_texts, priority=priority)
+                ids_for_combined_vs = [f"combined_{i}" for i in range(len(unique_docs))]
 
-                temp_combined_vs = Chroma.from_embeddings(
-                    embeddings=combined_embeddings,
-                    embedding_function=self.provider.embeddings,
-                    documents=combined_texts,
-                    metadatas=combined_metadatas
-                )
+                temp_combined_vs = Chroma(embedding_function=self.provider.embeddings)
+                
+                # We need to re-embed the combined list to create the final temporary store
+                combined_embeddings = self.provider.embeddings.embed_documents(combined_texts, priority=priority)
+                if combined_embeddings:
+                    temp_combined_vs._collection.add(
+                        embeddings=combined_embeddings,
+                        documents=combined_texts,
+                        metadatas=combined_metadatas,
+                        ids=ids_for_combined_vs
+                    )
                 session_history_retriever = temp_combined_vs.as_retriever(search_kwargs={"k": RAG_HISTORY_COUNT})
 
             # --- Step 3: Persistent Reflection Retriever ---
@@ -1671,6 +1710,8 @@ class AIChat:
                     search_kwargs={"k": RAG_HISTORY_COUNT},
                     vector_to_search=rag_query_vector
                 )
+                reflection_docs = reflection_chunks_retriever.invoke(user_input_for_rag_query)
+                logger.info(f"[RAG VERBOSITY] Reflection vector store search found {len(reflection_docs or [])} documents.")
 
             return (url_retriever, session_history_retriever, reflection_chunks_retriever, "")
 
@@ -1681,73 +1722,71 @@ class AIChat:
         
 
 
-    async def _generate_file_search_query_async(self, db: Session, user_input_for_analysis: str, recent_direct_history_str: str, session_id: str) -> str:
+    async def _generate_file_search_query_async(self, db: Session, user_input_for_analysis: str, recent_direct_history_str: str, history_rag_str: str, session_id: str) -> str:
         """
         Uses the default LLM to generate a concise search query for the file index.
-        Removes <think> tags and cleans the output.
+        MODIFIED: Now accepts and uses history_rag_str.
         """
-        query_gen_id = f"fqgen-{uuid.uuid4()}"
-        logger.info(f"{query_gen_id}: Generating dedicated file search query...")
-
-        default_model = self.provider.get_model("default")
-        if not default_model:
-            logger.error(f"{query_gen_id}: Default model not available for file query generation. Falling back to user input.")
-            # Log fallback
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
-                            user_input="File Query Gen Fallback",
-                            llm_response="Default model unavailable, using raw input for file search.")
-            return user_input_for_analysis # Fallback to original input
 
         prompt_input = {
             "input": user_input_for_analysis,
-            "recent_direct_history": recent_direct_history_str
+            "recent_direct_history": recent_direct_history_str,
+            "history_rag": history_rag_str
+        }
+        
+
+        query_gen_id = f"fqgen-{uuid.uuid4()}"
+
+        logger.debug(f"{query_gen_id}: Debugging file search query ctx input {user_input_for_analysis} dirHist {recent_direct_history_str} histRAGVec{history_rag_str}")
+
+        logger.info(f"{query_gen_id}: Generating dedicated file search query...")
+
+        file_search_query_gen_model = self.provider.get_model("router")
+        if not file_search_query_gen_model:
+            logger.error(f"{query_gen_id}: Router model not available for file query generation. Falling back to user input.")
+            return user_input_for_analysis
+
+        # FIX: Added history_rag to the prompt input dictionary
+        prompt_input = {
+            "input": user_input_for_analysis,
+            "recent_direct_history": recent_direct_history_str,
+            "history_rag": history_rag_str
         }
 
         chain = (
             ChatPromptTemplate.from_template(PROMPT_GENERATE_FILE_SEARCH_QUERY)
-            | default_model
+            # --- MODIFICATION START ---
+            | file_search_query_gen_model.bind(max_tokens=FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS) # Use the selected model
+            # --- MODIFICATION END ---
             | StrOutputParser()
         )
 
+        logger.debug(f"{query_gen_id}: Prompt Query _generate_file_search_query_async LLM to be processed {chain}")
+        logger.debug(f"{query_gen_id}: Prompt Query _generate_file_search_query_async LLM to be processed prompt_input {prompt_input}")
+
+
         query_gen_timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
-        generated_query_raw = ""
         try:
             generated_query_raw = await asyncio.to_thread(
                 self._call_llm_with_timing, chain, prompt_input, query_gen_timing_data
             )
-            logger.trace(f"{query_gen_id}: Raw generated query response: '{generated_query_raw}'")
+            logger.debug(f"{query_gen_id}: generatedRaw Query _generate_file_search_query_async {generated_query_raw}")
 
-            # --- Clean the output ---
-            # 1. Remove <think> tags
+            # ... (rest of the cleanup logic is the same) ...
             cleaned_query = re.sub(r'<think>.*?</think>', '', generated_query_raw, flags=re.DOTALL | re.IGNORECASE)
-            # 2. Trim whitespace
             cleaned_query = cleaned_query.strip()
-            # 3. Optional: Remove potential quotes if the model wraps the query
             cleaned_query = re.sub(r'^["\']|["\']$', '', cleaned_query)
 
             if not cleaned_query:
                  logger.warning(f"{query_gen_id}: LLM generated an empty search query. Falling back to user input.")
-                 # Log empty generation
-                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_info",
-                                 user_input="File Query Gen Result",
-                                 llm_response="LLM generated empty query, using raw input for file search.")
-                 return user_input_for_analysis # Fallback
+                 return user_input_for_analysis
 
             logger.info(f"{query_gen_id}: Generated file search query: '{cleaned_query}'")
-            # Log successful generation
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug",
-                            user_input="File Query Gen Result",
-                            llm_response=f"Generated query: '{cleaned_query}'. Raw: '{generated_query_raw[:100]}...'")
             return cleaned_query
 
         except Exception as e:
             logger.error(f"❌ {query_gen_id}: Error generating file search query: {e}")
             logger.exception(f"{query_gen_id}: Query Generation Traceback")
-            # Log the error
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                            user_input="File Query Gen Failed",
-                            llm_response=f"Error: {e}. Raw Response: '{generated_query_raw[:100]}...'")
-            # Fallback to original input on error
             return user_input_for_analysis
     # --- END NEW HELPER ---
 
@@ -5971,589 +6010,6 @@ class AIChat:
             add_interaction(db, **db_kwargs)
             return result_msg
 
-    async def background_generate(self, db: Session, user_input: str, session_id: str = None,  # type: ignore
-                                  classification: str = "chat_simple", image_b64: Optional[str] = None,
-                                  update_interaction_id: Optional[int] = None,  # For reflection tasks
-                                  stop_event_for_bg: Optional[threading.Event] = None):  # For external stop signal
-
-        request_id = f"bgen-{uuid.uuid4()}"
-        is_reflection_task = update_interaction_id is not None
-        log_prefix_base = "🔄 REFLECT" if is_reflection_task else "💬 BGEN"
-        log_prefix = f"{log_prefix_base} {request_id}|ELP0"
-
-        # 1. Initialization and Setup
-        # ----------------------------------------------------------------------
-        if session_id is None:
-            session_id = (f"session_{int(time.monotonic())}" if not is_reflection_task
-                          else f"reflection_on_{update_interaction_id}_{str(uuid.uuid4())[:4]}")
-
-        original_chat_session_id = self.current_session_id
-        self.current_session_id = session_id  # Temporarily set for logging within this task
-
-        logger.info(
-            f"{log_prefix} Async Background Generate START --> Session: {session_id}, "
-            f"Initial Class: '{classification}', Input: '{user_input[:50]}...', Img: {'Yes' if image_b64 else 'No'}, "
-            f"Reflection Target ID: {update_interaction_id if is_reflection_task else 'N/A'}"
-        )
-        request_start_time = time.monotonic()
-
-        interaction_data: Dict[str, Any] = {
-            "session_id": session_id, "mode": "chat", "input_type": "text",
-            "user_input": user_input, "llm_response": "[Processing background task...]",
-            "execution_time_ms": 0, "classification": classification, "classification_reason": None,
-            "rag_history_ids": None, "rag_source_url": None,
-            "requires_deep_thought": (classification == "chat_complex") or is_reflection_task,
-            "deep_thought_reason": None, "tot_analysis_requested": False,
-            "tot_analysis_spawned": False, "tot_result": None, "tot_delivered": False,
-            "emotion_context_analysis": None, "image_description": None,
-            "assistant_action_analysis_json": None, "assistant_action_type": None,
-            "assistant_action_params": None, "assistant_action_executed": False,
-            "assistant_action_result": None,
-            "image_data": image_b64[:20] + "..." if image_b64 and isinstance(image_b64, str) else None,
-            "imagined_image_prompt": None, "imagined_image_b64": None,
-            "imagined_image_vlm_description": None,
-            "reflection_completed": False,
-            "reflection_indexed_in_vs": False
-        }
-        if image_b64:
-            interaction_data["input_type"] = "image+text"
-
-        final_response_text_for_this_turn = "Error: Background processing did not complete as expected."
-        saved_initial_interaction: Optional[Interaction] = None
-        original_interaction_to_update_for_reflection: Optional[Interaction] = None
-        task_completed_successfully = False  # Overall task success across retries
-
-        max_retries_for_bg_task = LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES
-        retry_delay_seconds = LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY
-
-        # 2. Input Validation
-        # ----------------------------------------------------------------------
-        if not user_input and not image_b64:
-            logger.warning(f"{log_prefix} Empty input (no text, no image). Aborting.")
-            self.current_session_id = original_chat_session_id  # Restore before early exit
-            return
-
-        # 3. Pre-computation / Initial DB Operations
-        # ----------------------------------------------------------------------
-        if is_reflection_task:
-            try:
-                original_interaction_to_update_for_reflection = await asyncio.to_thread(
-                    db.query(Interaction).filter(Interaction.id == update_interaction_id).first
-                )
-                if original_interaction_to_update_for_reflection is None:
-                    logger.error(
-                        f"{log_prefix} CRITICAL - Reflection target ID {update_interaction_id} not found. Aborting.")
-                    self.current_session_id = original_chat_session_id
-                    return
-                interaction_data["classification_reason"] = "Self-reflection task, proceeding with deep analysis."
-                logger.info(f"{log_prefix} Loaded original interaction {update_interaction_id} for reflection.")
-            except Exception as e_load_orig:
-                logger.error(
-                    f"{log_prefix} Error loading reflection target ID {update_interaction_id}: {e_load_orig}. Aborting.")
-                self.current_session_id = original_chat_session_id
-                return
-        else:  # Not a reflection task, create initial placeholder
-            try:
-                initial_save_data = interaction_data.copy()
-                initial_save_data['llm_response'] = "[Background task initiated... Processing...]"
-                initial_save_data['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000
-                valid_keys_init = {c.name for c in Interaction.__table__.columns}
-                db_kwargs_init = {k: v for k, v in initial_save_data.items() if k in valid_keys_init and k != 'id'}
-
-                saved_initial_interaction = await asyncio.to_thread(add_interaction, db, **db_kwargs_init)
-                await asyncio.to_thread(db.commit)  # Commit after adding
-
-                if saved_initial_interaction and saved_initial_interaction.id:
-                    logger.info(f"{log_prefix} Saved initial 'pending' Interaction ID {saved_initial_interaction.id}.")
-                else:
-                    logger.error(f"{log_prefix} Failed to save initial 'pending' interaction.")
-            except Exception as e_initial_save:
-                logger.error(f"{log_prefix} Error saving initial 'pending' interaction: {e_initial_save}")
-                if db: await asyncio.to_thread(db.rollback)
-                # Not returning here, will attempt processing and save final result as new if this failed.
-
-        # 4. Main Processing Block with Semaphore and Retries
-        # ----------------------------------------------------------------------
-        semaphore_acquired_for_task = False
-        try:
-            logger.debug(f"{log_prefix} Attempting to acquire background_generate_task_semaphore...")
-            try:
-                # `acquire()` is blocking. To make it awaitable with a timeout, use asyncio.to_thread.
-                # If `acquire()` is called directly without `to_thread`, it blocks the entire event loop.
-                # Given this is meant for a background task, calling it via `to_thread` makes sense
-                # to allow the main loop (if this were called by an ELP1) to remain responsive.
-                # However, if this entire `background_generate` function is already running in its own
-                # dedicated background thread (e.g., via `threading.Thread` and `asyncio.run`),
-                # then `semaphore.acquire()` directly is fine as it only blocks *that specific thread*.
-                # Based on `run_self_reflection_loop` calling `asyncio.run(ai_chat.background_generate(...))`,
-                # this entire function runs within `asyncio.run` in a dedicated thread.
-                # So, `acquire()` blocking is acceptable here for this specific thread.
-
-                # If you need a timeout *on the blocking acquire*, it should be:
-                # acquired_success = await asyncio.to_thread(background_generate_task_semaphore.acquire, timeout=SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS)
-                # if not acquired_success: raise asyncio.TimeoutError(...)
-
-                background_generate_task_semaphore.acquire()  # This will block until a slot is available
-                semaphore_acquired_for_task = True
-                logger.info(f"{log_prefix} Acquired background_generate_task_semaphore.")
-
-            except Exception as e_acquire:  # Catch any unexpected error during acquire
-                logger.error(f"❌ {log_prefix} Error acquiring semaphore: {e_acquire}. Aborting task.")
-                final_response_text_for_this_turn = f"Error: Semaphore acquisition failed: {e_acquire}."
-                interaction_data.update(
-                    {'llm_response': final_response_text_for_this_turn, 'classification': "task_failed_semaphore_error",
-                     'input_type': 'error'}
-                )
-                # Task not completed, semaphore not acquired, proceed to outer finally.
-                raise  # Re-raise to skip main logic and go to outer finally
-
-            # --- Politeness Check (Wait if server is busy) ---
-            MAX_POLITENESS_WAIT_SECONDS = 300
-            POLITENESS_CHECK_INTERVAL_SECONDS = 1.0
-            politeness_wait_start_time = time.monotonic()
-            was_busy_waiting = False
-            while server_is_busy_event.is_set():
-                if stop_event_for_bg and stop_event_for_bg.is_set():
-                    logger.warning(f"🛑 {log_prefix} Stop signal received during politeness wait. Aborting task.")
-                    raise TaskInterruptedException("Background task stopped during politeness wait.")
-                if not was_busy_waiting:
-                    logger.info(f"🚦 {log_prefix} Server busy, pausing background task start...")
-                    was_busy_waiting = True
-
-                await asyncio.sleep(POLITENESS_CHECK_INTERVAL_SECONDS)
-                if (time.monotonic() - politeness_wait_start_time) > MAX_POLITENESS_WAIT_SECONDS:
-                    logger.warning(f"{log_prefix} Max politeness wait exceeded. Proceeding despite busy server.")
-                    break
-            if was_busy_waiting: logger.info(f"🟢 {log_prefix} Server free, resuming background task.")
-
-            # --- Core Logic Retry Loop ---
-            current_attempt = 0
-            while current_attempt <= max_retries_for_bg_task:
-                current_attempt += 1
-                attempt_successful = False  # Flag for success of this specific attempt
-
-                if stop_event_for_bg and stop_event_for_bg.is_set():
-                    logger.warning(
-                        f"🛑 {log_prefix} Stop signal received before attempt {current_attempt}. Aborting task.")
-                    raise TaskInterruptedException("Background task stopped by external signal before attempt.")
-
-                if current_attempt > 1:
-                    logger.info(
-                        f"{log_prefix} Attempt {current_attempt}/{max_retries_for_bg_task + 1}: Retrying after delay.")
-                    await asyncio.sleep(retry_delay_seconds)
-
-                try:
-                    # Reset response text for this attempt
-                    final_response_text_for_this_turn = "Error: Attempt did not complete as expected."
-                    current_input_for_llm_analysis = user_input  # Initialize for each attempt
-                    imagined_img_vlm_desc_this_turn = interaction_data.get('imagined_image_vlm_description', 'None.')
-
-                    # --- VLM Preprocessing (if image_b64) ---
-                    if image_b64:
-                        logger.info(f"{log_prefix} Attempt {current_attempt}: VLM processing for user image...")
-                        vlm_desc, vlm_err = await self._describe_image_async(db, session_id, image_b64,
-                                                                             "initial_description", ELP0)
-                        if vlm_err:
-                            logger.error(f"{log_prefix} Attempt {current_attempt}: VLM error: {vlm_err}")
-                            interaction_data['image_description'] = f"[VLM Error: {vlm_err}]"
-                        else:
-                            interaction_data['image_description'] = vlm_desc
-                            current_input_for_llm_analysis = f"[Image: {vlm_desc}]\nUser: {user_input or '(query about image)'}"
-                            imagined_img_vlm_desc_this_turn = vlm_desc
-                        logger.info(
-                            f"{log_prefix} Attempt {current_attempt}: VLM done. Input for LLM: '{current_input_for_llm_analysis[:70]}...'")
-
-                    # --- Classification (if not reflection) ---
-                    classification_for_current_task = classification
-                    if not is_reflection_task:
-                        logger.info(f"{log_prefix} Attempt {current_attempt}: Classifying input...")
-                        clf_data = {"session_id": session_id, "mode": "chat", "input_type": "classification_bg"}
-                        classification_for_current_task = await asyncio.to_thread(self._classify_input_complexity, db,
-                                                                                  current_input_for_llm_analysis,
-                                                                                  clf_data)
-                        interaction_data['classification'] = classification_for_current_task
-                        interaction_data['classification_reason'] = clf_data.get('classification_reason')
-                        logger.info(
-                            f"{log_prefix} Attempt {current_attempt}: Classified as '{classification_for_current_task}'.")
-
-                    interaction_data['requires_deep_thought'] = (
-                                                                            classification_for_current_task == "chat_complex") or is_reflection_task
-
-                    # --- Context Gathering ---
-                    logger.debug(f"{log_prefix} Attempt {current_attempt}: Gathering contexts...")
-
-                    global_hist = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-                    direct_hist_prompt = self._format_direct_history(global_hist)
-                    log_entries = await asyncio.to_thread(get_recent_interactions, db, RAG_HISTORY_COUNT * 2,
-                                                          session_id, "chat", True)
-                    log_ctx_prompt = self._format_log_history(log_entries)
-                    emotion_analysis_str = await asyncio.to_thread(self._run_emotion_analysis, db, user_input,
-                                                                   interaction_data)  # Correctly wrapped in to_thread
-
-                    keyword_file_query = await self._generate_file_search_query_async(db,
-                                                                                      current_input_for_llm_analysis,
-                                                                                      direct_hist_prompt, session_id)
-                    vec_file_ctx_result_str = await self._get_vector_search_file_index_context(keyword_file_query, ELP0,
-                                                                                               stop_event_for_bg)
-
-                    wrapped_rag_res = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db,
-                                                              current_input_for_llm_analysis, ELP0)
-
-                    url_docs, session_docs, reflection_docs = [], [], []  # Ensure these are always lists
-                    sess_chat_rag_ids = ""
-
-                    if wrapped_rag_res.get("status") == "success":
-                        rag_data_tuple = wrapped_rag_res.get("data")
-                        if isinstance(rag_data_tuple, tuple) and len(rag_data_tuple) == 4:
-                            url_ret_obj, sess_hist_ret_obj, refl_chunk_ret_obj, sess_chat_rag_ids = rag_data_tuple
-                            interaction_data['rag_history_ids'] = sess_chat_rag_ids
-                            if hasattr(self, 'vectorstore_url') and self.vectorstore_url:
-                                interaction_data['rag_source_url'] = getattr(self.vectorstore_url, '_source_url', None)
-                        else:
-                            raise RuntimeError(f"RAG wrapper malformed data: {rag_data_tuple}")
-                    elif wrapped_rag_res.get("status") == "interrupted":
-                        raise TaskInterruptedException(
-                            wrapped_rag_res.get("error_message", "RAG retrieval interrupted"))
-                    else:  # Error
-                        raise RuntimeError(
-                            f"RAG retrieval failed: {wrapped_rag_res.get('error_message', 'Unknown RAG error')}")
-
-                    # Conditionally invoke retrievers and ensure results are lists
-                    if url_ret_obj:
-                        try:
-                            url_docs = await asyncio.to_thread(url_ret_obj.invoke, current_input_for_llm_analysis)
-                        except Exception as e_url_rag:
-                            logger.warning(
-                                f"{log_prefix} Attempt {current_attempt}: URL RAG invoke error: {e_url_rag}"); url_docs = []
-                    if sess_hist_ret_obj:
-                        try:
-                            session_docs = await asyncio.to_thread(sess_hist_ret_obj.invoke,
-                                                                   current_input_for_llm_analysis)
-                        except Exception as e_sess_rag:
-                            logger.warning(
-                                f"{log_prefix} Attempt {current_attempt}: Session RAG invoke error: {e_sess_rag}"); session_docs = []
-                    if refl_chunk_ret_obj:
-                        try:
-                            reflection_docs = await asyncio.to_thread(refl_chunk_ret_obj.invoke,
-                                                                      current_input_for_llm_analysis)
-                        except Exception as e_refl_rag:
-                            logger.warning(
-                                f"{log_prefix} Attempt {current_attempt}: Reflection RAG invoke error: {e_refl_rag}"); reflection_docs = []
-
-                    url_ctx_untruncated = self._format_docs(url_docs, "URL Context")
-                    sess_refl_rag_untrunc = self._format_docs(session_docs + reflection_docs, "Session/Reflection RAG")
-
-                    # Token budgeting as in your file to prepare main_dynamic_ctx_block_for_llm
-                    # and context_for_router (url_ctx_for_router, sess_refl_router, file_ctx_for_router)
-                    # This logic is complex and omitted here for brevity but should be present
-                    MODEL_CONTEXT_WINDOW = LLAMA_CPP_N_CTX  # From config
-                    BUFFER_TOKENS_FOR_RESPONSE = 512  # From config or defined
-                    FIXED_PROMPT_OVERHEAD = 100  # From config or defined
-
-                    est_input_tokens = self._count_tokens(current_input_for_llm_analysis)
-                    est_direct_hist_tokens = self._count_tokens(direct_hist_prompt)
-                    est_log_tokens = self._count_tokens(log_ctx_prompt)
-
-                    available_context_tokens = MODEL_CONTEXT_WINDOW - est_input_tokens - est_direct_hist_tokens - est_log_tokens - BUFFER_TOKENS_FOR_RESPONSE - FIXED_PROMPT_OVERHEAD
-                    if available_context_tokens < 100: available_context_tokens = 100  # Minimum safety buffer
-
-                    # Truncate RAG contexts based on remaining budget
-                    main_dynamic_ctx_block_for_llm = self._truncate_rag_context(
-                        f"{url_ctx_untruncated}\n\n{sess_refl_rag_untrunc}\n\n{vec_file_ctx_result_str}",
-                        available_context_tokens)
-                    # Smaller subsets for router if needed, otherwise use `main_dynamic_ctx_block_for_llm`
-                    url_ctx_for_router = self._truncate_rag_context(url_ctx_untruncated, available_context_tokens // 2)
-                    sess_refl_router = self._truncate_rag_context(sess_refl_rag_untrunc, available_context_tokens // 2)
-                    file_ctx_for_router = self._truncate_rag_context(vec_file_ctx_result_str,
-                                                                     available_context_tokens // 2)
-
-                    logger.debug(f"{log_prefix} Attempt {current_attempt}: Contexts gathered.")
-
-                    # --- Action Analysis ---
-                    logger.info(f"{log_prefix} Attempt {current_attempt}: Analyzing assistant action...")
-                    action_payload_ctx = {"history_summary": emotion_analysis_str, "log_context": log_ctx_prompt,
-                                          "recent_direct_history": direct_hist_prompt,
-                                          "file_index_context": file_ctx_for_router}
-                    action_details = await self._analyze_assistant_action(db, current_input_for_llm_analysis,
-                                                                          session_id, action_payload_ctx)
-                    detected_action_type = action_details.get("action_type",
-                                                              "no_action") if action_details and isinstance(
-                        action_details, dict) else "no_action"
-                    if action_details:
-                        interaction_data.update({
-                            'assistant_action_analysis_json': json.dumps(action_details),
-                            'assistant_action_type': detected_action_type,
-                            'assistant_action_params': json.dumps(action_details.get("parameters", {}))
-                        })
-                    logger.info(
-                        f"{log_prefix} Attempt {current_attempt}: Action analysis type: '{detected_action_type}'.")
-
-                    # --- Main Logic Flow (Action, Image Gen, Standard LLM) ---
-                    if detected_action_type == "imagine" and action_details:
-                        interaction_data['assistant_action_executed'] = True
-                        idea_to_viz = action_details.get("parameters", {}).get("idea_to_visualize", user_input)
-                        img_prompt = await self._generate_image_generation_prompt_async(db, session_id, user_input,
-                                                                                        idea_to_viz, sess_refl_router,
-                                                                                        file_ctx_for_router,
-                                                                                        direct_hist_prompt,
-                                                                                        url_ctx_for_router,
-                                                                                        log_ctx_prompt)
-                        interaction_data['imagined_image_prompt'] = img_prompt
-                        if img_prompt:
-                            img_data_list, img_err = await self.provider.generate_image_async(prompt=img_prompt,
-                                                                                              image_base64=None,
-                                                                                              priority=ELP0)
-                            if img_err:
-                                final_response_text_for_this_turn = f"Imagine Error: {img_err}"
-                            elif img_data_list and img_data_list[0].get("b64_json"):
-                                img_b64_gen = img_data_list[0]["b64_json"]
-                                interaction_data['imagined_image_b64'] = img_b64_gen[:20] + "...[trunc]"
-                                gen_vlm_desc, _ = await self._describe_image_async(db, session_id, img_b64_gen,
-                                                                                   "describe_generated_image", ELP0)
-                                interaction_data['imagined_image_vlm_description'] = gen_vlm_desc
-                                imagined_img_vlm_desc_this_turn = gen_vlm_desc
-                                final_response_text_for_this_turn = f"I've imagined: {gen_vlm_desc or 'Generated an image.'}"
-                            else:
-                                final_response_text_for_this_turn = "Imagine Error: No image data."
-                        else:
-                            final_response_text_for_this_turn = "Imagine Error: Prompt gen failed."
-                        interaction_data['assistant_action_result'] = final_response_text_for_this_turn
-
-                    elif detected_action_type != "no_action" and action_details:
-                        target_interaction = saved_initial_interaction if not is_reflection_task else original_interaction_to_update_for_reflection
-                        if target_interaction:
-                            final_response_text_for_this_turn = await self._execute_assistant_action(db, session_id,
-                                                                                                     action_details,
-                                                                                                     target_interaction)  # type: ignore
-                        else:
-                            final_response_text_for_this_turn = "Error: Missing interaction context for action."
-                        interaction_data['assistant_action_result'] = final_response_text_for_this_turn
-                        interaction_data['assistant_action_executed'] = True
-
-                    else:  # Standard LLM response
-                        router_payload = {"input": current_input_for_llm_analysis,
-                                          "recent_direct_history": direct_hist_prompt, "context": url_ctx_for_router,
-                                          "history_rag": sess_refl_router, "file_index_context": file_ctx_for_router,
-                                          "log_context": log_ctx_prompt, "emotion_analysis": emotion_analysis_str,
-                                          "pending_tot_result": interaction_data.get("tot_result", "None."),
-                                          "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn}
-                        role, query, reason = await self._route_to_specialist(db, session_id,
-                                                                              current_input_for_llm_analysis,
-                                                                              router_payload)
-                        interaction_data['classification_reason'] = f"Routed to {role}: {reason}"
-
-                        specialist_model = self.provider.get_model(role)
-                        if not specialist_model: raise ValueError(f"Specialist model '{role}' not found.")
-
-                        specialist_payload = {"input": query, "emotion_analysis": emotion_analysis_str,
-                                              "context": url_ctx_untruncated, "history_rag": sess_refl_rag_untrunc,
-                                              "file_index_context": main_dynamic_ctx_block_for_llm,
-                                              "log_context": log_ctx_prompt,
-                                              "recent_direct_history": direct_hist_prompt,
-                                              "pending_tot_result": interaction_data.get("tot_result", "None."),
-                                              "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn}
-                        specialist_chain = (self.text_prompt_template | specialist_model | StrOutputParser())
-                        timing_data = {"session_id": session_id, "mode": f"chat_specialist_{role}"}
-
-                        draft_response = await asyncio.to_thread(
-                            self._call_llm_with_timing, specialist_chain, specialist_payload, timing_data, priority=ELP0
-                        )
-                        final_response_text_for_this_turn = await self._correct_response(db, session_id,
-                                                                                         current_input_for_llm_analysis,
-                                                                                         specialist_payload,
-                                                                                         draft_response)
-
-                    # --- Tree of Thought (ToT) Spawning ---
-                    if not is_reflection_task and \
-                            (classification_for_current_task == "chat_complex" or interaction_data.get(
-                                "requires_deep_thought")):
-                        trigger_id_for_tot = saved_initial_interaction.id if saved_initial_interaction else None
-                        if trigger_id_for_tot:
-                            logger.info(
-                                f"{log_prefix} Attempt {current_attempt}: Spawning ToT for Interaction ID: {trigger_id_for_tot}.")
-                            tot_payload = {"db_session_factory": SessionLocal,
-                                           "original_input_for_tot": current_input_for_llm_analysis,
-                                           "rag_context_docs": url_docs,
-                                           "history_rag_interactions": session_docs + reflection_docs,
-                                           "log_context_str": log_ctx_prompt,
-                                           "recent_direct_history_str": direct_hist_prompt,
-                                           "file_index_context_str": main_dynamic_ctx_block_for_llm,
-                                           # Ensure this is available and correct
-                                           "imagined_image_context_str": imagined_img_vlm_desc_this_turn or interaction_data.get(
-                                               'image_description', 'None.'),
-                                           "interaction_data_for_tot_llm_call": {},  # Placeholder
-                                           "original_user_input_for_log": user_input,  # Original for logging
-                                           "triggering_interaction_id_for_log": trigger_id_for_tot}
-
-                            asyncio.create_task(self._run_tot_in_background_wrapper_v2(**tot_payload))  # type: ignore
-                            interaction_data['tot_analysis_spawned'] = True
-                            # Update triggering interaction in DB immediately (if possible and desirable)
-                            try:
-                                tr_interaction = await asyncio.to_thread(
-                                    db.query(Interaction).filter(Interaction.id == trigger_id_for_tot).first)
-                                if tr_interaction:
-                                    tr_interaction.tot_analysis_spawned = True
-                                    tr_interaction.requires_deep_thought = True
-                                    # Ensure deep_thought_reason is set from classification if available
-                                    tr_interaction.deep_thought_reason = interaction_data.get('classification_reason',
-                                                                                              'Complex query, ToT spawned.')
-                                    await asyncio.to_thread(db.commit)
-                            except Exception as e_tot_update:
-                                logger.error(
-                                    f"{log_prefix} Failed to update triggering interaction for ToT: {e_tot_update}")
-                                await asyncio.to_thread(db.rollback)
-                        else:
-                            logger.warning(
-                                f"{log_prefix} Attempt {current_attempt}: Could not spawn ToT, no trigger ID.")
-
-                    attempt_successful = True  # Mark this attempt as successful
-                    task_completed_successfully = True  # Mark overall task success
-                    break  # Exit retry loop on success
-
-                except TaskInterruptedException as tie:
-                    logger.warning(f"� {log_prefix} Attempt {current_attempt} INTERRUPTED: {tie}")
-                    final_response_text_for_this_turn = f"[Task interrupted: {tie}]"
-                    interaction_data.update({'llm_response': final_response_text_for_this_turn,
-                                             'classification': "task_failed_interrupted", 'input_type': 'log_warning'})
-                    if current_attempt >= max_retries_for_bg_task:  # Check if max retries exhausted
-                        logger.error(f"{log_prefix} Max retries for interruption reached. Giving up.")
-                        task_completed_successfully = False  # Ensure it's marked as failed overall
-                        break  # Exit retry loop
-                    # else, loop will continue for next attempt
-
-                except Exception as e_inner:
-                    logger.error(
-                        f"❌❌ {log_prefix} Attempt {current_attempt} FAILED with unhandled exception: {e_inner}")
-                    logger.exception(f"{log_prefix} Attempt {current_attempt} Traceback:")
-                    final_response_text_for_this_turn = f"Error in processing: {type(e_inner).__name__} - {str(e_inner)}"
-                    interaction_data.update(
-                        {'llm_response': final_response_text_for_this_turn[:4000], 'input_type': 'error'})
-                    task_completed_successfully = False  # Mark as failed overall
-                    break  # Exit retry loop on unhandled error for this attempt
-
-            # End of retry loop (inner while loop)
-            if not task_completed_successfully and current_attempt > max_retries_for_bg_task:
-                logger.error(
-                    f"{log_prefix} All {current_attempt - 1} attempts failed or were interrupted. Task will be marked as failed.")
-
-
-        except asyncio.TimeoutError:  # From semaphore acquisition. This is for the `await asyncio.wait_for` if you were using it.
-            # The current structure has `background_generate_task_semaphore.acquire()` without a timeout as a blocking call.
-            # This `except asyncio.TimeoutError` will not be hit by the direct acquire unless it's wrapped.
-            # The error path `if not acquired:` handles the timeout result from `acquire()`.
-            pass  # This pass is fine, as other exceptions/returns handle it.
-        except TaskInterruptedException as tie_outer:  # From politeness check or before retry loop
-            logger.warning(f"🚦 {log_prefix} Task INTERRUPTED (outer): {tie_outer}")
-            final_response_text_for_this_turn = f"[Task interrupted externally: {tie_outer}]"
-            interaction_data.update({'llm_response': final_response_text_for_this_turn,
-                                     'classification': "task_failed_interrupted_outer", 'input_type': 'log_warning'})
-            task_completed_successfully = False
-        except Exception as e_outer:
-            logger.critical(f"🔥🔥 {log_prefix} CRITICAL UNHANDLED exception in background_generate (outer): {e_outer}")
-            logger.exception(f"{log_prefix} Outer Traceback:")
-            if final_response_text_for_this_turn == "Error: Background processing did not complete as expected.":  # Ensure it's updated
-                final_response_text_for_this_turn = f"Critical Error: {type(e_outer).__name__} - {str(e_outer)}"
-            interaction_data.update({'llm_response': final_response_text_for_this_turn[:4000], 'input_type': 'error'})
-            task_completed_successfully = False
-
-        finally:
-            # 5. Finalization: Semaphore Release, DB Update, Session ID Restore
-            # ----------------------------------------------------------------------
-            if semaphore_acquired_for_task:  # Only release if it was successfully acquired at the start
-                background_generate_task_semaphore.release()
-                logger.info(f"{log_prefix} Released background_generate_task_semaphore.")
-
-            if task_completed_successfully:
-                logger.info(f"{log_prefix} Overall task completed successfully after {current_attempt} attempt(s).")
-            else:
-                logger.error(f"{log_prefix} Overall task failed or was incomplete after {current_attempt} attempt(s).")
-
-            final_db_data_to_save = interaction_data.copy()
-            final_db_data_to_save['llm_response'] = self._cleanup_llm_output(final_response_text_for_this_turn)
-            final_db_data_to_save['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000.0
-            if 'last_modified_db' in final_db_data_to_save: del final_db_data_to_save['last_modified_db']
-
-            # Truncate large image data (safety)
-            img_b64_key = 'imagined_image_b64'
-            if final_db_data_to_save.get(img_b64_key) and len(final_db_data_to_save[img_b64_key]) > 1000000:
-                final_db_data_to_save[img_b64_key] = final_db_data_to_save[img_b64_key][
-                                                     :100] + "...[base64_too_large_for_db]"
-
-            logger.debug(
-                f"{log_prefix} Preparing to save final DB state. Reflection: {is_reflection_task}, Success: {task_completed_successfully}")
-
-            try:
-                if is_reflection_task and original_interaction_to_update_for_reflection:
-                    # Determine if reflection task itself completed successfully or failed/interrupted
-                    was_interrupted_or_errored = final_db_data_to_save.get('classification', '').startswith(
-                        "task_failed") or \
-                                                 final_db_data_to_save.get('input_type') == 'error'
-
-                    if was_interrupted_or_errored:
-                        original_interaction_to_update_for_reflection.reflection_completed = False
-                        note = (f"\n\n--- Reflection Task (ID: {request_id}) "
-                                f"{'Interrupted/Errored'} ({datetime.datetime.now(datetime.timezone.utc).isoformat()}): "
-                                f"{final_db_data_to_save['llm_response']} ---")
-                        current_resp = getattr(original_interaction_to_update_for_reflection, 'llm_response', "") or ""
-                        original_interaction_to_update_for_reflection.llm_response = (current_resp + note)[:getattr(
-                            Interaction.llm_response.type, 'length', 4000)]
-                    else:  # Successful reflection task execution
-                        original_interaction_to_update_for_reflection.reflection_completed = True
-
-                    await asyncio.to_thread(db.commit)  # Commit changes to the original interaction
-                    logger.info(
-                        f"{log_prefix} Updated original interaction {update_interaction_id} for reflection state.")
-
-                    # Only create a *new* reflection_result record if the reflection task itself completed successfully
-                    if task_completed_successfully and not was_interrupted_or_errored:
-                        new_reflection_data = final_db_data_to_save.copy()
-                        new_reflection_data.update({
-                            'input_type': "reflection_result",
-                            'user_input': f"[Reflection for OrigID {update_interaction_id}] {user_input[:100]}",
-                            # Add some original context
-                            'classification': "reflection_output",
-                            'reflection_completed': True,  # This new record is the completed reflection
-                            # tot_analysis_spawned might be set if reflection itself decided to spawn one
-                        })
-                        valid_keys_refl = {c.name for c in Interaction.__table__.columns}
-                        db_kwargs_refl = {k: v for k, v in new_reflection_data.items() if
-                                          k in valid_keys_refl and k != 'id'}
-                        reflection_record = await asyncio.to_thread(add_interaction, db, **db_kwargs_refl)
-                        await asyncio.to_thread(db.commit)  # Commit new reflection record
-
-                        if reflection_record and reflection_record.id and self.provider and self.provider.embeddings and ENABLE_SELF_REFLECTION:
-                            await asyncio.to_thread(index_single_reflection, reflection_record, self.provider, db, ELP0)
-                            logger.info(f"{log_prefix} Indexed new reflection record ID {reflection_record.id}.")
-
-
-                elif not is_reflection_task:  # Standard chat interaction initiated by handle_openai_chat_completion etc.
-                    if saved_initial_interaction and saved_initial_interaction.id:
-                        logger.debug(
-                            f"{log_prefix} Updating initial interaction {saved_initial_interaction.id} with final results.")
-                        for key, value in final_db_data_to_save.items():
-                            if hasattr(saved_initial_interaction, key) and key != 'id':
-                                setattr(saved_initial_interaction, key, value)
-                        await asyncio.to_thread(db.commit)
-                    else:  # Initial save failed, or was skipped somehow. Save as new.
-                        logger.warning(
-                            f"{log_prefix} Initial placeholder interaction not available/saved. Saving final state as new record.")
-                        valid_keys_final_new = {c.name for c in Interaction.__table__.columns}
-                        db_kwargs_final_new = {k: v for k, v in final_db_data_to_save.items() if
-                                               k in valid_keys_final_new and k != 'id'}
-                        await asyncio.to_thread(add_interaction, db, **db_kwargs_final_new)
-                        await asyncio.to_thread(db.commit)  # Commit new record
-
-            except Exception as final_db_save_err:
-                logger.error(f"❌ {log_prefix} CRITICAL error during final DB save/update: {final_db_save_err}")
-                if db: await asyncio.to_thread(db.rollback)
-
-            # Restore the original session_id for this AIChat instance.
-            self.current_session_id = original_chat_session_id
-            logger.info(
-                f"{log_prefix} Async Background Generate END. Duration: {final_db_data_to_save.get('execution_time_ms', 0):.2f}ms. "
-                f"Success: {task_completed_successfully}"
-            )
-
     def extract_text_from_url(self, url):
         """Extracts text from URL content (synchronous)."""
         logger.debug(f"🌐 Fetching content from {url}")
@@ -6775,7 +6231,7 @@ class AIChat:
 
         # 1. Initialization and Setup
         # ----------------------------------------------------------------------
-        # NEW: If 'db' is None, create a new session specifically for this background_generate task.
+        # If 'db' is None, create a new session specifically for this background_generate task.
         created_local_db_session = False
         if db is None:
             try:
@@ -6826,12 +6282,7 @@ class AIChat:
             interaction_data["input_type"] = "image+text"
 
         final_response_text_for_this_turn = "Error: Background processing did not complete as expected."
-        # If update_interaction_id is provided, these will be the records to update instead of creating new ones
         existing_interaction_to_update: Optional[Interaction] = None
-        # If is_reflection_task is True, this also covers cases where the reflection system itself re-queues.
-        # If is_reflection_task is True because of `_initiate_file_ingestion_and_reflection`,
-        # this will fetch the record created by that function.
-
         task_completed_successfully = False  # Overall task success across retries
 
         max_retries_for_bg_task = LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES
@@ -6842,7 +6293,6 @@ class AIChat:
         if not user_input and not image_b64 and not is_reflection_task:
             logger.warning(f"{log_prefix} Empty input (no text, no image). Aborting.")
             self.current_session_id = original_chat_session_id  # Restore before early exit
-            # NEW: Close DB session if created locally for this early exit
             if created_local_db_session and db:
                 try:
                     db.close()
@@ -6852,7 +6302,6 @@ class AIChat:
 
         # 3. Pre-computation / Initial DB Operations
         # ----------------------------------------------------------------------
-        # If update_interaction_id is provided, load the existing interaction record to update.
         if update_interaction_id is not None:
             try:
                 existing_interaction_to_update = await asyncio.to_thread(
@@ -6862,16 +6311,13 @@ class AIChat:
                     logger.error(
                         f"{log_prefix} CRITICAL - Target Interaction ID {update_interaction_id} not found. Aborting.")
                     self.current_session_id = original_chat_session_id
-                    # NEW: Close DB session if created locally for this critical exit
                     if created_local_db_session and db:
                         try:
                             db.close()
                         except Exception as e:
                             logger.error(f"{log_prefix} Error closing local DB session on critical exit: {e}")
                     return
-                # Use the user_input from the existing record as the primary input for LLM analysis
-                # if the new user_input is just a placeholder (e.g., "Analyze this JSONL entry").
-                # This ensures the LLM gets the original, full context.
+                
                 if existing_interaction_to_update.input_type == "ingested_file_entry_raw" and existing_interaction_to_update.user_input:
                     user_input = existing_interaction_to_update.user_input
                     logger.debug(
@@ -6883,16 +6329,12 @@ class AIChat:
                 logger.error(
                     f"{log_prefix} Error loading existing Interaction ID {update_interaction_id}: {e_load_orig}. Aborting.")
                 self.current_session_id = original_chat_session_id
-                # NEW: Close DB session if created locally for this critical exit
                 if created_local_db_session and db:
                     try:
                         db.close()
                     except Exception as e:
                         logger.error(f"{log_prefix} Error closing local DB session on error exit: {e}")
                 return
-        # If update_interaction_id is NOT provided AND it's not a reflection task re-queue
-        # (meaning it's a completely new background_generate call from the main API path),
-        # then create an initial placeholder.
         elif not is_reflection_task:
             try:
                 initial_save_data = interaction_data.copy()
@@ -6901,9 +6343,8 @@ class AIChat:
                 valid_keys_init = {c.name for c in Interaction.__table__.columns}
                 db_kwargs_init = {k: v for k, v in initial_save_data.items() if k in valid_keys_init and k != 'id'}
 
-                # Use the DB session from the caller to add the initial record
                 existing_interaction_to_update = await asyncio.to_thread(add_interaction, db, **db_kwargs_init)
-                await asyncio.to_thread(db.commit)  # Commit after adding
+                await asyncio.to_thread(db.commit)
 
                 if existing_interaction_to_update and existing_interaction_to_update.id:
                     logger.info(
@@ -6913,122 +6354,59 @@ class AIChat:
             except Exception as e_initial_save:
                 logger.error(f"{log_prefix} Error saving initial 'pending' interaction: {e_initial_save}")
                 if db: await asyncio.to_thread(db.rollback)
-                # Not returning here, will attempt processing and save final result as new if this failed.
 
         # 4. Main Processing Block with Semaphore and Retries
         # ----------------------------------------------------------------------
         semaphore_acquired_for_task = False
         try:
-            logger.debug(f"{log_prefix} Attempting to acquire background_generate_task_semaphore...")
-            try:
-                background_generate_task_semaphore.acquire()  # This will block until a slot is available
-                semaphore_acquired_for_task = True
-                logger.info(f"{log_prefix} Acquired background_generate_task_semaphore.")
-
-            except Exception as e_acquire:  # Catch any unexpected error during acquire
-                logger.error(f"❌ {log_prefix} Error acquiring semaphore: {e_acquire}. Aborting task.")
-                final_response_text_for_this_turn = f"Error: Semaphore acquisition failed: {e_acquire}."
-                interaction_data.update(
-                    {'llm_response': final_response_text_for_this_turn, 'classification': "task_failed_semaphore_error",
-                     'input_type': 'error'}
-                )
-                raise  # Re-raise to skip main logic and go to outer finally
-
-            # --- Politeness Check (Wait if server is busy) ---
-            MAX_POLITENESS_WAIT_SECONDS = 300
-            POLITENESS_CHECK_INTERVAL_SECONDS = 1.0
-            politeness_wait_start_time = time.monotonic()
+            background_generate_task_semaphore.acquire()
+            semaphore_acquired_for_task = True
+            logger.info(f"{log_prefix} Acquired background_generate_task_semaphore.")
+            
             was_busy_waiting = False
             while server_is_busy_event.is_set():
                 if stop_event_for_bg and stop_event_for_bg.is_set():
-                    logger.warning(f"🛑 {log_prefix} Stop signal received during politeness wait. Aborting task.")
                     raise TaskInterruptedException("Background task stopped during politeness wait.")
                 if not was_busy_waiting:
                     logger.info(f"🚦 {log_prefix} Server busy, pausing background task start...")
                     was_busy_waiting = True
-
-                await asyncio.sleep(POLITENESS_CHECK_INTERVAL_SECONDS)
-                if (time.monotonic() - politeness_wait_start_time) > MAX_POLITENESS_WAIT_SECONDS:
-                    logger.warning(f"{log_prefix} Max politeness wait exceeded. Proceeding despite busy server.")
-                    break
+                await asyncio.sleep(1.0)
             if was_busy_waiting: logger.info(f"🟢 {log_prefix} Server free, resuming background task.")
 
-            # --- Core Logic Retry Loop ---
             current_attempt = 0
             while current_attempt <= max_retries_for_bg_task:
                 current_attempt += 1
-                attempt_successful = False  # Flag for success of this specific attempt
-
-                if stop_event_for_bg and stop_event_for_bg.is_set():
-                    logger.warning(
-                        f"🛑 {log_prefix} Stop signal received before attempt {current_attempt}. Aborting task.")
-                    raise TaskInterruptedException("Background task stopped by external signal before attempt.")
-
                 if current_attempt > 1:
-                    logger.info(
-                        f"{log_prefix} Attempt {current_attempt}/{max_retries_for_bg_task + 1}: Retrying after delay.")
                     await asyncio.sleep(retry_delay_seconds)
 
                 try:
-                    # Reset response text for this attempt
-                    final_response_text_for_this_turn = "Error: Attempt did not complete as expected."
-                    current_input_for_llm_analysis = user_input  # Initialize for each attempt
+                    if stop_event_for_bg and stop_event_for_bg.is_set():
+                        raise TaskInterruptedException("Background task stopped by external signal before attempt.")
+
+                    current_input_for_llm_analysis = user_input
                     imagined_img_vlm_desc_this_turn = interaction_data.get('imagined_image_vlm_description', 'None.')
 
-                    # --- VLM Preprocessing (if image_b64) ---
                     if image_b64:
-                        logger.info(f"{log_prefix} Attempt {current_attempt}: VLM processing for user image...")
-                        vlm_desc, vlm_err = await self._describe_image_async(db, session_id, image_b64,
-                                                                             "initial_description", ELP0)
-                        if vlm_err:
-                            logger.error(f"{log_prefix} Attempt {current_attempt}: VLM error: {vlm_err}")
-                            interaction_data['image_description'] = f"[VLM Error: {vlm_err}]"
-                        else:
-                            interaction_data['image_description'] = vlm_desc
+                        vlm_desc, vlm_err = await self._describe_image_async(db, session_id, image_b64, "initial_description", ELP0)
+                        interaction_data['image_description'] = f"[VLM Error: {vlm_err}]" if vlm_err else vlm_desc
+                        if not vlm_err:
                             current_input_for_llm_analysis = f"[Image: {vlm_desc}]\nUser: {user_input or '(query about image)'}"
                             imagined_img_vlm_desc_this_turn = vlm_desc
-                        logger.info(
-                            f"{log_prefix} Attempt {current_attempt}: VLM done. Input for LLM: '{current_input_for_llm_analysis[:70]}...'")
 
-                    # --- Classification (if not reflection) ---
                     classification_for_current_task = classification
                     if not is_reflection_task:
-                        logger.info(f"{log_prefix} Attempt {current_attempt}: Classifying input...")
                         clf_data = {"session_id": session_id, "mode": "chat", "input_type": "classification_bg"}
-                        classification_for_current_task = await asyncio.to_thread(self._classify_input_complexity, db,
-                                                                                  current_input_for_llm_analysis,
-                                                                                  clf_data)
+                        classification_for_current_task = await self._classify_input_complexity(db, current_input_for_llm_analysis, clf_data)
                         interaction_data['classification'] = classification_for_current_task
                         interaction_data['classification_reason'] = clf_data.get('classification_reason')
-                        logger.info(
-                            f"{log_prefix} Attempt {current_attempt}: Classified as '{classification_for_current_task}'.")
 
-                    interaction_data['requires_deep_thought'] = (
-                                                                            classification_for_current_task == "chat_complex") or is_reflection_task
-
-                    # --- Context Gathering ---
+                    interaction_data['requires_deep_thought'] = (classification_for_current_task == "chat_complex") or is_reflection_task
+                    
                     logger.debug(f"{log_prefix} Attempt {current_attempt}: Gathering contexts...")
-
-                    global_hist = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-                    direct_hist_prompt = self._format_direct_history(global_hist)
-                    log_entries = await asyncio.to_thread(get_recent_interactions, db, RAG_HISTORY_COUNT * 2,
-                                                          session_id, "chat", True)
-                    log_ctx_prompt = self._format_log_history(log_entries)
-                    emotion_analysis_str = await asyncio.to_thread(self._run_emotion_analysis, db, user_input,
-                                                                   interaction_data)  # Correctly wrapped in to_thread
-
-                    keyword_file_query = await self._generate_file_search_query_async(db,
-                                                                                      current_input_for_llm_analysis,
-                                                                                      direct_hist_prompt, session_id)
-                    vec_file_ctx_result_str = await self._get_vector_search_file_index_context(keyword_file_query, ELP0,
-                                                                                               stop_event_for_bg)
-
-                    wrapped_rag_res = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db,
-                                                              current_input_for_llm_analysis, ELP0)
-
-                    url_docs, session_docs, reflection_docs = [], [], []  # Ensure these are always lists
-                    sess_chat_rag_ids = ""
-
+                    
+                    wrapped_rag_res = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db, current_input_for_llm_analysis, ELP0)
+                    url_docs, session_docs, reflection_docs = [], [], []
+                    url_ret_obj, sess_hist_ret_obj, refl_chunk_ret_obj = None, None, None
                     if wrapped_rag_res.get("status") == "success":
                         rag_data_tuple = wrapped_rag_res.get("data")
                         if isinstance(rag_data_tuple, tuple) and len(rag_data_tuple) == 4:
@@ -7036,107 +6414,58 @@ class AIChat:
                             interaction_data['rag_history_ids'] = sess_chat_rag_ids
                             if hasattr(self, 'vectorstore_url') and self.vectorstore_url:
                                 interaction_data['rag_source_url'] = getattr(self.vectorstore_url, '_source_url', None)
-                        else:
-                            raise RuntimeError(f"RAG wrapper malformed data: {rag_data_tuple}")
-                    elif wrapped_rag_res.get("status") == "interrupted":
-                        raise TaskInterruptedException(
-                            wrapped_rag_res.get("error_message", "RAG retrieval interrupted"))
-                    else:  # Error
-                        raise RuntimeError(
-                            f"RAG retrieval failed: {wrapped_rag_res.get('error_message', 'Unknown RAG error')}")
-
-                    # Conditionally invoke retrievers and ensure results are lists
-                    if url_ret_obj:
-                        try:
-                            url_docs = await asyncio.to_thread(url_ret_obj.invoke, current_input_for_llm_analysis)
-                        except Exception as e_url_rag:
-                            logger.warning(
-                                f"{log_prefix} Attempt {current_attempt}: URL RAG invoke error: {e_url_rag}"); url_docs = []
-                    if sess_hist_ret_obj:
-                        try:
-                            session_docs = await asyncio.to_thread(sess_hist_ret_obj.invoke,
-                                                                   current_input_for_llm_analysis)
-                        except Exception as e_sess_rag:
-                            logger.warning(
-                                f"{log_prefix} Attempt {current_attempt}: Session RAG invoke error: {e_sess_rag}"); session_docs = []
-                    if refl_chunk_ret_obj:
-                        try:
-                            reflection_docs = await asyncio.to_thread(refl_chunk_ret_obj.invoke,
-                                                                      current_input_for_llm_analysis)
-                        except Exception as e_refl_rag:
-                            logger.warning(
-                                f"{log_prefix} Attempt {current_attempt}: Reflection RAG invoke error: {e_refl_rag}"); reflection_docs = []
-
+                            if url_ret_obj: url_docs = await asyncio.to_thread(url_ret_obj.invoke, current_input_for_llm_analysis)
+                            if sess_hist_ret_obj: session_docs = await asyncio.to_thread(sess_hist_ret_obj.invoke, current_input_for_llm_analysis)
+                            if refl_chunk_ret_obj: reflection_docs = await asyncio.to_thread(refl_chunk_ret_obj.invoke, current_input_for_llm_analysis)
+                    elif wrapped_rag_res.get("status") == "interrupted": raise TaskInterruptedException(wrapped_rag_res.get("error_message", "RAG interrupted"))
+                    else: raise RuntimeError(f"RAG retrieval failed: {wrapped_rag_res.get('error_message', 'Unknown RAG error')}")
+                    
+                    global_hist = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
+                    direct_hist_prompt = self._format_direct_history(global_hist)
+                    log_entries = await asyncio.to_thread(get_recent_interactions, db, RAG_HISTORY_COUNT * 2, session_id, "chat", True)
+                    log_ctx_prompt = self._format_log_history(log_entries)
+                    emotion_analysis_str = await asyncio.to_thread(self._run_emotion_analysis, db, user_input, interaction_data)
+                    
+                    history_rag_for_search_query = self._format_docs(session_docs + reflection_docs, "Combined History RAG")
+                    keyword_file_query = await self._generate_file_search_query_async(db, current_input_for_llm_analysis, direct_hist_prompt, history_rag_for_search_query, session_id)
+                    vec_file_ctx_result_str = await self._get_vector_search_file_index_context(keyword_file_query, ELP0, stop_event_for_bg)
+                    
                     url_ctx_untruncated = self._format_docs(url_docs, "URL Context")
-                    sess_refl_rag_untrunc = self._format_docs(session_docs + reflection_docs, "Session/Reflection RAG")
-
-                    # Token budgeting as in your file to prepare main_dynamic_ctx_block_for_llm
-                    # and context_for_router (url_ctx_for_router, sess_refl_router, file_ctx_for_router)
-                    # This logic is complex and omitted here for brevity but should be present
-                    MODEL_CONTEXT_WINDOW = LLAMA_CPP_N_CTX  # From config
-                    BUFFER_TOKENS_FOR_RESPONSE = 512  # From config or defined
-                    FIXED_PROMPT_OVERHEAD = 100  # From config or defined
-
+                    sess_refl_rag_untrunc = history_rag_for_search_query
+                    MODEL_CONTEXT_WINDOW = LLAMA_CPP_N_CTX
+                    BUFFER_TOKENS_FOR_RESPONSE = 512
+                    FIXED_PROMPT_OVERHEAD = 100
                     est_input_tokens = self._count_tokens(current_input_for_llm_analysis)
                     est_direct_hist_tokens = self._count_tokens(direct_hist_prompt)
                     est_log_tokens = self._count_tokens(log_ctx_prompt)
-
                     available_context_tokens = MODEL_CONTEXT_WINDOW - est_input_tokens - est_direct_hist_tokens - est_log_tokens - BUFFER_TOKENS_FOR_RESPONSE - FIXED_PROMPT_OVERHEAD
-                    if available_context_tokens < 100: available_context_tokens = 100  # Minimum safety buffer
+                    
+                    main_dynamic_ctx_block_for_llm = self._truncate_rag_context(f"{url_ctx_untruncated}\n\n{sess_refl_rag_untrunc}\n\n{vec_file_ctx_result_str}", max(100, available_context_tokens))
+                    url_ctx_for_router = self._truncate_rag_context(url_ctx_untruncated, max(100, available_context_tokens // 2))
+                    sess_refl_router = self._truncate_rag_context(sess_refl_rag_untrunc, max(100, available_context_tokens // 2))
+                    file_ctx_for_router = self._truncate_rag_context(vec_file_ctx_result_str, max(100, available_context_tokens // 2))
 
-                    # Truncate RAG contexts based on remaining budget
-                    main_dynamic_ctx_block_for_llm = self._truncate_rag_context(
-                        f"{url_ctx_untruncated}\n\n{sess_refl_rag_untrunc}\n\n{vec_file_ctx_result_str}",
-                        available_context_tokens)
-                    # Smaller subsets for router if needed, otherwise use `main_dynamic_ctx_block_for_llm`
-                    url_ctx_for_router = self._truncate_rag_context(url_ctx_untruncated, available_context_tokens // 2)
-                    sess_refl_router = self._truncate_rag_context(sess_refl_rag_untrunc, available_context_tokens // 2)
-                    file_ctx_for_router = self._truncate_rag_context(vec_file_ctx_result_str,
-                                                                     available_context_tokens // 2)
-
-                    logger.debug(f"{log_prefix} Attempt {current_attempt}: Contexts gathered.")
-
-                    # --- Action Analysis ---
                     logger.info(f"{log_prefix} Attempt {current_attempt}: Analyzing assistant action...")
-                    action_payload_ctx = {"history_summary": emotion_analysis_str, "log_context": log_ctx_prompt,
-                                          "recent_direct_history": direct_hist_prompt,
-                                          "file_index_context": file_ctx_for_router}
-                    action_details = await self._analyze_assistant_action(db, current_input_for_llm_analysis,
-                                                                          session_id, action_payload_ctx)
-                    detected_action_type = action_details.get("action_type",
-                                                              "no_action") if action_details and isinstance(
-                        action_details, dict) else "no_action"
+                    action_payload_ctx = {"history_summary": emotion_analysis_str, "log_context": log_ctx_prompt, "recent_direct_history": direct_hist_prompt, "file_index_context": file_ctx_for_router}
+                    action_details = await self._analyze_assistant_action(db, current_input_for_llm_analysis, session_id, action_payload_ctx)
+                    detected_action_type = action_details.get("action_type", "no_action") if action_details and isinstance(action_details, dict) else "no_action"
+                    
                     if action_details:
-                        interaction_data.update({
-                            'assistant_action_analysis_json': json.dumps(action_details),
-                            'assistant_action_type': detected_action_type,
-                            'assistant_action_params': json.dumps(action_details.get("parameters", {}))
-                        })
-                    logger.info(
-                        f"{log_prefix} Attempt {current_attempt}: Action analysis type: '{detected_action_type}'.")
-
-                    # --- Main Logic Flow (Action, Image Gen, Standard LLM) ---
+                        interaction_data.update({'assistant_action_analysis_json': json.dumps(action_details), 'assistant_action_type': detected_action_type, 'assistant_action_params': json.dumps(action_details.get("parameters", {}))})
+                    
                     if detected_action_type == "imagine" and action_details:
                         interaction_data['assistant_action_executed'] = True
                         idea_to_viz = action_details.get("parameters", {}).get("idea_to_visualize", user_input)
-                        img_prompt = await self._generate_image_generation_prompt_async(db, session_id, user_input,
-                                                                                        idea_to_viz, sess_refl_router,
-                                                                                        file_ctx_for_router,
-                                                                                        direct_hist_prompt,
-                                                                                        url_ctx_for_router,
-                                                                                        log_ctx_prompt)
+                        img_prompt = await self._generate_image_generation_prompt_async(db, session_id, user_input, idea_to_viz, sess_refl_router, file_ctx_for_router, direct_hist_prompt, url_ctx_for_router, log_ctx_prompt)
                         interaction_data['imagined_image_prompt'] = img_prompt
                         if img_prompt:
-                            img_data_list, img_err = await self.provider.generate_image_async(prompt=img_prompt,
-                                                                                              image_base64=None,
-                                                                                              priority=ELP0)
+                            img_data_list, img_err = await self.provider.generate_image_async(prompt=img_prompt, priority=ELP0)
                             if img_err:
                                 final_response_text_for_this_turn = f"Imagine Error: {img_err}"
                             elif img_data_list and img_data_list[0].get("b64_json"):
                                 img_b64_gen = img_data_list[0]["b64_json"]
-                                interaction_data['imagined_image_b64'] = img_b64_gen[:20] + "...[trunc]"
-                                gen_vlm_desc, _ = await self._describe_image_async(db, session_id, img_b64_gen,
-                                                                                   "describe_generated_image", ELP0)
+                                interaction_data['imagined_image_b64'] = img_b64_gen
+                                gen_vlm_desc, _ = await self._describe_image_async(db, session_id, img_b64_gen, "describe_generated_image", ELP0)
                                 interaction_data['imagined_image_vlm_description'] = gen_vlm_desc
                                 imagined_img_vlm_desc_this_turn = gen_vlm_desc
                                 final_response_text_for_this_turn = f"I've imagined: {gen_vlm_desc or 'Generated an image.'}"
@@ -7147,260 +6476,127 @@ class AIChat:
                         interaction_data['assistant_action_result'] = final_response_text_for_this_turn
 
                     elif detected_action_type != "no_action" and action_details:
-                        # If existing_interaction_to_update is not None, it means it's an update.
-                        # Otherwise, it's a new main task (e.g. from handle_interaction, not file ingestion).
                         target_interaction_for_action = existing_interaction_to_update
-
                         if target_interaction_for_action:
-                            final_response_text_for_this_turn = await self._execute_assistant_action(db, session_id,
-                                                                                                     action_details,
-                                                                                                     target_interaction_for_action)  # type: ignore
+                            final_response_text_for_this_turn = await self._execute_assistant_action(db, session_id, action_details, target_interaction_for_action)
                         else:
                             final_response_text_for_this_turn = "Error: Missing interaction context for action."
                         interaction_data['assistant_action_result'] = final_response_text_for_this_turn
                         interaction_data['assistant_action_executed'] = True
 
-                    else:  # Standard LLM response
-                        router_payload = {"input": current_input_for_llm_analysis,
-                                          "recent_direct_history": direct_hist_prompt, "context": url_ctx_for_router,
-                                          "history_rag": sess_refl_router, "file_index_context": file_ctx_for_router,
-                                          "log_context": log_ctx_prompt, "emotion_analysis": emotion_analysis_str,
-                                          "pending_tot_result": interaction_data.get("tot_result", "None."),
-                                          "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn}
-                        role, query, reason = await self._route_to_specialist(db, session_id,
-                                                                              current_input_for_llm_analysis,
-                                                                              router_payload)
+                    else:
+                        router_payload = {"input": current_input_for_llm_analysis, "recent_direct_history": direct_hist_prompt, "context": url_ctx_for_router, "history_rag": sess_refl_router, "file_index_context": file_ctx_for_router, "log_context": log_ctx_prompt, "emotion_analysis": emotion_analysis_str, "pending_tot_result": interaction_data.get("tot_result", "None."), "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn}
+                        role, query, reason = await self._route_to_specialist(db, session_id, current_input_for_llm_analysis, router_payload)
                         interaction_data['classification_reason'] = f"Routed to {role}: {reason}"
-
                         specialist_model = self.provider.get_model(role)
                         if not specialist_model: raise ValueError(f"Specialist model '{role}' not found.")
-
-                        specialist_payload = {"input": query, "emotion_analysis": emotion_analysis_str,
-                                              "context": url_ctx_untruncated, "history_rag": sess_refl_rag_untrunc,
-                                              "file_index_context": main_dynamic_ctx_block_for_llm,
-                                              "log_context": log_ctx_prompt,
-                                              "recent_direct_history": direct_hist_prompt,
-                                              "pending_tot_result": interaction_data.get("tot_result", "None."),
-                                              "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn}
+                        specialist_payload = {"input": query, "emotion_analysis": emotion_analysis_str, "context": url_ctx_untruncated, "history_rag": sess_refl_rag_untrunc, "file_index_context": main_dynamic_ctx_block_for_llm, "log_context": log_ctx_prompt, "recent_direct_history": direct_hist_prompt, "pending_tot_result": interaction_data.get("tot_result", "None."), "imagined_image_vlm_description": imagined_img_vlm_desc_this_turn}
                         specialist_chain = (self.text_prompt_template | specialist_model | StrOutputParser())
                         timing_data = {"session_id": session_id, "mode": f"chat_specialist_{role}"}
-
-                        draft_response = await asyncio.to_thread(
-                            self._call_llm_with_timing, specialist_chain, specialist_payload, timing_data, priority=ELP0
-                        )
-                        final_response_text_for_this_turn = await self._correct_response(db, session_id,
-                                                                                         current_input_for_llm_analysis,
-                                                                                         specialist_payload,
-                                                                                         draft_response)
-
-                    # --- Tree of Thought (ToT) Spawning ---
-                    if not is_reflection_task and \
-                            (classification_for_current_task == "chat_complex" or interaction_data.get(
-                                "requires_deep_thought")):
-                        # Use existing_interaction_to_update ID if this background_generate call is itself processing an initial interaction from file ingestion
+                        draft_response = await asyncio.to_thread(self._call_llm_with_timing, specialist_chain, specialist_payload, timing_data, priority=ELP0)
+                        final_response_text_for_this_turn = await self._correct_response(db, session_id, current_input_for_llm_analysis, specialist_payload, draft_response)
+                    
+                    if not is_reflection_task and (classification_for_current_task == "chat_complex" or interaction_data.get("requires_deep_thought")):
                         trigger_id_for_tot = existing_interaction_to_update.id if existing_interaction_to_update else None
-
                         if trigger_id_for_tot:
-                            logger.info(
-                                f"{log_prefix} Attempt {current_attempt}: Spawning ToT for Interaction ID: {trigger_id_for_tot}.")
-                            tot_payload = {"db_session_factory": SessionLocal,
-                                           "original_input_for_tot": current_input_for_llm_analysis,
-                                           "rag_context_docs": url_docs,
-                                           "history_rag_interactions": session_docs + reflection_docs,
-                                           "log_context_str": log_ctx_prompt,
-                                           "recent_direct_history_str": direct_hist_prompt,
-                                           "file_index_context_str": main_dynamic_ctx_block_for_llm,
-                                           # Ensure this is available and correct
-                                           "imagined_image_context_str": imagined_img_vlm_desc_this_turn or interaction_data.get(
-                                               'image_description', 'None.'),
-                                           "interaction_data_for_tot_llm_call": {},  # Placeholder
-                                           "original_user_input_for_log": user_input,  # Original for logging
-                                           "triggering_interaction_id_for_log": trigger_id_for_tot}
-
-                            asyncio.create_task(self._run_tot_in_background_wrapper_v2(**tot_payload))  # type: ignore
+                            logger.info(f"{log_prefix} Spawning ToT for Interaction ID: {trigger_id_for_tot}.")
+                            tot_payload = {"db_session_factory": SessionLocal, "original_input_for_tot": current_input_for_llm_analysis, "rag_context_docs": url_docs, "history_rag_interactions": session_docs + reflection_docs, "log_context_str": log_ctx_prompt, "recent_direct_history_str": direct_hist_prompt, "file_index_context_str": main_dynamic_ctx_block_for_llm, "imagined_image_context_str": imagined_img_vlm_desc_this_turn or interaction_data.get('image_description', 'None.'), "interaction_data_for_tot_llm_call": {}, "original_user_input_for_log": user_input, "triggering_interaction_id_for_log": trigger_id_for_tot}
+                            asyncio.create_task(self._run_tot_in_background_wrapper_v2(**tot_payload))
                             interaction_data['tot_analysis_spawned'] = True
-                            # Update triggering interaction in DB immediately (if possible and desirable)
                             try:
-                                tr_interaction = await asyncio.to_thread(
-                                    db.query(Interaction).filter(Interaction.id == trigger_id_for_tot).first)
+                                tr_interaction = await asyncio.to_thread(db.query(Interaction).filter(Interaction.id == trigger_id_for_tot).first)
                                 if tr_interaction:
                                     tr_interaction.tot_analysis_spawned = True
                                     tr_interaction.requires_deep_thought = True
-                                    # Ensure deep_thought_reason is set from classification if available
-                                    tr_interaction.deep_thought_reason = interaction_data.get('classification_reason',
-                                                                                              'Complex query, ToT spawned.')
+                                    tr_interaction.deep_thought_reason = interaction_data.get('classification_reason', 'Complex query, ToT spawned.')
                                     await asyncio.to_thread(db.commit)
                             except Exception as e_tot_update:
-                                logger.error(
-                                    f"{log_prefix} Failed to update triggering interaction for ToT: {e_tot_update}")
+                                logger.error(f"{log_prefix} Failed to update triggering interaction for ToT: {e_tot_update}")
                                 await asyncio.to_thread(db.rollback)
                         else:
-                            logger.warning(
-                                f"{log_prefix} Attempt {current_attempt}: Could not spawn ToT, no trigger ID.")
+                            logger.warning(f"{log_prefix} Could not spawn ToT, no trigger ID.")
 
-                    attempt_successful = True  # Mark this attempt as successful
-                    task_completed_successfully = True  # Mark overall task success
-                    break  # Exit retry loop on success
+                    task_completed_successfully = True
+                    break
 
                 except TaskInterruptedException as tie:
                     logger.warning(f"🚦 {log_prefix} Attempt {current_attempt} INTERRUPTED: {tie}")
                     final_response_text_for_this_turn = f"[Task interrupted: {tie}]"
-                    interaction_data.update({'llm_response': final_response_text_for_this_turn,
-                                             'classification': "task_failed_interrupted", 'input_type': 'log_warning'})
-                    if current_attempt >= max_retries_for_bg_task:  # Check if max retries exhausted
-                        logger.error(f"{log_prefix} Max retries for interruption reached. Giving up.")
-                        task_completed_successfully = False  # Ensure it's marked as failed overall
-                        break  # Exit retry loop
-                    # else, loop will continue for next attempt
-
+                    interaction_data.update({'llm_response': final_response_text_for_this_turn, 'classification': "task_failed_interrupted", 'input_type': 'log_warning'})
+                    if current_attempt >= max_retries_for_bg_task:
+                        task_completed_successfully = False
+                        break
                 except Exception as e_inner:
-                    logger.error(
-                        f"❌❌ {log_prefix} Attempt {current_attempt} FAILED with unhandled exception: {e_inner}")
+                    logger.error(f"❌❌ {log_prefix} Attempt {current_attempt} FAILED with unhandled exception: {e_inner}")
                     logger.exception(f"{log_prefix} Attempt {current_attempt} Traceback:")
                     final_response_text_for_this_turn = f"Error in processing: {type(e_inner).__name__} - {str(e_inner)}"
-                    interaction_data.update(
-                        {'llm_response': final_response_text_for_this_turn[:4000], 'input_type': 'error'})
-                    task_completed_successfully = False  # Mark as failed overall
-                    break  # Exit retry loop on unhandled error for this attempt
-
-            # End of retry loop (inner while loop)
-            if not task_completed_successfully and current_attempt > max_retries_for_bg_task:
-                logger.error(
-                    f"{log_prefix} All {current_attempt - 1} attempts failed or were interrupted. Task will be marked as failed.")
-
-
-        except asyncio.TimeoutError:  # This except block handles asyncio.TimeoutError if the semaphore.acquire() was wrapped in asyncio.wait_for
-            # Since the current `background_generate_task_semaphore.acquire()` is a blocking call directly,
-            # this specific `except asyncio.TimeoutError` would only be hit if the blocking acquire itself
-            # was running within a `timeout` context that triggered this error, which is less common for sync acquire.
-            # However, the `if not acquired:` branch after `acquire()` handles the timeout logic.
-            pass  # This pass is fine, as other exceptions/returns handle it.
-        except TaskInterruptedException as tie_outer:  # From politeness check or before retry loop
-            logger.warning(f"🚦 {log_prefix} Task INTERRUPTED (outer): {tie_outer}")
-            final_response_text_for_this_turn = f"[Task interrupted externally: {tie_outer}]"
-            interaction_data.update({'llm_response': final_response_text_for_this_turn,
-                                     'classification': "task_failed_interrupted_outer", 'input_type': 'log_warning'})
-            task_completed_successfully = False
+                    interaction_data.update({'llm_response': final_response_text_for_this_turn[:4000], 'input_type': 'error'})
+                    task_completed_successfully = False
+                    break
+            
         except Exception as e_outer:
             logger.critical(f"🔥🔥 {log_prefix} CRITICAL UNHANDLED exception in background_generate (outer): {e_outer}")
             logger.exception(f"{log_prefix} Outer Traceback:")
-            if final_response_text_for_this_turn == "Error: Background processing did not complete as expected.":  # Ensure it's updated
-                final_response_text_for_this_turn = f"Critical Error: {type(e_outer).__name__} - {str(e_outer)}"
+            final_response_text_for_this_turn = f"Critical Error: {type(e_outer).__name__} - {str(e_outer)}"
             interaction_data.update({'llm_response': final_response_text_for_this_turn[:4000], 'input_type': 'error'})
             task_completed_successfully = False
 
         finally:
-            # 5. Finalization: Semaphore Release, DB Update, Session ID Restore
-            # ----------------------------------------------------------------------
-            if semaphore_acquired_for_task:  # Only release if it was successfully acquired at the start
+            if semaphore_acquired_for_task:
                 background_generate_task_semaphore.release()
                 logger.info(f"{log_prefix} Released background_generate_task_semaphore.")
-
-            if task_completed_successfully:
-                logger.info(f"{log_prefix} Overall task completed successfully after {current_attempt} attempt(s).")
-            else:
-                logger.error(f"{log_prefix} Overall task failed or was incomplete after {current_attempt} attempt(s).")
-
+            
             final_db_data_to_save = interaction_data.copy()
             final_db_data_to_save['llm_response'] = self._cleanup_llm_output(final_response_text_for_this_turn)
             final_db_data_to_save['execution_time_ms'] = (time.monotonic() - request_start_time) * 1000.0
-            if 'last_modified_db' in final_db_data_to_save: del final_db_data_to_save['last_modified_db']
-
-            # Truncate large image data (safety)
-            img_b64_key = 'imagined_image_b64'
-            if final_db_data_to_save.get(img_b64_key) and len(final_db_data_to_save[img_b64_key]) > 1000000:
-                final_db_data_to_save[img_b64_key] = final_db_data_to_save[img_b64_key][
-                                                     :100] + "...[base64_too_large_for_db]"
-
-            logger.debug(
-                f"{log_prefix} Preparing to save final DB state. Reflection: {is_reflection_task}, Success: {task_completed_successfully}")
 
             try:
-                # Determine the target interaction record to update
-                target_interaction_for_final_save: Optional[Interaction] = None
-                if update_interaction_id is not None and existing_interaction_to_update:
-                    # If this background_generate was called to update an existing record (e.g., from file ingestion or reflection re-queue)
-                    target_interaction_for_final_save = existing_interaction_to_update
-                # No 'elif not is_reflection_task and saved_initial_interaction' needed, as 'existing_interaction_to_update'
-                # will already hold the `saved_initial_interaction` from the initial placeholder creation path.
-
-                if target_interaction_for_final_save:
-                    # Update the attributes of the fetched/created Interaction object
+                if existing_interaction_to_update:
                     for key, value in final_db_data_to_save.items():
-                        if hasattr(target_interaction_for_final_save, key) and key != 'id':  # Avoid updating 'id'
-                            setattr(target_interaction_for_final_save, key, value)
+                        if hasattr(existing_interaction_to_update, key) and key != 'id':
+                            setattr(existing_interaction_to_update, key, value)
 
-                    # Specific updates for reflection status and indexing
-                    if is_reflection_task:  # This also covers records from file ingestion (ingested_file_entry_raw)
-                        was_interrupted_or_errored = final_db_data_to_save.get('classification', '').startswith(
-                            "task_failed") or \
-                                                     final_db_data_to_save.get('input_type') == 'error'
+                    if is_reflection_task:
+                        was_interrupted_or_errored = final_db_data_to_save.get('classification', '').startswith("task_failed") or final_db_data_to_save.get('input_type') == 'error'
+                        if not was_interrupted_or_errored:
+                            existing_interaction_to_update.reflection_completed = True
+                            if existing_interaction_to_update.input_type == "ingested_file_entry_raw":
+                                existing_interaction_to_update.input_type = "ingested_file_entry_processed"
+                                existing_interaction_to_update.classification = "ingested_reflection_task_completed"
+                        else:
+                            existing_interaction_to_update.reflection_completed = False
 
-                        if was_interrupted_or_errored:
-                            target_interaction_for_final_save.reflection_completed = False
-                            # Append error note to the original interaction's llm_response
-                            note_prefix = "\n\n--- Background Processing "
-                            if final_db_data_to_save.get('input_type') == 'error':
-                                note_prefix += "Error ---"
-                            elif "interrupted" in final_db_data_to_save.get('llm_response', '').lower():
-                                note_prefix += "Interrupted ---"
-                            else:
-                                note_prefix += "Failed ---"  # Default for other failures
+                    await asyncio.to_thread(db.commit)
+                    logger.info(f"{log_prefix} Updated Interaction ID {existing_interaction_to_update.id} with final results.")
 
-                            note = (f"{note_prefix}\n"
-                                    f"Status: {final_db_data_to_save.get('classification', 'N/A')} (ID: {request_id})\n"
-                                    f"Time: {datetime.datetime.now(datetime.timezone.utc).isoformat()}\n"
-                                    f"Details: {final_db_data_to_save.get('llm_response', '')[:1000]} ---")
-
-                            current_resp = getattr(target_interaction_for_final_save, 'llm_response', "") or ""
-                            target_interaction_for_final_save.llm_response = (current_resp + note)[
-                                                                             :getattr(Interaction.llm_response.type,
-                                                                                      'length', 4000)]
-                        else:  # Successful completion for this reflection task
-                            target_interaction_for_final_save.reflection_completed = True
-                            # If it was an ingested_file_entry_raw, update its input_type to reflect processing complete
-                            if target_interaction_for_final_save.input_type == "ingested_file_entry_raw":
-                                target_interaction_for_final_save.input_type = "ingested_file_entry_processed"
-                                target_interaction_for_final_save.classification = "ingested_reflection_task_completed"
-
-                        # Note: indexing into VS happens *after* DB commit, inside this block
-                        # The reflection_indexed_in_vs flag is set by index_single_reflection.
-
-                    await asyncio.to_thread(db.commit)  # Commit changes to the target interaction
-                    logger.info(
-                        f"{log_prefix} Updated Interaction ID {target_interaction_for_final_save.id} with final results.")
-
-                    # If this was a successful reflection task, also index it in the VS
-                    # This applies to original reflection re-queues AND successfully processed ingested file entries
                     if is_reflection_task and task_completed_successfully and not was_interrupted_or_errored:
-                        # Ensure the record is not detached before passing to index_single_reflection
-                        if not attributes.instance_state(target_interaction_for_final_save).session:
-                            target_interaction_for_final_save = db.merge(target_interaction_for_final_save)
+                        if not attributes.instance_state(existing_interaction_to_update).session:
+                            existing_interaction_to_update = db.merge(existing_interaction_to_update)
+                        await asyncio.to_thread(index_single_reflection, existing_interaction_to_update, self.provider, db, ELP0)
 
-                        await asyncio.to_thread(index_single_reflection, target_interaction_for_final_save,
-                                                self.provider, db, ELP0)
-                        logger.info(
-                            f"{log_prefix} Indexed reflection record ID {target_interaction_for_final_save.id} in VS.")
-
-                else:  # No target interaction found to update (e.g., critical error very early)
-                    logger.warning(
-                        f"{log_prefix} No target interaction record found to update. Logging final state as a new generic record.")
+                else:
+                    logger.warning(f"{log_prefix} No target interaction record to update. Saving as a new record.")
                     valid_keys_final_new = {c.name for c in Interaction.__table__.columns}
-                    db_kwargs_final_new = {k: v for k, v in final_db_data_to_save.items() if
-                                           k in valid_keys_final_new and k != 'id'}
+                    db_kwargs_final_new = {k: v for k, v in final_db_data_to_save.items() if k in valid_keys_final_new and k != 'id'}
                     await asyncio.to_thread(add_interaction, db, **db_kwargs_final_new)
-                    await asyncio.to_thread(db.commit)  # Commit new record
+                    await asyncio.to_thread(db.commit)
 
             except Exception as final_db_save_err:
                 logger.error(f"❌ {log_prefix} CRITICAL error during final DB save/update: {final_db_save_err}")
                 if db: await asyncio.to_thread(db.rollback)
 
-            # Restore the original session_id for this AIChat instance.
             self.current_session_id = original_chat_session_id
             logger.info(
                 f"{log_prefix} Async Background Generate END. Duration: {final_db_data_to_save.get('execution_time_ms', 0):.2f}ms. "
                 f"Success: {task_completed_successfully}"
             )
+            
+            if created_local_db_session and db:
+                try:
+                    db.close()
+                    logger.debug(f"{log_prefix} Closed local DB session.")
+                except Exception as e:
+                    logger.error(f"{log_prefix} Error closing local DB session: {e}")
 
 
 def sanitize_filename(name: str, max_length: int = 200, replacement_char: str = '_') -> str:
