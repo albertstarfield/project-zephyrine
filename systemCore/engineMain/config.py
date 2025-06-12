@@ -12,7 +12,8 @@ MODULE_DIR=os.path.dirname(__file__)
 PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "fireworks"
 MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20))
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *quick* answers (token generation? I forgot)
-MAX_TOKENS = int(os.getenv("MAX_TOKENS", 16384)) # Default token limit for LLM calls
+MAX_TOKENS = int(os.getenv("MAX_TOKENS", 32768)) # Default token limit for LLM calls
+FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768))
 #DEFAULT_LLM_TEMPERATURE = 0.8
 DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", 0.8))
 CHUNCK_SIZE = int(os.getenv("CHUNCK_SIZE", 512)) # For URL Chroma store
@@ -111,7 +112,7 @@ MODEL_DEFAULT_CHAT = MODEL_ROUTER # Use the router/corrector as default
 _engine_main_dir = os.path.dirname(os.path.abspath(__file__)) # Assumes config.py is in engineMain
 LLAMA_CPP_GGUF_DIR = os.path.join(_engine_main_dir, "staticmodelpool")
 LLAMA_CPP_N_GPU_LAYERS = int(os.getenv("LLAMA_CPP_N_GPU_LAYERS", -1)) # Default: Offload all possible layers
-LLAMA_CPP_N_CTX = int(os.getenv("LLAMA_CPP_N_CTX", 4096)) # Context window size
+LLAMA_CPP_N_CTX = int(os.getenv("LLAMA_CPP_N_CTX", 32768)) # Context window size
 LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "False").lower() == "true"
 LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 
@@ -790,21 +791,48 @@ Input Text:
 JSON Object:
 """
 
-PROMPT_GENERATE_FILE_SEARCH_QUERY = """Your goal is to help the user refine their search intent for a local file index (file paths and contents).
-Based on the user's query and recent conversation history below, formulate one or two concise clarifying questions.
-These questions should help the user articulate:
-1. The specific underlying question they are trying to answer with their search.
-2. What a good or ideal answer/result would look like, or what kind of information they expect to find.
+PROMPT_GENERATE_FILE_SEARCH_QUERY = """
+# ROLE: Keyword Extraction for Semantic Search
+# PRIMARY GOAL: Analyze the user's query and conversation history to extract the most relevant, concise keywords or key phrases for a local file search.
+# CRITICAL INSTRUCTIONS:
+# 1.  You MUST output ONLY a short string of 3-7 key search words.
+# 2.  The output should be a simple string, NOT a JSON object.
+# 3.  DO NOT output sentences, questions, explanations, or any conversational text.
+# 4.  DO NOT include <think> tags or any other XML-style tags in your output.
+# 5.  Synthesize information from the User Query, Direct History, and RAG History to find the most precise search terms.
+# --- CONTEXT FOR YOUR ANALYSIS ---
+# Recent Direct Conversation History:
+# ```
+# {{recent_direct_history}}
+# ```
 
-Output ONLY the clarifying question(s) for the user. Be brief and direct.
-Do NOT include explanations, reasoning (like <think> tags), or any conversational text beyond the question(s) themselves.
+# Relevant Conversation History Snippets (RAG):
+# ```
+# {{history_rag}}
+# ```
 
-User Query: {{input}}
-Recent History:
-{{recent_direct_history}}
-===============================
+# User/Immediate Query (Focus on this one):
+# ```
+# {{input}}
+# ```
+# --- EXAMPLES ---
+# EXAMPLE 1
+# User Query: "what were we talking about regarding the database schema for the user profiles?"
+# Correct Output: "database schema user profile table"
 
-Clarifying Question(s) for User:"""
+# EXAMPLE 2
+# User Query: "I need to find that file indexer fix we implemented yesterday."
+# Correct Output: "FileIndexer implementation fix database"
+
+# EXAMPLE 3
+# User Query: "The app is crashing when I upload a file, something about SQLAlchemy."
+# Correct Output: "file upload crash SQLAlchemy error"
+
+# --- YOUR TASK ---
+# Based on the context provided above, generate ONLY the keywords for the search query.
+
+Search Keywords:
+"""
 
 PROMPT_COMPLEXITY_CLASSIFICATION = """Analyze the following user query and the recent conversation context. Classify the query into ONE of the following categories based on how it should be processed:
 1.  `chat_simple`: Straightforward question/statement, direct answer needed.

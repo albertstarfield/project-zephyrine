@@ -38,7 +38,6 @@ def initialize_global_interaction_vectorstore(provider: AIProvider):
         try:
             os.makedirs(INTERACTION_VS_PERSIST_DIR, exist_ok=True)
 
-            # Check if a Chroma DB already exists at the path
             if os.path.exists(os.path.join(INTERACTION_VS_PERSIST_DIR, "chroma.sqlite3")):
                 logger.info(f"Loading existing persisted Interaction Chroma DB from: {INTERACTION_VS_PERSIST_DIR}")
                 global_interaction_vectorstore = Chroma(
@@ -48,12 +47,19 @@ def initialize_global_interaction_vectorstore(provider: AIProvider):
                     client_settings=Settings(anonymized_telemetry=False)
                 )
             else:
-                # If no persistent store, rebuild it from the main SQLite DB backups
                 logger.info(f"No persisted Interaction Chroma DB found. Rebuilding from main database...")
                 db_session = SessionLocal()
                 try:
+                    # First, create the empty, persistent Chroma store
+                    global_interaction_vectorstore = Chroma(
+                        collection_name=INTERACTION_COLLECTION_NAME,
+                        persist_directory=INTERACTION_VS_PERSIST_DIR,
+                        embedding_function=provider.embeddings
+                    )
+                    
                     interactions_with_backup = db_session.query(Interaction).filter(
                         Interaction.embedding_json.isnot(None)).all()
+                        
                     if interactions_with_backup:
                         logger.info(
                             f"Found {len(interactions_with_backup)} interactions with embedding backups to rebuild.")
@@ -63,26 +69,20 @@ def initialize_global_interaction_vectorstore(provider: AIProvider):
                         metadatas = [{"interaction_id": i.id, "session_id": i.session_id, "timestamp": str(i.timestamp)}
                                      for i in interactions_with_backup]
                         ids = [f"int_{i.id}_chunk_0" for i in
-                               interactions_with_backup]  # Assuming one backup embedding per interaction
+                               interactions_with_backup]
 
-                        global_interaction_vectorstore = Chroma.from_embeddings(
+                        # CORRECTED LOGIC
+                        global_interaction_vectorstore._collection.add(
                             embeddings=embeddings,
-                            embedding_function=provider.embeddings,
-                            documents=texts,  # Pass original texts for context
+                            documents=texts,
                             metadatas=metadatas,
-                            ids=ids,
-                            collection_name=INTERACTION_COLLECTION_NAME,
-                            persist_directory=INTERACTION_VS_PERSIST_DIR
+                            ids=ids
                         )
                         logger.success(
                             f"Rebuilt and persisted Interaction Vector Store with {len(interactions_with_backup)} records.")
                     else:
-                        logger.info("No interactions with backups found. Creating new empty vector store.")
-                        global_interaction_vectorstore = Chroma(
-                            collection_name=INTERACTION_COLLECTION_NAME,
-                            persist_directory=INTERACTION_VS_PERSIST_DIR,
-                            embedding_function=provider.embeddings
-                        )
+                        logger.info("No interactions with backups found. Created new empty vector store.")
+
                 finally:
                     db_session.close()
 
