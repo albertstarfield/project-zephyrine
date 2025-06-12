@@ -13,6 +13,7 @@ PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "firewo
 MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20))
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *quick* answers (token generation? I forgot)
 MAX_TOKENS = int(os.getenv("MAX_TOKENS", 32768)) # Default token limit for LLM calls
+BUFFER_TOKENS_FOR_RESPONSE = int(os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)) # Default token limit for LLM calls
 FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768))
 #DEFAULT_LLM_TEMPERATURE = 0.8
 DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", 0.8))
