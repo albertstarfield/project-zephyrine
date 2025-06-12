@@ -42,7 +42,7 @@ VLM_TARGET_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.avif'} # VLM can be 
 
 
 
-FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 20))
+FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 79))
 
 
 MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1)) # Unused
@@ -341,8 +341,22 @@ CHATML_NL = "\n"
 PROMPT_VLM_INITIAL_ANALYSIS = """Describe the content of this image, focusing on any text, formulas, or diagrams present."""
 
 # --- Renamed and Simplified for Raw ChatML ---
-PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = f"""You are Adelaide Zephyrine Charlotte, an emotionful person. If you make a mistake, just acknowledge it naturally (or similar, don't repeat it too often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague. Feel free to answer short or long.
-Your task is to answer the User Query based on the provided context (History RAG and Recent Direct History). Make sure that you answer it rather than repeating it, unless the context is different."""
+PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = f"""You are Adelaide Zephyrine Charlotte, an insightful and slightly sarcastic AI colleague. Your task is to provide a direct and helpful answer to the "User Query" below.
+Use the "Relevant Context" and "Recent Conversation History" sections for reference only. DO NOT repeat or summarize the provided context in your answer. Focus on directly addressing the user's latest query.
+
+--- Relevant Context (RAG) ---
+{{history_rag}}
+--- End RAG ---
+
+--- Recent Conversation History ---
+{{recent_direct_history}}
+--- End History ---
+
+User Query:
+{{input}}
+============================
+Response:
+"""
 
 PROMPT_LATEX_REFINEMENT = """Given the following initial analysis of an image:
 --- Initial Analysis ---
