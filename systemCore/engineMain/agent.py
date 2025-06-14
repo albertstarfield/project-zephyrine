@@ -18,9 +18,9 @@ from langchain_core.output_parsers import StrOutputParser
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 
 # Assuming these are in your config.py and accessible
-# Import necessary constants from config (ensure they are defined there)
+# Import necessary constants from CortexConfiguration (ensure they are defined there)
 try:
-    from config import PROVIDER, MAX_TOKENS, RAG_HISTORY_COUNT
+    from CortexConfiguration import PROVIDER, TOPCAP_TOKENS, RAG_HISTORY_COUNT
 except ImportError:
     # Fallbacks if config import fails during agent initialization (less ideal)
     logger.error("Failed to import config constants in agent.py")
@@ -323,10 +323,10 @@ class AmaryllisAgent:
         agent_model_role = "default" # Or "router" if you want it to use the same as the corrector
         agent_llm = self.provider.get_model(agent_model_role)
         if not agent_llm:
-             # Handle error: The required model wasn't initialized in AIProvider
-             logger.error(f"Agent setup failed: Could not get model for role '{agent_model_role}' from AIProvider.")
+             # Handle error: The required model wasn't initialized in CortexEngine
+             logger.error(f"Agent setup failed: Could not get model for role '{agent_model_role}' from CortexEngine.")
              # You might want to raise an exception here to stop initialization
-             raise ValueError(f"Agent model role '{agent_model_role}' not found in AIProvider.")
+             raise ValueError(f"Agent model role '{agent_model_role}' not found in CortexEngine.")
 
         self.agent_chain = self.agent_prompt_template | agent_llm | StrOutputParser()
 
@@ -511,7 +511,7 @@ class AmaryllisAgent:
     async def _run_task_in_background(self, initial_interaction_id: int, user_input: str, session_id: str):
         """
         Runs the Agent's task execution loop in the background with ELP0 priority.
-        Handles interruptions signaled by the AIProvider.
+        Handles interruptions signaled by the CortexEngine.
         """
         logger.warning(f"🧑‍💻🧵 Starting Agent background task ID: {initial_interaction_id} (Priority: ELP0)")
         db: Optional[Session] = None # Initialize db session variable

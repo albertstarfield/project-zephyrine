@@ -20,7 +20,7 @@ import re
 from functools import partial
 import math
 import wave
-from config import *
+from CortexConfiguration import *
 import multiprocess
 import multiprocessing
 
@@ -142,13 +142,13 @@ WHISPER_MODEL_DIR_CFG = "./staticmodelpool"
 WHISPER_DEFAULT_MODEL_FILENAME_CFG = "whisper-large-v3-q8_0.gguf"
 WHISPER_DEFAULT_LANGUAGE_CFG = "auto"
 try:
-    from config import WHISPER_MODEL_DIR, WHISPER_DEFAULT_MODEL_FILENAME, WHISPER_DEFAULT_LANGUAGE
+    from CortexConfiguration import WHISPER_MODEL_DIR, WHISPER_DEFAULT_MODEL_FILENAME, WHISPER_DEFAULT_LANGUAGE
     WHISPER_MODEL_DIR_CFG = WHISPER_MODEL_DIR
     WHISPER_DEFAULT_MODEL_FILENAME_CFG = WHISPER_DEFAULT_MODEL_FILENAME
     WHISPER_DEFAULT_LANGUAGE_CFG = WHISPER_DEFAULT_LANGUAGE
-    log_worker("INFO", "Successfully imported ASR defaults from config.py.")
+    log_worker("INFO", "Successfully imported ASR defaults from CortexConfiguration.py.")
 except ImportError:
-    log_worker("WARNING", "Could not import ASR defaults from config.py. Using internal fallbacks for ASR config.")
+    log_worker("WARNING", "Could not import ASR defaults from CortexConfiguration.py. Using internal fallbacks for ASR config.")
 
 # --- Numba (Optional for SCLParser) ---
 try:

@@ -4,7 +4,7 @@ import sys
 import os
 
 # --- Explicitly add the script's directory to sys.path ---
-# This helps ensure 'from config import ...' can find config.py
+# This helps ensure 'from CortexConfiguration import ...' can find config.py
 # if imagination_worker.py and config.py are in the same directory (e.g., engineMain).
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
 # Using print directly here as log_worker isn't defined yet.
@@ -99,8 +99,8 @@ REFINEMENT_SAMPLE_METHOD = REFINEMENT_SAMPLE_METHOD_DEFAULT
 REFINEMENT_ADD_NOISE_STRENGTH = REFINEMENT_ADD_NOISE_STRENGTH_DEFAULT
 
 try:
-    # Attempt to import from config, potentially overriding the defaults above
-    from config import (
+    # Attempt to import from CortexConfiguration, potentially overriding the defaults above
+    from CortexConfiguration import (
         REFINEMENT_MODEL_ENABLED as cfg_REFINEMENT_MODEL_ENABLED,
         REFINEMENT_MODEL_NAME as cfg_REFINEMENT_MODEL_NAME,
         REFINEMENT_PROMPT_PREFIX as cfg_REFINEMENT_PROMPT_PREFIX,
@@ -111,7 +111,7 @@ try:
         REFINEMENT_ADD_NOISE_STRENGTH as cfg_REFINEMENT_ADD_NOISE_STRENGTH
     )
 
-    # If import succeeds, use the values from config.py
+    # If import succeeds, use the values from CortexConfiguration.py
     REFINEMENT_MODEL_ENABLED = cfg_REFINEMENT_MODEL_ENABLED
     REFINEMENT_MODEL_NAME = cfg_REFINEMENT_MODEL_NAME
     REFINEMENT_PROMPT_PREFIX = cfg_REFINEMENT_PROMPT_PREFIX
@@ -120,11 +120,11 @@ try:
     REFINEMENT_CFG_SCALE = cfg_REFINEMENT_CFG_SCALE
     REFINEMENT_SAMPLE_METHOD = cfg_REFINEMENT_SAMPLE_METHOD
     REFINEMENT_ADD_NOISE_STRENGTH = cfg_REFINEMENT_ADD_NOISE_STRENGTH
-    print("[IMAGINATION_WORKER|INFO] Successfully imported refinement settings from config.py.", file=sys.stderr,
+    print("[IMAGINATION_WORKER|INFO] Successfully imported refinement settings from CortexConfiguration.py.", file=sys.stderr,
           flush=True)
 except ImportError as e_config_import:
     print(
-        f"[IMAGINATION_WORKER|WARNING] Could not import settings from config.py: {e_config_import}. Using internal defaults for refinement.",
+        f"[IMAGINATION_WORKER|WARNING] Could not import settings from CortexConfiguration.py: {e_config_import}. Using internal defaults for refinement.",
         file=sys.stderr, flush=True)
     # Defaults assigned above are already in place if import fails
 
@@ -166,9 +166,9 @@ def main():
 
     log_worker("INFO",
                f"Starting Imagination Worker (FLUX + Refiner). PID: {os.getpid()}. Device Arg (from cmd): {args.w_device}, TestMode: {args.test_mode}, RNG: {args.rng_type}, Threads: {args.n_threads}")
-    log_worker("INFO", f"Initial Refinement Stage Enabled (from config/default): {current_refinement_enabled_status}")
+    log_worker("INFO", f"Initial Refinement Stage Enabled (from CortexConfiguration/default): {current_refinement_enabled_status}")
     if current_refinement_enabled_status:
-        log_worker("INFO", f"Refinement Noise Strength (from config/default): {REFINEMENT_ADD_NOISE_STRENGTH}")
+        log_worker("INFO", f"Refinement Noise Strength (from CortexConfiguration/default): {REFINEMENT_ADD_NOISE_STRENGTH}")
 
     if PIL_AVIF_PLUGIN_POSSIBLY_AVAILABLE:
         log_worker("INFO", "AVIF plugin seems available, AVIF conversion will be attempted if enabled by format.")

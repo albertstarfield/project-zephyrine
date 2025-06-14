@@ -19,8 +19,8 @@ from chromadb.config import Settings
 
 # Assuming these are accessible or passed in
 from database import Interaction, init_db, SessionLocal  # The SQLAlchemy model for interactions
-from ai_provider import AIProvider  # To get the embedding function
-from config import *
+from cortex_backbone_provider import CortexEngine  # To get the embedding function
+from CortexConfiguration import *
 
 # --- NEW: Import the custom lock ---
 
@@ -50,13 +50,13 @@ _reflection_vs_initialized_event = threading.Event()
 REFLECTION_VS_PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "chroma_reflection_store")
 
 
-def initialize_global_reflection_vectorstore(provider: AIProvider,
+def initialize_global_reflection_vectorstore(provider: CortexEngine,
                                              db_session: Session):  # db_session might not be needed if loading persisted
     global global_reflection_vectorstore
     logger.info(">>> ReflectionIndexer: Entered initialize_global_reflection_vectorstore <<<")
 
     if not provider or not provider.embeddings:
-        logger.error("ReflectionIndexer Init: AIProvider or embeddings missing. Cannot initialize.")
+        logger.error("ReflectionIndexer Init: CortexEngine or embeddings missing. Cannot initialize.")
         return
 
     if _reflection_vs_initialized_event.is_set():
@@ -68,7 +68,7 @@ def initialize_global_reflection_vectorstore(provider: AIProvider,
             logger.info("ReflectionIndexer Init: Skipping (double check), event set while waiting for lock.")
             return
         try:
-            # Use the imported constants directly from config.py
+            # Use the imported constants directly from CortexConfiguration.py
             if REFLECTION_INDEX_CHROMA_PERSIST_DIR:  # Check if a path is configured
                 os.makedirs(REFLECTION_INDEX_CHROMA_PERSIST_DIR, exist_ok=True)  # Ensure dir exists
 
@@ -119,7 +119,7 @@ def initialize_global_reflection_vectorstore(provider: AIProvider,
 
 def index_single_reflection(
         reflection_interaction: Interaction,
-        provider: AIProvider,
+        provider: CortexEngine,
         db_session: Session,
         priority: int = ELP0
 ):
@@ -134,7 +134,7 @@ def index_single_reflection(
             f"{log_prefix}: CRITICAL - Reflection VS event IS SET, but global_reflection_vectorstore object IS None. Skipping.")
         return
     if not provider or not provider.embeddings:
-        logger.error(f"{log_prefix}: AIProvider or its embeddings are not available. Skipping indexing.")
+        logger.error(f"{log_prefix}: CortexEngine or its embeddings are not available. Skipping indexing.")
         return
 
     llm_response_content = getattr(reflection_interaction, 'llm_response', None)
@@ -147,7 +147,7 @@ def index_single_reflection(
         logger.warning(f"{log_prefix}: llm_response is not a string (type: {type(llm_response_content)}). Skipping.")
         return
 
-    # YOUR_REFLECTION_CHUNK_SIZE and YOUR_REFLECTION_CHUNK_OVERLAP should be imported from config
+    # YOUR_REFLECTION_CHUNK_SIZE and YOUR_REFLECTION_CHUNK_OVERLAP should be imported from CortexConfiguration
     # Define fallbacks if not found, or ensure they are always imported.
     _chunk_size = globals().get("YOUR_REFLECTION_CHUNK_SIZE", 500)
     _chunk_overlap = globals().get("YOUR_REFLECTION_CHUNK_OVERLAP", 50)
@@ -257,7 +257,7 @@ def get_global_reflection_vectorstore() -> Optional[Chroma]:
         return None
 
 # --- Optional: Periodic task to scan for unindexed reflections (if not done immediately) ---
-# def periodic_reflection_indexing_task(stop_event: threading.Event, provider: AIProvider, session_factory): ...
+# def periodic_reflection_indexing_task(stop_event: threading.Event, provider: CortexEngine, session_factory): ...
 
 class TaskInterruptedException(Exception):
     """Custom exception raised when an ELP0 task is interrupted."""
@@ -288,16 +288,16 @@ if __name__ == "__main__":
             logger.error(f"Failed to initialize database or create session: {e_db_init}")
             sys.exit(1)
 
-        # 2. Initialize AIProvider (needed for embeddings)
-        test_ai_provider: Optional[AIProvider] = None
+        # 2. Initialize CortexEngine (needed for embeddings)
+        test_cortex_backbone_provider: Optional[CortexEngine] = None
         try:
-            logger.info(f"Initializing AIProvider (Provider: {PROVIDER})...") # PROVIDER from config.py
-            test_ai_provider = AIProvider(PROVIDER)
-            if not test_ai_provider.embeddings:
-                raise ValueError("AIProvider initialized, but embeddings are not available.")
-            logger.info("AIProvider initialized successfully for embeddings.")
-        except Exception as e_ai_provider:
-            logger.error(f"Failed to initialize AIProvider: {e_ai_provider}")
+            logger.info(f"Initializing CortexEngine (Provider: {PROVIDER})...") # PROVIDER from CortexConfiguration.py
+            test_cortex_backbone_provider = CortexEngine(PROVIDER)
+            if not test_cortex_backbone_provider.embeddings:
+                raise ValueError("CortexEngine initialized, but embeddings are not available.")
+            logger.info("CortexEngine initialized successfully for embeddings.")
+        except Exception as e_cortex_backbone_provider:
+            logger.error(f"Failed to initialize CortexEngine: {e_cortex_backbone_provider}")
             if db_session_for_test: db_session_for_test.close()
             sys.exit(1)
 
@@ -305,7 +305,7 @@ if __name__ == "__main__":
         try:
             logger.info("Initializing global reflection vector store...")
             # initialize_global_reflection_vectorstore is synchronous
-            initialize_global_reflection_vectorstore(test_ai_provider, db_session_for_test)
+            initialize_global_reflection_vectorstore(test_cortex_backbone_provider, db_session_for_test)
             logger.info("Global reflection vector store initialization process completed.")
         except Exception as e_vs_init:
             logger.error(f"Error during reflection vector store initialization: {e_vs_init}")
@@ -341,7 +341,7 @@ if __name__ == "__main__":
                         db_session_for_test.commit()
                         db_session_for_test.refresh(dummy_interaction) # Get ID
                         logger.info(f"Added dummy reflection with ID: {dummy_interaction.id}")
-                        index_single_reflection(dummy_interaction, test_ai_provider, db_session_for_test)
+                        index_single_reflection(dummy_interaction, test_cortex_backbone_provider, db_session_for_test)
                         logger.info("Attempted to index dummy reflection.")
                         # Re-check count
                         collection_count_after_add = reflection_vs._collection.count() # type: ignore

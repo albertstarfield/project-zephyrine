@@ -12,12 +12,12 @@ MODULE_DIR=os.path.dirname(__file__)
 PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "fireworks"
 MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20))
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *quick* answers (token generation? I forgot)
-MAX_TOKENS = int(os.getenv("MAX_TOKENS", 32768)) # Default token limit for LLM calls
+TOPCAP_TOKENS = int(os.getenv("TOPCAP_TOKENS", 32768)) # Default token limit for LLM calls
 BUFFER_TOKENS_FOR_RESPONSE = int(os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)) # Default token limit for LLM calls
 FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768))
 #DEFAULT_LLM_TEMPERATURE = 0.8
 DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", 0.8))
-CHUNCK_SIZE = int(os.getenv("CHUNCK_SIZE", 512)) # For URL Chroma store
+VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE = int(os.getenv("VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE", 512)) # For URL Chroma store
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 256)) # For URL Chroma store
 RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 10))
@@ -97,17 +97,6 @@ LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES = int(os.getenv("LLM_CALL_ELP0_INTERRUPT_MAX
 LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY = int(os.getenv("LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY", 1)) # e.g., 1 seconds
 logger.info(f"🔧 LLM ELP0 Interrupt Max Retries: {LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES}")
 logger.info(f"🔧 LLM ELP0 Interrupt Retry Delay: {LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY}s")
-
-# --- Model Names (Ensure these exist in Ollama) ---
-OLLAMA_BASE_URL = os.getenv("OLLAMA_BASE_URL", "http://127.0.0.1:8141") # Default to 8141
-MODEL_ROUTER = os.getenv("MODEL_ROUTER", "deepscaler:latest") # Router and Corrector
-MODEL_VLM = os.getenv("MODEL_VLM", "gemma3:4b-it-qat") # Vision/General (Needs testing as VLM)
-MODEL_LATEX = os.getenv("MODEL_LATEX", "mradermacher/LatexMind-2B-Codec-i1-GGUF:IQ4_XS") # Check exact Ollama name
-MODEL_MATH = os.getenv("MODEL_MATH", "qwen2-math:1.5b-instruct-q5_K_M") # Needs Chinese translation
-MODEL_CODE = os.getenv("MODEL_CODE", "qwen2.5-coder:3b-instruct-q5_K_M") # Needs Chinese translation
-MODEL_GENERAL_FAST = os.getenv("MODEL_GENERAL_FAST", "qwen3:0.6b-q4_K_M") # New fast model
-MODEL_TRANSLATOR = os.getenv("MODEL_TRANSLATOR", "hf.co/mradermacher/NanoTranslator-immersive_translate-0.5B-GGUF:Q4_K_M") # Check exact Ollama name
-MODEL_DEFAULT_CHAT = MODEL_ROUTER # Use the router/corrector as default
 
 # --- NEW: LLAMA_CPP Settings (Used if PROVIDER="llama_cpp") ---
 _engine_main_dir = os.path.dirname(os.path.abspath(__file__)) # Assumes config.py is in engineMain
@@ -1006,23 +995,8 @@ VLM_TARGET_EXTENSIONS = {'.pdf'}
 # ---
 
 
-
-
-# --- Model Settings ---
-# Ollama Settings
-OLLAMA_CHAT = os.getenv("OLLAMA_CHAT", "gemma3:4b")
-OLLAMA_VISUAL_CHAT = os.getenv("OLLAMA_VISUAL_CHAT", "gemma3:4b") # Ensure this is a VLM like llava if used
-OLLAMA_EMBEDDINGS_MODEL = os.getenv("OLLAMA_EMBEDDINGS_MODEL", "mxbai-embed-large:latest")
-
-# Fireworks Settings
-FIREWORKS_CHAT = os.getenv("FIREWORKS_CHAT", "accounts/fireworks/models/llama-v3p1-8b-instruct")
-FIREWORKS_VISUAL_CHAT = os.getenv("FIREWORKS_VISUAL_CHAT", "accounts/fireworks/models/phi-3-vision-128k-instruct")
-FIREWORKS_API_KEY = os.getenv("FIREWORKS_API_KEY") # Loads from .env
-FIREWORKS_EMBEDDINGS_MODEL = os.getenv("FIREWORKS_EMBEDDINGS_MODEL", "nomic-ai/nomic-embed-text-v1.5")
-
 # --- Validation ---
-if PROVIDER == "fireworks" and not FIREWORKS_API_KEY:
-     logger.warning("⚠️ PROVIDER=fireworks but FIREWORKS_API_KEY missing/placeholder.")
+
 if PROVIDER == "llama_cpp" and not os.path.isdir(LLAMA_CPP_GGUF_DIR):
      logger.error(f"❌ PROVIDER=llama_cpp but GGUF directory not found: {LLAMA_CPP_GGUF_DIR}")
      # Decide whether to exit or continue (app will likely fail later)

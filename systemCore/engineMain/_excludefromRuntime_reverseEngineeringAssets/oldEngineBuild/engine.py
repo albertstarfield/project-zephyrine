@@ -54,7 +54,7 @@ EMBEDDING_MODEL_PATH = os.environ.get("EMBEDDING_MODEL_PATH",
 CTX_WINDOW_LLM = int(os.environ.get("CTX_WINDOW_LLM", 4096))
 N_BATCH = int(os.environ.get("N_BATCH", 512))  # Define n_batch globally
 DATABASE_FILE = os.environ.get("DATABASE_FILE", "./engine_interaction.db")
-MAX_TOKENS_GENERATE = int(os.environ.get("MAX_TOKENS_GENERATE", 512))
+TOPCAP_TOKENS_GENERATE = int(os.environ.get("TOPCAP_TOKENS_GENERATE", 512))
 TOKENIZER = tiktoken.get_encoding("cl100k_base")
 HTTP_PORT = int(os.environ.get("HTTP_PORT", 2738))  # Get port from environment, default to 8000
 HTTP_HOST = os.environ.get("HTTP_HOST", "127.0.0.1")  # Get host from environment, default to 0.0.0.0
@@ -3395,7 +3395,7 @@ def initialize_models():
         n_ctx=CTX_WINDOW_LLM,
         f16_kv=True,
         verbose=False,
-        max_tokens=MAX_TOKENS_GENERATE
+        max_tokens=TOPCAP_TOKENS_GENERATE
     )
 
     embedding_llm = Llama(model_path=EMBEDDING_MODEL_PATH, n_ctx=CTX_WINDOW_LLM, n_gpu_layers=-1, n_batch=n_batch,

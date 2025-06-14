@@ -40,7 +40,7 @@ LLM_MODEL_PATH = os.environ.get("LLM_MODEL_PATH", "./pretrainedggufmodel/preTrai
 EMBEDDING_MODEL_PATH = os.environ.get("EMBEDDING_MODEL_PATH", "./pretrainedggufmodel/mxbai-embed-large-v1-f16.gguf")  # Use new model
 CTX_WINDOW_LLM = int(os.environ.get("CTX_WINDOW_LLM", 4096))
 DATABASE_FILE = os.environ.get("DATABASE_FILE", "./engine_interaction.db")
-MAX_TOKENS_GENERATE = int(os.environ.get("MAX_TOKENS_GENERATE", 512))
+TOPCAP_TOKENS_GENERATE = int(os.environ.get("TOPCAP_TOKENS_GENERATE", 512))
 TOKENIZER = tiktoken.get_encoding("cl100k_base")
 HTTP_PORT = int(os.environ.get("HTTP_PORT", 8000))  # Get port from environment, default to 8000
 HTTP_HOST = os.environ.get("HTTP_HOST", "0.0.0.0")    # Get host from environment, default to 0.0.0.0
@@ -2026,7 +2026,7 @@ def initialize_models():
         n_ctx=CTX_WINDOW_LLM,
         f16_kv=True,
         verbose=False,  # Less verbose during initialization
-        max_tokens=MAX_TOKENS_GENERATE,
+        max_tokens=TOPCAP_TOKENS_GENERATE,
         rope_freq_base=10000,
         rope_freq_scale=1,
         embedding=True,

@@ -42,7 +42,7 @@ from alembic import command
 from alembic.util import CommandError
 from collections import deque
 from loguru import logger
-from config import *
+from CortexConfiguration import *
 
 # --- Configuration & Paths ---
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -1107,8 +1107,8 @@ try:
         print("[alembic/env.py]   CRITICAL: Imported 'Base' is None or has no 'metadata' attribute!", file=sys.stderr)
         target_metadata = None # Ensure it's None
 
-    print(f"[alembic/env.py] Attempting: from config import PROJECT_CONFIG_DATABASE_URL", file=sys.stderr)
-    from config import PROJECT_CONFIG_DATABASE_URL 
+    print(f"[alembic/env.py] Attempting: from CortexConfiguration import PROJECT_CONFIG_DATABASE_URL", file=sys.stderr)
+    from CortexConfiguration import PROJECT_CONFIG_DATABASE_URL 
     EFFECTIVE_DATABASE_URL_FOR_ALEMBIC = PROJECT_CONFIG_DATABASE_URL
     print(f"[alembic/env.py]   Successfully imported PROJECT_CONFIG_DATABASE_URL='{EFFECTIVE_DATABASE_URL_FOR_ALEMBIC}'", file=sys.stderr)
 
@@ -1128,7 +1128,7 @@ if target_metadata is None: # Check after try-except
     # target_metadata = MetaData() # This would lead to empty script
 
 if not EFFECTIVE_DATABASE_URL_FOR_ALEMBIC:
-    raise ValueError("PROJECT_CONFIG_DATABASE_URL from config.py was None. Alembic cannot proceed.")
+    raise ValueError("PROJECT_CONFIG_DATABASE_URL from CortexConfiguration.py was None. Alembic cannot proceed.")
 
 alembic_ini_config.set_main_option("sqlalchemy.url", EFFECTIVE_DATABASE_URL_FOR_ALEMBIC)
 
@@ -1352,14 +1352,14 @@ def init_db():
     # --- 3. Ensure Alembic Configuration Files Exist and are Correct ---
     # These functions create default ini, env.py, script.py.mako if missing.
     # _create_default_env_py() is critical as it writes an env.py that correctly
-    # imports Base.metadata from this database.py and PROJECT_CONFIG_DATABASE_URL from config.py.
+    # imports Base.metadata from this database.py and PROJECT_CONFIG_DATABASE_URL from CortexConfiguration.py.
     _create_default_env_py()  # Must be defined in this file
     _create_default_script_mako()  # Must be defined in this file
     if not os.path.exists(ALEMBIC_INI_PATH):
         logger.warning(f"🔧 Alembic config file alembic.ini not found. Creating default at {ALEMBIC_INI_PATH}")
         alembic_dir_for_ini = os.path.relpath(ALEMBIC_DIR, MODULE_DIR).replace("\\", "/")
         # alembic.ini's sqlalchemy.url will be overridden by env.py with PROJECT_CONFIG_DATABASE_URL,
-        # but it needs a valid placeholder. Using DATABASE_URL from config is fine.
+        # but it needs a valid placeholder. Using DATABASE_URL from CortexConfiguration is fine.
         alembic_cfg_content = f"""
 [alembic]
 # path to migration scripts
@@ -1591,7 +1591,7 @@ _log_batch_queue_lock = threading.Lock()
 _log_writer_stop_event = threading.Event() # <<<< DEFINITION
 
 _log_writer_thread: Optional[threading.Thread] = None # This is the instance of DatabaseLogBatchWriter
-# LOG_QUEUE_MAX_SIZE is imported from config
+# LOG_QUEUE_MAX_SIZE is imported from CortexConfiguration
 
 def _core_add_interaction_to_session(db_session: Session, **kwargs) -> Interaction:
     valid_keys = {c.name for c in Interaction.__table__.columns}

@@ -59,9 +59,18 @@ INITIAL_PYTHON_MINOR = 12
 FALLBACK_PYTHON_MAJOR = 3
 FALLBACK_PYTHON_MINOR = 12
 
+# --- ZephyMesh Configuration ---
+ZEPHYMESH_DIR = os.path.join(ROOT_DIR, "zephyMeshNetwork")
+ZEPHYMESH_NODE_SCRIPT = os.path.join(ZEPHYMESH_DIR, "mesh_node.py")
+# The port file is how the launcher will discover the random port chosen by the mesh node.
+ZEPHYMESH_PORT_INFO_FILE = os.path.join(ROOT_DIR, "zephymesh_ports.json")
+zephymesh_api_url: Optional[str] = None # Will be set dynamically after the node starts.
+zephymesh_process: Optional[subprocess.Popen] = None
+# --- END ZephyMesh Configuration ---
+
 running_processes = [] # For services started by the current script instance
 process_lock = threading.Lock()
-relaunched_conda_process_obj = None # <<<< ADD THIS LINE
+relaunched_conda_process_obj = None
 
 # --- Executable Paths (will be redefined after Conda activation) ---
 IS_WINDOWS = os.name == 'nt'
@@ -197,7 +206,6 @@ FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
 ]
 
 
-
 # Global list to keep track of running subprocesses
 running_processes = []
 process_lock = threading.Lock()
@@ -211,6 +219,8 @@ def print_colored(prefix, message, color=None):
         prefix_color = "\033[91m"
     elif prefix == "WARNING":
         prefix_color = "\033[93m"
+    elif prefix == "SUCCESS":
+        prefix_color = "\033[92m"
     reset_color = "\033[0m"
     if sys.stdout.isatty():
         print(f"[{now} | {prefix_color}{prefix.ljust(10)}{reset_color}] {message.strip()}")
@@ -376,6 +386,20 @@ def start_service_thread(target_func, name):
 
 def cleanup_processes():
     print_system("\nShutting down services...")
+    # FIX 2: Removed 'global zephymesh_process' as it's redundant and causes a SyntaxError
+    # with type-annotated variables. The variable is only read, not reassigned here.
+
+    # --- Shutdown ZephyMesh Node First ---
+    if zephymesh_process and zephymesh_process.poll() is None:
+        print_system(f"Terminating ZephyMesh Node (PID: {zephymesh_process.pid})...")
+        zephymesh_process.terminate()
+        try:
+            zephymesh_process.wait(timeout=5)
+            print_system("ZephyMesh Node terminated gracefully.")
+        except subprocess.TimeoutExpired:
+            print_warning("ZephyMesh Node did not terminate gracefully, killing...")
+            zephymesh_process.kill()
+    # The mesh node's own shutdown hook should clean up the port file.
 
     # --- Handle the main relaunched 'conda run' process first ---
     # This is relevant if the *initial* launcher instance is exiting (e.g., Ctrl+C)
@@ -411,7 +435,7 @@ def cleanup_processes():
         else:
             print_system(f"{name} already exited (return code: {proc.poll()}).")
 
-atexit.register(cleanup_processes) # This line should already exist
+atexit.register(cleanup_processes)
 
 
 def signal_handler(sig, frame):
@@ -457,7 +481,7 @@ def start_engine_main():
     MAX_UPLOAD_SIZE_BYTES = 2 ** 63  # Set this to 2 to the power of 63
     command = [
         HYPERCORN_EXECUTABLE,
-        "app:app",
+        "AdelaideAlbertCortex:app",
         "--bind", "127.0.0.1:11434",
         "--workers", "1",
         "--log-level", "info"
@@ -671,19 +695,15 @@ def get_conda_env_path(env_name_or_path):  # This function's usage for the *targ
 
 
 def create_conda_env(env_prefix_path, python_versions_to_try):  # Takes env_prefix_path directly
-    # global TARGET_CONDA_ENV_PATH # No longer needed to set globally here, it's passed in
-
     if not CONDA_EXECUTABLE:
         print_error("Conda executable not found. Cannot create environment.")
         return False
 
-    # Ensure the parent directory for the prefix exists if it's nested deeply (though here it's ROOT_DIR)
     os.makedirs(os.path.dirname(env_prefix_path), exist_ok=True)
 
     for py_version in python_versions_to_try:
         print_system(
             f"Attempting to create Conda environment at prefix '{env_prefix_path}' with Python {py_version}...")
-        # Using --prefix or -p instead of --name
         cmd_list_base = ["create", "--yes", "--prefix", env_prefix_path, f"python={py_version}", "-c", "conda-forge"]
 
         cmd_to_run = [CONDA_EXECUTABLE] + cmd_list_base
@@ -708,7 +728,6 @@ def create_conda_env(env_prefix_path, python_versions_to_try):  # Takes env_pref
             if process.returncode == 0:
                 print_system(
                     f"Conda environment created successfully at prefix '{env_prefix_path}' with Python {py_version}.")
-                # TARGET_CONDA_ENV_PATH is already known (it's env_prefix_path)
                 if not (os.path.isdir(env_prefix_path) and os.path.exists(os.path.join(env_prefix_path, 'conda-meta'))):
                     print_error(
                         f"Critical: Conda environment at prefix '{env_prefix_path}' seems invalid post-creation.")
@@ -717,7 +736,6 @@ def create_conda_env(env_prefix_path, python_versions_to_try):  # Takes env_pref
             else:
                 print_warning(
                     f"Failed to create Conda environment at prefix '{env_prefix_path}' with Python {py_version} (retcode: {process.returncode}).")
-                # Potentially remove the partially created prefix directory if creation fails
                 if os.path.exists(env_prefix_path):
                     print_warning(f"Attempting to clean up partially created environment at '{env_prefix_path}'...")
                     try:
@@ -735,7 +753,7 @@ def create_conda_env(env_prefix_path, python_versions_to_try):  # Takes env_pref
                 f"An unexpected error occurred while trying to create Conda environment at prefix '{env_prefix_path}' with Python {py_version}: {e}")
             print_error(
                 f"Failed to create Conda environment at prefix '{env_prefix_path}' with any of the specified Python versions: {python_versions_to_try}.")
-            _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)  # <--- ADD THIS LINE
+            _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
 
     print_error(
         f"Failed to create Conda environment at prefix '{env_prefix_path}' with any of the specified Python versions: {python_versions_to_try}.")
@@ -749,8 +767,6 @@ LICENSES_TO_ACCEPT = [
     ("MIT_Zephyrine.txt", "Project Zephyrine Core & UI (MIT)"),
     ("LICENSE_THIRD_PARTY_MODELS.txt", "Various licenses for bundled AI Models (see file for details)")
 ]
-
-
 
 
 def load_licenses() -> tuple[dict[str, str], str]:
@@ -1265,7 +1281,7 @@ def _detect_and_prepare_acceleration_env_vars() -> Dict[str, str]:
     print_system(
         f"--- Hardware Acceleration Auto-Detection Complete. Preferred GPU Backend: {primary_gpu_backend_detected} ---")
     if detected_env_vars.get("AUTODETECTED_COREML_POSSIBLE") == "1":
-        print_system("    (CoreML also noted as possible for Whisper on this platform)")
+        print_system("    (CoreML also noted as possible for this platform)")
 
     return detected_env_vars
 
@@ -1287,13 +1303,12 @@ except ImportError:
 
 # Global placeholder for requests_session, use string literal for type hint here too
 requests_session: Optional['requests.Session'] = None
-ARIA2P_AVAILABLE = False # Assuming this is set based on aria2p import attempt
 
 def download_file_with_progress(
     url: str,
     destination_path: str,
     file_description: str,
-    requests_session: 'requests.Session', # <<< CORRECTED TYPE HINT
+    requests_session: 'requests.Session',
     max_retries_non_connection_error: int = 3,
     aria2_rpc_host: str = "localhost",
     aria2_rpc_port: int = 6800,
@@ -1301,67 +1316,93 @@ def download_file_with_progress(
 ):
     """
     Downloads a file with a progress bar.
-    Attempts to use aria2c for multi-connection download if available and connected.
-    Falls back to requests-based download with robust retries.
+    1. First, attempts to find the file on the ZephyMesh network via the local API.
+    2. If found, downloads directly from the peer.
+    3. If not found, falls back to the provided internet URL.
+    4. If downloaded from the internet, notifies the local mesh node to start seeding it.
     """
-    print_system(f"Preparing to download {file_description} from {url} to {destination_path}...")
+    print_system(f"Requesting asset: {file_description}...")
+    # This is the relative path key used in the manifest (e.g., "staticmodelpool/model.gguf")
+    asset_relative_path = os.path.join(
+        os.path.basename(os.path.dirname(destination_path)),
+        os.path.basename(destination_path)
+    ).replace("\\", "/")
+
+    peer_download_url = None
+    # FIX 1: Removed 'global zephymesh_api_url' as it's redundant and causes a SyntaxError
+    # with type-annotated variables. The variable is only read, not reassigned here.
+    if zephymesh_process and zephymesh_api_url:
+        try:
+            # TODO: This is where you would query your local mesh node's API.
+            # The API server needs to be implemented in mesh_node.py.
+            # This is a placeholder for that future logic.
+            print_system(f"Querying ZephyMesh for '{asset_relative_path}'... (API call not yet implemented)")
+            # Example of what the actual request would look like:
+            # import requests
+            # response = requests.get(f"{zephymesh_api_url}/query", params={"filepath": asset_relative_path}, timeout=5)
+            # if response.status_code == 200:
+            #     data = response.json()
+            #     if data.get("found"):
+            #         peer_download_url = data["url"] # e.g., "http://<peer_ip>:<peer_port>/staticmodelpool/model.gguf"
+            #         print_colored("SUCCESS", f"Found on peer: {peer_download_url}")
+        except Exception as e:
+            print_warning(f"Could not query ZephyMesh node: {e}. Falling back to internet.")
+
+    url_to_use = peer_download_url if peer_download_url else url
+    download_successful = False
+
+    # Start of the robust download logic, now using url_to_use
+    print_system(f"Preparing to download {file_description} from {url_to_use} to {destination_path}...")
 
     try:
         os.makedirs(os.path.dirname(destination_path), exist_ok=True)
     except OSError as e:
         print_error(f"Failed to create directory for {destination_path}: {e}")
-        return False  # Cannot proceed if directory creation fails
+        return False
 
     # --- Attempt Aria2c Download First ---
-    aria2c_executable_path = shutil.which("aria2c")  # Check if aria2c CLI is in PATH
+    aria2c_executable_path = shutil.which("aria2c")
 
     if ARIA2P_AVAILABLE and aria2c_executable_path:
         print_system(f"Aria2c found at '{aria2c_executable_path}'. Attempting download via aria2p...")
-        aria2_api_instance = None  # Renamed variable to avoid conflict if API is also class name
+        aria2_api_instance = None
         try:
-            # Initialize API client and connect to aria2 RPC server
             aria2_client_instance = aria2p.Client(host=aria2_rpc_host, port=aria2_rpc_port, secret=aria2_rpc_secret)
             aria2_api_instance = aria2p.API(aria2_client_instance)
 
-            # Verify connection by getting global stats
             global_stats = aria2_api_instance.get_global_stat()
             print_system(
                 f"Connected to aria2c RPC server. Speed: {global_stats.download_speed_string()}/{global_stats.upload_speed_string()}, Active: {global_stats.num_active}, Waiting: {global_stats.num_waiting}")
 
-            # Define download options for aria2c
             aria2_options_dict = {
                 "dir": os.path.dirname(destination_path),
                 "out": os.path.basename(destination_path),
-                "max-connection-per-server": "16",
-                "split": "16",
-                "min-split-size": "1M",
-                "stream-piece-selector": "geom",
-                "continue": "true",  # Resume downloads
-                "allow-overwrite": "true"  # In case a .tmp_aria2 file exists
+                "max-connection-per-server": "16", "split": "16", "min-split-size": "1M",
+                "stream-piece-selector": "geom", "continue": "true", "allow-overwrite": "true"
             }
 
-            print_system(f"Adding URI to aria2c: {url} with options: {aria2_options_dict}")
-            download_task = aria2_api_instance.add_uris([url], options=aria2_options_dict)
+            print_system(f"Adding URI to aria2c: {url_to_use} with options: {aria2_options_dict}")
+            download_task = aria2_api_instance.add_uris([url_to_use], options=aria2_options_dict)
 
             if not download_task:
                 raise RuntimeError("aria2_api.add_uris did not return a download task object.")
 
             print_system(f"Aria2c download started (GID: {download_task.gid}). Monitoring progress...")
 
+            from tqdm import tqdm
             with tqdm(total=100, unit='%', desc=file_description[:30], ascii=IS_WINDOWS, leave=False,
                       bar_format='{l_bar}{bar}| {n_fmt}% [{elapsed}<{remaining}, {rate_fmt}{postfix}]') as progress_bar:
                 last_completed_bytes = 0
                 while not download_task.is_complete and not download_task.has_error:
                     download_task.update()
 
-                    if download_task.total_length > 0:  # If total size is known
-                        if progress_bar.total != download_task.total_length:  # Initialize or update total for tqdm
+                    if download_task.total_length > 0:
+                        if progress_bar.total != download_task.total_length:
                             progress_bar.total = download_task.total_length
-                            progress_bar.unit = 'iB'  # Switch to bytes
-                            progress_bar.unit_scale = True
-                            progress_bar.n = download_task.completed_length  # Set initial progress
+                            progress_bar.unit = 'iB'; progress_bar.unit_scale = True
+                            progress_bar.n = download_task.completed_length
                             last_completed_bytes = download_task.completed_length
-                        else:  # Already initialized with bytes, update by increment
+                        else:
                             progress_bar.update(download_task.completed_length - last_completed_bytes)
                             last_completed_bytes = download_task.completed_length
 
@@ -1370,8 +1411,7 @@ def download_file_with_progress(
                             postfix_details += f" ETA:{download_task.eta_string(human_readable=True)}"
                         progress_bar.set_postfix_str(postfix_details, refresh=False)
                         progress_bar.refresh()
-                    else:  # Total length not yet known, show percentage if available
-                        # download_task.progress is 0-100 based on files if total size unknown
+                    else:
                         if download_task.progress > progress_bar.n:
                             progress_bar.update(int(download_task.progress) - int(progress_bar.n))
                         progress_bar.set_postfix_str(
@@ -1382,168 +1422,149 @@ def download_file_with_progress(
                             f"Aria2c download error (Code {download_task.error_code}): {download_task.error_message}")
                     time.sleep(0.5)
 
-            download_task.update()  # Final update
+            download_task.update()
             if download_task.is_complete:
                 print_system(f"Aria2c download successful for {file_description}!")
-                # Verify file integrity after aria2c reports completion
-                final_path = download_task.files[0].path  # aria2p should update this to the correct path
+                final_path = download_task.files[0].path
                 if os.path.exists(final_path) and os.path.getsize(final_path) == download_task.total_length:
-                    if final_path != destination_path:  # If aria2c saved it with a different name (e.g. if "out" option was tricky)
+                    if final_path != destination_path:
                         print_warning(f"Aria2c saved to '{final_path}', moving to '{destination_path}'.")
                         shutil.move(final_path, destination_path)
-                    return True  # Success
+                    download_successful = True
                 else:
                     err_msg_verify = f"Aria2c reported complete, but file verification failed at '{final_path}'. Expected: {download_task.total_length}, Actual: {os.path.getsize(final_path) if os.path.exists(final_path) else 'Not Found'}"
                     print_error(err_msg_verify)
-                    # Fall through to requests if verification fails
             elif download_task.has_error:
                 print_error(
                     f"Aria2c download failed for {file_description}. Error (Code {download_task.error_code}): {download_task.error_message}")
                 if download_task.files:
-                    for file_entry in download_task.files:  # Clean up potentially incomplete files
+                    for file_entry in download_task.files:
                         if os.path.exists(file_entry.path):
                             try:
                                 os.remove(file_entry.path)
-                                print_warning(
-                                    f"Removed incomplete aria2c download: {file_entry.path}")
+                                print_warning(f"Removed incomplete aria2c download: {file_entry.path}")
                             except Exception as e_rm_aria:
                                 print_error(f"Failed to remove incomplete aria2c file {file_entry.path}: {e_rm_aria}")
+            
+            if not download_successful:
+                 print_warning("Aria2c download path did not complete successfully. Falling back to requests.")
 
-            # If not returned True by now, aria2c path failed or verification failed; fall through to requests
-            print_warning(
-                "Aria2c download path did not complete successfully or file verification failed. Falling back to requests.")
-
-        except aria2p.client.ClientException as e_aria_client:  # Errors connecting to RPC
-            print_warning(
-                f"Aria2p client/RPC connection error: {e_aria_client}. Is aria2c daemon running with --enable-rpc?")
+        except aria2p.client.ClientException as e_aria_client:
+            print_warning(f"Aria2p client/RPC connection error: {e_aria_client}. Is aria2c daemon running with --enable-rpc?")
             print_warning("Falling back to requests-based download.")
-        except Exception as e_aria_general:  # Other errors during aria2p usage
+        except Exception as e_aria_general:
             print_warning(f"Unexpected error during Aria2c download attempt: {e_aria_general}")
-            # traceback.print_exc(file=sys.stderr) # Uncomment for detailed debugging if needed
             print_warning("Falling back to requests-based download.")
     else:
-        if not ARIA2P_AVAILABLE:
-            print_system("Aria2p Python library not available. Using requests.")
-        elif not aria2c_executable_path:
-            print_system("aria2c executable not found in PATH. Using requests.")
+        if not ARIA2P_AVAILABLE: print_system("Aria2p Python library not available. Using requests.")
+        elif not aria2c_executable_path: print_system("aria2c executable not found in PATH. Using requests.")
 
-    # --- Requests-based Download (Fallback or if Aria2c not used) ---
-    print_system("Using requests-based download method...")
-    temp_destination_path_requests = destination_path + ".tmp_download_requests"  # Use a distinct temp name
-    connection_error_retries = 0
-    other_errors_retries = 0
-    server_file_size = 0
-    head_request_successful = False
+    # --- Requests-based Download (Fallback or if Aria2c not used/failed) ---
+    if not download_successful:
+        print_system("Using requests-based download method...")
+        temp_destination_path_requests = destination_path + ".tmp_download_requests"
+        connection_error_retries = 0
+        other_errors_retries = 0
+        server_file_size = 0
+        head_request_successful = False
 
-    try:  # Try to get file size with HEAD request first
-        head_resp = requests_session.head(url, timeout=10, allow_redirects=True)
-        head_resp.raise_for_status()
-        server_file_size = int(head_resp.headers.get('content-length', 0))
-        head_request_successful = True
-        print_system(f"File size (requests HEAD): {server_file_size / (1024 * 1024):.2f} MB.")
-    except requests.exceptions.RequestException as e_head_req:
-        print_warning(f"Requests: Could not get file size via HEAD request: {e_head_req}.")
-
-    while True:  # Main retry loop for requests method
         try:
-            current_attempt_log = f"(ConnRetry: {connection_error_retries + 1}, OtherErrRetry: {other_errors_retries + 1})"
-            print_system(f"Attempting download (requests): {file_description} {current_attempt_log}")
+            import requests
+            head_resp = requests_session.head(url_to_use, timeout=10, allow_redirects=True)
+            head_resp.raise_for_status()
+            server_file_size = int(head_resp.headers.get('content-length', 0))
+            head_request_successful = True
+            print_system(f"File size (requests HEAD): {server_file_size / (1024 * 1024):.2f} MB.")
+        except requests.exceptions.RequestException as e_head_req:
+            print_warning(f"Requests: Could not get file size via HEAD request: {e_head_req}.")
 
-            response = requests_session.get(url, stream=True, timeout=(15, 300))  # (connect_timeout, read_timeout)
-            response.raise_for_status()  # Raises HTTPError for 4xx/5xx responses
+        while True:
+            try:
+                current_attempt_log = f"(ConnRetry: {connection_error_retries + 1}, OtherErrRetry: {other_errors_retries + 1})"
+                print_system(f"Attempting download (requests): {file_description} {current_attempt_log}")
 
-            if not head_request_successful and server_file_size == 0:  # If HEAD failed, try GET headers
-                server_file_size = int(response.headers.get('content-length', 0))
-                if server_file_size > 0: print_system(
-                    f"File size (requests GET): {server_file_size / (1024 * 1024):.2f} MB.")
+                response = requests_session.get(url_to_use, stream=True, timeout=(15, 300))
+                response.raise_for_status()
 
-            block_size = 8192  # 8KB
-            progress_bar_description_short = file_description[:30]
+                if not head_request_successful and server_file_size == 0:
+                    server_file_size = int(response.headers.get('content-length', 0))
+                    if server_file_size > 0: print_system(f"File size (requests GET): {server_file_size / (1024 * 1024):.2f} MB.")
 
-            with tqdm(total=server_file_size, unit='iB', unit_scale=True, desc=progress_bar_description_short,
-                      ascii=IS_WINDOWS, leave=False,
-                      bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]') as progress_bar:
-                downloaded_bytes_count = 0
-                with open(temp_destination_path_requests, 'wb') as file_handle:
-                    for data_chunk_item in response.iter_content(block_size):
-                        progress_bar.update(len(data_chunk_item))
-                        file_handle.write(data_chunk_item)
-                        downloaded_bytes_count += len(data_chunk_item)
+                block_size = 8192
+                from tqdm import tqdm
+                with tqdm(total=server_file_size, unit='iB', unit_scale=True, desc=file_description[:30],
+                          ascii=IS_WINDOWS, leave=False,
+                          bar_format='{l_bar}{bar}| {n_fmt}/{total_fmt} [{elapsed}<{remaining}, {rate_fmt}{postfix}]') as progress_bar:
+                    downloaded_bytes_count = 0
+                    with open(temp_destination_path_requests, 'wb') as file_handle:
+                        for data_chunk_item in response.iter_content(block_size):
+                            progress_bar.update(len(data_chunk_item))
+                            file_handle.write(data_chunk_item)
+                            downloaded_bytes_count += len(data_chunk_item)
 
-            if server_file_size != 0 and downloaded_bytes_count != server_file_size:
-                print_error(f"Requests Download ERROR: Size mismatch for {file_description}.")
-                print_error(f"  Expected {server_file_size} bytes, actually downloaded {downloaded_bytes_count} bytes.")
-                if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
-                other_errors_retries += 1
-                if other_errors_retries >= max_retries_non_connection_error:
-                    print_error(
-                        f"Max retries ({max_retries_non_connection_error}) reached for size mismatch. Download failed for {file_description}.")
-                    return False  # Permanent failure for this file
-                print_warning(
-                    f"Retrying (requests) due to size mismatch (retry {other_errors_retries}/{max_retries_non_connection_error}). Waiting 5 seconds...")
+                if server_file_size != 0 and downloaded_bytes_count != server_file_size:
+                    print_error(f"Requests Download ERROR: Size mismatch for {file_description}.")
+                    print_error(f"  Expected {server_file_size} bytes, downloaded {downloaded_bytes_count} bytes.")
+                    if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
+                    other_errors_retries += 1
+                    if other_errors_retries >= max_retries_non_connection_error:
+                        print_error(f"Max retries ({max_retries_non_connection_error}) for size mismatch. Download failed.")
+                        download_successful = False
+                        break # Exit while loop
+                    print_warning(f"Retrying (requests) due to size mismatch (retry {other_errors_retries}/{max_retries_non_connection_error})...")
+                    time.sleep(5)
+                    continue
+
+                shutil.move(temp_destination_path_requests, destination_path)
+                print_system(f"Successfully downloaded (requests) {file_description}")
+                download_successful = True
+                break # Exit while loop
+
+            except (requests.exceptions.ConnectionError, requests.exceptions.Timeout, requests.exceptions.ChunkedEncodingError) as e_connection:
+                connection_error_retries += 1
+                print_warning(f"Connection error (requests): {type(e_connection).__name__}. Retrying (attempt {connection_error_retries + 1})...")
+                if os.path.exists(temp_destination_path_requests):
+                    try: os.remove(temp_destination_path_requests)
+                    except Exception: pass
                 time.sleep(5)
-                continue  # Go to next iteration of the while True loop
+            
+            except requests.exceptions.HTTPError as e_http_error:
+                other_errors_retries += 1
+                print_error(f"HTTP error (requests): {e_http_error.response.status_code} for URL {url_to_use}")
+                if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
+                if e_http_error.response.status_code in [401, 403, 404]:
+                    print_error(f"Fatal HTTP error {e_http_error.response.status_code}. Not retrying.")
+                    download_successful = False
+                    break # Exit while loop
+                if other_errors_retries >= max_retries_non_connection_error:
+                    print_error(f"Max retries ({max_retries_non_connection_error}) for HTTP error. Download failed.")
+                    download_successful = False
+                    break # Exit while loop
+                print_warning(f"Retrying (requests) due to HTTP error (retry {other_errors_retries}/{max_retries_non_connection_error})...")
+                time.sleep(5)
+            
+            except Exception as e_general_requests:
+                other_errors_retries += 1
+                print_error(f"Unexpected error during requests download: {type(e_general_requests).__name__}")
+                traceback.print_exc(file=sys.stderr)
+                if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
+                if other_errors_retries >= max_retries_non_connection_error:
+                    print_error(f"Max retries ({max_retries_non_connection_error}) for general error. Download failed.")
+                    download_successful = False
+                    break # Exit while loop
+                print_warning(f"Retrying (requests) due to general error (retry {other_errors_retries}/{max_retries_non_connection_error})...")
+                time.sleep(5)
 
-            shutil.move(temp_destination_path_requests, destination_path)
-            print_system(f"Successfully downloaded (requests) {file_description} to {destination_path}")
-            return True  # Successful download
+    if download_successful and not peer_download_url:
+        print_system(f"Notifying ZephyMesh node to seed new file: {asset_relative_path}")
+        # TODO: Implement API call to local mesh node to trigger manifest update
+        # try:
+        #     import requests
+        #     requests.post(f"{zephymesh_api_url}/manifest/update", timeout=2)
+        # except Exception as e:
+        #      print_warning(f"Could not notify ZephyMesh node to update manifest: {e}")
 
-        except (requests.exceptions.ConnectionError, requests.exceptions.Timeout,
-                requests.exceptions.ChunkedEncodingError) as e_connection:
-            connection_error_retries += 1
-            print_warning(
-                f"Connection error (requests) for {file_description}: {type(e_connection).__name__} - {e_connection}.")
-            print_warning(
-                f"Retrying download (attempt {connection_error_retries + 1}). Designed for our famously fast & reliable Indonesian internet! ;) Waiting 5 seconds...")
-            if os.path.exists(temp_destination_path_requests):
-                try:
-                    os.remove(temp_destination_path_requests)
-                except Exception as e_remove_conn:
-                    print_warning(
-                        f"Could not remove partial download {temp_destination_path_requests} after connection error: {e_remove_conn}")
-            time.sleep(5)
-            # Loop continues for connection errors (infinite retries)
-
-        except requests.exceptions.HTTPError as e_http_error:
-            other_errors_retries += 1
-            print_error(
-                f"HTTP error (requests) for {file_description}: {e_http_error.response.status_code} {e_http_error.response.reason} for URL {url}")
-            if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
-
-            if e_http_error.response.status_code in [401, 403, 404]:  # Fatal client errors
-                print_error(
-                    f"Fatal HTTP error {e_http_error.response.status_code}. Not retrying for {file_description}.")
-                return False  # Permanent failure
-
-            if other_errors_retries >= max_retries_non_connection_error:
-                print_error(
-                    f"Max retries ({max_retries_non_connection_error}) reached for HTTP error. Download failed for {file_description}.")
-                return False  # Permanent failure
-            print_warning(
-                f"Retrying (requests) due to HTTP error (retry {other_errors_retries}/{max_retries_non_connection_error}). Waiting 5 seconds...")
-            time.sleep(5)
-            # Loop continues for limited other_errors_retries
-
-        except Exception as e_general_requests:
-            other_errors_retries += 1
-            print_error(
-                f"Unexpected error during requests download for {file_description}: {type(e_general_requests).__name__} - {e_general_requests}")
-            traceback.print_exc(file=sys.stderr)  # Print full traceback for unexpected issues
-            if os.path.exists(temp_destination_path_requests): os.remove(temp_destination_path_requests)
-
-            if other_errors_retries >= max_retries_non_connection_error:
-                print_error(
-                    f"Max retries ({max_retries_non_connection_error}) reached for general error. Download failed for {file_description}.")
-                return False  # Permanent failure
-            print_warning(
-                f"Retrying (requests) due to general error (retry {other_errors_retries}/{max_retries_non_connection_error}). Waiting 5 seconds...")
-            time.sleep(5)
-            # Loop continues for limited other_errors_retries
-
-    # This line should ideally not be reached if the requests loop is infinite for connection errors
-    # and returns False for other maxed-out errors. It's a final safety net.
-    print_error(f"Download failed for {file_description} after all attempts and fallbacks.")
-    return False
+    return download_successful
 
 
 # --- Main Execution Logic ---
@@ -1571,7 +1592,41 @@ if __name__ == "__main__":
     if is_already_in_correct_env:
         # --- This is the RELAUNCHED script, running inside the correct Conda environment ---
         print_system(f"Running inside target Conda environment (Prefix: {ACTIVE_ENV_PATH})")
-        print_system(f"Python executable in use: {sys.executable}")
+        
+        # --- Start the ZephyMesh Node and read its port ---
+        # FIX 3: Removed 'global' keyword. This code is already in the global scope, so 'global'
+        # is unnecessary and causes the SyntaxError with type-annotated variables.
+        try:
+            print_system(f"Starting ZephyMesh Node from: {ZEPHYMESH_NODE_SCRIPT}")
+            # PYTHON_EXECUTABLE is the conda env python, defined later in this block, so use sys.executable
+            mesh_command = [sys.executable, ZEPHYMESH_NODE_SCRIPT]
+            zephymesh_process = subprocess.Popen(mesh_command, cwd=ZEPHYMESH_DIR)
+            print_system(f"ZephyMesh Node process started (PID: {zephymesh_process.pid}).")
+
+            # Wait for the port file to be created by the mesh node
+            print_system(f"Waiting for ZephyMesh port file: {ZEPHYMESH_PORT_INFO_FILE}")
+            port_file_wait_start = time.monotonic()
+            while not os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
+                time.sleep(0.5)
+                # Check if the process died unexpectedly
+                if zephymesh_process.poll() is not None:
+                    raise RuntimeError("ZephyMesh node process exited prematurely.")
+                if time.monotonic() - port_file_wait_start > 30: # 30 second timeout
+                    raise TimeoutError("ZephyMesh node did not create port file in time.")
+
+            # Read the port file to configure the API URL
+            with open(ZEPHYMESH_PORT_INFO_FILE, 'r') as f:
+                port_info = json.load(f)
+                api_port = port_info['api_port']
+                zephymesh_api_url = f"http://127.0.0.1:{api_port}"
+                print_system(f"ZephyMesh Node is ready. API URL set to: {zephymesh_api_url}")
+        except Exception as e:
+            print_error(f"Failed to start ZephyMesh Node or read its port: {e}. P2P distribution will be unavailable.")
+            if zephymesh_process:
+                zephymesh_process.terminate()
+            zephymesh_process = None
+            zephymesh_api_url = None
+        # --- END ZephyMesh Start ---
 
         if "ZEPHYRINE_RELAUNCHED_IN_CONDA" in os.environ:
             del os.environ["ZEPHYRINE_RELAUNCHED_IN_CONDA"]
@@ -1678,21 +1733,12 @@ if __name__ == "__main__":
         else:
             print_system("aria2c command-line tool checked/installed via Conda.")
 
-        # The previous block for "Core command-line tools check/install attempt complete" can come after this.
-        # Then refresh global CMD vars as you have it.
-        # print_system("--- Core command-line tools check/install attempt complete ---")
-        # globals()['GIT_CMD'] = shutil.which("git") or ... etc. ...
-
         # --- Install Python wrapper for Aria2 (aria2p) via Pip ---
-        # This step is best after general pip requirements and before specific source builds
-        # that might depend on a stable Python environment.
         if not os.path.exists(ARIA2P_INSTALLED_FLAG_FILE):
             print_system("--- Installing Python wrapper for Aria2 (aria2p) ---")
-            # PIP_EXECUTABLE should be correctly defined by this point in the relaunched script
             if not run_command([PIP_EXECUTABLE, "install", "aria2p"], ROOT_DIR, "PIP-ARIA2P"):
                 print_warning(
                     "Failed to install 'aria2p' Python library. Multi-connection downloads via Aria2 will not be available if chosen as the download method.")
-                # Not making this fatal, as the 'requests'-based download is a fallback.
             else:
                 print_system("'aria2p' Python library installed successfully.")
                 try:
@@ -1745,16 +1791,15 @@ if __name__ == "__main__":
 
         print_system(f"--- Checking Static Model Pool: {STATIC_MODEL_POOL_PATH} ---")
         os.makedirs(STATIC_MODEL_POOL_PATH, exist_ok=True)
-        all_models_ok = True  # This flag was from my suggestion, might not be in your version
-        for model_info in MODELS_TO_DOWNLOAD:  # MODELS_TO_DOWNLOAD needs to be defined globally
+        all_models_ok = True
+        for model_info in MODELS_TO_DOWNLOAD:
             dest_path = os.path.join(STATIC_MODEL_POOL_PATH, model_info["filename"])
-            if not os.path.exists(dest_path):  # <<< THE CRITICAL CHECK
+            if not os.path.exists(dest_path):
                 print_warning(f"Model '{model_info['description']}' ({model_info['filename']}) not found. Downloading.")
-                # download_file_with_progress is assumed to be defined elsewhere
                 if not download_file_with_progress(model_info["url"], dest_path, model_info["description"],
                                                    requests_session):
                     print_error(f"Failed download for {model_info['filename']}.")
-                    all_models_ok = False  # From my suggestion
+                    all_models_ok = False
             else:
                 print_system(f"Model '{model_info['description']}' ({model_info['filename']}) already present.")
         print_system("Static model pool checked.")
@@ -1767,12 +1812,9 @@ if __name__ == "__main__":
                 print_error("Please ensure the submodule/directory exists. Skipping ChatterboxTTS installation.")
             else:
                 print_system(f"Installing ChatterboxTTS in editable mode from: {CHATTERBOX_TTS_PATH}")
-                # Ensure PIP_EXECUTABLE is defined and valid at this point
                 if not run_command([PIP_EXECUTABLE, "install", "-e", "."], CHATTERBOX_TTS_PATH,
                                    "PIP-CHATTERBOX-EDITABLE"):
                     print_error("ChatterboxTTS installation failed. Check pip logs above.")
-                    # Decide if this is a fatal error or if the launcher can continue
-                    # For now, it will continue but ChatterboxTTS might not be available.
                 else:
                     print_system("ChatterboxTTS installed successfully in editable mode.")
                     try:
@@ -1793,19 +1835,12 @@ if __name__ == "__main__":
                 "MeloTTS install failed."); sys.exit(1)
             if not run_command([PYTHON_EXECUTABLE, "-m", "unidic", "download"], MELO_TTS_PATH,
                                "UNIDIC-DOWNLOAD"): print_warning("unidic download failed.")
-            # (MeloTTS test logic from your file - ensure audio_worker_script is defined)
-            audio_worker_script_path_for_melo_test = os.path.join(ENGINE_MAIN_DIR,
-                                                                  "audio_worker.py")  # Assuming ENGINE_MAIN_DIR is defined
+            audio_worker_script_path_for_melo_test = os.path.join(ENGINE_MAIN_DIR, "audio_worker.py")
             if os.path.exists(audio_worker_script_path_for_melo_test):
-                # temp_melo_test_dir = os.path.join(ROOT_DIR, "temp_melo_audio_test_files"); os.makedirs(temp_melo_test_dir, exist_ok=True)
-                # test_out_file_melo = os.path.join(temp_melo_test_dir, f"initial_melo_test_{datetime.now().strftime('%Y%m%d%H%M%S')}.wav")
-                # test_cmd_melo = [PYTHON_EXECUTABLE, audio_worker_script_path_for_melo_test, "--test-mode", "--task-type", "tts", "--model-lang", "EN", "--device", "auto", "--output-file", test_out_file_melo, "--temp-dir", temp_melo_test_dir]
-                # if not run_command(test_cmd_melo, ENGINE_MAIN_DIR, "MELO-INIT-TEST"): print_warning("MeloTTS initial test failed.")
-                # else: print_system(f"MeloTTS initial test OK. Test audio: {test_out_file_melo if os.path.exists(test_out_file_melo) else 'Not found'}")
-                pass  # Simplified, assuming test runs if path exists
-            with open(MELO_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_melo_flag:  # Corrected with statement
+                pass
+            with open(MELO_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_melo_flag:
                 f_melo_flag.write(f"Tested: {datetime.now().isoformat()}")
-            print_system("MeloTTS setup and flag created.")  # Use print_system instead of print_success
+            print_system("MeloTTS setup and flag created.")
         else:
             print_system("MeloTTS previously installed/tested.")
 
@@ -1860,31 +1895,25 @@ if __name__ == "__main__":
                                        env_override=env_whisper if env_whisper else None):
                         print_error("pywhispercpp install failed.")
                     else:
-                        print_system("pywhispercpp installed.")  # Use print_system
+                        print_system("pywhispercpp installed.")
                         print_warning("For non-WAV ASR, ensure FFmpeg is in PATH (via conda install ffmpeg).")
                         with open(PYWHISPERCPP_INSTALLED_FLAG_FILE, 'w',
-                                  encoding='utf-8') as f_pwc_flag:  # Corrected with statement
+                                  encoding='utf-8') as f_pwc_flag:
                             f_pwc_flag.write(backend_whisper)
                         print_system("PyWhisperCpp installation flag created.")
         else:
             print_system("PyWhisperCpp previously installed.")
 
 
-        # ---
         # --- Install Local LaTeX-OCR Sub-Engine ---
         if not os.path.exists(LATEX_OCR_INSTALLED_FLAG_FILE):
             print_system(f"--- First-Time Setup for local LaTeX_OCR-SubEngine ---")
-
-            # Check if the local directory for your fork exists
             if not os.path.isdir(LATEX_OCR_PATH):
                 print_error(f"LaTeX-OCR Sub-Engine directory not found at: {LATEX_OCR_PATH}")
                 print_error("Please ensure the submodule/directory exists. Skipping LaTeX-OCR installation.")
             else:
                 print_system(f"Installing local LaTeX-OCR in editable mode from: {LATEX_OCR_PATH}")
-
-                # The command for editable install from a local directory
                 pip_cmd_latex_ocr_local = [PIP_EXECUTABLE, "install", "-e", "."]
-
                 if not run_command(pip_cmd_latex_ocr_local, LATEX_OCR_PATH, "PIP-LATEX-OCR-LOCAL"):
                     print_error(
                         "Failed to install local LaTeX-OCR Sub-Engine. This functionality will be unavailable.")
@@ -1932,9 +1961,9 @@ if __name__ == "__main__":
                                            env_override=build_env_llama):
                             print_error("Build llama-cpp-python failed.")
                         else:
-                            print_system("llama-cpp-python installed.")  # Use print_system
+                            print_system("llama-cpp-python installed.")
                             with open(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE, 'w',
-                                      encoding='utf-8') as f_lcpp_flag:  # Corrected with statement
+                                      encoding='utf-8') as f_lcpp_flag:
                                 f_lcpp_flag.write(backend_log_llama)
             else:
                 print_system("Custom llama-cpp-python previously installed.")
@@ -1980,9 +2009,9 @@ if __name__ == "__main__":
                                            "PIP-SD-BINDINGS", env_override=pip_build_env_sd):
                             print_error("Install SD bindings failed.")
                         else:
-                            print_system("stable-diffusion-cpp-python installed.")  # Use print_system
+                            print_system("stable-diffusion-cpp-python installed.")
                             with open(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE, 'w',
-                                      encoding='utf-8') as f_sd_flag:  # Corrected with statement
+                                      encoding='utf-8') as f_sd_flag:
                                 f_sd_flag.write(backend_log_sd)
         else:
             print_system("Custom stable-diffusion-cpp-python previously installed.")
@@ -2005,7 +2034,7 @@ if __name__ == "__main__":
         service_threads.append(start_service_thread(start_backend_service, "BackendServiceThread"))
         time.sleep(2)
         service_threads.append(start_service_thread(start_frontend, "FrontendThread"))
-        print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.")  # Use print_colored for success
+        print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.")
         try:
             while True:
                 all_ok = True
@@ -2050,61 +2079,52 @@ if __name__ == "__main__":
             print_system(f"Target Conda env '{TARGET_CONDA_ENV_PATH}' exists.")
 
 
-        # --- (NEW) Conda install NVIDIA CUDA Toolkit if detected ---
-        # This runs in the initial launcher instance, preparing the environment for the relaunched script.
+        # --- Conda install NVIDIA CUDA Toolkit if detected ---
         if autodetected_build_env_vars.get("AUTODETECTED_CUDA_AVAILABLE") == "1":
             print_system("CUDA acceleration detected by initial launcher.")
             if not os.path.exists(CUDA_TOOLKIT_INSTALLED_FLAG_FILE):
                 print_warning("NVIDIA CUDA Toolkit not yet marked as installed in the Conda environment. Attempting installation...")
                 print_warning("This may take several minutes and download a significant amount of data (>2 GB).")
 
-                # We use the 'cuda' metapackage from the 'nvidia' channel. It's the recommended way.
                 cuda_install_cmd = [
                     CONDA_EXECUTABLE, 'install', '--yes',
                     '--prefix', TARGET_CONDA_ENV_PATH,
                     '-c', 'nvidia',
-                    'cuda-toolkit' # Using the official cuda-toolkit package
+                    'cuda-toolkit'
                 ]
                 
-                # Handle the case where the conda executable is a .bat file on Windows
                 if IS_WINDOWS and CONDA_EXECUTABLE and CONDA_EXECUTABLE.lower().endswith(".bat"):
                     cuda_install_cmd = ['cmd', '/c'] + cuda_install_cmd
 
                 print_system(f"Executing: {' '.join(cuda_install_cmd)}")
                 try:
-                    # Use a similar streaming process as env creation for consistent output
                     process = subprocess.Popen(cuda_install_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors='replace')
                     stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, "CUDA-INSTALL-OUT"), daemon=True)
                     stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, "CUDA-INSTALL-ERR"), daemon=True)
                     stdout_thread.start()
                     stderr_thread.start()
 
-                    process.wait() # This can be a long-running process
+                    process.wait()
                     stdout_thread.join(timeout=5)
                     stderr_thread.join(timeout=5)
 
                     if process.returncode == 0:
                         print_system("NVIDIA CUDA Toolkit successfully installed into Conda environment.")
-                        # Create the flag file on success
                         with open(CUDA_TOOLKIT_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_flag:
                             f_flag.write(f"Installed on: {datetime.now().isoformat()}\n")
                     else:
                         print_error(f"Failed to install NVIDIA CUDA Toolkit (return code: {process.returncode}).")
                         print_error("The launcher will continue, but builds requiring 'nvcc' will likely fail.")
                         print_error("Please check the 'CUDA-INSTALL-ERR' logs above for details.")
-                        # We don't exit, allowing fallback to other backends.
-
                 except Exception as e_cuda_install:
                     print_error(f"An exception occurred during CUDA toolkit installation: {e_cuda_install}")
                     print_error("The launcher will continue, but CUDA support will likely be unavailable.")
             else:
                 print_system("NVIDIA CUDA Toolkit is already marked as installed in Conda environment (flag file found).")
-        # --- END (NEW) Conda install NVIDIA CUDA Toolkit ---
+        # --- END Conda install NVIDIA CUDA Toolkit ---
 
         script_to_run_abs_path = os.path.abspath(__file__)
         conda_run_cmd_list_base = [CONDA_EXECUTABLE, 'run', '--prefix', TARGET_CONDA_ENV_PATH]
-
-
 
         conda_supports_no_capture = False
         try:
@@ -2146,7 +2166,7 @@ if __name__ == "__main__":
                 print_system(
                     f"Parent: Relaunched script output via logs: STDOUT='{RELAUNCH_STDOUT_LOG}', STDERR='{RELAUNCH_STDERR_LOG}'")
                 with open(RELAUNCH_STDOUT_LOG, 'w', encoding='utf-8') as f_stdout, \
-                        open(RELAUNCH_STDERR_LOG, 'w', encoding='utf-8') as f_stderr:  # Corrected with statement
+                        open(RELAUNCH_STDERR_LOG, 'w', encoding='utf-8') as f_stderr:
                     file_capture_kwargs = common_popen_kwargs_relaunch.copy()
                     file_capture_kwargs["stdout"] = f_stdout
                     file_capture_kwargs["stderr"] = f_stderr
@@ -2188,4 +2208,3 @@ if __name__ == "__main__":
                 print_error("Failed to start 'conda run' process."); sys.exit(1)
         except Exception as e_outer:
             print_error(f"Error during 'conda run' or wait: {e_outer}"); traceback.print_exc(); sys.exit(1)
-

@@ -17,7 +17,7 @@ const DB_PATH = './project_zephyrine_chats.db';
 
 // LLM Parameters
 const LLM_TEMPERATURE = parseFloat(process.env.LLM_TEMPERATURE) || 0.7;
-const LLM_MAX_TOKENS = parseInt(process.env.LLM_MAX_TOKENS) || 2048;
+const LLM_TOPCAP_TOKENS = parseInt(process.env.LLM_TOPCAP_TOKENS) || 2048;
 const LLM_TOP_P = parseFloat(process.env.LLM_TOP_P) || 1.0;
 
 // Allowed file types for fine-tuning (these are MIME types)
@@ -256,7 +256,7 @@ wss.on('connection', (ws) => {
 
             const llmStream = await openai.chat.completions.create({
               messages: clientMessages.map(m => ({ role: m.role || m.sender, content: m.content })),
-              model: model, stream: true, temperature: LLM_TEMPERATURE, max_tokens: LLM_MAX_TOKENS, top_p: LLM_TOP_P,
+              model: model, stream: true, temperature: LLM_TEMPERATURE, max_tokens: LLM_TOPCAP_TOKENS, top_p: LLM_TOP_P,
             });
             let assistantResponse = '';
             for await (const chunk of llmStream) {
@@ -357,7 +357,7 @@ wss.on('connection', (ws) => {
 
             const llmEditStream = await openai.chat.completions.create({
               messages: historyForRegen.map(m => ({ role: m.sender, content: m.content })),
-              model: editModel, stream: true, temperature: LLM_TEMPERATURE, max_tokens: LLM_MAX_TOKENS, top_p: LLM_TOP_P,
+              model: editModel, stream: true, temperature: LLM_TEMPERATURE, max_tokens: LLM_TOPCAP_TOKENS, top_p: LLM_TOP_P,
             });
             let editAssistantResponse = '';
             for await (const chunk of llmEditStream) {

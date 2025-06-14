@@ -124,27 +124,7 @@ from langchain_core.vectorstores import VectorStoreRetriever, VectorStore
 #from langchain_community.vectorstores import Chroma # Use Chroma for in-memory history/URL RAG
 from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-# --- ADD OLLAMA/FIREWORKS IMPORTS DIRECTLY FOR MULTI-MODEL ---
-# Ollama
-try:
-    from langchain_community.chat_models import ChatOllama
-    from langchain_community.embeddings import OllamaEmbeddings
-    logger.info("Using langchain_community imports for Ollama.")
-except ImportError:
-    try:
-        from langchain_ollama import ChatOllama, OllamaEmbeddings
-        logger.info("Using langchain_ollama imports.")
-    except ImportError:
-        logger.error("❌ Failed to import Ollama. Did you install 'langchain-ollama'?")
-        ChatOllama = None
-        OllamaEmbeddings = None
-# Fireworks
-try:
-    from langchain_fireworks import ChatFireworks, FireworksEmbeddings
-except ImportError:
-     logger.warning("⚠️ Failed to import Fireworks. Did you install 'langchain-fireworks'? Fireworks provider disabled.")
-     ChatFireworks = None
-     FireworksEmbeddings = None
+
 # --- END PROVIDER IMPORTS ---
 
 
@@ -161,8 +141,8 @@ except ImportError:
 FUZZY_SEARCH_THRESHOLD_APP = getattr(globals(), 'FUZZY_SEARCH_THRESHOLD', 30) # Default to 80 if not from
 
 try:
-    # ... (your existing local imports for AIProvider, database, config) ...
-    from config import ENABLE_STELLA_ICARUS_HOOKS # Ensure this is imported
+    # ... (your existing local imports for CortexEngine, database, config) ...
+    from CortexConfiguration import ENABLE_STELLA_ICARUS_HOOKS # Ensure this is imported
     from stella_icarus_utils import StellaIcarusHookManager # <<< NEW IMPORT
 except ImportError as e:
     # ... (your existing ImportError handling) ...
@@ -189,7 +169,7 @@ background_generate_task_semaphore = threading.Semaphore(MAX_CONCURRENT_BACKGROU
 
 # --- Local Imports with Error Handling ---
 try:
-    from ai_provider import AIProvider, ai_provider_instance as global_ai_provider_ref
+    from cortex_backbone_provider import CortexEngine
     # Import database components needed in app.py
     
     from database import (
@@ -199,17 +179,17 @@ try:
         get_past_applescript_attempts, FileIndex, search_file_index, UploadedFileRecord, add_interaction_no_commit # Added new DB function
     )
     # Import all config variables (prompts, settings, etc.)
-    from config import * # Ensure this includes the SQLite DATABASE_URL and all prompts/models
+    from CortexConfiguration import * # Ensure this includes the SQLite DATABASE_URL and all prompts/models
     # Import Agent components
     # Make sure AmaryllisAgent and _start_agent_task are correctly defined/imported if used elsewhere
     from file_indexer import (
         FileIndexer,
         initialize_global_file_index_vectorstore as init_file_vs_from_indexer,  # <<< ADD THIS IMPORT and ALIAS
-        get_global_file_index_vectorstore  # You already had this for AIChat
+        get_global_file_index_vectorstore  # You already had this for CortexThoughts
     )
     from agent import AmaryllisAgent, AgentTools, _start_agent_task # Keep Agent imports
 except ImportError as e:
-    print(f"Error importing local modules (database, config, agent, ai_provider): {e}")
+    print(f"Error importing local modules (database, config, agent, cortex_backbone_provider): {e}")
     logger.exception("Import Error Traceback:") # Log traceback for import errors
     FileIndexer = None # Define as None if import fails
     FileIndex = None
@@ -218,7 +198,7 @@ except ImportError as e:
 
 from reflection_indexer import (
     initialize_global_reflection_vectorstore,
-    index_single_reflection, # If you want AIChat to trigger indexing
+    index_single_reflection, # If you want CortexThoughts to trigger indexing
     get_global_reflection_vectorstore
 )
 
@@ -261,7 +241,7 @@ logger.debug("-------------------------------------------------------------")
 
 try:
     import tiktoken
-    # Attempt to load the encoder once globally for AIChat if not already done by worker logic
+    # Attempt to load the encoder once globally for CortexThoughts if not already done by worker logic
     # Or load it on demand in the helper function.
     # For simplicity here, assume it's available or loaded in a helper.
     TIKTOKEN_AVAILABLE_APP = True
@@ -350,18 +330,18 @@ _indexer_stop_event = threading.Event()
 
 def start_file_indexer():
     """Starts the background file indexer thread."""
-    global _indexer_thread, ai_provider # <<< Need ai_provider here
+    global _indexer_thread, cortex_backbone_provider # <<< Need cortex_backbone_provider here
     if not FileIndexer:
         logger.error("Cannot start file indexer: FileIndexer class not available (import failed?).")
         return
-    if not ai_provider: # <<< Check if AIProvider initialized successfully
-        logger.error("Cannot start file indexer: AIProvider (and embedding model) not available.")
+    if not cortex_backbone_provider: # <<< Check if CortexEngine initialized successfully
+        logger.error("Cannot start file indexer: CortexEngine (and embedding model) not available.")
         return
 
     # --- Get embedding model ---
-    embedding_model = ai_provider.embeddings
+    embedding_model = cortex_backbone_provider.embeddings
     if not embedding_model:
-        logger.error("Cannot start file indexer: Embedding model not found within AIProvider.")
+        logger.error("Cannot start file indexer: Embedding model not found within CortexEngine.")
         return
     # --- End get embedding model ---
 
@@ -371,7 +351,7 @@ def start_file_indexer():
             # --- Pass embedding_model to FileIndexer ---
             indexer_instance = FileIndexer(
                 stop_event=_indexer_stop_event,
-                provider=ai_provider,
+                provider=cortex_backbone_provider,
                 server_busy_event=server_is_busy_event # <<< Pass the busy event
             )
             # --- End pass embedding_model ---
@@ -399,12 +379,12 @@ def run_self_reflection_loop():
     Main loop for self-reflection. Periodically processes eligible interactions.
     If no new interactions, may proactively re-queue an old one for re-reflection.
     """
-    global ai_provider, ai_chat  # Assuming these are global instances
+    global cortex_backbone_provider, ai_chat  # Assuming these are global instances
     thread_name = threading.current_thread().name
     logger.info(f"✅ {thread_name} started (Continuous Reflection Logic).")
 
-    if not ai_provider or not ai_chat:
-        logger.error(f"🛑 {thread_name}: AIProvider or AIChat not initialized. Cannot run reflection.")
+    if not cortex_backbone_provider or not ai_chat:
+        logger.error(f"🛑 {thread_name}: CortexEngine or CortexThoughts not initialized. Cannot run reflection.")
         return
 
     logger.info(
@@ -682,7 +662,7 @@ def _extract_json_candidate_string(raw_llm_text: str, log_prefix: str = "JSONExt
     cleaned_text = re.sub(r"^\s*(assistant\s*\n?)?(<\|im_start\|>\s*(system|assistant)\s*\n?)?", "", cleaned_text,
                           flags=re.IGNORECASE).lstrip()
     # Remove trailing ChatML end token
-    if CHATML_END_TOKEN and cleaned_text.endswith(CHATML_END_TOKEN):  # CHATML_END_TOKEN from config
+    if CHATML_END_TOKEN and cleaned_text.endswith(CHATML_END_TOKEN):  # CHATML_END_TOKEN from CortexConfiguration
         cleaned_text = cleaned_text[:-len(CHATML_END_TOKEN)].strip()
 
     # 3. Look for JSON within markdown code blocks (```json ... ```)
@@ -1019,11 +999,11 @@ def setup_assistant_proxy():
 
 
 # === AI Chat Logic (Amaryllis - SQLite RAG with Fuzzy Search) ===
-class AIChat:
+class CortexThoughts:
     """Handles Chat Mode interactions with RAG, ToT, Action Analysis, Multi-LLM routing, and VLM preprocessing."""
 
-    def __init__(self, provider: AIProvider):
-        self.provider = provider # AIProvider instance with multiple models
+    def __init__(self, provider: CortexEngine):
+        self.provider = provider # CortexEngine instance with multiple models
         self.vectorstore_url: Optional[Chroma] = None
         self.vectorstore_history: Optional[Chroma] = None # In-memory store for current request
         self.current_session_id: Optional[str] = None
@@ -1036,18 +1016,18 @@ class AIChat:
             try:
                 self.stella_icarus_manager = StellaIcarusHookManager()
                 if self.stella_icarus_manager.hook_load_errors:
-                    logger.warning("AIChat Init: StellaIcarusHookManager loaded with some errors.")
+                    logger.warning("CortexThoughts Init: StellaIcarusHookManager loaded with some errors.")
                 elif not self.stella_icarus_manager.hooks:
-                    logger.info("AIChat Init: StellaIcarusHookManager loaded, but no hooks found/active.")
+                    logger.info("CortexThoughts Init: StellaIcarusHookManager loaded, but no hooks found/active.")
                 else:
-                    logger.success("AIChat Init: StellaIcarusHookManager loaded successfully with hooks.")
+                    logger.success("CortexThoughts Init: StellaIcarusHookManager loaded successfully with hooks.")
             except Exception as e_sihm_init:
-                logger.error(f"AIChat Init: Failed to initialize StellaIcarusHookManager: {e_sihm_init}")
+                logger.error(f"CortexThoughts Init: Failed to initialize StellaIcarusHookManager: {e_sihm_init}")
                 self.stella_icarus_manager = None
         elif not StellaIcarusHookManager:
-            logger.error("AIChat Init: StellaIcarusHookManager class not available (import failed?). Hooks disabled.")
+            logger.error("CortexThoughts Init: StellaIcarusHookManager class not available (import failed?). Hooks disabled.")
         else:  # ENABLE_STELLA_ICARUS_HOOKS is False
-            logger.info("AIChat Init: StellaIcarusHooks are disabled by configuration.")
+            logger.info("CortexThoughts Init: StellaIcarusHooks are disabled by configuration.")
         # --- END MODIFIED ---
         # --- END NEW ---
 
@@ -1098,7 +1078,7 @@ class AIChat:
             try:
                 return len(cl100k_base_encoder_app.encode(text))
             except Exception as e:
-                logger.warning(f"Tiktoken counting error in AIChat: {e}. Falling back to char count.")
+                logger.warning(f"Tiktoken counting error in CortexThoughts: {e}. Falling back to char count.")
                 return len(text) // 4  # Rough char to token estimate
         elif text:
             return len(text) // 4  # Rough char to token estimate
@@ -1137,7 +1117,7 @@ class AIChat:
 
     def setup_prompts(self):
         """Initializes Langchain prompt templates."""
-        logger.debug("Setting up AIChat prompt templates...")
+        logger.debug("Setting up CortexThoughts prompt templates...")
         self.text_prompt_template = ChatPromptTemplate.from_messages(
             [
                 ("system", PROMPT_CHAT), # Expects various context keys
@@ -1159,7 +1139,7 @@ class AIChat:
         self.tot_prompt = ChatPromptTemplate.from_template(PROMPT_TREE_OF_THOUGHTS)
         self.emotion_analysis_prompt = ChatPromptTemplate.from_template(PROMPT_EMOTION_ANALYSIS)
         self.image_latex_prompt = ChatPromptTemplate.from_template(PROMPT_IMAGE_TO_LATEX)
-        logger.debug("AIChat prompt templates setup complete.")
+        logger.debug("CortexThoughts prompt templates setup complete.")
 
     async def _refine_direct_image_prompt_async(
             self,
@@ -1327,7 +1307,7 @@ class AIChat:
         }
 
         chain = (
-            ChatPromptTemplate.from_template(PROMPT_CREATE_IMAGE_PROMPT) # Uses the updated prompt from config
+            ChatPromptTemplate.from_template(PROMPT_CREATE_IMAGE_PROMPT) # Uses the updated prompt from CortexConfiguration
             | prompt_gen_model
             | StrOutputParser()
         )
@@ -1386,7 +1366,7 @@ class AIChat:
             return None
 
     # --- NEW HELPER: Describe Image with VLM (ELP0) ---
-        # app.py -> AIChat class
+        # app.py -> CortexThoughts class
 
     async def _describe_generated_image_async(self, db: Session, session_id: str, image_b64: str) -> Optional[str]:
         """
@@ -1413,7 +1393,7 @@ class AIChat:
             image_uri = f"data:image/png;base64,{image_b64}" # Assumes PNG from imagination_worker
             image_content_part = {"type": "image_url", "image_url": {"url": image_uri}}
 
-            # Use the correctly named prompt from config.py
+            # Use the correctly named prompt from CortexConfiguration.py
             messages = [HumanMessage(content=[image_content_part, {"type": "text", "text": PROMPT_VLM_DESCRIBE_GENERATED_IMAGE}])]
             chain = vlm_model | StrOutputParser()
             timing_data = {"session_id": session_id, "mode": "chat", "execution_time_ms": 0}
@@ -2004,8 +1984,8 @@ class AIChat:
         logger.info(f"🚀 {req_id} Triggering internal background web search task for query: '{query}'")
 
         # --- Default settings for the search ---
-        num_results_per_engine = 7 # Or get from config
-        timeout_per_engine = 20    # Or get from config
+        num_results_per_engine = 7 # Or get from CortexConfiguration
+        timeout_per_engine = 20    # Or get from CortexConfiguration
         # Use all implemented engines by default
         # Note: Filter this list based on which _scrape_ methods you actually implemented!
         engines_to_use = ['ddg', 'google'] # Add other implemented keys: 'sem', 'scholar', 'base', 'core', 'scigov', 'baidu', 'refseek', 'scidirect', 'mdpi', 'tandf', 'ieee', 'springer'
@@ -3831,7 +3811,7 @@ class AIChat:
                     response_from_llm = chain.invoke(inputs, config=llm_call_config)
                 elif callable(chain):  # Direct model call (e.g., for raw ChatML in direct_generate)
                     # Assuming 'chain' is the model and 'inputs' is the raw prompt string.
-                    # The LlamaCppChatWrapper._call method handles 'priority' from config.
+                    # The LlamaCppChatWrapper._call method handles 'priority' from CortexConfiguration.
                     response_from_llm = chain(messages=inputs, stop=[CHATML_END_TOKEN], **llm_call_config)
                 else:
                     raise TypeError(f"Unsupported chain/model type for _call_llm_with_timing: {type(chain)}")
@@ -3987,7 +3967,7 @@ class AIChat:
         logger.info(f"{log_prefix} Classifying input complexity for: '{user_input[:50]}...'")
 
         # Get history summary synchronously (it's a DB call)
-        history_summary = await asyncio.to_thread(self._get_history_summary, db, MEMORY_SIZE)  # MEMORY_SIZE from config
+        history_summary = await asyncio.to_thread(self._get_history_summary, db, MEMORY_SIZE)  # MEMORY_SIZE from CortexConfiguration
 
         classification_model_instance = self.provider.get_model("router")
         if not classification_model_instance:
@@ -4014,7 +3994,7 @@ class AIChat:
 
         prompt_inputs_for_classification = {"input": user_input, "history_summary": history_summary}
         classification_chain_raw_output = (
-                self.input_classification_prompt  # PROMPT_COMPLEXITY_CLASSIFICATION from config
+                self.input_classification_prompt  # PROMPT_COMPLEXITY_CLASSIFICATION from CortexConfiguration
                 | classification_model_for_call
                 | StrOutputParser()
         )
@@ -4024,7 +4004,7 @@ class AIChat:
         parsed_json_output: Optional[Dict[str, Any]] = None
 
         # Initial LLM calls and parsing attempts
-        for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):  # DEEP_THOUGHT_RETRY_ATTEMPTS from config
+        for attempt in range(DEEP_THOUGHT_RETRY_ATTEMPTS):  # DEEP_THOUGHT_RETRY_ATTEMPTS from CortexConfiguration
             current_attempt_num = attempt + 1
             logger.debug(
                 f"{log_prefix} Classification LLM call attempt {current_attempt_num}/{DEEP_THOUGHT_RETRY_ATTEMPTS}")
@@ -4082,7 +4062,7 @@ class AIChat:
             action_analysis_model = self.provider.get_model("router")
             reformat_prompt_input = {"faulty_llm_output_for_reformat": raw_llm_response_for_final_log}
             reformat_chain = ChatPromptTemplate.from_template(
-                PROMPT_REFORMAT_TO_ACTION_JSON) | action_analysis_model | StrOutputParser()  # PROMPT_REFORMAT_TO_ACTION_JSON from config
+                PROMPT_REFORMAT_TO_ACTION_JSON) | action_analysis_model | StrOutputParser()  # PROMPT_REFORMAT_TO_ACTION_JSON from CortexConfiguration
 
             reformatted_llm_output_text = await asyncio.to_thread(
                 self._call_llm_with_timing, reformat_chain, reformat_prompt_input,
@@ -4098,7 +4078,7 @@ class AIChat:
                 if json_candidate_from_reformat:
                     parsed_json_output = self._programmatic_json_parse_and_fix(
                         json_candidate_from_reformat,
-                        JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,  # From config (e.g., 2-3 attempts)
+                        JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,  # from CortexConfiguration (e.g., 2-3 attempts)
                         log_prefix + "-ReformatFix"
                     )
                     if parsed_json_output and isinstance(parsed_json_output, dict) and \
@@ -4200,7 +4180,7 @@ class AIChat:
         log_prefix = f"😊 EmotionAnalyze|{interaction_data.get('session_id', 'unknown')[:8]}-{request_id_suffix}"
         logger.info(f"{log_prefix} Analyzing input emotion/context for: '{user_input[:50]}...'")
 
-        history_summary = self._get_history_summary(db, MEMORY_SIZE)  # MEMORY_SIZE from config
+        history_summary = self._get_history_summary(db, MEMORY_SIZE)  # MEMORY_SIZE from CortexConfiguration
 
         # Determine which model role to use for emotion analysis
         emotion_model_role = "router"  # Configurable: could be "router" or a dedicated role
@@ -4326,7 +4306,7 @@ class AIChat:
             # Prepare interaction_data for the _call_llm_with_timing within _run_tree_of_thought_v2
             # This is for metrics of the ToT LLM call itself.
             interaction_data_for_llm_call = {
-                'session_id': self.current_session_id,  # Use session_id from the AIChat instance
+                'session_id': self.current_session_id,  # Use session_id from the CortexThoughts instance
                 'mode': 'chat',  # Or 'internal_tot_llm_call'
                 'execution_time_ms': 0
             }
@@ -4723,7 +4703,7 @@ class AIChat:
 
 
     # --- NEW HELPER: Translation ---
-    # app.py -> Inside AIChat class
+    # app.py -> Inside CortexThoughts class
 
     # --- NEW HELPER: Translation ---
     async def _translate(self, text: str, target_lang: str, source_lang: str = "auto") -> str:
@@ -4831,7 +4811,7 @@ class AIChat:
             return default_model_key, user_input_for_routing, "Router model unavailable, using default."
 
         router_chain_raw_output = (
-                ChatPromptTemplate.from_template(PROMPT_ROUTER)  # PROMPT_ROUTER from config
+                ChatPromptTemplate.from_template(PROMPT_ROUTER)  # PROMPT_ROUTER from CortexConfiguration
                 | router_model
                 | StrOutputParser()
         )
@@ -4910,7 +4890,7 @@ class AIChat:
                     # --- Stage 3: Parse/Fix Reformatted Output ---
                     parsed_routing_json = self._programmatic_json_parse_and_fix(
                         json_candidate_from_reformat,
-                        JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,  # From config
+                        JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,  # from CortexConfiguration
                         log_prefix + "-ReformatFix"
                     )
                     if parsed_routing_json and isinstance(parsed_routing_json, dict) and \
@@ -4937,10 +4917,10 @@ class AIChat:
         return default_model_key, user_input_for_routing, default_reason
 
     # --- generate method ---
-    # app.py -> Inside AIChat class
+    # app.py -> Inside CortexThoughts class
 
     # --- generate (Main Async Method - Fuzzy History RAG + Direct History + Log Context + Multi-LLM Routing + VLM Preprocessing) ---
-    # app.py -> Inside AIChat class
+    # app.py -> Inside CortexThoughts class
 
     async def direct_generate(self, db: Session, user_input: str, session_id: str,
                               vlm_description: Optional[str] = None,
@@ -5190,7 +5170,7 @@ class AIChat:
                     search_results_docs = await asyncio.to_thread(
                         global_file_vs.similarity_search_by_vector,
                         embedding=query_vector,
-                        k=RAG_FILE_INDEX_COUNT  # From config
+                        k=RAG_FILE_INDEX_COUNT  # from CortexConfiguration
                     )
                     if search_results_docs:
                         vector_search_succeeded = True
@@ -5350,9 +5330,9 @@ class AIChat:
             # 2. Prepare the prompt based on type
             vlm_prompt_text = ""
             if prompt_type == "initial_description":
-                vlm_prompt_text = PROMPT_VLM_INITIAL_ANALYSIS # From config.py
+                vlm_prompt_text = PROMPT_VLM_INITIAL_ANALYSIS # from CortexConfiguration.py
             elif prompt_type == "describe_generated_image":
-                vlm_prompt_text = PROMPT_VLM_DESCRIBE_GENERATED_IMAGE # From config.py
+                vlm_prompt_text = PROMPT_VLM_DESCRIBE_GENERATED_IMAGE # from CortexConfiguration.py
             else:
                 logger.warning(f"{log_prefix}: Unknown prompt_type '{prompt_type}'. Using default description prompt.")
                 vlm_prompt_text = "Describe this image."
@@ -5370,7 +5350,7 @@ class AIChat:
 
             # _call_llm_with_timing is synchronous, so wrap it for our async context
             response_text = await asyncio.to_thread(
-                self._call_llm_with_timing, # Use the AIChat's internal LLM call helper
+                self._call_llm_with_timing, # Use the CortexThoughts's internal LLM call helper
                 vlm_chain,
                 vlm_messages, # Pass messages directly as input to the model in the chain
                 timing_data,
@@ -5727,7 +5707,7 @@ class AIChat:
             return # Stop generation
 
         # --- Prepare LLM Call ---
-        # Combine image and the specific prompt from config.py
+        # Combine image and the specific prompt from CortexConfiguration.py
         messages = [HumanMessage(content=[image_content_part, {"type": "text", "text": PROMPT_IMAGE_TO_LATEX}])]
         # Ensure the chain uses the correct model instance
         chain = latex_model | StrOutputParser() # Assumes StrOutputParser works with stream
@@ -5852,7 +5832,7 @@ class AIChat:
                  except Exception as db_log_err:
                      logger.error(f"{stream_id}: Failed to log successful LaTeX/TikZ results: {db_log_err}")
 
-    # --- (rest of AIChat class, including the modified generate method) ---
+    # --- (rest of CortexThoughts class, including the modified generate method) ---
 
     def process_image(self, db: Session, image_b64: str, session_id: str = None):
         """Processes image, gets description/LaTeX, returns description for non-VLM flow."""
@@ -5930,7 +5910,7 @@ class AIChat:
         result_msg = ""
         success = False
         try:
-            text = self.extract_text_from_url(url)
+            text = self.extract_context_through_referencePath(url)
             if not text or not text.strip():
                 raise ValueError("No significant text extracted")
             self.create_vectorstore_for_url(text, url)
@@ -5955,7 +5935,7 @@ class AIChat:
             add_interaction(db, **db_kwargs)
             return result_msg
 
-    def extract_text_from_url(self, url):
+    def extract_context_through_referencePath(self, url):
         """Extracts text from URL content (synchronous)."""
         logger.debug(f"🌐 Fetching content from {url}")
         try:
@@ -5996,7 +5976,7 @@ class AIChat:
             logger.error("❌ Embeddings provider missing.")
             self.vectorstore_url = None
             raise ValueError("Embeddings needed")
-        text_splitter = RecursiveCharacterTextSplitter(chunk_size=CHUNCK_SIZE, chunk_overlap=CHUNK_OVERLAP)
+        text_splitter = RecursiveCharacterTextSplitter(chunk_size=VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE, chunk_overlap=CHUNK_OVERLAP)
         splits = text_splitter.split_text(text)
         if not splits:
             logger.warning("⚠️ No text splits generated.")
@@ -6859,7 +6839,7 @@ def _stream_openai_chat_response_generator_flask(
                 if ai_chat is None:
                     raise RuntimeError("Global ai_chat instance is not initialized.")
 
-                # LOG_SINK_LEVEL and LOG_SINK_FORMAT should be available from config or defined
+                # LOG_SINK_LEVEL and LOG_SINK_FORMAT should be available from CortexConfiguration or defined
                 sink_id_holder[0] = logger.add(log_sink, level=LOG_SINK_LEVEL, format=LOG_SINK_FORMAT,
                                                filter=lambda record: record["extra"].get(
                                                    "request_session_id") == log_session_id, enqueue=False)
@@ -7192,13 +7172,13 @@ def _execute_audio_worker_with_priority(
         worker_cwd: str,
         timeout: int = 120
 ) -> Tuple[Optional[Dict[str, Any]], Optional[str]]:
-    # Ensure ai_provider and its _priority_quota_lock are accessible.
-    # This might be self.ai_provider if this function is part of a class that has it,
-    # or a global ai_provider instance. For this example, assuming global ai_provider.
-    # If ai_provider is an instance variable (e.g., self.ai_provider), adjust accordingly.
-    global ai_provider  # Assuming ai_provider is a global instance initialized elsewhere
+    # Ensure cortex_backbone_provider and its _priority_quota_lock are accessible.
+    # This might be self.cortex_backbone_provider if this function is part of a class that has it,
+    # or a global cortex_backbone_provider instance. For this example, assuming global cortex_backbone_provider.
+    # If cortex_backbone_provider is an instance variable (e.g., self.cortex_backbone_provider), adjust accordingly.
+    global cortex_backbone_provider  # Assuming cortex_backbone_provider is a global instance initialized elsewhere
 
-    shared_priority_lock: Optional[PriorityQuotaLock] = getattr(ai_provider, '_priority_quota_lock', None)
+    shared_priority_lock: Optional[PriorityQuotaLock] = getattr(cortex_backbone_provider, '_priority_quota_lock', None)
 
     request_id = request_data.get("request_id", "audio-worker-unknown")
     log_prefix = f"AudioExec|ELP{priority}|{request_id}"
@@ -7383,12 +7363,12 @@ async def _run_background_high_quality_asr(
         asr_worker_cmd_bg = [
             APP_PYTHON_EXECUTABLE, asr_worker_script_bg,
             "--task-type", "asr",
-            "--model-dir", WHISPER_MODEL_DIR,  # From config
+            "--model-dir", WHISPER_MODEL_DIR,  # from CortexConfiguration
             "--temp-dir", os.path.join(SCRIPT_DIR, "temp_audio_worker_files")  # Consistent temp dir
         ]
         asr_request_data_bg = {
             "input_audio_path": original_audio_path,  # Original audio path
-            "whisper_model_name": WHISPER_DEFAULT_MODEL_FILENAME,  # High-quality model from config
+            "whisper_model_name": WHISPER_DEFAULT_MODEL_FILENAME,  # High-quality model from CortexConfiguration
             "language": language_for_asr,  # Language used for initial ASR
             "request_id": f"{request_id}-bg-asr"
         }
@@ -7615,22 +7595,22 @@ async def _run_background_asr_and_translation_analysis(
 
 # === Global AI Instances ===
 ai_agent: Optional[AmaryllisAgent] = None
-ai_provider: Optional[AIProvider] = None # Defined globally
-ai_chat: Optional[AIChat] = None # Define ai_chat globally too
+cortex_backbone_provider: Optional[CortexEngine] = None # Defined globally
+ai_chat: Optional[CortexThoughts] = None # Define ai_chat globally too
 
 try:
-    ai_provider = AIProvider(PROVIDER) # <<< ai_provider is initialized here
-    global_ai_provider_ref = ai_provider
-    ai_chat = AIChat(ai_provider)
+    cortex_backbone_provider = CortexEngine(PROVIDER) # <<< cortex_backbone_provider is initialized here
+    global_cortex_backbone_provider_ref = cortex_backbone_provider
+    ai_chat = CortexThoughts(cortex_backbone_provider)
     AGENT_CWD = os.path.dirname(os.path.abspath(__file__))
     SUPPORTS_COMPUTER_USE = True # Or determine dynamically
-    ai_agent = AmaryllisAgent(ai_provider, AGENT_CWD, SUPPORTS_COMPUTER_USE)
+    ai_agent = AmaryllisAgent(cortex_backbone_provider, AGENT_CWD, SUPPORTS_COMPUTER_USE)
     logger.success("✅ AI Instances Initialized.")
 except Exception as e:
     logger.critical(f"🔥🔥 Failed AI init: {e}")
     logger.exception("AI Init Traceback:")
-    # Ensure ai_provider is None if init fails
-    ai_provider = None # <<< Add this line
+    # Ensure cortex_backbone_provider is None if init fails
+    cortex_backbone_provider = None # <<< Add this line
     sys.exit(1)
 
 
@@ -7775,7 +7755,7 @@ async def handle_interaction():
                  response_text = description_or_error
                  status_code = 200 if "Error" not in response_text else 500
         elif prompt:
-            # --- Use AIChat.generate which contains all complex logic ---
+            # --- Use CortexThoughts.generate which contains all complex logic ---
             # 1. Classify complexity first (sync in thread)
             classification_data = {"session_id": session_id, "mode": "chat", "input_type": "classification", "user_input": prompt[:100]}
             input_classification = await asyncio.to_thread(
@@ -7873,14 +7853,14 @@ async def handle_openai_embeddings():
     response_payload = "" # Initialize
 
     # --- Check Provider Initialization ---
-    if not ai_provider or not ai_provider.embeddings or not ai_provider.EMBEDDINGS_MODEL_NAME:
+    if not cortex_backbone_provider or not cortex_backbone_provider.embeddings or not cortex_backbone_provider.EMBEDDINGS_MODEL_NAME:
         logger.error(f"{request_id}: Embeddings provider not initialized correctly.")
         resp_data, status_code = _create_openai_error_response("Embedding model not available.", err_type="server_error", status_code=500)
         response_payload = json.dumps(resp_data)
         return Response(response_payload, status=status_code, mimetype='application/json')
 
     # Use the configured embedding model name for the response
-    model_name_to_return = f"{ai_provider.provider_name}/{ai_provider.EMBEDDINGS_MODEL_NAME}"
+    model_name_to_return = f"{cortex_backbone_provider.provider_name}/{cortex_backbone_provider.EMBEDDINGS_MODEL_NAME}"
 
     # --- Get and Validate Request Data ---
     try:
@@ -7937,11 +7917,11 @@ async def handle_openai_embeddings():
         # Run embedding in a thread as it can be CPU intensive
         if len(texts_to_embed) == 1:
             # Use embed_query for single string
-            embedding_vector = await asyncio.to_thread(ai_provider.embeddings.embed_query, texts_to_embed[0])
+            embedding_vector = await asyncio.to_thread(cortex_backbone_provider.embeddings.embed_query, texts_to_embed[0])
             embeddings_list = [embedding_vector]
         else:
             # Use embed_documents for list of strings
-            embeddings_list = await asyncio.to_thread(ai_provider.embeddings.embed_documents, texts_to_embed)
+            embeddings_list = await asyncio.to_thread(cortex_backbone_provider.embeddings.embed_documents, texts_to_embed)
 
         embed_duration = (time.monotonic() - start_embed_time) * 1000
         logger.info(f"{request_id}: Embedding generation took {embed_duration:.2f} ms.")
@@ -8056,7 +8036,7 @@ def handle_legacy_completions():
         # --- Call Core Generation Logic (Non-Streaming) ---
         response_text = ""
         status_code = 200
-        logger.info(f"{request_id}: Proceeding with non-streaming AIChat.generate for legacy prompt...")
+        logger.info(f"{request_id}: Proceeding with non-streaming CortexThoughts.generate for legacy prompt...")
         try:
             # Use asyncio.run to call the async generate function
             # Pass the legacy prompt directly as user_input
@@ -8066,9 +8046,9 @@ def handle_legacy_completions():
             )
 
             if "internal error" in response_text.lower() or "Error:" in response_text or "Traceback" in response_text:
-                status_code = 500; logger.warning(f"{request_id}: AIChat.generate potential error: {response_text[:200]}...")
+                status_code = 500; logger.warning(f"{request_id}: CortexThoughts.generate potential error: {response_text[:200]}...")
             else: status_code = 200
-            logger.debug(f"{request_id}: AIChat.generate completed. Status: {status_code}")
+            logger.debug(f"{request_id}: CortexThoughts.generate completed. Status: {status_code}")
 
         except Exception as gen_err:
             logger.error(f"{request_id}: Error during asyncio.run(ai_chat.generate): {gen_err}")
@@ -8174,7 +8154,7 @@ def handle_openai_chat_completion():
         stream_requested_by_client = raw_request_data_dict.get("stream", False)
         model_requested_by_client = raw_request_data_dict.get("model")
         session_id_for_logs = raw_request_data_dict.get("session_id", f"openai_req_{request_id}")
-        if ai_chat: ai_chat.current_session_id = session_id_for_logs  # Set session for AIChat instance
+        if ai_chat: ai_chat.current_session_id = session_id_for_logs  # Set session for CortexThoughts instance
 
         logger.debug(
             f"{request_id}: Request parsed - SessionID={session_id_for_logs}, Stream: {stream_requested_by_client}, ModelReq: {model_requested_by_client}")
@@ -8219,7 +8199,7 @@ def handle_openai_chat_completion():
         if not user_input_from_req and not image_b64_from_req:
             raise ValueError("No text or image content provided in user message.")
 
-        # --- Call AIProvider to classify complexity for background task planning ---
+        # --- Call CortexEngine to classify complexity for background task planning ---
         # This runs synchronously here to determine if background_generate needs "chat_complex"
         # Note: direct_generate (for ELP1 streaming) might do its own simpler/no classification.
         logger.info(f"{request_id}: Classifying input for background task planning (ELP0 context)...")
@@ -8236,7 +8216,7 @@ def handle_openai_chat_completion():
         vlm_desc_for_bg_and_direct: Optional[str] = None  # VLM desc of user's image
         status_code_val = 200  # Assume success for direct path unless error
 
-        logger.info(f"{request_id}: Preparing for AIChat.direct_generate (ELP1 path)...")
+        logger.info(f"{request_id}: Preparing for CortexThoughts.direct_generate (ELP1 path)...")
         try:
             if image_b64_from_req:  # If user sent an image
                 logger.info(f"{request_id}: Preprocessing user-provided image for direct_generate (ELP1 context)...")
@@ -8305,9 +8285,9 @@ def handle_openai_chat_completion():
             initial_check_done = False
 
             while True:
-                if ai_provider and ai_provider.is_resource_busy_with_high_priority():
+                if cortex_backbone_provider and cortex_backbone_provider.is_resource_busy_with_high_priority():
                     logger.info(
-                        f"{bg_log_prefix_thread} AIProvider resources busy with ELP1. Pausing background task start...")
+                        f"{bg_log_prefix_thread} CortexEngine resources busy with ELP1. Pausing background task start...")
                     initial_check_done = True
                     time.sleep(POLITENESS_CHECK_INTERVAL_SECONDS)
                     if time.monotonic() - politeness_wait_start_time > MAX_POLITENESS_WAIT_SECONDS:
@@ -8317,9 +8297,9 @@ def handle_openai_chat_completion():
                 else:
                     if initial_check_done:  # Log only if we actually waited
                         logger.info(
-                            f"{bg_log_prefix_thread} AIProvider resources appear free. Proceeding with background task.")
+                            f"{bg_log_prefix_thread} CortexEngine resources appear free. Proceeding with background task.")
                     else:  # Log if we proceed immediately on first check
-                        logger.debug(f"{bg_log_prefix_thread} AIProvider resources free on initial check. Proceeding.")
+                        logger.debug(f"{bg_log_prefix_thread} CortexEngine resources free on initial check. Proceeding.")
                     break  # Exit politeness loop
             # --- END NEW: Politeness Check Loop ---
 
@@ -8486,7 +8466,7 @@ def handle_openai_chat_completion():
 async def handle_openai_moderations():
     """
     Handles requests mimicking OpenAI's Moderations endpoint.
-    Uses AIChat.direct_generate() with a specific prompt for assessment.
+    Uses CortexThoughts.direct_generate() with a specific prompt for assessment.
     """
     start_req_time = time.monotonic()
     request_id = f"req-mod-{uuid.uuid4()}"
@@ -8557,10 +8537,10 @@ async def handle_openai_moderations():
             final_status_code = 200
             return resp
 
-        # --- Call AIChat.direct_generate() for moderation assessment ---
+        # --- Call CortexThoughts.direct_generate() for moderation assessment ---
         # direct_generate runs at ELP1
         if not ai_chat:  # Should be initialized globally
-            raise RuntimeError("AIChat instance not available.")
+            raise RuntimeError("CortexThoughts instance not available.")
 
         moderation_prompt_filled = PROMPT_MODERATION_CHECK.format(input_text_to_moderate=input_text_to_moderate)
 
@@ -8734,10 +8714,10 @@ def handle_openai_models():
             # "description": "Speech-to-Text model based on Whisper." # Optional
         },
         {
-            "id": AUDIO_TRANSLATION_MODEL_CLIENT_FACING,  # From config.py
+            "id": AUDIO_TRANSLATION_MODEL_CLIENT_FACING,  # from CortexConfiguration.py
             "object": "model",
             "created": int(time.time()),
-            "owned_by": META_MODEL_OWNER,  # From config.py
+            "owned_by": META_MODEL_OWNER,  # from CortexConfiguration.py
             "permission": [], "root": AUDIO_TRANSLATION_MODEL_CLIENT_FACING, "parent": None,
             # "description": "Audio-to-Audio Translation Service" # Optional
         },
@@ -8863,17 +8843,17 @@ async def handle_openai_asr_transcriptions():
         # Ensure ai_chat instance is available if needed for direct_generate
         if 'ai_chat' not in globals() or ai_chat is None:
             logger.error(f"{request_id}: ai_chat instance not available. Cannot proceed with LLM steps.")
-            raise RuntimeError("AIChat instance not configured for ASR post-processing.")
+            raise RuntimeError("CortexThoughts instance not configured for ASR post-processing.")
         ai_chat.current_session_id = session_id_for_log  # type: ignore
 
         if audio_file_storage and audio_file_storage.filename:
             uploaded_filename = secure_filename(audio_file_storage.filename)
 
         if not audio_file_storage: raise ValueError("'file' field (audio data) is required.")
-        if not model_requested or model_requested != ASR_MODEL_NAME_CLIENT_FACING:  # From config.py
+        if not model_requested or model_requested != ASR_MODEL_NAME_CLIENT_FACING:  # from CortexConfiguration.py
             raise ValueError(f"Invalid 'model'. This endpoint supports '{ASR_MODEL_NAME_CLIENT_FACING}'.")
 
-        language_for_asr_steps = language_param_for_log or WHISPER_DEFAULT_LANGUAGE  # From config.py
+        language_for_asr_steps = language_param_for_log or WHISPER_DEFAULT_LANGUAGE  # from CortexConfiguration.py
         if not language_for_asr_steps or language_for_asr_steps.strip().lower() == "auto":
             language_for_asr_steps = "auto"
         else:
@@ -8901,12 +8881,12 @@ async def handle_openai_asr_transcriptions():
         # --- Step 1.1: Low-Latency ASR ---
         logger.info(f"{request_id}: ELP1 Step 1.1: Low-Latency ASR (Model: {WHISPER_LOW_LATENCY_MODEL_FILENAME})...")
         asr_worker_script = os.path.join(SCRIPT_DIR, "audio_worker.py")
-        # APP_PYTHON_EXECUTABLE and WHISPER_MODEL_DIR from config or defined in app.py
+        # APP_PYTHON_EXECUTABLE and WHISPER_MODEL_DIR from CortexConfiguration or defined in app.py
         ll_asr_cmd = [APP_PYTHON_EXECUTABLE, asr_worker_script, "--task-type", "asr",
                       "--model-dir", WHISPER_MODEL_DIR, "--temp-dir", temp_audio_dir]
         ll_asr_req_data = {
             "input_audio_path": temp_input_audio_path,
-            "whisper_model_name": WHISPER_LOW_LATENCY_MODEL_FILENAME,  # From config.py
+            "whisper_model_name": WHISPER_LOW_LATENCY_MODEL_FILENAME,  # from CortexConfiguration.py
             "language": language_for_asr_steps,
             "request_id": f"{request_id}-elp1-llasr"  # low-latency asr
         }
@@ -8928,7 +8908,7 @@ async def handle_openai_asr_transcriptions():
             request_data=ll_asr_req_data,
             priority=ELP1,
             worker_cwd=SCRIPT_DIR,
-            timeout=ASR_WORKER_TIMEOUT  # From config.py
+            timeout=ASR_WORKER_TIMEOUT  # from CortexConfiguration.py
         )
         # Note: ASR_WORKER_TIMEOUT might need adjustment for low-latency vs high-quality if they differ significantly
 
@@ -9221,7 +9201,7 @@ async def handle_openai_audio_translations():
         # --- Step 1.4: Quick Translation (LLM ELP1) ---
         logger.info(
             f"{request_id}: ELP1 Step 1.4: Translating to '{target_language_code}' (LLM role '{TRANSLATION_LLM_ROLE}')...")
-        translation_model = ai_provider.get_model(TRANSLATION_LLM_ROLE)  # type: ignore
+        translation_model = cortex_backbone_provider.get_model(TRANSLATION_LLM_ROLE)  # type: ignore
         if not translation_model: raise RuntimeError(f"LLM role '{TRANSLATION_LLM_ROLE}' for translation unavailable.")
 
         src_lang_full = langcodes.Language.make(
@@ -9443,7 +9423,7 @@ def handle_openai_tts():
         if not voice_requested or not isinstance(voice_requested, str):
             raise ValueError("'voice' field (MeloTTS speaker ID, e.g., EN-US) is required.")
 
-        if model_requested != TTS_MODEL_NAME_CLIENT_FACING:  # TTS_MODEL_NAME_CLIENT_FACING from config.py
+        if model_requested != TTS_MODEL_NAME_CLIENT_FACING:  # TTS_MODEL_NAME_CLIENT_FACING from CortexConfiguration.py
             logger.warning(
                 f"{request_id}: Invalid TTS model requested '{model_requested}'. Expected '{TTS_MODEL_NAME_CLIENT_FACING}'.")
             resp_data, status_code = _create_openai_error_response(
@@ -9476,14 +9456,14 @@ def handle_openai_tts():
         os.makedirs(temp_audio_dir, exist_ok=True)
 
         # Ensure APP_PYTHON_EXECUTABLE is defined (usually sys.executable at top of app.py)
-        # Ensure WHISPER_MODEL_DIR is imported from config.py (this directory is used for all models, including MeloTTS data if needed by worker)
+        # Ensure WHISPER_MODEL_DIR is imported from CortexConfiguration.py (this directory is used for all models, including MeloTTS data if needed by worker)
         worker_command = [
             APP_PYTHON_EXECUTABLE,
             audio_worker_script_path,
             "--task-type", "tts",  # Specify TTS task for the worker
             "--model-lang", melo_language,
             "--device", "auto",  # Or make this configurable via app's config
-            "--model-dir", WHISPER_MODEL_DIR,  # Use the general model pool path from config.py
+            "--model-dir", WHISPER_MODEL_DIR,  # Use the general model pool path from CortexConfiguration.py
             "--temp-dir", temp_audio_dir
         ]
 
@@ -9661,7 +9641,7 @@ async def handle_openai_image_generations():  # Route is async
         else:
             logger.error(
                 f"{request_id}: Global 'ai_chat' instance not available. Cannot proceed with image generation context.")
-            resp_data, status_code_val = _create_openai_error_response("Server AI component (AIChat) not ready.",
+            resp_data, status_code_val = _create_openai_error_response("Server AI component (CortexThoughts) not ready.",
                                                                        err_type="server_error", status_code=503)
             resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
             final_response_status_code = status_code_val
@@ -9752,9 +9732,9 @@ async def handle_openai_image_generations():  # Route is async
             logger.error(f"{request_id}: Failed to log refined image prompt: {db_log_err_prompt}")
             if db_to_use: db_to_use.rollback()
 
-        # --- 5. Generate Image(s) using AIProvider (ELP1) ---
+        # --- 5. Generate Image(s) using CortexEngine (ELP1) ---
         logger.info(
-            f"{request_id}: Requesting {n_images} image(s) from AIProvider (ELP1). Prompt: '{refined_prompt_for_generation[:100]}...'")
+            f"{request_id}: Requesting {n_images} image(s) from CortexEngine (ELP1). Prompt: '{refined_prompt_for_generation[:100]}...'")
         all_generated_image_data_items = []
         error_during_loop = False
         loop_error_message = None
@@ -9762,10 +9742,10 @@ async def handle_openai_image_generations():  # Route is async
         for i in range(n_images):
             if error_during_loop: break
             logger.info(f"{request_id}: Generating image {i + 1}/{n_images}...")
-            # ai_provider.generate_image_async returns: Tuple[Optional[List[Dict[str, Optional[str]]]], Optional[str]]
+            # cortex_backbone_provider.generate_image_async returns: Tuple[Optional[List[Dict[str, Optional[str]]]], Optional[str]]
             # The first element is a list of image data dicts (usually one dict per call for this worker)
             # The second is an error message string if any.
-            list_of_one_image_dict, image_gen_err_msg = await ai_provider.generate_image_async(
+            list_of_one_image_dict, image_gen_err_msg = await cortex_backbone_provider.generate_image_async(
                 prompt=refined_prompt_for_generation,
                 image_base64=None,  # This endpoint is for txt2img primarily
                 priority=ELP1
@@ -9966,17 +9946,17 @@ def handle_openai_retrieve_model(model: str):
 
 
 try:
-    ai_provider = AIProvider(PROVIDER)
-    global_ai_provider_ref = ai_provider
-    ai_chat = AIChat(ai_provider)
+    cortex_backbone_provider = CortexEngine(PROVIDER)
+    global_cortex_backbone_provider_ref = cortex_backbone_provider
+    ai_chat = CortexThoughts(cortex_backbone_provider)
     AGENT_CWD = os.path.dirname(os.path.abspath(__file__))
     SUPPORTS_COMPUTER_USE = True
-    ai_agent = AmaryllisAgent(ai_provider, AGENT_CWD, SUPPORTS_COMPUTER_USE)
+    ai_agent = AmaryllisAgent(cortex_backbone_provider, AGENT_CWD, SUPPORTS_COMPUTER_USE)
     logger.success("✅ AI Instances Initialized.")
 except Exception as e:
     logger.critical(f"🔥🔥 Failed AI init: {e}")
     logger.exception("AI Init Traceback:")
-    ai_provider = None
+    cortex_backbone_provider = None
     sys.exit(1)
 
 ## Fine tuning API Call handler
@@ -10307,7 +10287,7 @@ async def handle_upload_and_ingest_file():
         original_filename = secure_filename(file_storage.filename)
 
         # Ensure base temporary directory for ingestions exists
-        os.makedirs(FILE_INGESTION_TEMP_DIR, exist_ok=True)  # FILE_INGESTION_TEMP_DIR from config.py
+        os.makedirs(FILE_INGESTION_TEMP_DIR, exist_ok=True)  # FILE_INGESTION_TEMP_DIR from CortexConfiguration.py
 
         # Create a unique temporary path for the uploaded file
         # Use a more descriptive prefix for temporary files
@@ -10760,7 +10740,7 @@ def list_run_steps_stub(thread_id: str, run_id: str):
     specific_message = (
         "This system does not expose discrete 'run steps' in the OpenAI Assistants API format. "
         "Agentic operations and tool use occur as part of an integrated, asynchronous background process "
-        "(e.g., within AIChat.background_generate or AmaryllisAgent._run_task_in_background). "
+        "(e.g., within CortexThoughts.background_generate or AmaryllisAgent._run_task_in_background). "
         "Progress or outcomes are reflected in the ongoing conversation, database logs, or direct results "
         "from initiated tasks, rather than through a list of formal 'steps' for a given 'run ID'."
     )
@@ -10830,35 +10810,35 @@ async def startup_tasks():
 
     if ENABLE_FILE_INDEXER:
         logger.info("APP.PY: startup_tasks: Attempting to initialize global FileIndex vector store...")
-        if ai_provider and ai_provider.embeddings:
+        if cortex_backbone_provider and cortex_backbone_provider.embeddings:
             init_vs_start_time = time.monotonic()
             logger.info(
-                "APP.PY: startup_tasks: >>> CALLING await init_file_vs_from_indexer(ai_provider). This will block here. <<<")
-            await init_file_vs_from_indexer(ai_provider)  # This is initialize_global_file_index_vectorstore
+                "APP.PY: startup_tasks: >>> CALLING await init_file_vs_from_indexer(cortex_backbone_provider). This will block here. <<<")
+            await init_file_vs_from_indexer(cortex_backbone_provider)  # This is initialize_global_file_index_vectorstore
             init_vs_duration = time.monotonic() - init_vs_start_time
             logger.info(
-                f"APP.PY: startup_tasks: >>> init_file_vs_from_indexer(ai_provider) HAS COMPLETED. Duration: {init_vs_duration:.2f}s <<<")
+                f"APP.PY: startup_tasks: >>> init_file_vs_from_indexer(cortex_backbone_provider) HAS COMPLETED. Duration: {init_vs_duration:.2f}s <<<")
         else:
-            logger.error("APP.PY: startup_tasks: CRITICAL - AIProvider or embeddings None. Cannot init FileIndex VS.")
+            logger.error("APP.PY: startup_tasks: CRITICAL - CortexEngine or embeddings None. Cannot init FileIndex VS.")
     else:
         logger.info("APP.PY: startup_tasks: File Indexer and its Vector Store are DISABLED by config.")
 
     if ENABLE_SELF_REFLECTION:
         logger.info("APP.PY: startup_tasks: Attempting to initialize global Reflection vector store...")
-        if ai_provider and ai_provider.embeddings:
+        if cortex_backbone_provider and cortex_backbone_provider.embeddings:
             init_refl_vs_start_time = time.monotonic()
             logger.info(
                 "APP.PY: startup_tasks: >>> CALLING await asyncio.to_thread(initialize_global_reflection_vectorstore, ...). This will block here. <<<")
             temp_db_session_for_init = SessionLocal()  # type: ignore
             try:
-                await asyncio.to_thread(initialize_global_reflection_vectorstore, ai_provider, temp_db_session_for_init)
+                await asyncio.to_thread(initialize_global_reflection_vectorstore, cortex_backbone_provider, temp_db_session_for_init)
             finally:
                 temp_db_session_for_init.close()
             init_refl_vs_duration = time.monotonic() - init_refl_vs_start_time
             logger.info(
                 f"APP.PY: startup_tasks: >>> initialize_global_reflection_vectorstore HAS COMPLETED. Duration: {init_refl_vs_duration:.2f}s <<<")
         else:
-            logger.error("APP.PY: startup_tasks: CRITICAL - AIProvider or embeddings None. Cannot init Reflection VS.")
+            logger.error("APP.PY: startup_tasks: CRITICAL - CortexEngine or embeddings None. Cannot init Reflection VS.")
     else:
         logger.info("APP.PY: startup_tasks: Self Reflection and its Vector Store are DISABLED by config.")
 
@@ -10881,9 +10861,9 @@ else:
 
     # Ensure critical global instances were initialized earlier in the module loading
     # (These are typically defined after config and before this 'else' block)
-    if ai_provider is None or ai_chat is None or ai_agent is None:
+    if cortex_backbone_provider is None or ai_chat is None or ai_agent is None:
         logger.critical(
-            "APP.PY: 🔥🔥 Core AI components (ai_provider, ai_chat, ai_agent) are NOT INITIALIZED. Application cannot start properly.")
+            "APP.PY: 🔥🔥 Core AI components (cortex_backbone_provider, ai_chat, ai_agent) are NOT INITIALIZED. Application cannot start properly.")
         # This is a fundamental setup error, exiting directly.
         print("APP.PY: CRITICAL FAILURE - Core AI components not initialized. Exiting.", file=sys.stderr, flush=True)
         sys.exit(1)
@@ -10989,19 +10969,19 @@ else:
             "APP.PY: ✅ Core initializations (DB, Startup Tasks) successful. Proceeding to start background services...")
 
         logger.info("APP.PY: Initializing and Starting Interaction Indexer service...")
-        if 'initialize_global_interaction_vectorstore' in globals() and 'ai_provider' in globals():
-            initialize_global_interaction_vectorstore(ai_provider)
+        if 'initialize_global_interaction_vectorstore' in globals() and 'cortex_backbone_provider' in globals():
+            initialize_global_interaction_vectorstore(cortex_backbone_provider)
 
-        if 'InteractionIndexer' in globals() and 'ai_provider' in globals():
+        if 'InteractionIndexer' in globals() and 'cortex_backbone_provider' in globals():
             _interaction_indexer_stop_event = threading.Event()
-            interaction_indexer_thread = InteractionIndexer(_interaction_indexer_stop_event, ai_provider)
+            interaction_indexer_thread = InteractionIndexer(_interaction_indexer_stop_event, cortex_backbone_provider)
             interaction_indexer_thread.start()
             # You would also need to add logic to stop this thread gracefully on shutdown
         else:
             logger.error("APP.PY: Could not start InteractionIndexer.")
 
         # Ensure start_file_indexer and start_self_reflector are defined in app.py
-        # and that ENABLE_FILE_INDEXER, ENABLE_SELF_REFLECTION are from config.py
+        # and that ENABLE_FILE_INDEXER, ENABLE_SELF_REFLECTION are from CortexConfiguration.py
         if 'ENABLE_FILE_INDEXER' in globals() and ENABLE_FILE_INDEXER:
             logger.info("APP.PY: Starting File Indexer service...")
             if 'start_file_indexer' in globals() and callable(globals()['start_file_indexer']):
