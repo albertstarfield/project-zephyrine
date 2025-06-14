@@ -66,9 +66,7 @@ Just a heads up, some details aren't listed here or in the `readme.md` file. Ins
 
 ## 🎞 Demonstration Screenshot
 
-![Demonstration](https://raw.githubusercontent.com/albertstarfield/alpaca-electron-zephyrine/main/documentation/demo-0.png)
-
-https://github.com/albertstarfield/project-zephyrine/assets/30130461/f2cf58f1-839f-4f4f-9acc-f20c9f966a44
+![Demonstration](https://raw.githubusercontent.com/albertstarfield/alpaca-electron-zephyrine/main/documentation/demo-newUI-0.png)
 
 ### Sidenote:
 > This footage was recorded on an arm64 device running macOS/darwin with a “Rhodes Chop” processor (10 Cores) and G14S Architecture (16 Cores GPU). Some parts of the footage were sped up. The list of models that are being used can be seen in `config.py`.
