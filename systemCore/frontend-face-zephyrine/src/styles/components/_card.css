@@ -1,0 +1,116 @@
+/* styles/components/_card.css */
+
+/* Category Card used in Welcome Screen */
+.category {
+  width: 100%;
+  max-width: 700px; /* Default max-width */
+  background-color: rgba(46, 46, 53, 0.041); /* Use variables if possible */
+  border-radius: 2rem;
+  padding: 1.5rem; /* Default padding */
+  backdrop-filter: blur(9px);
+  box-shadow: 0 4px 20px rgba(0, 0, 0, 0.2);
+  transition: transform 0.2s ease, box-shadow 0.2s ease;
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  text-align: center;
+}
+
+.category:hover {
+  transform: translateY(-2px);
+  box-shadow: 0 6px 25px rgba(0, 0, 0, 0.25);
+}
+
+.category-icon {
+  width: 40px;
+  height: 40px;
+  margin-bottom: 15px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  background-color: rgba(255, 255, 255, 0.1); /* Use variables if possible */
+  border-radius: 50%;
+  padding: 8px;
+}
+
+.category-icon svg {
+  width: 100%;
+  height: 100%;
+  color: var(--accent);
+}
+
+.category h3 {
+  margin-bottom: 15px;
+  font-size: 20px; /* Default size */
+  font-weight: 600;
+  color: var(--primary-text);
+  margin: 0 0 1rem 0;
+  font-family: "IBM Plex", sans-serif;
+  text-align: center;
+}
+
+/* Example Card within Category */
+.example-card {
+  background-color: rgba(240, 240, 245, 0.9); /* Use variables if possible */
+  padding: 0;
+  letter-spacing: 0.1px;
+  font-size: 0.9rem; /* Default size */
+  border-radius: 10px;
+  width: 100%;
+  color: #333; /* Use variables if possible */
+  min-height: auto;
+  overflow: hidden;
+  margin-bottom: 0.75rem;
+  border: 1px solid rgba(255, 255, 255, 0.1); /* Use variables if possible */
+  transition: all 0.2s ease;
+}
+
+.example-card:last-child {
+  margin-bottom: 0;
+}
+
+.example-card button {
+  width: 100%;
+  height: 100%;
+  padding: 16px 20px; /* Default padding */
+  text-align: center;
+  background: none;
+  border: none;
+  color: inherit; /* Inherit color from .example-card */
+  font-size: 15px; /* Default size */
+  line-height: 1.5;
+  cursor: pointer;
+  transition: background-color 0.2s;
+  font-family: "Inter", sans-serif;
+}
+
+.example-card:hover {
+  background-color: rgba(250, 250, 255, 1); /* Use variables if possible */
+  transform: translateY(-1px);
+  box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+/* Button inside card doesn't need separate hover if card hover is sufficient */
+.example-card button:hover {
+  /* background-color: transparent; */ /* Usually not needed */
+}
+
+/* Responsive adjustments */
+@media (min-width: 1024px) {
+  .category {
+    padding: 1.5rem;
+  }
+  .category h3 {
+    font-size: 22px;
+  }
+  .example-card button {
+    padding: 18px 22px;
+    font-size: 16px;
+  }
+}
+
+@media (min-width: 1440px) {
+  .category {
+    padding: 1.75rem;
+  }
+}

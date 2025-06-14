@@ -1,0 +1,88 @@
+/*
+ * Full _nightSky.css
+ * Defines the dark blue gradient background and styles for SVG star particles.
+ * This file is intended to be imported into a main stylesheet (e.g., App.css)
+ * and works in conjunction with a conditional rendering of the `.svg-star-background`
+ * element (typically when in dark mode).
+ */
+
+/*
+ * Container for the SVG star particles and the night sky gradient.
+ * This element will be rendered in App.jsx when in dark mode.
+ */
+ .svg-star-background {
+    position: absolute; /* Occupy the full space of its parent (.background-container) */
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    pointer-events: none; /* Ensure stars don't interfere with mouse events */
+    overflow: hidden; /* Prevent scrollbars if stars extend beyond viewport */
+  
+    /* The dark blue gradient for the night sky */
+    background: linear-gradient(
+      180deg,
+      #0a0a20 0%,   /* Very dark blue at the top */
+      #1a1a4a 50%,  /* Mid-dark blue in the middle */
+      #2a2a7a 100%  /* Slightly lighter dark blue at the bottom */
+    );
+    background-size: 100% 100%; /* Ensure gradient covers the whole background */
+  }
+  
+  /*
+   * New Animation: Pop in, oscillate, then fade out
+   * This animation will be applied to each individual SVG particle.
+   */
+  @keyframes pop-oscillate-fade {
+    0% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0) rotateZ(0deg); /* Start scaled down, invisible, no rotation */
+    }
+    10% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1.1) rotateZ(var(--random-rotation, 0deg)); /* Pop in with slight random rotation */
+    }
+    20% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(1) rotateZ(var(--random-rotation, 0deg)); /* Settle at normal size with rotation */
+    }
+    40% {
+      transform: translate(-50%, -50%) scale(1) translateY(-10px) rotateZ(var(--random-rotation, 0deg)); /* Oscillate up with rotation */
+    }
+    60% {
+      transform: translate(-50%, -50%) scale(1) translateY(10px) rotateZ(var(--random-rotation, 0deg)); /* Oscillate down with rotation */
+    }
+    80% {
+      opacity: 1;
+      transform: translate(-50%, -50%) scale(0.5) rotateZ(calc(var(--random-rotation, 0deg) * 1.5)); /* Start fading out and shrinking, slight additional rotation */
+    }
+    100% {
+      opacity: 0;
+      transform: translate(-50%, -50%) scale(0) rotateZ(calc(var(--random-rotation, 0deg) * 2)); /* Fully transparent and shrunk, final rotation */
+    }
+  }
+  
+  /*
+   * Styling for individual SVG particles.
+   * Each SVG will be absolutely positioned and animated.
+   */
+  .svg-star-background .star-particle-svg {
+    position: absolute;
+    /* Use transform for positioning, as it works well with animations */
+    /* The translate(-50%, -50%) centers the SVG relative to its top/left position */
+    /* Specific top/left positions will be set dynamically via React inline styles */
+    transform: translate(-50%, -50%);
+    width: 25px; /* Adjust default size of each star */
+    height: 25px;
+    /* The animation will be applied dynamically in the React component (StarParticle.jsx) */
+  }
+  
+  /* Optional: Responsive adjustments for very small screens if needed */
+  @media (max-width: 768px) {
+    /* Adjust star density or sizes for smaller screens */
+    .svg-star-background .star-particle-svg {
+      width: 18px; /* Slightly smaller on mobile */
+      height: 18px;
+    }
+  }
+  

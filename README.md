@@ -8,55 +8,61 @@
 
 <h5 align="center"> </h5>
 
-<p align="center">
-  <a href="https://nodejs.org">
-    <img src="https://img.shields.io/badge/node.js-6DA55F?style=for-the-badge&logo=node.js&logoColor=white">
-  </a>
-  <a href="https://www.electronjs.org/">
-    <img src="https://img.shields.io/badge/Electron-191970?style=for-the-badge&logo=Electron&logoColor=white">
-  </a>
-</p>
+
 <h5 align="center">
 <sub align="center">
-<img src="https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/usr/icon/png/512x512.png?raw=true" height=128>
+<img src="https://github.com/albertstarfield/project-zephyrine/blob/adelaide-zephyrine-charlotte-assistant-dev-sync-stream/documentation/Project%20Zephyrine%20Logo.png?raw=true" height=128>
 </sub>
 </h5>
 <p align="center"><i>Greetings, I am called Project Zephyrine or the entity name so-be called Adelaide Zephyrine Charlotte, delighted to make your acquaintance. Shall we embark on our intellectual voyage through this endeavor? </i></p>
-
+<p align="center"><h5>In Self-learning and Self-improvement We Trust</h5></p>
 <hr>
 
 
-> > **Important Note:**
-> This software is being entirely rewritten and will no longer be based on the existing javascript codebase. The new architecture will be a plug-and-play, primarily offline framework, similar to Copilot, featuring a Mix of Experts (MoE) interface with delineated entities. This approach aims to avoid direct competition with more successful projects like LMStudio and OLlama GUI. The `adelaide-zephyrine-charlotte-assistant-dev-stream` branch contains the development progress.
+## Project Zephyrine: Yet another An Open-Source OpenAI API Implementation, and very simple AI Assistant for Your Computer.
 
-## Project Zephyrine: An Open-Source, Decentralized, non-Nvidia exclusive, non-proprietary, AI Assistant for Your Desktop and Embedded Device*.
+**Project Zephyrine** is a collaborative effort spearheaded by the Zephyrine Foundation, bringing together expertise from professional AI engineers within a leading corporation, researchers from RisTIE Brawijaya University's Electrical Engineering, Internal People of Zephyrine Foundation, Freelancers, and independent developer Albert.
 
-**Project Zephyrine** is a collaborative effort spearheaded by the Zephyrine Foundation, bringing together expertise from professional AI engineers within a leading corporation, researchers from RisTIE Brawijaya University's Electrical Engineering department, and independent developer Albert. 
+**Vision:** Our vision is to empower users with a personal AI assistant that utilizes the processing power of their local machines. We aim to offer an alternative to cloud-based assistants and reduce reliance on external infrastructure.
 
-**Vision:** Our vision is to empower users with a truly personal AI assistant that leverages the full processing power of their local machines. We aim to move beyond cloud-based, web-centric assistants and liberate users from dependence on external infrastructure.
-
-**Open-Source and Freely Available:** Project Zephyrine is a fully open-source project, fostering community contribution and development, just like the popular 3D creation software Blender.
+**Open-Source and Freely Available:** Project Zephyrine is a fully open-source project, encouraging community contribution and development.
 
 **Key Features:**
 
-* **Decentralized Processing:** Zephyrine utilizes the user's local machine for AI processing, eliminating the need for external servers and fostering data privacy.
-* **Multimodel Async + Multimodal Interaction:** Zephyrine analyzes various user inputs, including ~~vision~~, ~~sound~~, text, and emotion, enabling a richer and more intuitive user experience.
-* **Advanced AI Architectures:** We leverage a combination of Large Language Models (LLMs) and Multimodal models, including cutting-edge options like LLaMa, Whisper, mpt, Falcon, and more (licensing subject to individual model terms).
-* **Asynchronous Processing:** Queries are processed asynchronously, allowing utilization of large models (100B+ parameters) even on local hardware, without the need for expensive data center setups (e.g., NVIDIA Exclusive Datacenter GPUs).
+*   **Decentralized Processing:** Zephyrine uses your local machine for AI processing, which helps keep your data private and reduces the need for external servers.
+
+*   **Broad API Compatibility:** The system aims to be compatible with common AI service APIs, making it easier to integrate with existing tools and workflows.
+    *   **OpenAI API Compatibility:** The application includes implementations for several OpenAI v1 API endpoints.
+        *   `/v1/chat/completions`: Handles chat requests and provides responses as expected from the API. For more involved queries, the system can perform additional analysis in the background to enhance its understanding and future answers.
+        *   `/v1/completions`: A functional endpoint for legacy completion requests.
+        *   `/v1/embeddings`: Provides access to the system's configured embedding model.
+        *   `/v1/moderations`: Includes a functional simulation to help assess content.
+        *   **Multi-Modal Endpoints:**
+            *   `/v1/audio/speech`: A functional Text-to-Speech (TTS) endpoint.
+            *   `/v1/audio/transcriptions` & `/v1/audio/translations`: These use multi-stage processes for ASR, text handling, and translation.
+            *   `/v1/images/generations`: A text-to-image endpoint that uses its internal context augmentation system to help refine image prompts.
+        *   **File & Fine-Tuning APIs:** These endpoints are designed to process uploaded data for the system's self-reflection process, which helps update its augmented knowledge base.
+        *   **Assistants API:** Endpoints under `/v1/assistants` and `/v1/threads` are handled with informational responses. They explain that the system operates as an integrated assistant rather than using a separate, stateful object model.
+    *   **Ollama API Support:** The server offers compatibility with key Ollama endpoints.
+        *   **Core & Discovery Endpoints:** Endpoints like `/api/chat`, `/api/tags`, and `/api/version` are implemented to function as expected.
+        *   **Model Management Endpoints:** Calls to `/api/pull`, `/api/create`, etc., are handled with basic responses, indicating that model management is handled internally by the system.
+
+*   **Multimodal Interaction:** Zephyrine can process various user inputs, including text, images, and audio, to provide a richer user experience.
+
+*   **AI Architectures:** We use a combination of Large Language Models (LLMs) and Multimodal models, including those compatible with `llama.cpp`. This architecture is mature and reliable.
+
+*   **Non-Centralized Downloads:** This feature can help you download model files and other components faster by checking for them from other users' Zephyrine instances on your local network or the internet. This aims to provide a more efficient download experience compared to relying solely on central servers.
 
 ## 📃 Main features
 
-- [x] Operates locally on your computer, requiring an internet connection solely for web access.
-- [x] Can function exclusively on CPU architectures, such as x86_64 and arm64/aarch64.
-- [x] Provides compatibility with Windows* (untested), MacOS (untested on x86_64), and Linux operating systems.
-- [x] Features partial GPU/MPS/FPGA (opencl)/Tensor acceleration using cuBLAS, openBLAS, clBLAST, Vulkan, and Metal.
-- [x] Web access.
-- [x] Chat history functionality.
+-   [x] Operates locally on your computer, requiring an internet connection solely for web access.
+-   [x] Can function exclusively on CPU architectures, such as x86_64 and arm64/aarch64.
+-   [x] Provides compatibility with Windows* (untested), MacOS (untested on x86_64), and Linux operating systems.
+-   [x] Features partial GPU/MPS/FPGA (opencl)/Tensor acceleration using cuBLAS, openBLAS, clBLAST, Vulkan, and Metal.
+-   [x] Web access.
+-   [x] Chat history functionality.
 
 Just a heads up, some details aren't listed here or in the `readme.md` file. Instead, they've been moved to the `TodoFeatureFullList.md` document or you can check them out [here](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/TodoFeatureFullList.md).
-
-
-
 
 ## 🎞 Demonstration Screenshot
 
@@ -64,42 +70,44 @@ Just a heads up, some details aren't listed here or in the `readme.md` file. Ins
 
 https://github.com/albertstarfield/project-zephyrine/assets/30130461/f2cf58f1-839f-4f4f-9acc-f20c9f966a44
 
-
 ### Sidenote:
-> This footage was recorded on a arm64 device running macOS/darwin with an “Rhodes Chop” processor 10 Cores and G14S Architecture 16 Cores GPU. Some parts of the footage were sped up, The list of models that are being used can be seen in [here](https://raw.githubusercontent.com/albertstarfield/alpaca-electron-zephyrine/main/usr/engine_component/LLM_Model_Index.js).
+> This footage was recorded on an arm64 device running macOS/darwin with a “Rhodes Chop” processor (10 Cores) and G14S Architecture (16 Cores GPU). Some parts of the footage were sped up. The list of models that are being used can be seen in `config.py`.
+
 ## 🚀 Quick Start Guide
 
-1. **Follow the Guide**: Look at the guide provided and do what it says.
-2. **Wait for the Model**: After following the guide, be patient. Keep an eye on your terminal or console for messages about the model downloading itself automatically.
-3. **Relaunch the Program**: Once the model has finished downloading, restart the program.
+The installation process is now managed by a single, cross-platform launcher script.
 
-That's it! You're ready to go.
+1.  **Clone the Repository:**
+    ```bash
+    git clone https://github.com/albertstarfield/project-zephyrine
+    cd project-zephyrine
+    ```
 
-### Windows
-> **Note**  
-> For Windows the launch sequence command are currently broken, You could try running the following command but it is under heavy development, you can see the update on the Issue section about Windows Native Support. In the meantime you could run it using wsl2 and wslg
+2.  **Run the Launcher:**
+    The `launcher.py` script is designed to handle the setup for you:
+    *   It detects your operating system and hardware for a suitable setup.
+    *   It manages a local Conda environment to handle dependencies.
+    *   It installs necessary Python and Node.js packages.
+    *   It helps download required AI models and assets.
+    *   It starts all application services.
 
-### Linux and macOS (Running manually)
+    Execute it with Python:
+    ```bash
+    python launcher.py
+    ```
 
-> The procedure will encompass an automated compilation process, wherein all components shall be seamlessly and effortlessly installed. Consequently, the necessity for specific release binaries shall be obviated.
+    **First-Time Setup:** The first time you run the launcher, it will set up the Conda environment and download several gigabytes of model files. This process can take a notable amount of time, depending on your internet connection. Please be patient.
 
->
->```git clone https://github.com/albertstarfield/alpaca-electron-zephyrine```
->
->Change your current directory to alpaca-electron:
->
->```cd alpaca-electron-zephyrine```
->
->Install application specific dependencies: 
->
-> ```chmod +x ./launchcontrol/run.sh ```
->
-> Run it
->
-> ```./launchcontrol/run.sh```
+    **Subsequent Launches:** After the initial setup, subsequent launches will generally be much faster.
 
+### ZephyMesh P2P Distribution
+To help improve download speeds and reliability, this project incorporates ZephyMesh, a peer-to-peer network feature.
 
-3. The program will commence automatically, affording you the opportunity to initiate a conversation at your convenience.
+When you run the launcher, your application can optionally become a peer on this network.
+
+If you are a new user, the launcher will first try to find the required models and files from other users on your local network or the internet. This can sometimes be faster than downloading directly from centralized sources.
+
+If you have a particular file, your application may help make it available to other new users once you've downloaded it.
 
 ## 🔧 Troubleshooting
 
@@ -108,15 +116,18 @@ That's it! You're ready to go.
 ## 👨‍💻 Credits
 The development of this project owes credit to several contributors whose valuable efforts have shaped its foundation and brought it to fruition.
 
-Sincere gratitude is extended to [@itsPi3141](https://github.com/ItsPi3141/alpaca-electron)  for their original creation of the Alpaca-electron program, which served as the starting point and inspiration for this work.
+Sincere gratitude is extended to [@itsPi3141](https://github.com/ItsPi3141/alpaca-electron) for their original creation of the Alpaca-electron program, which served as the starting point and inspiration for this work.
 
 Furthermore, recognition is due to the following individuals for their significant contributions to the project:
 
-[@antimatter15](https://github.com/antimatter15/alpaca.cpp) for their contributions in creating the alpaca.cpp component.
-[@ggerganov](https://github.com/ggerganov/llama.cpp) for their pivotal role in the development of the llama.cpp component and the GGML base backbone behind alpaca.cpp.
+**[@stefanus-ai-tech](https://github.com/stefanus-ai-tech) for significant contributions to the project.**
+
+[@antimatter15](https://github.com/antimatter15/alpaca.cpp) for their contributions in creating the `alpaca.cpp` component.
+[@ggerganov](https://github.com/ggerganov/llama.cpp) for their pivotal role in the development of the `llama.cpp` component and the GGML base backbone behind `alpaca.cpp`.
 Meta and Stanford for their invaluable creation of the LLaMA and Alpaca models, respectively, which have laid the groundwork for the project's AI capabilities.
-Additionally, special appreciation goes to [@keldenl](https://github.com/keldenl) for providing arm64 builds for MacOS and [@W48B1T](https://github.com/W48B1T) for providing Linux builds, which have greatly enhanced the project's accessibility and usability across different platforms.
+Additionally, special appreciation goes to [@keldenl](https://github.com/keldenl) for providing arm64 builds for MacOS and [@W48B1T](https://github.com/W48B1T) for providing Linux builds, which have greatly enhanced the project's accessibility and usability across different platforms and finally for Amaryllis Cortex Base code based on [SiriLLaMa](https://github.com/0ssamaak0/SiriLLama) by 0ssamaak0.
+
 
 Lastly, although the project may not garner widespread attention as [@Willy030125](https://github.com/Willy030125/alpaca-electron-GGML-v2-v3), we acknowledge and cherish the efforts put forth by all contributors. Let this work be a testament to the dedication and collective collaboration that underpin academic and technological advancements.
 
-With deep appreciation for everyone involved, Project Zephyrine signs off.
+With deep appreciation for everyone involved, Zephyrine Foundation, for now signs off.
