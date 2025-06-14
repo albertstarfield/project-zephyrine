@@ -59,14 +59,7 @@ INITIAL_PYTHON_MINOR = 12
 FALLBACK_PYTHON_MAJOR = 3
 FALLBACK_PYTHON_MINOR = 12
 
-# --- ZephyMesh Configuration ---
-ZEPHYMESH_DIR = os.path.join(ROOT_DIR, "zephyMeshNetwork")
-ZEPHYMESH_NODE_SCRIPT = os.path.join(ZEPHYMESH_DIR, "mesh_node.py")
-# The port file is how the launcher will discover the random port chosen by the mesh node.
-ZEPHYMESH_PORT_INFO_FILE = os.path.join(ROOT_DIR, "zephymesh_ports.json")
-zephymesh_api_url: Optional[str] = None # Will be set dynamically after the node starts.
-zephymesh_process: Optional[subprocess.Popen] = None
-# --- END ZephyMesh Configuration ---
+
 
 running_processes = [] # For services started by the current script instance
 process_lock = threading.Lock()
@@ -80,6 +73,15 @@ HYPERCORN_EXECUTABLE = ""
 NPM_CMD = 'npm.cmd' if IS_WINDOWS else 'npm'
 GIT_CMD = 'git.exe' if IS_WINDOWS else 'git'
 CMAKE_CMD = 'cmake.exe' if IS_WINDOWS else 'cmake'
+
+# --- ZephyMesh Configuration (MODIFIED FOR GO) ---
+ZEPHYMESH_DIR = os.path.join(ROOT_DIR, "zephyMeshNetwork")
+ZEPHYMESH_NODE_BINARY = os.path.join(ROOT_DIR, "zephymesh_node.exe" if IS_WINDOWS else "zephymesh_node")
+ZEPHYMESH_API_PORT = 22000 # The port you configured in the Go app's flags
+zephymesh_api_url: Optional[str] = f"http://127.0.0.1:{ZEPHYMESH_API_PORT}"
+zephymesh_process: Optional[subprocess.Popen] = None
+ZEPHYMESH_PORT_INFO_FILE = os.path.join(ROOT_DIR, "zephymesh_ports.json")
+# --- END ZephyMesh Configuration ---
 
 # --- License Acceptance & Optional Imports (Initial state) ---
 TIKTOKEN_AVAILABLE = False
@@ -1589,47 +1591,121 @@ if __name__ == "__main__":
         except Exception as e_path_check:  # Corrected 'e' usage
             print_warning(f"Error comparing Conda paths during initial check: {e_path_check}")
 
+
+
     if is_already_in_correct_env:
         # --- This is the RELAUNCHED script, running inside the correct Conda environment ---
         print_system(f"Running inside target Conda environment (Prefix: {ACTIVE_ENV_PATH})")
-        
-        # --- Start the ZephyMesh Node and read its port ---
-        # FIX 3: Removed 'global' keyword. This code is already in the global scope, so 'global'
-        # is unnecessary and causes the SyntaxError with type-annotated variables.
+        import requests
+
         try:
-            print_system(f"Starting ZephyMesh Node from: {ZEPHYMESH_NODE_SCRIPT}")
-            # PYTHON_EXECUTABLE is the conda env python, defined later in this block, so use sys.executable
-            mesh_command = [sys.executable, ZEPHYMESH_NODE_SCRIPT]
-            zephymesh_process = subprocess.Popen(mesh_command, cwd=ZEPHYMESH_DIR)
+            # --- Auto-Setup & Compilation ---
+            # Check if the Go binary exists. If not, initialize the module and compile.
+            if not os.path.exists(ZEPHYMESH_NODE_BINARY):
+                print_warning(f"ZephyMesh node binary not found at {ZEPHYMESH_NODE_BINARY}.")
+                print_system("Preparing to compile the Go mesh node...")
+
+                go_source_dir = os.path.join(ROOT_DIR, "zephyMeshNetwork")
+                go_mod_file = os.path.join(go_source_dir, "go.mod")
+
+                # Step 1: Ensure Go module is initialized
+                if not os.path.exists(go_mod_file):
+                    print_warning(f"go.mod file not found in {go_source_dir}.")
+                    print_system("Initializing Go module with 'go mod init'...")
+
+                    init_command = ["go", "mod", "init", "zephymesh"]
+                    if not run_command(init_command, cwd=go_source_dir, name="GO-MOD-INIT"):
+                        print_error("Failed to initialize the Go module. The application cannot continue.")
+                        sys.exit(1)
+
+                    print_system("Running 'go mod tidy' to download dependencies...")
+                    tidy_command = ["go", "mod", "tidy"]
+                    if not run_command(tidy_command, cwd=go_source_dir, name="GO-MOD-TIDY"):
+                        print_error(
+                            "Failed to download Go dependencies ('go mod tidy'). The application cannot continue.")
+                        sys.exit(1)
+
+                    print_system("✅ Go module initialized successfully.")
+
+                # Step 2: Compile the binary
+                print_system("Compiling the Go mesh node with 'go build'...")
+                go_package_path = "./cmd/zephymesh_node"
+                compile_command = ["go", "build", "-o", ZEPHYMESH_NODE_BINARY, go_package_path]
+
+                if not run_command(compile_command, cwd=go_source_dir, name="GO-COMPILE-MESHNODE"):
+                    print_error("Failed to compile the Go ZephyMesh node. The application cannot continue.")
+                    sys.exit(1)
+
+                print_system("✅ Go ZephyMesh node compiled successfully.")
+
+            # --- Go Process Startup & Port Discovery ---
+            # Define the path to the port info file that the Go process will create.
+            # Note: ZEPHYMESH_PORT_INFO_FILE should be defined at the top of launcher.py
+            # ZEPHYMESH_PORT_INFO_FILE = os.path.join(ROOT_DIR, "zephymesh_ports.json")
+
+            # Remove the old port file to ensure we don't read a stale port from a previous run
+            if os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
+                os.remove(ZEPHYMESH_PORT_INFO_FILE)
+
+            # <<< START: New Fix for Identity Error >>>
+            # Define the path to the identity key file
+            ZEPHYMESH_IDENTITY_FILE = os.path.join(ROOT_DIR, "zephymesh_identity.key")
+            # Remove old/corrupt identity file to force the Go program to generate a new, valid one.
+            if os.path.exists(ZEPHYMESH_IDENTITY_FILE):
+                print_system("Removing existing ZephyMesh identity file to ensure a clean start...")
+                try:
+                    os.remove(ZEPHYMESH_IDENTITY_FILE)
+                    print_system("✅ Old identity file removed.")
+                except OSError as e:
+                    print_error(f"Could not remove old identity file at {ZEPHYMESH_IDENTITY_FILE}: {e}")
+                    # Decide if this is a fatal error. For now, we'll let the Go program try anyway.
+            # <<< END: New Fix for Identity Error >>>
+
+            print_system(f"Starting Go ZephyMesh Node: {ZEPHYMESH_NODE_BINARY}")
+            # The Go binary now finds its own port, so we don't pass a port flag here.
+            mesh_command = [ZEPHYMESH_NODE_BINARY]
+            zephymesh_process = subprocess.Popen(mesh_command, cwd=ROOT_DIR)
             print_system(f"ZephyMesh Node process started (PID: {zephymesh_process.pid}).")
 
             # Wait for the port file to be created by the mesh node
             print_system(f"Waiting for ZephyMesh port file: {ZEPHYMESH_PORT_INFO_FILE}")
             port_file_wait_start = time.monotonic()
-            while not os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
-                time.sleep(0.5)
-                # Check if the process died unexpectedly
+            api_ready = False
+            while time.monotonic() - port_file_wait_start < 30:  # 30-second timeout
+                # Check if the process crashed before creating the file
                 if zephymesh_process.poll() is not None:
-                    raise RuntimeError("ZephyMesh node process exited prematurely.")
-                if time.monotonic() - port_file_wait_start > 30: # 30 second timeout
-                    raise TimeoutError("ZephyMesh node did not create port file in time.")
+                    raise RuntimeError("ZephyMesh node process exited prematurely while waiting for port file.")
 
-            # Read the port file to configure the API URL
+                # Check if the file has been created
+                if os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
+                    api_ready = True
+                    break
+
+                time.sleep(0.5)
+
+            if not api_ready:
+                raise TimeoutError("ZephyMesh node did not create its port file in time.")
+
+            # Read the port file to configure the API URL dynamically
             with open(ZEPHYMESH_PORT_INFO_FILE, 'r') as f:
                 port_info = json.load(f)
                 api_port = port_info['api_port']
+                # Set the global zephymesh_api_url variable
                 zephymesh_api_url = f"http://127.0.0.1:{api_port}"
-                print_system(f"ZephyMesh Node is ready. API URL set to: {zephymesh_api_url}")
+                print_system(f"✅ ZephyMesh Node is ready. API URL discovered: {zephymesh_api_url}")
+
         except Exception as e:
-            print_error(f"Failed to start ZephyMesh Node or read its port: {e}. P2P distribution will be unavailable.")
-            if zephymesh_process:
+            print_error(f"Failed to start ZephyMesh Node: {e}. P2P distribution will be unavailable.")
+            # Ensure the process is terminated if it was started
+            if 'zephymesh_process' in locals() and zephymesh_process and zephymesh_process.poll() is None:
                 zephymesh_process.terminate()
             zephymesh_process = None
             zephymesh_api_url = None
         # --- END ZephyMesh Start ---
 
+
         if "ZEPHYRINE_RELAUNCHED_IN_CONDA" in os.environ:
-            del os.environ["ZEPHYRINE_RELAUNCHED_IN_CONDA"]
+                del os.environ["ZEPHYRINE_RELAUNCHED_IN_CONDA"]
 
         if globals().get('CONDA_EXECUTABLE') is None:
             print_system("Relaunched script: CONDA_EXECUTABLE is None. Attempting to load from cache or PATH...")
@@ -1722,6 +1798,7 @@ if __name__ == "__main__":
         print_system("--- Ensuring core command-line tools (git, cmake, nodejs, ffmpeg) ---")
         if not _ensure_conda_package("git", "git", is_critical=True): sys.exit(1)
         if not _ensure_conda_package("cmake", "cmake", is_critical=True): sys.exit(1)
+        if not _ensure_conda_package("go", "go", conda_channel="conda-forge", is_critical=True): sys.exit(1)  # <<< ADD THIS LINE
         if not _ensure_conda_package("nodejs", "node", is_critical=True): sys.exit(1)
         if not _ensure_conda_package("nodejs", "npm", is_critical=True): sys.exit(1)
         _ensure_conda_package("ffmpeg", "ffmpeg", is_critical=False)
