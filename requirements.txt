@@ -1,0 +1,164 @@
+################################################################################
+#                            Project Zephyrine                                 #
+#                       Main Application Requirements                          #
+#                                                                              #
+#  To install: pip install -r requirements.txt                                 #
+#  Consider using a virtual environment.                                       #
+################################################################################
+
+
+tqdm
+requests
+aria2p
+pandas
+pyarrow
+frontend
+fastparquet
+libp2p
+zeroconf
+
+
+# fitz # This is the import name for PyMuPDF; PyMuPDF below is the package to install
+pytesseract
+PyMuPDF
+
+# --- Core Web Framework & ASGI/WSGI Server ---
+Flask
+Flask-Cors
+hypercorn
+# uvicorn>=0.15             # Alternative ASGI server (optional) - Kept commented
+werkzeug
+
+# --- AI & Language Model Libraries ---
+# Core Langchain
+langchain-core
+langchain-community
+
+# LLM Provider Integrations
+langchain-ollama
+langchain-fireworks
+llama-cpp-python
+                            # Note: Custom build might be handled by launcher.py
+
+# Vector Store
+chromadb
+langchain-chroma
+
+# --- Database & Migrations ---
+SQLAlchemy
+alembic
+
+# --- Web Interaction, Scraping & Parsing ---
+# requests # Duplicate of above, removed for clarity
+beautifulsoup4
+selenium
+webdriver-manager
+lxml
+
+# --- Data Handling, Utilities & Logging ---
+python-dotenv
+loguru
+Pillow
+numpy
+python-Levenshtein
+thefuzz
+zstandard
+datasets
+
+# --- Document Processing & Text Extraction ---
+xlrd
+pypdf
+python-docx
+openpyxl
+python-pptx
+pdf2image
+                            # Requires Poppler utilities to be installed on the system:
+                            #   - Linux: sudo apt-get install poppler-utils
+                            #   - macOS: brew install poppler
+                            #   - Windows: Download Poppler binaries and add to PATH
+
+# --- Text-to-Speech & Speech-to-Text Related (from original list) ---
+# Note: These seem extensive and might be for a specific TTS/STT pipeline.
+# Verify if all are strictly needed for the current core functionality.
+txtsplit
+torch
+torchaudio
+cached_path
+transformers
+num2words
+unidic-lite
+unidic
+mecab-python3
+pykakasi
+fugashi
+g2p_en
+anyascii
+jamo
+gruut[de,es,fr]
+g2pkk
+librosa
+pydub
+eng_to_ipa
+inflect
+unidecode
+pypinyin
+cn2an
+jieba
+langcodes
+pedalboard
+peft
+
+# --- Development & UI Tools (from original list) ---
+gradio
+langid
+# tqdm # Duplicate of above, removed for clarity
+tensorboard
+#colorama                  # Removed as launcher.py was modified to not use it directly
+tiktoken
+
+# --- High-Performance Computing & Scientific Libraries ---
+# These are often for specific numerical tasks or model optimization.
+numba
+# numpy # Duplicate of above, removed for clarity
+matplotlib
+scikit-learn
+
+# --- Added from LaTeX_OCR-SubEngine (pix2tex) ---
+munch
+opencv_python_headless
+einops
+x_transformers
+tokenizers
+PyYAML
+timm
+albumentations
+pyreadline3 # Note: Primarily for Windows compatibility
+
+################################################################################
+#                            Notes & Considerations                            #
+#                                                                              #
+# 1. Virtual Environment: It is STRONGLY recommended to install these in a     #
+#    Python virtual environment to avoid conflicts with system packages.       #
+#    (e.g., `python -m venv venv` then `source venv/bin/activate`)             #
+#                                                                              #
+# 2. llama-cpp-python: This file lists the standard PyPI package. Your         #
+#    `launcher.py` script handles a custom build from a specific fork. Ensure #
+#    the launcher logic is up-to-date if the fork changes.                     #
+#                                                                              #
+# 3. Poppler (for pdf2image): This is a system dependency. See notes above.    #
+#                                                                              #
+# 4. TTS/STT Dependencies: The large block of TTS/STT related packages seems   #
+#    quite specific. If they are not core to the LLM/agent functionality,      #
+#    consider moving them to an optional requirements file (e.g.,              #
+#    `requirements_speech.txt`) to keep the core setup lighter.                #
+#                                                                              #
+# 5. Torch/Transformers: These are heavy dependencies. Ensure they are         #
+#    actually required by a component you are actively using. If only for a   #
+#    small utility or optional feature, evaluate if lighter alternatives exist #
+#    or if they can be made optional.                                          #
+#                                                                              #
+# 6. Pinning Versions: For production or reproducible environments, consider   #
+#    pinning package versions (e.g., `Flask==2.3.2`). You can generate a      #
+#    pinned list from your working environment using `pip freeze >             #
+#    requirements_pinned.txt`.                                                #
+################################################################################
