@@ -13,8 +13,8 @@ from loguru import logger
 import hashlib # <<< Import hashlib for MD5
 from typing import Optional, Tuple, List, Any, Dict  # <<< ADD Optional and List HERE
 import json
-from ai_provider import AIProvider
-from config import * # Ensure this includes the SQLite DATABASE_URL and all prompts/models
+from cortex_backbone_provider import CortexEngine
+from CortexConfiguration import * # Ensure this includes the SQLite DATABASE_URL and all prompts/models
 import base64
 from io import BytesIO
 from PIL import Image # Requires Pillow: pip install Pillow
@@ -130,7 +130,7 @@ TEXT_EXTENSIONS = { # Added csv
     '.csv', '.tsv', '.tex', '.bib'
 }
 DOC_EXTENSIONS = {'.pdf', '.docx', '.xlsx', '.pptx'}
-OFFICE_EXTENSIONS = {'.docx', '.doc', '.xls', '.xlsx', '.pptx', '.ppt'} # Added from config.py
+OFFICE_EXTENSIONS = {'.docx', '.doc', '.xls', '.xlsx', '.pptx', '.ppt'} # Added from CortexConfiguration.py
 
 # --- File types we want to embed ---
 EMBEDDABLE_EXTENSIONS = TEXT_EXTENSIONS.union(DOC_EXTENSIONS).union({'.csv'}) # Explicitly add csv here if not in TEXT_EXTENSIONS
@@ -145,7 +145,7 @@ class FileIndexer:
     """Scans the filesystem, extracts text/metadata, and updates the database index."""
 
     # --- MODIFIED: Accept embedding_model ---
-    def __init__(self, stop_event: threading.Event, provider: AIProvider, server_busy_event: threading.Event):
+    def __init__(self, stop_event: threading.Event, provider: CortexEngine, server_busy_event: threading.Event):
         self.stop_event = stop_event
         self.provider = provider
         self.embedding_model = provider.embeddings
@@ -442,7 +442,7 @@ class FileIndexer:
             img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
             image_uri = f"data:image/jpeg;base64,{img_str}"
 
-            # Prepare VLM input (similar to AIChat.process_image but using LaTeX prompt)
+            # Prepare VLM input (similar to CortexThoughts.process_image but using LaTeX prompt)
             image_content_part = {"type": "image_url", "image_url": {"url": image_uri}}
             # Use the specific LaTeX prompt
             vlm_messages = [HumanMessage(content=[
@@ -1126,7 +1126,7 @@ class FileIndexer:
         if not isinstance(text, str):
             return ""
 
-        # This cleanup logic should match the one in app.py's AIChat class for consistency
+        # This cleanup logic should match the one in app.py's CortexThoughts class for consistency
         sanitized = text.strip()
 
         # Use config variables if they are available, otherwise use defaults
@@ -1471,7 +1471,7 @@ class FileIndexer:
             logger.info(f"--- {self.thread_name}: Full pipeline cycle finished in {cycle_duration:.2f} seconds. ---")
 
             # Wait before starting the next full cycle
-            wait_time = FILE_INDEXER_IDLE_WAIT_SECONDS  # From config.py
+            wait_time = FILE_INDEXER_IDLE_WAIT_SECONDS  # from CortexConfiguration.py
             logger.debug(f"{self.thread_name} waiting for {wait_time}s before next full cycle...")
             stopped = self.stop_event.wait(timeout=wait_time)
             if stopped:
@@ -1486,7 +1486,7 @@ class FileIndexer:
         logger.info(f"🛑 {self.thread_name} has been shut down.")
 
 
-def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
+def _locked_initialization_task(provider_ref: CortexEngine) -> Dict[str, Any]:
     global global_file_index_vectorstore
 
     task_status: str = "unknown_error_before_processing"
@@ -1518,7 +1518,7 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
             logger.info(">>> FileIndex VS Init: Stage 0: Validating Provider and Embeddings. <<<")
             if not provider_ref or not provider_ref.embeddings:
                 task_status = "error_provider_missing"
-                task_message = "AIProvider or its embeddings module is missing. Cannot initialize FileIndex VS."
+                task_message = "CortexEngine or its embeddings module is missing. Cannot initialize FileIndex VS."
                 logger.error(task_message)
                 initialization_succeeded_or_known_empty = True
                 global_file_index_vectorstore = None
@@ -1529,7 +1529,7 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
             # STAGE 1: Attempt to load persisted Chroma DB
             current_stage_start_time_s1: float = time.monotonic()
             # These globals() calls assume FILE_INDEX_CHROMA_PERSIST_DIR and FILE_INDEX_CHROMA_COLLECTION_NAME
-            # are available from config.py, imported via 'from config import *'
+            # are available from CortexConfiguration.py, imported via 'from CortexConfiguration import *'
             _persist_dir_to_use = globals().get("FILE_INDEX_CHROMA_PERSIST_DIR")
             _collection_name_to_use = globals().get("FILE_INDEX_CHROMA_COLLECTION_NAME")
 
@@ -1781,18 +1781,18 @@ def _locked_initialization_task(provider_ref: AIProvider) -> Dict[str, Any]:
     return {"status": "error_unexpected_exit_from_lock", "message": "Task exited lock context unexpectedly."}
 
 
-async def initialize_global_file_index_vectorstore(provider: AIProvider):
+async def initialize_global_file_index_vectorstore(provider: CortexEngine):
     global global_file_index_vectorstore  # Still need this for the outer function's scope
     logger.info(">>> Entered initialize_global_file_index_vectorstore (async version) <<<")
 
     if not provider:
-        logger.error("  INIT_VS_ERROR (Outer): AIProvider instance is None! Cannot initialize file index vector store.")
+        logger.error("  INIT_VS_ERROR (Outer): CortexEngine instance is None! Cannot initialize file index vector store.")
         return
     if not provider.embeddings:
         logger.error(
-            "  INIT_VS_ERROR (Outer): AIProvider.embeddings is None! Cannot initialize file index vector store.")
+            "  INIT_VS_ERROR (Outer): CortexEngine.embeddings is None! Cannot initialize file index vector store.")
         return
-    logger.info(f"  INIT_VS_INFO (Outer): Using AIProvider embeddings of type: {type(provider.embeddings)}")
+    logger.info(f"  INIT_VS_INFO (Outer): Using CortexEngine embeddings of type: {type(provider.embeddings)}")
 
     if _file_index_vs_initialized_event.is_set():
         logger.info(">>> SKIPPING FileIndex VS Init (Outer): _file_index_vs_initialized_event is ALREADY SET. <<<")
@@ -1861,25 +1861,25 @@ if __name__ == "__main__":
             logger.error(f"Failed to initialize database: {e_db_init}")
             sys.exit(1)
 
-        # 2. Initialize AIProvider (needed for embeddings)
+        # 2. Initialize CortexEngine (needed for embeddings)
         #    Ensure PROVIDER is set in your environment or config.py for this to work.
-        #    The AIProvider constructor might try to load all models, which could be slow.
+        #    The CortexEngine constructor might try to load all models, which could be slow.
         #    For testing search, only provider.embeddings is strictly needed by initialize_global_file_index_vectorstore.
-        test_ai_provider: Optional[AIProvider] = None
+        test_cortex_backbone_provider: Optional[CortexEngine] = None
         try:
-            logger.info(f"Initializing AIProvider (Provider: {PROVIDER})...") # PROVIDER from config.py
-            test_ai_provider = AIProvider(PROVIDER)
-            if not test_ai_provider.embeddings:
-                raise ValueError("AIProvider initialized, but embeddings are not available.")
-            logger.info("AIProvider initialized successfully for embeddings.")
-        except Exception as e_ai_provider:
-            logger.error(f"Failed to initialize AIProvider: {e_ai_provider}")
+            logger.info(f"Initializing CortexEngine (Provider: {PROVIDER})...") # PROVIDER from CortexConfiguration.py
+            test_cortex_backbone_provider = CortexEngine(PROVIDER)
+            if not test_cortex_backbone_provider.embeddings:
+                raise ValueError("CortexEngine initialized, but embeddings are not available.")
+            logger.info("CortexEngine initialized successfully for embeddings.")
+        except Exception as e_cortex_backbone_provider:
+            logger.error(f"Failed to initialize CortexEngine: {e_cortex_backbone_provider}")
             sys.exit(1)
 
         # 3. Initialize Global File Index Vector Store (runs the async function)
         try:
             logger.info("Initializing global file index vector store (async task)...")
-            asyncio.run(initialize_global_file_index_vectorstore(test_ai_provider)) # Run the async init
+            asyncio.run(initialize_global_file_index_vectorstore(test_cortex_backbone_provider)) # Run the async init
             logger.info("Global file index vector store initialization process completed.")
         except Exception as e_vs_init:
             logger.error(f"Error during file index vector store initialization: {e_vs_init}")

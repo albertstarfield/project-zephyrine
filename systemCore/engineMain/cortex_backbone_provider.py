@@ -104,10 +104,10 @@ except ImportError:
 # --- Local Imports ---
 try:
     # Import all config variables
-    from config import * # Includes PROVIDER, model names, paths, MAX_TOKENS etc.
+    from CortexConfiguration import * # Includes PROVIDER, model names, paths, TOPCAP_TOKENS etc.
 except ImportError:
     logger.critical("❌ Failed to import config.py in ai_provider.py!")
-    sys.exit("AIProvider cannot function without config.")
+    sys.exit("CortexEngine cannot function without config.")
 
 class TaskInterruptedException(Exception):
     """Custom exception raised when an ELP0 task is interrupted by ELP1."""
@@ -145,7 +145,7 @@ def strip_initial_think_block(text: str) -> str:
 
 # --- Chat Model Wrapper ---
 class LlamaCppChatWrapper(SimpleChatModel):
-    ai_provider: 'AIProvider'
+    ai_provider: 'CortexEngine'
     model_role: str
     model_kwargs: Dict[str, Any]
 
@@ -162,7 +162,7 @@ class LlamaCppChatWrapper(SimpleChatModel):
         Langchain BaseMessage lists.
         Applies `strip_initial_think_block` to the raw LLM output.
         """
-        provider_logger = getattr(self.ai_provider, 'logger', logger)  # Use AIProvider's logger if available
+        provider_logger = getattr(self.ai_provider, 'logger', logger)  # Use CortexEngine's logger if available
         wrapper_log_prefix = f"LlamaCppChatWrapper(Role:{self.model_role})"
 
         # Extract custom 'priority' from kwargs, default to ELP0 if not provided
@@ -374,10 +374,10 @@ class LlamaCppChatWrapper(SimpleChatModel):
 # --- Embeddings Wrapper ---
 # Placeholder/Modified Embeddings Wrapper
 class LlamaCppEmbeddingsWrapper(Embeddings):
-    ai_provider: 'AIProvider'
+    ai_provider: 'CortexEngine'
     model_role: str = "embeddings"
 
-    def __init__(self, ai_provider: 'AIProvider'):
+    def __init__(self, ai_provider: 'CortexEngine'):
         super().__init__()
         self.ai_provider = ai_provider
 
@@ -408,7 +408,7 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
         provider_logger.debug(f"{log_prefix}: Delegating embedding for {len(texts)} texts to worker.")
         request_payload = {"texts": texts}
 
-        # Call the AIProvider's worker execution method with the specified priority
+        # Call the CortexEngine's worker execution method with the specified priority
         worker_result = self.ai_provider._execute_in_worker(  # type: ignore
             model_role=self.model_role,  # This is "embeddings"
             task_type="embedding",
@@ -446,12 +446,12 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
                     "LLAMA_CPP_EMBED_WORKER_RESPONSE_ERROR: Unknown dictionary structure for embeddings.")
         else:
             provider_logger.error(
-                f"{log_prefix}: AIProvider._execute_in_worker for embeddings failed or returned invalid data type: {type(worker_result)}")
+                f"{log_prefix}: CortexEngine._execute_in_worker for embeddings failed or returned invalid data type: {type(worker_result)}")
             raise RuntimeError(
                 "LLAMA_CPP_EMBED_PROVIDER_ERROR: Worker execution for embeddings failed or returned invalid type.")
 
 # === AI Provider Class ===
-class AIProvider:
+class CortexEngine:
     def __init__(self, provider_name):
         # ... (other initialization lines) ...
         self.provider_name = provider_name.lower()
@@ -496,13 +496,13 @@ class AIProvider:
         self._validate_config()
         self.setup_provider() # Sets up LLM/Embedding models
         if self.embeddings:
-            logger.info(f"AIProvider embeddings initialized. Type: {type(self.embeddings)}")
+            logger.info(f"CortexEngine embeddings initialized. Type: {type(self.embeddings)}")
             if hasattr(self.embeddings, 'embed_query') and hasattr(self.embeddings, 'embed_documents'):
-                logger.info("  AIProvider embeddings object HAS 'embed_query' and 'embed_documents' methods.")
+                logger.info("  CortexEngine embeddings object HAS 'embed_query' and 'embed_documents' methods.")
             else:
-                logger.error("  CRITICAL: AIProvider embeddings object LACKS required embedding methods!")
+                logger.error("  CRITICAL: CortexEngine embeddings object LACKS required embedding methods!")
         else:
-            logger.error("CRITICAL: AIProvider.embeddings is None after setup_provider!")
+            logger.error("CRITICAL: CortexEngine.embeddings is None after setup_provider!")
         # VVVVVVVVVV THIS IS THE LINE TO CHANGE VVVVVVVVVV
         self._setup_image_generator_config() # Renamed: Validates image gen worker config
         # ^^^^^^^^^^ THIS IS THE LINE TO CHANGE ^^^^^^^^^^
@@ -624,7 +624,7 @@ class AIProvider:
                         f"{worker_log_prefix}: Passing fixed --n-ctx {embedding_n_ctx} for embeddings.")
                 elif LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:  # Check if config.py has an explicit override value
                     # LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT needs to be defined in config.py, e.g. can be os.getenv("LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT", None)
-                    # If it's set (e.g. to 4096 from config), pass it to the worker as an override.
+                    # If it's set (e.g. to 4096 from CortexConfiguration), pass it to the worker as an override.
                     # The worker will use this if --n-ctx is provided.
                     command.extend(["--n-ctx", str(LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT)])
                     provider_logger.info(
@@ -656,7 +656,7 @@ class AIProvider:
                 stdout_data, stderr_data = "", ""
 
                 try:
-                    # Use LLAMA_WORKER_TIMEOUT from config
+                    # Use LLAMA_WORKER_TIMEOUT from CortexConfiguration
                     stdout_data, stderr_data = worker_process.communicate(input=input_json,
                                                                           timeout=LLAMA_WORKER_TIMEOUT)
                     provider_logger.debug(f"{worker_log_prefix}: Worker communicate() finished.")
@@ -770,7 +770,7 @@ class AIProvider:
             current_worker_process: Optional[subprocess.Popen] = None
             # `task_name`, `prompt`, `image_base64`, `priority` are from the outer scope (closure)
             # `_python_executable`, `_imagination_worker_script_path` are instance vars (self.)
-            # Config constants like IMAGE_GEN_MODEL_DIR are global from config.py
+            # Config constants like IMAGE_GEN_MODEL_DIR are global from CortexConfiguration.py
 
             # Acquire the shared priority lock
             # `start_lock_wait` is captured from the outer scope of _execute_imagination_worker
@@ -828,7 +828,7 @@ class AIProvider:
                         text=True,  # For text-mode communication (JSON)
                         encoding='utf-8',  # Specify encoding
                         errors='replace',  # Handle potential encoding errors in output
-                        cwd=os.path.dirname(__file__)  # Run worker from AIProvider's directory
+                        cwd=os.path.dirname(__file__)  # Run worker from CortexEngine's directory
                     )
 
                     # If it's a background priority task, register its process with the lock
@@ -1194,8 +1194,8 @@ class AIProvider:
                 if not LLAMA_CPP_AVAILABLE:  # LLAMA_CPP_AVAILABLE global flag from top of ai_provider.py
                     raise ImportError("llama-cpp-python library is not installed or failed to import.")
 
-                self._llama_gguf_dir = LLAMA_CPP_GGUF_DIR  # From config.py
-                self._llama_model_map = LLAMA_CPP_MODEL_MAP  # From config.py
+                self._llama_gguf_dir = LLAMA_CPP_GGUF_DIR  # from CortexConfiguration.py
+                self._llama_model_map = LLAMA_CPP_MODEL_MAP  # from CortexConfiguration.py
                 self._python_executable = sys.executable  # Python executable for workers
 
                 if not self._llama_gguf_dir or not os.path.isdir(self._llama_gguf_dir):
@@ -1217,7 +1217,7 @@ class AIProvider:
 
                 # --- Setup Chat Models (Wrappers only) ---
                 logger.info("Creating llama.cpp chat wrappers for configured roles...")
-                default_temp = DEFAULT_LLM_TEMPERATURE  # From config.py
+                default_temp = DEFAULT_LLM_TEMPERATURE  # from CortexConfiguration.py
 
                 for role, gguf_filename_in_map in self._llama_model_map.items():
                     if role == "embeddings":  # Skip embeddings role for chat models
@@ -1236,10 +1236,10 @@ class AIProvider:
                         logger.info(
                             f"Setting max_tokens=-1 (unlimited within context) for system role: '{role}' (using model file: {gguf_filename_in_map})")
                     else:
-                        # For general chat, VLM, code, math, translator etc., use the global MAX_TOKENS from config.py
-                        role_specific_kwargs["max_tokens"] = MAX_TOKENS  # MAX_TOKENS from config.py
+                        # For general chat, VLM, code, math, translator etc., use the global TOPCAP_TOKENS from CortexConfiguration.py
+                        role_specific_kwargs["max_tokens"] = TOPCAP_TOKENS  # TOPCAP_TOKENS from CortexConfiguration.py
                         logger.info(
-                            f"Setting max_tokens={MAX_TOKENS} for role: '{role}' (using model file: {gguf_filename_in_map})")
+                            f"Setting max_tokens={TOPCAP_TOKENS} for role: '{role}' (using model file: {gguf_filename_in_map})")
 
                     # Add chat format if specified for the role in LLAMA_CPP_MODEL_MAP (e.g., role_chat_format)
                     # Example: "router_chat_format": "chatml" could be in LLAMA_CPP_MODEL_MAP if needed
@@ -1250,13 +1250,13 @@ class AIProvider:
                     logger.debug(
                         f"  Creating LlamaCppChatWrapper for role '{role}' (model file '{gguf_filename_in_map}') with kwargs: {role_specific_kwargs}")
                     self.models[role] = LlamaCppChatWrapper(
-                        ai_provider=self,  # Pass reference to this AIProvider instance
+                        ai_provider=self,  # Pass reference to this CortexEngine instance
                         model_role=role,
                         model_kwargs=role_specific_kwargs
                     )
 
                 # Assign the default chat model wrapper explicitly
-                default_chat_role_key = MODEL_DEFAULT_CHAT_LLAMA_CPP  # From config.py, e.g., "general"
+                default_chat_role_key = MODEL_DEFAULT_CHAT_LLAMA_CPP  # from CortexConfiguration.py, e.g., "general"
                 if default_chat_role_key in self.models:
                     self.models["default"] = self.models[default_chat_role_key]
                     logger.info(f"Assigned model for role '{default_chat_role_key}' as the default chat model.")
@@ -1473,11 +1473,11 @@ class AIProvider:
             logger.info("Releasing lock after explicit unload attempt.")
         # Lock released here
 
-# --- Optional: Add a shutdown hook specific to AIProvider for llama.cpp ---
+# --- Optional: Add a shutdown hook specific to CortexEngine for llama.cpp ---
 # This ensures the model is unloaded even if the main DB hook runs first/fails.
 # Note: atexit runs hooks in reverse order of registration.
 def _ai_provider_shutdown():
-    # Need a way to access the global AIProvider instance created in app.py
+    # Need a way to access the global CortexEngine instance created in app.py
     # This is tricky. A better pattern might be for app.py to explicitly call
     # a shutdown method on the provider instance it holds.
     # For now, we'll assume a global `ai_provider_instance` might exist (set by app.py).
@@ -1493,4 +1493,4 @@ def _ai_provider_shutdown():
 
 # --- Global Instance Placeholder ---
 # This global would be set by app.py after initialization
-ai_provider_instance: Optional[AIProvider] = None
+ai_provider_instance: Optional[CortexEngine] = None

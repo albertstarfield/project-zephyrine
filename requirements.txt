@@ -14,6 +14,10 @@ pandas
 pyarrow
 frontend
 fastparquet
+libp2p
+zeroconf
+
+
 # fitz # This is the import name for PyMuPDF; PyMuPDF below is the package to install
 pytesseract
 PyMuPDF

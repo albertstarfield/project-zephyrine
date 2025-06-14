@@ -16,7 +16,7 @@ try:
     LLAMA_CPP_AVAILABLE = True
 except ImportError:
     LLAMA_CPP_AVAILABLE = False
-    # This print will go to stderr, which ai_provider.py reads for worker errors
+    # This print will go to stderr, which cortex_backbone_provider.py reads for worker errors
     print(json.dumps({"error": "llama-cpp-python not found in worker environment."}), flush=True)
     sys.exit(1)
 
@@ -276,9 +276,9 @@ def main():
     if args.task_type == "embedding":
         calculated_n_ctx_for_model_load = args.n_ctx if args.n_ctx is not None else EMBEDDING_N_CTX
         if args.n_ctx is None: log_worker("INFO", f"Using fixed n_ctx={EMBEDDING_N_CTX} for embeddings task.")
-    elif args.n_ctx is not None:  # Explicit override from ai_provider.py
+    elif args.n_ctx is not None:  # Explicit override from cortex_backbone_provider.py
         calculated_n_ctx_for_model_load = args.n_ctx
-        log_worker("INFO", f"Using n_ctx={calculated_n_ctx_for_model_load} from ai_provider override.")
+        log_worker("INFO", f"Using n_ctx={calculated_n_ctx_for_model_load} from cortex_backbone_provider override.")
     elif input_tokens_for_dynamic_ctx > 0:
         dynamic_ctx_attempt = input_tokens_for_dynamic_ctx * 2  # Target double the input
         # Ensure it's at least MIN_DYNAMIC_N_CTX and at most MAX_DYNAMIC_N_CTX

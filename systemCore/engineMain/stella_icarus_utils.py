@@ -9,12 +9,12 @@ from typing import List, Tuple, Callable, Optional, Any, Dict
 
 from loguru import logger
 
-# Attempt to import from config. If this util is in a different location
+# Attempt to import from CortexConfiguration. If this util is in a different location
 # relative to config.py than app.py, this import might need adjustment
 # or config values might need to be passed to the manager.
 # Assuming it's in the same directory as app.py and config.py for this example.
 try:
-    from config import *
+    from CortexConfiguration import *
 except ImportError:
     logger.critical("StellaIcarusUtils: Failed to import configuration. Hooks will likely be disabled or use defaults.")
     # Define fallbacks so the class can at least be defined

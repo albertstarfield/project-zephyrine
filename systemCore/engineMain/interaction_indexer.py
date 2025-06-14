@@ -12,8 +12,8 @@ from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 from database import Interaction, SessionLocal
-from ai_provider import AIProvider
-from config import *
+from cortex_backbone_provider import CortexEngine
+from CortexConfiguration import *
 import chromadb
 from chromadb.config import Settings
 
@@ -28,7 +28,7 @@ INTERACTION_VS_PERSIST_DIR = os.path.join(os.path.dirname(os.path.abspath(__file
 INTERACTION_COLLECTION_NAME = "global_interaction_history"
 
 
-def initialize_global_interaction_vectorstore(provider: AIProvider):
+def initialize_global_interaction_vectorstore(provider: CortexEngine):
     global global_interaction_vectorstore
     logger.info(">>> InteractionIndexer: Initializing global interaction vector store...")
     with _interaction_vs_init_lock:
@@ -101,7 +101,7 @@ def get_global_interaction_vectorstore() -> Optional[Chroma]:
 
 
 class InteractionIndexer(threading.Thread):
-    def __init__(self, stop_event: threading.Event, provider: AIProvider):
+    def __init__(self, stop_event: threading.Event, provider: CortexEngine):
         super().__init__(name="InteractionIndexerThread", daemon=True)
         self.stop_event = stop_event
         self.provider = provider
