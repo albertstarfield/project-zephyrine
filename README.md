@@ -56,9 +56,9 @@
 ## 📃 Main features
 
 -   [x] Operates locally on your computer, requiring an internet connection solely for web access.
--   [x] Can function exclusively on CPU architectures, such as x86_64 and arm64/aarch64.
+-   [x] Can function exclusively on CPU architectures, such as amd64 and arm64/aarch64.
 -   [x] Provides compatibility with Windows* (untested), MacOS (untested on x86_64), and Linux operating systems.
--   [x] Features partial GPU/MPS/FPGA (opencl)/Tensor acceleration using cuBLAS, openBLAS, clBLAST, Vulkan, and Metal.
+-   [x] Features partial GPU/MPS/FPGA (opencl)/Tensor acceleration using cuBLAS, openBLAS, Vulkan, and Metal.
 -   [x] Web access.
 -   [x] Chat history functionality.
 
@@ -67,9 +67,6 @@ Just a heads up, some details aren't listed here or in the `readme.md` file. Ins
 ## 🎞 Demonstration Screenshot
 
 ![Demonstration](https://raw.githubusercontent.com/albertstarfield/alpaca-electron-zephyrine/main/documentation/demo-newUI-0.png)
-
-### Sidenote:
-> This footage was recorded on an arm64 device running macOS/darwin with a “Rhodes Chop” processor (10 Cores) and G14S Architecture (16 Cores GPU). Some parts of the footage were sped up. The list of models that are being used can be seen in `config.py`.
 
 ## 🚀 Quick Start Guide
 
@@ -110,6 +107,22 @@ If you have a particular file, your application may help make it available to ot
 ## 🔧 Troubleshooting
 
 [Click here to see the general troubleshooting](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/Troubleshooting%20Quick%20Guide.md)
+
+## Warning
+> A Warning to Al Users or potential Investor from Zephyrine Foundation
+> 
+> **(Please Read Carefully)**
+> 
+>We've noted a societal preference towards immediate consumption or process in various forms, including food and information consumption. consider this:
+>This AI assistant/agent is designed to learn directly from you and effort resoure allocation from you, the user. Your engagement and guidance are fundamental to its development (her personality, her knowledge compass, and her moral compass). You are the one responsible for your action of the agent and the Al self-awareness.
+>If you are seeking an Al that delivers instant, highly refined insights (chatGPT, Direct GPT40/o3, Deepseek R1, Claude 3.5/3.7/4, Gemini 2.5 Pro, ollama or LocalAI highly capable ready to use models) without your thoughtful participation or iterative effort - if your preference is for readily/instant digestible facts, something like passively consuming doomscrolling streams of content (such as on TikTok, YouTube Shorts, or Instagram Reels), rather than investing in collaborative dialogue that leads to deeper understanding or searching the singularity of a fact.
+>
+> **This product is not for you.**
+> 
+>This project aims to do mutual growth in intellect between the Al (Zephy) and the user (the human), moving beyond one-way passive consumption.
+>If your expectation is for an AI that instantly provides all answers without requiring your active involvement and development, 
+> 
+>**look somewhere else. You have been warned.**
 
 ## 👨‍💻 Credits
 The development of this project owes credit to several contributors whose valuable efforts have shaped its foundation and brought it to fruition.
