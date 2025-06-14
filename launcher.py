@@ -1848,8 +1848,8 @@ def _ensure_alire_and_gnat_toolchain():
             return False
 
     # 3. Use Alire to get the GNAT toolchain
-    print_system("Using Alire to install the GNAT toolchain. This may take a moment...")
-    alr_get_gnat_command = ["alr", "toolchain", "--select", "gnat_native"]
+    print_system("Using Alire to install the GNAT toolchain and gprbuild for Ada Compiler. This may take a moment...")
+    alr_get_gnat_command = ["alr", "toolchain", "--select", "gnat_native", "gprbuild"]
 
     if not run_command(alr_get_gnat_command, cwd=ROOT_DIR, name="ALIRE-GET-GNAT"):
         print_error("Alire failed to install the GNAT toolchain.")
