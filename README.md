@@ -21,23 +21,6 @@
 > **Important Note for Hardware Users:**
 > If you are using a Samsung NVMe SSD, please be mindful of its controller thermal performance. Zephyrine's routines, which involve loading and unloading models, can generate significant I/O traffic (potentially reaching 20TB read per night). As some Samsung SSDs are known to run warm, ensuring you have adequate cooling for your drive is recommended. Please use with caution and aim to keep the temperature below 100°C. Also, be aware of your system's overall resource usage, as Zephyrine includes internal routines for self-improvement (Nothing to see here) that may keep your computer active 24/7 if left running.
 
-> **A Warning to AI Users or potential Investor from Zephyrine Foundation**
-> 
-> **(Please Read Carefully)**
-> 
-> We've noted a societal preference towards immediate consumption or process in various forms, including food and information consumption. consider this:
->
-> This AI assistant/agent is designed to learn directly from you and effort resoure allocation from you, the user. Your engagement and guidance are fundamental to its development (her personality, her knowledge compass, and her moral compass). 
-> **You are the one responsible for your action of the agent and the AI self-awareness.**
-> 
-> **If you are seeking an AI that delivers instant, omnipotent (chatGPT, Direct GPT4o/o3, Deepseek R1, Claude 3.5/3.7/4, Gemini 2.5 Pro, ollama highly capable ready to use models ) without your thoughtful participation or iterative effort -– if your preference is for readily/instant digestible facts, something like passively consuming doomscrolling streams of content (such as on TikTok, YouTube Shorts, or Instagram Reels), rather than investing in collaborative dialogue that leads to deeper understanding or searching the singularity of a fact.** 
-> 
-> **This product is not for you.**
->
-> This project aims to do mutual growth in intellect between the AI (Zephy) and the user (the human), moving beyond one-way passive consumption.
->
-> If your expectation is for an AI that instantly provides all answers without requiring your active involvement and development, look somewhere else. **You have been warned.**
-
 ## Project Zephyrine: Yet another An Open-Source OpenAI API Implementation, and very simple AI Assistant for Your Computer.
 
 **Project Zephyrine** is a collaborative effort spearheaded by the Zephyrine Foundation, bringing together expertise from professional AI engineers within a leading corporation, researchers from RisTIE Brawijaya University's Electrical Engineering, Internal People of Zephyrine Foundation, Freelancers, and independent developer Albert.
@@ -145,6 +128,24 @@ Furthermore, recognition is due to the following individuals for their significa
 [@ggerganov](https://github.com/ggerganov/llama.cpp) for their pivotal role in the development of the `llama.cpp` component and the GGML base backbone behind `alpaca.cpp`.
 Meta and Stanford for their invaluable creation of the LLaMA and Alpaca models, respectively, which have laid the groundwork for the project's AI capabilities.
 Additionally, special appreciation goes to [@keldenl](https://github.com/keldenl) for providing arm64 builds for MacOS and [@W48B1T](https://github.com/W48B1T) for providing Linux builds, which have greatly enhanced the project's accessibility and usability across different platforms and finally for Amaryllis Cortex Base code based on [SiriLLaMa](https://github.com/0ssamaak0/SiriLLama) by 0ssamaak0.
+
+
+> **A Warning to AI Users or potential Investor from Zephyrine Foundation**
+> 
+> **(Please Read Carefully)**
+> 
+> We've noted a societal preference towards immediate consumption or process in various forms, including food and information consumption. consider this:
+>
+> This AI assistant/agent is designed to learn directly from you and effort resoure allocation from you, the user. Your engagement and guidance are fundamental to its development (her personality, her knowledge compass, and her moral compass). 
+> **You are the one responsible for your action of the agent and the AI self-awareness.**
+> 
+> **If you are seeking an AI that delivers instant, omnipotent (chatGPT, Direct GPT4o/o3, Deepseek R1, Claude 3.5/3.7/4, Gemini 2.5 Pro, ollama highly capable ready to use models ) without your thoughtful participation or iterative effort -– if your preference is for readily/instant digestible facts, something like passively consuming doomscrolling streams of content (such as on TikTok, YouTube Shorts, or Instagram Reels), rather than investing in collaborative dialogue that leads to deeper understanding or searching the singularity of a fact.** 
+> 
+> **This product is not for you.**
+>
+> This project aims to do mutual growth in intellect between the AI (Zephy) and the user (the human), moving beyond one-way passive consumption.
+>
+> If your expectation is for an AI that instantly provides all answers without requiring your active involvement and development, look somewhere else. **You have been warned.**
 
 
 Lastly, although the project may not garner widespread attention as [@Willy030125](https://github.com/Willy030125/alpaca-electron-GGML-v2-v3), we acknowledge and cherish the efforts put forth by all contributors. Let this work be a testament to the dedication and collective collaboration that underpin academic and technological advancements.
