@@ -36,6 +36,7 @@ import sys
 import time
 import json
 import re
+import signal
 import pandas as pd
 import asyncio
 import threading # Used by asyncio.to_thread internally
@@ -7590,6 +7591,56 @@ async def _run_background_asr_and_translation_analysis(
         logger.info(f"{bg_log_prefix}: Background task finished.")
 
 
+async def run_startup_benchmark():
+    """
+    Runs a benchmark on the direct_generate function at startup and measures it in milliseconds.
+    """
+    global BENCHMARK_ELP1_TIME_MS # Declare that we are modifying the global variable
+    logger.info("--- Running Startup Benchmark for direct_generate() or ELP1 ---")
+    if not ai_chat:
+        logger.error("DETERMENISM_ELP1_CALIBRATION: (CortexThoughts) instance not available. Skipping benchmark.")
+        return
+
+    benchmark_db_session: Optional[Session] = None
+    try:
+        benchmark_db_session = SessionLocal()
+        if not benchmark_db_session:
+            raise RuntimeError("Failed to create a database session for the benchmark.")
+
+        # The story prompt for the benchmark
+        story_prompt = "Tell me a short, epic story about a brave knight and a wise dragon who become friends."
+        benchmark_session_id = f"benchmark_startup_{int(time.time())}"
+
+        logger.info(f"DETERMENISM_ELP1_CALIBRATION: Prompt: '{story_prompt}'")
+        start_time = time.monotonic()
+
+        # Calling the direct_generate function to be benchmarked
+        response_text = await ai_chat.direct_generate(
+            db=benchmark_db_session,
+            user_input=story_prompt,
+            session_id=benchmark_session_id
+        )
+
+        end_time = time.monotonic()
+        # Calculate duration and convert to milliseconds
+        duration_ms = (end_time - start_time) * 1000
+
+        # Store the result in the global variable
+        BENCHMARK_ELP1_TIME_MS = duration_ms
+
+        logger.info("--- Startup Benchmark Result ---")
+        logger.info(f"Response Snippet: '{response_text[:150]}...'")
+        logger.info(f"direct_generate() execution time and will be expected for ELP1 to response within: {BENCHMARK_ELP1_TIME_MS:.2f} ms") # Display in milliseconds
+        logger.info("---------------------------------")
+
+    except Exception as e:
+        logger.error(f"DETERMENISM_ELP1_CALIBRATION: An error occurred during the startup DETERMENISM_ELP1_CALIBRATION: {e}")
+        logger.exception("Benchmark Execution Traceback:")
+    finally:
+        if benchmark_db_session:
+            benchmark_db_session.close()
+
+
 # --- End Helpers ---
 
 
@@ -9852,6 +9903,8 @@ async def handle_openai_image_generations():  # Route is async
     return resp
 
 
+
+
 # --- NEW: Dummy Handlers for Pretending this is Ollama Model Management ---
 
 @app.route("/api/pull", methods=["POST"])
@@ -10805,6 +10858,7 @@ def submit_tool_outputs_stub(thread_id: str, run_id: str):
 #============================ Main Program Startup
 # Define startup_tasks (as you had it)
 async def startup_tasks():
+    await run_startup_benchmark() 
     logger.info("APP.PY: >>> Entered startup_tasks (async). <<<")
     task_start_time = time.monotonic()
 
