@@ -83,7 +83,7 @@ CMAKE_CMD = 'cmake.exe' if IS_WINDOWS else 'cmake'
 
 # --- ZephyMesh Configuration (MODIFIED FOR GO) ---
 ZEPHYMESH_DIR = os.path.join(ROOT_DIR, "zephyMeshNetwork")
-ZEPHYMESH_NODE_BINARY = os.path.join(ZEPHYMESH_DIR, "zephymesh_node.exe" if IS_WINDOWS else "zephymesh_node")
+ZEPHYMESH_NODE_BINARY = os.path.join(ZEPHYMESH_DIR, "zephymesh_node_compiled.exe" if IS_WINDOWS else "zephymesh_node_compiled")
 ZEPHYMESH_API_PORT = 22000 # The port you configured in the Go app's flags
 zephymesh_api_url: Optional[str] = f"http://127.0.0.1:{ZEPHYMESH_API_PORT}"
 zephymesh_process: Optional[subprocess.Popen] = None
@@ -1888,6 +1888,174 @@ if __name__ == "__main__":
     if is_already_in_correct_env:
         # --- This is the RELAUNCHED script, running inside the correct Conda environment ---
         print_system(f"Running inside target Conda environment (Prefix: {ACTIVE_ENV_PATH})")
+
+
+
+
+
+
+
+        if "ZEPHYRINE_RELAUNCHED_IN_CONDA" in os.environ:
+                del os.environ["ZEPHYRINE_RELAUNCHED_IN_CONDA"]
+
+        if globals().get('CONDA_EXECUTABLE') is None:
+            print_system("Relaunched script: CONDA_EXECUTABLE is None. Attempting to load from cache or PATH...")
+            loaded_from_cache = False
+            if os.path.exists(CONDA_PATH_CACHE_FILE):
+                try:
+                    with open(CONDA_PATH_CACHE_FILE, 'r', encoding='utf-8') as f_cache:  # Corrected with statement
+                        cached_path = f_cache.read().strip()
+                    if cached_path and _verify_conda_path(cached_path):
+                        globals()['CONDA_EXECUTABLE'] = cached_path
+                        print_system(f"Using Conda executable from cache in relaunched script: {CONDA_EXECUTABLE}")
+                        loaded_from_cache = True
+                    else:
+                        print_warning("Cached Conda path invalid/unverified in relaunched script.")
+                except Exception as e_cache_read:
+                    print_warning(f"Error reading Conda cache in relaunched script: {e_cache_read}")  # Corrected 'e'
+            if not loaded_from_cache:
+                conda_exe_from_which = shutil.which("conda.exe" if IS_WINDOWS else "conda")
+                if conda_exe_from_which and _verify_conda_path(conda_exe_from_which):
+                    globals()['CONDA_EXECUTABLE'] = conda_exe_from_which
+                    print_system(f"Found Conda via shutil.which in relaunched script: {CONDA_EXECUTABLE}")
+                else:
+                    print_error("CRITICAL: Conda executable could not be determined. Conda package installs will fail.")
+
+        if globals().get('CONDA_EXECUTABLE') is None:
+            print_error("CRITICAL: CONDA_EXECUTABLE is still None. Subsequent Conda operations WILL FAIL.")
+            sys.exit(1)
+
+
+        # --- Read AUTODETECTED environment variables ---
+        AUTO_PRIMARY_GPU_BACKEND = os.getenv("AUTODETECTED_PRIMARY_GPU_BACKEND", "cpu")
+        AUTO_CUDA_AVAILABLE = os.getenv("AUTODETECTED_CUDA_AVAILABLE") == "1"  # Corrected variable name
+        AUTO_METAL_AVAILABLE = os.getenv("AUTODETECTED_METAL_AVAILABLE") == "1"  # Corrected variable name
+        AUTO_VULKAN_AVAILABLE = os.getenv("AUTODETECTED_VULKAN_AVAILABLE") == "1"  # Corrected variable name
+        AUTO_COREML_POSSIBLE = os.getenv("AUTODETECTED_COREML_POSSIBLE") == "1"  # Corrected variable name
+        print_system(
+            f"Auto-detected preferences received: GPU_BACKEND='{AUTO_PRIMARY_GPU_BACKEND}', CUDA={AUTO_CUDA_AVAILABLE}, METAL={AUTO_METAL_AVAILABLE}, VULKAN={AUTO_VULKAN_AVAILABLE}, COREML_POSSIBLE={AUTO_COREML_POSSIBLE}")
+
+        _sys_exec_dir = os.path.dirname(sys.executable)
+        PYTHON_EXECUTABLE = sys.executable
+        PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
+        if not os.path.exists(PIP_EXECUTABLE): PIP_EXECUTABLE = shutil.which("pip") or "pip"
+        HYPERCORN_EXECUTABLE = os.path.join(_sys_exec_dir, "hypercorn.exe" if IS_WINDOWS else "hypercorn")
+        if not os.path.exists(HYPERCORN_EXECUTABLE): HYPERCORN_EXECUTABLE = shutil.which("hypercorn") or "hypercorn"
+
+        print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
+        print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
+
+        if not run_command([PIP_EXECUTABLE, "install", "pip", "setuptools", "wheel"], ROOT_DIR,
+                           "PIP-UPGRADE-CORE"): print_warning("Pip/setuptools upgrade failed.")
+        if not run_command([PIP_EXECUTABLE, "install", "tqdm", "requests"], ROOT_DIR, "PIP-UTILS"): print_error(
+            "tqdm/requests install failed."); sys.exit(1)
+
+
+        try:
+            import requests; from tqdm import tqdm
+        except ImportError:
+            print_error("Failed to import requests/tqdm. Exiting."); sys.exit(1)
+        requests_session = requests.Session()
+        adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=20)
+        requests_session.mount('http://', adapter)
+        requests_session.mount('https://', adapter)
+
+
+
+        engine_req_path = os.path.join(ROOT_DIR, "requirements.txt")
+        if not os.path.exists(engine_req_path): print_error(f"requirements.txt not found: {engine_req_path}"); sys.exit(
+            1)
+        pip_install_success = False
+        # You could make MAX_PIP_RETRIES a constant or configurable
+        MAX_PIP_RETRIES = int(os.getenv("PIP_INSTALL_RETRIES", 99999))  # Get from env or default
+        PIP_RETRY_DELAY_SECONDS = 5  # Delay between retries
+
+        for attempt in range(MAX_PIP_RETRIES):
+            if run_command([PIP_EXECUTABLE, "install", "-r", engine_req_path], ENGINE_MAIN_DIR, "PIP-ENGINE-REQ"):
+                pip_install_success = True
+                break  # Exit loop on success
+            else:
+                print_warning(
+                    f"pip install failed on attempt {attempt + 1}/{MAX_PIP_RETRIES}. Retrying in {PIP_RETRY_DELAY_SECONDS} seconds due to unreliable connection...")
+                time.sleep(PIP_RETRY_DELAY_SECONDS)
+
+        if not pip_install_success:
+            print_error(f"Failed to install Python dependencies for Engine after {MAX_PIP_RETRIES} attempts. Exiting.")
+            sys.exit(1)
+        try:
+            import tiktoken; TIKTOKEN_AVAILABLE = True
+        except ImportError:
+            TIKTOKEN_AVAILABLE = False; print_warning("tiktoken not available.")
+
+        print_system("--- Ensuring core command-line tools (git, cmake, nodejs, ffmpeg) ---")
+        if not _ensure_conda_package("git", "git", is_critical=True): sys.exit(1)
+        if not _ensure_conda_package("cmake", "cmake", is_critical=True): sys.exit(1)
+        if not _ensure_conda_package("go", "go", conda_channel="conda-forge", is_critical=True): sys.exit(1)  # <<< ADD THIS LINE
+        if not _ensure_conda_package("nodejs", "node", is_critical=True): sys.exit(1)
+        if not _ensure_conda_package("nodejs", "npm", is_critical=True): sys.exit(1)
+        if not _ensure_alire_and_gnat_toolchain(): sys.exit(1)  # Install Adacore alr ALIRE
+        _ensure_conda_package("ffmpeg", "ffmpeg", is_critical=False)
+        print_system("--- Ensuring Aria2c (for multi-connection downloads) via Conda ---")
+        # is_critical=False because the requests-based downloader can be a fallback.
+        if not _ensure_conda_package(package_name="aria2", executable_to_check="aria2c", is_critical=False):
+            print_warning(
+                "aria2c (command-line tool) could not be installed via Conda. Multi-connection downloads will be unavailable.")
+        else:
+            print_system("aria2c command-line tool checked/installed via Conda.")
+
+        # --- Install Python wrapper for Aria2 (aria2p) via Pip ---
+        if not os.path.exists(ARIA2P_INSTALLED_FLAG_FILE):
+            print_system("--- Installing Python wrapper for Aria2 (aria2p) ---")
+            if not run_command([PIP_EXECUTABLE, "install", "aria2p"], ROOT_DIR, "PIP-ARIA2P"):
+                print_warning(
+                    "Failed to install 'aria2p' Python library. Multi-connection downloads via Aria2 will not be available if chosen as the download method.")
+            else:
+                print_system("'aria2p' Python library installed successfully.")
+                try:
+                    with open(ARIA2P_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_aria2p:
+                        f_aria2p.write(f"Installed on: {datetime.now().isoformat()}\n")
+                    print_system("aria2p installation flag created.")
+                except IOError as flag_err_aria2p:
+                    print_error(f"Could not create aria2p installation flag file: {flag_err_aria2p}")
+        else:
+            print_system("Python wrapper for Aria2 (aria2p) previously installed (flag file found).")
+        print_system("--- Core command-line tools check/install complete ---")
+
+        globals()['GIT_CMD'] = shutil.which("git") or ('git.exe' if IS_WINDOWS else 'git')
+        globals()['CMAKE_CMD'] = shutil.which("cmake") or ('cmake.exe' if IS_WINDOWS else 'cmake')
+        npm_exe_name = "npm.cmd" if IS_WINDOWS else "npm"
+        globals()['NPM_CMD'] = shutil.which(npm_exe_name) or npm_exe_name
+        print_system(f"Using GIT_CMD: {GIT_CMD}")
+        print_system(f"Using CMAKE_CMD: {CMAKE_CMD}")
+        print_system(f"Using NPM_CMD: {NPM_CMD}")
+        if not all([GIT_CMD and shutil.which(GIT_CMD.split()[0]), CMAKE_CMD and shutil.which(CMAKE_CMD.split()[0]),
+                    NPM_CMD and shutil.which(NPM_CMD.split('.')[0]), shutil.which("node")]):
+            print_error("One or more critical tools (git, cmake, node, npm) not found after attempts. Exiting.")
+            sys.exit(1)
+
+        if IS_WINDOWS:
+            if not run_command([PIP_EXECUTABLE, "install", "windows-curses"], ROOT_DIR, "PIP-WINCURSES"): print_error(
+                "windows-curses install failed."); sys.exit(1)
+        try:
+            import curses
+        except ImportError:
+            print_error("curses import failed."); sys.exit(1)
+        if not os.path.exists(LICENSE_FLAG_FILE):
+            print_system("License agreement required.")
+            _, combined_license_text = load_licenses()
+            estimated_reading_seconds = calculate_reading_time(combined_license_text)
+            accepted, time_taken = curses.wrapper(display_license_prompt, combined_license_text.splitlines(),
+                                                  estimated_reading_seconds)  # type: ignore
+            if not accepted: print_error("License not accepted. Exiting."); sys.exit(1)
+            with open(LICENSE_FLAG_FILE, 'w', encoding='utf-8') as f_license:  # Corrected with statement
+                f_license.write(f"Accepted: {datetime.now().isoformat()}\nTime: {time_taken:.2f}s\n")
+            print_system(f"Licenses accepted by user in {time_taken:.2f}s.")
+            if estimated_reading_seconds > 30 and time_taken < (estimated_reading_seconds * 0.1):
+                print_warning("Warning: Licenses accepted quickly. Ensure you understood terms.")
+                time.sleep(3)
+        else:
+            print_system("License previously accepted.")
+
         import requests
 
         try:
@@ -1995,172 +2163,6 @@ if __name__ == "__main__":
             zephymesh_api_url = None
         # --- END ZephyMesh Start ---
 
-
-        if "ZEPHYRINE_RELAUNCHED_IN_CONDA" in os.environ:
-                del os.environ["ZEPHYRINE_RELAUNCHED_IN_CONDA"]
-
-        if globals().get('CONDA_EXECUTABLE') is None:
-            print_system("Relaunched script: CONDA_EXECUTABLE is None. Attempting to load from cache or PATH...")
-            loaded_from_cache = False
-            if os.path.exists(CONDA_PATH_CACHE_FILE):
-                try:
-                    with open(CONDA_PATH_CACHE_FILE, 'r', encoding='utf-8') as f_cache:  # Corrected with statement
-                        cached_path = f_cache.read().strip()
-                    if cached_path and _verify_conda_path(cached_path):
-                        globals()['CONDA_EXECUTABLE'] = cached_path
-                        print_system(f"Using Conda executable from cache in relaunched script: {CONDA_EXECUTABLE}")
-                        loaded_from_cache = True
-                    else:
-                        print_warning("Cached Conda path invalid/unverified in relaunched script.")
-                except Exception as e_cache_read:
-                    print_warning(f"Error reading Conda cache in relaunched script: {e_cache_read}")  # Corrected 'e'
-            if not loaded_from_cache:
-                conda_exe_from_which = shutil.which("conda.exe" if IS_WINDOWS else "conda")
-                if conda_exe_from_which and _verify_conda_path(conda_exe_from_which):
-                    globals()['CONDA_EXECUTABLE'] = conda_exe_from_which
-                    print_system(f"Found Conda via shutil.which in relaunched script: {CONDA_EXECUTABLE}")
-                else:
-                    print_error("CRITICAL: Conda executable could not be determined. Conda package installs will fail.")
-
-        if globals().get('CONDA_EXECUTABLE') is None:
-            print_error("CRITICAL: CONDA_EXECUTABLE is still None. Subsequent Conda operations WILL FAIL.")
-            sys.exit(1)
-
-        # --- Read AUTODETECTED environment variables ---
-        AUTO_PRIMARY_GPU_BACKEND = os.getenv("AUTODETECTED_PRIMARY_GPU_BACKEND", "cpu")
-        AUTO_CUDA_AVAILABLE = os.getenv("AUTODETECTED_CUDA_AVAILABLE") == "1"  # Corrected variable name
-        AUTO_METAL_AVAILABLE = os.getenv("AUTODETECTED_METAL_AVAILABLE") == "1"  # Corrected variable name
-        AUTO_VULKAN_AVAILABLE = os.getenv("AUTODETECTED_VULKAN_AVAILABLE") == "1"  # Corrected variable name
-        AUTO_COREML_POSSIBLE = os.getenv("AUTODETECTED_COREML_POSSIBLE") == "1"  # Corrected variable name
-        print_system(
-            f"Auto-detected preferences received: GPU_BACKEND='{AUTO_PRIMARY_GPU_BACKEND}', CUDA={AUTO_CUDA_AVAILABLE}, METAL={AUTO_METAL_AVAILABLE}, VULKAN={AUTO_VULKAN_AVAILABLE}, COREML_POSSIBLE={AUTO_COREML_POSSIBLE}")
-
-        _sys_exec_dir = os.path.dirname(sys.executable)
-        PYTHON_EXECUTABLE = sys.executable
-        PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
-        if not os.path.exists(PIP_EXECUTABLE): PIP_EXECUTABLE = shutil.which("pip") or "pip"
-        HYPERCORN_EXECUTABLE = os.path.join(_sys_exec_dir, "hypercorn.exe" if IS_WINDOWS else "hypercorn")
-        if not os.path.exists(HYPERCORN_EXECUTABLE): HYPERCORN_EXECUTABLE = shutil.which("hypercorn") or "hypercorn"
-
-        print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
-        print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
-
-        if not run_command([PIP_EXECUTABLE, "install", "pip", "setuptools", "wheel"], ROOT_DIR,
-                           "PIP-UPGRADE-CORE"): print_warning("Pip/setuptools upgrade failed.")
-        if not run_command([PIP_EXECUTABLE, "install", "tqdm", "requests"], ROOT_DIR, "PIP-UTILS"): print_error(
-            "tqdm/requests install failed."); sys.exit(1)
-
-
-        try:
-            import requests; from tqdm import tqdm
-        except ImportError:
-            print_error("Failed to import requests/tqdm. Exiting."); sys.exit(1)
-        requests_session = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=20)
-        requests_session.mount('http://', adapter)
-        requests_session.mount('https://', adapter)
-
-
-
-        engine_req_path = os.path.join(ROOT_DIR, "requirements.txt")
-        if not os.path.exists(engine_req_path): print_error(f"requirements.txt not found: {engine_req_path}"); sys.exit(
-            1)
-        pip_install_success = False
-        # You could make MAX_PIP_RETRIES a constant or configurable
-        MAX_PIP_RETRIES = int(os.getenv("PIP_INSTALL_RETRIES", 99999))  # Get from env or default
-        PIP_RETRY_DELAY_SECONDS = 5  # Delay between retries
-
-        for attempt in range(MAX_PIP_RETRIES):
-            if run_command([PIP_EXECUTABLE, "install", "-r", engine_req_path], ENGINE_MAIN_DIR, "PIP-ENGINE-REQ"):
-                pip_install_success = True
-                break  # Exit loop on success
-            else:
-                print_warning(
-                    f"pip install failed on attempt {attempt + 1}/{MAX_PIP_RETRIES}. Retrying in {PIP_RETRY_DELAY_SECONDS} seconds due to unreliable connection...")
-                time.sleep(PIP_RETRY_DELAY_SECONDS)
-
-        if not pip_install_success:
-            print_error(f"Failed to install Python dependencies for Engine after {MAX_PIP_RETRIES} attempts. Exiting.")
-            sys.exit(1)
-        try:
-            import tiktoken; TIKTOKEN_AVAILABLE = True
-        except ImportError:
-            TIKTOKEN_AVAILABLE = False; print_warning("tiktoken not available.")
-
-        print_system("--- Ensuring core command-line tools (git, cmake, nodejs, ffmpeg) ---")
-        if not _ensure_conda_package("git", "git", is_critical=True): sys.exit(1)
-        if not _ensure_conda_package("cmake", "cmake", is_critical=True): sys.exit(1)
-        if not _ensure_conda_package("go", "go", conda_channel="conda-forge", is_critical=True): sys.exit(1)  # <<< ADD THIS LINE
-        if not _ensure_conda_package("nodejs", "node", is_critical=True): sys.exit(1)
-        if not _ensure_conda_package("nodejs", "npm", is_critical=True): sys.exit(1)
-        if not _ensure_alire_and_gnat_toolchain(): sys.exit(1)  # Install Adacore alr ALIRE
-        _ensure_conda_package("ffmpeg", "ffmpeg", is_critical=False)
-        print_system("--- Ensuring Aria2c (for multi-connection downloads) via Conda ---")
-        # is_critical=False because the requests-based downloader can be a fallback.
-        if not _ensure_conda_package(package_name="aria2", executable_to_check="aria2c", is_critical=False):
-            print_warning(
-                "aria2c (command-line tool) could not be installed via Conda. Multi-connection downloads will be unavailable.")
-        else:
-            print_system("aria2c command-line tool checked/installed via Conda.")
-
-
-
-        # --- Install Python wrapper for Aria2 (aria2p) via Pip ---
-        if not os.path.exists(ARIA2P_INSTALLED_FLAG_FILE):
-            print_system("--- Installing Python wrapper for Aria2 (aria2p) ---")
-            if not run_command([PIP_EXECUTABLE, "install", "aria2p"], ROOT_DIR, "PIP-ARIA2P"):
-                print_warning(
-                    "Failed to install 'aria2p' Python library. Multi-connection downloads via Aria2 will not be available if chosen as the download method.")
-            else:
-                print_system("'aria2p' Python library installed successfully.")
-                try:
-                    with open(ARIA2P_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_aria2p:
-                        f_aria2p.write(f"Installed on: {datetime.now().isoformat()}\n")
-                    print_system("aria2p installation flag created.")
-                except IOError as flag_err_aria2p:
-                    print_error(f"Could not create aria2p installation flag file: {flag_err_aria2p}")
-        else:
-            print_system("Python wrapper for Aria2 (aria2p) previously installed (flag file found).")
-        print_system("--- Core command-line tools check/install complete ---")
-
-        globals()['GIT_CMD'] = shutil.which("git") or ('git.exe' if IS_WINDOWS else 'git')
-        globals()['CMAKE_CMD'] = shutil.which("cmake") or ('cmake.exe' if IS_WINDOWS else 'cmake')
-        npm_exe_name = "npm.cmd" if IS_WINDOWS else "npm"
-        globals()['NPM_CMD'] = shutil.which(npm_exe_name) or npm_exe_name
-        print_system(f"Using GIT_CMD: {GIT_CMD}")
-        print_system(f"Using CMAKE_CMD: {CMAKE_CMD}")
-        print_system(f"Using NPM_CMD: {NPM_CMD}")
-        if not all([GIT_CMD and shutil.which(GIT_CMD.split()[0]), CMAKE_CMD and shutil.which(CMAKE_CMD.split()[0]),
-                    NPM_CMD and shutil.which(NPM_CMD.split('.')[0]), shutil.which("node")]):
-            print_error("One or more critical tools (git, cmake, node, npm) not found after attempts. Exiting.")
-            sys.exit(1)
-
-        if IS_WINDOWS:
-            if not run_command([PIP_EXECUTABLE, "install", "windows-curses"], ROOT_DIR, "PIP-WINCURSES"): print_error(
-                "windows-curses install failed."); sys.exit(1)
-        try:
-            import curses
-        except ImportError:
-            print_error("curses import failed."); sys.exit(1)
-        if not os.path.exists(LICENSE_FLAG_FILE):
-            print_system("License agreement required.")
-            _, combined_license_text = load_licenses()
-            estimated_reading_seconds = calculate_reading_time(combined_license_text)
-            accepted, time_taken = curses.wrapper(display_license_prompt, combined_license_text.splitlines(),
-                                                  estimated_reading_seconds)  # type: ignore
-            if not accepted: print_error("License not accepted. Exiting."); sys.exit(1)
-            with open(LICENSE_FLAG_FILE, 'w', encoding='utf-8') as f_license:  # Corrected with statement
-                f_license.write(f"Accepted: {datetime.now().isoformat()}\nTime: {time_taken:.2f}s\n")
-            print_system(f"Licenses accepted by user in {time_taken:.2f}s.")
-            if estimated_reading_seconds > 30 and time_taken < (estimated_reading_seconds * 0.1):
-                print_warning("Warning: Licenses accepted quickly. Ensure you understood terms.")
-                time.sleep(3)
-        else:
-            print_system("License previously accepted.")
-
-
-
-
         print_system(f"--- Checking Static Model Pool: {STATIC_MODEL_POOL_PATH} ---")
         os.makedirs(STATIC_MODEL_POOL_PATH, exist_ok=True)
         all_models_ok = True
@@ -2175,6 +2177,9 @@ if __name__ == "__main__":
             else:
                 print_system(f"Model '{model_info['description']}' ({model_info['filename']}) already present.")
         print_system("Static model pool checked.")
+
+
+
 
         # --- ChatterboxTTS Installation (NEW) ---
         if not os.path.exists(CHATTERBOX_TTS_INSTALLED_FLAG_FILE):

@@ -105,7 +105,6 @@ systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3.zip
 
 # Amaryllis generated files/folders
 RuntimeNotebook.md
-zephymesh_node
 zephymesh_ports.json
 **meshCommunicationRelay**
 ToolCheck/
@@ -148,6 +147,6 @@ systemCore/backend-service/project_zephyrine_chats.db
 *.db
 *.sqlite3
 zephymesh_identity.key
-zephymesh_node
+zephymesh_node_compiled
 zephymesh_ports.json
 .gnat_toolchain_installed_v1
