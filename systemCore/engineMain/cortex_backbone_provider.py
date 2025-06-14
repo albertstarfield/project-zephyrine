@@ -11,6 +11,7 @@ import subprocess  # Added for worker management
 import shlex       # <<< --- ADD THIS LINE --- >>>
 import asyncio
 import re
+import signal
 
 # --- NEW: Import the custom lock ---
 
@@ -459,6 +460,8 @@ class CortexEngine:
         self.embeddings: Optional[Embeddings] = None
         self.EMBEDDINGS_MODEL_NAME: Optional[str] = None
         self.embeddings: Optional[LlamaCppEmbeddingsWrapper] = None  # NEW, if always this type
+        self.active_workers: Dict[int, subprocess.Popen] = {}
+        self.active_workers_lock = threading.Lock()
         self.setup_provider()
         # self.image_generator: Any = None # This will be implicitly handled by calling the worker
 
@@ -506,6 +509,38 @@ class CortexEngine:
         # VVVVVVVVVV THIS IS THE LINE TO CHANGE VVVVVVVVVV
         self._setup_image_generator_config() # Renamed: Validates image gen worker config
         # ^^^^^^^^^^ THIS IS THE LINE TO CHANGE ^^^^^^^^^^
+
+    def kill_all_workers(self, reason: str):
+        """
+        Forcefully terminates all tracked worker processes. This is a critical
+        shutdown mechanism for severe errors like performance timeouts.
+        """
+        logger.critical(f"--- KILL_ALL_WORKERS TRIGGERED --- REASON: {reason} ---")
+        with self.active_workers_lock:
+            if not self.active_workers:
+                logger.warning("kill_all_workers called, but no active workers were tracked.")
+                return
+
+            pids_to_kill = list(self.active_workers.keys())
+            logger.warning(f"Attempting to forcefully terminate {len(pids_to_kill)} worker processes: {pids_to_kill}")
+
+            for pid in pids_to_kill:
+                proc = self.active_workers.get(pid)
+                if proc and proc.poll() is None:  # Check if process exists and is running
+                    try:
+                        logger.info(f"Killing PID: {pid}...")
+                        if os.name == 'nt':
+                            # Forcefully terminate the process and its entire tree on Windows
+                            subprocess.run(['taskkill', '/F', '/T', '/PID', str(pid)], check=False, capture_output=True)
+                        else:
+                            # Send SIGKILL on Unix-like systems for forceful termination
+                            os.kill(pid, signal.SIGKILL)
+                        logger.info(f"Termination signal sent to PID: {pid}.")
+                    except Exception as e:
+                        logger.error(f"Error while trying to kill process PID {pid}: {e}")
+
+            self.active_workers.clear()
+            logger.critical("--- All tracked worker processes have been targeted for termination. ---")
 
     def _validate_config(self):
         # (Validation remains largely the same, ensuring distinct embedding model etc.)
@@ -648,6 +683,10 @@ class CortexEngine:
                     command, stdin=subprocess.PIPE, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
                     text=True, encoding='utf-8', errors='replace'
                 )
+                if worker_process and worker_process.pid:
+                    with self.active_workers_lock:
+                        self.active_workers[worker_process.pid] = worker_process
+                    logger.debug(f"Registered worker PID {worker_process.pid} for role {model_role}")
                 if priority == ELP0: self._priority_quota_lock.set_holder_process(worker_process)
 
                 input_json = json.dumps(request_data)
@@ -725,6 +764,10 @@ class CortexEngine:
                         pass
                 return {"error": f"Error managing worker process: {e}"}
             finally:
+                if worker_process and worker_process.pid:
+                    with self.active_workers_lock:
+                        self.active_workers.pop(worker_process.pid, None)  # Remove on clean exit
+                    logger.debug(f"De-registered worker PID {worker_process.pid}")
                 provider_logger.info(f"{worker_log_prefix}: Releasing worker execution lock.")
                 self._priority_quota_lock.release()
         else:
@@ -830,6 +873,10 @@ class CortexEngine:
                         errors='replace',  # Handle potential encoding errors in output
                         cwd=os.path.dirname(__file__)  # Run worker from CortexEngine's directory
                     )
+                    if current_worker_process and current_worker_process.pid:
+                        with self.active_workers_lock:
+                            self.active_workers[current_worker_process.pid] = current_worker_process
+                        provider_logger.debug(f"Registered imagination worker PID {current_worker_process.pid}")
 
                     # If it's a background priority task, register its process with the lock
                     if priority == ELP0:
@@ -1028,6 +1075,10 @@ class CortexEngine:
                             pass
                     return {"error": f"Error managing Imagination worker process: {e_outer_manage}"}
                 finally:
+                    if current_worker_process and current_worker_process.pid:
+                        with self.active_workers_lock:
+                            self.active_workers.pop(current_worker_process.pid, None)
+                        provider_logger.debug(f"De-registered imagination worker PID {current_worker_process.pid}")
                     provider_logger.debug(f"{worker_log_prefix}: Releasing worker execution lock.")
                     self._priority_quota_lock.release()
             else:  # Lock acquisition failed
