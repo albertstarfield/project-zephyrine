@@ -59,6 +59,13 @@ INITIAL_PYTHON_MINOR = 12
 FALLBACK_PYTHON_MAJOR = 3
 FALLBACK_PYTHON_MINOR = 12
 
+# --- GNAT Ada Compiler Configuration ---
+GNAT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".gnat_compiler_installed_v1")
+GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".gnat_toolchain_installed_v1")
+GNAT_BUILD_DIR = os.path.join(ROOT_DIR, "gnat_community_build")
+GNAT_SOURCE_URL = "https://github.com/AdaCore/gnat-community-sources/archive/refs/tags/gnat-community-2021.tar.gz"
+GNAT_TAR_FILENAME = "gnat-community-2021.tar.gz"
+# --- END GNAT Configuration ---
 
 
 running_processes = [] # For services started by the current script instance
@@ -76,7 +83,7 @@ CMAKE_CMD = 'cmake.exe' if IS_WINDOWS else 'cmake'
 
 # --- ZephyMesh Configuration (MODIFIED FOR GO) ---
 ZEPHYMESH_DIR = os.path.join(ROOT_DIR, "zephyMeshNetwork")
-ZEPHYMESH_NODE_BINARY = os.path.join(ROOT_DIR, "zephymesh_node.exe" if IS_WINDOWS else "zephymesh_node")
+ZEPHYMESH_NODE_BINARY = os.path.join(ZEPHYMESH_DIR, "zephymesh_node.exe" if IS_WINDOWS else "zephymesh_node")
 ZEPHYMESH_API_PORT = 22000 # The port you configured in the Go app's flags
 zephymesh_api_url: Optional[str] = f"http://127.0.0.1:{ZEPHYMESH_API_PORT}"
 zephymesh_process: Optional[subprocess.Popen] = None
@@ -1569,6 +1576,291 @@ def download_file_with_progress(
     return download_successful
 
 
+def _ensure_gnat_compiler_from_source():
+    """
+    Checks for the GNAT compiler and if not found, downloads and builds GCC with Ada support from source.
+    This is a complex, multi-stage process.
+    """
+    if os.path.exists(GNAT_INSTALLED_FLAG_FILE):
+        print_system("GNAT compiler previously installed (flag file found).")
+        return True
+
+    if shutil.which("gnat"):
+        print_system("GNAT compiler found in PATH. Creating flag file and skipping build.")
+        with open(GNAT_INSTALLED_FLAG_FILE, 'w') as f:
+            f.write(f"Found at {shutil.which('gnat')} on {datetime.now().isoformat()}")
+        return True
+
+    print_warning("GNAT Ada compiler not found. Preparing to build from GCC source...")
+    print_warning("This is a complex, one-time setup and will take a VERY long time.")
+
+    # --- Configuration for GCC Build (with user-specified versions) ---
+    GCC_VERSION = "15.1.0"
+    GCC_SOURCE_URL = f"https://ftp.gnu.org/gnu/gcc/gcc-{GCC_VERSION}/gcc-{GCC_VERSION}.tar.gz"
+    GCC_TAR_FILENAME = f"gcc-{GCC_VERSION}.tar.gz"
+
+    # Dependencies (with user-specified versions)
+    GMP_VERSION = "6.3.0"
+    MPC_VERSION = "1.3.1"
+    MPFR_VERSION = "4.2.1"  # Using latest stable as 4.2.2 is not on the server
+    GMP_URL = f"https://ftp.gnu.org/gnu/gmp/gmp-{GMP_VERSION}.tar.bz2"
+    MPC_URL = f"https://ftp.gnu.org/gnu/mpc/mpc-{MPC_VERSION}.tar.gz"
+    MPFR_URL = f"https://ftp.gnu.org/gnu/mpfr/mpfr-{MPFR_VERSION}.tar.gz"
+
+    build_dir = os.path.join(ROOT_DIR, "gnat_from_gcc_build")
+    source_dir = os.path.join(build_dir, "sources")
+    os.makedirs(source_dir, exist_ok=True)
+
+    # --- Step 1: Download all sources ---
+    sources_to_download = {
+        "GCC": (GCC_SOURCE_URL, os.path.join(source_dir, GCC_TAR_FILENAME)),
+        "GMP": (GMP_URL, os.path.join(source_dir, f"gmp-{GMP_VERSION}.tar.bz2")),
+        "MPC": (MPC_URL, os.path.join(source_dir, f"mpc-{MPC_VERSION}.tar.gz")),
+        "MPFR": (MPFR_URL, os.path.join(source_dir, f"mpfr-{MPFR_VERSION}.tar.gz")),
+    }
+
+    try:
+        import requests
+        from tqdm import tqdm
+        for name, (url, path) in sources_to_download.items():
+            if not os.path.exists(path):
+                print_system(f"Downloading {name} source from {url}...")
+                with requests.get(url, stream=True) as r:
+                    r.raise_for_status()
+                    total_size = int(r.headers.get('content-length', 0))
+                    with tqdm(total=total_size, unit='iB', unit_scale=True, desc=os.path.basename(path),
+                              ascii=IS_WINDOWS) as progress_bar:
+                        with open(path, 'wb') as f:
+                            for chunk in r.iter_content(chunk_size=8192):
+                                progress_bar.update(len(chunk))
+                                f.write(chunk)
+    except Exception as e:
+        print_error(f"Failed to download sources: {e}")
+        return False
+
+    # --- Step 2: Extract sources and create symlinks ---
+    print_system("Extracting all source archives...")
+    try:
+        gcc_source_path = os.path.join(source_dir, f"gcc-{GCC_VERSION}")
+        if not os.path.isdir(gcc_source_path):
+            for name, (url, path) in sources_to_download.items():
+                shutil.unpack_archive(path, source_dir)
+
+        if not os.path.lexists(os.path.join(gcc_source_path, "gmp")):
+            os.symlink(os.path.join(source_dir, f"gmp-{GMP_VERSION}"), os.path.join(gcc_source_path, "gmp"))
+        if not os.path.lexists(os.path.join(gcc_source_path, "mpc")):
+            os.symlink(os.path.join(source_dir, f"mpc-{MPC_VERSION}"), os.path.join(gcc_source_path, "mpc"))
+        if not os.path.lexists(os.path.join(gcc_source_path, "mpfr")):
+            os.symlink(os.path.join(source_dir, f"mpfr-{MPFR_VERSION}"), os.path.join(gcc_source_path, "mpfr"))
+
+        print_system("Sources extracted and symlinked.")
+    except Exception as e:
+        print_error(f"Failed to extract or symlink sources: {e}")
+        return False
+
+    # --- Step 3: Perform the two-stage build ---
+    install_prefix = TARGET_CONDA_ENV_PATH
+    bootstrap_build_path = os.path.join(build_dir, "gcc-bootstrap")
+    final_build_path = os.path.join(build_dir, "gcc-final")
+
+    print_system("Cleaning previous build artifacts to prevent conflicts...")
+    if os.path.exists(bootstrap_build_path):
+        shutil.rmtree(bootstrap_build_path)
+    if os.path.exists(final_build_path):
+        shutil.rmtree(final_build_path)
+    os.makedirs(bootstrap_build_path, exist_ok=True)
+    os.makedirs(final_build_path, exist_ok=True)
+
+    build_flags = []
+    if sys.platform == "darwin":
+        machine_arch = platform.machine()
+        if machine_arch == 'arm64':
+            machine_arch = 'aarch64'
+        build_target_str = f"{machine_arch}-apple-darwin"
+        print_system(f"Applying macOS build flags for target: {build_target_str}")
+        build_flags = [
+            f"--build={build_target_str}",
+            f"--host={build_target_str}",
+            f"--target={build_target_str}"
+        ]
+
+    # A. Bootstrap GCC with C only
+    print_system("Stage 1: Configuring bootstrap GCC (C only)...")
+    bootstrap_configure_cmd = [
+                                  os.path.join(gcc_source_path, "configure"),
+                                  f"--prefix={install_prefix}",
+                                  "--enable-languages=c",
+                                  "--disable-multilib",
+                                  "--disable-shared",
+                                  "--disable-nls"
+                              ] + build_flags
+    if not run_command(bootstrap_configure_cmd, cwd=bootstrap_build_path, name="GCC-BOOTSTRAP-CONFIGURE"):
+        print_error("Bootstrap GCC configure step failed.")
+        return False
+
+    # <<< FIX: Use specific 'make' targets for bootstrap >>>
+    print_system("Stage 1: Building bootstrap GCC ('make all-gcc')...")
+    if not run_command(["make", "all-gcc"], cwd=bootstrap_build_path, name="GCC-BOOTSTRAP-MAKE"):
+        print_error("Bootstrap GCC 'make all-gcc' step failed.")
+        return False
+
+    print_system("Stage 1: Installing bootstrap GCC ('make install-gcc')...")
+    if not run_command(["make", "install-gcc"], cwd=bootstrap_build_path, name="GCC-BOOTSTRAP-INSTALL"):
+        print_error("Bootstrap GCC 'make install-gcc' step failed.")
+        return False
+
+    print_system("✅ Bootstrap GCC installed successfully.")
+
+    # B. Final GCC with Ada support
+    print_system("Stage 2: Configuring final GCC (with Ada support)...")
+    final_configure_cmd = [
+                              os.path.join(gcc_source_path, "configure"),
+                              f"--prefix={install_prefix}",
+                              "--enable-languages=c,c++,ada",
+                              "--disable-libada",
+                              "--disable-nls",
+                              "--disable-threads",
+                              "--disable-multilib",
+                              "--disable-shared"
+                          ] + build_flags
+    if not run_command(final_configure_cmd, cwd=final_build_path, name="GCC-FINAL-CONFIGURE"):
+        print_error("Final GCC configure step failed.")
+        return False
+
+    # <<< FIX: Use specific 'make' targets for final build >>>
+    print_system("Stage 2: Building final GCC tools. This will take a very long time...")
+    if not run_command(["make", "all-gcc"], cwd=final_build_path, name="GCC-FINAL-MAKE-GCC"):
+        print_error("Final GCC 'make all-gcc' step failed.")
+        return False
+    if not run_command(["make", "all-target-libgcc"], cwd=final_build_path, name="GCC-FINAL-MAKE-LIBGCC"):
+        print_error("Final GCC 'make all-target-libgcc' step failed.")
+        return False
+    if not run_command(["make", "-C", "gcc", "cross-gnattools", "ada.all.cross"], cwd=final_build_path,
+                       name="GCC-FINAL-MAKE-GNAT"):
+        print_error("Final GCC 'make gnatools' step failed.")
+        return False
+
+    print_system("Stage 2: Installing final GNAT and GCC components...")
+    if not run_command(["make", "install-strip-gcc", "install-target-libgcc"], cwd=final_build_path,
+                       name="GCC-FINAL-INSTALL"):
+        print_error("Final GCC 'make install' step failed.")
+        return False
+
+    # --- Finalization ---
+    print_system("✅ GNAT compiler built and installed successfully into the Conda environment.")
+    with open(GNAT_INSTALLED_FLAG_FILE, 'w') as f:
+        f.write(f"Installed on {datetime.now().isoformat()}")
+
+    print_system("Cleaning up GCC build files...")
+    shutil.rmtree(build_dir)
+
+    return True
+
+
+def _ensure_alire_and_gnat_toolchain():
+    """
+    Ensures the Alire package manager and the GNAT toolchain are available.
+    The primary goal is to install 'alr' and then use it to get GNAT.
+    """
+    # 1. Check if the final flag file exists. If so, the entire process is complete.
+    if os.path.exists(GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE):
+        print_system("GNAT toolchain previously installed via Alire (flag file found).")
+        return True
+
+    # Also check if gnat is in the path, in case the flag was deleted.
+    if shutil.which("gnat"):
+        print_system("GNAT compiler found in PATH. Assuming Alire setup is complete.")
+        # Re-create the flag file for future runs
+        with open(GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE, 'w') as f:
+            f.write(f"Found at {shutil.which('gnat')} on {datetime.now().isoformat()}")
+        return True
+
+    alire_install_dir = os.path.join(ROOT_DIR, "alire_installer")
+
+    # 2. Ensure Alire ('alr') is installed. If not, download the pre-compiled binary.
+    if not shutil.which("alr"):
+        print_warning("Alire 'alr' command not found. Downloading pre-compiled binary...")
+
+        # --- Determine Correct Alire Binary for OS/Arch ---
+        os_name = platform.system().lower()
+        machine_arch = platform.machine().lower()
+
+        if os_name == "darwin":
+            os_name = "macos"
+            if machine_arch == "arm64":
+                machine_arch = "aarch64"
+        elif os_name == "linux":
+            machine_arch = "x86_64"
+
+        if os_name not in ["macos", "linux"]:
+            print_error(f"Automated Alire download is not supported for OS: {os_name}")
+            return False
+
+        alire_release_tag = "v2.1.0"
+        alire_version_str = "2.1.0"
+        alire_filename = f"alr-{alire_version_str}-bin-{machine_arch}-{os_name}.zip"
+        alire_url = f"https://github.com/alire-project/alire/releases/download/{alire_release_tag}/{alire_filename}"
+
+        # Clean up previous attempts and download
+        if os.path.exists(alire_install_dir):
+            shutil.rmtree(alire_install_dir)
+        os.makedirs(alire_install_dir)
+
+        zip_path = os.path.join(alire_install_dir, alire_filename)
+
+        try:
+            import requests
+            from tqdm import tqdm
+            print_system(f"Downloading Alire from: {alire_url}")
+            with requests.get(alire_url, stream=True) as r:
+                r.raise_for_status()
+                total_size = int(r.headers.get('content-length', 0))
+                with tqdm(total=total_size, unit='iB', unit_scale=True, desc=alire_filename, ascii=IS_WINDOWS) as pbar:
+                    with open(zip_path, 'wb') as f:
+                        for chunk in r.iter_content(chunk_size=8192):
+                            pbar.update(len(chunk))
+                            f.write(chunk)
+            print_system("Alire downloaded successfully.")
+        except Exception as e:
+            print_error(f"Failed to download Alire binary: {e}")
+            return False
+
+        # --- Extract and Install Alire ---
+        print_system(f"Extracting {alire_filename}...")
+        try:
+            shutil.unpack_archive(zip_path, alire_install_dir)
+
+            alr_binary_path = os.path.join(alire_install_dir, "bin", "alr")
+            conda_bin_path = os.path.join(TARGET_CONDA_ENV_PATH, "bin")
+
+            if not os.path.exists(alr_binary_path):
+                raise FileNotFoundError(f"'alr' binary not found at expected path: {alr_binary_path}")
+
+            print_system(f"Installing 'alr' executable to {conda_bin_path}...")
+            os.makedirs(conda_bin_path, exist_ok=True)
+            shutil.copy(alr_binary_path, conda_bin_path)
+            os.chmod(os.path.join(conda_bin_path, "alr"), 0o755)
+
+            shutil.rmtree(alire_install_dir)
+            print_system("✅ Alire 'alr' executable installed successfully.")
+        except Exception as e:
+            print_error(f"Failed to install Alire: {e}")
+            return False
+
+    # 3. Use Alire to get the GNAT toolchain
+    print_system("Using Alire to install the GNAT toolchain. This may take a moment...")
+    alr_get_gnat_command = ["alr", "toolchain", "--select", "gnat_native"]
+
+    if not run_command(alr_get_gnat_command, cwd=ROOT_DIR, name="ALIRE-GET-GNAT"):
+        print_error("Alire failed to install the GNAT toolchain.")
+        return False
+
+    print_system("✅ GNAT toolchain successfully installed via Alire.")
+    # Create the flag file to skip this entire process next time
+    with open(GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE, 'w') as f:
+        f.write(f"Installed via Alire on {datetime.now().isoformat()}")
+
+    return True
 # --- Main Execution Logic ---
 if __name__ == "__main__":
     print_system("--- Project Zephyrine Launcher ---")
@@ -1801,6 +2093,7 @@ if __name__ == "__main__":
         if not _ensure_conda_package("go", "go", conda_channel="conda-forge", is_critical=True): sys.exit(1)  # <<< ADD THIS LINE
         if not _ensure_conda_package("nodejs", "node", is_critical=True): sys.exit(1)
         if not _ensure_conda_package("nodejs", "npm", is_critical=True): sys.exit(1)
+        if not _ensure_alire_and_gnat_toolchain(): sys.exit(1)  # Install Adacore alr ALIRE
         _ensure_conda_package("ffmpeg", "ffmpeg", is_critical=False)
         print_system("--- Ensuring Aria2c (for multi-connection downloads) via Conda ---")
         # is_critical=False because the requests-based downloader can be a fallback.
@@ -1809,6 +2102,8 @@ if __name__ == "__main__":
                 "aria2c (command-line tool) could not be installed via Conda. Multi-connection downloads will be unavailable.")
         else:
             print_system("aria2c command-line tool checked/installed via Conda.")
+
+
 
         # --- Install Python wrapper for Aria2 (aria2p) via Pip ---
         if not os.path.exists(ARIA2P_INSTALLED_FLAG_FILE):
