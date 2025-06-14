@@ -1,4 +1,4 @@
-sudo docker rm db13893ad6545f1d6e63bc697f0f31165030480dfd1315346022016918b4b720node_modules
+**node_modules**
 package-lock.json
 yarn.lock
 models/*
@@ -101,8 +101,10 @@ systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3.zip
 **.mp3**
 
 
+
 # Amaryllis generated files/folders
 RuntimeNotebook.md
+**meshCommunicationRelay**
 ToolCheck/
 **temp_file_ingestions**
 commands/
@@ -142,3 +144,6 @@ systemCore/backend-service/project_zephyrine_chats.db
 *.sqlite3
 *.db
 *.sqlite3
+zephymesh_identity.key
+zephymesh_node
+zephymesh_ports.json
