@@ -1,0 +1,177 @@
+/* styles/components/_button.css */
+
+/* Base styles for action buttons (sidebar, etc.) */
+.action-button {
+  margin: 0.25rem 0.5rem; /* Consistent margin */
+  padding: 0.75rem 1rem; /* Default padding */
+  display: flex;
+  align-items: center;
+  gap: 0.75rem;
+  width: auto; /* Let flexbox handle width */
+  border-radius: 0.375rem;
+  cursor: pointer;
+  background-color: transparent;
+  border: none; /* Ensure no default border */
+  color: var(--primary-text);
+  transition: background-color 0.1s ease-out, transform 0.1s ease;
+  text-align: left; /* Ensure text alignment */
+  font-family: inherit; /* Inherit font */
+  font-size: 1rem; /* Default size */
+}
+
+.action-button:hover {
+  background-color: var(--hover);
+}
+
+.action-button:active {
+  transform: scale(0.98);
+}
+
+.action-button svg {
+  width: 24px; /* Default size */
+  height: 24px;
+  color: currentColor; /* Inherit color from button text */
+  flex-shrink: 0; /* Prevent icon shrinking */
+}
+
+/* Send/Stop buttons */
+#send,
+#stop {
+  border: none;
+  border-radius: 1.124rem; /* Soft edge rectangle */
+  outline: none;
+  box-sizing: border-box;
+  padding: 0.7rem; /* Default padding */
+  width: 40px; /* Default size */
+  height: 40px; /* Default size */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background-color: #fafad2; /* Pastel yellow */
+  color: #333; /* Darker text for better contrast on yellow */
+  font-weight: bold;
+  cursor: pointer;
+  transition: background-color 0.2s, transform 0.1s ease;
+  box-shadow: 0 2px 5px rgba(0, 0, 0, 0.2);
+  flex-shrink: 0; /* Prevent shrinking in flex container */
+  pointer-events: all; /* Ensure clickable within form */
+}
+
+#send:hover,
+#stop:hover {
+  background-color: var(--secondary); /* Consider a different hover for stop */
+}
+
+#send:disabled {
+  background-color: var(--surface-alt);
+  color: var(--secondary-text);
+  cursor: not-allowed;
+  box-shadow: none;
+}
+
+#stop {
+  background-color: var(--error);
+  color: var(--on-error, white);
+}
+
+#stop:hover {
+  background-color: #ff3333; /* Darken or specific error hover color */
+}
+
+#send svg,
+#stop svg {
+  /* Stop might have a different icon */
+  width: 20px; /* Default icon size */
+  height: 20px;
+  color: currentColor;
+}
+
+#send:active,
+#stop:active {
+  transform: scale(0.95);
+}
+
+/* Window control buttons (Titlebar) */
+.titlebar-button {
+  /* Renamed from .button to be specific */
+  width: 32px;
+  height: 32px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  cursor: pointer;
+  background-color: transparent;
+  border: none;
+  color: var(--primary-text);
+  transition: background-color 0.2s;
+  -webkit-app-region: no-drag; /* Ensure clickable */
+}
+
+.titlebar-button:hover {
+  background-color: var(--hover);
+}
+
+#close-button:hover {
+  background-color: #e81123;
+  color: white; /* Ensure icon is visible */
+}
+
+.titlebar-button .icon {
+  /* Style icons within titlebar buttons */
+  width: 16px;
+  height: 16px;
+  color: currentColor;
+}
+
+/* Responsive Adjustments for Buttons */
+
+/* Sidebar action buttons */
+@media (max-width: 767px) {
+  .action-button {
+    margin: 0.25rem;
+    padding: 0.5rem;
+    justify-content: center; /* Center icon on small screens */
+  }
+  .action-button span {
+    /* Hide text if needed */
+    /* display: none; */
+  }
+  .action-button svg {
+    width: 20px;
+    height: 20px;
+    margin: 0; /* Remove gap if text is hidden */
+  }
+}
+@media (max-width: 480px) {
+  .action-button {
+    padding: 0.4rem;
+  }
+  .action-button svg {
+    width: 18px;
+    height: 18px;
+  }
+}
+
+/* Send/Stop buttons */
+@media (min-width: 1024px) {
+  #send,
+  #stop {
+    width: 48px;
+    height: 48px;
+    padding: 0.75rem;
+  }
+  #send svg,
+  #stop svg {
+    width: 24px;
+    height: 24px;
+  }
+}
+
+/* Touch device optimizations */
+@media (hover: none) {
+  .action-button:active,
+  #send:active,
+  #stop:active {
+    transform: scale(0.95);
+  }
+}

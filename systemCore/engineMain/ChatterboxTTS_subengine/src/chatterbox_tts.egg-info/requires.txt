@@ -1,0 +1,12 @@
+numpy
+resampy
+librosa
+s3tokenizer
+torch
+torchaudio
+transformers
+diffusers
+resemble-perth
+omegaconf
+conformer
+safetensors

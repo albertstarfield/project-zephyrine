@@ -102,3 +102,15 @@ I have been tasked to auto-develop a dataset for self-developing AI Model
 I would add another one to develop multi session interaction
 array L0 session and name
 array L1 content role and emotion
+
+
+### Entry I : July 8, 2024
+The thrill of exploring the realm of programming languages, where the boundaries of innovation are constantly being pushed! In this episode of "Albert" we embark on a fascinating journey to uncover the fundamental principles underlying the mighty ICBM and rocket systems. As we delve into the world of code, we'll discover the intricate dance between algorithms and mathematics that enables these marvels of engineering to soar to new heights.
+
+As we begin our exploration, it's essential to establish a solid foundation in programming languages. This is where the art of coding comes alive, as we craft instructions that can be understood by machines. The syntax, semantics, and structure of programming languages are the keys to unlocking the secrets of these complex systems. By grasping these fundamental concepts, we'll be well-equipped to tackle the challenges that lie ahead.
+
+In this episode, we'll take a step-by-step approach to unraveling the mysteries of ICBM and rocket programming. We'll examine the role of programming languages in controlling the trajectory of these vehicles, as well as the critical considerations that must be taken into account when writing code for such complex systems. Whether you're a seasoned programmer or just starting your coding journey, this episode is sure to provide valuable insights and inspiration for your own explorations in the world of programming. So, buckle up and join me on this thrilling adventure as we explore the intersection of programming languages and rocket science!
+
+Just kidding m8, I'm not doing rocket science, for now. Just a bunch of code.
+
+### Entry II : July 9, 2024

@@ -1,0 +1,112 @@
+/* styles/views/_welcomeScreen.css */
+
+/* Styles applied to #feed when it's the welcome screen */
+#feed.welcome-screen {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start; /* Changed from center to allow scrolling */
+  align-items: center;
+  padding: 2rem 1rem; /* Padding for content */
+  min-height: 100vh; /* Ensure it takes full height */
+  text-align: center; /* Center text elements by default */
+}
+
+/* Placeholder specific layout */
+#feed-placeholder-alpaca {
+  text-align: center;
+  max-width: 50rem; /* Default max-width */
+  margin: 4vh auto 4rem; /* Adjust vertical spacing */
+  display: block; /* Ensure it takes block space */
+}
+
+/* Logo positioning specific to welcome screen */
+.welcome-screen .logo {
+  /* More specific selector */
+  margin-top: 2vh; /* Adjust as needed */
+  z-index: 10; /* Ensure visibility */
+}
+
+/* Greeting text styling */
+.greeting-text {
+  max-width: 800px;
+  margin: 0 auto 30px;
+  padding: 0 20px; /* Horizontal padding */
+}
+
+.greeting-text p {
+  color: var(--primary-text);
+  font-size: 16px;
+  line-height: 1.6;
+  text-align: center;
+}
+
+/* Scroll indicator styling */
+.scroll-indicator {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  margin-bottom: 30px;
+  opacity: 0.8; /* Make it slightly less prominent */
+}
+
+.scroll-indicator svg {
+  width: 32px;
+  height: 32px;
+  margin-bottom: 5px;
+  opacity: 0.6; /* Make icon slightly transparent */
+  color: var(--secondary-text); /* Use secondary color */
+}
+
+.scroll-indicator p {
+  font-size: 14px;
+  color: var(--secondary-text);
+}
+
+/* Layout for example categories */
+.example-categories {
+  display: flex;
+  flex-direction: column; /* Stack vertically by default */
+  gap: 1.5rem; /* Space between categories */
+  padding: 0;
+  margin: 2rem auto 80px; /* Space around the category list */
+  width: 100%;
+  max-width: 800px; /* Match greeting text */
+  align-items: center; /* Center categories horizontally */
+}
+
+/* Input placeholder is styled in _input.css */
+
+/* Responsive adjustments for welcome screen elements */
+@media (max-width: 1023px) {
+  #feed-placeholder-alpaca {
+    max-width: 48rem;
+    margin: 2vh 1.5rem 6rem; /* Adjust spacing */
+  }
+}
+
+@media (min-width: 768px) {
+  /* Maybe switch to grid or flex-row on larger screens if desired */
+  /* .example-categories {
+      flex-direction: row;
+      flex-wrap: wrap;
+      justify-content: center;
+      gap: 2rem;
+      max-width: 900px;
+    }
+    .category {
+       width: calc(50% - 1rem); // Example for 2 columns
+       max-width: 400px;
+    } */
+}
+
+@media screen and (max-height: 600px) {
+  /* Hide less critical elements when keyboard might be open */
+  .welcome-screen .logo,
+  .scroll-indicator,
+  #feed-placeholder-alpaca {
+    /* display: none; */ /* Be careful not to hide too much */
+  }
+  #feed.welcome-screen {
+    padding-top: 1rem; /* Reduce top padding */
+  }
+}
