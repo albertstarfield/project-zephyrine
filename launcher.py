@@ -114,7 +114,7 @@ MODELS_TO_DOWNLOAD = [
     },
     {
         "filename": "mxbai-embed-large-v1.gguf",
-        "url": "https://huggingface.co/mixedbread-ai/mxbai-embed-large-v1/resolve/main/mxbai-embed-large-v1.gguf?download=true",
+        "url": "https://huggingface.co/ChristianAzinn/mxbai-embed-large-v1-gguf/resolve/main/mxbai-embed-large-v1_fp16.gguf?download=true",
         "description": "MXBAI Embeddings Model"
     },
     {
@@ -143,8 +143,8 @@ MODELS_TO_DOWNLOAD = [
         "description": "Qwen2.5 VL Model"
     },
     {
-        "filename": "whisper-large-v3-q8_0.gguf",
-        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/models/ggml-large-v3-q8_0.bin?download=true",
+        "filename": "whisper-large-v3-q5_0.gguf",
+        "url": "https://huggingface.co/ggerganov/whisper.cpp/resolve/main/ggml-large-v3-q5_0.bin?download=true",
         "description": "Whisper Large v3 Model (ASR)"
     },
     {

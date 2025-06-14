@@ -133,7 +133,7 @@ ENABLE_ASR = os.getenv("ENABLE_ASR", "true").lower() in ('true', '1', 't', 'yes'
 # WHISPER_MODEL_DIR reuses the general static model pool where GGUF files are stored.
 # This matches where launcher.py downloads the whisper-large-v3-q8_0.gguf model.
 WHISPER_MODEL_DIR = os.getenv("WHISPER_MODEL_DIR", LLAMA_CPP_GGUF_DIR)
-WHISPER_DEFAULT_MODEL_FILENAME = os.getenv("WHISPER_DEFAULT_MODEL_FILENAME", "whisper-large-v3-q8_0.gguf")
+WHISPER_DEFAULT_MODEL_FILENAME = os.getenv("WHISPER_DEFAULT_MODEL_FILENAME", "whisper-large-v3-q5_0.gguf")
 WHISPER_LOW_LATENCY_MODEL_FILENAME = os.getenv("WHISPER_LOW_LATENCY_MODEL_FILENAME", "whisper-lowlatency-direct.gguf")
 WHISPER_DEFAULT_LANGUAGE = os.getenv("WHISPER_DEFAULT_LANGUAGE", "auto") # Default language for transcription
 ASR_WORKER_TIMEOUT = int(os.getenv("ASR_WORKER_TIMEOUT", 300)) # Timeout in seconds for ASR worker
