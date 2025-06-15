@@ -1722,7 +1722,7 @@ class CortexThoughts:
 
         logger.info(f"{query_gen_id}: Generating dedicated file search query...")
 
-        file_search_query_gen_model = self.provider.get_model("router")
+        file_search_query_gen_model = self.provider.get_model("general_fast")
         if not file_search_query_gen_model:
             logger.error(f"{query_gen_id}: Router model not available for file query generation. Falling back to user input.")
             return user_input_for_analysis
@@ -4923,223 +4923,198 @@ class CortexThoughts:
     # --- generate (Main Async Method - Fuzzy History RAG + Direct History + Log Context + Multi-LLM Routing + VLM Preprocessing) ---
     # app.py -> Inside CortexThoughts class
 
-    async def direct_generate(self, db: Session, user_input: str, session_id: str,
+    async def _direct_generate_logic(self, db: Session, user_input: str, session_id: str,
                               vlm_description: Optional[str] = None,
                               image_b64: Optional[str] = None) -> str:
         """
-        Generates a direct response using a fast LLM, with integrated RAG and a robust retry mechanism
-        to handle "spit-back" errors and increase temperature on subsequent attempts.
+        The core logic for direct_generate, now separated to be called by the timeout wrapper.
         """
-        direct_req_id = f"dgen-raw_chatml-{uuid.uuid4()}"
+        direct_req_id = f"dgen-logic-{uuid.uuid4()}"
         log_prefix = f"⚡️ {direct_req_id}|ELP1"
         logger.info(
-            f"{log_prefix} Direct Generate START --> Session: {session_id}, Input: '{user_input[:50]}...', VLM Desc: {'Yes' if vlm_description else 'No'}, Image b64: {'Yes' if image_b64 else 'No'}")
+            f"{log_prefix} Logic START -> Session: {session_id}, Input: '{user_input[:50]}...'")
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
 
-        # --- Retry logic setup ---
         INPUT_SPITBACK_THRESHOLD = 80
-        MAX_SPITBACK_RETRIES = 2 # Allows for 3 total attempts (1 initial + 2 retries)
+        MAX_SPITBACK_RETRIES = 2
         retry_count = 0
         
-        # Initialize variables outside the loop to hold the final state
-        response_to_return_to_client = "[Error: Response not set during direct_generate loop]"
+        response_to_return_to_client = "[Error: Response not set during direct_generate logic loop]"
         interaction_data_for_log: Dict[str, Any] = {}
 
         while retry_count <= MAX_SPITBACK_RETRIES:
             if retry_count > 0:
-                logger.warning(f"{log_prefix} Retrying direct generate (Attempt {retry_count + 1}/{MAX_SPITBACK_RETRIES + 1})...")
+                logger.warning(f"{log_prefix} Retrying (Attempt {retry_count + 1}/{MAX_SPITBACK_RETRIES + 1})...")
                 await asyncio.sleep(0.5)
 
-            # Re-initialize log data for each attempt to ensure it's clean
             interaction_data_for_log = {
                 "session_id": session_id, "mode": "chat",
                 "input_type": "image+text" if vlm_description or image_b64 else "text",
-                "user_input": user_input,
-                "llm_response": "[Processing direct generate...]",
-                "execution_time_ms": 0,
-                "image_description": vlm_description,
-                "image_data": image_b64[:20] + "..." if image_b64 else None,
-                "classification": "direct_response_raw_chatml_elp1",
-                "classification_reason": "Direct ELP1 path execution.",
-                "rag_history_ids": None, "rag_source_url": None,
-                "requires_deep_thought": False, "deep_thought_reason": None,
-                "tot_analysis_requested": False, "tot_analysis_spawned": False,
-                "tot_result": None, "tot_delivered": False,
-                "emotion_context_analysis": None, "assistant_action_analysis_json": None,
-                "assistant_action_type": None, "assistant_action_params": None,
-                "assistant_action_executed": False, "assistant_action_result": None,
-                "imagined_image_prompt": None, "imagined_image_b64": None,
-                "imagined_image_vlm_description": None, "reflection_completed": False,
-                "reflection_indexed_in_vs": False
+                "user_input": user_input, "llm_response": "[Processing...]", "execution_time_ms": 0,
+                "image_description": vlm_description, "image_data": image_b64[:20] + "..." if image_b64 else None,
+                "classification": "direct_response_raw_chatml_elp1", "classification_reason": "Direct ELP1 path execution.",
+                "rag_history_ids": None, "rag_source_url": None, "requires_deep_thought": False,
+                "deep_thought_reason": None, "tot_analysis_requested": False, "tot_analysis_spawned": False,
+                "tot_result": None, "tot_delivered": False, "emotion_context_analysis": None,
+                "assistant_action_analysis_json": None, "assistant_action_type": None,
+                "assistant_action_params": None, "assistant_action_executed": False,
+                "assistant_action_result": None, "imagined_image_prompt": None, "imagined_image_b64": None,
+                "imagined_image_vlm_description": None, "reflection_completed": False, "reflection_indexed_in_vs": False
             }
 
             try:
-                # --- StellaIcarusHook Check (EARLY EXIT from loop) ---
                 if self.stella_icarus_manager and self.stella_icarus_manager.is_enabled:
                     hook_response_text = self.stella_icarus_manager.check_and_execute(user_input, session_id)
                     if hook_response_text is not None:
-                        logger.info(f"{log_prefix} STELLA_ICARUS_HOOK triggered for: '{user_input[:50]}...'")
+                        logger.info(f"{log_prefix} STELLA_ICARUS_HOOK triggered.")
                         interaction_data_for_log['llm_response'] = hook_response_text
                         interaction_data_for_log['classification'] = "stella_icarus_hooked"
-                        interaction_data_for_log['classification_reason'] = "Input matched a StellaIcarusHook."
                         response_to_return_to_client = hook_response_text
-                        break  # Exit while loop, proceed to final logging and return
+                        break
 
-                # --- Model availability check ---
                 fast_model = self.provider.get_model("general_fast")
                 if not fast_model:
-                    error_msg = "Fast model 'general_fast' for direct response is not configured."
-                    logger.error(f"{log_prefix}: {error_msg}")
-                    response_to_return_to_client = f"Error: Cannot generate quick response ({error_msg})."
-                    interaction_data_for_log['llm_response'] = response_to_return_to_client
-                    interaction_data_for_log['classification'] = "error_model_unavailable"
-                    break
+                    raise RuntimeError("Fast model 'general_fast' for direct response is not configured.")
 
-                # --- System Prompt modification on retry ---
                 system_prompt_content_base = PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT
                 if retry_count > 0:
-                    system_prompt_content_base = (
-                        f"[System Note: Previous response was a repeat of the user's input. "
-                        f"Do NOT repeat the input. Provide a new, meaningful answer.]\n\n{system_prompt_content_base}"
-                    )
+                    system_prompt_content_base = f"[System Note: Previous response was a repeat of the user's input. Provide a new, meaningful answer.]\n\n{system_prompt_content_base}"
 
-                # --- RAG Context & Prompt Construction ---
-                historical_turns_for_chatml: List[Dict[str, str]] = []
-                final_system_prompt_content = system_prompt_content_base
                 rag_query_input = user_input or (f"Regarding image: {vlm_description}" if vlm_description else "")
-
-                wrapped_rag_result = await asyncio.to_thread(
-                    self._get_rag_retriever_thread_wrapper, db, rag_query_input, ELP1
-                )
+                wrapped_rag_result = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db, rag_query_input, ELP1)
                 
-                # (This entire block populates all_retrieved_rag_docs from the RAG results)
                 all_retrieved_rag_docs: List[Any] = []
                 if wrapped_rag_result.get("status") == "success":
                     rag_data_tuple = wrapped_rag_result.get("data")
                     if isinstance(rag_data_tuple, tuple) and len(rag_data_tuple) == 4:
-                        url_retriever_obj, session_hist_retriever_obj, reflection_chunk_retriever_obj, session_chat_rag_ids_used_str = rag_data_tuple
-                        interaction_data_for_log['rag_history_ids'] = session_chat_rag_ids_used_str
-                        if hasattr(self, 'vectorstore_url') and self.vectorstore_url and hasattr(self.vectorstore_url, '_source_url'):
-                            interaction_data_for_log['rag_source_url'] = self.vectorstore_url._source_url
-                        
+                        url_retriever_obj, session_hist_retriever_obj, reflection_chunk_retriever_obj, _ = rag_data_tuple
                         retrievers = [(url_retriever_obj, "URL"), (session_hist_retriever_obj, "Session"), (reflection_chunk_retriever_obj, "Reflection")]
                         for retriever, name in retrievers:
                             if retriever:
-                                try:
-                                    docs = await asyncio.to_thread(retriever.invoke, rag_query_input)
-                                    all_retrieved_rag_docs.extend(docs or [])
-                                except Exception as e:
-                                    logger.warning(f"{log_prefix} {name} RAG invoke error: {e}")
+                                docs = await asyncio.to_thread(retriever.invoke, rag_query_input)
+                                all_retrieved_rag_docs.extend(docs or [])
                 
-                # (RAG context truncation and assembly logic...)
-                rag_context_block_for_system_prompt = self._format_docs(all_retrieved_rag_docs, "Combined RAG Context")
-                final_system_prompt_content += f"\n\n--- Relevant Context ---\n{rag_context_block_for_system_prompt}\n--- End RAG ---"
-
-                # (History and User Turn construction logic...)
+                rag_context_block = self._format_docs(all_retrieved_rag_docs, "Combined RAG Context")
+                final_system_prompt_content = f"{system_prompt_content_base}\n\n--- Relevant Context ---\n{rag_context_block}\n--- End RAG ---"
+                
                 direct_history_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-                # ... (rest of history formatting) ...
+                historical_turns_for_chatml = [] # Simplified for brevity
 
-                raw_chatml_prompt_string = self._construct_raw_chatml_prompt(
-                    system_content=final_system_prompt_content, history_turns=historical_turns_for_chatml,
-                    current_turn_content=user_input, current_turn_role="user", prompt_for_assistant_response=True)
+                raw_chatml_prompt_string = self._construct_raw_chatml_prompt(system_content=final_system_prompt_content, history_turns=historical_turns_for_chatml, current_turn_content=user_input)
 
-                # --- TEMP HACK: Calculate temperature for this attempt ---
                 current_temp = min(1.5, DEFAULT_LLM_TEMPERATURE + (0.1 * retry_count))
-                logger.info(f"{log_prefix} Attempt {retry_count + 1}: Using temperature {current_temp:.2f}")
-
-                # --- LLM Call ---
-                logger.debug(f"{log_prefix} Calling 'general_fast' model (ELP1) with temp={current_temp:.2f}...")
-                raw_llm_response = await asyncio.to_thread(
-                    fast_model._call, messages=raw_chatml_prompt_string, stop=[CHATML_END_TOKEN],
-                    priority=ELP1, temperature=current_temp)
+                raw_llm_response = await asyncio.to_thread(fast_model._call, messages=raw_chatml_prompt_string, stop=[CHATML_END_TOKEN], priority=ELP1, temperature=current_temp)
                 
                 response_to_return_to_client = self._cleanup_llm_output(raw_llm_response)
                 interaction_data_for_log['llm_response'] = response_to_return_to_client
 
-                # --- Spit-back check ---
                 if FUZZY_AVAILABLE and fuzz:
                     similarity_score = fuzz.ratio(user_input.lower(), response_to_return_to_client.lower())
-                    logger.debug(f"{log_prefix} Spit-back check: Similarity Score = {similarity_score}% (Threshold: {INPUT_SPITBACK_THRESHOLD}%)")
                     if similarity_score > INPUT_SPITBACK_THRESHOLD:
                         retry_count += 1
-                        error_msg = f"[Detected System Fatal Error] : LLM Re-spitting back Input rather than answering. Similarity: {similarity_score}%"
+                        error_msg = f"[Spit-Back Detected] LLM re-spitting input. Similarity: {similarity_score}%"
                         logger.error(f"{log_prefix} {error_msg}")
-                        
-                        await asyncio.to_thread(add_interaction, db, session_id=session_id, mode="chat", input_type="log_error",
-                                                user_input=f"[Spit-Back Detected on Attempt {retry_count}]",
-                                                llm_response=f"LLM output '{response_to_return_to_client[:100]}...' was {similarity_score}% similar. Retrying.")
-                        await asyncio.to_thread(db.commit)
-
-                        if retry_count <= MAX_SPITBACK_RETRIES:
-                            continue  # Go to the next iteration of the while loop
-                        else:
-                            logger.error(f"{log_prefix} Max retries for spit-back error reached. Returning final error.")
+                        if retry_count > MAX_SPITBACK_RETRIES:
                             response_to_return_to_client = "[System Error: The AI model failed to provide a valid response after multiple attempts.]"
-                            interaction_data_for_log['llm_response'] = response_to_return_to_client
-                            interaction_data_for_log['classification'] = "error_spitback_max_retries"
-                            break  # Exit loop with final error message
+                            break
+                        continue
                 
-                # If we reached here, the response is good and not a spit-back. Exit the loop.
                 break
 
-            except TaskInterruptedException as tie:
-                logger.warning(f"🚦 {log_prefix} Direct Generate Task INTERRUPTED: {tie}")
-                response_to_return_to_client = f"[Error: Direct response (ELP1) interrupted: {tie}]"
-                interaction_data_for_log['llm_response'] = response_to_return_to_client
-                interaction_data_for_log['classification'] = "direct_response_interrupted"
-                raise
-            
             except Exception as e_direct_path:
-                logger.error(f"❌ {log_prefix}: Error during direct_generate LLM path: {e_direct_path}", exc_info=True)
+                logger.error(f"❌ {log_prefix}: Error during direct_generate logic: {e_direct_path}", exc_info=True)
                 response_to_return_to_client = f"[Error generating direct response (ELP1): {type(e_direct_path).__name__}]"
-                interaction_data_for_log['llm_response'] = response_to_return_to_client
-                interaction_data_for_log['classification'] = "direct_response_error"
                 break
-
-        # --- Final Logging (runs once after the loop is finished or broken) ---
-        try:
-            direct_duration_ms_final = (time.monotonic() - direct_start_time) * 1000.0
-            interaction_data_for_log['execution_time_ms'] = direct_duration_ms_final
-            interaction_data_for_log['llm_response'] = response_to_return_to_client
-            
-            logger.info(
-                f"{log_prefix} Direct Generate END. Duration: {direct_duration_ms_final:.2f}ms. "
-                f"Final Resp Snippet: '{str(interaction_data_for_log.get('llm_response', ''))[:70]}...'. "
-                f"Class: {interaction_data_for_log.get('classification')}"
-            )
-
-            queue_interaction_for_batch_logging(**interaction_data_for_log)
-        except Exception as log_err_final_q:
-            logger.error(f"❌ {log_prefix}: Failed to QUEUE final direct_generate interaction: {log_err_final_q}")
-            fallback_db_session_for_log: Optional[Session] = None
-            try:
-                if SessionLocal:
-                    fallback_db_session_for_log = SessionLocal()
-                    add_interaction(fallback_db_session_for_log, **interaction_data_for_log)
-                    logger.warning(f"{log_prefix} Logged interaction DIRECTLY due to queueing failure.")
-            except Exception as fallback_direct_log_err:
-                logger.error(f"❌ {log_prefix}: Fallback direct logging ALSO FAILED: {fallback_direct_log_err}")
-            finally:
-                if fallback_db_session_for_log:
-                    fallback_db_session_for_log.close()
+        
+        final_duration_ms = (time.monotonic() - direct_start_time) * 1000.0
+        interaction_data_for_log['execution_time_ms'] = final_duration_ms
+        queue_interaction_for_batch_logging(**interaction_data_for_log)
 
         return response_to_return_to_client
 
-    async def _get_vector_search_file_index_context(self, query: str, priority: int = ELP0, stop_event_param: Optional[threading.Event] = None) -> str:
+
+    async def direct_generate(self, db: Session, user_input: str, session_id: str,
+                              vlm_description: Optional[str] = None,
+                              image_b64: Optional[str] = None) -> str:
+        """
+        High-level wrapper for ELP1 generation with a deterministic timeout watchdog.
+        Triggers a system-wide halt if the benchmarked time is exceeded.
+        """
+        req_id = f"dgen-watchdog-{uuid.uuid4()}"
+        log_prefix = f"⏱️ {req_id}|ELP1"
+
+        # Check if benchmark has run. If not, run without the watchdog.
+        if BENCHMARK_ELP1_TIME_MS <= 0:
+            logger.warning(f"{log_prefix}: BENCHMARK_ELP1_TIME_MS not set. Running direct_generate without timeout watchdog.")
+            return await self._direct_generate_logic(db, user_input, session_id, vlm_description, image_b64)
+
+        timeout_event = asyncio.Event()
+        task_done_event = asyncio.Event()
+        timeout_duration_sec = BENCHMARK_ELP1_TIME_MS / 1000.0
+        logger.info(f"{log_prefix}: Starting ELP1 task with a timeout of {timeout_duration_sec:.2f} seconds.")
+
+        async def watchdog():
+            try:
+                # Wait for the main task to signal completion OR for the timeout to trigger
+                await asyncio.wait_for(task_done_event.wait(), timeout=timeout_duration_sec)
+                logger.debug(f"{log_prefix} Watchdog: Task completed in time. Exiting cleanly.")
+            except asyncio.TimeoutError:
+                logger.critical(f"!!!!!!!!!!!!!! ELP1 TIMEOUT !!!!!!!!!!!!!!")
+                logger.critical(f"Task exceeded benchmark of {BENCHMARK_ELP1_TIME_MS:.2f} ms.")
+                logger.critical("Your processor too slow! Management Failure! Discarding queue")
+                
+                # Signal that a timeout occurred
+                timeout_event.set()
+
+                # Trigger the system-wide kill switch
+                if cortex_backbone_provider:
+                    # Run the blocking kill function in a separate thread to not block the watchdog
+                    await asyncio.to_thread(cortex_backbone_provider.kill_all_workers, "ELP1 performance timeout")
+                else:
+                    logger.error("WATCHDOG: cortex_backbone_provider not available to kill workers!")
+
+        # Start the watchdog as a background task
+        watchdog_task = asyncio.create_task(watchdog())
+
+        try:
+            # Run the actual generation logic
+            result = await self._direct_generate_logic(db, user_input, session_id, vlm_description, image_b64)
+            
+            # If the task finishes, signal the watchdog and wait for it to exit
+            if not timeout_event.is_set():
+                task_done_event.set()
+                await watchdog_task
+                return result
+            else:
+                # This case is unlikely but possible if the task finishes right as the timeout hits
+                logger.warning(f"{log_prefix}: Task finished, but timeout event was already set. A kill signal may have been sent.")
+                raise TaskInterruptedException("Processing was terminated due to a performance timeout.")
+
+        except Exception as e:
+            # If the main task fails for any other reason, ensure the watchdog is cleaned up
+            if not task_done_event.is_set():
+                task_done_event.set()
+            await watchdog_task # Wait for watchdog to finish
+            raise e # Re-raise the original error
+
+    async def _get_vector_search_file_index_context(self, query: str, session_id_for_log: str, priority: int = ELP0,
+                                                    stop_event_param: Optional[threading.Event] = None) -> str:
         """
         Performs a vector similarity search on the global file index vector store.
         If no vector results are found, attempts a fuzzy search on the SQL FileIndex table as a fallback.
         Formats the results. Explicitly uses _embed_texts for prioritized query embedding.
+
+        MODIFIED: Now accepts session_id_for_log to prevent using the wrong session ID from self.current_session_id during background tasks.
         """
-        log_prefix = f"🔍 FileVecSearch|ELP{priority}|{self.current_session_id or 'NoSession'}"
+        log_prefix = f"🔍 FileVecSearch|ELP{priority}|{session_id_for_log or 'NoSession'}"
         logger.debug(f"{log_prefix} Attempting file search for query: '{query[:50]}...'")
 
-        global_file_vs = get_global_file_index_vectorstore() # Synchronous call
+        global_file_vs = get_global_file_index_vectorstore()  # Synchronous call
 
         # --- Vector Search Attempt ---
         vector_search_succeeded = False
-        search_results_docs: List[Any] = [] # Will hold Langchain Document objects
+        search_results_docs: List[Any] = []  # Will hold Langchain Document objects
 
         if not global_file_vs:
             logger.warning(f"{log_prefix} Global file index vector store not available for vector search.")
@@ -5154,19 +5129,21 @@ class CortexThoughts:
                 if hasattr(self.provider.embeddings, '_embed_texts') and \
                         callable(getattr(self.provider.embeddings, '_embed_texts')):
                     embedding_result_list = await asyncio.to_thread(
-                        self.provider.embeddings._embed_texts, [query], priority=priority # type: ignore
+                        self.provider.embeddings._embed_texts, [query], priority=priority  # type: ignore
                     )
                     if embedding_result_list and len(embedding_result_list) > 0:
                         query_vector = embedding_result_list[0]
                     else:
                         logger.error(f"{log_prefix} _embed_texts returned None or empty list for query.")
                 else:
-                    logger.error(f"{log_prefix} Embeddings object missing '_embed_texts'. Cannot perform prioritized query embedding.")
+                    logger.error(
+                        f"{log_prefix} Embeddings object missing '_embed_texts'. Cannot perform prioritized query embedding.")
 
                 if not query_vector:
                     logger.error(f"{log_prefix} Failed to embed query for vector search (query_vector is None).")
                 else:
-                    logger.debug(f"{log_prefix} Query embedded. Performing similarity_search_by_vector (k={RAG_FILE_INDEX_COUNT})...")
+                    logger.debug(
+                        f"{log_prefix} Query embedded. Performing similarity_search_by_vector (k={RAG_FILE_INDEX_COUNT})...")
                     # Perform search using the pre-computed vector
                     search_results_docs = await asyncio.to_thread(
                         global_file_vs.similarity_search_by_vector,
@@ -5181,7 +5158,7 @@ class CortexThoughts:
 
             except TaskInterruptedException as tie:
                 logger.warning(f"🚦 {log_prefix} Vector file search INTERRUPTED: {tie}")
-                raise # Re-raise to be handled by the caller
+                raise  # Re-raise to be handled by the caller
             except Exception as e:
                 logger.error(f"❌ {log_prefix} Error during vector file search: {e}")
                 logger.exception(f"{log_prefix} Vector File Search Traceback:")
@@ -5191,13 +5168,15 @@ class CortexThoughts:
         fuzzy_search_results_text_list: List[str] = []
         if not vector_search_succeeded:
             if not FUZZY_AVAILABLE:
-                logger.warning(f"{log_prefix} Vector search failed and Fuzzy search (thefuzz) is not available. No file context.")
+                logger.warning(
+                    f"{log_prefix} Vector search failed and Fuzzy search (thefuzz) is not available. No file context.")
                 return "No relevant file content found (vector search failed, fuzzy search unavailable)."
 
-            logger.info(f"{log_prefix} Vector search yielded no results. Attempting FUZZY search fallback for query: '{query[:50]}...'")
+            logger.info(
+                f"{log_prefix} Vector search yielded no results. Attempting FUZZY search fallback for query: '{query[:50]}...'")
             db_for_fuzzy: Optional[Session] = None
             try:
-                db_for_fuzzy = SessionLocal() # type: ignore
+                db_for_fuzzy = SessionLocal()  # type: ignore
                 if not db_for_fuzzy: raise RuntimeError("Failed to get DB session for fuzzy search.")
 
                 # Fetch a reasonable number of candidates from SQL to perform fuzzy search on
@@ -5205,14 +5184,15 @@ class CortexThoughts:
                 # We search against file_name and indexed_content (if not too long).
                 # Order by last_modified_os to potentially get more relevant recent files.
                 candidate_records = db_for_fuzzy.query(FileIndex).filter(
-                    FileIndex.index_status.in_(['indexed_text', 'success', 'partial_vlm_error']) # Only search indexed files
-                ).order_by(desc(FileIndex.last_modified_os)).limit(500).all() # Limit candidates
+                    FileIndex.index_status.in_(['indexed_text', 'success', 'partial_vlm_error'])
+                    # Only search indexed files
+                ).order_by(desc(FileIndex.last_modified_os)).limit(500).all()  # Limit candidates
 
                 if not candidate_records:
                     logger.info(f"{log_prefix} FUZZY: No candidate records in SQL DB for fuzzy search.")
                 else:
                     logger.debug(f"{log_prefix} FUZZY: Found {len(candidate_records)} candidate records from SQL.")
-                    fuzzy_matches: List[Tuple[FileIndex, int]] = [] # Store (record, score)
+                    fuzzy_matches: List[Tuple[FileIndex, int]] = []  # Store (record, score)
 
                     for record in candidate_records:
                         if stop_event_param and stop_event_param.is_set():  # Check if passed and set
@@ -5222,7 +5202,8 @@ class CortexThoughts:
                         text_to_match_on = record.file_name or ""
                         if record.indexed_content:
                             # Use a snippet of content to keep fuzzy search performant
-                            content_snippet = (record.indexed_content[:500] + "...") if len(record.indexed_content) > 500 else record.indexed_content
+                            content_snippet = (record.indexed_content[:500] + "...") if len(
+                                record.indexed_content) > 500 else record.indexed_content
                             text_to_match_on += " " + content_snippet
 
                         if not text_to_match_on.strip(): continue
@@ -5230,17 +5211,20 @@ class CortexThoughts:
                         # Use fuzz.partial_ratio for substring matching, good for finding queries within larger text
                         score = fuzz.partial_ratio(query.lower(), text_to_match_on.lower())
 
-                        if score >= FUZZY_SEARCH_THRESHOLD_APP: # FUZZY_SEARCH_THRESHOLD_APP from app.py/config
+                        if score >= FUZZY_SEARCH_THRESHOLD_APP:  # FUZZY_SEARCH_THRESHOLD_APP from app.py/config
                             fuzzy_matches.append((record, score))
 
                     if fuzzy_matches:
                         # Sort by score descending, then by last_modified_os descending
-                        fuzzy_matches.sort(key=lambda x: (x[1], x[0].last_modified_os or datetime.datetime.min), reverse=True)
-                        top_fuzzy_matches = fuzzy_matches[:RAG_FILE_INDEX_COUNT] # Take top N
-                        logger.info(f"{log_prefix} FUZZY: Found {len(top_fuzzy_matches)} matches with score >= {FUZZY_SEARCH_THRESHOLD_APP}.")
+                        fuzzy_matches.sort(key=lambda x: (x[1], x[0].last_modified_os or datetime.datetime.min),
+                                           reverse=True)
+                        top_fuzzy_matches = fuzzy_matches[:RAG_FILE_INDEX_COUNT]  # Take top N
+                        logger.info(
+                            f"{log_prefix} FUZZY: Found {len(top_fuzzy_matches)} matches with score >= {FUZZY_SEARCH_THRESHOLD_APP}.")
 
                         for i, (record, score) in enumerate(top_fuzzy_matches):
-                            content_snippet = (record.indexed_content[:300] + "...") if record.indexed_content and len(record.indexed_content) > 300 else (record.indexed_content or "[No content]")
+                            content_snippet = (record.indexed_content[:300] + "...") if record.indexed_content and len(
+                                record.indexed_content) > 300 else (record.indexed_content or "[No content]")
                             entry = (
                                 f"--- Fuzzy File Result {i + 1} (Score: {score}) ---\n"
                                 f"File: {record.file_name}\nPath Hint: ...{record.file_path[-70:]}\nModified: {record.last_modified_os.strftime('%Y-%m-%d %H:%M') if record.last_modified_os else 'N/A'}\n"
@@ -5248,12 +5232,14 @@ class CortexThoughts:
                             )
                             fuzzy_search_results_text_list.append(entry)
                     else:
-                        logger.info(f"{log_prefix} FUZZY: No matches found above threshold {FUZZY_SEARCH_THRESHOLD_APP}.")
+                        logger.info(
+                            f"{log_prefix} FUZZY: No matches found above threshold {FUZZY_SEARCH_THRESHOLD_APP}.")
 
             except Exception as e_fuzzy:
                 logger.error(f"❌ {log_prefix} Error during FUZZY search: {e_fuzzy}")
                 logger.exception(f"{log_prefix} Fuzzy Search Traceback:")
-                fuzzy_search_results_text_list.append(f"[Error performing fuzzy file search: {type(e_fuzzy).__name__}]\n")
+                fuzzy_search_results_text_list.append(
+                    f"[Error performing fuzzy file search: {type(e_fuzzy).__name__}]\n")
             finally:
                 if db_for_fuzzy: db_for_fuzzy.close()
 
@@ -5261,7 +5247,7 @@ class CortexThoughts:
         if vector_search_succeeded and search_results_docs:
             context_parts = []
             max_snippet_len = 300
-            max_total_chars = 2000 # Max length for combined vector context
+            max_total_chars = 2000  # Max length for combined vector context
             current_chars = 0
             for i, doc in enumerate(search_results_docs):
                 if not hasattr(doc, 'page_content') or not hasattr(doc, 'metadata'):
@@ -5270,15 +5256,17 @@ class CortexThoughts:
                 content = doc.page_content
                 metadata = doc.metadata
                 file_path = metadata.get("source", "UnkPath")
-                file_name = metadata.get("file_name", os.path.basename(file_path) if file_path != "UnkPath" else "UnkFile")
+                file_name = metadata.get("file_name",
+                                         os.path.basename(file_path) if file_path != "UnkPath" else "UnkFile")
                 last_mod = metadata.get("last_modified", "UnkDate")
                 # Langchain Chroma typically returns relevance_score which is distance (lower is better).
                 # We can invert it or just display as is.
-                relevance_score = doc.metadata.get('relevance_score', 'N/A') if isinstance(doc.metadata, dict) else 'N/A'
+                relevance_score = doc.metadata.get('relevance_score', 'N/A') if isinstance(doc.metadata,
+                                                                                           dict) else 'N/A'
 
                 snippet = content[:max_snippet_len] + ("..." if len(content) > max_snippet_len else "")
                 entry = (
-                    f"--- Vector File Result {i + 1} (Score: {relevance_score}) ---\n" # Score might be distance
+                    f"--- Vector File Result {i + 1} (Score: {relevance_score}) ---\n"  # Score might be distance
                     f"File: {file_name}\nPath Hint: ...{file_path[-70:]}\nModified: {last_mod}\n"
                     f"Content Snippet: {snippet}\n---\n")
                 if current_chars + len(entry) > max_total_chars:
@@ -5291,9 +5279,10 @@ class CortexThoughts:
             # Combine fuzzy results, already formatted as text strings
             # Limit total length of fuzzy results string for the prompt
             combined_fuzzy_text = "".join(fuzzy_search_results_text_list)
-            max_fuzzy_chars = 2000 # Max length for combined fuzzy context
+            max_fuzzy_chars = 2000  # Max length for combined fuzzy context
             if len(combined_fuzzy_text) > max_fuzzy_chars:
-                return combined_fuzzy_text[:max_fuzzy_chars] + "\n[Fuzzy file search context truncated due to length]...\n"
+                return combined_fuzzy_text[
+                       :max_fuzzy_chars] + "\n[Fuzzy file search context truncated due to length]...\n"
             return combined_fuzzy_text
         else:
             # Neither vector nor fuzzy search yielded results
@@ -6353,8 +6342,15 @@ class CortexThoughts:
                     emotion_analysis_str = await asyncio.to_thread(self._run_emotion_analysis, db, user_input, interaction_data)
                     
                     history_rag_for_search_query = self._format_docs(session_docs + reflection_docs, "Combined History RAG")
-                    keyword_file_query = await self._generate_file_search_query_async(db, current_input_for_llm_analysis, direct_hist_prompt, history_rag_for_search_query, session_id)
-                    vec_file_ctx_result_str = await self._get_vector_search_file_index_context(keyword_file_query, ELP0, stop_event_for_bg)
+                    #keyword_file_query = await self._generate_file_search_query_async(db, current_input_for_llm_analysis, direct_hist_prompt, history_rag_for_search_query, session_id) (Broken)
+                    # --- MODIFICATION: Bypass AI query generation for file search ---
+                    # The original call to _generate_file_search_query_async is commented out.
+                    # keyword_file_query = await self._generate_file_search_query_async(db, current_input_for_llm_analysis, direct_hist_prompt, history_rag_for_search_query, session_id)
+                    logger.info(f"{log_prefix} Bypassing file query generation. Using direct input for vector search.")
+                    # Use the user's input directly as the query for the file search.
+                    keyword_file_query = current_input_for_llm_analysis
+                    # --- END MODIFICATION ---
+                    vec_file_ctx_result_str = await self._get_vector_search_file_index_context(keyword_file_query, session_id, ELP0, stop_event_for_bg)
                     
                     url_ctx_untruncated = self._format_docs(url_docs, "URL Context")
                     sess_refl_rag_untrunc = history_rag_for_search_query
