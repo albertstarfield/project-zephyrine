@@ -6056,7 +6056,7 @@ class CortexThoughts:
                 for i, line in enumerate(f):
                     processed_rows_or_lines += 1
                     if not line.strip(): continue
-                    bg_user_input = f"Analyze this entry: {line.strip()}"
+                    bg_user_input = f"{line.strip()}"
                     bg_session_id = f"ingest_{uploaded_record.ingestion_id}_entry_{i + 1}"
 
                     # Use the new no-commit function
@@ -6346,7 +6346,7 @@ class CortexThoughts:
                     # --- MODIFICATION: Bypass AI query generation for file search ---
                     # The original call to _generate_file_search_query_async is commented out.
                     # keyword_file_query = await self._generate_file_search_query_async(db, current_input_for_llm_analysis, direct_hist_prompt, history_rag_for_search_query, session_id)
-                    logger.info(f"{log_prefix} Bypassing file query generation. Using direct input for vector search.")
+                    logger.info(f"{log_prefix} Bypassing file query generation. Using direct input for vector search. {current_input_for_llm_analysis}")
                     # Use the user's input directly as the query for the file search.
                     keyword_file_query = current_input_for_llm_analysis
                     # --- END MODIFICATION ---
