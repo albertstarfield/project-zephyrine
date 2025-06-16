@@ -65,6 +65,26 @@ if LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:
         LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = None
 
 
+# Controls the duty cycle of the ELP0 priority lock to reduce sustained CPU/GPU load.
+# Can be a string preset or a number from 0 to 100 (%).
+# 0 or "Default": No relaxation, ELP0 tasks run at full capacity.
+# 100 or "EmergencyReservative": ELP0 tasks are fully suspended.
+AGENTIC_RELAXATION_MODE = os.getenv("AGENTIC_RELAXATION_MODE", "default") # Preset: Default, Relaxed, Vacation, HyperRelaxed, Conservative, ExtremePowerSaving, EmergencyReservative
+
+AGENTIC_RELAXATION_PRESETS = {
+    "default": 0,
+    "relaxed": 30,
+    "vacation": 50,
+    "hyperrelaxed": 70,
+    "conservative": 93,
+    "extremepowersaving": 98,
+    "emergencyreservative": 100
+}
+
+# The time period (in seconds) over which the PWM cycle occurs.
+AGENTIC_RELAXATION_PERIOD_SECONDS = 2.0
+
+
 
 USER_AGENTS = [
     'Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/114.0.0.0 Safari/537.36',
@@ -709,7 +729,7 @@ Faulty AI Output:
 Corrected JSON Output (ONLY the JSON object itself, no other text, no markdown, no wrappers):
 """
 
-PROMPT_SELF_REFLECTION_TOPICS = """Analyze the following summary of recent global conversation history. Identify up to {max_topics} distinct key themes and Possible branch or possible answer from this, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the AI (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A. Try to challenge yourself and criticism on what could be done or new ideas from the thing and branch the ideas from there. then validate against the RAG or the snippets augmented on this prompt.
+PROMPT_SELF_REFLECTION_TOPICS = """Analyze and Attempt to reanswer and the most Complete and elaborative deep long answer! The following summary of recent global conversation history. Identify up to {max_topics} distinct key themes and Possible branch or possible answer from this, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the AI (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A. Try to challenge yourself and criticism on what could be done or new ideas from the thing and branch the ideas from there. then validate against the RAG or the snippets augmented on this prompt.
 
 Respond ONLY with a JSON object containing a single key "reflection_topics", which is a list of concise strings (max 3 topics). Each string should represent a single topic for reflection. If no specific topics stand out, return an empty list.
 
@@ -796,7 +816,7 @@ JSON Object:
 
 PROMPT_GENERATE_FILE_SEARCH_QUERY = """
 # ROLE: Keyword Extraction for Semantic Search
-# PRIMARY GOAL: Analyze the user's query and conversation history to extract the most relevant, concise keywords or key phrases for a local file search.
+# PRIMARY GOAL: Analyze and Answer the user's query and conversation history to extract the most relevant, concise keywords or key phrases for a local file search.
 # CRITICAL INSTRUCTIONS:
 # 1.  You MUST output ONLY a short string of 3-7 key search words.
 # 2.  The output should be a simple string, NOT a JSON object.

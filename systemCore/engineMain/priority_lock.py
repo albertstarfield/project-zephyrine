@@ -2,15 +2,81 @@
 
 import threading
 import time
-import subprocess # To store the process handle
+import subprocess  # To store the process handle
 from typing import Optional, Tuple
 from loguru import logger
 import platform
 import os
 
+# --- Configuration Import ---
+try:
+    from CortexConfiguration import AGENTIC_RELAXATION_MODE, AGENTIC_RELAXATION_PRESETS, \
+        AGENTIC_RELAXATION_PERIOD_SECONDS
+except ImportError:
+    # Define fallbacks if config can't be imported (e.g., during testing)
+    AGENTIC_RELAXATION_MODE = "Default"
+    AGENTIC_RELAXATION_PRESETS = {"default": 0}
+    AGENTIC_RELAXATION_PERIOD_SECONDS = 2.0
+
 # Priority Levels
-ELP0 = 0 # Background Tasks (File Indexer, Reflection)
-ELP1 = 1 # Foreground User Requests
+ELP0 = 0  # Background Tasks (File Indexer, Reflection)
+ELP1 = 1  # Foreground User Requests
+
+
+class AgenticRelaxationThread(threading.Thread):
+    """
+    A thread that implements PWM-style lock acquisition on ELP0 to throttle
+    background tasks and manage thermals/power.
+    """
+
+    def __init__(self, lock: 'PriorityQuotaLock', duty_cycle_off: float, period_sec: float,
+                 stop_event: threading.Event):
+        super().__init__(name="AgenticRelaxationThread", daemon=True)
+        self.lock = lock
+        self.duty_cycle_off = duty_cycle_off  # e.g., 0.3 for 30% off time
+        self.period_sec = period_sec
+        self.stop_event = stop_event
+        self.off_time = self.period_sec * self.duty_cycle_off
+        self.on_time = self.period_sec * (1.0 - self.duty_cycle_off)
+        logger.info(
+            f"AgenticRelaxationThread initialized. Off-Time: {self.off_time:.2f}s, On-Time: {self.on_time:.2f}s per cycle.")
+
+    def run(self):
+        logger.info("✅ AgenticRelaxationThread started.")
+        while not self.stop_event.is_set():
+            try:
+                # --- OFF Cycle: Hold the lock as ELP0 ---
+                if self.off_time > 0:
+                    # Acquire the lock as a low-priority (ELP0) task.
+                    # This can be interrupted by an ELP1 task.
+                    # We don't register a process, as this thread doesn't have one to kill.
+                    was_acquired = self.lock.acquire(priority=ELP0,
+                                                     timeout=self.on_time)  # Wait for lock during on-time
+
+                    if was_acquired:
+                        try:
+                            # Hold the lock for the "off" duration
+                            logger.trace(f"Relaxation thread acquired ELP0 lock. Holding for {self.off_time:.2f}s...")
+                            self.stop_event.wait(self.off_time)
+                        finally:
+                            logger.trace("Relaxation thread releasing ELP0 lock.")
+                            self.lock.release()
+                    else:
+                        # Could not acquire lock during on_time, means an ELP0 task is running.
+                        # This is fine, we just wait and try again next cycle.
+                        logger.trace(
+                            f"Relaxation thread could not acquire lock, another ELP0 task is active. Waiting for next cycle.")
+                        self.stop_event.wait(self.period_sec)
+                else:  # on_time is 100%
+                    self.stop_event.wait(self.period_sec)
+
+            except Exception as e:
+                logger.error(f"Error in AgenticRelaxationThread loop: {e}")
+                # Avoid busy-looping on error
+                self.stop_event.wait(5)
+
+        logger.info("🛑 AgenticRelaxationThread has been shut down.")
+
 
 class PriorityQuotaLock:
     """
@@ -27,9 +93,50 @@ class PriorityQuotaLock:
         self._lock_holder_proc: Optional[subprocess.Popen] = None
         self._lock_holder_thread_ident: Optional[int] = None
         self._elp1_interrupt_quota: int = self.QUOTA_MAX
-        self._elp1_waiting_count = 0 # How many ELP1 threads are waiting
+        self._elp1_waiting_count = 0  # How many ELP1 threads are waiting
+
+        # --- NEW: Relaxation Thread ---
+        self._relaxation_thread: Optional[AgenticRelaxationThread] = None
+        self._relaxation_stop_event = threading.Event()
+        self._initialize_relaxation()
 
         logger.info("🚦 PriorityQuotaLock initialized. ELP1 Interrupt Quota: {}", self.QUOTA_MAX)
+
+    def _initialize_relaxation(self):
+        mode = str(AGENTIC_RELAXATION_MODE).lower().replace(" ", "")
+        presets = {k.lower(): v for k, v in AGENTIC_RELAXATION_PRESETS.items()}
+
+        duty_cycle_off_percent = 0
+        if mode in presets:
+            duty_cycle_off_percent = presets[mode]
+        else:
+            try:
+                duty_cycle_off_percent = float(mode)
+            except ValueError:
+                logger.warning(f"Invalid AGENTIC_RELAXATION_MODE '{AGENTIC_RELAXATION_MODE}'. Defaulting to 0%.")
+
+        duty_cycle_off_percent = max(0, min(100, duty_cycle_off_percent))  # Clamp between 0 and 100
+
+        if duty_cycle_off_percent > 0:
+            duty_cycle_float = duty_cycle_off_percent / 100.0
+            logger.info(f"Activating AgenticRelaxation with {duty_cycle_off_percent}% off-cycle.")
+            self._relaxation_thread = AgenticRelaxationThread(
+                lock=self,
+                duty_cycle_off=duty_cycle_float,
+                period_sec=AGENTIC_RELAXATION_PERIOD_SECONDS,
+                stop_event=self._relaxation_stop_event
+            )
+            self._relaxation_thread.start()
+        else:
+            logger.info("AgenticRelaxation is disabled (0% off-cycle).")
+
+    def shutdown_relaxation_thread(self):
+        if self._relaxation_thread and self._relaxation_thread.is_alive():
+            logger.info("Signaling AgenticRelaxationThread to stop...")
+            self._relaxation_stop_event.set()
+            self._relaxation_thread.join(timeout=AGENTIC_RELAXATION_PERIOD_SECONDS + 1)
+            if self._relaxation_thread.is_alive():
+                logger.warning("AgenticRelaxationThread did not stop in time.")
 
     def acquire(self, priority: int, proc: Optional[subprocess.Popen] = None, timeout: Optional[float] = None) -> bool:
         acquire_start_time = time.monotonic()
@@ -179,29 +286,23 @@ class PriorityQuotaLock:
                     logger.trace("{}:: Woke up from condition.wait(). Signaled: {}. Re-evaluating...", log_prefix,
                                  signaled)
 
-            # --- End Wait Condition Loop ---
-            # This part should ideally not be reached due to return statements in the loop
-            # logger.error("{}:: Exited acquire loop unexpectedly.", log_prefix)
-            # if priority == ELP1: self._elp1_waiting_count -= 1
-            # return False
-
-
     def set_holder_process(self, proc: subprocess.Popen):
         """Stores the Popen object associated with the ELP0 lock holder."""
         with self._condition:
             log_prefix = f"PQLock|SetProc|Thr{threading.get_ident()}"
             if self._is_locked and self._lock_holder_priority == ELP0 and self._lock_holder_thread_ident == threading.get_ident():
                 if self._lock_holder_proc is not None and self._lock_holder_proc is not proc:
-                     logger.warning("{}:: Overwriting existing process for ELP0 holder.", log_prefix)
+                    logger.warning("{}:: Overwriting existing process for ELP0 holder.", log_prefix)
                 self._lock_holder_proc = proc
-                logger.trace("{}:: Associated process PID {} with ELP0 lock holder.", log_prefix, proc.pid if proc else 'None')
+                logger.trace("{}:: Associated process PID {} with ELP0 lock holder.", log_prefix,
+                             proc.pid if proc else 'None')
             elif self._is_locked and self._lock_holder_priority == ELP1:
-                 logger.error("{}:: Attempted to set process for ELP1 holder. Ignoring.", log_prefix)
+                logger.error("{}:: Attempted to set process for ELP1 holder. Ignoring.", log_prefix)
             elif not self._is_locked:
-                 logger.error("{}:: Attempted to set process when lock not held. Ignoring.", log_prefix)
-            else: # Lock held by different ELP0 thread?
-                 logger.error("{}:: Attempted to set process, but lock held by different thread ({}). Ignoring.", log_prefix, self._lock_holder_thread_ident)
-
+                logger.error("{}:: Attempted to set process when lock not held. Ignoring.", log_prefix)
+            else:  # Lock held by different ELP0 thread?
+                logger.error("{}:: Attempted to set process, but lock held by different thread ({}). Ignoring.",
+                             log_prefix, self._lock_holder_thread_ident)
 
     def release(self):
         """Releases the lock and notifies waiting threads."""
@@ -218,9 +319,11 @@ class PriorityQuotaLock:
             if self._lock_holder_thread_ident != releasing_thread_ident:
                 # This might happen if ELP0 was interrupted and killed by ELP1,
                 # but the original ELP0 thread eventually tries to release.
-                 logger.warning("{}:: Thread attempting release does not match current lock holder ({}). Possible interruption occurred.", log_prefix, self._lock_holder_thread_ident)
-                 # Don't actually release if the holder is different, the interruptor already took over.
-                 return
+                logger.warning(
+                    "{}:: Thread attempting release does not match current lock holder ({}). Possible interruption occurred.",
+                    log_prefix, self._lock_holder_thread_ident)
+                # Don't actually release if the holder is different, the interruptor already took over.
+                return
 
             # Clear lock state
             holder_prio = self._lock_holder_priority
