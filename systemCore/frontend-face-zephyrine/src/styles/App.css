@@ -27,6 +27,7 @@
 @import 'components/_cloudiaSky.css'; /* Day Themed */
 @import 'components/_nightSky.css'; /* Dark Themed */
 @import 'components/_splashScreen.css'; /* NEW: Splash screen styles */
+@import 'components/_preSplashScreen.css'; /* NEW: Pre-splash screen styles */
 
 
 /* 6. Views / Page-specific styles */
