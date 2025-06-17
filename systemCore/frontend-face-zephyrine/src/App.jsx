@@ -305,7 +305,6 @@ const AppContent = () => {
           transition: 'opacity 0.5s ease-out',
           pointerEvents: appReady ? 'auto' : 'none',
       }}>
-        <div className="logo"><img src="/img/ProjectZephyrine023LogoRenewal.png" alt="Project Zephyrine Logo" className="project-logo"/></div>
         
         <div id="main">
           <SystemOverlay systemInfo={systemInfo} />
