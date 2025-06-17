@@ -19,11 +19,13 @@
 <hr>
 
 
-## Project Zephyrine: Yet another An Open-Source OpenAI API Implementation, and very simple AI Assistant for Your Computer.
+## Project Zephyrine: Yet another An Open-Source OpenAI API Implementation, and very simple Edge-AI (Assistant) for Your Computer.
 
-**Project Zephyrine** is a collaborative effort spearheaded by the Zephyrine Foundation, bringing together expertise from professional AI engineers within a leading corporation, researchers from RisTIE Brawijaya University's Electrical Engineering, Internal People of Zephyrine Foundation, Freelancers, and independent developer Albert.
+**Project Zephyrine** is just by the Zephyrine Foundation product. it's just **Qwen 2.5 & Mixed Bread AI**, **Nothing to see here.**
 
-**Vision:** Our vision is to empower users with a personal AI assistant that utilizes the processing power of their local machines. We aim to offer an alternative to cloud-based assistants and reduce reliance on external infrastructure.
+bringing together expertise from random AI corporation, researchers from RisTIE Brawijaya University's Electrical Engineering, Internal People of Zephyrine Foundation, Freelancers, and independent developer Albert.
+
+**Vision:** Our vision is to empower users with a personal AI assistant that utilizes the processing power of their local machines. We aim to offer an alternative to cloud-based assistants and reduce reliance on external infrastructure. or Let's just say adaptive Edge-AI
 
 **Open-Source and Freely Available:** Project Zephyrine is a fully open-source project, encouraging community contribution and development.
 
@@ -55,12 +57,11 @@
 
 ## 📃 Main features
 
--   [x] Operates locally on your computer, requiring an internet connection solely for web access.
+-   [x] Operates locally on your computer, requiring an internet connection solely for web access or initial setup or ZephyMesh.
 -   [x] Can function exclusively on CPU architectures, such as amd64 and arm64/aarch64.
 -   [x] Provides compatibility with Windows* (untested), MacOS (untested on x86_64), and Linux operating systems.
--   [x] Features partial GPU/MPS/FPGA (opencl)/Tensor acceleration using cuBLAS, openBLAS, Vulkan, and Metal.
+-   [x] Features partial GPU/MPS/FPGA (Manual Configuration required) (opencl)/Tensor acceleration using cuBLAS, openBLAS, Vulkan, and Metal.
 -   [x] Web access.
--   [x] Chat history functionality.
 
 Just a heads up, some details aren't listed here or in the `readme.md` file. Instead, they've been moved to the `TodoFeatureFullList.md` document or you can check them out [here](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/TodoFeatureFullList.md).
 
@@ -119,7 +120,7 @@ If you have a particular file, your application may help make it available to ot
 >
 > **This product is not for you.**
 > 
->This project aims to do mutual growth in intellect between the Al (Zephy) and the user (the human), moving beyond one-way passive consumption.
+>This project aims to do mutual growth in intellect between the AI (Zephy) and the user (the human), moving beyond one-way passive consumption.
 >If your expectation is for an AI that instantly provides all answers without requiring your active involvement and development, 
 > 
 >**look somewhere else. You have been warned.**

@@ -164,15 +164,17 @@ function ChatPage({
           setIsGenerating(false);
           const finalContent = accumulatedContentRef.current;
           if (finalContent && currentAssistantMessageId.current) {
-            const finalMessage = {
-              id: currentAssistantMessageId.current,
-              sender: "assistant",
-              content: finalContent,
-              chat_id: chatId,
-              created_at: streamingAssistantMessage?.created_at || new Date().toISOString(),
-              isLoading: false,
-            };
+            // Use the functional update form for setMessages
             setMessages((prev) => {
+                const finalMessage = {
+                    id: currentAssistantMessageId.current,
+                    sender: "assistant",
+                    content: finalContent,
+                    chat_id: chatId,
+                    created_at: new Date().toISOString(), // Or use a ref to store the start time
+                    isLoading: false,
+                };
+
                 const existing = prev.find(msg => msg.id === finalMessage.id);
                 if (existing) {
                     return prev.map(msg => msg.id === finalMessage.id ? finalMessage : msg);
@@ -180,11 +182,9 @@ function ChatPage({
                     return [...prev, finalMessage];
                 }
             });
-            const userMessagesInHistory = messages.filter(m => m.sender === 'user' && !m.id?.startsWith('temp-')).length;
-            if (userMessagesInHistory === 1 && messages.filter(m => m.sender === 'assistant' && !m.isLoading).length === 0) {
-                 console.log("ChatPage: First assistant response complete, calling triggerSidebarRefresh.");
-                 triggerSidebarRefresh();
-            }
+            // You might need to use a ref to check the message count here
+            // if you remove 'messages' from the dependency array.
+            triggerSidebarRefresh();
           }
           setStreamingAssistantMessage(null);
           accumulatedContentRef.current = "";
@@ -236,7 +236,7 @@ function ChatPage({
       currentAssistantMessageId.current = null;
       setIsLoadingHistory(false);
     }
-  }, [chatId, refreshHistory, messages, streamingAssistantMessage, updateSidebarHistory, triggerSidebarRefresh, user]); // <<<<<<<<<<<< CRITICAL FIX IS HERE
+  }, [chatId, refreshHistory, updateSidebarHistory, triggerSidebarRefresh, user]);
 
   const sendMessageOrRegenerate = async (contentToSend, isRegeneration = false) => {
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
