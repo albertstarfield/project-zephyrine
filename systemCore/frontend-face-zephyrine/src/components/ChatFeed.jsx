@@ -6,21 +6,13 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Copy, RefreshCw, Edit3 as Edit, Check, X } from "lucide-react";
 import rehypeRaw from 'rehype-raw';
-import ErrorBoundary from './ErrorBoundary'; // 1. Import the ErrorBoundary
+import ErrorBoundary from './ErrorBoundary';
 
 
-// New Imports for Math and Mermaid
 import remarkMath from 'remark-math';
 import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm'; 
-import remarkMermaid from 'remark-mermaidjs'; // Ensure you installed remark-mermaidjs correctly
-
-// Note: You might need to initialize Mermaid directly if remark-mermaidjs doesn't
-// automatically render. For now, it will simply render a <div>.
-// For direct rendering, you might wrap the Mermaid div in a useEffect with mermaid.init()
-// or use a dedicated component like 'react-mermaid'.
-// This example assumes remark-mermaidjs handles the basic wrapping.
-
+import remarkMermaid from 'remark-mermaidjs';
 
 const ChatFeed = ({
   messages,
@@ -51,13 +43,13 @@ const ChatFeed = ({
       const trimmedThinkContent = thinkContent.trim();
       // Basic HTML escaping for the content within <details>
       const escapedThinkContent = trimmedThinkContent
-        .replace(/&/g, "&")
-        .replace(/</g, "<")
-        .replace(/>/g, ">")
-        .replace(/"/g, "\"")
-        .replace(/'/g, "'");
+        .replace(/&/g, "&amp;")
+        .replace(/</g, "&lt;")
+        .replace(/>/g, "&gt;")
+        .replace(/"/g, "&quot;")
+        .replace(/'/g, "&#039;");
       return `<details class="thought-block">
-                <summary class="thought-summary"><span class="summary-icon"></span>🤔</summary>
+                <summary class="thought-summary"><span class="summary-icon"></span>View Zephy Backend Thoughts</summary>
                 <div class="thought-content">${escapedThinkContent}</div>
               </details>`;
     });
@@ -107,19 +99,12 @@ const ChatFeed = ({
     return (
       <ErrorBoundary>
       <ReactMarkdown
-        // Add remark plugins for math and mermaid
         remarkPlugins={[remarkGfm, remarkMath, remarkMermaid]}
-        // Add rehype plugins for raw HTML (for <think> blocks) and KaTeX
         rehypePlugins={[rehypeRaw, rehypeKatex]}
         components={{
           code({ node, inline, className, children, ...props }) {
             const match = /language-(\w+)/.exec(className || "");
-            // Handle Mermaid code blocks specifically
             if (className === 'language-mermaid') {
-              // The 'mermaid' class is used by remark-mermaidjs.
-              // You might need a global 'mermaid.init()' call or a custom component
-              // to fully render these dynamically if remark-mermaidjs doesn't
-              // handle it automatically. For now, it outputs a div with the code.
               return <div className="mermaid">{String(children).replace(/\n$/, "")}</div>;
             }
             return !inline && match ? (
@@ -137,8 +122,6 @@ const ChatFeed = ({
               </code>
             );
           },
-          // For math, remark-math and rehype-katex usually handle it automatically
-          // without needing specific component overrides for inline or block math.
         }}
       >
         {processMessageContent(contentToRender)}
@@ -147,6 +130,32 @@ const ChatFeed = ({
     );
   };
 
+  // Reusable sun icon SVG path
+  const SunIconSVG = (props) => (
+    <svg
+      viewBox="0 0 24 24"
+      stroke="currentColor"
+      fill="currentColor"
+      xmlns="http://www.w3.org/2000/svg"
+      {...props} // Pass through other props like className, style, etc.
+    >
+      <g>
+        <path
+          fillRule="evenodd"
+          clipRule="evenodd"
+          d="M12.0002 1.25C12.4144 1.25 12.7502 1.58579 12.7502 2V3C12.7502 3.41421 12.4144 3.75 12.0002 3.75C11.586 3.75 11.2502 3.41421 11.2502 3V2C11.2502 1.58579 11.586 1.25 12.0002 1.25ZM1.25017 12C1.25017 11.5858 1.58596 11.25 2.00017 11.25H3.00017C3.41438 11.25 3.75017 11.5858 3.75017 12C3.75017 12.4142 3.41438 12.75 3.00017 12.75H2.00017C1.58596 12.75 1.25017 12.4142 1.25017 12ZM20.2502 12C20.2502 11.5858 20.586 11.25 21.0002 11.25H22.0002C22.4144 11.25 22.7502 11.5858 22.7502 12C22.7502 12.4142 22.4144 12.75 22.0002 12.75H21.0002C20.586 12.75 20.2502 12.4142 20.2502 12Z"
+        ></path>
+        <path d="M22.1722 16.0424C20.8488 15.7306 20.1708 14.9891 19.5458 14.0435C19.1370 13.4250 18.4905 13.1875 17.8692 13.2526C17.9550 12.8486 18.0002 12.4296 18.0002 12C18.0002 8.68629 15.3139 6 12.0002 6C8.68646 6 6.00017 8.68629 6.00017 12C6.00017 12.3623 6.03228 12.7171 6.09380 13.0617C5.51698 13.0396 4.93367 13.2972 4.57004 13.8657C3.90775 14.9011 3.22910 15.7123 1.82816 16.0424C1.42498 16.1374 1.17516 16.5412 1.27016 16.9444C1.36516 17.3476 1.76901 17.5974 2.17218 17.5024C4.13929 17.0389 5.09416 15.8301 5.83365 14.6740C5.88442 14.5946 5.95388 14.5619 6.02981 14.5602C6.11032 14.5585 6.20392 14.5934 6.27565 14.6853C7.38876 16.1101 9.15759 17.75 12.0002 17.75C14.7604 17.75 16.5386 16.4804 17.7063 14.9195C17.7936 14.8027 17.9223 14.7449 18.0408 14.7427C18.1519 14.7406 18.2374 14.7844 18.2944 14.8705C19.0206 15.9692 19.9762 17.0660 21.8282 17.5024C22.2313 17.5974 22.6352 17.3478 22.7302 16.9446C22.8252 16.5414 22.5754 16.1376 22.1722 16.0426Z"></path>
+        <g opacity="0.5">
+          <path d="M4.39936 4.39838C4.69225 4.10549 5.16712 4.10549 5.46002 4.39838L5.85285 4.79122C6.14575 5.08411 6.14575 5.55898 5.85285 5.85188C5.55996 6.14477 5.08509 6.14477 4.79219 5.85188L4.39936 5.45904C4.10646 5.16615 4.10646 4.69127 4.39936 4.39838Z"></path>
+          <path d="M19.6009 4.39864C19.8938 4.69153 19.8938 5.16641 19.6009 5.45930L19.2081 5.85214C18.9152 6.14503 18.4403 6.14503 18.1474 5.85214C17.8545 5.55924 17.8545 5.08437 18.1474 4.79148L18.5402 4.39864C18.8331 4.10575 19.3080 4.10575 19.6009 4.39864Z"></path>
+        </g>
+        <g opacity="0.5">
+          <path d="M4.57004 18.8659C5.25688 17.7921 6.72749 17.8273 7.45770 18.762C8.44770 20.0293 9.82965 21.2502 12.0002 21.2502C14.2088 21.2502 15.5699 20.2714 16.5051 19.0211C17.2251 18.0587 18.7909 17.9015 19.5458 19.0437C20.1708 19.9893 20.8488 20.7308 22.1722 21.0426C22.5754 21.1376 22.8252 21.5414 22.7302 21.9446C22.6352 22.3478 22.2313 22.5976 21.8282 22.5026C19.9762 22.0662 19.0206 20.9694 18.2944 19.8707C18.2374 19.7846 18.1519 19.7408 18.0408 19.7429C17.9223 19.7451 17.7936 19.8029 17.7063 19.9197C16.5386 21.4806 14.7604 22.7502 12.0002 22.7502C9.15759 22.7502 7.38876 21.1103 6.27565 19.6855C6.20392 19.5936 6.11032 19.5587 6.02981 19.5604C5.95388 19.5621 5.88442 19.5948 5.83365 19.6742C5.09416 20.8303 4.13929 22.0391 2.17218 22.5026C1.76901 22.5976 1.36516 22.3478 1.27016 21.9446C1.17516 21.5414 1.42498 21.1376 1.82816 21.0426Z"></path>
+        </g>
+      </g>
+    </svg>
+  );
 
   return (
     <>
@@ -190,7 +199,7 @@ const ChatFeed = ({
               ></g>
               <g id="SVGRepo_iconCarrier">
                 <path
-                  d="M19 9L14 14.1599C13.7429 14.4323 13.4329 14.6493 13.089 14.7976C12.7451 14.9459 12.3745 15.0225 12 15.0225C11.6255 15.0225 11.2549 14.9459 10.9109 14.7976C10.567 14.6493 10.2571 14.4323 10 14.1599L5 9"
+                  d="M19 9L14 14.1599C13.7429 14.4323 13.4329 14.6493 13.0890 14.7976C12.7451 14.9459 12.3745 15.0225 12 15.0225C11.6255 15.0225 11.2549 14.9459 10.9109 14.7976C10.5670 14.6493 10.2571 14.4323 10 14.1599L5 9"
                   stroke="#595959"
                   strokeWidth="1.5"
                   strokeLinecap="round"
@@ -201,9 +210,10 @@ const ChatFeed = ({
             <p>Scroll down for usage examples</p>
           </div>
           <div className="example-categories">
+            {/* Row 1, Column 1 */}
             <div className="category">
               <div className="category-icon sun">
-                <svg viewBox="0 0 24 24" stroke="currentColor" fill="none" xmlns="http://www.w3.org/2000/svg"><g><path fillRule="evenodd" clipRule="evenodd" d="M12.0002 1.25C12.4144 1.25 12.7502 1.58579 12.7502 2V3C12.7502 3.41421 12.4144 3.75 12.0002 3.75C11.586 3.75 11.2502 3.41421 11.2502 3V2C11.2502 1.58579 11.586 1.25 12.0002 1.25ZM1.25017 12C1.25017 11.5858 1.58596 11.25 2.00017 11.25H3.00017C3.41438 11.25 3.75017 11.5858 3.75017 12C3.75017 12.4142 3.41438 12.75 3.00017 12.75H2.00017C1.58596 12.75 1.25017 12.4142 1.25017 12ZM20.2502 12C20.2502 11.5858 20.586 11.25 21.0002 11.25H22.0002C22.4144 11.25 22.7502 11.5858 22.7502 12C22.7502 12.4142 22.4144 12.75 22.0002 12.75H21.0002C20.586 12.75 20.2502 12.4142 20.2502 12Z" fill="#f4a61f"></path><path d="M22.1722 16.0424C20.8488 15.7306 20.1708 14.9891 19.5458 14.0435C19.137 13.425 18.4905 13.1875 17.8692 13.2526C17.955 12.8486 18.0002 12.4296 18.0002 12C18.0002 8.68629 15.3139 6 12.0002 6C8.68646 6 6.00017 8.68629 6.00017 12C6.00017 12.3623 6.03228 12.7171 6.0938 13.0617C5.51698 13.0396 4.93367 13.2972 4.57004 13.8657C3.90775 14.9011 3.2291 15.7123 1.82816 16.0424C1.42498 16.1374 1.17516 16.5412 1.27016 16.9444C1.36516 17.3476 1.76901 17.5974 2.17218 17.5024C4.13929 17.0389 5.09416 15.8301 5.83365 14.674C5.88442 14.5946 5.95388 14.5619 6.02981 14.5602C6.11032 14.5585 6.20392 14.5934 6.27565 14.6853C7.38876 16.1101 9.15759 17.75 12.0002 17.75C14.7604 17.75 16.5386 16.4804 17.7063 14.9195C17.7936 14.8027 17.9223 14.7449 18.0408 14.7427C18.1519 14.7406 18.2374 14.7844 18.2944 14.8705C19.0206 15.9692 19.9762 17.066 21.8282 17.5024C22.2313 17.5974 22.6352 17.3478 22.7302 16.9446C22.8252 16.5414 22.5754 16.1376 22.1722 16.0426Z" fill="#f4a61f"></path><g opacity="0.5"><path d="M4.39936 4.39838C4.69225 4.10549 5.16712 4.10549 5.46002 4.39838L5.85285 4.79122C6.14575 5.08411 6.14575 5.55898 5.85285 5.85188C5.55996 6.14477 5.08509 6.14477 4.79219 5.85188L4.39936 5.45904C4.10646 5.16615 4.10646 4.69127 4.39936 4.39838Z" fill="#f4a61f"></path><path d="M19.6009 4.39864C19.8938 4.69153 19.8938 5.16641 19.6009 5.4593L19.2081 5.85214C18.9152 6.14503 18.4403 6.14503 18.1474 5.85214C17.8545 5.55924 17.8545 5.08437 18.1474 4.79148L18.5402 4.39864C18.8331 4.10575 19.308 4.10575 19.6009 4.39864Z" fill="#f4a61f"></path></g><g opacity="0.5"><path d="M4.57004 18.8659C5.25688 17.7921 6.72749 17.8273 7.4577 18.762C8.4477 20.0293 9.82965 21.2502 12.0002 21.2502C14.2088 21.2502 15.5699 20.2714 16.5051 19.0211C17.2251 18.0587 18.7909 17.9015 19.5458 19.0437C20.1708 19.9893 20.8488 20.7308 22.1722 21.0426C22.5754 21.1376 22.8252 21.5414 22.7302 21.9446C22.6352 22.3478 22.2313 22.5976 21.8282 22.5026C19.9762 22.0662 19.0206 20.9694 18.2944 19.8707C18.2374 19.7846 18.1519 19.7408 18.0408 19.7429C17.9223 19.7451 17.7936 19.8029 17.7063 19.9197C16.5386 21.4806 14.7604 22.7502 12.0002 22.7502C9.15759 22.7502 7.38876 21.1103 6.27565 19.6855C6.20392 19.5936 6.11032 19.5587 6.02981 19.5604C5.95388 19.5621 5.88442 19.5948 5.83365 19.6742C5.09416 20.8303 4.13929 22.0391 2.17218 22.5026C1.76901 22.5976 1.36516 22.3478 1.27016 21.9446C1.17516 21.5414 1.42498 21.1376 1.82816 21.0426C3.2291 20.7125 3.90775 19.9013 4.57004 18.8659Z" fill="#f4a61f"></path></g></g></svg>
+                <SunIconSVG />
               </div>
               <h3>Plan Vacation</h3>
               <div className="example-card">
@@ -219,7 +229,102 @@ const ChatFeed = ({
                 </button>
               </div>
             </div>
-            {/* ... other categories from your example ... */}
+
+            {/* Row 1, Column 2 */}
+            <div className="category">
+              <div className="category-icon sun">
+                <SunIconSVG />
+              </div>
+              <h3>Write Code</h3>
+              <div className="example-card">
+                <button
+                  onClick={() =>
+                    onExampleClick && onExampleClick(
+                      "Write a Python function to perform a quicksort on a list of integers."
+                    )
+                  }
+                >
+                  "Write a Python function to perform a quicksort on a list of integers."
+                </button>
+              </div>
+            </div>
+
+            {/* Row 1, Column 3 */}
+            <div className="category">
+              <div className="category-icon sun">
+                <SunIconSVG />
+              </div>
+              <h3>Summarize Text</h3>
+              <div className="example-card">
+                <button
+                  onClick={() =>
+                    onExampleClick && onExampleClick(
+                      "Summarize the main points of this article: [Paste article text or link here]"
+                    )
+                  }
+                >
+                  "Summarize the main points of this article: [Paste article text or link here]"
+                </button>
+              </div>
+            </div>
+
+            {/* Row 2, Column 1 */}
+            <div className="category">
+              <div className="category-icon sun">
+                <SunIconSVG />
+              </div>
+              <h3>Explain Concept</h3>
+              <div className="example-card">
+                <button
+                  onClick={() =>
+                    onExampleClick && onExampleClick(
+                      "Explain the concept of quantum entanglement in simple terms."
+                    )
+                  }
+                >
+                  "Explain the concept of quantum entanglement in simple terms."
+                </button>
+              </div>
+            </div>
+
+            {/* Row 2, Column 2 */}
+            <div className="category">
+              <div className="category-icon sun">
+                <SunIconSVG />
+              </div>
+              <h3>Brainstorm Ideas</h3>
+              <div className="example-card">
+                <button
+                  onClick={() =>
+                    onExampleClick && onExampleClick(
+                      "Brainstorm some creative ideas for a new mobile app about personal finance."
+                    )
+                  }
+                >
+                  "Brainstorm some creative ideas for a new mobile app about personal finance."
+                </button>
+              </div>
+            </div>
+
+            {/* Row 2, Column 3 */}
+            <div className="category">
+              <div className="category-icon sun">
+                <SunIconSVG />
+              </div>
+              <h3>Recipe Suggestion</h3>
+              <div className="example-card">
+                <button
+                  onClick={() =>
+                    onExampleClick && onExampleClick(
+                      "Suggest a healthy dinner recipe using chicken and broccoli."
+                    )
+                  }
+                >
+                  "Suggest a healthy dinner recipe using chicken and broccoli."
+                </button>
+              </div>
+            </div>
+
           </div>
         </div>
       ) : (
@@ -338,15 +443,12 @@ const ChatFeed = ({
                 <div className="message-content">
                   {/* Process streaming content and append cursor */}
                   <ReactMarkdown
-                    // Add remark plugins for math and mermaid
                     remarkPlugins={[remarkMath, remarkMermaid]}
-                    // Add rehype plugins for raw HTML (for <think> blocks) and KaTeX
                     rehypePlugins={[rehypeRaw, rehypeKatex]}
                     children={processMessageContent(streamingMessage.content) + "<span class='streaming-cursor'>▋</span>"}
                     components={{
                       code({ node, inline, className, children, ...props }) {
                         const match = /language-(\w+)/.exec(className || "");
-                        // Handle Mermaid code blocks specifically
                         if (className === 'language-mermaid') {
                           return <div className="mermaid">{String(children).replace(/\n$/, "")}</div>;
                         }
@@ -367,6 +469,12 @@ const ChatFeed = ({
                       },
                     }}
                   />
+                  {/* Display tokens/second counter */}
+                  {streamingMessage.tokensPerSecond && (
+                    <span className="tokens-per-second">
+                      {streamingMessage.tokensPerSecond} chars/s
+                    </span>
+                  )}
                 </div>
               </div>
             </li>
@@ -391,6 +499,7 @@ ChatFeed.propTypes = {
     id: PropTypes.string,
     content: PropTypes.string,
     isLoading: PropTypes.bool,
+    tokensPerSecond: PropTypes.string,
   }),
   showPlaceholder: PropTypes.bool,
   isGenerating: PropTypes.bool,
@@ -417,4 +526,4 @@ ChatFeed.defaultProps = {
   lastAssistantMessageIndex: -1,
 };
 
-export default ChatFeed;
+export default memo(ChatFeed);

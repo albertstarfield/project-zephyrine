@@ -29,7 +29,7 @@ export default defineConfig({
           },
         ]
       },
-      includeAssets: ['/img/AdelaideEntity.png', '/img/ProjectZephyrine023LogoRenewal.png', '/fonts/*.ttf', '/fonts/*.otf'],
+      includeAssets: ['/img/AdelaideEntity.png', '/img/ProjectZephy023LogoRenewal.png', '/fonts/*.ttf', '/fonts/*.otf'],
       manifest: {
         name: 'Project Zephyrine',
         short_name: 'Zephyrine',
