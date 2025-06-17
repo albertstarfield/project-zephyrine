@@ -60,12 +60,14 @@
 #feed {
   flex-grow: 1; /* Allow feed to take available space within wrapper */
   overflow-y: auto; /* Enable scrolling for messages */
-  padding: 3rem;
+  padding: 1rem; /* Adjust top/left/right padding as needed, or keep 3rem */
+  padding-bottom: 180px; /* Increased padding to make space for the input area + more */
   /* margin-left is removed as flexbox handles positioning */
   position: relative; /* Needed for welcome screen absolute positioning */
   display: flex; /* Use flex to manage internal content (welcome vs messages) */
   flex-direction: column; /* Stack messages vertically */
 }
+
 
 /* --- Responsive Adjustments --- */
 
@@ -101,7 +103,8 @@
     border-radius: 3rem;
   }
   #feed {
-    padding: 0.75rem;
+    padding: 1rem;
+    padding-bottom: 200px; /* More space for larger screens if input area grows */
   }
   /* Consider collapsing sidebar here if needed */
 }
@@ -123,6 +126,7 @@
   }
   #feed {
     padding: 0.5rem;
+    padding-bottom: 160px; /* Slightly less padding for smaller screens */
   }
   /* Adjust sidebar display/positioning for mobile toggle */
   /* On mobile, sidebar is fixed, so main content doesn't need margin adjustments */

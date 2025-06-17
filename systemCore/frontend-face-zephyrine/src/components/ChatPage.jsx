@@ -34,6 +34,10 @@ function ChatPage({
   const accumulatedContentRef = useRef("");
   const isConnected = useRef(false);
 
+  // Add a ref for a throttle timer
+  const throttleTimerRef = useRef(null);
+  const THROTTLE_INTERVAL = 420; // ms
+
   useEffect(() => {
     setIsLoadingHistory(true);
     setError(null);
@@ -111,6 +115,9 @@ function ChatPage({
 
     return () => {
       console.log("ChatPage: Closing WebSocket connection for chatId:", chatId);
+      if (throttleTimerRef.current) {
+        clearTimeout(throttleTimerRef.current);
+      }
       ws.current?.close();
       isConnected.current = false;
     };
@@ -145,36 +152,62 @@ function ChatPage({
           setIsGenerating(true);
           const contentChunk = message.payload.content;
           accumulatedContentRef.current += contentChunk;
-          setStreamingAssistantMessage((prev) => {
-            const newId = prev?.id || currentAssistantMessageId.current || `temp-stream-${uuidv4()}`;
-            if (!currentAssistantMessageId.current && !prev?.id) {
+
+          // Clear any existing timer to avoid multiple updates within the interval
+          if (throttleTimerRef.current) {
+            clearTimeout(throttleTimerRef.current);
+          }
+
+          // Set a new timer to update state after THROTTLE_INTERVAL
+          throttleTimerRef.current = setTimeout(() => {
+            setStreamingAssistantMessage((prev) => {
+              const newId = prev?.id || currentAssistantMessageId.current || `temp-stream-${uuidv4()}`;
+              if (!currentAssistantMessageId.current && !prev?.id) {
                 currentAssistantMessageId.current = newId;
-            }
-            return {
-              id: newId,
-              sender: "assistant",
-              content: accumulatedContentRef.current,
-              chat_id: chatId,
-              created_at: prev?.created_at || new Date().toISOString(),
-              isLoading: true,
-            };
-          });
+              }
+              return {
+                id: newId,
+                sender: "assistant",
+                content: accumulatedContentRef.current,
+                chat_id: chatId,
+                created_at: prev?.created_at || new Date().toISOString(),
+                isLoading: true,
+              };
+            });
+            throttleTimerRef.current = null; // Clear the timer ref
+          }, THROTTLE_INTERVAL);
           break;
         case "end":
+          // Ensure final update is processed immediately
+          if (throttleTimerRef.current) {
+            clearTimeout(throttleTimerRef.current);
+            throttleTimerRef.current = null;
+          }
+          // Force a final state update with all accumulated content
+          setStreamingAssistantMessage((prev) => {
+              const finalId = prev?.id || currentAssistantMessageId.current;
+              return {
+                  id: finalId,
+                  sender: "assistant",
+                  content: accumulatedContentRef.current,
+                  chat_id: chatId,
+                  created_at: prev?.created_at || new Date().toISOString(),
+                  isLoading: true, // Mark as loading to differentiate until saved
+              };
+          });
+          
           setIsGenerating(false);
           const finalContent = accumulatedContentRef.current;
           if (finalContent && currentAssistantMessageId.current) {
-            // Use the functional update form for setMessages
+            const finalMessage = {
+              id: currentAssistantMessageId.current,
+              sender: "assistant",
+              content: finalContent,
+              chat_id: chatId,
+              created_at: streamingAssistantMessage?.created_at || new Date().toISOString(),
+              isLoading: false,
+            };
             setMessages((prev) => {
-                const finalMessage = {
-                    id: currentAssistantMessageId.current,
-                    sender: "assistant",
-                    content: finalContent,
-                    chat_id: chatId,
-                    created_at: new Date().toISOString(), // Or use a ref to store the start time
-                    isLoading: false,
-                };
-
                 const existing = prev.find(msg => msg.id === finalMessage.id);
                 if (existing) {
                     return prev.map(msg => msg.id === finalMessage.id ? finalMessage : msg);
@@ -182,9 +215,11 @@ function ChatPage({
                     return [...prev, finalMessage];
                 }
             });
-            // You might need to use a ref to check the message count here
-            // if you remove 'messages' from the dependency array.
-            triggerSidebarRefresh();
+            const userMessagesInHistory = messages.filter(m => m.sender === 'user' && !m.id?.startsWith('temp-')).length;
+            if (userMessagesInHistory === 1 && messages.filter(m => m.sender === 'assistant' && !m.isLoading).length === 0) {
+                 console.log("ChatPage: First assistant response complete, calling triggerSidebarRefresh.");
+                 triggerSidebarRefresh();
+            }
           }
           setStreamingAssistantMessage(null);
           accumulatedContentRef.current = "";
@@ -236,7 +271,7 @@ function ChatPage({
       currentAssistantMessageId.current = null;
       setIsLoadingHistory(false);
     }
-  }, [chatId, refreshHistory, updateSidebarHistory, triggerSidebarRefresh, user]);
+  }, [chatId, refreshHistory, messages, streamingAssistantMessage, updateSidebarHistory, triggerSidebarRefresh, user]);
 
   const sendMessageOrRegenerate = async (contentToSend, isRegeneration = false) => {
     if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
@@ -430,6 +465,11 @@ function ChatPage({
         console.warn("ChatPage: Cannot send stop request: WebSocket not connected.");
     }
     setIsGenerating(false);
+    
+    if (throttleTimerRef.current) {
+      clearTimeout(throttleTimerRef.current);
+      throttleTimerRef.current = null;
+    }
 
     if (streamingAssistantMessage && accumulatedContentRef.current && currentAssistantMessageId.current) {
       const finalPartialMessage = {
