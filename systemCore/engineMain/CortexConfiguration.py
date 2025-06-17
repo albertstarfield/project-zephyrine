@@ -311,7 +311,7 @@ SELF_REFLECTION_FIXER_MODEL = os.getenv("SELF_REFLECTION_FIXER_MODEL", "code") #
 REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 10)
 # --- Add/Ensure these constants for the reflection loop timing ---
 # How long the reflector thread waits if NO work was found in a full active cycle
-IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 300)) # e.g., 5 minutes
+IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 1)) # e.g., 5 minutes
 # How long the reflector thread waits briefly between processing batches IF work IS being processed in an active cycle
 ACTIVE_CYCLE_PAUSE_SECONDS = float(os.getenv("REFLECTION_ACTIVE_CYCLE_PAUSE_SECONDS", 0.1)) # e.g., 0.1 seconds, very short
 

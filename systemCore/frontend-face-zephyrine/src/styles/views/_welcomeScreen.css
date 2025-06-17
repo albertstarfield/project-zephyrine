@@ -97,6 +97,18 @@
        width: calc(50% - 1rem); // Example for 2 columns
        max-width: 400px;
     } */
+
+    .example-categories {
+      display: grid; /* Change to grid */
+      grid-template-columns: repeat(auto-fit, minmax(250px, 1fr)); /* 3 columns, flexible width */
+      gap: 1.5rem; /* Space between grid items */
+      max-width: 960px; /* Adjust max-width for 3 columns */
+      align-items: flex-start; /* Align items to the start of their grid area */
+  }
+  .category {
+     width: auto; /* Let grid handle width */
+     max-width: none; /* Remove max-width constraint for grid items */
+  }
 }
 
 @media screen and (max-height: 600px) {
