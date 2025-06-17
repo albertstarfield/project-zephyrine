@@ -2,7 +2,7 @@
 import React, { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
-import { useTheme } from './contexts/ThemeContext'; // NEW: Import theme context hook
+import { useTheme } from './contexts/ThemeContext';
 
 // Component Imports
 import ChatPage from "./components/ChatPage";
@@ -14,8 +14,7 @@ import ImageGenerationPage from "./components/ImageGenerationPage";
 import KnowledgeTuningPage from "./components/KnowledgeTuningPage";
 import VoiceAssistantOverlay from "./components/VoiceAssistantOverlay";
 import RedirectToNewChat from "./components/RedirectToNewChat";
-// SystemInfo component is imported but not directly used in Routes, likely a dependency elsewhere or for future use.
-import SystemInfo from "./components/SystemInfo";
+import SystemInfo from "./components/SystemInfo"; // Keep import even if not directly rendered in Routes
 
 // Hook Imports
 import { useSystemInfo } from "./hooks/useSystemInfo";
@@ -44,7 +43,11 @@ const AppContent = () => {
   // --- NEW: Theme and Background Setup ---
   const { theme } = useTheme(); // Get the current theme ('light' or 'dark')
   const backgroundRef = useRef(null); // Create a ref for the background container
-  useThemedBackground(backgroundRef); // Use the new theme-aware background hook
+  // NEW: Ref for the canvas element itself
+  const starsCanvasRef = useRef(null);
+
+  // Pass the new canvasRef to useThemedBackground
+  useThemedBackground(backgroundRef, starsCanvasRef); // Pass starsCanvasRef as the second argument now
 
   useEffect(() => {
     console.log('Current App theme:', theme);
@@ -244,13 +247,11 @@ const AppContent = () => {
           </div>
         )}
 
-        {/* Render stars when the theme is 'dark' */}
+        {/* NEW: Conditionally render the canvas here, and pass its ref */}
         {theme === 'dark' && (
-          <div className="stars"></div>
+          <canvas ref={starsCanvasRef} className="stars-canvas"></canvas>
         )}
       </div>
-
-
 
       {/* Overlay that appears when sidebar is open on mobile, closes sidebar on click */}
       <div className={`sidebar-overlay ${!isSidebarOpen ? 'active' : ''}`} onClick={toggleSidebar}></div>

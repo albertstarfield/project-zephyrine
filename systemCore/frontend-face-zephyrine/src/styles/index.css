@@ -11,7 +11,8 @@
   font-weight: normal;
 }
 /* Default Theme (Dark Mode) */
-:root {
+:root,
+html.dark { /* Apply dark theme to :root by default AND when html has 'dark' class */
   /* --- User's New Core Palette (Dark Mode) --- */
   --primary-text: #d1d5db;
   --primary-text-alt: #ececf1;
@@ -78,76 +79,75 @@
   --scrollbar-thumb-hover-color: var(--accent);     /* Yellow #FFFF00 */
 }
 
-/* Light Mode Theme */
-@media (prefers-color-scheme: light) {
-  :root {
-    /* --- User's New Core Palette (Light Mode) --- */
-    --primary-text: #222222; 
-    --primary-text-alt: #474748;
-    --secondary-text: #2d2d2d80;
-    --background: #ffffff8a;
-    --background-mid: #f4f4f4;
-    --background-alt: #c5c4c4;
-    --surface: #f8f8f81e;
-    --surface-alt: #7575755e;
-    --surface-alt-bright: #acacbe; /* This is a grey, might need adjustment for light text on light bg */
-    --tertiary: #f1f1f1;
-    --accent: #f17b269e; /* Yellow accent */
-    --oppositeaccent: #ff581b;
-    --secondary: #62c645bd; /* Azure Turquoise Sweet Blue secondary */
-    --error: #ff5d5d;
-    --overlay: rgba(240, 240, 240, 0.34);
-    --hover: hsla(240, 9%, 59%, 0.1);
-    --border: #dddddd; /* Changed from #ffffff to be visible on white bg */
-    --sidebar-background: #ffffff8c; 
-    --secondary-background-rgb: var(--secondary); /* If --secondary-background is #242424 */
-    --accent-color-rgb: var(--accent); /* If --accent-color is #6a0ded */
+/* Light Mode Theme - Apply when html has 'light' class */
+html.light {
+  /* --- User's New Core Palette (Light Mode) --- */
+  --primary-text: #222222; 
+  --primary-text-alt: #474748;
+  --secondary-text: #2d2d2d80;
+  --background: #ffffff8a;
+  --background-mid: #f4f4f4;
+  --background-alt: #c5c4c4;
+  --surface: #f8f8f81e;
+  --surface-alt: #7575755e;
+  --surface-alt-bright: #acacbe;
+  --tertiary: #f1f1f1;
+  --accent: #f17b269e; /* Yellow accent */
+  --oppositeaccent: #ff581b;
+  --secondary: #62c645bd; /* Azure Turquoise Sweet Blue secondary */
+  --error: #ff5d5d;
+  --overlay: rgba(240, 240, 240, 0.34);
+  --hover: hsla(240, 9%, 59%, 0.1);
+  --border: #dddddd; /* Changed from #ffffff to be visible on white bg */
+  --sidebar-background: #ffffff8c; 
+  --secondary-background-rgb: var(--secondary);
+  --accent-color-rgb: var(--accent);
 
-    /* --- User's New Shadow System (Light Mode) --- */
-    --small-shadow: 0 6px 9px -1px rgba(0, 0, 0, 0.1),
-      0 4px 8px -2px rgba(0, 0, 0, 0.1);
-    --shadow-color: #00000029;
-    --shadow-color-less-intense: #0000000f;
-    --shadow-intensity: 13;
-    --shadow-disperse: 100px;
-    --contrast-black-overlay: #525252; /* Specific to light theme from user's snippet */
+  /* --- User's New Shadow System (Light Mode) --- */
+  --small-shadow: 0 6px 9px -1px rgba(0, 0, 0, 0.1),
+    0 4px 8px -2px rgba(0, 0, 0, 0.1);
+  --shadow-color: #00000029;
+  --shadow-color-less-intense: #0000000f;
+  --shadow-intensity: 13;
+  --shadow-disperse: 100px;
+  --contrast-black-overlay: #525252; /* Specific to light theme from user's snippet */
 
-    /* --- Adapted Chat Bubble Colors (Light Mode) --- */
-    --user-message-bg: var(--accent);      /* Yellow #FFFF00 */
-    --user-message-text-color: var(--primary-text); /* Dark text (#383838) for light mode on yellow */
-    --assistant-message-bg: var(--secondary); /* Azure Turquoise (#1a7f64) */
-    --assistant-message-text-color: #FFFFFF;   /* White text for light mode on turquoise */
+  /* --- Adapted Chat Bubble Colors (Light Mode) --- */
+  --user-message-bg: var(--accent);      /* Yellow #FFFF00 */
+  --user-message-text-color: var(--primary-text); /* Dark text (#383838) for light mode on yellow */
+  --assistant-message-bg: var(--secondary); /* Azure Turquoise (#1a7f64) */
+  --assistant-message-text-color: #FFFFFF;   /* White text for light mode on turquoise */
 
-    /* --- Preserved/Adapted Layout & Utility Variables (mostly same as dark, defined for completeness) --- */
-    --sidebar-width: 260px;
-    --sidebar-collapsed-width: 70px;
-    --header-height: 60px;
-    --input-area-height: 120px;
+  /* --- Preserved/Adapted Layout & Utility Variables (mostly same as dark, defined for completeness) --- */
+  --sidebar-width: 260px;
+  --sidebar-collapsed-width: 70px;
+  --header-height: 60px;
+  --input-area-height: 120px;
 
-    --font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
-    --font-family-mono: 'IBM Plex Mono', 'Courier New', Courier, monospace;
-    --font-family-title: 'TitleFont', var(--font-family-sans);
-    
-    /* Using user's new border radius variables */
-    --rounded-border: 8px; 
-    --rounded-button: 25px;
-    --border-radius-small: 4px;
-    --border-radius-medium: var(--rounded-border);
-    --border-radius-large: 16px;
-    --border-radius-xl: var(--rounded-button);
-    --border-radius-pill: 50px;
+  --font-family-sans: 'Inter', -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Helvetica, Arial, sans-serif;
+  --font-family-mono: 'IBM Plex Mono', 'Courier New', Courier, monospace;
+  --font-family-title: 'TitleFont', var(--font-family-sans);
+  
+  /* Using user's new border radius variables */
+  --rounded-border: 8px; 
+  --rounded-button: 25px;
+  --border-radius-small: 4px;
+  --border-radius-medium: var(--rounded-border);
+  --border-radius-large: 16px;
+  --border-radius-xl: var(--rounded-button);
+  --border-radius-pill: 50px;
 
-    /* Preserved Status Colors */
-    --success-color: #4caf50;
-    --warning-color: #ff9800;
-    --info-color: #2196f3;
+  /* Preserved Status Colors */
+  --success-color: #4caf50;
+  --warning-color: #ff9800;
+  --info-color: #2196f3;
 
-    /* Scrollbar Colors (Light Mode) */
-    --scrollbar-thumb-color: #b0b0b0; /* Darker grey for light track */
-    --scrollbar-track-color: var(--background-mid);    /* #f4f4f4 */
-    --scrollbar-thumb-hover-color: #909090;      /* Darker grey hover */
-  }
+  /* Scrollbar Colors (Light Mode) */
+  --scrollbar-thumb-color: #b0b0b0; /* Darker grey for light track */
+  --scrollbar-track-color: var(--background-mid);    /* #f4f4f4 */
+  --scrollbar-thumb-hover-color: #909090;      /* Darker grey hover */
 }
+
 
 h1.logo {
   font-family: "TitleFont";
