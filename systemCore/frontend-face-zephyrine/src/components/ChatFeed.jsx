@@ -54,7 +54,7 @@ const ChatFeed = ({
         .replace(/&/g, "&")
         .replace(/</g, "<")
         .replace(/>/g, ">")
-        .replace(/"/g, """)
+        .replace(/"/g, "\"")
         .replace(/'/g, "'");
       return `<details class="thought-block">
                 <summary class="thought-summary"><span class="summary-icon"></span>🤔</summary>

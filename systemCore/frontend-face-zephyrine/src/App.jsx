@@ -1,4 +1,4 @@
-// ExternalAnalyzer/frontend-face-zephyrine/src/App.jsx
+// externalAnalyzer_GUI/frontend-face-zephyrine/src/App.jsx
 import React, { useState, useEffect, useCallback, useRef, Suspense } from "react";
 import { Routes, Route, useNavigate, Navigate } from "react-router-dom";
 import { AuthProvider, useAuth } from "./contexts/AuthContext";
@@ -15,8 +15,9 @@ import KnowledgeTuningPage from "./components/KnowledgeTuningPage";
 import VoiceAssistantOverlay from "./components/VoiceAssistantOverlay";
 import RedirectToNewChat from "./components/RedirectToNewChat";
 import SystemInfo from "./components/SystemInfo";
-// NEW: Import SplashScreen
 import SplashScreen from "./components/SplashScreen";
+// NEW: Import PreSplashScreen
+import PreSplashScreen from "./components/PreSplashScreen";
 
 // Hook Imports
 import { useSystemInfo } from "./hooks/useSystemInfo";
@@ -32,8 +33,9 @@ import "./styles/Header.css";
 import "./styles/ChatInterface.css";
 import "./styles/SystemInfo.css";
 import 'katex/dist/katex.min.css';
-// NEW: Import splash screen CSS
 import "./styles/components/_splashScreen.css";
+// NEW: Import pre-splash screen CSS
+import "./styles/components/_preSplashScreen.css";
 
 
 const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001";
@@ -51,27 +53,38 @@ const AppContent = () => {
 
   const stars = useStarBackground();
 
-  // NEW: State for splash screen visibility
-  const [showSplashScreen, setShowSplashScreen] = useState(true);
-  // NEW: State to control when the main app content is visible/interactive
+  // NEW: State for pre-splash screen visibility
+  const [showPreSplashScreen, setShowPreSplashScreen] = useState(true);
+  const [showSplashScreen, setShowSplashScreen] = useState(false); // Initial state set to false
   const [appReady, setAppReady] = useState(false);
 
+  // NEW: Callback for when pre-splash screen determines system is ready
+  const handlePrimedAndReady = useCallback(() => {
+    setShowPreSplashScreen(false); // Hide pre-splash
+    setShowSplashScreen(true); // Show main splash screen
+    // The main splash screen's useEffect will then handle its own fade-out
+  }, []);
 
+  // Callback for when the main splash screen's fade-out animation completes
   const handleSplashScreenFadeOutComplete = useCallback(() => {
     setShowSplashScreen(false);
     setAppReady(true); // Make main app content interactive
   }, []);
 
-  // NEW: useEffect to manage splash screen animation sequence
+  // useEffect to manage main splash screen animation sequence
   useEffect(() => {
     let logoFadeOutTimer;
     let overlayFadeOutTimer;
 
+    // Only run this logic if the main splash screen is currently active
     if (showSplashScreen) {
-      // Phase 1: Show overlay, logo fades in (CSS handled by animation-delay)
-      // Phase 2: After logo fade-in (approx 1.5s + 0.5s delay = 2s), start fade-out
+      const overlayElement = document.querySelector('.splash-screen-overlay');
+      if (overlayElement) {
+        overlayElement.classList.add('visible'); // Ensure it becomes visible to start animations
+      }
+
+      // Phase 2: After logo fade-in (CSS handled by animation-delay), start fade-out
       logoFadeOutTimer = setTimeout(() => {
-        // Add a class to trigger the logo fade-out animation
         const logoElement = document.querySelector('.splash-screen-logo');
         if (logoElement) {
           logoElement.style.animation = 'splash-logo-fade-out 1s ease-in forwards';
@@ -80,28 +93,20 @@ const AppContent = () => {
 
       // Phase 3: After logo fades out (1s duration), fade out the overlay
       overlayFadeOutTimer = setTimeout(() => {
-        // Trigger overlay fade-out by removing 'visible' class
         const overlayElement = document.querySelector('.splash-screen-overlay');
         if (overlayElement) {
-          overlayElement.classList.remove('visible');
+          overlayElement.classList.remove('visible'); // Triggers fade-out via CSS
         }
       }, 3500); // Start overlay fade-out after 3.5 seconds (adjust timing)
 
-      // Phase 4: Once overlay completely fades out (0.5s duration), hide component and make app interactive
-      // This timeout should match the overlay's total fade-out time + transition delay
-      const totalSplashTime = 3500 + 500; // 3.5s start fade + 0.5s transition
-      setTimeout(() => {
-        setShowSplashScreen(false);
-        setAppReady(true); // Allow main app content to be fully interactive
-      }, totalSplashTime);
+      // Phase 4: This will now be handled by onTransitionEnd in SplashScreen.jsx -> handleSplashScreenFadeOutComplete
     }
 
     return () => {
       clearTimeout(logoFadeOutTimer);
       clearTimeout(overlayFadeOutTimer);
     };
-  }, [showSplashScreen]);
-
+  }, [showSplashScreen]); // Depend on showSplashScreen
 
   useEffect(() => {
     console.log('Current App theme:', theme);
@@ -236,7 +241,6 @@ const AppContent = () => {
     setIsVoiceAssistantVisible(false);
   }, []); 
 
-
   if (authLoading) {
     return (
       <div className="app-loading-screen">
@@ -246,13 +250,18 @@ const AppContent = () => {
     );
   }
 
+  // NEW: Render PreSplashScreen first
+  if (showPreSplashScreen) {
+    return <PreSplashScreen onPrimedAndReady={handlePrimedAndReady} />;
+  }
+
   if (!user) {
     return <Auth />;
   }
 
   return (
     <div id="content">
-      {/* NEW: Render SplashScreen component conditionally */}
+      {/* Main SplashScreen component is now visible only when triggered */}
       {showSplashScreen && <SplashScreen isVisible={showSplashScreen} onFadeOutComplete={handleSplashScreenFadeOutComplete} />}
 
       <div ref={backgroundRef} className="background-container">
@@ -290,14 +299,13 @@ const AppContent = () => {
         onSendMessage={handleSendMessageFromVoiceAssistant}
       />
 
-      {/* NEW: Conditionally render main app content only when ready */}
-      {/* Set minimum opacity to avoid flicker before splash screen is gone */}
       <div id="main-app-content" style={{ 
           filter: isVoiceAssistantVisible ? 'blur(4px)' : 'none',
-          opacity: appReady ? 1 : 0, // Fade in main content
-          transition: 'opacity 0.5s ease-out', // Smooth transition
-          pointerEvents: appReady ? 'auto' : 'none', // Disable interactions during splash
+          opacity: appReady ? 1 : 0,
+          transition: 'opacity 0.5s ease-out',
+          pointerEvents: appReady ? 'auto' : 'none',
       }}>
+        <div className="logo"><img src="/img/ProjectZephyrine023LogoRenewal.png" alt="Project Zephyrine Logo" className="project-logo"/></div>
         
         <div id="main">
           <SystemOverlay systemInfo={systemInfo} />

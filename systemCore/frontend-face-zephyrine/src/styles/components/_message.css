@@ -39,6 +39,35 @@
   margin-left: 0;
   flex-direction: row; /* Avatar on the left for assistant */
 }
+.tokens-per-second {
+  font-size: 0.75em; /* Smaller font size */
+  color: var(--secondary-text); /* Subtle color */
+  margin-left: 10px; /* Space from content */
+  align-self: flex-end; /* Align to the end of the flex container */
+  position: absolute;
+  bottom: 5px;
+  right: 18px; /* Align with padding of content container */
+}
+
+/* Ensure actions don't overlap tokens/second if both visible */
+/* You might need to adjust positions if they conflict significantly */
+.message-actions {
+  display: flex;
+  align-items: center;
+  gap: 5px;
+  margin-top: 5px;
+  opacity: 0;
+  transition: opacity 0.2s ease-in-out;
+  pointer-events: none; /* Disable interaction when hidden */
+  position: absolute; /* Ensure it also positions absolutely */
+  bottom: 25px; /* Adjust if tokens-per-second is at 5px */
+  right: 8px; /* Position to the right */
+}
+
+/* If you need to make space for both when streaming, you might adjust message-content-container padding */
+.message.streaming .message-content-container {
+  padding-bottom: 40px; /* Example: add more space at the bottom for both counter and cursor */
+}
 
 /* Message Avatar */
 .message-avatar {

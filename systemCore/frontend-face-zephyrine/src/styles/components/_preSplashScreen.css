@@ -1,0 +1,30 @@
+/* src/styles/components/_preSplashScreen.css */
+
+.pre-splash-screen-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: black; /* Solid black background */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 10000; /* Higher than main splash screen */
+    color: #FFA500; /* Orange text */
+    text-align: center;
+  }
+  
+  .pre-splash-screen-content {
+    padding: 20px;
+    max-width: 80%;
+  }
+  
+  .pre-splash-status-text {
+    font-family: 'IBM Plex Mono', 'Courier New', Courier, monospace; /* Mono font */
+    font-size: 1.2rem;
+    white-space: pre-wrap; /* Preserve line breaks */
+    word-wrap: break-word; /* Break long words */
+    line-height: 1.5;
+    color: inherit; /* Inherit orange color from parent */
+  }
