@@ -26,5 +26,5 @@
     white-space: pre-wrap; /* Preserve line breaks */
     word-wrap: break-word; /* Break long words */
     line-height: 1.5;
-    color: inherit; /* Inherit orange color from parent */
+    color: #FFA500; /* Inherit orange color from parent */
   }
