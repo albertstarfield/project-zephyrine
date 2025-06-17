@@ -14,7 +14,7 @@ function ChatPage({
   systemInfo = { assistantName: "Zephyrine" }, 
   user = null, 
   refreshHistory = () => console.warn("ChatPage: 'refreshHistory' prop was called but not provided."), 
-  selectedModel = "default-model",
+  selectedModel = "ZephyUnifiedRoutedModel",
   updateSidebarHistory = () => console.warn("ChatPage: 'updateSidebarHistory' prop was called but not passed by App.jsx."), 
   triggerSidebarRefresh = () => console.warn("ChatPage: 'triggerSidebarRefresh' prop was called but not passed by App.jsx.")
 }) {
@@ -346,7 +346,7 @@ function ChatPage({
     try {
       const messagePayload = {
         messages: [...historyForBackend, finalUserMessagePayload],
-        model: selectedModel || "default-model",
+        model: selectedModel || "ZephyUnifiedRoutedModel",
         chatId: chatId,
         userId: user?.id,
       };
@@ -536,8 +536,8 @@ function ChatPage({
           onSend={handleSendMessage}
           onStopGeneration={handleStopGeneration}
           isGenerating={isGenerating}
-          onFileSelect={setFileData} // <<<<<<<<<<<< PASS THE SETTER
-          selectedFile={fileData}    // <<<<<<<<<<<< PASS THE CURRENT FILE DATA
+          onFileSelect={setFileData}
+          selectedFile={fileData}
           selectedModel={selectedModel}
           disabled={isLoadingHistory || !isConnected.current}
         />

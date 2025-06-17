@@ -31,6 +31,7 @@ html.light .background-container {
   left: 0;
   width: 100%;
   height: 100%;
+  z-index: 0; /* ADDED: Ensures clouds are rendered above the background container's gradient */
 }
 
 .cloud {
@@ -39,7 +40,7 @@ html.light .background-container {
   border-radius: 50%;
   opacity: 0.8;
   filter: blur(2px);
-  /* REMOVED: animation property is now controlled by JavaScript */
+  animation: moveClouds 60s linear infinite;
 }
 
 .cloud.c1 {
@@ -81,3 +82,12 @@ html.light .background-container {
 
 .cloud.c3::before { width: 80px; height: 80px; top: -40px; left: 40px; }
 .cloud.c3::after { width: 100px; height: 100px; top: -50px; right: 20px; }
+
+@keyframes moveClouds {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(calc(100vw + 400px));
+    }
+}
