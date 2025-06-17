@@ -1,0 +1,87 @@
+/* src/styles/components/_splashScreen.css */
+
+/* Overlay Container */
+.splash-screen-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: rgba(0, 0, 0, 0.8); /* Dark, semi-transparent background */
+    backdrop-filter: blur(15px); /* Blurry effect */
+    -webkit-backdrop-filter: blur(15px); /* Safari compatibility */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    z-index: 9999; /* Ensure it's on top of everything */
+    opacity: 0; /* Starts invisible */
+    visibility: hidden; /* Hidden by default */
+    pointer-events: none; /* Do not block interactions initially */
+  
+    /* Initial transition for fade-in of the overlay */
+    transition: opacity 0.5s ease-out, visibility 0s linear 0.5s;
+  }
+  
+  .splash-screen-overlay.visible {
+    opacity: 1; /* Fade in overlay */
+    visibility: visible;
+    pointer-events: auto; /* Block interactions when visible */
+    transition: opacity 0.5s ease-out; /* Only opacity transition for fade-in */
+  }
+  
+  /* Content (Logo) */
+  .splash-screen-content {
+    text-align: center;
+    opacity: 0;
+    transform: translateY(20px);
+    /* REMOVE animation and animation-delay from here */
+    /* animation: splash-logo-fade-in 1.5s ease-out forwards; */
+    /* animation-delay: 0.5s; */
+  }
+  
+  .splash-screen-content.loaded .splash-screen-logo {
+    animation: splash-logo-fade-in 1.5s ease-out forwards; /* Apply the animation */
+    animation-delay: 0.5s; /* Keep the delay after content is ready */
+  }
+
+  .splash-screen-logo {
+    max-width: 400px; /* Adjust logo size */
+    width: 80vw; /* Responsive width */
+    height: auto;
+    filter: drop-shadow(0 0 20px rgba(255, 255, 255, 0.4)); /* Glow effect */
+  }
+  
+  /* Loading text (optional) */
+  /*
+  .loading-text {
+    color: white;
+    font-size: 1.2rem;
+    margin-top: 20px;
+    opacity: 0;
+    animation: fade-in 0.8s ease-out forwards;
+    animation-delay: 1.5s;
+  }
+  */
+  
+  /* Keyframe Animations */
+  @keyframes splash-logo-fade-in {
+    from {
+      opacity: 0;
+      transform: translateY(20px) scale(0.9);
+    }
+    to {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+  }
+  
+  @keyframes splash-logo-fade-out {
+    from {
+      opacity: 1;
+      transform: translateY(0) scale(1);
+    }
+    to {
+      opacity: 0;
+      transform: translateY(-20px) scale(0.9);
+    }
+  }

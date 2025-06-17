@@ -51,13 +51,13 @@ const ChatFeed = ({
       const trimmedThinkContent = thinkContent.trim();
       // Basic HTML escaping for the content within <details>
       const escapedThinkContent = trimmedThinkContent
-        .replace(/&/g, "&amp;")
-        .replace(/</g, "&lt;")
-        .replace(/>/g, "&gt;")
-        .replace(/"/g, "&quot;")
-        .replace(/'/g, "&#039;");
+        .replace(/&/g, "&")
+        .replace(/</g, "<")
+        .replace(/>/g, ">")
+        .replace(/"/g, """)
+        .replace(/'/g, "'");
       return `<details class="thought-block">
-                <summary class="thought-summary"><span class="summary-icon"></span>View Zephy Backend Thoughts</summary>
+                <summary class="thought-summary"><span class="summary-icon"></span>🤔</summary>
                 <div class="thought-content">${escapedThinkContent}</div>
               </details>`;
     });
