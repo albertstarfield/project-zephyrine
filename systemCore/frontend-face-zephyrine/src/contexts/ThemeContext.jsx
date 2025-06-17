@@ -11,16 +11,9 @@ const ThemeContext = createContext();
  */
 export const ThemeProvider = ({ children }) => {
   const [theme, setTheme] = useState(() => {
-    const savedTheme = localStorage.getItem('theme');
+    // A. Initial theme: always use system preference.
     const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
-
-    // A. Check if a valid theme is explicitly saved in localStorage
-    if (savedTheme === 'dark' || savedTheme === 'light') {
-      return savedTheme; // Use the user's saved preference
-    }
-
-    // B. If no valid saved theme, check the system preference
-    return systemPrefersDark ? 'dark' : 'light'; // Use system preference
+    return systemPrefersDark ? 'dark' : 'light';
   });
 
   useEffect(() => {
@@ -29,11 +22,48 @@ export const ThemeProvider = ({ children }) => {
     root.classList.remove('light', 'dark');
     // Add the current theme class
     root.classList.add(theme);
-    localStorage.setItem('theme', theme); // Always save the current theme to localStorage
+    // REMOVED: localStorage.setItem('theme', theme); // No longer saving to localStorage
   }, [theme]);
 
+  // NEW: Effect to periodically check system preference (every 5 seconds)
+  useEffect(() => {
+    const checkSystemTheme = () => {
+      const systemPrefersDark = window.matchMedia('(prefers-color-scheme: dark)').matches;
+      const newTheme = systemPrefersDark ? 'dark' : 'light';
+      // Only update state if the theme actually changed to prevent unnecessary re-renders
+      if (newTheme !== theme) {
+        setTheme(newTheme);
+      }
+    };
+
+    const intervalId = setInterval(checkSystemTheme, 5000); // Check every 5 seconds
+
+    // NEW: Add a listener for immediate system theme changes (best practice)
+    const mediaQueryList = window.matchMedia('(prefers-color-scheme: dark)');
+    const handleSystemThemeChange = (e) => {
+      const newTheme = e.matches ? 'dark' : 'light';
+      if (newTheme !== theme) {
+        setTheme(newTheme);
+      }
+    };
+    mediaQueryList.addEventListener('change', handleSystemThemeChange);
+
+
+    return () => {
+      // Cleanup: Clear the interval and remove the event listener when component unmounts
+      clearInterval(intervalId);
+      mediaQueryList.removeEventListener('change', handleSystemThemeChange);
+    };
+  }, [theme]); // Re-run if `theme` changes, important for `newTheme !== theme` check
+
   const toggleTheme = () => {
+    // When the user manually toggles, set the theme immediately
     setTheme((prevTheme) => (prevTheme === 'light' ? 'dark' : 'light'));
+    // Note: The 5-second interval and system listener will continue to run,
+    // and might override the user's manual toggle if the system preference
+    // doesn't match their chosen theme.
+    // If you want user toggle to temporarily override system preference,
+    // you would need more complex state management (e.g., a 'userOverride' state).
   };
 
   // Provide the theme and toggle function to the children
