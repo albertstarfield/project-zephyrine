@@ -213,12 +213,12 @@ ENABLE_DB_SNAPSHOTS = os.getenv("ENABLE_DB_SNAPSHOTS", "true").lower() in ('true
 DB_SNAPSHOT_INTERVAL_MINUTES = int(os.getenv("DB_SNAPSHOT_INTERVAL_MINUTES", 1))
 DB_SNAPSHOT_DIR_NAME = "db_snapshots"
 # DB_SNAPSHOT_DIR is derived in database.py
-DB_SNAPSHOT_RETENTION_COUNT = int(os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 5)) # << SET TO 7 HERE or via .env
+DB_SNAPSHOT_RETENTION_COUNT = int(os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 3)) # << SET TO 3 HERE or via .env
 DB_SNAPSHOT_FILENAME_PREFIX = "snapshot_"
 DB_SNAPSHOT_FILENAME_SUFFIX = ".db.zst"
 ZSTD_COMPRESSION_LEVEL = 9
-DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", 50))
-DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", 100))
+DB_POOL_SIZE = int(os.getenv("DB_POOL_SIZE", 96))
+DB_MAX_OVERFLOW = int(os.getenv("DB_MAX_OVERFLOW", 128))
 _file_indexer_module_dir = os.path.dirname(os.path.abspath(__file__)) # If config.py is in the same dir as file_indexer.py
 MODULE_DIR = os.path.dirname(__file__)
 # Or, if config.py is in engineMain and file_indexer.py is also there:
@@ -227,7 +227,7 @@ MODULE_DIR = os.path.dirname(__file__)
 # --- NEW: Batch Logging Configuration ---
 LOG_QUEUE_MAX_SIZE = int(os.getenv("LOG_QUEUE_MAX_SIZE", 1000000000)) # Max items in log queue before warning/discard
 LOG_BATCH_SIZE = int(os.getenv("LOG_BATCH_SIZE", 10))          # Number of log items to write to DB in one go
-LOG_FLUSH_INTERVAL_SECONDS = float(os.getenv("LOG_FLUSH_INTERVAL_SECONDS", 60.0)) # How often to force flush the log queue
+LOG_FLUSH_INTERVAL_SECONDS = float(os.getenv("LOG_FLUSH_INTERVAL_SECONDS", 3600.0)) # How often to force flush the log queue
 # --- END NEW: Batch Logging Configuration ---
 
 # Define a subdirectory for Chroma databases relative to the module's location
