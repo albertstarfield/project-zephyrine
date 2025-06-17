@@ -768,6 +768,7 @@ def _programmatic_json_parse_and_fix(
 
 
 # --- Flask App Setup ---
+APP_START_TIME = time.monotonic()
 app = Flask(__name__) # Use Flask app
 
 #Allowing recieving big dataset
@@ -7887,6 +7888,48 @@ async def handle_interaction():
 
 # === NEW OpenAI Compatible Embeddings Route ===
 # app.py -> Flask Routes Section
+
+#=============[Self Test Status]===============
+@app.route("/v1/primedready", methods=["GET"])
+@app.route("/primedready", methods=["GET"])
+def handle_primed_ready_status():
+    """
+    Custom endpoint for the GUI to check if the initial startup benchmark
+    has completed, using an avionics-style "Power-on Self Test" message.
+    """
+    req_id = f"req-primedready-{uuid.uuid4()}"
+    logger.info(f"🚀 {req_id}: Received GET /primedready status check.")
+
+    is_benchmark_done = abs(BENCHMARK_ELP1_TIME_MS - 30000.0) > 1e-9
+    elapsed_seconds = time.monotonic() - APP_START_TIME
+    post_duration_seconds = 60.0
+
+    if is_benchmark_done:
+        # The benchmark is finished, system is fully ready.
+        status_payload = {
+            "primed_and_ready": True,
+            "status": "Power-on Self Test complete. All systems nominal. Ready for engagement.",
+            "elp1_benchmark_ms": BENCHMARK_ELP1_TIME_MS
+        }
+    elif elapsed_seconds < post_duration_seconds:
+        # The benchmark is not done, but we are still within the 60-second POST window.
+        remaining_seconds = post_duration_seconds - elapsed_seconds
+        status_payload = {
+            "primed_and_ready": False,
+            "status": f"Power-on Self Test in progress... T-minus {remaining_seconds:.0f} seconds.",
+            "elp1_benchmark_ms": None
+        }
+    else:
+        # It has been more than 60 seconds and the benchmark STILL hasn't finished.
+        # This indicates a potential problem or a very slow startup.
+        status_payload = {
+            "primed_and_ready": False,
+            "status": "POST WARNING: Power-on Self Test exceeded expected duration. System initialization is slow or may have stalled.",
+            "elp1_benchmark_ms": None
+        }
+
+    return jsonify(status_payload), 200
+
 
 #==============================[openAI API (Most standard) Behaviour]==============================
 @app.route("/v1/embeddings", methods=["POST"])

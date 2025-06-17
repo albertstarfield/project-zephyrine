@@ -35,7 +35,7 @@ export default defineConfig({
         // --- Customize Your App Manifest ---
         name: 'Project Zephyrine',
         short_name: 'Zephyrine',
-        description: 'Conversational AI Assistant - Adelaide Zephyrine Charlotte',
+        description: 'Allegedly an AI - Adelaide Zephyrine Charlotte',
         theme_color: '#242424', // Match your app's dark theme (adjust if needed)
         background_color: '#1a1a1a', // Background for splash screen
         display: 'standalone', // Run in its own window
