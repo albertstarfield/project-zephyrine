@@ -18,6 +18,8 @@ import SystemInfo from "./components/SystemInfo";
 import SplashScreen from "./components/SplashScreen";
 // NEW: Import PreSplashScreen
 import PreSplashScreen from "./components/PreSplashScreen";
+import WingModePage from "./components/WingModePage"; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/components/WingModePage.jsx]
+
 
 // Hook Imports
 import { useSystemInfo } from "./hooks/useSystemInfo";
@@ -25,6 +27,8 @@ import { useChatHistory } from "./hooks/useChatHistory";
 import { useThemedBackground } from './hooks/useThemedBackground';
 import { useStarBackground } from './hooks/useStarBackground';
 import StarParticle from './components/StarParticle';
+import { useWingModeTransition } from './hooks/useWingModeTransition'; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/hooks/useWingModeTransition.js]
+
 
 // Stylesheet Imports
 import "./styles/App.css";
@@ -36,6 +40,8 @@ import 'katex/dist/katex.min.css';
 import "./styles/components/_splashScreen.css";
 // NEW: Import pre-splash screen CSS
 import "./styles/components/_preSplashScreen.css";
+import "./styles/components/_wingModePage.css"; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/styles/components/_wingModePage.css]
+
 
 
 const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001";
@@ -57,6 +63,9 @@ const AppContent = () => {
   const [showPreSplashScreen, setShowPreSplashScreen] = useState(true);
   const [showSplashScreen, setShowSplashScreen] = useState(false); // Initial state set to false
   const [appReady, setAppReady] = useState(false);
+
+  const isWingModeActive = useWingModeTransition(); 
+
 
   // NEW: Callback for when pre-splash screen determines system is ready
   const handlePrimedAndReady = useCallback(() => {
@@ -229,7 +238,7 @@ const AppContent = () => {
   }, []);
 
   const handleNewChat = useCallback(() => {
-    navigate(`/chat/new`);
+    navigate(`/`);
   }, [navigate]);
 
   const toggleVoiceAssistant = useCallback(() => {
@@ -253,6 +262,12 @@ const AppContent = () => {
   // NEW: Render PreSplashScreen first
   if (showPreSplashScreen) {
     return <PreSplashScreen onPrimedAndReady={handlePrimedAndReady} />;
+  }
+
+  // If Wing Mode is active, render the WingModePage and nothing else.
+  // This will overlay everything.
+  if (isWingModeActive) {
+    return <WingModePage />; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/components/WingModePage.jsx]
   }
 
   if (!user) {
