@@ -18,7 +18,7 @@ import SystemInfo from "./components/SystemInfo";
 import SplashScreen from "./components/SplashScreen";
 // NEW: Import PreSplashScreen
 import PreSplashScreen from "./components/PreSplashScreen";
-import WingModePage from "./components/WingModePage"; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/components/WingModePage.jsx]
+import ShuttleDisplay from "./components/ShuttleDisplay"; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/components/WingModePage.jsx]
 
 
 // Hook Imports
@@ -267,7 +267,7 @@ const AppContent = () => {
   // If Wing Mode is active, render the WingModePage and nothing else.
   // This will overlay everything.
   if (isWingModeActive) {
-    return <WingModePage />; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/components/WingModePage.jsx]
+    return <ShuttleDisplay />;
   }
 
   if (!user) {

@@ -9,6 +9,8 @@
     "preview": "vite preview"
   },
   "dependencies": {
+    "@react-three/drei": "^9.108.3",   
+    "@react-three/fiber": "^8.16.8",
     "@ricky0123/vad-web": "^0.0.24",
     "onnxruntime-web": "^1.22.0",
     "dotenv": "^16.4.7",
@@ -28,6 +30,7 @@
     "remark-math": "^5.1.1",
     "remark-mermaidjs": "^7.0.0",
     "sqlite3": "^5.1.7",
+    "three": "^0.166.1",       
     "uuid": "^10.0.0",
     "vite-plugin-pwa": "^0.2.1"
   },

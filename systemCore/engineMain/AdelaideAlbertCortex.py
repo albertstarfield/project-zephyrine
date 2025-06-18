@@ -7680,70 +7680,127 @@ async def build_ada_daemons():
 
 
 _sim_lock = threading.Lock()
+# Holds the persistent state of the simulated aircraft.
 _sim_state = {
-    "pitch": 0.0, "roll": 0.0, "heading": 180.0, "altitude": 5000.0,
-    "vertical_speed": 0.0, "airspeed": 120.0, "ground_speed": 115.0,
-    "turn_rate": 0.0, "slip_skid": 0.0, "last_update": time.monotonic(),
-    "mode": "Atmospheric Flight", "nav_reference": "Sol System",
-    "relative_velocity_c": 0.0
+    # Flight Dynamics
+    "pitch": 0.0, "roll": 0.0, "yaw": 180.0, "last_update": time.monotonic(),
+    "pitch_rate": 0.0, "roll_rate": 0.0, "yaw_rate": 0.0,
+    "mach": 0.2, "keas": 120.0, "vertical_speed": 0.0,
+    "altitude": 5000.0,
+    "g_force": 1.0, "angle_of_attack": 4.5, "sideslip_angle": 0.0,
+
+    # Navigation
+    "flight_director": {"command_pitch": 2.0, "command_roll": -1.0},
+    "hsi": {
+        "selected_course": 185.0, "course_deviation": 0.1, "hac_turn_angle": 90.0,
+        "waypoints": [
+            {"id": "WAYPOINT_1", "label": "*", "bearing": 190.0, "range": 10.5}
+            # Can add more waypoints here if needed for simulation
+        ]
+    },
+
+    # Systems
+    "systems_status": {"dap_mode": "Auto", "throttle_mode": "Auto", "attitude_ref": "GND",
+                       "flight_controller_mode": "MAN", "yaw_damper_on": True},
+    "flight_controls": {
+        "elevons": {"left_deg": 0.0, "right_deg": 0.0},
+        "body_flap": {"actual_pct": 0.0, "commanded_pct": 0.0},
+        "rudder": {"actual_deg": 0.0, "commanded_deg": 0.0},
+        "speedbrake": {"actual_pct": 0.0, "commanded_pct": 0.0}
+    }
 }
 
 
 def _generate_simulated_avionics_data() -> Dict[str, Any]:
-    """Generates a single frame of simulated avionics data. This is the fallback."""
+    """
+    Generates a single, detailed frame of simulated avionics data, matching
+    the new hierarchical JSON structure.
+    """
     with _sim_lock:
         global _sim_state
         now = time.monotonic()
         delta_t = now - _sim_state["last_update"]
+        if delta_t == 0: delta_t = 1.0 / 60.0  # Prevent division by zero if called too quickly
         _sim_state["last_update"] = now
 
-        # Update logic based on current mode
-        current_mode = _sim_state["mode"]
-        if current_mode in ["Atmospheric Flight", "Planetary Reconnaissance"]:
-            _sim_state["roll"] = max(-60, min(60, _sim_state["roll"] + random.uniform(-0.5, 0.5) * delta_t * 20))
-            _sim_state["pitch"] = max(-30, min(30, _sim_state["pitch"] + random.uniform(-0.2, 0.2) * delta_t * 10))
-            _sim_state["turn_rate"] = _sim_state["roll"] / 15.0
-            _sim_state["heading"] = (_sim_state["heading"] + _sim_state["turn_rate"] * delta_t) % 360
-            _sim_state["vertical_speed"] = max(-3000, min(3000, _sim_state["vertical_speed"] + random.uniform(-50,
-                                                                                                              50) * delta_t * 10))
-            _sim_state["altitude"] += _sim_state["vertical_speed"] * delta_t / 60.0
-            _sim_state["airspeed"] = max(60, min(400, _sim_state["airspeed"] + random.uniform(-1, 1) * delta_t * 10))
-            _sim_state["ground_speed"] = _sim_state["airspeed"] + math.sin(math.radians(_sim_state["heading"])) * 5
-        elif current_mode == "Interstellar Flight":
-            _sim_state["relative_velocity_c"] = max(0.0, min(0.99, _sim_state["relative_velocity_c"] + (
-                        random.random() - 0.49) * 0.0001))
-            _sim_state["altitude"] += _sim_state["relative_velocity_c"] * 2.998e8 * delta_t / 1.496e11  # Altitude in AU
-            _sim_state["vertical_speed"] = _sim_state["relative_velocity_c"] * 2.998e8
+        # --- Simulate Flight Dynamics ---
+        last_roll = _sim_state["roll"]
+        last_pitch = _sim_state["pitch"]
+        last_yaw = _sim_state["yaw"]
 
-        # Randomly change mode
-        if random.random() < 0.001:
-            _sim_state["mode"] = random.choice(
-                ["Planetary Reconnaissance", "Interstellar Flight", "Atmospheric Flight"])
-            if _sim_state["mode"] == "Interstellar Flight":
-                _sim_state["nav_reference"] = "Sol -> Proxima Centauri"
+        # Attitude random walk
+        _sim_state["roll"] = max(-60, min(60, last_roll + random.uniform(-1, 1) * delta_t * 10))
+        _sim_state["pitch"] = max(-30, min(30, last_pitch + random.uniform(-0.5, 0.5) * delta_t * 5))
 
-        # Construct the full data packet
+        # Calculate rates based on attitude change
+        _sim_state["roll_rate"] = (_sim_state["roll"] - last_roll) / delta_t
+        _sim_state["pitch_rate"] = (_sim_state["pitch"] - last_pitch) / delta_t
+        # Simplified yaw rate based on roll and pitch (co-ordinated turn)
+        _sim_state["yaw_rate"] = _sim_state["roll_rate"] * math.sin(math.radians(_sim_state["pitch"]))
+        _sim_state["yaw"] = (_sim_state["yaw"] + _sim_state["yaw_rate"] * delta_t) % 360
+        _sim_state["sideslip_angle"] = _sim_state["yaw_rate"] * -0.1  # Simplified sideslip
+
+        # G-force based on bank angle
+        _sim_state["g_force"] = 1.0 / math.cos(math.radians(_sim_state["roll"])) if abs(
+            _sim_state["roll"]) < 85 else 6.0
+
+        # Velocity and Position
+        _sim_state["vertical_speed"] = max(-4000, min(4000, _sim_state["vertical_speed"] + random.uniform(-50,
+                                                                                                          50) * delta_t * 5))
+        _sim_state["altitude"] += _sim_state["vertical_speed"] * delta_t / 60.0
+        _sim_state["keas"] = max(60, min(700, _sim_state["keas"] + random.uniform(-2, 2) * delta_t * 5))
+        try:
+            _sim_state["mach"] = _sim_state["keas"] / (661.47 * (1.0 - _sim_state["altitude"] / 145442.0) ** 2.5)
+        except ZeroDivisionError:
+            _sim_state["mach"] = 0.0
+        _sim_state["angle_of_attack"] = 2.5 + _sim_state["pitch"] / 4.0 - (_sim_state["keas"] - 150.0) / 50.0
+
+        # --- Simulate Flight Controls (mirroring pilot input) ---
+        _sim_state["flight_controls"]["elevons"]["left_deg"] = _sim_state["pitch"] * -0.5 + _sim_state["roll"] * 0.25
+        _sim_state["flight_controls"]["elevons"]["right_deg"] = _sim_state["pitch"] * -0.5 - _sim_state["roll"] * 0.25
+        _sim_state["flight_controls"]["rudder"]["actual_deg"] = _sim_state["yaw_rate"] * -0.5
+        _sim_state["flight_controls"]["rudder"]["commanded_deg"] = _sim_state["flight_controls"]["rudder"]["actual_deg"]
+
+        # --- Construct the Final JSON Payload ---
         payload = {
             "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "mode": _sim_state["mode"],
-            "attitude_indicator": {"pitch": _sim_state["pitch"], "roll": _sim_state["roll"]},
-            "heading_indicator": _sim_state["heading"],
-            "altimeter": _sim_state["altitude"],
-            "vertical_speed_indicator": _sim_state["vertical_speed"],
-            "autopilot_status": {"AP": True, "HDG": True, "NAV": False}
+            "flight_dynamics": {
+                "attitude": {
+                    "pitch": round(_sim_state["pitch"], 2),
+                    "roll": round(_sim_state["roll"], 2),
+                    "yaw": round(_sim_state["yaw"], 2)
+                },
+                "rates": {
+                    "pitch_rate": round(_sim_state["pitch_rate"], 2),
+                    "roll_rate": round(_sim_state["roll_rate"], 2),
+                    "yaw_rate": round(_sim_state["yaw_rate"], 2)
+                },
+                "velocity": {
+                    "mach": round(_sim_state["mach"], 2),
+                    "keas": round(_sim_state["keas"], 2),
+                    "vertical_speed": round(_sim_state["vertical_speed"], 2)
+                },
+                "position": {
+                    "altitude": round(_sim_state["altitude"], 2)
+                },
+                "aero": {
+                    "g_force": round(_sim_state["g_force"], 2),
+                    "angle_of_attack": round(_sim_state["angle_of_attack"], 2),
+                    "sideslip_angle": round(_sim_state["sideslip_angle"], 2)
+                }
+            },
+            "navigation": {
+                "flight_director": {
+                    "command_pitch": round(_sim_state["pitch"] + 2.0, 2),
+                    "command_roll": round(_sim_state["roll"] - 1.0, 2)
+                },
+                "hsi": _sim_state["hsi"]
+            },
+            "systems": {
+                "status": _sim_state["systems_status"],
+                "flight_controls": _sim_state["flight_controls"]
+            }
         }
-        # Add mode-specific data
-        if _sim_state["mode"] != "Interstellar Flight":
-            payload.update({
-                "gps_speed": _sim_state["ground_speed"],
-                "airspeed_indicator": _sim_state["airspeed"],
-                "turn_coordinator": {"rate": _sim_state["turn_rate"], "slip_skid": _sim_state["slip_skid"]}
-            })
-        else:
-            payload.update({
-                "relative_velocity_c": _sim_state["relative_velocity_c"],
-                "navigation_reference": _sim_state["nav_reference"]
-            })
         return payload
 
 
@@ -11001,6 +11058,7 @@ def submit_tool_outputs_stub(thread_id: str, run_id: str):
 
 
 #============== Dove Section ===============
+
 
 @app.route("/instrumentviewportdatastreamlowpriopreview", methods=["GET"])
 def handle_instrument_viewport_stream():

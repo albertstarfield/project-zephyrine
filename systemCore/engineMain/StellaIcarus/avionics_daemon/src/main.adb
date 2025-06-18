@@ -34,8 +34,7 @@ procedure Main is
       Result    : VSS.JSON.JSON_Object_SPtr := VSS.JSON.Create_Object;
       Attitude  : VSS.JSON.JSON_Object_SPtr := VSS.JSON.Create_Object;
       Autopilot : VSS.JSON.JSON_Object_SPtr := VSS.JSON.Create_Object;
-      Turn_Coord: VSS.JSON.JSON_Object_SPtr := VSS.JSON.Create_Object;
-      CDI_GS    : VSS.JSON.JSON_Object_SPtr := VSS.JSON.Create_Object;
+      Flight_Dir: VSS.JSON.JSON_Object_SPtr := VSS.JSON.Create_Object;
       Current_Mode : constant String := U_Strings.To_String(Mode_Str);
    begin
       -- Common instruments for all modes
@@ -44,11 +43,17 @@ procedure Main is
       Result.Set ("altimeter", Item.Altimeter);
       Result.Set ("vertical_speed_indicator", Item.Vertical_Speed_Indicator);
       Result.Set ("heading_indicator", Item.Heading_Indicator);
-
+      Result.Set ("g_force", Item.G_Force);
+      
       -- Attitude Indicator
       Attitude.Set ("pitch", Item.Attitude.Pitch);
       Attitude.Set ("roll", Item.Attitude.Roll);
       Result.Set ("attitude_indicator", Attitude);
+
+      -- Flight Director
+      Flight_Dir.Set("command_pitch", Item.Flight_Director.Command_Pitch);
+      Flight_Dir.Set("command_roll", Item.Flight_Director.Command_Roll);
+      Result.Set("flight_director", Flight_Dir);
       
       -- Autopilot Status
       Autopilot.Set ("AP", Item.Autopilot_Status.AP);
@@ -59,30 +64,42 @@ procedure Main is
       -- Mode-specific instruments
       if Current_Mode = "Atmospheric Flight" or Current_Mode = "Planetary Reconnaissance" then
          -- These instruments are relevant within an atmosphere
-         Result.Set ("gps_speed", Item.GPS_Speed);
-         Result.Set ("air_pressure", Item.Air_Pressure);
          Result.Set ("airspeed_indicator", Item.Airspeed_Indicator);
-         Result.Set ("selected_airspeed", Item.Selected_Airspeed);
-         Result.Set ("selected_altitude", Item.Selected_Altitude);
-         Result.Set ("selected_heading", Item.Selected_Heading);
+         Result.Set ("mach_number", Item.Mach_Number);
+         Result.Set ("angle_of_attack", Item.Angle_Of_Attack);
+         Result.Set ("pitch_rate", Item.Pitch_Rate);
+         Result.Set ("roll_rate", Item.Roll_Rate);
          Result.Set ("yaw_damper_indicator", Item.Yaw_Damper_Indicator);
+         Result.Set ("air_pressure", Item.Air_Pressure);
+         Result.Set ("gps_speed", Item.GPS_Speed);
 
-         -- Turn Coordinator (more relevant for aerodynamic flight)
-         Turn_Coord.Set ("rate", Item.Turn_Coordinator.Roll);
-         Turn_Coord.Set ("slip_skid", Item.Turn_Coordinator.Pitch);
-         Result.Set ("turn_coordinator", Turn_Coord);
+         -- Flight Controls
+         declare
+            Controls : VSS.JSON.JSON_Object_SPtr := VSS.JSON.Create_Object;
+         begin
+            Controls.Set("elevon_deflection", Item.Flight_Controls.Elevon_Deflection);
+            Controls.Set("body_flap_position", Item.Flight_Controls.Body_Flap_Position);
+            Controls.Set("rudder_deflection", Item.Flight_Controls.Rudder_Deflection);
+            Controls.Set("speedbrake_position", Item.Flight_Controls.Speedbrake_Position);
+            Result.Set("flight_controls", Controls);
+         end;
 
-         -- CDI/GS Indicator (for approaches)
-         CDI_GS.Set ("course_deviation", Item.CDI_GS_Indicator.Course_Deviation);
-         CDI_GS.Set ("glideslope_deviation", Item.CDI_GS_Indicator.Glideslope_Deviation);
-         Result.Set ("cdi_gs_indicator", CDI_GS);
+         -- HSI Data
+         declare
+            HSI : VSS.JSON.JSON_Object_SPtr := VSS.JSON.Create_Object;
+         begin
+            HSI.Set("selected_course", Item.HSI.Selected_Course);
+            HSI.Set("course_deviation", Item.HSI.Course_Deviation);
+            HSI.Set("waypoint_bearing", Item.HSI.Waypoint_Bearing);
+            HSI.Set("waypoint_range_nm", Item.HSI.Waypoint_Range_NM);
+            HSI.Set("hac_turn_angle", Item.HSI.HAC_Turn_Angle);
+            Result.Set("hsi_data", HSI);
+         end;
          
       elsif Current_Mode = "Interstellar Flight" then
          -- These instruments are relevant for space travel
          Result.Set ("relative_velocity_c", Item.Relative_Velocity_C); -- Velocity as fraction of light speed
-         Result.Set ("navigation_reference", U_Strings.To_VSS_String(Nav_Ref_Str)); -- e.g., "Sol -> Proxima Centauri"
-         -- "Altimeter" in this mode could represent distance from a reference point (e.g., star, station) in AU or km.
-         -- "Heading" would be relative to the galactic plane.
+         Result.Set ("navigation_reference", U_Strings.To_VSS_String(Nav_Ref_Str));
       end if;
       
       return Result;
@@ -96,37 +113,38 @@ begin
    
    loop
       -- 1. SIMULATE DATA UPDATE
-      -- This logic mimics the Python simulation for consistency.
       declare
          Last_Pitch : constant Float := State.Attitude.Pitch;
          Last_Roll  : constant Float := State.Attitude.Roll;
-         Last_Hdg   : constant Float := State.Heading_Indicator;
-         Last_Alt   : constant Float := State.Altimeter;
-         Last_VS    : constant Float := State.Vertical_Speed_Indicator;
-         Last_IAS   : constant Float := State.Airspeed_Indicator;
          Current_Mode : constant String := U_Strings.To_String(Mode_Str);
       begin
          -- Simulate common values
          State.Attitude.Roll  := Float'Max (-60.0, Float'Min (60.0, Last_Roll + Ada.Numerics.Float_Random.Random (Gen) * 4.0 - 2.0));
          State.Attitude.Pitch := Float'Max (-30.0, Float'Min (30.0, Last_Pitch + Ada.Numerics.Float_Random.Random (Gen) * 2.0 - 1.0));
-         State.Turn_Coordinator.Roll := State.Attitude.Roll / 15.0; -- Turn rate
-         State.Heading_Indicator := (Last_Hdg + State.Turn_Coordinator.Roll * Float (Period_Sec)) mod 360.0;
-         if State.Heading_Indicator < 0.0 then
-            State.Heading_Indicator := State.Heading_Indicator + 360.0;
-         end if;
-         
+         State.Roll_Rate  := (State.Attitude.Roll - Last_Roll) / Float(Period_Sec);
+         State.Pitch_Rate := (State.Attitude.Pitch - Last_Pitch) / Float(Period_Sec);
+         State.G_Force := 1.0 + (abs(State.Attitude.Roll) / 60.0)**2 * 2.0; -- Simplified G-force in turns
+         State.Flight_Director.Command_Pitch := State.Attitude.Pitch + 2.0;
+         State.Flight_Director.Command_Roll  := State.Attitude.Roll - 1.0;
+
          -- Simulate mode-specific values
          if Current_Mode = "Atmospheric Flight" or Current_Mode = "Planetary Reconnaissance" then
-            State.Vertical_Speed_Indicator := Float'Max (-3000.0, Float'Min (3000.0, Last_VS + Ada.Numerics.Float_Random.Random(Gen) * 10.0 - 5.0));
-            State.Altimeter := Last_Alt + (State.Vertical_Speed_Indicator * Float (Period_Sec) / 60.0);
-            State.Airspeed_Indicator := Float'Max (60.0, Float'Min (400.0, Last_IAS + Ada.Numerics.Float_Random.Random(Gen) * 2.0 - 1.0));
-            State.GPS_Speed := State.Airspeed_Indicator + VSS.JSON.Sin(Last_Hdg * PI / 180.0) * 5.0;
-            State.Relative_Velocity_C := State.Airspeed_Indicator / (2.998E8 * 1.944); -- Convert knots to fraction of c (rough)
+            State.Heading_Indicator := (State.Heading_Indicator + (State.Roll_Rate / 10.0)) mod 360.0;
+            State.Vertical_Speed_Indicator := Float'Max (-4000.0, Float'Min (4000.0, State.Vertical_Speed_Indicator + Ada.Numerics.Float_Random.Random(Gen) * 20.0 - 10.0));
+            State.Altimeter := State.Altimeter + (State.Vertical_Speed_Indicator * Float (Period_Sec) / 60.0);
+            State.Airspeed_Indicator := Float'Max (60.0, Float'Min (700.0, State.Airspeed_Indicator + Ada.Numerics.Float_Random.Random(Gen) * 4.0 - 2.0));
+            State.Mach_Number := State.Airspeed_Indicator / (661.47 * (1.0 - State.Altimeter/145442.0)**2.5); -- Simplified Mach calc
+            State.Angle_Of_Attack := 2.5 + State.Attitude.Pitch / 5.0 - (State.Airspeed_Indicator - 120.0) / 50.0;
+
+            -- Simulate Flight Controls
+            State.Flight_Controls.Elevon_Deflection := State.Attitude.Pitch * -0.5;
+            State.Flight_Controls.Rudder_Deflection := State.Roll_Rate * -0.2;
+            State.Flight_Controls.Speedbrake_Position := 0.0;
+            
          elsif Current_Mode = "Interstellar Flight" then
             State.Relative_Velocity_C := State.Relative_Velocity_C + (Ada.Numerics.Float_Random.Random(Gen) - 0.49) * 0.0001;
             State.Relative_Velocity_C := Float'Max(0.0, Float'Min(0.99, State.Relative_Velocity_C));
-            State.Altimeter := Last_Alt + State.Relative_Velocity_C * 2.998E8 * Float(Period_Sec) / 1.496E11; -- Altitude in AU
-            State.Vertical_Speed_Indicator := State.Relative_Velocity_C * 2.998E8; -- VS in m/s
+            State.Altimeter := State.Altimeter + State.Relative_Velocity_C * 2.998E8 * Float(Period_Sec) / 1.496E11; -- Altitude in AU
          end if;
 
 
