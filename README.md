@@ -21,7 +21,7 @@
 
 ## Project Zephyrine: Yet another An Open-Source OpenAI API Implementation, and very simple Edge-AI (Assistant) for Your Computer.
 
-**Project Zephyrine** is just by the Zephyrine Foundation product. it's just **Qwen 2.5 & Mixed Bread AI**, **Nothing to see here.**
+**Project Zephyrine** is just by the Zephyrine Foundation product. it's just **Qwen 2.5 & Mixed Bread AI (For global context embedding vectorization)**, **Nothing to see here.**
 
 bringing together expertise from random AI corporation, researchers from RisTIE Brawijaya University's Electrical Engineering, Internal People of Zephyrine Foundation, Freelancers, and independent developer Albert.
 
