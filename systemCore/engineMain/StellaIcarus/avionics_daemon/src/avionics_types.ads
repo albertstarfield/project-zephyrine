@@ -1,4 +1,28 @@
+
 package Avionics_Types is
+
+   -- NEW: Record for Flight Director commands
+   type Flight_Director_Record is record
+      Command_Pitch : Float := 0.0;
+      Command_Roll  : Float := 0.0;
+   end record;
+
+   -- NEW: Record for flight control surface positions
+   type Flight_Controls_Record is record
+      Elevon_Deflection   : Float := 0.0; -- in degrees
+      Body_Flap_Position  : Float := 0.0; -- in percent
+      Rudder_Deflection   : Float := 0.0; -- in degrees
+      Speedbrake_Position : Float := 0.0; -- in percent
+   end record;
+
+   -- NEW: Record for HSI (Horizontal Situation Indicator) data
+   type HSI_Record is record
+      Selected_Course   : Float := 0.0; -- degrees
+      Course_Deviation  : Float := 0.0; -- dots/degrees
+      Waypoint_Bearing  : Float := 0.0; -- degrees
+      Waypoint_Range_NM : Float := 0.0; -- nautical miles
+      HAC_Turn_Angle    : Float := 0.0; -- delta azimuth
+   end record;
 
    -- A record to hold the state of the autopilot system.
    type Autopilot_Status_Record is record
@@ -43,11 +67,23 @@ package Avionics_Types is
       Relative_Velocity_C        : Float := 0.0;
       Navigation_Reference       : String(1 .. 32) := (others => ' ');
       Nav_Ref_Len                : Natural;
+      -- NEW PFD Fields
+      Angle_Of_Attack            : Float := 4.5;
+      G_Force                    : Float := 1.0;
+      Mach_Number                : Float := 0.2;
+      Pitch_Rate                 : Float := 0.0;
+      Roll_Rate                  : Float := 0.0;
+      Cross_Track_Error_NM       : Float := 0.0;
+      Delta_Inclination          : Float := 0.0;
       -- Common records
       Attitude                   : Attitude_Record;
       Turn_Coordinator           : Attitude_Record; -- Using Attitude for rate/slip
       CDI_GS_Indicator           : Deviation_Indicator_Record;
       Autopilot_Status           : Autopilot_Status_Record;
+      -- NEW Record Groups
+      Flight_Director            : Flight_Director_Record;
+      Flight_Controls            : Flight_Controls_Record;
+      HSI                        : HSI_Record;
    end record;
 
 end Avionics_Types;

@@ -28,7 +28,7 @@
 @import 'components/_nightSky.css'; /* Dark Themed */
 @import 'components/_splashScreen.css'; /* NEW: Splash screen styles */
 @import 'components/_preSplashScreen.css'; /* NEW: Pre-splash screen styles */
-@import 'components/_wingModePage.css'; /* NEW: Wing mode page styles */
+@import 'components/_shuttleDisplay.css';
 
 
 

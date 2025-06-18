@@ -10,45 +10,41 @@ const WingModePage = () => {
   const [errorMessage, setErrorMessage] = useState(null);
 
   useEffect(() => {
-    // EventSource is designed for Server-Sent Events (SSE)
     const eventSource = new EventSource(INSTRUMENT_DATA_API_URL);
 
     eventSource.onopen = () => {
       console.log("SSE Connection opened for instrument data.");
-      setErrorMessage(null); // Clear errors on successful open
+      setErrorMessage(null);
     };
 
     eventSource.onmessage = (event) => {
       try {
-        // Each event.data will be a JSON string from the "data:" line
         const data = JSON.parse(event.data);
-        setInstrumentData(data); // Update state with the latest data object
-        setErrorMessage(null); // Clear errors if data is successfully received
+        setInstrumentData(data);
+        setErrorMessage(null);
       } catch (error) {
         console.error("Error parsing SSE message data:", error, event.data);
-        setErrorMessage("Data parse error. Check console.");
+        setErrorMessage("Data parse error. Check console for raw data.");
       }
     };
 
     eventSource.onerror = (error) => {
       console.error("SSE Error:", error);
-      // Attempt to get more specific error message
-      if (error.status) { // For Fetch/XHR errors
+      if (error.status) {
           setErrorMessage(`SSE connection error: Status ${error.status}`);
-      } else if (error.message) { // For generic JS errors
+      } else if (error.message) {
           setErrorMessage(`SSE connection error: ${error.message}`);
       } else {
           setErrorMessage("SSE connection error. See console for details.");
       }
-      eventSource.close(); // Close the connection on error to avoid infinite retries if server isn't responsive
+      eventSource.close();
     };
 
-    // Cleanup: Close the EventSource connection when the component unmounts
     return () => {
       console.log("Closing SSE connection for instrument data.");
       eventSource.close();
     };
-  }, []); // Empty dependency array means this effect runs once on mount and cleans up on unmount
+  }, []);
 
   const renderTileContent = (tileNum) => {
     if (errorMessage) {
@@ -58,88 +54,101 @@ const WingModePage = () => {
       return "Connecting to instruments...";
     }
 
-    const data = instrumentData.data;
-    // Safely destructure data, providing defaults to prevent errors if keys are missing
+    // Safely access the 'data' sub-object and its nested properties
+    const data = instrumentData.data || {};
     const {
-      mode = "N/A",
-      altimeter,
-      attitude_indicator,
-      autopilot_status,
-      airspeed_indicator,
-      gps_speed,
-      heading_indicator,
-      turn_coordinator,
-      vertical_speed_indicator,
-      navigation_reference,
-      relative_velocity_c
-    } = data || {}; // Ensure data is not null before destructuring
+      flight_dynamics = {},
+      navigation = {},
+      systems = {},
+      timestamp // Root level timestamp in 'data'
+    } = data;
+
+    // Destructure flight_dynamics
+    const {
+      attitude = {},
+      rates = {},
+      velocity = {},
+      position = {},
+      aero = {}
+    } = flight_dynamics;
+
+    // Destructure navigation
+    const {
+      flight_director = {},
+      hsi = {}
+    } = navigation;
+
+    // Destructure systems
+    const {
+      status = {},
+      flight_controls = {}
+    } = systems;
+
+    // Helper to format numbers or return N/A
+    const formatNum = (value, unit = '') => value !== undefined && value !== null ? `${value.toFixed(2)}${unit}` : "N/A";
+    const formatDeg = (value) => formatNum(value, '°');
+    const formatPct = (value) => formatNum(value, '%');
+
 
     switch (tileNum) {
-      case 1: // General Status / Mode
+      case 1: // General Flight Status & Position
         return (
           <>
             <h3>Mode</h3>
-            <p>{mode}</p>
+            <p>{flight_dynamics.mode || "N/A"}</p> {/* Assuming mode is directly under flight_dynamics or root */}
+            <h3>Altitude</h3>
+            <p>{formatNum(position.altitude, 'm')}</p>
+            <h3>Vertical Speed</h3>
+            <p>{formatNum(velocity.vertical_speed, ' m/s')}</p>
             <h3>Source Daemon</h3>
             <p>{instrumentData.source_daemon || "N/A"}</p>
             <h3>Timestamp</h3>
-            <p>{new Date(data?.timestamp || instrumentData.timestamp_py).toLocaleTimeString()}</p>
+            <p>{new Date(timestamp || instrumentData.timestamp_py).toLocaleTimeString()}</p>
           </>
         );
-      case 2: // Altitude / Vertical Speed
+      case 2: // Attitude & Rates
         return (
           <>
-            <h3>Altimeter</h3>
-            <p>{altimeter !== undefined ? `${altimeter.toFixed(2)}m` : "N/A"}</p>
-            <h3>Vertical Speed</h3>
-            <p>{vertical_speed_indicator !== undefined ? `${vertical_speed_indicator.toFixed(2)} m/s` : "N/A"}</p>
-            {mode === "Interstellar Flight" && relative_velocity_c !== undefined && (
-              <>
-                <h3>Rel Velocity (c)</h3>
-                <p>{relative_velocity_c.toFixed(4)}c</p>
-              </>
-            )}
+            <h3>Attitude (P/R/Y)</h3>
+            <p>P: {formatDeg(attitude.pitch)}</p>
+            <p>R: {formatDeg(attitude.roll)}</p>
+            <p>Y: {formatDeg(attitude.yaw)}</p>
+            <h3>Rates (P/R/Y)</h3>
+            <p>P: {formatNum(rates.pitch_rate, '°/s')}</p>
+            <p>R: {formatNum(rates.roll_rate, '°/s')}</p>
+            <p>Y: {formatNum(rates.yaw_rate, '°/s')}</p>
           </>
         );
-      case 3: // Speed / Heading / Navigation
+      case 3: // Velocity & Aerodynamics
         return (
           <>
-            <h3>Airspeed</h3>
-            <p>{airspeed_indicator !== undefined ? `${airspeed_indicator.toFixed(2)} km/h` : "N/A"}</p>
-            <h3>GPS Speed</h3>
-            <p>{gps_speed !== undefined ? `${gps_speed.toFixed(2)} km/h` : "N/A"}</p>
-            <h3>Heading</h3>
-            <p>{heading_indicator !== undefined ? `${heading_indicator.toFixed(1)}°` : "N/A"}</p>
-            {mode === "Interstellar Flight" && navigation_reference && (
-              <>
-                <h3>Nav Ref</h3>
-                <p>{navigation_reference}</p>
-              </>
-            )}
+            <h3>Velocity</h3>
+            <p>Mach: {formatNum(velocity.mach)}</p>
+            <p>KEAS: {formatNum(velocity.keas, 'kts')}</p>
+            <h3>Aerodynamics</h3>
+            <p>G-Force: {formatNum(aero.g_force, 'g')}</p>
+            <p>AoA: {formatDeg(aero.angle_of_attack)}</p>
+            <p>Sideslip: {formatDeg(aero.sideslip_angle)}</p>
           </>
         );
-      case 4: // Attitude / Autopilot / Turn
-        const pitch = attitude_indicator?.pitch;
-        const roll = attitude_indicator?.roll;
-        const apStatus = autopilot_status;
-        const turnRate = turn_coordinator?.rate;
-        const slipSkid = turn_coordinator?.slip_skid;
+      case 4: // Navigation & Systems Status
+        const waypoints = hsi.waypoints || [];
+        const firstWaypoint = waypoints[0];
 
         return (
           <>
-            <h3>Attitude</h3>
-            <p>Pitch: {pitch !== undefined ? `${pitch.toFixed(1)}°` : "N/A"}</p>
-            <p>Roll: {roll !== undefined ? `${roll.toFixed(1)}°` : "N/A"}</p>
-            <h3>Autopilot</h3>
-            <p>AP: {apStatus?.AP ? "ON" : "OFF"} | HDG: {apStatus?.HDG ? "ON" : "OFF"} | NAV: {apStatus?.NAV ? "ON" : "OFF"}</p>
-            {turnRate !== undefined && (
-              <>
-                <h3>Turn Rate</h3>
-                <p>{turnRate.toFixed(2)}°/s</p>
-                <h3>Slip/Skid</h3>
-                <p>{slipSkid !== undefined ? slipSkid.toFixed(1) : "N/A"}</p>
-              </>
+            <h3>Flight Director</h3>
+            <p>Cmd P: {formatDeg(flight_director.command_pitch)}</p>
+            <p>Cmd R: {formatDeg(flight_director.command_roll)}</p>
+            <h3>HSI</h3>
+            <p>Course: {formatDeg(hsi.selected_course)}</p>
+            <p>Deviation: {formatNum(hsi.course_deviation)}</p>
+            {firstWaypoint && (
+              <p>WP: {firstWaypoint.label || firstWaypoint.id} ({formatDeg(firstWaypoint.bearing)}, {formatNum(firstWaypoint.range, 'km')})</p>
             )}
+            <h3>Systems Status</h3>
+            <p>DAP: {status.dap_mode || "N/A"} | THR: {status.throttle_mode || "N/A"}</p>
+            <p>FC: {status.flight_controller_mode || "N/A"} | YD: {status.yaw_damper_on ? "ON" : "OFF"}</p>
           </>
         );
       default:
