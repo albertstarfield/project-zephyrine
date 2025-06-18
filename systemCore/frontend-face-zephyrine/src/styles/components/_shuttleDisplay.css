@@ -1,0 +1,115 @@
+/* src/styles/components/_shuttleDisplay.css */
+
+/* --- Main Container --- */
+.shuttle-display-container {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100vw;
+    height: 100vh;
+    background-color: #000;
+    display: flex;
+    flex-direction: column;
+    color: #FFFFFF;
+    font-family: 'IBM Plex Mono', monospace;
+    font-size: 14px;
+}
+
+.display-screen {
+    flex-grow: 1;
+    background-color: #000;
+    padding: 10px;
+    position: relative;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+}
+
+/* --- PFD Grid Layout (Corrected) --- */
+.pfd-grid {
+    width: 100%;
+    height: 100%;
+    display: grid;
+    /* Columns: Left Tape | Main Display Area | Right Tape */
+    grid-template-columns: 150px 1fr 150px;
+    /* Rows: Top Status | ADI Area | HSI Area */
+    grid-template-rows: 50px 1fr 150px; 
+    gap: 10px;
+    text-align: center;
+}
+
+/* --- Grid Area Assignments --- */
+/* Top Row */
+.pfd-dap-status { grid-area: 1 / 1 / 2 / 2; }
+.pfd-rate-status { grid-area: 1 / 2 / 2 / 3; }
+.pfd-mm-status { grid-area: 1 / 3 / 2 / 4; }
+
+/* Middle Row */
+.pfd-speed-tapes { grid-area: 2 / 1 / 3 / 2; }
+.pfd-adi-container { grid-area: 2 / 2 / 3 / 3; }
+.pfd-altitude-tapes { grid-area: 2 / 3 / 3 / 4; }
+
+/* Bottom Row: Everything is now relative to its parent cell */
+.pfd-airspeed-readouts { grid-area: 3 / 1 / 4 / 2; display: flex; flex-direction: column; justify-content: flex-end; }
+.pfd-center-bottom { grid-area: 3 / 2 / 4 / 3; display: flex; flex-direction: column; justify-content: space-between; align-items: center; }
+.pfd-nav-readouts { grid-area: 3 / 3 / 4 / 4; display: flex; flex-direction: column; justify-content: flex-end; }
+
+
+/* --- Child Elements of the Central Bottom Area --- */
+.pfd-g-meter-wrapper {
+    /* This wrapper helps position the G-meter */
+    width: 120px; /* Or whatever size you prefer */
+    height: 100px;
+}
+.pfd-hsi-wrapper {
+    width: 250px; /* HSI is wider */
+    height: 150px;
+}
+
+
+/* --- Tapes & Readouts --- */
+.pfd-speed-tapes, .pfd-altitude-tapes { display: flex; justify-content: space-around; }
+.vertical-tape { width: 60px; height: 100%; display: flex; flex-direction: column; }
+.tape-label { height: 20px; }
+.tape-body { flex-grow: 1; background: #333; position: relative; overflow: hidden; border: 1px solid #555; }
+.tape-indicator { position: absolute; left: 0; top: 50%; transform: translateY(-50%); width: 100%; height: 2px; background: #FFF; z-index: 2; }
+.tape-scale { position: absolute; width: 100%; left: 0; bottom: 50%; display: flex; flex-direction: column; align-items: flex-end; transform: translateY(50%); transition: bottom 0.1s linear; }
+.tape-tick { display: flex; align-items: center; width: 100%; justify-content: space-between; height: 20px; }
+.tape-tick span { padding-right: 5px; }
+.tape-line { width: 10px; height: 1px; background: #FFF; }
+.tape-box { height: 30px; border: 1px solid #FFF; margin-top: 5px; line-height: 28px; background: #000; }
+.readout-box { border: 1px solid #FFF; padding: 5px; margin: 2px auto; background: #000; width: 90%; }
+
+/* --- ADI --- */
+.pfd-adi-container { position: relative; display:flex; align-items:center; justify-content:center; }
+.adi-webgl-wrapper { width: 100%; height: 100%; max-width: 400px; max-height:400px; aspect-ratio: 1/1; border-radius: 50%; overflow: hidden; position: relative; border: 2px solid #FF00FF; }
+.adi-roll-indicator { position: absolute; top: -2px; left: 50%; transform: translateX(-50%); color: #00FF00; font-size: 24px; }
+
+/* --- INOP Display --- */
+.inop-container { text-align: center; width: 100%; height: 100%; display: flex; flex-direction: column; align-items: center; justify-content: center; }
+.inop-box { border: 4px dashed #FF4444; color: #FF4444; font-size: 4rem; padding: 20px 40px; }
+
+/* --- Menu Buttons --- */
+.display-menu {
+    height: 50px;
+    background-color: #222;
+    flex-shrink: 0;
+    display: flex;
+    align-items: center;
+    padding: 0 10px;
+    border-top: 2px solid #444;
+}
+.display-menu button {
+    background: #333;
+    border: 2px solid #555;
+    color: #FFF;
+    padding: 5px 15px;
+    margin: 0 5px;
+    font-family: inherit;
+    cursor: pointer;
+}
+.display-menu button.active {
+    border-color: #00FF00;
+    color: #00FF00;
+}
+.menu-spacer { flex-grow: 1; }
