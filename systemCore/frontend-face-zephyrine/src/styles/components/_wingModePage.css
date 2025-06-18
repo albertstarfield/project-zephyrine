@@ -1,0 +1,114 @@
+/* src/styles/components/_wingModePage.css */
+
+.wing-mode-overlay {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    background-color: black; /* Solid black background */
+    display: flex;
+    flex-direction: column; /* Arrange content vertically */
+    align-items: center; /* Center content horizontally */
+    justify-content: flex-start; /* Align content to the top */
+    z-index: 10001; /* Ensure it's on top of all other elements, including pre-splash */
+    color: #FFA500; /* Orange text color */
+    text-align: center;
+    overflow: hidden; /* Prevent body scrollbars */
+    padding: 0; /* Reset padding to ensure full stretch */
+    margin: 0; /* Reset margin */
+  }
+  
+  .wing-mode-content {
+    display: flex;
+    flex-direction: column; /* Stack title and tiles container vertically */
+    flex-grow: 1; /* Allows this content area to take available vertical space */
+    width: 100%; /* Occupy full width of the overlay */
+    box-sizing: border-box; /* Include padding in width/height calculations */
+    padding: 0; /* Reset padding */
+    margin: 0; /* Reset margin */
+  }
+  
+  .wing-mode-title {
+    font-family: 'IBM Plex Mono', monospace; /* Mono font for the title */
+    font-size: 2.5rem;
+    text-transform: uppercase;
+    letter-spacing: 3px;
+    margin-top: 5vh; /* Margin from top of viewport, pushes title down */
+    margin-bottom: 20px; /* Space below title */
+    color: inherit; /* Inherit orange color */
+    flex-shrink: 0; /* Prevent title from shrinking */
+    width: 100%; /* Ensure title spans full width for centering */
+  }
+  
+  .wing-mode-tiles-container {
+    display: flex; /* Arrange tiles horizontally */
+    flex-grow: 1; /* Makes this container take up all *remaining* vertical space */
+    width: 100%; /* Take full width */
+    justify-content: center; /* Center the group of tiles if they don't fill 100% width */
+    align-items: stretch; /* Crucial: Makes children stretch to fill container height */
+    /* No gap here, borders will provide visual separation */
+    padding: 0; /* Reset padding */
+    margin: 0; /* Reset margin */
+  }
+  
+  .wing-mode-tile {
+    /* Each tile takes 1/4 of the viewport width */
+    width: calc(100vw / 4);
+    /* The height should stretch to fill the available vertical space of its parent (wing-mode-tiles-container) */
+    height: 100%;
+    
+    /* IMPORTANT: Forcing a square aspect ratio.
+       Since width is set to 1/4 of viewport width, height will adjust to match.
+       This ensures it is SQUARE and stretches vertically as much as its width allows within the flex container. */
+    aspect-ratio: 1 / 1; 
+  
+    background-color: #000000; /* Dark grey background for tiles */
+    border: 1px solid #afafaf; /* Subtle border for separation */
+    border-radius: 0; /* No rounded corners for perfectly tiled segments */
+    font-family: 'IBM Plex Mono', monospace; /* Mono font for tile text */
+    font-size: 1.5rem; /* Increased font size for better visibility */
+    color: inherit; /* Inherit orange color */
+    
+    /* Use flexbox to center the text content inside each tile */
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    
+    box-sizing: border-box; /* Include padding/border in width/height calculations */
+    flex-shrink: 0; /* Prevent tiles from shrinking below their desired width */
+    flex-basis: auto; /* Reset flex-basis */
+  }
+  
+  /* Responsive adjustments for smaller screens */
+  @media (max-width: 768px) {
+    .wing-mode-title {
+      font-size: 1.8rem;
+      margin-top: 3vh; /* Reduce top margin for smaller screens */
+      margin-bottom: 15px;
+    }
+    .wing-mode-tiles-container {
+      flex-direction: column; /* Stack tiles vertically on smaller screens */
+      align-items: center; /* Center vertically stacked tiles */
+      gap: 0; /* Ensure no gaps when stacked */
+    }
+    .wing-mode-tile {
+      width: 100%; /* Take full width when stacked vertically */
+      /* For square in vertical stack, height will be based on width (100% of parent),
+         so aspect-ratio will ensure it's square. No explicit height needed here. */
+      height: auto; /* Allow height to be determined by aspect-ratio and width */
+      font-size: 1.2rem;
+      border-radius: 0; /* Ensure no rounded corners */
+    }
+  }
+  
+  @media (max-width: 480px) {
+    .wing-mode-title {
+      font-size: 1.5rem;
+      margin-top: 2vh;
+      margin-bottom: 10px;
+    }
+    .wing-mode-tile {
+      font-size: 1rem;
+    }
+  }

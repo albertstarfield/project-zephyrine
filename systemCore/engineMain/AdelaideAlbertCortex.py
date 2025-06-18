@@ -70,6 +70,8 @@ import difflib
 import contextlib # For ensuring driver quit
 from urllib.parse import urlparse, parse_qs, quote_plus, urljoin
 import langcodes
+import math
+import cmath
 
 # --- Selenium Imports (add if not present) ---
 try:
@@ -142,15 +144,15 @@ except ImportError:
 FUZZY_SEARCH_THRESHOLD_APP = getattr(globals(), 'FUZZY_SEARCH_THRESHOLD', 30) # Default to 80 if not from
 
 try:
-    # ... (your existing local imports for CortexEngine, database, config) ...
     from CortexConfiguration import ENABLE_STELLA_ICARUS_HOOKS # Ensure this is imported
-    from stella_icarus_utils import StellaIcarusHookManager # <<< NEW IMPORT
+    from stella_icarus_utils import StellaIcarusHookManager, StellaIcarusAdaDaemonManager # <<< NEW IMPORT
 except ImportError as e:
-    # ... (your existing ImportError handling) ...
     StellaIcarusHookManager = None # Define as None if import fails
     ENABLE_STELLA_ICARUS_HOOKS = False # Default to false if config itself fails
     # ...
-
+# --- NEW: Initialize the Ada Daemon Manager ---
+stella_icarus_daemon_manager = StellaIcarusAdaDaemonManager()
+logger.success("✅ StellaIcarus Ada Daemon Manager Initialized (not yet started).")
 
 # === Global Semaphores and Concurrency Control ===
 # Default to a small number, can be overridden by environment variable if desired
@@ -639,6 +641,30 @@ def stop_file_indexer():
 atexit.register(stop_file_indexer)
 # Register the stop function for application exit
 atexit.register(stop_self_reflector)
+def shutdown_app_services():
+    """A single shutdown hook to orchestrate a graceful shutdown of all background services."""
+    logger.info("--- Orchestrating graceful shutdown of all background services... ---")
+
+    # 1. Stop the provider's internal threads first (like the relaxation thread)
+    if cortex_backbone_provider and hasattr(cortex_backbone_provider, '_priority_quota_lock'):
+        if hasattr(cortex_backbone_provider._priority_quota_lock, 'shutdown_relaxation_thread'):
+            logger.info("Shutting down AgenticRelaxationThread...")
+            cortex_backbone_provider._priority_quota_lock.shutdown_relaxation_thread()
+
+    # 2. Stop the StellaIcarus Ada Daemons
+    if 'stella_icarus_daemon_manager' in globals() and stella_icarus_daemon_manager:
+        logger.info("Shutting down StellaIcarus Ada Daemons...")
+        stella_icarus_daemon_manager.stop_all()
+
+    # 3. Stop the application's main background threads
+    logger.info("Shutting down Self Reflector and File Indexer...")
+    stop_self_reflector()
+    stop_file_indexer()
+
+    # The database log writer and compression hooks registered with atexit elsewhere will run after this.
+    logger.info("--- Graceful shutdown sequence initiated. ---")
+# Register the single, organized shutdown function
+atexit.register(shutdown_app_services)
 
 # json Fixer
 def _extract_json_candidate_string(raw_llm_text: str, log_prefix: str = "JSONExtract") -> Optional[str]:
@@ -7638,7 +7664,90 @@ async def run_startup_benchmark():
             benchmark_db_session.close()
 
 
-# --- End Helpers ---
+async def build_ada_daemons():
+    """
+    Runs the build process for all discovered Ada daemons in a separate thread
+    to avoid blocking the async event loop.
+    """
+    if not ENABLE_STELLA_ICARUS_DAEMON:
+        logger.info("Skipping Ada daemon build: feature disabled in configuration.")
+        return
+
+    logger.info("... Scheduling build for StellaIcarus Ada daemons in background thread ...")
+    # Run the synchronous build method in a thread
+    await asyncio.to_thread(stella_icarus_daemon_manager.build_all)
+    logger.info("... Ada daemon build process has completed ...")
+
+
+_sim_lock = threading.Lock()
+_sim_state = {
+    "pitch": 0.0, "roll": 0.0, "heading": 180.0, "altitude": 5000.0,
+    "vertical_speed": 0.0, "airspeed": 120.0, "ground_speed": 115.0,
+    "turn_rate": 0.0, "slip_skid": 0.0, "last_update": time.monotonic(),
+    "mode": "Atmospheric Flight", "nav_reference": "Sol System",
+    "relative_velocity_c": 0.0
+}
+
+
+def _generate_simulated_avionics_data() -> Dict[str, Any]:
+    """Generates a single frame of simulated avionics data. This is the fallback."""
+    with _sim_lock:
+        global _sim_state
+        now = time.monotonic()
+        delta_t = now - _sim_state["last_update"]
+        _sim_state["last_update"] = now
+
+        # Update logic based on current mode
+        current_mode = _sim_state["mode"]
+        if current_mode in ["Atmospheric Flight", "Planetary Reconnaissance"]:
+            _sim_state["roll"] = max(-60, min(60, _sim_state["roll"] + random.uniform(-0.5, 0.5) * delta_t * 20))
+            _sim_state["pitch"] = max(-30, min(30, _sim_state["pitch"] + random.uniform(-0.2, 0.2) * delta_t * 10))
+            _sim_state["turn_rate"] = _sim_state["roll"] / 15.0
+            _sim_state["heading"] = (_sim_state["heading"] + _sim_state["turn_rate"] * delta_t) % 360
+            _sim_state["vertical_speed"] = max(-3000, min(3000, _sim_state["vertical_speed"] + random.uniform(-50,
+                                                                                                              50) * delta_t * 10))
+            _sim_state["altitude"] += _sim_state["vertical_speed"] * delta_t / 60.0
+            _sim_state["airspeed"] = max(60, min(400, _sim_state["airspeed"] + random.uniform(-1, 1) * delta_t * 10))
+            _sim_state["ground_speed"] = _sim_state["airspeed"] + math.sin(math.radians(_sim_state["heading"])) * 5
+        elif current_mode == "Interstellar Flight":
+            _sim_state["relative_velocity_c"] = max(0.0, min(0.99, _sim_state["relative_velocity_c"] + (
+                        random.random() - 0.49) * 0.0001))
+            _sim_state["altitude"] += _sim_state["relative_velocity_c"] * 2.998e8 * delta_t / 1.496e11  # Altitude in AU
+            _sim_state["vertical_speed"] = _sim_state["relative_velocity_c"] * 2.998e8
+
+        # Randomly change mode
+        if random.random() < 0.001:
+            _sim_state["mode"] = random.choice(
+                ["Planetary Reconnaissance", "Interstellar Flight", "Atmospheric Flight"])
+            if _sim_state["mode"] == "Interstellar Flight":
+                _sim_state["nav_reference"] = "Sol -> Proxima Centauri"
+
+        # Construct the full data packet
+        payload = {
+            "timestamp": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "mode": _sim_state["mode"],
+            "attitude_indicator": {"pitch": _sim_state["pitch"], "roll": _sim_state["roll"]},
+            "heading_indicator": _sim_state["heading"],
+            "altimeter": _sim_state["altitude"],
+            "vertical_speed_indicator": _sim_state["vertical_speed"],
+            "autopilot_status": {"AP": True, "HDG": True, "NAV": False}
+        }
+        # Add mode-specific data
+        if _sim_state["mode"] != "Interstellar Flight":
+            payload.update({
+                "gps_speed": _sim_state["ground_speed"],
+                "airspeed_indicator": _sim_state["airspeed"],
+                "turn_coordinator": {"rate": _sim_state["turn_rate"], "slip_skid": _sim_state["slip_skid"]}
+            })
+        else:
+            payload.update({
+                "relative_velocity_c": _sim_state["relative_velocity_c"],
+                "navigation_reference": _sim_state["nav_reference"]
+            })
+        return payload
+
+
+# --- End Helpers or helper function ---
 
 
 # === Global AI Instances ===
@@ -10891,13 +11000,70 @@ def submit_tool_outputs_stub(thread_id: str, run_id: str):
 
 
 
+#============== Dove Section ===============
+
+@app.route("/instrumentviewportdatastreamlowpriopreview", methods=["GET"])
+def handle_instrument_viewport_stream():
+    """
+    Streams data aggregated from all running StellaIcarus Ada daemons.
+    If the data queue is empty, it falls back to generating and streaming
+    simulated data to ensure the GUI always has a data source.
+    """
+    req_id = f"req-instr-stream-{uuid.uuid4()}"
+    logger.info(f"🚀 {req_id}: SSE connection opened for instrument data stream.")
+
+    def generate_data_stream():
+        try:
+            while True:
+                # Attempt to get real data from the Ada daemons' queue
+                data_packet = stella_icarus_daemon_manager.get_data_from_queue()
+
+                if data_packet is None:
+                    # FALLBACK: Queue is empty. Generate simulated data.
+                    # This happens if the Ada daemons failed to build, start, or are not sending data.
+                    sim_data = _generate_simulated_avionics_data()
+                    data_packet = {
+                        "source_daemon": "System_Simulation_Fallback",
+                        "timestamp_py": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                        "data": sim_data
+                    }
+
+                # Format as Server-Sent Event and yield to the client
+                yield f"data: {json.dumps(data_packet)}\n\n"
+
+                # Control the streaming rate from the single configuration value
+                time.sleep(1.0 / INSTRUMENT_STREAM_RATE_HZ)
+
+        except GeneratorExit:
+            # This is raised when the client disconnects, which is normal.
+            logger.info(f"{req_id}: Client disconnected, closing instrument data stream.")
+        except Exception as e:
+            logger.error(f"{req_id}: Error in instrument data stream generator: {e}")
+            try:
+                # Try to send a final error message to the client
+                error_data = json.dumps({"error": "An internal error occurred in the data stream.", "detail": str(e)})
+                yield f"event: error\ndata: {error_data}\n\n"
+            except:
+                # If yielding fails, just log it.
+                logger.error(f"{req_id}: Could not send final error message to client.")
+
+    # Return a streaming response to the client
+    return Response(generate_data_stream(), mimetype='text/event-stream')
+
 
 
 #=============== IPC Server END ===============
 #============================ Main Program Startup
 # Define startup_tasks (as you had it)
 async def startup_tasks():
-    await run_startup_benchmark() 
+    await run_startup_benchmark()
+
+    await build_ada_daemons()
+    if 'stella_icarus_daemon_manager' in globals() and stella_icarus_daemon_manager.is_enabled:
+        logger.info("APP.PY: Starting all StellaIcarus Ada Daemon services...")
+        stella_icarus_daemon_manager.start_all()
+
+
     logger.info("APP.PY: >>> Entered startup_tasks (async). <<<")
     task_start_time = time.monotonic()
 
