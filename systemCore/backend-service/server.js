@@ -12,6 +12,7 @@ const { v4: uuidv4 } = require('uuid');
 // Configuration
 const PORT = process.env.PORT || 3001;
 const OPENAI_API_BASE_URL = process.env.OPENAI_API_BASE_URL || 'http://localhost:11434/v1';
+const LLM_API_ROOT = OPENAI_API_BASE_URL.replace(/\/v1$/, ''); 
 const OPENAI_API_KEY = process.env.OPENAI_API_KEY || 'ollama';
 const DB_PATH = './project_zephyrine_chats.db';
 
@@ -439,6 +440,72 @@ app.get('/primedready', (req, res) => {
     });
   }
 });
+
+
+// NEW ENDPOINT: Proxy /api/instrumentviewportdatastreamlowpriopreview to the LLM API
+// Corrected ENDPOINT: Proxy /api/instrumentviewportdatastreamlowpriopreview as an SSE stream
+app.get('/api/instrumentviewportdatastreamlowpriopreview', async (req, res) => {
+  const targetUrl = `${LLM_API_ROOT}/instrumentviewportdatastreamlowpriopreview`;
+  console.log(`Proxying SSE instrument data request to: ${targetUrl}`);
+
+  // Set necessary SSE headers
+  res.writeHead(200, {
+    'Content-Type': 'text/event-stream',
+    'Cache-Control': 'no-cache',
+    'Connection': 'keep-alive',
+  });
+
+  try {
+    const upstreamResponse = await fetch(targetUrl); // This fetch returns a standard Web Response object
+
+    if (!upstreamResponse.ok) {
+      // If upstream fails, send an SSE error event and close
+      const errorText = await upstreamResponse.text();
+      console.error(`LLM API instrument data SSE upstream failed: ${upstreamResponse.status} - ${errorText}`);
+      res.write(`event: error\ndata: {"message": "Upstream service error: ${upstreamResponse.status}", "details": ${JSON.stringify(errorText)}}\n\n`);
+      res.end(); // End the response
+      return;
+    }
+
+    // --- FIX START: Manually read from Web ReadableStream and write to Node.js response ---
+    const reader = upstreamResponse.body.getReader(); // Get a reader for the Web ReadableStream
+    const textDecoder = new TextDecoder(); // To decode Uint8Array chunks to strings
+
+    // Function to read and push chunks
+    const pushChunk = async () => {
+      try {
+        const { done, value } = await reader.read(); // Read a chunk from the stream
+        if (done) {
+          console.log("Upstream SSE stream finished.");
+          res.end(); // End the client's response when the upstream stream is done
+          return;
+        }
+        // Decode the Uint8Array value to a string and write it to the Node.js response
+        res.write(textDecoder.decode(value));
+        pushChunk(); // Read the next chunk
+      } catch (error) {
+        console.error("Error reading from upstream SSE stream:", error);
+        res.end(); // End the response on error
+      }
+    };
+
+    pushChunk(); // Start reading the stream immediately
+
+    // Handle client disconnection: important for long-lived streams
+    req.on('close', () => {
+      console.log('Client disconnected from SSE stream. Cancelling upstream read.');
+      reader.cancel(); // Cancel the upstream reader to stop fetching data
+      res.end(); // Ensure the response is ended if not already
+    });
+    // --- FIX END ---
+
+  } catch (error) {
+    console.error('Error establishing SSE proxy connection:', error.message);
+    res.write(`event: error\ndata: {"message": "Backend proxy error establishing connection: ${error.message}"}\n\n`);
+    res.end();
+  }
+});
+
 
 // Reset simulation on server restart or specific trigger if needed for testing
 // app.post('/reset-primed-status', (req, res) => {

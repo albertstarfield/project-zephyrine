@@ -193,6 +193,13 @@ STELLA_ICARUS_CACHE_DIR = os.getenv("STELLA_ICARUS_CACHE_DIR", os.path.join(os.p
 logger.info(f"StellaIcarusHooks Enabled: {ENABLE_STELLA_ICARUS_HOOKS}")
 logger.info(f"  Hook Directory: {STELLA_ICARUS_HOOK_DIR}")
 logger.info(f"  Cache Directory: {STELLA_ICARUS_CACHE_DIR}") # Primarily for Numba's cache if configured
+# --- NEW: StellaIcarus Ada Daemon & Instrument Viewport Settings ---
+ENABLE_STELLA_ICARUS_DAEMON = os.getenv("ENABLE_STELLA_ICARUS_DAEMON", "true").lower() in ('true', '1', 't', 'yes', 'y')
+# This is the parent directory where multiple Ada project folders are located.
+STELLA_ICARUS_ADA_DIR = os.getenv("STELLA_ICARUS_ADA_DIR", os.path.join(os.path.dirname(os.path.abspath(__file__)), "StellaIcarus"))
+# The name of the final executable within each project's ./bin directory after `alr build`
+ALR_DEFAULT_EXECUTABLE_NAME = "stella_greeting" # A default name, can be project-specific if needed.
+INSTRUMENT_STREAM_RATE_HZ = 20.0 # How many updates per second to stream
 
 # --- Text Moderation Setting ---
 # --- Moderation Settings & Prompt ---
