@@ -1861,6 +1861,89 @@ def _ensure_alire_and_gnat_toolchain():
         f.write(f"Installed via Alire on {datetime.now().isoformat()}")
 
     return True
+
+
+def launch_and_manage_zephymesh_node():
+    """
+    Launches the ZephyMesh Go binary, waits for it to become ready by checking
+    for its port file, and then sets the global API URL.
+    This function is designed to be run in a separate thread.
+    """
+    # Use global variables to update the main script's state
+    global zephymesh_process, zephymesh_api_url
+
+    try:
+        # --- Auto-Setup & Compilation ---
+        if not os.path.exists(ZEPHYMESH_NODE_BINARY):
+            print_warning(f"ZephyMesh node binary not found at {ZEPHYMESH_NODE_BINARY}.")
+            print_system("Preparing to compile the Go mesh node...")
+
+            go_source_dir = os.path.join(ROOT_DIR, "zephyMeshNetwork")
+            go_mod_file = os.path.join(go_source_dir, "go.mod")
+
+            if not os.path.exists(go_mod_file):
+                print_warning(f"go.mod file not found in {go_source_dir}.")
+                print_system("Initializing Go module with 'go mod init'...")
+                init_command = ["go", "mod", "init", "zephymesh"]
+                if not run_command(init_command, cwd=go_source_dir, name="GO-MOD-INIT"):
+                    print_error("Failed to initialize the Go module. ZephyMesh cannot start.")
+                    return
+                print_system("Running 'go mod tidy' to download dependencies...")
+                tidy_command = ["go", "mod", "tidy"]
+                if not run_command(tidy_command, cwd=go_source_dir, name="GO-MOD-TIDY"):
+                    print_error("Failed to download Go dependencies ('go mod tidy'). ZephyMesh cannot start.")
+                    return
+
+            print_system("Compiling the Go mesh node with 'go build'...")
+            go_package_path = "./cmd/zephymesh_node"
+            compile_command = ["go", "build", "-o", ZEPHYMESH_NODE_BINARY, go_package_path]
+
+            if not run_command(compile_command, cwd=go_source_dir, name="GO-COMPILE-MESHNODE"):
+                print_error("Failed to compile the Go ZephyMesh node. ZephyMesh cannot start.")
+                return
+            print_system("✅ Go ZephyMesh node compiled successfully.")
+
+        # --- Go Process Startup & Port Discovery ---
+        if os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
+            os.remove(ZEPHYMESH_PORT_INFO_FILE)
+        if os.path.exists(os.path.join(ROOT_DIR, "zephymesh_identity.key")):
+            print_system("Removing existing ZephyMesh identity file to ensure a clean start...")
+            os.remove(os.path.join(ROOT_DIR, "zephymesh_identity.key"))
+
+        print_system(f"Starting Go ZephyMesh Node in background: {ZEPHYMESH_NODE_BINARY}")
+        mesh_command = [ZEPHYMESH_NODE_BINARY]
+        zephymesh_process = subprocess.Popen(mesh_command, cwd=ROOT_DIR)
+        print_system(f"ZephyMesh Node process started (PID: {zephymesh_process.pid}).")
+
+        print_system(f"Waiting for ZephyMesh port file: {ZEPHYMESH_PORT_INFO_FILE}")
+        port_file_wait_start = time.monotonic()
+        api_ready = False
+        while time.monotonic() - port_file_wait_start < 30:  # 30-second timeout
+            if zephymesh_process.poll() is not None:
+                raise RuntimeError("ZephyMesh node process exited prematurely while waiting for port file.")
+            if os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
+                api_ready = True
+                break
+            time.sleep(0.5)
+
+        if not api_ready:
+            raise TimeoutError("ZephyMesh node did not create its port file in time.")
+
+        with open(ZEPHYMESH_PORT_INFO_FILE, 'r') as f:
+            port_info = json.load(f)
+            api_port = port_info['api_port']
+            zephymesh_api_url = f"http://127.0.0.1:{api_port}"
+            print_system(f"✅ ZephyMesh Node is ready. API URL discovered: {zephymesh_api_url}")
+
+    except Exception as e:
+        print_error(f"Failed to start ZephyMesh Node in background thread: {e}. P2P distribution will be unavailable.")
+        if zephymesh_process and zephymesh_process.poll() is None:
+            zephymesh_process.terminate()
+        zephymesh_process = None
+        zephymesh_api_url = None
+
+# --- End Helper Logic ---
+
 # --- Main Execution Logic ---
 if __name__ == "__main__":
     print_system("--- Project Zephyrine Launcher ---")
@@ -2058,112 +2141,21 @@ if __name__ == "__main__":
 
         import requests
 
-        try:
-            # --- Auto-Setup & Compilation ---
-            # Check if the Go binary exists. If not, initialize the module and compile.
-            if not os.path.exists(ZEPHYMESH_NODE_BINARY):
-                print_warning(f"ZephyMesh node binary not found at {ZEPHYMESH_NODE_BINARY}.")
-                print_system("Preparing to compile the Go mesh node...")
-
-                go_source_dir = os.path.join(ROOT_DIR, "zephyMeshNetwork")
-                go_mod_file = os.path.join(go_source_dir, "go.mod")
-
-                # Step 1: Ensure Go module is initialized
-                if not os.path.exists(go_mod_file):
-                    print_warning(f"go.mod file not found in {go_source_dir}.")
-                    print_system("Initializing Go module with 'go mod init'...")
-
-                    init_command = ["go", "mod", "init", "zephymesh"]
-                    if not run_command(init_command, cwd=go_source_dir, name="GO-MOD-INIT"):
-                        print_error("Failed to initialize the Go module. The application cannot continue.")
-                        sys.exit(1)
-
-                    print_system("Running 'go mod tidy' to download dependencies...")
-                    tidy_command = ["go", "mod", "tidy"]
-                    if not run_command(tidy_command, cwd=go_source_dir, name="GO-MOD-TIDY"):
-                        print_error(
-                            "Failed to download Go dependencies ('go mod tidy'). The application cannot continue.")
-                        sys.exit(1)
-
-                    print_system("✅ Go module initialized successfully.")
-
-                # Step 2: Compile the binary
-                print_system("Compiling the Go mesh node with 'go build'...")
-                go_package_path = "./cmd/zephymesh_node"
-                compile_command = ["go", "build", "-o", ZEPHYMESH_NODE_BINARY, go_package_path]
-
-                if not run_command(compile_command, cwd=go_source_dir, name="GO-COMPILE-MESHNODE"):
-                    print_error("Failed to compile the Go ZephyMesh node. The application cannot continue.")
-                    sys.exit(1)
-
-                print_system("✅ Go ZephyMesh node compiled successfully.")
-
-            # --- Go Process Startup & Port Discovery ---
-            # Define the path to the port info file that the Go process will create.
-            # Note: ZEPHYMESH_PORT_INFO_FILE should be defined at the top of launcher.py
-            # ZEPHYMESH_PORT_INFO_FILE = os.path.join(ROOT_DIR, "zephymesh_ports.json")
-
-            # Remove the old port file to ensure we don't read a stale port from a previous run
-            if os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
-                os.remove(ZEPHYMESH_PORT_INFO_FILE)
-
-            # <<< START: New Fix for Identity Error >>>
-            # Define the path to the identity key file
-            ZEPHYMESH_IDENTITY_FILE = os.path.join(ROOT_DIR, "zephymesh_identity.key")
-            # Remove old/corrupt identity file to force the Go program to generate a new, valid one.
-            if os.path.exists(ZEPHYMESH_IDENTITY_FILE):
-                print_system("Removing existing ZephyMesh identity file to ensure a clean start...")
-                try:
-                    os.remove(ZEPHYMESH_IDENTITY_FILE)
-                    print_system("✅ Old identity file removed.")
-                except OSError as e:
-                    print_error(f"Could not remove old identity file at {ZEPHYMESH_IDENTITY_FILE}: {e}")
-                    # Decide if this is a fatal error. For now, we'll let the Go program try anyway.
-            # <<< END: New Fix for Identity Error >>>
-
-            print_system(f"Starting Go ZephyMesh Node: {ZEPHYMESH_NODE_BINARY}")
-            # The Go binary now finds its own port, so we don't pass a port flag here.
-            mesh_command = [ZEPHYMESH_NODE_BINARY]
-            zephymesh_process = subprocess.Popen(mesh_command, cwd=ROOT_DIR)
-            print_system(f"ZephyMesh Node process started (PID: {zephymesh_process.pid}).")
-
-            # Wait for the port file to be created by the mesh node
-            print_system(f"Waiting for ZephyMesh port file: {ZEPHYMESH_PORT_INFO_FILE}")
-            port_file_wait_start = time.monotonic()
-            api_ready = False
-            while time.monotonic() - port_file_wait_start < 30:  # 30-second timeout
-                # Check if the process crashed before creating the file
-                if zephymesh_process.poll() is not None:
-                    raise RuntimeError("ZephyMesh node process exited prematurely while waiting for port file.")
-
-                # Check if the file has been created
-                if os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
-                    api_ready = True
-                    break
-
-                time.sleep(0.5)
-
-            if not api_ready:
-                raise TimeoutError("ZephyMesh node did not create its port file in time.")
-
-            # Read the port file to configure the API URL dynamically
-            with open(ZEPHYMESH_PORT_INFO_FILE, 'r') as f:
-                port_info = json.load(f)
-                api_port = port_info['api_port']
-                # Set the global zephymesh_api_url variable
-                zephymesh_api_url = f"http://127.0.0.1:{api_port}"
-                print_system(f"✅ ZephyMesh Node is ready. API URL discovered: {zephymesh_api_url}")
-
-        except Exception as e:
-            print_error(f"Failed to start ZephyMesh Node: {e}. P2P distribution will be unavailable.")
-            # Ensure the process is terminated if it was started
-            if 'zephymesh_process' in locals() and zephymesh_process and zephymesh_process.poll() is None:
-                zephymesh_process.terminate()
-            zephymesh_process = None
-            zephymesh_api_url = None
+        # --- Start ZephyMesh Node in a Background Thread ---
+        # This allows the rest of the application to start immediately without
+        # waiting for the mesh node to compile or initialize.
+        print_system("--- Preparing to launch ZephyMesh Node in the background ---")
+        zephymesh_thread = threading.Thread(
+            target=launch_and_manage_zephymesh_node,
+            name="ZephyMeshManagerThread",
+            daemon=True  # Ensures the thread exits when the main app does
+        )
+        zephymesh_thread.start()
         # --- END ZephyMesh Start ---
 
         print_system(f"--- Checking Static Model Pool: {STATIC_MODEL_POOL_PATH} ---")
+        # --- END ZephyMesh Start ---
+
         os.makedirs(STATIC_MODEL_POOL_PATH, exist_ok=True)
         all_models_ok = True
         for model_info in MODELS_TO_DOWNLOAD:
