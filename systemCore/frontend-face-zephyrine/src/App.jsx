@@ -267,8 +267,8 @@ const AppContent = () => {
   // If Wing Mode is active, render the WingModePage and nothing else.
   // This will overlay everything.
   if (isWingModeActive) {
-    return <ShuttleDisplay />;
-  }
+  return <ShuttleDisplay />;
+}
 
   if (!user) {
     return <Auth />;
