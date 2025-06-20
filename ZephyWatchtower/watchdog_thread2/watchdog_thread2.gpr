@@ -1,0 +1,22 @@
+with "config/watchdog_thread2_config.gpr";
+project Watchdog_Thread2 is
+
+   for Source_Dirs use ("src/", "config/");
+   for Object_Dir use "obj/" & Watchdog_Thread2_Config.Build_Profile;
+   for Create_Missing_Dirs use "True";
+   for Exec_Dir use "bin";
+   for Main use ("watchdog_thread2.adb", "child_process.adb");
+
+   package Compiler is
+      for Default_Switches ("Ada") use ("-g", "-gnat2022", "-gnatwa");
+   end Compiler;
+
+   package Binder is
+      for Switches ("Ada") use ("-Es"); --  Symbolic traceback
+   end Binder;
+
+   package Install is
+      for Artifacts (".") use ("share");
+   end Install;
+
+end Watchdog_Thread2;

@@ -13,6 +13,27 @@ import json  # For parsing conda info
 import traceback
 #import requests #(Don't request at the top) But on the main after conda relaunch to make sure it's installed
 from typing import Optional, Dict
+try:
+    from loguru import logger
+    # Ensure default configuration for this module if needed
+    logger.remove()
+    logger.add(sys.stderr, format="<green>{time:YYYY-MM-DD HH:mm:ss}</green> | <level>{level: <8}</level> | <cyan>{name}</cyan>:<cyan>{function}</cyan>:<cyan>{line}</cyan> - <level>{message}</level>", level="DEBUG")
+    logger.info("📝 Loguru logger configured successfully.")
+except ImportError:
+    import logging
+    # Configure a basic logger that mimics loguru's method names
+    logging.basicConfig(
+        level=logging.DEBUG,
+        format='%(asctime)s | %(levelname)-8s | %(name)s:%(funcName)s:%(lineno)d - %(message)s',
+        stream=sys.stderr
+    )
+    logger = logging.getLogger(__name__)
+    # Add a 'success' method for compatibility
+    def success(msg, *args, **kwargs):
+        logger.info(msg, *args, **kwargs)
+    logger.success = success
+    logger.warning("Loguru not found. Falling back to standard Python logging.")
+
 
 # --- Configuration ---
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -237,6 +258,149 @@ def print_colored(prefix, message, color=None):
         print(f"[{now} | {prefix.ljust(10)}] {message.strip()}")
 
 
+def _compile_watchtowers() -> bool:
+    """
+    Compiles both the Go (Thread1) and Ada (Thread2) watchdogs.
+    Returns True if both succeed, False otherwise.
+    """
+    print_system("--- Compiling ZephyWatchtower Components ---")
+
+    # --- Compile Go Watchdog (Thread 1) ---
+    go_watchdog_dir = os.path.join(ROOT_DIR, "ZephyWatchtower")
+    go_watchdog_src = os.path.join(go_watchdog_dir, "watchdog_thread1.go")
+    go_mod_path = os.path.join(go_watchdog_dir, "go.mod")
+    go_exe_name = "watchdog_thread1.exe" if IS_WINDOWS else "watchdog_thread1"
+    go_exe_path = os.path.join(go_watchdog_dir, go_exe_name)
+
+    print_system("Compiling Go Watchdog (Thread 1)...")
+    if not os.path.exists(go_watchdog_src):
+        print_error(f"Go Watchdog source code not found: {go_watchdog_src}")
+        return False
+
+    if not os.path.exists(go_mod_path):
+        print_warning(f"go.mod not found in {go_watchdog_dir}. Initializing module...")
+        try:
+            subprocess.run(["go", "mod", "init", "ZephyWatchtower"], cwd=go_watchdog_dir, check=True)
+        except Exception as e:
+            print_error(f"Failed to initialize Go module: {e}")
+            return False
+            
+    try:
+        build_command_go = ["go", "build", "-o", go_exe_path, "."]
+        process_go = subprocess.run(build_command_go, cwd=go_watchdog_dir, capture_output=True, text=True, check=False, timeout=180)
+        if process_go.returncode != 0:
+            print_error(f"Failed to build Go Watchdog. RC: {process_go.returncode}\nSTDERR: {process_go.stderr.strip()}")
+            return False
+        print_system("Go Watchdog (Thread 1) built successfully.")
+    except Exception as e:
+        print_error(f"An unexpected error occurred during Go watchdog build: {e}")
+        return False
+
+    # --- Compile Ada Watchdog (Thread 2) ---
+    ada_watchdog_dir = os.path.join(ROOT_DIR, "ZephyWatchtower", "watchdog_thread2")
+    
+    print_system("Compiling Ada Watchdog (Thread 2)...")
+    if not os.path.isdir(ada_watchdog_dir):
+        print_error(f"Ada Watchdog project directory not found: {ada_watchdog_dir}")
+        return False
+
+    if not shutil.which("alr"):
+        print_error("'alr' command not found. Cannot build Ada watchdog. Please ensure Alire is in your PATH.")
+        return False
+        
+    try:
+        ### MODIFICATION START ###
+        
+        # Base command is now 'alr exec -- gprbuild', which we proved is more reliable.
+        build_command_ada = ["alr", "exec", "--", "gprbuild"]
+
+        # Check if the OS is macOS and add the specific linker flag if it is.
+        if platform.system() == 'Darwin':
+            print_system("macOS detected, adding specific linker flags for Ada build...")
+            try:
+                # Get the SDK path from the system
+                sdk_path_result = subprocess.run(['xcrun', '--show-sdk-path'], capture_output=True, text=True, check=True)
+                sdk_path = sdk_path_result.stdout.strip()
+                # Append the necessary linker arguments to the command
+                build_command_ada.extend(['-largs', f'-L{sdk_path}/usr/lib'])
+            except Exception as e:
+                print_error(f"Could not get macOS SDK path for Ada build: {e}")
+                return False
+        
+        ### MODIFICATION END ###
+
+        process_ada = subprocess.run(build_command_ada, cwd=ada_watchdog_dir, capture_output=True, text=True, check=False, timeout=300)
+        if process_ada.returncode == 0:
+            print_system("Ada Watchdog (Thread 2) built successfully.")
+        else:
+            print_error(f"Failed to build Ada Watchdog. RC: {process_ada.returncode}\nSTDERR: {process_ada.stderr.strip()}")
+            return False
+    except Exception as e:
+        print_error(f"An unexpected error occurred during Ada watchdog build: {e}")
+        return False
+
+    print_system("--- All ZephyWatchtower components compiled successfully. ---")
+    return True
+
+def _compile_and_get_watchdog_path() -> Optional[str]:
+    """
+    Ensures the Go watchdog binary is compiled and returns its path.
+    Includes logic to initialize the Go module if it's missing.
+    Returns None on failure.
+    """
+    watchdog_dir = os.path.join(ROOT_DIR, "ZephyWatchtower")
+    watchdog_src_path = os.path.join(watchdog_dir, "watchdog_thread1.go")
+    go_mod_path = os.path.join(watchdog_dir, "go.mod")
+    executable_name = "watchdog_thread1.exe" if IS_WINDOWS else "watchdog_thread1"
+    watchdog_exe_path = os.path.join(watchdog_dir, executable_name)
+
+    if not os.path.exists(watchdog_src_path):
+        print_error(f"Watchdog source code not found at: {watchdog_src_path}")
+        return None
+
+    if not shutil.which("go"):
+        print_error("Go compiler ('go') not found in PATH. Cannot build watchdog.")
+        return None
+
+    # --- NEW: Check for go.mod and initialize if missing ---
+    if not os.path.exists(go_mod_path):
+        print_warning(f"go.mod file not found in {watchdog_dir}. Initializing module...")
+        try:
+            # The module name should match the directory for convention
+            mod_init_command = ["go", "mod", "init", "ZephyWatchtower"]
+            init_process = subprocess.run(
+                mod_init_command,
+                cwd=watchdog_dir,
+                capture_output=True, text=True, check=True, timeout=30
+            )
+            print_system(f"Go module 'ZephyWatchtower' initialized successfully.")
+        except Exception as e:
+            print_error(f"Failed to initialize Go module: {e}")
+            if hasattr(e, 'stderr'):
+                print_error(f"STDERR: {e.stderr}")
+            return None
+    # --- END NEW ---
+
+    print_system(f"Attempting to build Go watchdog in: {watchdog_dir}")
+    try:
+        build_command = ["go", "build", "-o", watchdog_exe_path, "."]
+        process = subprocess.run(
+            build_command,
+            cwd=watchdog_dir,
+            capture_output=True, text=True, check=False, timeout=180
+        )
+        if process.returncode == 0:
+            print_system(f"Go watchdog built successfully: {watchdog_exe_path}")
+            return watchdog_exe_path
+        else:
+            print_error(f"Failed to build Go watchdog. RC: {process.returncode}")
+            if process.stdout: print_error(f"STDOUT: {process.stdout.strip()}")
+            if process.stderr: print_error(f"STDERR: {process.stderr.strip()}")
+            return None
+    except Exception as e:
+        print_error(f"An unexpected error occurred during watchdog build: {e}")
+        return None
+
 def terminate_relaunched_process(process_obj, name="Relaunched Conda Process"):
     if not process_obj or process_obj.poll() is not None:
         return # Process doesn't exist or already terminated
@@ -386,11 +550,35 @@ def run_command(command, cwd, name, color=None, check=True, capture_output=False
         return False
 
 
-def start_service_thread(target_func, name):
-    print_system(f"Preparing to start service: {name}")
-    thread = threading.Thread(target=target_func, name=name, daemon=True)
-    thread.start()
-    return thread
+def start_service_process(command, cwd, name, use_shell_windows=False):
+    # This is the helper function moved from launcher.py
+    logger.info(f"[{name}] Launching: {' '.join(command)} in {os.path.basename(cwd)}")
+    try:
+        shell_val = use_shell_windows if IS_WINDOWS else False
+        # Simplified process startup for clarity
+        process = subprocess.Popen(
+            command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
+            text=True, encoding='utf-8', errors='replace', bufsize=1,
+            shell=shell_val
+        )
+        with process_lock:
+            running_processes.append((process, name))
+
+        # Optional: Add threads to stream stdout/stderr if you want to see their output
+        def stream_output(pipe, pipe_name):
+            for line in iter(pipe.readline, ''):
+                logger.info(f"[{pipe_name}] {line.strip()}")
+        
+        stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, f"{name}-OUT"), daemon=True)
+        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{name}-ERR"), daemon=True)
+        stdout_thread.start()
+        stderr_thread.start()
+        
+        return process
+    except Exception as e:
+        logger.error(f"[{name}] Failed to start: {e}")
+        # In a real scenario, you might want to exit if a critical service fails
+        # For now, we just log the error.
 
 
 def cleanup_processes():
@@ -1849,7 +2037,7 @@ def _ensure_alire_and_gnat_toolchain():
 
     # 3. Use Alire to get the GNAT toolchain
     print_system("Using Alire to install the GNAT toolchain and gprbuild for Ada Compiler. This may take a moment...")
-    alr_get_gnat_command = ["alr", "toolchain", "--select", "gnat_native", "gprbuild"]
+    alr_get_gnat_command = ["alr", "toolchain", "--select", "gnat_native", "gprbuild", "gnat"]
 
     if not run_command(alr_get_gnat_command, cwd=ROOT_DIR, name="ALIRE-GET-GNAT"):
         print_error("Alire failed to install the GNAT toolchain.")
@@ -1941,6 +2129,14 @@ def launch_and_manage_zephymesh_node():
             zephymesh_process.terminate()
         zephymesh_process = None
         zephymesh_api_url = None
+
+
+def start_service_thread(target_func, name):
+    print_system(f"Preparing to start service: {name}")
+    thread = threading.Thread(target=target_func, name=name, daemon=True)
+    thread.start()
+    return thread
+
 
 # --- End Helper Logic ---
 
@@ -2394,6 +2590,9 @@ if __name__ == "__main__":
             "NPM Frontend install failed."); sys.exit(1)
 
         print_system("--- Starting All Services ---")
+        if not _compile_watchtowers():
+            print_error("One or more watchdog components failed to compile. Halting startup.")
+            sys.exit(1)
         service_threads = []
         service_threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
         time.sleep(3)
