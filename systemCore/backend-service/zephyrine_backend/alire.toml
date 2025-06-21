@@ -1,0 +1,20 @@
+name = "zephyrine_backend"
+description = ""
+version = "0.1.0-dev"
+
+authors = ["Your Name"]
+maintainers = ["Your Name <example@example.com>"]
+licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
+website = ""
+tags = []
+
+executables = ["zephyrine_backend"]
+
+[[depends-on]]
+aws = "^24.0.0"
+
+[[depends-on]]
+gnatcoll = "^24.0.0"
+
+[[depends-on]]
+libgpr = "^24.0.0"
