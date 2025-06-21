@@ -1,0 +1,12 @@
+-- File: src/config.pra
+
+-- This is a configuration pragma file. It uses a special syntax.
+-- The GPR file will pass the 'OS' variable to this file.
+
+if OS = "macos" then
+   pragma Import (C, Get_Errno_Addr, "__error");
+elsif OS = "linux" then
+   pragma Import (C, Get_Errno_Addr, "__errno_location");
+elsif OS = "windows" then
+   pragma Import (Stdcall, Get_Errno, "WSAGetLastError");
+end if;
