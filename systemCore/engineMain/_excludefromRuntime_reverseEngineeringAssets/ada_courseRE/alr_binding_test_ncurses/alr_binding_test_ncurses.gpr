@@ -1,0 +1,22 @@
+with "config/alr_binding_test_ncurses_config.gpr";
+project Alr_Binding_Test_Ncurses is
+
+   for Source_Dirs use ("src/", "config/");
+   for Object_Dir use "obj/" & Alr_Binding_Test_Ncurses_Config.Build_Profile;
+   for Create_Missing_Dirs use "True";
+   for Exec_Dir use "bin";
+   for Main use ("alr_binding_test_ncurses.adb");
+
+   package Compiler is
+      for Default_Switches ("Ada") use Alr_Binding_Test_Ncurses_Config.Ada_Compiler_Switches;
+   end Compiler;
+
+   package Binder is
+      for Switches ("Ada") use ("-Es"); --  Symbolic traceback
+   end Binder;
+
+   package Install is
+      for Artifacts (".") use ("share");
+   end Install;
+
+end Alr_Binding_Test_Ncurses;

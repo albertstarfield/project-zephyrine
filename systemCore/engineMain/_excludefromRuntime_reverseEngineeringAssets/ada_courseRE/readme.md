@@ -147,3 +147,5 @@ When the build system behaves illogically (e.g., compiling a phantom version of 
 3.  **Restart the terminal completely.**
 4.  **Reinstall Alire from scratch:** `curl -sS https://alire.ada.dev/install.py | python3`
 5.  **Restart the terminal again.** This provides a truly clean slate.
+
+> Note: I am not expecting to understand Ada directly but it's better if you transitioned from javascipt to transition to golang first. then jump to Ada, also make sure that alr (alire) packages or libraries can be portable like go tidy into the project folder rather than ~/.local/share which make things messy like huggingface trying to store model whatever it wanted to be. oh and AI doesn't knows about most of alire packaging so good luck vibe coders.

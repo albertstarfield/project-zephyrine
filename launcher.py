@@ -690,9 +690,31 @@ def start_engine_main():
 
 
 def start_backend_service():
+    """
+    Launches the Go backend service.
+    First runs 'go mod tidy', then starts the server with 'go run .'.
+    """
     name = "BACKEND"
-    command = ["node", "server.js"]
-    start_service_process(command, BACKEND_SERVICE_DIR, name, use_shell_windows=False)
+    # The directory is already defined globally as BACKEND_SERVICE_DIR
+    print_system(f"Preparing to launch {name} service from: {BACKEND_SERVICE_DIR}")
+
+    if not os.path.isdir(BACKEND_SERVICE_DIR):
+        print_error(f"Backend service directory not found: {BACKEND_SERVICE_DIR}")
+        sys.exit(1) # This is a critical failure
+
+    # --- Step 1: Run 'go mod tidy' ---
+    # We use your 'run_command' helper because this is a one-off task we need to wait for.
+    print_system(f"Running 'go mod tidy' in {os.path.basename(BACKEND_SERVICE_DIR)}...")
+    tidy_command = ["go", "mod", "tidy"]
+    if not run_command(tidy_command, cwd=BACKEND_SERVICE_DIR, name=f"{name}-MOD-TIDY", check=True):
+        print_error("Failed to run 'go mod tidy'. Backend service cannot start.")
+        sys.exit(1)
+
+    # --- Step 2: Launch 'go run .' ---
+    # We use your 'start_service_process' helper as it correctly handles
+    # long-running services, adds them to the cleanup list, and streams output.
+    run_command_go = ["go", "run", "."]
+    start_service_process(run_command_go, BACKEND_SERVICE_DIR, name)
 
 
 def start_frontend():
@@ -2584,8 +2606,6 @@ if __name__ == "__main__":
         print_system("--- Installing/Checking Node.js Dependencies ---")
         if not NPM_CMD or not shutil.which(NPM_CMD.split('.')[0]): print_error(
             f"'{NPM_CMD}' not found. Node.js setup failed."); sys.exit(1)
-        if not run_command([NPM_CMD, "install"], BACKEND_SERVICE_DIR, "NPM-BACKEND"): print_error(
-            "NPM Backend install failed."); sys.exit(1)
         if not run_command([NPM_CMD, "install"], FRONTEND_DIR, "NPM-FRONTEND"): print_error(
             "NPM Frontend install failed."); sys.exit(1)
 
