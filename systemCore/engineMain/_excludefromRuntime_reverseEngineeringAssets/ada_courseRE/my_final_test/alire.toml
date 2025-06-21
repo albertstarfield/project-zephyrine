@@ -9,3 +9,6 @@ website = ""
 tags = []
 
 executables = ["my_final_test"]
+
+[[depends-on]]
+ncursesada = "^6.5.0"

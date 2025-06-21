@@ -1,0 +1,17 @@
+/obj_g/
+/lib/
+/objects/
+*.o
+*.ali
+*.stderr
+*.stdout
+*.cgpr
+*.bexch
+*-loc.xml
+b__*.ad[bs]
+gnatinspect.*
+clang_ref_cache.db
+/Ada95/static-obj/
+/Ada95/static-ali/
+/alire/
+/config/
