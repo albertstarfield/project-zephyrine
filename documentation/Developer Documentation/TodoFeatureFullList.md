@@ -17,7 +17,6 @@
 - [x] Automata Agent Mode (autoGPT agent like functionality).
 - [x] Multi-LLMChild Background Queue Prompt to Experience when can't catch up with QoS time (Improving experience ~22B Parameter Adelaide Paradigm Experience) (Backbrain).
 - [x] Aggressive LLMChild QoS via ELP0/ELP1 Task Prioritization.
-- [x] ~~Electron/v8 Memory Workaround~~ (Obsolete; project no longer uses Electron).
 - [x] Infinite Context Window via Global Vector Database (replaces UMA/MLCMCF design).
 - [x] Facilitates access to local literature documents and resources through local files integration, excluding formatted documents, Implemented using UMA MLCMCF NLP Based matching.
 - [x] New JSON interaction database that handles emotion sentiment analysis, more data, side of interaction, and multiple SessionID
@@ -42,18 +41,19 @@
 
 #### High Priority
 - [ ] Implementing Self writing StellaIcarus realtime hook response for ELP1 on Ada and Python code
+- [ ] Redraw Zephy by Hand instead of AI generated.
 
 #### Low Priority
 - [/] Implementing Native Windows Support. (Partially implemented via Conda; requires further testing/scripting).
-- [ ] Implementing multi language support with Frontend Automatic Translation and Backend EN Processing.
 - [ ] Self-updating, Self-maintaning, and Self-Adapting Code.
-- [ ] Categorize into Classes based on the subsystem drawio for cleaner Code and easier debugging
 - [ ] Multi format communication Real-time communication and collaboration (Audio, Video, Actuator)
 - [ ] Adding Docker Support
 - [ ] AI Blackbox Issue required Reference if its plausible be like Bing AI on the referencing system (Adapt as factual seeker) (APA7 based referencing system and formatting)
+- - [ ] Categorize into Classes based on the subsystem drawio for cleaner Code and easier debugging (for the base architecture)
 
 
 #### Cancelled
+- [ ] ~~Electron/v8 Memory Workaround~~ (Obsolete; project no longer uses Electron. Now, uses the mix of python, Golang, Ada, and nodejs for legacy soon deprecated).
 - [ ] ~~Mobile static-version precompiled.~~ Will not be implemented (Cancelled)
 - [ ] ~~Less-Weeb Graphic mode as default due to request of the industry~~ (Rejected; aesthetic is a core feature)
 - [ ] ~~Static compilation Mobile (No AI Dynamics on Self-Modification or Special Specific Hardware Compilation), Very strict jailed version of Mobile version for iOS support.~~ (Canceled)
