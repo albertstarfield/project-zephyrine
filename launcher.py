@@ -2096,6 +2096,77 @@ def _ensure_alire_and_gnat_toolchain():
     return True
 
 
+def _check_and_repair_conda_env(env_path: str) -> bool:
+    """
+    Runs `conda doctor` on the specified environment and triggers a repair if needed.
+    The "repair" consists of deleting the corrupt environment so it can be recreated.
+
+    Returns:
+        True if the environment is healthy, False if it was corrupt and deleted.
+    """
+    print_system(f"--- Running Conda Environment Health Check on {os.path.basename(env_path)} ---")
+
+    if not os.path.isdir(env_path):
+        print_system("Health check skipped: Conda environment does not exist yet.")
+        return True # It's not "unhealthy", it just needs to be created.
+
+    if not CONDA_EXECUTABLE:
+        print_error("Cannot run `conda doctor`: Conda executable path is not set.")
+        return False # Cannot verify, assume failure to be safe
+
+    try:
+        doctor_command = [CONDA_EXECUTABLE, "doctor", "-v", "-p", env_path]
+        print_system(f"Executing: {' '.join(doctor_command)}")
+        process = subprocess.run(
+            doctor_command,
+            capture_output=True,
+            text=True,
+            check=False, # We need to check output manually, not just return code
+            timeout=180
+        )
+
+        output = process.stdout + "\n" + process.stderr
+        
+        # Check for specific failure signatures from the conda doctor output.
+        # "Missing Files" is a critical error that requires a rebuild.
+        # "Altered Files" is often benign (e.g., new .pyc files), so we ignore it.
+        if "❌ Missing Files:" in output:
+            print_error(f"Conda environment at '{env_path}' is CORRUPT (Missing Files detected).")
+            print_warning("Triggering autofix: The environment will be completely removed and recreated.")
+            print_error(f"--- Conda Doctor Report ---\n{output.strip()}\n--------------------------")
+            
+            # --- The "Autofix" ---
+            # 1. Remove associated flag files to ensure fresh installations.
+            _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
+            
+            # 2. Delete the entire corrupt Conda environment directory.
+            try:
+                shutil.rmtree(env_path)
+                print_system(f"Successfully removed corrupt environment: {env_path}")
+            except Exception as e:
+                print_error(f"CRITICAL: Failed to remove corrupt Conda environment at '{env_path}': {e}")
+                print_error("Please remove this directory manually and restart the launcher.")
+                sys.exit(1)
+            
+            return False # Signal that the environment was corrupt and has been removed.
+
+        elif "❌" in output: # Catch other potential doctor errors
+             print_warning(f"Conda doctor reported issues, but not 'Missing Files'. Report:\n{output.strip()}")
+             print_system("Proceeding cautiously, but a manual environment recreation might be needed if errors persist.")
+             return True # Treat as healthy for now, but warn the user.
+
+        else:
+            print_system("✅ Conda environment health check passed.")
+            return True # Environment is healthy.
+
+    except subprocess.TimeoutExpired:
+        print_error("`conda doctor` command timed out. Assuming environment is unhealthy.")
+        # You could trigger the autofix here as well if a timeout is considered critical.
+        return False
+    except Exception as e:
+        print_error(f"An unexpected error occurred during `conda doctor` check: {e}")
+        return False
+
 def launch_and_manage_zephymesh_node():
     """
     Launches the ZephyMesh Go binary, waits for it to become ready by checking
@@ -2827,6 +2898,11 @@ if __name__ == "__main__":
             _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
             sys.exit(1)
         print_system(f"Using Conda executable: {CONDA_EXECUTABLE}")
+
+        # Run the health check on the existing environment before proceeding.
+        # If it returns False, it means the environment was corrupt and has been deleted.
+        if not _check_and_repair_conda_env(TARGET_CONDA_ENV_PATH):
+            print_warning("Environment was repaired by deletion. The launcher will now create a fresh one.")
 
         if not (os.path.isdir(TARGET_CONDA_ENV_PATH) and os.path.exists(
                 os.path.join(TARGET_CONDA_ENV_PATH, 'conda-meta'))):
