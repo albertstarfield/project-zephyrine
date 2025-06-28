@@ -1,0 +1,14 @@
+name = "hello_sekai_spark"
+description = ""
+version = "0.1.0-dev"
+
+authors = ["Your Name"]
+maintainers = ["Your Name <example@example.com>"]
+licenses = "MIT OR Apache-2.0 WITH LLVM-exception"
+website = ""
+tags = []
+
+executables = ["hello_sekai_spark"]
+
+[[depends-on]]
+gnatprove = "^15.1.0"

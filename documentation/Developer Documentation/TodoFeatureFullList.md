@@ -38,6 +38,7 @@
 - [x] StellaIcarus realtime hook response for all API ELP1
 - [x] Self Learning iterative global vectoring. 
 - [x] Initial Flight Interface
+- [x] I/O Swappable KV Shared Cache/State (LLM/VLM Qwen2.5) (for more serialized faster loading model swapping)
 
 #### High Priority
 - [ ] Implementing Self writing StellaIcarus realtime hook response for ELP1 on Ada and Python code

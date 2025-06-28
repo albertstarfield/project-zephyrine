@@ -510,6 +510,63 @@ class CortexEngine:
         self._setup_image_generator_config() # Renamed: Validates image gen worker config
         # ^^^^^^^^^^ THIS IS THE LINE TO CHANGE ^^^^^^^^^^
 
+    async def save_llama_session_async(self, model_role: str, state_name: str, priority: int = ELP0) -> Dict[str, Any]:
+        """
+        Asynchronously requests the llama_worker to save its current KV cache state.
+
+        Args:
+            model_role: The logical role of the model whose state should be saved.
+            state_name: The name to save the state file as (e.g., "my_conversation").
+            priority: The execution priority for the task.
+
+        Returns:
+            A dictionary with the result from the worker.
+        """
+        log_prefix = f"KV_SAVE|ELP{priority}|{model_role}"
+        self.logger.info(f"{log_prefix}: Requesting to save session state '{state_name}'.")
+        
+        request_data = {
+            "state_name": state_name
+        }
+        
+        # We use asyncio.to_thread because _execute_in_worker is synchronous
+        result = await asyncio.to_thread(
+            self._execute_in_worker,
+            model_role=model_role,
+            task_type="save_kv_cache",
+            request_data=request_data,
+            priority=priority
+        )
+        return result or {"error": "Failed to get response from save_kv_cache worker task."}
+    
+    async def load_llama_session_async(self, model_role: str, state_name: str, priority: int = ELP0) -> Dict[str, Any]:
+        """
+        Asynchronously requests the llama_worker to load a KV cache state.
+
+        Args:
+            model_role: The logical role of the model to load the state into.
+            state_name: The name of the state file to load.
+            priority: The execution priority for the task.
+
+        Returns:
+            A dictionary with the result from the worker.
+        """
+        log_prefix = f"KV_LOAD|ELP{priority}|{model_role}"
+        self.logger.info(f"{log_prefix}: Requesting to load session state '{state_name}'.")
+
+        request_data = {
+            "state_name": state_name
+        }
+
+        result = await asyncio.to_thread(
+            self._execute_in_worker,
+            model_role=model_role,
+            task_type="load_kv_cache",
+            request_data=request_data,
+            priority=priority
+        )
+        return result or {"error": "Failed to get response from load_kv_cache worker task."}
+
     def kill_all_workers(self, reason: str):
         """
         Forcefully terminates all tracked worker processes. This is a critical
