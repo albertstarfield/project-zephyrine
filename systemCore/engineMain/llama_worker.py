@@ -7,6 +7,7 @@ import time
 import traceback
 import argparse
 import re
+import pickle
 from typing import Union, List, Dict, Any, Optional  # Added for type hints
 
 # --- Try importing llama_cpp ---
@@ -19,6 +20,8 @@ except ImportError:
     # This print will go to stderr, which cortex_backbone_provider.py reads for worker errors
     print(json.dumps({"error": "llama-cpp-python not found in worker environment."}), flush=True)
     sys.exit(1)
+
+
 
 # --- Try importing tiktoken ---
 try:
@@ -44,18 +47,38 @@ except ImportError:
         file=sys.stderr, flush=True)
     cl100k_base_encoder = None  # Ensure it's defined for type hints
 
-# --- Constants for Dynamic Context ---
-MIN_DYNAMIC_N_CTX = 2048  # Minimum context size for dynamic calculation (can be tuned)
-MAX_DYNAMIC_N_CTX = 32768  # Maximum context size for dynamic calculation
-DEFAULT_N_CTX_FOR_FALLBACK = 4096  # If token counting fails or not applicable
-EMBEDDING_N_CTX = 512  # Fixed context for embedding tasks
-
 
 # --- Basic Logging to stderr ---
 def log_worker(level, message):
     now = time.strftime("%Y-%m-%d %H:%M:%S", time.gmtime())
     print(f"[{now} WORKER|{level}] {message}", file=sys.stderr, flush=True)
 
+# In llama_worker.py, near the top with other imports
+import hashlib
+
+# --- Configuration Import for State Directory ---
+# This ensures the worker knows where to save/load state files.
+try:
+    # Assuming the config file is in the parent directory of this worker
+    # Adjust the path if your structure is different.
+    from CortexConfiguration import MODULE_DIR
+    STATE_SAVE_DIR = os.path.join(MODULE_DIR, "staticModelState")
+except ImportError:
+    # Fallback if CortexConfiguration is not found (e.g., during standalone testing)
+    STATE_SAVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "staticModelState")
+    log_worker("WARNING", f"Could not import STATE_SAVE_DIR from config. Using default: {STATE_SAVE_DIR}")
+
+os.makedirs(STATE_SAVE_DIR, exist_ok=True)
+# --- End Configuration Import ---
+
+# --- Constants for Dynamic Context ---
+N_CTX_BINS = [2048, 4096, 8192, 16384, 32768]
+DEFAULT_N_CTX_FOR_FALLBACK = 4096  # If token counting fails or not applicable
+EMBEDDING_N_CTX = 512  # Fixed context for embedding tasks
+MIN_DYNAMIC_N_CTX = 2048  # Minimum context size for dynamic calculation (can be tuned)
+MAX_DYNAMIC_N_CTX = 32768  # Maximum context size for dynamic calculation
+DEFAULT_N_CTX_FOR_FALLBACK = 4096  # If token counting fails or not applicable
+EMBEDDING_N_CTX = 512  # Fixed context for embedding tasks
 
 # --- Think Tag Cleanup Helper ---
 def cleanup_initial_think_tag(text: str) -> str:
@@ -233,8 +256,21 @@ def adaptive_middle_truncate(text: str, target_max_tokens: int, model_actual_n_c
         return truncated_text
 
 
+def get_state_path_for_model(model_path: str, n_ctx: int) -> str:
+    """Generates a unique state file path based on model path and context size."""
+    # e.g. /path/to/models/llava-v1.5-7b.Q4_K_M.gguf
+    model_dir = os.path.dirname(model_path)
+    model_name = os.path.basename(model_path)
+    # e.g. llava-v1.5-7b.Q4_K_M.gguf
+    state_filename = f"{model_name}.nctx_{n_ctx}.state"
+    # e.g. /path/to/models/llava-v1.5-7b.Q4_K_M.gguf.nctx_4096.state
+    return os.path.join(model_dir, state_filename)
+
+
+
 def main():
-    parser = argparse.ArgumentParser(description="Llama.cpp Worker Process")
+    # --- Argument Parsing ---
+    parser = argparse.ArgumentParser(description="Llama.cpp Worker Process with Automatic KV Caching and Dynamic Context")
     parser.add_argument("--model-path", required=True, help="Path to GGUF model file")
     parser.add_argument("--task-type", required=True, choices=["chat", "embedding", "raw_text_completion"],
                         help="Task type")
@@ -246,27 +282,28 @@ def main():
                         help="Chat format for 'chat' task (e.g., chatml, llama-2)")
     args = parser.parse_args()
 
+    # --- Initializations ---
     request_data_str = ""
     request_data_dict = None
-    input_tokens_for_dynamic_ctx = 0  # Estimated from input before model load
-    calculated_n_ctx_for_model_load = DEFAULT_N_CTX_FOR_FALLBACK  # Actual n_ctx Llama model will be loaded with
+    input_tokens_for_dynamic_ctx = 0
+    calculated_n_ctx_for_model_load = DEFAULT_N_CTX_FOR_FALLBACK
+    llm: Optional[llama_cpp.Llama] = None
+    result_payload: Dict[str, Any] = {"error": "Worker did not process a valid task."}
 
+    # --- Pre-computation and Stdin Read ---
     try:
         log_worker("INFO", "Reading request data from stdin for dynamic n_ctx calculation...")
         request_data_str = sys.stdin.read()
         if not request_data_str.strip(): raise ValueError("Received empty input string from stdin.")
         request_data_dict = json.loads(request_data_str)
         log_worker("DEBUG", f"Request data JSON parsed for n_ctx calc. Task: {args.task_type}")
-
         if args.task_type == "chat":
             messages_for_count = request_data_dict.get("messages")
             if messages_for_count: input_tokens_for_dynamic_ctx = count_tokens_cl100k(messages_for_count)
         elif args.task_type == "raw_text_completion":
             prompt_for_count = request_data_dict.get("prompt")
             if prompt_for_count: input_tokens_for_dynamic_ctx = count_tokens_cl100k(prompt_for_count)
-
         log_worker("INFO", f"Initial estimated input tokens (for n_ctx calc): {input_tokens_for_dynamic_ctx}")
-
     except Exception as e_stdin:
         log_worker("CRITICAL", f"Failed to read/parse stdin: {e_stdin}\n{traceback.format_exc()}")
         print(json.dumps({"error": f"Worker critical error: Failed to read/parse request: {e_stdin}"}), flush=True)
@@ -276,268 +313,172 @@ def main():
     if args.task_type == "embedding":
         calculated_n_ctx_for_model_load = args.n_ctx if args.n_ctx is not None else EMBEDDING_N_CTX
         if args.n_ctx is None: log_worker("INFO", f"Using fixed n_ctx={EMBEDDING_N_CTX} for embeddings task.")
-    elif args.n_ctx is not None:  # Explicit override from cortex_backbone_provider.py
+    elif args.n_ctx is not None:
         calculated_n_ctx_for_model_load = args.n_ctx
         log_worker("INFO", f"Using n_ctx={calculated_n_ctx_for_model_load} from cortex_backbone_provider override.")
+
+    # ------------------- MODIFIED BLOCK FOR CONTEXT BINNING -------------------
     elif input_tokens_for_dynamic_ctx > 0:
-        dynamic_ctx_attempt = input_tokens_for_dynamic_ctx * 2  # Target double the input
-        # Ensure it's at least MIN_DYNAMIC_N_CTX and at most MAX_DYNAMIC_N_CTX
-        calculated_n_ctx_for_model_load = max(MIN_DYNAMIC_N_CTX, min(dynamic_ctx_attempt, MAX_DYNAMIC_N_CTX))
-        # Also ensure it's not smaller than the input itself plus some buffer, if dynamic_ctx_attempt was too small
-        # (e.g. if input_tokens_for_dynamic_ctx was already > MAX_DYNAMIC_N_CTX / 2)
-        # This means if input is 20k tokens, and MAX_DYNAMIC_N_CTX is 32k, dynamic_ctx_attempt is 40k, so it caps at 32k.
-        # If input is 2k tokens, MIN_DYNAMIC_N_CTX is 4k, dynamic_ctx_attempt is 4k, so it uses 4k.
-        log_worker("INFO",
-                   f"Dynamically calculated n_ctx for model load: {calculated_n_ctx_for_model_load} (InputTokens: {input_tokens_for_dynamic_ctx}, Attempt: {dynamic_ctx_attempt})")
-    else:  # Fallback (e.g. tiktoken error, no input)
+        target_n_ctx = input_tokens_for_dynamic_ctx * 2
+        
+        # Find the smallest bin that can fit the target context size
+        locked_n_ctx = N_CTX_BINS[-1]  # Default to the largest available bin
+        for bin_size in N_CTX_BINS:
+            if target_n_ctx <= bin_size:
+                locked_n_ctx = bin_size
+                break  # Found the smallest sufficient bin, so we stop
+
+        calculated_n_ctx_for_model_load = locked_n_ctx
+        log_worker("INFO", f"Input tokens ({input_tokens_for_dynamic_ctx}) need ~{target_n_ctx} context. Locking to bin: {calculated_n_ctx_for_model_load}")
+    # ------------------------------------------------------------------------
+
+    else:
         calculated_n_ctx_for_model_load = DEFAULT_N_CTX_FOR_FALLBACK
         log_worker("INFO", f"Falling back to default n_ctx={calculated_n_ctx_for_model_load} for model load.")
 
     log_worker("INFO", f"--- Worker Config (effective for model load) ---")
     log_worker("INFO", f"  Model: '{os.path.basename(args.model_path)}', Task: '{args.task_type}'")
     log_worker("INFO", f"  Effective n_ctx for Llama load: {calculated_n_ctx_for_model_load}")
-    # ... (other logs as before)
 
-    llm: Optional[llama_cpp.Llama] = None
+    # --- Main Execution Block ---
     try:
+        # 1. Determine the dedicated state path for this model AND n_ctx
+        state_file_path = get_state_path_for_model(args.model_path, calculated_n_ctx_for_model_load)
+        state_file_exists = os.path.exists(state_file_path)
+
+        # 2. Attempt to Load the Model
         load_start_time = time.monotonic()
         effective_chat_format = args.chat_format if args.task_type == "chat" else None
         if args.task_type == "raw_text_completion": effective_chat_format = None
 
-        llm = llama_cpp.Llama(
-            model_path=args.model_path, n_gpu_layers=args.n_gpu_layers,
-            n_ctx=calculated_n_ctx_for_model_load,  # Use the determined n_ctx
-            embedding=(args.task_type == "embedding"),
-            verbose=args.verbose, chat_format=effective_chat_format,
-        )
-        log_worker("INFO",
-                   f"Model loaded in {(time.monotonic() - load_start_time) * 1000:.2f} ms using n_ctx={calculated_n_ctx_for_model_load}.")
-    except Exception as e_load:
-        log_worker("CRITICAL", f"Model loading failed: {e_load}\n{traceback.format_exc()}")
-        print(json.dumps({
-                             "error": f"Worker critical error: Failed to load model with n_ctx={calculated_n_ctx_for_model_load}: {e_load}"}),
-              flush=True)
-        sys.exit(1)
+        try:
+            should_attempt_cache_load = (args.task_type != "embedding" and state_file_exists)
+            if should_attempt_cache_load:
+                log_worker("INFO", f"Found existing state cache for n_ctx={calculated_n_ctx_for_model_load}. Attempting load from: {state_file_path}")
+                llm = llama_cpp.Llama(model_path=args.model_path, n_gpu_layers=args.n_gpu_layers, n_ctx=calculated_n_ctx_for_model_load, embedding=False, verbose=args.verbose, chat_format=effective_chat_format)
+                with open(state_file_path, "rb") as f:
+                    state_object = pickle.load(f)
+                llm.load_state(state_object)
+                log_worker("SUCCESS", "Model and KV cache state loaded successfully.")
+            else:
+                if args.task_type != "embedding": log_worker("INFO", f"No state cache found for n_ctx={calculated_n_ctx_for_model_load}. Loading model fresh.")
+                else: log_worker("INFO", "Embedding task: Bypassing state cache, loading model fresh.")
+                llm = llama_cpp.Llama(model_path=args.model_path, n_gpu_layers=args.n_gpu_layers, n_ctx=calculated_n_ctx_for_model_load, embedding=(args.task_type == "embedding"), verbose=args.verbose, chat_format=effective_chat_format)
+        except Exception as e_load_with_cache:
+            log_worker("ERROR", f"Failed to load model, potentially due to an invalid state cache: {e_load_with_cache}")
+            if should_attempt_cache_load:
+                log_worker("WARNING", "Invalid cache detected. Flushing and retrying model load without cache...")
+                try:
+                    os.remove(state_file_path)
+                    log_worker("INFO", f"Flushed invalid state cache file: {state_file_path}")
+                except OSError as e_delete:
+                    log_worker("CRITICAL", f"Failed to flush invalid state cache: {e_delete}. Cannot recover.")
+                    raise RuntimeError(f"Invalid state cache file at {state_file_path} could not be flushed.") from e_delete
+                llm = llama_cpp.Llama(model_path=args.model_path, n_gpu_layers=args.n_gpu_layers, n_ctx=calculated_n_ctx_for_model_load, embedding=(args.task_type == "embedding"), verbose=args.verbose, chat_format=effective_chat_format)
+                log_worker("SUCCESS", "Model loaded successfully on retry.")
+            else:
+                log_worker("CRITICAL", "Model failed to load. This is a fatal error.")
+                raise e_load_with_cache
+        log_worker("INFO", f"Model loaded in {(time.monotonic() - load_start_time) * 1000:.2f} ms.")
 
-    # --- Request Processing (using request_data_dict from earlier) ---
-    result_payload: Dict[str, Any] = {"error": "Worker did not process a valid task."}
-    try:
+        # 3. Process the Task
         task_processing_start_time = time.monotonic()
         completion_result_dict: Optional[Dict[str, Any]] = None
         original_kwargs_from_provider = request_data_dict.get("kwargs", {}).copy()
-
-        # Define a buffer for LLM's own generation output
-        # This is how many tokens we reserve for the *response*, so input prompt must be smaller.
-        # It can be a fixed value, or a percentage of the effective context window.
-        GENERATION_OUTPUT_BUFFER_TOKENS = max(256,
-                                              calculated_n_ctx_for_model_load // 4)  # e.g., 25% of context or 256, whichever is larger
-        log_worker("DEBUG", f"Generation output buffer set to: {GENERATION_OUTPUT_BUFFER_TOKENS} tokens.")
-
+        GENERATION_OUTPUT_BUFFER_TOKENS = max(256, calculated_n_ctx_for_model_load // 4)
         if args.task_type == "chat":
             messages_for_llm = request_data_dict.get("messages")
-            if not messages_for_llm or not isinstance(messages_for_llm, list):
-                raise ValueError("Missing or invalid 'messages' for 'chat' task.")
-
-            # For 'chat' (list of messages), the primary context management is the dynamically loaded n_ctx.
-            # Adaptive middle truncation is complex for structured messages.
-            # We just need to ensure `max_tokens` for generation is sane.
+            if not messages_for_llm or not isinstance(messages_for_llm, list): raise ValueError("Missing or invalid 'messages' for 'chat' task.")
             current_input_token_count_chat = count_tokens_cl100k(messages_for_llm)
-            if current_input_token_count_chat == -1:  # Tiktoken error
-                current_input_token_count_chat = len(json.dumps(messages_for_llm)) // 3  # Rough fallback
-                log_worker("WARNING",
-                           f"Tiktoken error for chat messages, using char estimate: {current_input_token_count_chat} tokens.")
-
-            # `max_tokens` for generation output
-            max_gen_tokens_chat = min(
-                original_kwargs_from_provider.get("max_tokens", calculated_n_ctx_for_model_load // 2),
-                # Provider's hint or half context
-                calculated_n_ctx_for_model_load - current_input_token_count_chat - 64  # Safety buffer for prompt, roles
-            )
-            if max_gen_tokens_chat <= 0: max_gen_tokens_chat = GENERATION_OUTPUT_BUFFER_TOKENS // 2  # Min sensible value if calc is bad
+            if current_input_token_count_chat == -1: current_input_token_count_chat = len(json.dumps(messages_for_llm)) // 3
+            max_gen_tokens_chat = min(original_kwargs_from_provider.get("max_tokens", calculated_n_ctx_for_model_load // 2), calculated_n_ctx_for_model_load - current_input_token_count_chat - 64)
+            if max_gen_tokens_chat <= 0: max_gen_tokens_chat = GENERATION_OUTPUT_BUFFER_TOKENS // 2
             original_kwargs_from_provider["max_tokens"] = max_gen_tokens_chat
-
-            log_worker("INFO",
-                       f"Attempt 1 (Chat): Msgs={len(messages_for_llm)}, InputTokensEst={current_input_token_count_chat}, Effective GenMaxTokens={max_gen_tokens_chat}, Kwargs={original_kwargs_from_provider}")
-            if current_input_token_count_chat + max_gen_tokens_chat > calculated_n_ctx_for_model_load:
-                log_worker("ERROR",
-                           f"Potential token overflow for CHAT: Input ({current_input_token_count_chat}) + MaxGen ({max_gen_tokens_chat}) > Model n_ctx ({calculated_n_ctx_for_model_load}). Model might truncate input.")
-
-            completion_result_dict = llm.create_chat_completion(
-                messages=messages_for_llm, stream=False, **original_kwargs_from_provider
-            )
-
+            completion_result_dict = llm.create_chat_completion(messages=messages_for_llm, stream=False, **original_kwargs_from_provider)
         elif args.task_type == "raw_text_completion":
-            prompt_from_provider = request_data_dict.get("prompt")  # This is the full assembled ChatML string
-            if not prompt_from_provider or not isinstance(prompt_from_provider, str):
-                raise ValueError("Missing or invalid 'prompt' for 'raw_text_completion' task.")
-
-            # Max tokens the INPUT prompt can occupy *before* truncation
+            prompt_from_provider = request_data_dict.get("prompt")
+            if not prompt_from_provider or not isinstance(prompt_from_provider, str): raise ValueError("Missing or invalid 'prompt' for 'raw_text_completion' task.")
             target_input_prompt_max_tokens = calculated_n_ctx_for_model_load - GENERATION_OUTPUT_BUFFER_TOKENS
-            if target_input_prompt_max_tokens <= 0:
-                log_worker("ERROR",
-                           f"target_input_prompt_max_tokens ({target_input_prompt_max_tokens}) is too low. Model n_ctx: {calculated_n_ctx_for_model_load}, GenBuffer: {GENERATION_OUTPUT_BUFFER_TOKENS}")
-                target_input_prompt_max_tokens = calculated_n_ctx_for_model_load // 2  # Fallback to half context for prompt
-                log_worker("WARNING", f"Adjusted target_input_prompt_max_tokens to {target_input_prompt_max_tokens}")
-
-            prompt_for_llm = adaptive_middle_truncate(prompt_from_provider, target_input_prompt_max_tokens,
-                                                      calculated_n_ctx_for_model_load)
-
-            # Recalculate input tokens after potential truncation
+            if target_input_prompt_max_tokens <= 0: target_input_prompt_max_tokens = calculated_n_ctx_for_model_load // 2
+            prompt_for_llm = adaptive_middle_truncate(prompt_from_provider, target_input_prompt_max_tokens, calculated_n_ctx_for_model_load)
             current_input_token_count_raw = count_tokens_cl100k(prompt_for_llm)
-            if current_input_token_count_raw == -1:  # Tiktoken error
-                current_input_token_count_raw = len(prompt_for_llm) // 3
-                log_worker("WARNING",
-                           f"Tiktoken error for raw prompt, using char estimate: {current_input_token_count_raw} tokens.")
-
-            original_kwargs_from_provider.setdefault("stop", ["<|im_end|>"])  # Ensure stop token
-            # `max_tokens` for generation output, ensuring it fits remaining context
-            max_gen_tokens_raw = min(
-                original_kwargs_from_provider.get("max_tokens", calculated_n_ctx_for_model_load // 2),
-                calculated_n_ctx_for_model_load - current_input_token_count_raw - 64  # Safety buffer
-            )
+            if current_input_token_count_raw == -1: current_input_token_count_raw = len(prompt_for_llm) // 3
+            original_kwargs_from_provider.setdefault("stop", ["<|im_end|>"])
+            max_gen_tokens_raw = min(original_kwargs_from_provider.get("max_tokens", calculated_n_ctx_for_model_load // 2), calculated_n_ctx_for_model_load - current_input_token_count_raw - 64)
             if max_gen_tokens_raw <= 0: max_gen_tokens_raw = GENERATION_OUTPUT_BUFFER_TOKENS // 2
             original_kwargs_from_provider["max_tokens"] = max_gen_tokens_raw
-
-            log_worker("INFO",
-                       f"Attempt 1 (Raw): PromptLen={len(prompt_for_llm)}, InputTokensEst={current_input_token_count_raw}, Effective GenMaxTokens={max_gen_tokens_raw}, Kwargs={original_kwargs_from_provider}")
-            if current_input_token_count_raw + max_gen_tokens_raw > calculated_n_ctx_for_model_load:
-                log_worker("ERROR",
-                           f"Potential token overflow for RAW: Input ({current_input_token_count_raw}) + MaxGen ({max_gen_tokens_raw}) > Model n_ctx ({calculated_n_ctx_for_model_load}). Model might truncate input.")
-
-            completion_result_dict = llm.create_completion(
-                prompt=prompt_for_llm, stream=False, **original_kwargs_from_provider
-            )
-
+            completion_result_dict = llm.create_completion(prompt=prompt_for_llm, stream=False, **original_kwargs_from_provider)
         elif args.task_type == "embedding":
             texts_to_embed = request_data_dict.get("texts")
-            if not texts_to_embed or not isinstance(texts_to_embed, list) or not all(
-                    isinstance(t, str) for t in texts_to_embed):
-                raise ValueError("Invalid 'texts' for 'embedding' task.")
-            log_worker("INFO", f"Performing embedding for {len(texts_to_embed)} texts...")
+            if not texts_to_embed or not isinstance(texts_to_embed, list) or not all(isinstance(t, str) for t in texts_to_embed): raise ValueError("Invalid 'texts' for 'embedding' task.")
             embedding_vectors = llm.embed(texts_to_embed)
             result_payload = {"result": embedding_vectors}
         else:
             raise ValueError(f"Unknown task type in processing block: {args.task_type}")
-
-        # --- Process and Cleanup/Re-request (if not embedding) ---
         if args.task_type != "embedding":
-            if not completion_result_dict:
-                raise RuntimeError("LLM call did not return a result dictionary on first attempt.")
-            log_worker("DEBUG", f"Raw LLM Output (Attempt 1):\n{json.dumps(completion_result_dict, indent=2)}")
-
+            if not completion_result_dict: raise RuntimeError("LLM call did not return a result dictionary on first attempt.")
             raw_generated_text = ""
             if args.task_type == "chat":
-                if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict['choices'] and
-                        isinstance(completion_result_dict['choices'][0].get('message'), dict)):
-                    raw_generated_text = completion_result_dict['choices'][0]['message'].get('content', "")
+                if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict['choices'] and isinstance(completion_result_dict['choices'][0].get('message'), dict)): raw_generated_text = completion_result_dict['choices'][0]['message'].get('content', "")
             elif args.task_type == "raw_text_completion":
-                if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict['choices']):
-                    raw_generated_text = completion_result_dict['choices'][0].get('text', "")
-
-            if not isinstance(raw_generated_text, str): raw_generated_text = str(raw_generated_text or "")
-            cleaned_text = cleanup_initial_think_tag(raw_generated_text)
-            if cleaned_text != raw_generated_text: log_worker("INFO",
-                                                              f"ThinkCleanup applied (Attempt 1). Original len: {len(raw_generated_text)}, Cleaned len: {len(cleaned_text)}")
-            # log_worker("DEBUG", f"Cleaned Output (Attempt 1):\n{cleaned_text}") # Can be verbose
-
+                if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict['choices']): raw_generated_text = completion_result_dict['choices'][0].get('text', "")
+            cleaned_text = cleanup_initial_think_tag(str(raw_generated_text or ""))
             token_count_after_cleanup = count_tokens_cl100k(cleaned_text)
-            log_worker("INFO", f"Token count of cleaned output (Attempt 1): {token_count_after_cleanup}")
-
-            # --- Re-request Logic for Zero Tokens ---
-            if TIKTOKEN_AVAILABLE and token_count_after_cleanup == 0 and args.task_type != "embedding":  # Ensure not embedding
-                log_worker("WARNING", "Cleaned output has zero tokens. Attempting re-request...")
-                rerequest_kwargs = original_kwargs_from_provider.copy()  # Use kwargs from provider for 1st attempt
+            if TIKTOKEN_AVAILABLE and token_count_after_cleanup == 0:
+                rerequest_kwargs = original_kwargs_from_provider.copy()
                 complaint_prefix = "[System Note: Previous response was empty. Please provide a substantive answer.]\n"
-
                 if args.task_type == "chat":
-                    modified_messages_for_rerequest = request_data_dict.get("messages", []).copy()  # Original messages
-                    if isinstance(modified_messages_for_rerequest, list):
-                        modified_messages_for_rerequest.append({"role": "system", "content": complaint_prefix.strip()})
-
+                    modified_messages_for_rerequest = request_data_dict.get("messages", []).copy()
+                    if isinstance(modified_messages_for_rerequest, list): modified_messages_for_rerequest.append({"role": "system", "content": complaint_prefix.strip()})
                     input_tokens_rerequest_chat = count_tokens_cl100k(modified_messages_for_rerequest)
-                    if input_tokens_rerequest_chat == -1: input_tokens_rerequest_chat = len(
-                        json.dumps(modified_messages_for_rerequest)) // 3
-
-                    max_gen_tokens_rereq_chat = min(calculated_n_ctx_for_model_load // 2,
-                                                    calculated_n_ctx_for_model_load - input_tokens_rerequest_chat - 128)
+                    max_gen_tokens_rereq_chat = min(calculated_n_ctx_for_model_load // 2, calculated_n_ctx_for_model_load - input_tokens_rerequest_chat - 128)
                     if max_gen_tokens_rereq_chat <= 0: max_gen_tokens_rereq_chat = 128
                     rerequest_kwargs["max_tokens"] = max_gen_tokens_rereq_chat
-
-                    log_worker("INFO",
-                               f"Attempt 2 (Chat): Re-requesting. InputTokensEst={input_tokens_rerequest_chat}, New GenMaxTokens={rerequest_kwargs['max_tokens']}.")
-                    completion_result_dict = llm.create_chat_completion(messages=modified_messages_for_rerequest,
-                                                                        stream=False, **rerequest_kwargs)
-
+                    completion_result_dict = llm.create_chat_completion(messages=modified_messages_for_rerequest, stream=False, **rerequest_kwargs)
                 elif args.task_type == "raw_text_completion":
-                    # For raw, re-use the already (potentially) truncated prompt_for_llm from the first attempt.
-                    # Prepend the complaint to it.
-                    prompt_for_rerequest = complaint_prefix + prompt_for_llm  # prompt_for_llm is from adaptive_middle_truncate
+                    prompt_for_rerequest = complaint_prefix + prompt_for_llm
                     input_tokens_rerequest_raw = count_tokens_cl100k(prompt_for_rerequest)
-                    if input_tokens_rerequest_raw == -1: input_tokens_rerequest_raw = len(prompt_for_rerequest) // 3
-
-                    max_gen_tokens_rereq_raw = min(calculated_n_ctx_for_model_load // 2,
-                                                   calculated_n_ctx_for_model_load - input_tokens_rerequest_raw - 128)
+                    max_gen_tokens_rereq_raw = min(calculated_n_ctx_for_model_load // 2, calculated_n_ctx_for_model_load - input_tokens_rerequest_raw - 128)
                     if max_gen_tokens_rereq_raw <= 0: max_gen_tokens_rereq_raw = 128
                     rerequest_kwargs["max_tokens"] = max_gen_tokens_rereq_raw
-
-                    log_worker("INFO",
-                               f"Attempt 2 (Raw): Re-requesting. InputTokensEst={input_tokens_rerequest_raw}, New GenMaxTokens={rerequest_kwargs['max_tokens']}.")
-                    completion_result_dict = llm.create_completion(prompt=prompt_for_rerequest, stream=False,
-                                                                   **rerequest_kwargs)
-
-                log_worker("INFO", "Re-request (Attempt 2) finished.")
-                log_worker("DEBUG", f"Raw LLM Output (Attempt 2):\n{json.dumps(completion_result_dict, indent=2)}")
+                    completion_result_dict = llm.create_completion(prompt=prompt_for_rerequest, stream=False, **rerequest_kwargs)
                 raw_generated_text_attempt2 = ""
                 if args.task_type == "chat":
-                    if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict[
-                        'choices'] and isinstance(completion_result_dict['choices'][0].get('message'), dict)):
-                        raw_generated_text_attempt2 = completion_result_dict['choices'][0]['message'].get('content', "")
+                    if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict['choices'] and isinstance(completion_result_dict['choices'][0].get('message'), dict)): raw_generated_text_attempt2 = completion_result_dict['choices'][0]['message'].get('content', "")
                 elif args.task_type == "raw_text_completion":
-                    if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict['choices']):
-                        raw_generated_text_attempt2 = completion_result_dict['choices'][0].get('text', "")
-                if not isinstance(raw_generated_text_attempt2, str): raw_generated_text_attempt2 = str(
-                    raw_generated_text_attempt2 or "")
-                cleaned_text_attempt2 = cleanup_initial_think_tag(raw_generated_text_attempt2)
-                if cleaned_text_attempt2 != raw_generated_text_attempt2: log_worker("INFO",
-                                                                                    f"ThinkCleanup applied (Attempt 2). Original len: {len(raw_generated_text_attempt2)}, Cleaned len: {len(cleaned_text_attempt2)}")
-                # log_worker("DEBUG", f"Cleaned Output (Attempt 2):\n{cleaned_text_attempt2}")
-                if args.task_type == "chat":
-                    completion_result_dict['choices'][0]['message']['content'] = cleaned_text_attempt2
-                elif args.task_type == "raw_text_completion":
-                    completion_result_dict['choices'][0]['text'] = cleaned_text_attempt2
-
+                    if (isinstance(completion_result_dict.get('choices'), list) and completion_result_dict['choices']): raw_generated_text_attempt2 = completion_result_dict['choices'][0].get('text', "")
+                cleaned_text_attempt2 = cleanup_initial_think_tag(str(raw_generated_text_attempt2 or ""))
+                if args.task_type == "chat": completion_result_dict['choices'][0]['message']['content'] = cleaned_text_attempt2
+                elif args.task_type == "raw_text_completion": completion_result_dict['choices'][0]['text'] = cleaned_text_attempt2
             result_payload = {"result": completion_result_dict}
-
         task_processing_duration_ms = (time.monotonic() - task_processing_start_time) * 1000
-        log_worker("INFO",
-                   f"Task '{args.task_type}' core processing completed in {task_processing_duration_ms:.2f} ms.")
+        log_worker("INFO", f"Task '{args.task_type}' core processing completed in {task_processing_duration_ms:.2f} ms.")
 
-    except json.JSONDecodeError as e_json_proc:  # Should be caught by initial stdin read
-        log_worker("ERROR", f"Internal JSON error during processing (should have been caught earlier): {e_json_proc}")
-        result_payload = {"error": f"Worker Internal JSON Error: {e_json_proc}"}
-    except ValueError as e_val_proc:
-        log_worker("ERROR", f"Input validation error during processing: {e_val_proc}")
-        result_payload = {"error": f"Worker Input Error: {e_val_proc}"}
-    except Exception as e_proc:
-        log_worker("ERROR", f"Unexpected exception during task execution: {e_proc}")
-        log_worker("ERROR", traceback.format_exc())
-        result_payload = {"error": f"Worker Execution Error: {type(e_proc).__name__} - {e_proc}"}
+        # 4. Save the New State Automatically After Successful Task
+        if llm and args.task_type != "embedding":
+            log_worker("INFO", f"Task complete. Saving updated KV cache state to: {state_file_path}")
+            state_to_save = llm.save_state()
+            with open(state_file_path, "wb") as f:
+                pickle.dump(state_to_save, f)
+            log_worker("SUCCESS", "Updated state cache saved successfully.")
+        elif llm and args.task_type == "embedding":
+            log_worker("INFO", "Embedding task finished. State caching is skipped.")
 
-    # --- Send Result to Parent ---
-    try:
-        output_json_to_parent = json.dumps(result_payload)
-        # log_worker("DEBUG", f"Final result payload being sent to parent (len={len(output_json_to_parent)}):\n{output_json_to_parent[:200]}...")
-        print(output_json_to_parent, flush=True)
-        log_worker("INFO", "Result/Error JSON sent to stdout successfully.")
-    except Exception as e_serialize:
-        log_worker("CRITICAL", f"Failed to serialize/write final result_payload to stdout: {e_serialize}")
-        fallback_error_msg = {
-            "error": f"Worker critical error: Failed to serialize/write result to stdout: {e_serialize}"}
+    except Exception as e:
+        log_worker("ERROR", f"Error during worker execution: {e}\n{traceback.format_exc()}")
+        result_payload = {"error": f"Worker execution failed: {str(e)}"}
+
+    # --- Send Result to Parent and Exit ---
+    finally:
         try:
+            output_json_to_parent = json.dumps(result_payload)
+            print(output_json_to_parent, flush=True)
+            log_worker("INFO", "Result/Error JSON sent to stdout successfully.")
+        except Exception as e_serialize:
+            log_worker("CRITICAL", f"Failed to serialize/write final result_payload to stdout: {e_serialize}")
+            fallback_error_msg = {"error": f"Worker critical error: Failed to serialize/write result to stdout: {e_serialize}"}
             print(json.dumps(fallback_error_msg), flush=True)
-        except Exception:
-            pass
-        sys.exit(1)
+            sys.exit(1)
 
     log_worker("INFO", f"Llama Worker (PID: {os.getpid()}) process finished gracefully.")
     sys.exit(0)

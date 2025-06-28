@@ -1,8 +1,3 @@
-Of course. This is the perfect way to conclude the `README`. It synthesizes all the lessons learned into a practical, step-by-step guide for a real project.
-
-Here is the complete, final `README.md` with the new section detailing the full workflow for the "zephy" StellaIcarus Daemon Module.
-
----
 
 # Ada on macOS, Linux, & Windows: A Developer's Survival Guide
 
@@ -75,8 +70,6 @@ This section provides a complete, step-by-step workflow for initializing, buildi
 
 ### Step 1: Project Initialization
 
-Create a new binary crate using Alire. The `-n` flag accepts all defaults for a quick, clean setup.
-
 ```bash
 alr -n init --bin zephy
 cd zephy
@@ -84,68 +77,157 @@ cd zephy
 
 ### Step 2: Adding Dependencies (If Necessary)
 
-This project follows the philosophy of minimizing third-party dependencies. However, if a library were needed, the process is:
-
-1.  **Add the dependency to the manifest:**
-    ```bash
-    alr with <library_name>
-    ```
-2.  **Fetch the source code:**
-    ```bash
-    alr update
-    ```
+```bash
+alr with <library_name>
+alr update
+```
 
 ### Step 3: Writing the Application Code
 
-Place your main source file in the `src/` directory. By convention, the main procedure and the filename should match.
-
-1.  Create the main file, e.g., `src/zephy_daemon.adb`.
-2.  Write the application logic, using C bindings for OS interaction as needed.
-3.  Update the project file (`zephy.gpr`) to point to your main file:
-    ```gpr
-    project Zephy is
-       for Main use ("zephy_daemon.adb");
-       -- ...
-    end Zephy;
-    ```
+Update `zephy.gpr` to point to your main file: `for Main use ("zephy_daemon.adb");`.
 
 ### Step 4: Building the Executable
 
-The build command is OS-dependent due to linker variations.
-
 **For macOS:**
-Use the explicit command that specifies the system SDK path. This has proven to be the most reliable method.
 ```bash
 alr exec -- gprbuild -largs -L"$(xcrun --show-sdk-path)/usr/lib"
 ```
 
 **For Linux & Windows:**
-These systems typically do not require the linker workaround.
 ```bash
 alr exec -- gprbuild
 ```
 
-Upon success, the compiled executable will be located at `bin/zephy_daemon`.
-
 ### Step 5: Running the Daemon
-
-Execute the program directly from the `bin` directory. This is more explicit and reliable than using `alr run`.
 
 ```bash
 ./bin/zephy_daemon
 ```
 
-This workflow provides a robust and repeatable process for all future Ada development.
-
 ## 7. The "Ghost in the Machine" Protocol: The Ultimate Reset
 
-When the build system behaves illogically (e.g., compiling a phantom version of a file), the environment is irrecoverably corrupt.
-
-**The "Nuke and Pave" Procedure:**
+When the build system behaves illogically, the environment is irrecoverably corrupt.
 1.  **Back up and remove the Alire cache:** `mv ~/.alire ~/.alire_BACKUP`
-2.  **Clean the shell config:** Edit `~/.zshrc` and remove the line adding `.alire/bin` to your `PATH`.
+2.  **Clean the shell config:** Edit `~/.zshrc` or similar and remove the Alire `PATH` entry.
 3.  **Restart the terminal completely.**
-4.  **Reinstall Alire from scratch:** `curl -sS https://alire.ada.dev/install.py | python3`
-5.  **Restart the terminal again.** This provides a truly clean slate.
+4.  **Reinstall Alire from scratch.**
+5.  **Restart the terminal again.**
 
-> Note: I am not expecting to understand Ada directly but it's better if you transitioned from javascipt to transition to golang first. then jump to Ada, also make sure that alr (alire) packages or libraries can be portable like go tidy into the project folder rather than ~/.local/share which make things messy like huggingface trying to store model whatever it wanted to be. oh and AI doesn't knows about most of alire packaging so good luck vibe coders.
+---
+## 8. Workflow for a Provable SPARK Project: Hello Sekai
+
+This section details the workflow for creating a high-integrity application using SPARK, a subset of Ada designed for formal verification. We will mathematically prove our code is free from certain classes of runtime errors. This process is the result of debugging the toolchain and discovering the most robust method for creating a self-contained, provable project.
+
+### Step 1: Project Initialization
+
+Create a new binary crate for our SPARK project.
+
+```bash
+alr init --bin hello_sekai_spark
+cd hello_sekai_spark
+```
+
+### Step 2: Add the `gnatprove` Tool Dependency
+
+By default, a new project does not have access to the `gnatprove` formal analysis engine. Attempts to run it will fail with `Executable not found in PATH`.
+
+While one could use `alr toolchain --select` to pick a global SPARK-enabled compiler, a more robust and portable method is to declare the prover as a **project-specific tool dependency.**
+
+> **The Self-Contained Project Principle:**
+> By adding `gnatprove` with `alr with`, the project's manifest (`alire.toml`) now explicitly records the tools it needs. This makes the project immune to global toolchain configuration changes and guarantees that any developer can check it out and build it with a single command.
+
+Run the following command to add the prover to your project:
+
+```bash
+alr with gnatprove
+```
+
+### Step 3: Configure the Project File for Proof
+
+We must tell the build system that we intend to prove this project. Open `hello_sekai_spark.gpr` and add the `package Prove`.
+
+```gpr
+project Hello_Sekai_Spark is
+   for Source_Dirs use ("src");
+   for Object_Dir use "obj";
+   for Main use ("hello_sekai_spark.adb");
+
+   -- Add this entire section to enable formal proof
+   package Prove is
+      for Proof_Switches ("Ada") use ("--level=0");
+   end Prove;
+
+end Hello_Sekai_Spark;
+```
+
+### Step 4: The Core SPARK Pattern: Separate Logic from I/O
+
+The single most important concept in SPARK is the separation of provable logic from unprovable side-effects (like console I/O). The prover cannot reason about `Ada.Text_IO`, so we must isolate it.
+
+The pattern is:
+1.  **The Provable Core:** A pure SPARK package with contracts that performs calculations and returns results.
+2.  **The Unprovable Shell:** A standard Ada procedure (marked with `SPARK_Mode => Off`) that calls the provable core and handles all I/O.
+
+**1. Create the Provable Core (`src/message_generator.ads` and `.adb`)**
+
+*   `src/message_generator.ads` (The Specification with a Contract)
+    ```ada
+    package Message_Generator
+      with SPARK_Mode -- This package must be valid SPARK code
+    is
+       function Get_Message return String
+         with Post => Get_Message'Result = "Hello, Sekai! (Proven and Separated)";
+    end Message_Generator;
+    ```
+*   `src/message_generator.adb` (The Implementation)
+    ```ada
+    package body Message_Generator
+      with SPARK_Mode
+    is
+       function Get_Message return String is
+       begin
+          return "Hello, Sekai! (Proven and Separated)";
+       end Get_Message;
+    end Message_Generator;
+    ```
+
+**2. Create the Unprovable Shell (`src/hello_sekai_spark.adb`)**
+
+Replace the default main file with this code, which acts as the harness.
+
+```ada
+with Ada.Text_IO;
+with Message_Generator; -- Import our provable package
+
+procedure Hello_Sekai_Spark
+  with SPARK_Mode => Off -- Explicitly tell the prover to ignore this file
+is
+   The_Message : constant String := Message_Generator.Get_Message;
+begin
+   Ada.Text_IO.Put_Line (The_Message);
+end Hello_Sekai_Spark;
+```
+
+### Step 5: Prove, Build, and Run
+
+The three-stage command sequence is now:
+
+1.  **Prove the Logic:** Run `gnatprove`. It will analyze `message_generator` and ignore `hello_sekai_spark`.
+    ```bash
+    alr exec -- gnatprove -P hello_sekai_spark.gpr
+    ```
+
+2.  **Build the Executable:** Use `gprbuild` as usual.
+    ```bash
+    # For macOS
+    alr exec -- gprbuild -P hello_sekai_spark.gpr -largs -L"$(xcrun --show-sdk-path)/usr/lib"
+
+    # For Linux & Windows
+    alr exec -- gprbuild -P hello_sekai_spark.gpr
+    ```
+
+3.  **Run the Final Program:**
+    ```bash
+    ./bin/hello_sekai_spark
+    ```
+    You will see the output: `Hello, Sekai! (Proven and Separated)`
