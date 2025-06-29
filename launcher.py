@@ -521,7 +521,7 @@ def run_command(command, cwd, name, color=None, check=True, capture_output=False
         stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, f"{log_name_prefix}-OUT"),
                                          daemon=True)
         stdout_thread.start()
-        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{log_name_prefix}-ERR"),
+        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{log_name_prefix}-LogStream"),
                                          daemon=True)
         stderr_thread.start()
 
@@ -666,7 +666,7 @@ def start_service_process(command, cwd, name, use_shell_windows=False):
             running_processes.append((process, name))
 
         stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, f"{name}-OUT"), daemon=True)
-        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{name}-ERR"), daemon=True)
+        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{name}-LogStream"), daemon=True)
         stdout_thread.start()
         stderr_thread.start()
         return process
