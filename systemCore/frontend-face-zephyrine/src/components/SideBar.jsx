@@ -58,6 +58,7 @@ const SideBar = ({
   onRenameChat,
   onDeleteChat,
   onActivateVoiceMode,
+  onSettingsClick,
 }) => {
   const navigate = useNavigate();
   const location = useLocation();
@@ -233,8 +234,20 @@ const SideBar = ({
             {!(isCollapsed && !isHovering) && <span className="user-email">{user?.email}</span>}
           </button>
 
-          <button className="sidebar-button settings-button" title={isCollapsed ? 'Settings' : ''} onClick={handleInfoClick}>
-          <svg viewBox="0 0 24 24" fill="none" className="sidebar-icon" xmlns="http://www.w3.org/2000/svg"><g id="SVGRepo_bgCarrier" stroke-width="0"></g><g id="SVGRepo_tracerCarrier" stroke-linecap="round" stroke-linejoin="round"></g><g id="SVGRepo_iconCarrier"> <path opacity="0.4" d="M18.9401 5.41994L13.7701 2.42994C12.7801 1.85994 11.2301 1.85994 10.2401 2.42994L5.02008 5.43994C2.95008 6.83994 2.83008 7.04994 2.83008 9.27994V14.7099C2.83008 16.9399 2.95008 17.1599 5.06008 18.5799L10.2301 21.5699C10.7301 21.8599 11.3701 21.9999 12.0001 21.9999C12.6301 21.9999 13.2701 21.8599 13.7601 21.5699L18.9801 18.5599C21.0501 17.1599 21.1701 16.9499 21.1701 14.7199V9.27994C21.1701 7.04994 21.0501 6.83994 18.9401 5.41994Z" fill="currentColor"></path> <path d="M12 15.25C13.7949 15.25 15.25 13.7949 15.25 12C15.25 10.2051 13.7949 8.75 12 8.75C10.2051 8.75 8.75 10.2051 8.75 12C8.75 13.7949 10.2051 15.25 12 15.25Z" fill="currentColor"></path> </g></svg>
+          <button className="sidebar-button settings-button" title={isCollapsed ? 'Settings' : ''} onClick={onSettingsClick}>
+            {/* START: New Corrected SVG Icon */}
+            <svg viewBox="0 0 24 24" fill="none" className="sidebar-icon" xmlns="http://www.w3.org/2000/svg">
+                <path d="M14.5315 12.0158C14.5315 13.405 13.4192 14.5447 12.0003 14.5447C10.5814 14.5447 9.46916 13.405 9.46916 12.0158C9.46916 10.6265 10.5814 9.48682 12.0003 9.48682C13.4192 9.48682 14.5315 10.6265 14.5315 12.0158Z" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+                <path d="M18.8475 19.3418L18.1189 18.6141C17.4768 17.9726 17.2023 17.0378 17.3718 16.1557C17.5413 15.2736 18.1345 14.5447 18.9663 14.2258L20.0094 13.842C21.0333 13.4673 21.6548 12.3893 21.2801 11.3654L20.8913 10.2307C20.5166 9.20679 19.4386 8.5853 18.4147 8.95998L17.3716 9.34377C16.5398 9.66266 15.9466 10.3916 15.7771 11.2737C15.6076 12.1558 15.8821 13.0906 16.5242 13.7321L17.2528 14.4598" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+                <path d="M5.15247 4.68987L5.88107 5.41753C6.52317 6.05902 6.79767 6.99386 6.62817 7.87595C6.45867 8.75804 5.86548 9.48693 5.03368 9.80582L3.99063 10.1896C2.96673 10.5643 2.34524 11.6423 2.71992 12.6662L3.10873 13.7993C3.48341 14.8232 4.56141 15.4447 5.58531 15.07L6.62836 14.6862C7.46016 14.3673 8.05335 13.6384 8.22285 12.7563C8.39235 11.8742 8.11785 10.9394 7.47575 10.2979L6.74715 9.57021" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+                <path d="M12.0002 18.8475L12.0002 17.3941" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+                <path d="M12.0002 6.6377L12.0002 5.15234" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+                <path d="M7.42676 16.5781L6.3837 17.6212" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+                <path d="M17.6191 6.38574L16.5761 7.4288" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+                <path d="M4.68945 7.4288L3.6464 6.38574" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+                <path d="M20.3545 17.6212L19.3114 16.5781" stroke="currentColor" strokeWidth="1.5" strokeLinecap="round" strokeLinejoin="round"></path>
+            </svg>
+            {/* END: New Corrected SVG Icon */}
             {!(isCollapsed && !isHovering) && <span>Settings</span>}
           </button>
 
@@ -270,6 +283,7 @@ SideBar.propTypes = {
   onRenameChat: PropTypes.func.isRequired,
   onDeleteChat: PropTypes.func.isRequired,
   onActivateVoiceMode: PropTypes.func.isRequired,
+  onSettingsClick: PropTypes.func.isRequired, // Add this
 };
 
 SideBar.defaultProps = {
@@ -277,4 +291,5 @@ SideBar.defaultProps = {
   user: null,
 };
 
-export default SideBar;
+//export default SideBar;
+export default React.memo(SideBar); // Wrap the export

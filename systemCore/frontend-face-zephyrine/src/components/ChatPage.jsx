@@ -1,3 +1,4 @@
+// externalAnalyzer/frontend-face-zephyrine/src/components/ChatPage.jsx
 import React, { useState, useEffect, useRef, useCallback } from "react";
 import { useParams } from "react-router-dom";
 import PropTypes from 'prop-types';
@@ -9,13 +10,12 @@ import "../styles/utils/_overlay.css";
 
 const WEBSOCKET_URL = import.meta.env.VITE_WEBSOCKET_URL || "ws://localhost:3001";
 
-// Using default parameters in the function signature for props.
-function ChatPage({ 
-  systemInfo = { assistantName: "Zephyrine" }, 
-  user = null, 
-  refreshHistory = () => console.warn("ChatPage: 'refreshHistory' prop was called but not provided."), 
-  selectedModel = "ZephyUnifiedRoutedModel",
-  updateSidebarHistory = () => console.warn("ChatPage: 'updateSidebarHistory' prop was called but not passed by App.jsx."), 
+function ChatPage({
+  systemInfo = { assistantName: "Zephyrine" },
+  user = null,
+  refreshHistory = () => console.warn("ChatPage: 'refreshHistory' prop was called but not provided."),
+  selectedModel = "default-model",
+  updateSidebarHistory = () => console.warn("ChatPage: 'updateSidebarHistory' prop was called but not passed by App.jsx."),
   triggerSidebarRefresh = () => console.warn("ChatPage: 'triggerSidebarRefresh' prop was called but not passed by App.jsx.")
 }) {
   const { chatId } = useParams();
@@ -26,17 +26,14 @@ function ChatPage({
   const [showPlaceholder, setShowPlaceholder] = useState(false);
   const [error, setError] = useState(null);
   const [streamingAssistantMessage, setStreamingAssistantMessage] = useState(null);
-  const [fileData, setFileData] = useState(null); // <<<<<<<<<<<< NEW STATE for file data
+  const [fileData, setFileData] = useState(null);
   const [localCopySuccessId, setLocalCopySuccessId] = useState('');
   const bottomRef = useRef(null);
   const ws = useRef(null);
   const currentAssistantMessageId = useRef(null);
   const accumulatedContentRef = useRef("");
   const isConnected = useRef(false);
-
-  // Add a ref for a throttle timer
-  const throttleTimerRef = useRef(null);
-  const THROTTLE_INTERVAL = 420; // ms
+  const streamingStartTimeRef = useRef(0);
 
   useEffect(() => {
     setIsLoadingHistory(true);
@@ -115,9 +112,6 @@ function ChatPage({
 
     return () => {
       console.log("ChatPage: Closing WebSocket connection for chatId:", chatId);
-      if (throttleTimerRef.current) {
-        clearTimeout(throttleTimerRef.current);
-      }
       ws.current?.close();
       isConnected.current = false;
     };
@@ -148,56 +142,56 @@ function ChatPage({
             setShowPlaceholder(true);
             setIsLoadingHistory(false);
             break;
+        
+        // --- START: Added Case to Handle Backend Errors ---
+        case "error":
+            console.error("ChatPage: Received error from backend:", message.payload?.message);
+            setError(message.payload?.message || "An unknown error occurred on the backend.");
+            setIsGenerating(false);
+            setStreamingAssistantMessage(null);
+            break;
+        // --- END: Added Case ---
+
         case "chunk":
           setIsGenerating(true);
           const contentChunk = message.payload.content;
           accumulatedContentRef.current += contentChunk;
 
-          // Clear any existing timer to avoid multiple updates within the interval
-          if (throttleTimerRef.current) {
-            clearTimeout(throttleTimerRef.current);
+          const currentTime = Date.now();
+          const elapsedTime = currentTime - streamingStartTimeRef.current;
+          const currentChars = accumulatedContentRef.current.length;
+          let tokensPerSecond = 0;
+          if (elapsedTime > 0) {
+            tokensPerSecond = (currentChars / elapsedTime) * 1000;
           }
 
-          // Set a new timer to update state after THROTTLE_INTERVAL
-          throttleTimerRef.current = setTimeout(() => {
-            setStreamingAssistantMessage((prev) => {
-              const newId = prev?.id || currentAssistantMessageId.current || `temp-stream-${uuidv4()}`;
-              if (!currentAssistantMessageId.current && !prev?.id) {
+          const currentContent = accumulatedContentRef.current;
+          const hasOpenThink = currentContent.includes("<think>") && !currentContent.includes("</think>");
+          const isCurrentlyThinking = hasOpenThink;
+          
+          setStreamingAssistantMessage((prev) => {
+            const newId = prev?.id || currentAssistantMessageId.current || `temp-stream-${uuidv4()}`;
+            if (!currentAssistantMessageId.current && !prev?.id) {
                 currentAssistantMessageId.current = newId;
-              }
-              return {
-                id: newId,
-                sender: "assistant",
-                content: accumulatedContentRef.current,
-                chat_id: chatId,
-                created_at: prev?.created_at || new Date().toISOString(),
-                isLoading: true,
-              };
-            });
-            throttleTimerRef.current = null; // Clear the timer ref
-          }, THROTTLE_INTERVAL);
+            }
+            return {
+              id: newId,
+              sender: "assistant",
+              content: accumulatedContentRef.current,
+              chat_id: chatId,
+              created_at: prev?.created_at || new Date().toISOString(),
+              isLoading: true,
+              tokensPerSecond: tokensPerSecond.toFixed(1),
+              isThinking: isCurrentlyThinking,
+            };
+          });
           break;
         case "end":
-          // Ensure final update is processed immediately
-          if (throttleTimerRef.current) {
-            clearTimeout(throttleTimerRef.current);
-            throttleTimerRef.current = null;
-          }
-          // Force a final state update with all accumulated content
-          setStreamingAssistantMessage((prev) => {
-              const finalId = prev?.id || currentAssistantMessageId.current;
-              return {
-                  id: finalId,
-                  sender: "assistant",
-                  content: accumulatedContentRef.current,
-                  chat_id: chatId,
-                  created_at: prev?.created_at || new Date().toISOString(),
-                  isLoading: true, // Mark as loading to differentiate until saved
-              };
-          });
-          
           setIsGenerating(false);
           const finalContent = accumulatedContentRef.current;
+          const hasOpenThinkFinal = finalContent.includes("<think>") && !finalContent.includes("</think>");
+          const isCurrentlyThinkingFinal = hasOpenThinkFinal;
+
           if (finalContent && currentAssistantMessageId.current) {
             const finalMessage = {
               id: currentAssistantMessageId.current,
@@ -206,6 +200,7 @@ function ChatPage({
               chat_id: chatId,
               created_at: streamingAssistantMessage?.created_at || new Date().toISOString(),
               isLoading: false,
+              isThinking: isCurrentlyThinkingFinal,
             };
             setMessages((prev) => {
                 const existing = prev.find(msg => msg.id === finalMessage.id);
@@ -224,7 +219,15 @@ function ChatPage({
           setStreamingAssistantMessage(null);
           accumulatedContentRef.current = "";
           currentAssistantMessageId.current = null;
+          streamingStartTimeRef.current = 0;
           break;
+        case "message_status_update":
+            setMessages(prevMessages => 
+                prevMessages.map(msg => 
+                    msg.id === message.payload.id ? { ...msg, status: message.payload.status } : msg
+                )
+            );
+            break;
         case "title_updated":
           console.log("ChatPage: Received title_updated:", message.payload);
           triggerSidebarRefresh(); 
@@ -234,7 +237,6 @@ function ChatPage({
           updateSidebarHistory(message.payload.chats || []); 
           break;
         case "message_saved":
-            // Optional: You can add logic here if needed for when a message is confirmed saved.
             break;
         case "message_updated":
             console.log(`ChatPage: Message updated confirmation received: ID ${message.payload.id}`);
@@ -251,14 +253,6 @@ function ChatPage({
         case "stopped":
             console.log("ChatPage: Backend confirmed generation stopped.");
             break;
-        case "error":
-          console.error("ChatPage: WebSocket Server Error:", message.message || "Unknown server error");
-          setError(`Assistant error: ${message.message || "Unknown server error"}`);
-          setIsGenerating(false);
-          setStreamingAssistantMessage(null);
-          accumulatedContentRef.current = "";
-          currentAssistantMessageId.current = null;
-          break;
         default:
           console.warn("ChatPage: Unknown WebSocket message type:", message.type, message);
       }
@@ -272,98 +266,6 @@ function ChatPage({
       setIsLoadingHistory(false);
     }
   }, [chatId, refreshHistory, messages, streamingAssistantMessage, updateSidebarHistory, triggerSidebarRefresh, user]);
-
-  const sendMessageOrRegenerate = async (contentToSend, isRegeneration = false) => {
-    if (!ws.current || ws.current.readyState !== WebSocket.OPEN) {
-      setError("WebSocket is not connected.");
-      return;
-    }
-    // Allow sending if there's text OR a file selected
-    if (!contentToSend?.trim() && !fileData) return;
-    setError(null);
-
-    const userMessageContent = [];
-    
-    // 1. Handle text content
-    if (contentToSend && contentToSend.trim()) {
-      userMessageContent.push({
-        type: 'text',
-        text: contentToSend,
-      });
-    }
-
-    // 2. Handle file content
-    let submittedFileData = fileData; // Copy file data to use in this send, then clear it
-    if (submittedFileData) {
-      if (submittedFileData.type.startsWith("image/")) {
-        // Format for OpenAI Vision API
-        userMessageContent.push({
-          type: "image_url",
-          image_url: {
-            url: submittedFileData.content, // The base64 data URL
-          },
-        });
-      } else if (submittedFileData.type === "text/plain") {
-        // Prepend text file content to the user's message
-        const fileText = `--- START OF FILE: ${submittedFileData.name} ---\n${submittedFileData.content}\n--- END OF FILE ---`;
-        // Check if there's already a text part, if so, append. If not, add one.
-        let textPart = userMessageContent.find(p => p.type === 'text');
-        if (textPart) {
-          textPart.text = `${fileText}\n\n${textPart.text}`;
-        } else {
-          userMessageContent.unshift({ type: 'text', text: fileText });
-        }
-      }
-    }
-
-    if (userMessageContent.length === 0) {
-      console.error("Attempted to send but no content was available.");
-      return;
-    }
-
-    // Use the content array for the payload
-    const finalUserMessagePayload = { role: 'user', content: userMessageContent };
-    
-    // Optimistic UI update
-    setInputValue("");
-    setFileData(null); // Clear the staged file
-    const optimisticUserMessage = {
-      id: `temp-user-${uuidv4()}`,
-      sender: "user",
-      // For display, we can show a summary
-      content: contentToSend + (submittedFileData ? `\n[File: ${submittedFileData.name}]` : ''),
-      isLoading: true,
-    };
-    setMessages(prev => [...prev, optimisticUserMessage]);
-    setShowPlaceholder(false);
-
-    // Prepare history for backend
-    const historyForBackend = messages
-      .filter(m => !m.isLoading && !m.id?.startsWith('temp-'))
-      .slice(-20)
-      .map(m => ({ role: m.sender || m.role, content: m.content }));
-      
-    try {
-      const messagePayload = {
-        messages: [...historyForBackend, finalUserMessagePayload],
-        model: selectedModel || "ZephyUnifiedRoutedModel",
-        chatId: chatId,
-        userId: user?.id,
-      };
-
-      console.log("ChatPage: Sending WS 'chat' message with file data:", messagePayload);
-      ws.current.send(JSON.stringify({ type: "chat", payload: messagePayload }));
-
-      setIsGenerating(true);
-      accumulatedContentRef.current = "";
-      currentAssistantMessageId.current = `temp-assistant-${uuidv4()}`;
-      setStreamingAssistantMessage({ id: currentAssistantMessageId.current, sender: "assistant", content: "", isLoading: true });
-    } catch (sendError) {
-      console.error("ChatPage: WebSocket send error:", sendError);
-      setError("Failed to communicate with the assistant.");
-      setIsGenerating(false);
-    }
-  };
 
   const handleEditSave = async (messageId, newContent) => {
     if (isGenerating) return;
@@ -428,7 +330,94 @@ function ChatPage({
     }
   };
 
+  // --- START: Reordered Functions ---
+
+  const handleStopGeneration = useCallback((isSilent = false) => {
+    if (!isGenerating) return;
+    console.log("ChatPage: Stopping generation...");
+    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
+      ws.current.send(JSON.stringify({ type: "stop", payload: { chatId } }));
+    }
+    setIsGenerating(false);
+
+    if (!isSilent && streamingAssistantMessage && accumulatedContentRef.current && currentAssistantMessageId.current) {
+      const finalPartialMessage = {
+        ...streamingAssistantMessage,
+        content: accumulatedContentRef.current,
+        isLoading: false,
+      };
+      setMessages((prev) => {
+          const existing = prev.find(msg => msg.id === finalPartialMessage.id);
+          if (existing) {
+              return prev.map(msg => msg.id === finalPartialMessage.id ? finalPartialMessage : msg);
+          } else {
+              return [...prev, finalPartialMessage];
+          }
+      });
+    }
+    
+    setStreamingAssistantMessage(null);
+    accumulatedContentRef.current = "";
+    currentAssistantMessageId.current = null;
+  }, [isGenerating, streamingAssistantMessage, chatId]);
+
+  const sendMessageOrRegenerate = useCallback(async (contentToSend, isRegeneration = false) => {
+    if ((!contentToSend?.trim() && !fileData) || !ws.current || ws.current.readyState !== WebSocket.OPEN) {
+      if (!ws.current || ws.current.readyState !== WebSocket.OPEN) setError("WebSocket is not connected.");
+      return;
+    }
+    
+    // Stop any currently active generation.
+    if (isGenerating) {
+      handleStopGeneration(true);
+    }
+    setError(null);
+
+    // 1. Prepare all the data and new state *before* calling setMessages.
+    const optimisticUserMessage = {
+      id: uuidv4(),
+      sender: "user",
+      content: contentToSend + (fileData ? `\n[File: ${fileData.name}]` : ''),
+      isLoading: true,
+      status: 'sending',
+    };
+
+    const baseMessages = isRegeneration
+      ? messages.slice(0, messages.findLastIndex(m => m.sender === 'assistant'))
+      : messages;
+
+    const newUiState = [...baseMessages, optimisticUserMessage];
+
+    const historyForBackend = newUiState
+      .map(m => ({ role: m.sender, content: m.content }));
+
+    const messagePayload = {
+      messages: historyForBackend,
+      model: selectedModel,
+      chatId: chatId,
+      userId: user?.id,
+      optimisticMessageId: optimisticUserMessage.id,
+    };
+
+    // 2. Perform all state updates and side effects sequentially.
+    setMessages(newUiState);
+    setInputValue("");
+    setFileData(null);
+    setShowPlaceholder(false);
+    setIsGenerating(true);
+    accumulatedContentRef.current = "";
+    currentAssistantMessageId.current = `temp-assistant-${uuidv4()}`;
+    setStreamingAssistantMessage({ id: currentAssistantMessageId.current, sender: "assistant", content: "", isLoading: true });
+
+    ws.current.send(JSON.stringify({ type: "chat", payload: messagePayload }));
+
+  }, [chatId, fileData, isGenerating, selectedModel, user, handleStopGeneration, messages]);
+
+  // --- END: Reordered Functions ---
+
   const handleSendMessage = () => {
+    // Basic guard to prevent sending empty messages or sending while the AI is busy.
+    if (!inputValue.trim() || isGenerating) return;
     sendMessageOrRegenerate(inputValue, false);
   };
 
@@ -454,43 +443,7 @@ function ChatPage({
       setError("Failed to copy text.");
     }
   };
-
-  const handleStopGeneration = () => {
-    if (!isGenerating) return;
-    console.log("ChatPage: Stopping generation...");
-    if (ws.current && ws.current.readyState === WebSocket.OPEN) {
-      ws.current.send(JSON.stringify({ type: "stop", payload: { chatId } }));
-      console.log("ChatPage: Sent stop request to backend.");
-    } else {
-        console.warn("ChatPage: Cannot send stop request: WebSocket not connected.");
-    }
-    setIsGenerating(false);
-    
-    if (throttleTimerRef.current) {
-      clearTimeout(throttleTimerRef.current);
-      throttleTimerRef.current = null;
-    }
-
-    if (streamingAssistantMessage && accumulatedContentRef.current && currentAssistantMessageId.current) {
-      const finalPartialMessage = {
-        ...streamingAssistantMessage,
-        content: accumulatedContentRef.current,
-        isLoading: false,
-      };
-      setMessages((prev) => {
-          const existing = prev.find(msg => msg.id === finalPartialMessage.id);
-          if (existing) {
-              return prev.map(msg => msg.id === finalPartialMessage.id ? finalPartialMessage : msg);
-          } else {
-              return [...prev, finalPartialMessage];
-          }
-      });
-    }
-    setStreamingAssistantMessage(null);
-    accumulatedContentRef.current = "";
-    currentAssistantMessageId.current = null;
-  };
-
+  
   const handleExampleClick = (text) => {
     setInputValue(text);
   };
@@ -501,11 +454,6 @@ function ChatPage({
 
   return (
     <>
-      {(!showPlaceholder || messages.length > 0) && (
-        <div className="chat-model-selector">
-          <span>{selectedModel || 'Default Model'}</span>
-        </div>
-      )}
 
       <div id="feed" className={showPlaceholder && !isLoadingHistory ? "welcome-screen" : ""}>
         {isLoadingHistory && (
@@ -535,11 +483,10 @@ function ChatPage({
           onInputChange={setInputValue}
           onSend={handleSendMessage}
           onStopGeneration={handleStopGeneration}
-          isGenerating={isGenerating}
           onFileSelect={setFileData}
           selectedFile={fileData}
           selectedModel={selectedModel}
-          disabled={isLoadingHistory || !isConnected.current}
+          disabled={isLoadingHistory || !isConnected.current} 
         />
       </div>
     </>
@@ -559,4 +506,5 @@ ChatPage.propTypes = {
   triggerSidebarRefresh: PropTypes.func,
 };
 
-export default ChatPage;
+//export default ChatPage;
+export default React.memo(ChatPage); // Wrap the export

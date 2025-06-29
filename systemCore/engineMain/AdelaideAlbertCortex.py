@@ -4951,10 +4951,10 @@ class CortexThoughts:
     # app.py -> Inside CortexThoughts class
 
     async def _direct_generate_logic(self, db: Session, user_input: str, session_id: str,
-                              vlm_description: Optional[str] = None,
-                              image_b64: Optional[str] = None) -> str:
+                                 vlm_description: Optional[str] = None,
+                                 image_b64: Optional[str] = None) -> str:
         """
-        The core logic for direct_generate, now separated to be called by the timeout wrapper.
+        The core logic for direct_generate, now with enhanced retry logic for defective responses.
         """
         direct_req_id = f"dgen-logic-{uuid.uuid4()}"
         log_prefix = f"⚡️ {direct_req_id}|ELP1"
@@ -4963,16 +4963,18 @@ class CortexThoughts:
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
 
-        INPUT_SPITBACK_THRESHOLD = 80
-        MAX_SPITBACK_RETRIES = 2
+        # Use constants from config for retry logic
+        INPUT_SPITBACK_THRESHOLD = 80 # Could also be from config
+        MAX_SPITBACK_RETRIES = 2      # Could also be from config
+
         retry_count = 0
-        
         response_to_return_to_client = "[Error: Response not set during direct_generate logic loop]"
         interaction_data_for_log: Dict[str, Any] = {}
+        retry_reason = "" # To store the reason for the retry
 
         while retry_count <= MAX_SPITBACK_RETRIES:
             if retry_count > 0:
-                logger.warning(f"{log_prefix} Retrying (Attempt {retry_count + 1}/{MAX_SPITBACK_RETRIES + 1})...")
+                logger.warning(f"{log_prefix} Retrying (Attempt {retry_count + 1}/{MAX_SPITBACK_RETRIES + 1}). Reason: {retry_reason}")
                 await asyncio.sleep(0.5)
 
             interaction_data_for_log = {
@@ -4981,72 +4983,95 @@ class CortexThoughts:
                 "user_input": user_input, "llm_response": "[Processing...]", "execution_time_ms": 0,
                 "image_description": vlm_description, "image_data": image_b64[:20] + "..." if image_b64 else None,
                 "classification": "direct_response_raw_chatml_elp1", "classification_reason": "Direct ELP1 path execution.",
-                "rag_history_ids": None, "rag_source_url": None, "requires_deep_thought": False,
-                "deep_thought_reason": None, "tot_analysis_requested": False, "tot_analysis_spawned": False,
-                "tot_result": None, "tot_delivered": False, "emotion_context_analysis": None,
-                "assistant_action_analysis_json": None, "assistant_action_type": None,
-                "assistant_action_params": None, "assistant_action_executed": False,
-                "assistant_action_result": None, "imagined_image_prompt": None, "imagined_image_b64": None,
-                "imagined_image_vlm_description": None, "reflection_completed": False, "reflection_indexed_in_vs": False
             }
 
             try:
+                # --- Check for StellaIcarus Hooks (as before) ---
                 if self.stella_icarus_manager and self.stella_icarus_manager.is_enabled:
                     hook_response_text = self.stella_icarus_manager.check_and_execute(user_input, session_id)
                     if hook_response_text is not None:
-                        logger.info(f"{log_prefix} STELLA_ICARUS_HOOK triggered.")
-                        interaction_data_for_log['llm_response'] = hook_response_text
-                        interaction_data_for_log['classification'] = "stella_icarus_hooked"
+                        logger.info(f"{log_prefix} STELLA_ICARUS_HOOK triggered. Bypassing LLM.")
                         response_to_return_to_client = hook_response_text
-                        break
+                        break # Exit the loop, we have a valid response
 
+                # --- Prepare and Call the LLM ---
                 fast_model = self.provider.get_model("general_fast")
                 if not fast_model:
                     raise RuntimeError("Fast model 'general_fast' for direct response is not configured.")
 
                 system_prompt_content_base = PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT
-                if retry_count > 0:
-                    system_prompt_content_base = f"[System Note: Previous response was a repeat of the user's input. Provide a new, meaningful answer.]\n\n{system_prompt_content_base}"
+                # --- MODIFIED: Add specific retry prompts ---
+                if retry_reason == "spit-back":
+                    system_prompt_content_base = f"[System ERROR: Previous response was a repeat of the user's input. Provide a new, meaningful answer.]\n\n{system_prompt_content_base}"
+                elif retry_reason == "defective-response":
+                    system_prompt_content_base = f"[System ERROR: You WRONG Answer! Try again with new answer perspective and rephrase based on your Experienced. DO NOT USE {DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY} on the Answer! ]\n\n{system_prompt_content_base}"
 
                 rag_query_input = user_input or (f"Regarding image: {vlm_description}" if vlm_description else "")
+                # (RAG and context gathering logic remains the same...)
                 wrapped_rag_result = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db, rag_query_input, ELP1)
-                
                 all_retrieved_rag_docs: List[Any] = []
                 if wrapped_rag_result.get("status") == "success":
-                    rag_data_tuple = wrapped_rag_result.get("data")
-                    if isinstance(rag_data_tuple, tuple) and len(rag_data_tuple) == 4:
-                        url_retriever_obj, session_hist_retriever_obj, reflection_chunk_retriever_obj, _ = rag_data_tuple
-                        retrievers = [(url_retriever_obj, "URL"), (session_hist_retriever_obj, "Session"), (reflection_chunk_retriever_obj, "Reflection")]
-                        for retriever, name in retrievers:
-                            if retriever:
-                                docs = await asyncio.to_thread(retriever.invoke, rag_query_input)
-                                all_retrieved_rag_docs.extend(docs or [])
-                
+                    rag_data_tuple = wrapped_rag_result.get("data", (None, None, None, ""))
+                    url_retriever_obj, session_hist_retriever_obj, reflection_chunk_retriever_obj, _ = rag_data_tuple
+                    retrievers = [(url_retriever_obj, "URL"), (session_hist_retriever_obj, "Session"), (reflection_chunk_retriever_obj, "Reflection")]
+                    for retriever, name in retrievers:
+                        if retriever:
+                            docs = await asyncio.to_thread(retriever.invoke, rag_query_input)
+                            all_retrieved_rag_docs.extend(docs or [])
+
                 rag_context_block = self._format_docs(all_retrieved_rag_docs, "Combined RAG Context")
                 final_system_prompt_content = f"{system_prompt_content_base}\n\n--- Relevant Context ---\n{rag_context_block}\n--- End RAG ---"
                 
+                # (Direct history and ChatML prompt construction logic remains the same...)
                 direct_history_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-                historical_turns_for_chatml = [] # Simplified for brevity
+                historical_turns_for_chatml = [] # Simplified for this example
+                raw_chatml_prompt_string = self._construct_raw_chatml_prompt(
+                    system_content=final_system_prompt_content, 
+                    history_turns=historical_turns_for_chatml, 
+                    current_turn_content=user_input
+                )
 
-                raw_chatml_prompt_string = self._construct_raw_chatml_prompt(system_content=final_system_prompt_content, history_turns=historical_turns_for_chatml, current_turn_content=user_input)
-
+                # --- LLM Call ---
                 current_temp = min(1.5, DEFAULT_LLM_TEMPERATURE + (0.1 * retry_count))
                 raw_llm_response = await asyncio.to_thread(fast_model._call, messages=raw_chatml_prompt_string, stop=[CHATML_END_TOKEN], priority=ELP1, temperature=current_temp)
                 
                 response_to_return_to_client = self._cleanup_llm_output(raw_llm_response)
                 interaction_data_for_log['llm_response'] = response_to_return_to_client
 
+                # --- FILTER 1: Check for input spit-back ---
                 if FUZZY_AVAILABLE and fuzz:
                     similarity_score = fuzz.ratio(user_input.lower(), response_to_return_to_client.lower())
                     if similarity_score > INPUT_SPITBACK_THRESHOLD:
                         retry_count += 1
+                        retry_reason = "spit-back" # Set reason for next loop's prompt
                         error_msg = f"[Spit-Back Detected] LLM re-spitting input. Similarity: {similarity_score}%"
                         logger.error(f"{log_prefix} {error_msg}")
                         if retry_count > MAX_SPITBACK_RETRIES:
                             response_to_return_to_client = "[System Error: The AI model failed to provide a valid response after multiple attempts.]"
                             break
-                        continue
+                        continue # Go to the next iteration of the while loop
+
+                # --- FILTER 2: Check for canned/defective responses ---
+                is_defective_response = False
+                if FUZZY_AVAILABLE and fuzz:
+                    # Loop through the list from CortexConfiguration.py
+                    for defective_phrase in DefectiveWordDirectGenerateArray:
+                        defective_score = fuzz.partial_ratio(defective_phrase.lower(), response_to_return_to_client.lower())
+                        if defective_score > DEFECTIVE_WORD_THRESHOLD: # Use threshold from config
+                            is_defective_response = True
+                            retry_reason = "defective-response" # Set reason for next loop's prompt
+                            error_msg = f"[Defective Response Detected] Response is similar to canned phrase ('{defective_phrase}'). Similarity: {defective_score}%"
+                            logger.error(f"{log_prefix} {error_msg}")
+                            break # Found a match, no need to check other phrases
                 
+                if is_defective_response:
+                    retry_count += 1
+                    if retry_count > MAX_SPITBACK_RETRIES:
+                        response_to_return_to_client = "[System Error: The AI model repeatedly generated unhelpful responses.]"
+                        break
+                    continue # Go to the next iteration of the while loop
+                
+                # If all checks pass, we have a valid response, so we break the loop
                 break
 
             except Exception as e_direct_path:
@@ -5054,8 +5079,11 @@ class CortexThoughts:
                 response_to_return_to_client = f"[Error generating direct response (ELP1): {type(e_direct_path).__name__}]"
                 break
         
+        # --- Final Logging and Return ---
         final_duration_ms = (time.monotonic() - direct_start_time) * 1000.0
         interaction_data_for_log['execution_time_ms'] = final_duration_ms
+        # Update the final response text in the log data
+        interaction_data_for_log['llm_response'] = response_to_return_to_client
         queue_interaction_for_batch_logging(**interaction_data_for_log)
 
         return response_to_return_to_client
@@ -7804,6 +7832,97 @@ def _generate_simulated_avionics_data() -> Dict[str, Any]:
         return payload
 
 
+def get_current_configurable_settings():
+    """
+    Reads the current values of all adjustable settings from the CortexConfiguration module.
+    Excludes paths, lists, and other non-user-facing constants.
+    """
+    settings = {}
+    # Directly reference the imported CortexConfiguration module's variables
+    import CortexConfiguration as config
+    
+    # --- COMPLETE LIST of all user-adjustable variables ---
+    adjustable_vars = [
+        # General & Core
+        "PROVIDER",
+        "MEMORY_SIZE",
+        "ANSWER_SIZE_WORDS",
+        "TOPCAP_TOKENS",
+        "DEFAULT_LLM_TEMPERATURE",
+        "DEEP_THOUGHT_RETRY_ATTEMPTS",
+        "RESPONSE_TIMEOUT_MS",
+        
+        # RAG, Vector & Indexing
+        "VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE",
+        "CHUNK_OVERLAP",
+        "RAG_FILE_INDEX_COUNT",
+        "RAG_URL_COUNT",
+        "FUZZY_SEARCH_THRESHOLD",
+        "TOT_SIMILARITY_THRESHOLD",
+        "ENABLE_FILE_INDEXER",
+        "FILE_INDEX_MAX_SIZE_MB",
+        "FILE_INDEX_MIN_SIZE_KB",
+        "FILE_INDEXER_IDLE_WAIT_SECONDS",
+
+        # Self-Reflection
+        "ENABLE_SELF_REFLECTION",
+        "SELF_REFLECTION_HISTORY_COUNT",
+        "SELF_REFLECTION_MAX_TOPICS",
+        "REFLECTION_BATCH_SIZE",
+        "IDLE_WAIT_SECONDS",
+        "ACTIVE_CYCLE_PAUSE_SECONDS",
+        "ENABLE_PROACTIVE_RE_REFLECTION",
+        "PROACTIVE_RE_REFLECTION_CHANCE",
+        "MIN_AGE_FOR_RE_REFLECTION_DAYS",
+
+        # Concurrency & Performance
+        "MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS",
+        "SEMAPHORE_ACQUIRE_TIMEOUT_SECONDS",
+        "BENCHMARK_ELP1_TIME_MS",
+        "AGENTIC_RELAXATION_MODE",
+        "AGENTIC_RELAXATION_PERIOD_SECONDS",
+        
+        # Llama.cpp Specific
+        "LLAMA_CPP_N_GPU_LAYERS",
+        "LLAMA_CPP_N_CTX",
+        "LLAMA_CPP_VERBOSE",
+        "LLAMA_WORKER_TIMEOUT",
+        
+        # Image Generation (FLUX & Refiner)
+        "IMAGE_GEN_WORKER_TIMEOUT",
+        "IMAGE_GEN_DEVICE",
+        "IMAGE_GEN_RNG_TYPE",
+        "IMAGE_GEN_N_THREADS",
+        "IMAGE_GEN_DEFAULT_SAMPLE_STEPS",
+        "IMAGE_GEN_DEFAULT_CFG_SCALE",
+        "REFINEMENT_MODEL_ENABLED",
+        "REFINEMENT_STRENGTH",
+        "REFINEMENT_CFG_SCALE",
+        "REFINEMENT_ADD_NOISE_STRENGTH",
+        
+        # StellaIcarus Hooks & Daemons
+        "ENABLE_STELLA_ICARUS_HOOKS",
+        "ENABLE_STELLA_ICARUS_DAEMON",
+        "INSTRUMENT_STREAM_RATE_HZ",
+
+        # Database Snapshots
+        "ENABLE_DB_SNAPSHOTS",
+        "DB_SNAPSHOT_INTERVAL_MINUTES",
+        "DB_SNAPSHOT_RETENTION_COUNT",
+
+        # Batch Logging
+        "LOG_BATCH_SIZE",
+        "LOG_FLUSH_INTERVAL_SECONDS"
+    ]
+    
+    for var_name in adjustable_vars:
+        if hasattr(config, var_name):
+            settings[var_name] = getattr(config, var_name)
+        else:
+            logger.warning(f"Config API: Variable '{var_name}' not found in CortexConfiguration.py")
+            
+    return settings
+
 # --- End Helpers or helper function ---
 
 
@@ -8050,7 +8169,82 @@ async def handle_interaction():
     return resp
 
 
+# === NEW: Zephy Cortex Configuration API ===
+@app.route("/ZephyCortexConfig", methods=["GET", "POST"])
+def handle_cortex_config():
+    """
+    GET: Returns the current adjustable configuration.
+    POST: Updates the configuration by writing to a .env file.
+          Requires application restart to take effect.
+    """
+    req_id = f"req-config-{uuid.uuid4()}" # Assumes uuid is imported
+    
+    if request.method == "GET":
+        logger.info(f"🚀 {req_id}: Received GET /ZephyCortexConfig")
+        try:
+            current_settings = get_current_configurable_settings()
+            return jsonify(current_settings), 200
+        except Exception as e:
+            logger.error(f"❌ {req_id}: Error fetching current config: {e}")
+            return jsonify({"error": "Failed to retrieve current configuration."}), 500
 
+    elif request.method == "POST":
+        logger.info(f"🚀 {req_id}: Received POST /ZephyCortexConfig")
+        try:
+            new_settings = request.get_json()
+            if not isinstance(new_settings, dict):
+                raise ValueError("Invalid JSON payload. Expected an object.")
+
+            # Define constraints based on your comments
+            constraints = {
+                "MEMORY_SIZE": {"type": int, "max": 20},
+                "ANSWER_SIZE_WORDS": {"type": int},
+                "TOPCAP_TOKENS": {"type": int, "max": 32768},
+                "DEFAULT_LLM_TEMPERATURE": {"type": float, "max": 1.0},
+                "RAG_FILE_INDEX_COUNT": {"type": int},
+                "FILE_INDEX_MAX_SIZE_MB": {"type": int, "max": 512},
+                "FUZZY_SEARCH_THRESHOLD": {"type": int, "max": 85},
+                "RAG_URL_COUNT": {"type": int, "max": 10},
+                # Add other constraints as needed
+            }
+
+            env_file_content = ""
+            for key, value in new_settings.items():
+                # Only process keys that are adjustable
+                if key in constraints:
+                    constraint = constraints[key]
+                    # Validate and cast type
+                    try:
+                        value = constraint["type"](value)
+                    except (ValueError, TypeError):
+                        return jsonify({"error": f"Invalid type for '{key}'. Expected {constraint['type'].__name__}."}), 400
+                    
+                    # Validate max value
+                    if "max" in constraint and value > constraint["max"]:
+                        return jsonify({"error": f"Value for '{key}' ({value}) exceeds maximum of {constraint['max']}."}), 400
+                
+                # Append to .env file content
+                env_file_content += f"{key.upper()}={value}\n"
+
+            # Write to .env file in the same directory as CortexConfiguration.py
+            env_file_path = os.path.join(MODULE_DIR, ".env")
+            with open(env_file_path, "w") as f:
+                f.write(env_file_content)
+
+            logger.success(f"✅ {req_id}: Configuration successfully written to {env_file_path}")
+            return jsonify({
+                "message": "Configuration saved successfully. A restart of the application is required for changes to take effect.",
+                "path": env_file_path
+            }), 200
+
+        except ValueError as ve:
+            logger.warning(f"{req_id}: Invalid POST request to /ZephyCortexConfig: {ve}")
+            return jsonify({"error": str(ve)}), 400
+        except Exception as e:
+            logger.error(f"❌ {req_id}: Error processing config update: {e}")
+            return jsonify({"error": "Failed to update configuration."}), 500
+
+    return jsonify({"error": "Method not allowed"}), 405
 
 # === NEW OpenAI Compatible Embeddings Route ===
 # app.py -> Flask Routes Section

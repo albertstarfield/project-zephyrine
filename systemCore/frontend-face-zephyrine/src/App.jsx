@@ -16,15 +16,20 @@ import VoiceAssistantOverlay from "./components/VoiceAssistantOverlay";
 import RedirectToNewChat from "./components/RedirectToNewChat";
 import SystemInfo from "./components/SystemInfo";
 import SplashScreen from "./components/SplashScreen";
+
 // NEW: Import PreSplashScreen
 import PreSplashScreen from "./components/PreSplashScreen";
-import ShuttleDisplay from "./components/ShuttleDisplay"; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/components/WingModePage.jsx]
 
+import ShuttleDisplay from "./components/ShuttleDisplay"; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/components/WingModePage.jsx]
+import SettingsModal from "./components/SettingsModal";
+import ThemedBackground from "./components/ThemedBackground";
 
 // Hook Imports
 import { useSystemInfo } from "./hooks/useSystemInfo";
 import { useChatHistory } from "./hooks/useChatHistory";
 import { useThemedBackground } from './hooks/useThemedBackground';
+
+
 import { useStarBackground } from './hooks/useStarBackground';
 import StarParticle from './components/StarParticle';
 import { useWingModeTransition } from './hooks/useWingModeTransition'; // [cite: uploaded:externalAnalyzer_GUI/frontend-face-zephyrine/src/hooks/useWingModeTransition.js]
@@ -52,17 +57,28 @@ const AppContent = () => {
 
   const ws = useRef(null);
 
-  const { theme } = useTheme();
-  const backgroundRef = useRef(null);
+  //const { theme } = useTheme();
+  const { theme, toggleTheme } = useTheme();
+  const [forcedTheme, setForcedTheme] = useState(theme);
+  useEffect(() => {
+      if (forcedTheme) {
+          document.documentElement.className = forcedTheme;
+      } else {
+          document.documentElement.className = theme;
+      }
+  }, [theme, forcedTheme]);
+  //const backgroundRef = useRef(null);
 
-  useThemedBackground(backgroundRef);
+  //useThemedBackground(backgroundRef);
 
-  const stars = useStarBackground();
+  //const stars = useStarBackground();
 
   // NEW: State for pre-splash screen visibility
   const [showPreSplashScreen, setShowPreSplashScreen] = useState(true);
   const [showSplashScreen, setShowSplashScreen] = useState(false); // Initial state set to false
   const [appReady, setAppReady] = useState(false);
+  const [isSettingsModalVisible, setIsSettingsModalVisible] = useState(false);
+  
 
   const isWingModeActive = useWingModeTransition(); 
 
@@ -79,6 +95,33 @@ const AppContent = () => {
     setShowSplashScreen(false);
     setAppReady(true); // Make main app content interactive
   }, []);
+
+
+  const handleSettingsClick = useCallback(() => {
+    setIsSettingsModalVisible(true);
+  }, []);
+
+  const handleCloseSettings = useCallback(() => {
+    setIsSettingsModalVisible(false);
+  }, []);
+
+  const handleApplySettings = async (newConfig) => {
+    const response = await fetch('/ZephyCortexConfig', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify(newConfig),
+    });
+    if (!response.ok) {
+      const errorData = await response.json();
+      throw new Error(errorData.message || 'Failed to apply settings');
+    }
+    return await response.json();
+  };
+
+  const handleForceThemeChange = useCallback((newTheme) => {
+    setForcedTheme(newTheme);
+  }, []);
+
 
   // useEffect to manage main splash screen animation sequence
   useEffect(() => {
@@ -117,12 +160,6 @@ const AppContent = () => {
     };
   }, [showSplashScreen]); // Depend on showSplashScreen
 
-  useEffect(() => {
-    console.log('Current App theme:', theme);
-    if (backgroundRef.current) {
-      console.log('Background container ref exists:', backgroundRef.current);
-    }
-  }, [theme, backgroundRef]);
 
   const getWsInstance = useCallback(() => ws.current, []); 
 
@@ -230,8 +267,8 @@ const AppContent = () => {
   }, [user, fetchChatHistory, setChatHistory, setIsLoadingHistory]);
 
 
-  const availableModels = [{ id: "ZephyUnifiedRoutedModel", name: "Default Model (App)" }, { id: "Zephyrine Unified fragmented Model Interface", name: "Zephyrine Unified Model" }];
-  const [selectedModel, setSelectedModel] = useState(availableModels[0]?.id || "ZephyUnifiedRoutedModel");
+  const availableModels = [{ id: "+11111111111", name: "Default Model (App)" }, { id: "Zephyrine Unified fragmented Model Interface", name: "Zephyrine Unified Model" }];
+  const [selectedModel, setSelectedModel] = useState(availableModels[0]?.id || "+11111111111");
 
   const toggleSidebar = useCallback(() => {
     setIsSidebarOpen((prev) => !prev);
@@ -279,32 +316,7 @@ const AppContent = () => {
       {/* Main SplashScreen component is now visible only when triggered */}
       {showSplashScreen && <SplashScreen isVisible={showSplashScreen} onFadeOutComplete={handleSplashScreenFadeOutComplete} />}
 
-      <div ref={backgroundRef} className="background-container">
-        {theme === 'light' && (
-          <div className="clouds">
-            <div className="cloud c1"></div>
-            <div className="cloud c2"></div>
-            <div className="cloud c3"></div>
-          </div>
-        )}
-
-        {theme === 'dark' && (
-          <div className="svg-star-background">
-            {stars.map((star) => (
-              <StarParticle
-                key={star.id}
-                id={star.id}
-                top={star.top}
-                left={star.left}
-                width={star.width}
-                height={star.height}
-                animationDelay={star.animationDelay}
-                animationDuration={star.animationDuration}
-              />
-            ))}
-          </div>
-        )}
-      </div>
+      <ThemedBackground />
 
       <div className={`sidebar-overlay ${!isSidebarOpen ? 'active' : ''}`} onClick={toggleSidebar}></div>
       
@@ -322,7 +334,7 @@ const AppContent = () => {
       }}>
         
         <div id="main">
-          <SystemOverlay systemInfo={systemInfo} />
+
           
           <div className={`main-content-area ${!isSidebarOpen ? "main-content-area--sidebar-collapsed" : ""}`}>
             <SideBar
@@ -339,8 +351,18 @@ const AppContent = () => {
               onModelChange={setSelectedModel}
               onActivateVoiceMode={toggleVoiceAssistant}
               isConnected={isConnected}
+              onSettingsClick={handleSettingsClick}
             />
             
+            <SettingsModal
+            isVisible={isSettingsModalVisible}
+            onClose={handleCloseSettings}
+            onApply={handleApplySettings}
+            //isCriticalMission={isGenerating} // Example: a critical mission is when the AI is generating a response
+            onForceThemeChange={handleForceThemeChange}
+            currentTheme={forcedTheme}
+          />
+
             <div className="chat-area-wrapper">
               <Suspense fallback={<div className="loading-screen">Loading Page...</div>}>
                 <Routes>

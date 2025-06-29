@@ -18,14 +18,14 @@ import (
 	"sync"
 	"syscall"
 	"time"
-	
+
 	"github.com/go-chi/chi/v5"
 	"github.com/go-chi/chi/v5/middleware"
 	"github.com/go-chi/cors"
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/joho/godotenv"
-	_ "modernc.org/sqlite" 
+	_ "modernc.org/sqlite"
 	"github.com/sashabaranov/go-openai"
 )
 
@@ -42,6 +42,16 @@ type Config struct {
 	DBPath              string
 	AllowedFileTypes    map[string]bool
 	LLMAPIRoot          string
+}
+
+// Define the structure for buffered messages
+type BufferedMessage struct {
+	ID        string
+	ChatID    string
+	UserID    string
+	Sender    string
+	Content   string
+	CreatedAt time.Time
 }
 
 // loadConfig loads configuration from .env file and environment variables.
@@ -103,11 +113,19 @@ func getEnv(key, fallback string) string {
 
 // App holds application-wide dependencies.
 type App struct {
-	Config          *Config
-	DB              *sql.DB
-	OpenAIClient    *openai.Client
-	PrimedState     *PrimedReadyState
+	Config            *Config
+	DB                *sql.DB
+	OpenAIClient      *openai.Client
+	PrimedState       *PrimedReadyState
 	WebsocketUpgrader websocket.Upgrader
+	DBMutex           sync.Mutex
+
+	// --- NEW: Buffer for batch writing ---
+	MessageBuffer []BufferedMessage
+	BufferMutex   sync.Mutex
+
+	ongoingStreams    map[string]context.CancelFunc
+	ongoingStreamsMux sync.Mutex
 }
 
 // PrimedReadyState simulates the readiness check.
@@ -195,7 +213,6 @@ func main() {
 	defer db.Close()
 
 	// 3. Initialize OpenAI Client
-	// Note: The go-openai client needs a specific configuration for custom base URLs.
 	openaiConfig := openai.DefaultConfig(cfg.LLMAPIKey)
 	openaiConfig.BaseURL = cfg.OpenAIAPIBaseURL
 	openaiClient := openai.NewClientWithConfig(openaiConfig)
@@ -211,17 +228,25 @@ func main() {
 		WebsocketUpgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
-			// Allow all origins for simplicity, matching the Node.js `cors()` setup.
 			CheckOrigin: func(r *http.Request) bool {
 				return true
 			},
 		},
+		MessageBuffer: make([]BufferedMessage, 0, 100), // Pre-allocate capacity
+		ongoingStreams: make(map[string]context.CancelFunc),
 	}
+
+	// Create a context that will be canceled on shutdown
+	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
+	defer stop()
+
+	// Start the background message flusher
+	go app.startMessageFlusher(ctx)
 
 	// 5. Setup Router and Middleware
 	r := chi.NewRouter()
-	r.Use(middleware.Logger)   // Log requests
-	r.Use(middleware.Recoverer) // Recover from panics
+	r.Use(middleware.Logger)
+	r.Use(middleware.Recoverer)
 	r.Use(cors.Handler(cors.Options{
 		AllowedOrigins:   []string{"*"},
 		AllowedMethods:   []string{"GET", "POST", "PUT", "DELETE", "OPTIONS"},
@@ -232,10 +257,13 @@ func main() {
 	}))
 
 	// 6. Define HTTP and WebSocket Routes
-	r.Get("/", app.handleRoot)
+	// Note: We are setting the WebSocket handler on the root path, overwriting any previous handler.
+	// This matches the original user configuration.
 	r.Get("/health", app.handleHealth)
 	r.Get("/primedready", app.handlePrimedReady)
 	r.Get("/api/instrumentviewportdatastreamlowpriopreview", app.handleInstrumentProxy)
+
+	r.HandleFunc("/ZephyCortexConfig", app.handleZephyCortexConfig)
 
 	r.Route("/api/v1", func(r chi.Router) {
 		r.Post("/images/generations", app.handleImageGeneration)
@@ -244,10 +272,8 @@ func main() {
 		r.Get("/files", app.handleFileHistory)
 	})
 
-	// The WebSocket endpoint
-	//r.Get("/ws", app.serveWs)
+	// The WebSocket endpoint, bound to the root path as in the original file.
 	r.Get("/", app.serveWs)
-
 
 	// 7. Setup and Start Server
 	srv := &http.Server{
@@ -265,34 +291,140 @@ func main() {
 	}()
 
 	// Wait for interrupt signal to gracefully shut down the server
-	quit := make(chan os.Signal, 1)
-	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
-	<-quit
+	<-ctx.Done()
 	log.Println("Shutting down server...")
 
+	// Perform a final flush before shutting down
+	log.Println("Performing final message flush to database...")
+	if err := app.flushMessagesToDB(context.Background()); err != nil {
+		log.Printf("CRITICAL: Final message flush failed: %v", err)
+	} else {
+		log.Println("Final message flush successful.")
+	}
+
 	// The context is used to inform the server it has 5 seconds to finish
-	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	if err := srv.Shutdown(ctx); err != nil {
+	if err := srv.Shutdown(shutdownCtx); err != nil {
 		log.Fatal("Server forced to shutdown:", err)
 	}
 
 	log.Println("Server exiting.")
 }
 
-// --- HTTP Handlers ---
+// startMessageFlusher runs in the background, flushing the message buffer periodically.
+func (app *App) startMessageFlusher(ctx context.Context) {
+	ticker := time.NewTicker(30 * time.Second)
+	defer ticker.Stop()
 
-func (app *App) handleRoot(w http.ResponseWriter, r *http.Request) {
-	w.Header().Set("Content-Type", "text/plain")
-	w.Write([]byte("Project Zephyrine WebSocket server is running. HTTP endpoints are available."))
+	log.Println("Background message flusher started.")
+
+	for {
+		select {
+		case <-ticker.C:
+			if err := app.flushMessagesToDB(ctx); err != nil {
+				log.Printf("ERROR during periodic message flush: %v", err)
+			}
+		case <-ctx.Done():
+			log.Println("Background message flusher stopping.")
+			return
+		}
+	}
 }
+
+func (app *App) flushMessagesToDB(ctx context.Context) error {
+	app.BufferMutex.Lock()
+	if len(app.MessageBuffer) == 0 {
+		app.BufferMutex.Unlock()
+		return nil
+	}
+
+	messagesToFlush := make([]BufferedMessage, len(app.MessageBuffer))
+	copy(messagesToFlush, app.MessageBuffer)
+	app.MessageBuffer = app.MessageBuffer[:0]
+	app.BufferMutex.Unlock()
+
+	log.Printf("Flushing %d messages to the database...", len(messagesToFlush))
+
+	return app.executeTransactionWithRetry(ctx, func(tx *sql.Tx) error {
+		stmt, err := tx.PrepareContext(ctx, "INSERT INTO messages (id, chat_id, user_id, sender, content, created_at) VALUES (?, ?, ?, ?, ?, ?)")
+		if err != nil {
+			return fmt.Errorf("failed to prepare statement: %w", err)
+		}
+		defer stmt.Close()
+
+		chatsToUpdate := make(map[string]bool)
+
+		for _, msg := range messagesToFlush {
+			_, err := stmt.ExecContext(ctx, msg.ID, msg.ChatID, msg.UserID, msg.Sender, msg.Content, msg.CreatedAt)
+			if err != nil {
+				return fmt.Errorf("failed to execute statement for message %s: %w", msg.ID, err)
+			}
+			chatsToUpdate[msg.ChatID] = true
+		}
+
+		updateStmt, err := tx.PrepareContext(ctx, "UPDATE chats SET updated_at = datetime('now', 'localtime') WHERE id = ?")
+		if err != nil {
+			return fmt.Errorf("failed to prepare update statement: %w", err)
+		}
+		defer updateStmt.Close()
+
+		for chatID := range chatsToUpdate {
+			_, err := updateStmt.ExecContext(ctx, chatID)
+			if err != nil {
+				return fmt.Errorf("failed to update timestamp for chat %s: %w", chatID, err)
+			}
+		}
+
+		return nil
+	})
+}
+
+// executeTransactionWithRetry handles potential "database is locked" errors from SQLite.
+func (app *App) executeTransactionWithRetry(ctx context.Context, fn func(tx *sql.Tx) error) error {
+	const maxRetries = 5
+	const retryDelay = 50 * time.Millisecond
+	var err error
+
+	for i := 0; i < maxRetries; i++ {
+		app.DBMutex.Lock()
+		tx, startErr := app.DB.BeginTx(ctx, nil)
+		if startErr != nil {
+			app.DBMutex.Unlock()
+			return fmt.Errorf("failed to begin transaction: %w", startErr)
+		}
+
+		err = fn(tx)
+
+		if err == nil {
+			if commitErr := tx.Commit(); commitErr == nil {
+				app.DBMutex.Unlock()
+				return nil
+			} else {
+				err = commitErr
+			}
+		}
+
+		tx.Rollback()
+		app.DBMutex.Unlock()
+
+		if strings.Contains(err.Error(), "database is locked") || strings.Contains(err.Error(), "(5)") {
+			log.Printf("Database locked, retrying transaction... (attempt %d/%d): %v", i+1, maxRetries, err)
+			time.Sleep(retryDelay * time.Duration(i+1))
+			continue
+		}
+		break
+	}
+	return fmt.Errorf("database operation failed after %d retries: %w", maxRetries, err)
+}
+
+// --- HTTP Handlers ---
 
 func (app *App) handleHealth(w http.ResponseWriter, r *http.Request) {
 	respondWithJSON(w, http.StatusOK, map[string]string{"status": "ok", "message": "HTTP and WebSocket server is healthy"})
 }
 
-// handlePrimedReady simulates the LLM readiness check.
 func (app *App) handlePrimedReady(w http.ResponseWriter, r *http.Request) {
 	const simulatedReadyTime = 60 * time.Second
 	app.PrimedState.mu.Lock()
@@ -303,7 +435,6 @@ func (app *App) handlePrimedReady(w http.ResponseWriter, r *http.Request) {
 	if elapsed >= simulatedReadyTime {
 		if !app.PrimedState.IsReady {
 			app.PrimedState.IsReady = true
-			// Simulate a benchmark result between 1 and 3 seconds
 			app.PrimedState.BenchmarkMS = 1000 + rand.Float64()*2000
 		}
 		respondWithJSON(w, http.StatusOK, map[string]interface{}{
@@ -321,20 +452,47 @@ func (app *App) handlePrimedReady(w http.ResponseWriter, r *http.Request) {
 	}
 }
 
-// handleInstrumentProxy proxies the SSE stream from the LLM.
+func (app *App) handleZephyCortexConfig(w http.ResponseWriter, r *http.Request) {
+	targetURL := app.Config.LLMAPIRoot + "/ZephyCortexConfig"
+	log.Printf("Proxying config request for %s %s to: %s", r.Method, r.URL.Path, targetURL)
+
+	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
+	if err != nil {
+		http.Error(w, fmt.Sprintf("failed to create upstream request: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	proxyReq.Header.Set("Content-Type", r.Header.Get("Content-Type"))
+	proxyReq.Header.Set("Accept", r.Header.Get("Accept"))
+
+	client := &http.Client{}
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		log.Printf("Error during proxy config request: %v", err)
+		http.Error(w, fmt.Sprintf("Backend proxy error: %v", err), http.StatusServiceUnavailable)
+		return
+	}
+	defer resp.Body.Close()
+
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
 func (app *App) handleInstrumentProxy(w http.ResponseWriter, r *http.Request) {
 	targetURL := app.Config.LLMAPIRoot + "/instrumentviewportdatastreamlowpriopreview"
 	log.Printf("Proxying SSE instrument data request to: %s", targetURL)
 
-	// Create a new request to the target URL, passing through the original context
-	// so that if the client disconnects, the upstream request is cancelled.
 	req, err := http.NewRequestWithContext(r.Context(), "GET", targetURL, nil)
 	if err != nil {
 		http.Error(w, fmt.Sprintf("failed to create upstream request: %v", err), http.StatusInternalServerError)
 		return
 	}
 
-	// Make the request to the upstream service
 	client := &http.Client{}
 	resp, err := client.Do(req)
 	if err != nil {
@@ -351,17 +509,13 @@ func (app *App) handleInstrumentProxy(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Set SSE headers for the client
 	w.Header().Set("Content-Type", "text/event-stream")
 	w.Header().Set("Cache-Control", "no-cache")
 	w.Header().Set("Connection", "keep-alive")
-	w.WriteHeader(http.StatusOK) // Flush the headers to the client
+	w.WriteHeader(http.StatusOK)
 
-	// Stream the response body directly to the client
-	// io.Copy is highly efficient for this.
 	_, err = io.Copy(w, resp.Body)
 	if err != nil && !errors.Is(err, context.Canceled) {
-		// context.Canceled happens when the client disconnects, which is expected.
 		log.Printf("Error streaming SSE data to client: %v", err)
 	}
 	log.Println("SSE stream finished or client disconnected.")
@@ -380,13 +534,11 @@ func (app *App) handleImageGeneration(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-
 	if reqBody.Prompt == "" || reqBody.UserID == "" {
 		respondWithError(w, http.StatusBadRequest, "Prompt and userId are required.")
 		return
 	}
 
-	// Call OpenAI API
 	resp, err := app.OpenAIClient.CreateImage(
 		r.Context(),
 		openai.ImageRequest{
@@ -408,7 +560,6 @@ func (app *App) handleImageGeneration(w http.ResponseWriter, r *http.Request) {
 	}
 	imageUrl := resp.Data[0].URL
 
-	// Save to DB
 	imageId := "img_" + uuid.New().String()
 	_, err = app.DB.ExecContext(r.Context(), `
 		INSERT INTO generated_images (id, user_id, prompt, image_url) VALUES (?, ?, ?, ?)
@@ -419,7 +570,6 @@ func (app *App) handleImageGeneration(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Send success response
 	type ImageData struct {
 		URL           string `json:"url"`
 		RevisedPrompt string `json:"revised_prompt"`
@@ -442,7 +592,6 @@ func (app *App) handleImageHistory(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "User ID is required to fetch image history.")
 		return
 	}
-
 	rows, err := app.DB.QueryContext(r.Context(), `
 		SELECT id, prompt, image_url, created_at FROM generated_images WHERE user_id = ? ORDER BY created_at DESC
 	`, userId)
@@ -459,7 +608,6 @@ func (app *App) handleImageHistory(w http.ResponseWriter, r *http.Request) {
 		ImageURL  string `json:"image_url"`
 		CreatedAt string `json:"created_at"`
 	}
-
 	var history []ImageHistoryItem
 	for rows.Next() {
 		var item ImageHistoryItem
@@ -470,7 +618,6 @@ func (app *App) handleImageHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		history = append(history, item)
 	}
-
 	log.Printf("[GET /api/v1/images/history] Fetched %d image history entries for user %s.", len(history), userId)
 	respondWithJSON(w, http.StatusOK, map[string]interface{}{"success": true, "data": history})
 }
@@ -481,7 +628,7 @@ type FileUploadRequest struct {
 	Filename  string `json:"filename"`
 	Filetype  string `json:"filetype"`
 	UserID    string `json:"userId"`
-	LLMFileID string `json:"llmFileId"` // Optional
+	LLMFileID string `json:"llmFileId"`
 }
 
 func (app *App) handleFileUpload(w http.ResponseWriter, r *http.Request) {
@@ -490,28 +637,22 @@ func (app *App) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "Invalid request body")
 		return
 	}
-
 	if reqBody.Filename == "" || reqBody.Filetype == "" || reqBody.UserID == "" {
 		respondWithError(w, http.StatusBadRequest, "Filename, filetype, and user ID are required.")
 		return
 	}
-
 	if !app.Config.AllowedFileTypes[reqBody.Filetype] {
 		msg := fmt.Sprintf("Unsupported file type: %s", reqBody.Filetype)
 		respondWithError(w, http.StatusUnsupportedMediaType, msg)
 		return
 	}
-
 	fileId := uuid.New().String()
 	status := "uploaded"
-
-	// Use sql.NullString for optional fields like llmFileId
 	var llmFileID sql.NullString
 	if reqBody.LLMFileID != "" {
 		llmFileID.String = reqBody.LLMFileID
 		llmFileID.Valid = true
 	}
-
 	_, err := app.DB.ExecContext(r.Context(), `
 		INSERT INTO fine_tuning_files (id, user_id, filename, filetype, status, llm_file_id) VALUES (?, ?, ?, ?, ?, ?)
 	`, fileId, reqBody.UserID, reqBody.Filename, reqBody.Filetype, status, llmFileID)
@@ -520,7 +661,6 @@ func (app *App) handleFileUpload(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusInternalServerError, "Failed to save file metadata to database.")
 		return
 	}
-
 	log.Printf("[POST /api/v1/files] File metadata %s saved to DB with ID: %s.", reqBody.Filename, fileId)
 	respondWithJSON(w, http.StatusOK, map[string]interface{}{
 		"success": true,
@@ -541,7 +681,6 @@ func (app *App) handleFileHistory(w http.ResponseWriter, r *http.Request) {
 		respondWithError(w, http.StatusBadRequest, "User ID is required to fetch file history.")
 		return
 	}
-
 	rows, err := app.DB.QueryContext(r.Context(), `
 		SELECT id, filename, filetype, status, uploaded_at, llm_file_id FROM fine_tuning_files WHERE user_id = ? ORDER BY uploaded_at DESC
 	`, userId)
@@ -553,14 +692,13 @@ func (app *App) handleFileHistory(w http.ResponseWriter, r *http.Request) {
 	defer rows.Close()
 
 	type FileHistoryItem struct {
-		ID        string         `json:"id"`
-		Filename  string         `json:"filename"`
-		Filetype  string         `json:"filetype"`
-		Status    string         `json:"status"`
-		UploadedAt string        `json:"uploaded_at"`
-		LLMFileID sql.NullString `json:"llm_file_id"`
+		ID         string         `json:"id"`
+		Filename   string         `json:"filename"`
+		Filetype   string         `json:"filetype"`
+		Status     string         `json:"status"`
+		UploadedAt string         `json:"uploaded_at"`
+		LLMFileID  sql.NullString `json:"llm_file_id"`
 	}
-
 	var history []FileHistoryItem
 	for rows.Next() {
 		var item FileHistoryItem
@@ -571,14 +709,12 @@ func (app *App) handleFileHistory(w http.ResponseWriter, r *http.Request) {
 		}
 		history = append(history, item)
 	}
-
 	log.Printf("[GET /api/v1/files] Fetched %d fine-tuning file entries for user %s.", len(history), userId)
 	respondWithJSON(w, http.StatusOK, map[string]interface{}{"success": true, "data": history})
 }
 
 // --- Helper Functions ---
 
-// respondWithJSON writes a JSON response.
 func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	response, err := json.Marshal(payload)
 	if err != nil {
@@ -592,17 +728,13 @@ func respondWithJSON(w http.ResponseWriter, code int, payload interface{}) {
 	w.Write(response)
 }
 
-// respondWithError writes a standard JSON error response.
 func respondWithError(w http.ResponseWriter, code int, message string) {
 	respondWithJSON(w, code, map[string]string{"success": "false", "message": message})
 }
 
-// sseError sends a server-sent event error message.
 func sseError(w http.ResponseWriter, message string) {
-	// The SSE format for a custom event named 'error'
 	fmt.Fprintf(w, "event: error\ndata: {\"message\": \"%s\"}\n\n", message)
 	if f, ok := w.(http.Flusher); ok {
 		f.Flush()
 	}
 }
-
