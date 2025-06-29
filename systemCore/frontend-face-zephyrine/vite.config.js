@@ -69,6 +69,7 @@ export default defineConfig({
     proxy: {
       '/api': 'http://localhost:3001', //
       '/primedready': 'http://localhost:3001', //
+      '/ZephyCortexConfig': 'http://localhost:3001'
     }
   }
 });

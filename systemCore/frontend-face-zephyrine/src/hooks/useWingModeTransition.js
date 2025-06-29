@@ -3,14 +3,27 @@ import { useState, useEffect, useRef } from 'react';
 
 // Define the cheat code sequence
 const CHEAT_CODE = "aether278unveilyourwings";
+const WING_MODE_STORAGE_KEY = "wingModeOverride";
 
 export const useWingModeTransition = () => {
-  // State to track if wing mode is active
-  const [isWingModeActive, setIsWingModeActive] = useState(false);
+  // State to track if wing mode is active, initialized from localStorage
+  const [isWingModeActive, setIsWingModeActive] = useState(() => {
+    try {
+      const storedValue = window.localStorage.getItem(WING_MODE_STORAGE_KEY);
+      return storedValue === 'true';
+    } catch (error) {
+      console.error("Could not read wing mode override from localStorage", error);
+      return false;
+    }
+  });
+
   // Ref to store the buffer of typed characters
   const keyBufferRef = useRef('');
 
   useEffect(() => {
+    // If already active from storage, no need for the keydown listener
+    if (isWingModeActive) return;
+
     const handleKeyDown = (event) => {
       // Append the pressed key to the buffer
       keyBufferRef.current += event.key.toLowerCase();
@@ -36,7 +49,7 @@ export const useWingModeTransition = () => {
     return () => {
       window.removeEventListener('keydown', handleKeyDown);
     };
-  }, []); // Empty dependency array means this effect runs once on mount
+  }, [isWingModeActive]); // Re-run effect if wing mode is deactivated
 
   return isWingModeActive;
 };

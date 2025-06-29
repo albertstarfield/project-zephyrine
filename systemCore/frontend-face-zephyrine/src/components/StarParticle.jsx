@@ -36,4 +36,5 @@ const StarParticle = ({ id, top, left, animationDelay, width, height, animationD
   );
 };
 
-export default StarParticle;
+//export default StarParticle;
+export default React.memo(StarParticle);

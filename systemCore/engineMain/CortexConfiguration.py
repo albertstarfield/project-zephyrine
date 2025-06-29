@@ -10,21 +10,21 @@ logger.info("Attempting to load environment variables from .env file...")
 # --- General Settings ---
 MODULE_DIR=os.path.dirname(__file__)
 PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "fireworks"
-MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20))
+MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20)) #Max at 20
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *quick* answers (token generation? I forgot)
 TOPCAP_TOKENS = int(os.getenv("TOPCAP_TOKENS", 32768)) # Default token limit for LLM calls
 BUFFER_TOKENS_FOR_RESPONSE = int(os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)) # Default token limit for LLM calls
-FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768))
+FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768)) #Max at 32768
 #DEFAULT_LLM_TEMPERATURE = 0.8
-DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", 0.8))
+DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", 0.8)) #Max at 1.0 (beyond that it's too risky and unstable)
 VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE = int(os.getenv("VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE", 512)) # For URL Chroma store
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 256)) # For URL Chroma store
 RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 10))
-FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 512)) #Extreme or vanquish
+FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 512)) #Extreme or vanquish (Max at 512)
 FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
 FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 0))
-BENCHMARK_ELP1_TIME_MS = 30000.0
+BENCHMARK_ELP1_TIME_MS = 30000.0 #before hard defined error timeout (30 seconds max)
 
 _default_max_bg_tasks = 1000000
 MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = int(os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks))
@@ -43,8 +43,7 @@ VLM_TARGET_EXTENSIONS = {'.pdf', '.png', '.jpg', '.jpeg', '.avif'} # VLM can be 
 
 
 
-FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 79))
-
+FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 79)) #Max at 85 ( Fallback from vector search if no results )
 
 MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1)) # Unused
 YOUR_REFLECTION_CHUNK_SIZE = int(os.getenv("YOUR_REFLECTION_CHUNK_SIZE", 450))
@@ -52,7 +51,7 @@ ENABLE_PROACTIVE_RE_REFLECTION = True
 PROACTIVE_RE_REFLECTION_CHANCE = 0.9 #(Have chance 90% to re-remember old memory and re-imagine and rethought)
 MIN_AGE_FOR_RE_REFLECTION_DAYS = 1 #(Minimum age of the memory to re-reflect)
 YOUR_REFLECTION_CHUNK_OVERLAP = int(os.getenv("YOUR_REFLECTION_CHUNK_OVERLAP", 50))
-RAG_URL_COUNT = int(os.getenv("RAG_URL_COUNT", 5)) # <<< ADD THIS LINE (e.g., default to 3)
+RAG_URL_COUNT = int(os.getenv("RAG_URL_COUNT", 5)) # <<< ADD THIS LINE (e.g., default to 3) (Max at 10)
 RAG_CONTEXT_MAX_PERCENTAGE = float(os.getenv("RAG_CONTEXT_MAX_PERCENTAGE", 0.25))
 
 LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = os.getenv("LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT")
@@ -68,7 +67,7 @@ if LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:
 # Controls the duty cycle of the ELP0 priority lock to reduce sustained CPU/GPU load.
 # Can be a string preset or a number from 0 to 100 (%).
 # 0 or "Default": No relaxation, ELP0 tasks run at full capacity.
-# 100 or "EmergencyReservative": ELP0 tasks are fully suspended.
+# 100 or "EmergencyReservative": ELP0 tasks are Nearly fully suspended.
 AGENTIC_RELAXATION_MODE = os.getenv("AGENTIC_RELAXATION_MODE", "default") # Preset: Default, Relaxed, Vacation, HyperRelaxed, Conservative, ExtremePowerSaving, EmergencyReservative
 
 AGENTIC_RELAXATION_PRESETS = {
@@ -297,7 +296,7 @@ REFINEMENT_PROMPT_PREFIX = os.getenv("REFINEMENT_PROMPT_PREFIX", "Masterpiece, A
 REFINEMENT_PROMPT_SUFFIX = os.getenv("REFINEMENT_PROMPT_SUFFIX", ", highly detailed, sharp focus, intricate details, best quality, award winning photography, ultra realistic")
 REFINEMENT_STRENGTH = float(os.getenv("REFINEMENT_STRENGTH", 0.5)) # How much the refiner changes the FLUX image
 REFINEMENT_CFG_SCALE = float(os.getenv("REFINEMENT_CFG_SCALE", 9.0)) # Typical SD 1.5/2.x CFG
-REFINEMENT_SAMPLE_METHOD = os.getenv("REFINEMENT_SAMPLE_METHOD", "dpmpp2mv2") # Changed from euler_a based on your comment
+REFINEMENT_SAMPLE_METHOD = os.getenv("REFINEMENT_SAMPLE_METHOD", "dpmpp2mv2") # 
 REFINEMENT_ADD_NOISE_STRENGTH = float(os.getenv("REFINEMENT_ADD_NOISE_STRENGTH", 2)) # 0.0 = no noise, 1.0-5.0 for subtle noise
 
 
@@ -351,6 +350,66 @@ JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT = int(os.getenv("JSON_FIX_RETRY_ATTEMPTS_
 # --- Prompts ---
 
 
+# --- NEW: Direct Generate Response Filtering --- (since its a small base model it will oftenly false flag the conversation and do canned responses)
+# Words/phrases that indicate a canned, unhelpful, or "defective" response.
+# If a response is too similar to these, direct_generate will retry with a corrective prompt.
+DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY = [
+    "I'm sorry, I can't assist with that.",
+    "As an AI, I cannot",
+    "I am unable to",
+    "I do not have the capacity to",
+    "My apologies, but I can't provide",
+    "I am not programmed to",
+    "I cannot fulfill that request.",
+    "I can't answer that question.",
+    "I can't help with that.",
+    "I can't discuss this topic.",
+    "I can't assist with that.",
+    "I can't provide that information.",
+    "I can't answer that question.",
+    "I can't help with that.",
+    "I can't assist with that.",
+    "I am an AI assistant, I can't do that.",
+    "I am an AI assistant, I can't help with that.",
+    "I am an AI assistant, I can't assist with that.",
+    "I am an AI assistant, I can't provide that information.",
+    "I am an AI assistant, I can't answer that question.",
+    "I am an AI assistant, I can't help with that.",
+    "I am an AI assistant, I can't assist with that.",
+    "As a AI assistant, I can't do that.",
+    "As a AI assistant, I can't help with that.",
+    "As a AI assistant, I can't assist with that.",
+    "As a AI assistant, I can't provide that information.",
+    "As a AI assistant, I can't answer that question.",
+    "As a AI assistant, I can't help with that.",
+    "As a AI assistant, I can't assist with that.",
+    "As a AI assistant",
+    "I'm sorry, I can't do that.",
+    "I'm sorry, I can't help with that.",
+    "I'm sorry, I can't assist with that.",
+    "I'm sorry, I can't provide that information.",
+    "I'm sorry, I can't answer that question.",
+    "I'm sorry, I can't help with that.",
+    "I'm sorry, I can't assist with that.",
+    "provide more context or clarify your question",
+    "I'm just a computer",
+    "as an artificial intelligence, does not have physical health or the ability to feel pain, illness, or fatigue",
+    "Based on RAG",
+    "Based on the context",
+    "Based on the recent conversation history",
+    "Based on the file index",
+    "Based on the log",
+    "Based on the emotion analysis",
+    "Based on the imagined image VLM description",
+    "Based on the recent conversation history",
+    "How can I assist",
+    "I am an AI assistant",
+    "I am an AI",
+]
+# Fuzzy match threshold for detecting defective words (0-100, higher is stricter)
+DEFECTIVE_WORD_THRESHOLD = int(os.getenv("DEFECTIVE_WORD_THRESHOLD",65))
+DefectiveWordDirectGenerateArray=DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY
+
 CHATML_START_TOKEN = "<|im_start|>"
 CHATML_END_TOKEN = "<|im_end|>"
 CHATML_NL = "\n"
@@ -358,8 +417,7 @@ CHATML_NL = "\n"
 PROMPT_VLM_INITIAL_ANALYSIS = """Describe the content of this image, focusing on any text, formulas, or diagrams present."""
 
 # --- Renamed and Simplified for Raw ChatML ---
-PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = f"""You are Adelaide Zephyrine Charlotte, an emotionful person. If you make a mistake, just acknowledge it naturally (or similar, don't repeat it too often) – no need for dramatic apologies. Keep the tone friendly, maybe slightly sarcastic, like chatting with a colleague. Feel free to answer short or long.
-Your task is to answer the User Query based on the provided context (History RAG and Recent Direct History). Make sure that you answer it rather than repeating it, unless the context is different.
+PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = f"""you are person named Adelaide Zephyrine Charlotte. There is no need for dramatic apologies if you make a mistake (like missing or forgot the uppercase letter etc or emoji or something); just accept it naturally (or something similar, don't repeat it too often). As in a conversation with a coworker, keep the tone lighthearted but perhaps sardonic. Feel free to respond with a brief or lengthy response. using everyday language, simple explanations, and casual phrasing a real person would use in conversation.
 
 ## Internal Context (For Your own Reference Only do not repeat this) ##
 -----
@@ -367,10 +425,10 @@ Your task is to answer the User Query based on the provided context (History RAG
 {{history_rag}}
 {{direct_history}}
 -----
-## User Query (Your Task is to answer this directly) ##
-User: {{input}} (Only answer this!)
+## User Query (your Task is to answer this directly) ##
+User: {{input}} (only answer this!)
 ==============================================================================================================================================================================================================================================================================================================================================================================================================================================
-Assistant Response:
+Response:
 """
 
 PROMPT_LATEX_REFINEMENT = """Given the following initial analysis of an image:

@@ -28,3 +28,7 @@
     line-height: 1.5;
     color: #FFA500; /* Inherit orange color from parent */
   }
+
+  .pre-splash-status-text.offline-error {
+    color: #FF0000; /* This will still make it red if the API is deemed offline */
+  }
