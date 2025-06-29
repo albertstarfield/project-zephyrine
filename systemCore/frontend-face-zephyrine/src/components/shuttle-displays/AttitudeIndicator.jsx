@@ -11,13 +11,13 @@ const toRad = (deg) => deg * (Math.PI / 180);
 const ADIScene = ({ roll, pitch, cmdRoll, cmdPitch }) => {
   const adiGroupRef = useRef(); // A single group for all rotating elements
 
-  // 1. NEW HIGH-FIDELITY SPHERE TEXTURE WITH FULL GRID
   const adiTexture = useMemo(() => {
     const size = 1024; // High resolution for sharp lines
     const canvas = document.createElement('canvas');
     canvas.width = size;
     canvas.height = size;
     const ctx = canvas.getContext('2d');
+    const center = size / 2;
 
     // --- Layer 1: Base Colors ---
     ctx.fillStyle = '#404040'; // Ground
@@ -59,44 +59,35 @@ const ADIScene = ({ roll, pitch, cmdRoll, cmdPitch }) => {
     ctx.fillText('0', size / 2, size / 2);
 
     // Main Pitch Ladder
-    for (let i = 3; i <= 90; i += 3) {
-      const y = size / 2 - (i * 8); // Scale factor for lines
-      const yDown = size / 2 + (i * 8);
-      const isMajor = i % 9 === 0;
+    for (let i = 10; i <= 90; i += 10) {
+      const yUp = center - (i * 8);
+      const yDown = center + (i * 8);
+      const isMajor = i % 30 === 0;
       const lineWidth = isMajor ? 120 : 60;
-      
+
       // Pitch Up lines (Solid)
       ctx.beginPath();
-      ctx.moveTo(size / 2 - lineWidth, y);
-      ctx.lineTo(size / 2 + lineWidth, y);
+      ctx.moveTo(center - lineWidth, yUp);
+      ctx.lineTo(center + lineWidth, yUp);
       ctx.stroke();
 
       // Pitch Down lines (Dashed)
       ctx.beginPath();
       ctx.setLineDash([20, 10]);
-      ctx.moveTo(size / 2 - lineWidth, yDown);
-      ctx.lineTo(size / 2 + lineWidth, yDown);
+      ctx.moveTo(center - lineWidth, yDown);
+      ctx.lineTo(center + lineWidth, yDown);
       ctx.stroke();
       ctx.setLineDash([]);
       
-      // Vertical Bank Ticks for the main ladder
-      if(isMajor) {
-          ctx.beginPath();
-          ctx.moveTo(size / 2 - lineWidth, y); ctx.lineTo(size/2 - lineWidth, y-20); ctx.stroke();
-          ctx.moveTo(size / 2 + lineWidth, y); ctx.lineTo(size/2 + lineWidth, y-20); ctx.stroke();
-          ctx.moveTo(size / 2 - lineWidth, yDown); ctx.lineTo(size/2 - lineWidth, yDown+20); ctx.stroke();
-          ctx.moveTo(size / 2 + lineWidth, yDown); ctx.lineTo(size/2 + lineWidth, yDown+20); ctx.stroke();
-          // Add pitch numbers
-          ctx.fillText(String(i), size / 2 - 150, y);
-          ctx.fillText(String(i), size / 2 + 150, y);
-          ctx.fillText(String(i), size / 2 - 150, yDown);
-          ctx.fillText(String(i), size / 2 + 150, yDown);
-      }
+      // Add pitch numbers
+      ctx.fillText(String(i), center - lineWidth - 40, yUp);
+      ctx.fillText(String(i), center + lineWidth + 40, yUp);
+      ctx.fillText(String(i), center - lineWidth - 40, yDown);
+      ctx.fillText(String(i), center + lineWidth + 40, yDown);
     }
     return new THREE.CanvasTexture(canvas);
   }, []);
   
-  // Magenta Roll Scale Texture (no changes needed)
   const rollScaleTexture = useMemo(() => {
     const canvas = document.createElement('canvas');
     canvas.width = 4096;
@@ -106,18 +97,18 @@ const ADIScene = ({ roll, pitch, cmdRoll, cmdPitch }) => {
     ctx.fillStyle = '#FFFFFF';
     ctx.textAlign = 'center';
     ctx.textBaseline = 'middle';
-    for(let i=0; i<360; i+=1) {
+    for(let i=0; i<360; i+=10) { // Changed step to 10 for clarity
         const x = (i / 360) * 4096;
-        if(i % 10 === 0) {
-            ctx.fillRect(x, 0, 4, 40);
-            const label = String(i / 10).padStart(2, '0');
+        const tickHeight = (i % 30 === 0) ? 40 : 20; // Major ticks are taller
+        ctx.fillRect(x, 0, 4, tickHeight);
+        
+        if (i % 30 === 0) { // Add labels only for major ticks
+            const label = String(i).padStart(2, '0');
             ctx.save();
             ctx.translate(x, 80);
             ctx.rotate(Math.PI / 2);
             ctx.fillText(label, 0, 0);
             ctx.restore();
-        } else if (i % 5 === 0) {
-            ctx.fillRect(x, 0, 2, 20);
         }
     }
     return new THREE.CanvasTexture(canvas);
@@ -179,7 +170,7 @@ const AttitudeIndicator = (props) => {
         <div className="adi-fixed-overlays">
             <div className="adi-roll-pointer">▼</div>
             <div className="bezel-border"></div> 
-            {[60, 120, 240, 300].map(angle => (
+            {[30, 60, 120, 150, 210, 240, 300, 330].map(angle => ( // Added more angles
                  <div key={angle} className="bezel-mark" style={{transform: `rotate(${angle}deg)`}}>
                     <div className="bezel-label" style={{'--angle': angle}}>{String(angle/10).padStart(2,'0')}</div>
                  </div>

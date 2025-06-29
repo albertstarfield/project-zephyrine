@@ -1,8 +1,10 @@
 import React from "react";
 import "../styles/SystemInfo.css";
+import { useSystemInfo } from "../hooks/useSystemInfo"; // 1. Import the hook
 
-const SystemInfo = ({ systemInfo }) => {
-  const {
+
+const SystemInfo = () => { // 2. Remove the systemInfo prop
+  const { // 3. Call the hook inside the component
     cpuUsage,
     cpuFree,
     cpuCount,
@@ -10,7 +12,8 @@ const SystemInfo = ({ systemInfo }) => {
     freeMem,
     totalMem,
     os,
-  } = systemInfo;
+  } = useSystemInfo();
+
 
   return (
     <div className="system-info-panel">
