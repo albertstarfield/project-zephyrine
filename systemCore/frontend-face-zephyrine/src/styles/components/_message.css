@@ -89,12 +89,12 @@
 }
 
 .message.user .message-content-container {
-  background-color: rgba(18, 18, 22, 0.5); /* Darker user bubble */
+  background-color: rgba(148, 173, 179, 0.035); /* Darker user bubble */
   color: var(--user-message-text-color, #E0E0E0);
 }
 
 .message.assistant .message-content-container {
-  background-color: rgba(46, 46, 51, 0.6); /* Dark assistant bubble */
+  background-color: rgba(149, 132, 112, 0.084); /* Dark assistant bubble */
   color: var(--assistant-message-text-color, #E0E0E0);
 }
 

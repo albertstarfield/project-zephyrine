@@ -181,7 +181,10 @@ func (app *App) wsChat(ctx context.Context, conn *websocket.Conn, payload json.R
 	for {
 		response, err := stream.Recv()
 		if errors.Is(err, io.EOF) {
-			sendWsMessage(conn, "end", nil)
+			// Add the ID to the "end" message
+			sendWsMessage(conn, "end", map[string]string{
+				"optimisticMessageId": p.OptimisticMessageID,
+			})
 			break
 		}
 		if err != nil {
@@ -196,7 +199,11 @@ func (app *App) wsChat(ctx context.Context, conn *websocket.Conn, payload json.R
 		content := response.Choices[0].Delta.Content
 		if content != "" {
 			fullResponse.WriteString(content)
-			sendWsMessage(conn, "chunk", map[string]string{"content": content})
+			// Add the ID to every "chunk" message
+			sendWsMessage(conn, "chunk", map[string]string{
+				"content":             content,
+				"optimisticMessageId": p.OptimisticMessageID,
+			})
 		}
 	}
 
