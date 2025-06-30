@@ -34,6 +34,7 @@ function ChatPage({
   const accumulatedContentRef = useRef("");
   const isConnected = useRef(false);
   const streamingStartTimeRef = useRef(0);
+  const latestRequestRef = useRef(null); // <-- Add this line
 
   useEffect(() => {
     setIsLoadingHistory(true);
@@ -127,6 +128,11 @@ function ChatPage({
     try {
       const message = JSON.parse(data);
 
+      if ((message.type === 'chunk' || message.type === 'end') && message.payload.optimisticMessageId !== latestRequestRef.current) {
+        // This message is from an old, cancelled stream. Ignore it completely.
+        return; 
+      }
+
       switch (message.type) {
         case "chat_history":
             if (message.payload.chatId === chatId) {
@@ -164,6 +170,8 @@ function ChatPage({
           if (elapsedTime > 0) {
             tokensPerSecond = (currentChars / elapsedTime) * 1000;
           }
+
+          
 
           const currentContent = accumulatedContentRef.current;
           const hasOpenThink = currentContent.includes("<think>") && !currentContent.includes("</think>");
@@ -382,6 +390,8 @@ function ChatPage({
       status: 'sending',
     };
 
+    latestRequestRef.current = optimisticUserMessage.id;
+
     const baseMessages = isRegeneration
       ? messages.slice(0, messages.findLastIndex(m => m.sender === 'assistant'))
       : messages;
@@ -416,8 +426,9 @@ function ChatPage({
   // --- END: Reordered Functions ---
 
   const handleSendMessage = () => {
-    // Basic guard to prevent sending empty messages or sending while the AI is busy.
-    if (!inputValue.trim() || isGenerating) return;
+    // The guard should ONLY prevent sending empty messages.
+    // The sendMessageOrRegenerate function will handle the isGenerating logic.
+    if (!inputValue.trim() && !fileData) return;
     sendMessageOrRegenerate(inputValue, false);
   };
 
