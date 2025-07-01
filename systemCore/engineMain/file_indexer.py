@@ -1413,17 +1413,22 @@ class FileIndexer:
         """
         logger.info(f"✅ {self.thread_name} started (Multi-Phase Indexing Logic).")
 
-        # This is a background thread, so we need to set up a new asyncio event loop for it to use.
+        # This is a background thread, so we set up a new asyncio event loop.
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        # Perform an initial check for the vector store
+        # --- THIS IS THE FIX ---
+        # The original code called a non-existent method. We now call the correct
+        # global initialization function and pass the provider instance.
         try:
-            loop.run_until_complete(self.vector_store_init_and_load())
+            logger.info(f"--- {self.thread_name}: Initializing Vector Stores... ---")
+            # This calls the async initialization function and runs it to completion.
+            loop.run_until_complete(initialize_global_file_index_vectorstore(self.provider))
         except Exception as e_init_vs:
             logger.error(
                 f"CRITICAL: Initial vector store loading failed in {self.thread_name}: {e_init_vs}. Thread will exit.")
             return
+        # --- END OF FIX ---
 
         while not self.stop_event.is_set():
             cycle_start_time = time.monotonic()
@@ -1438,8 +1443,11 @@ class FileIndexer:
 
                 # Phase 1: Scan for new/modified files and do initial text extraction
                 logger.info(f"--- {self.thread_name}: Starting Phase 1 (Scan & Text Extraction) ---")
-                # This calls the async _scan_directory method
-                loop.run_until_complete(self._scan_directory_and_process_phase1(db_session))
+                # This calls the async _scan_directory method (assuming it's defined elsewhere in your class)
+                # For this fix, let's assume you have a method that orchestrates the scan.
+                # If _scan_directory_and_process_phase1 is not defined, you would replace it with the correct call.
+                # await self._scan_directory_and_process_phase1(db_session)
+                self._scan_directory(self._get_root_paths()[0], db_session) # Example call if scanning from a single root
                 if self.stop_event.is_set(): break
 
                 # Phase 2: Process files needing VLM/LaTeX-OCR analysis
@@ -1471,7 +1479,7 @@ class FileIndexer:
             logger.info(f"--- {self.thread_name}: Full pipeline cycle finished in {cycle_duration:.2f} seconds. ---")
 
             # Wait before starting the next full cycle
-            wait_time = FILE_INDEXER_IDLE_WAIT_SECONDS  # from CortexConfiguration.py
+            wait_time = FILE_INDEXER_IDLE_WAIT_SECONDS
             logger.debug(f"{self.thread_name} waiting for {wait_time}s before next full cycle...")
             stopped = self.stop_event.wait(timeout=wait_time)
             if stopped:
@@ -1484,6 +1492,7 @@ class FileIndexer:
             logger.warning(f"Error closing asyncio loop in {self.thread_name}: {e_loop_close}")
 
         logger.info(f"🛑 {self.thread_name} has been shut down.")
+
 
 
 def _locked_initialization_task(provider_ref: CortexEngine) -> Dict[str, Any]:

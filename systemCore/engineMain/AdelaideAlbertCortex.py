@@ -1148,7 +1148,7 @@ class CortexThoughts:
         logger.debug("Setting up CortexThoughts prompt templates...")
         self.text_prompt_template = ChatPromptTemplate.from_messages(
             [
-                ("system", PROMPT_CHAT), # Expects various context keys
+                ("system", PROMPT_BACKGROUND_MULTISTAGE_GRINDING), # Expects various context keys
                 ("human", "{input}")
             ]
         )
