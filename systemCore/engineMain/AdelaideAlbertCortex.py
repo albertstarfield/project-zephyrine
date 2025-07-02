@@ -105,6 +105,7 @@ from sqlalchemy.sql import func
 
 # --- Flask Imports ---
 from flask import Flask, request, Response, g, jsonify # Use Flask imports
+from flask import stream_with_context
 from flask_cors import CORS
 
 try:
@@ -129,6 +130,15 @@ from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # --- END PROVIDER IMPORTS ---
+
+# --- XMPP Imports ---
+import aioxmpp
+import aioxmpp.service
+import aioxmpp.chatstates
+from aioxmpp import stanza as Stanza
+from aioxmpp import JID, Message
+import slixmpp
+
 
 
 # --- Fuzzy Search Imports ---
@@ -646,10 +656,11 @@ def shutdown_app_services():
     logger.info("--- Orchestrating graceful shutdown of all background services... ---")
 
     # 1. Stop the provider's internal threads first (like the relaxation thread)
-    if cortex_backbone_provider and hasattr(cortex_backbone_provider, '_priority_quota_lock'):
+    if 'cortex_backbone_provider' in globals() and cortex_backbone_provider and hasattr(cortex_backbone_provider, '_priority_quota_lock'):
         if hasattr(cortex_backbone_provider._priority_quota_lock, 'shutdown_relaxation_thread'):
             logger.info("Shutting down AgenticRelaxationThread...")
             cortex_backbone_provider._priority_quota_lock.shutdown_relaxation_thread()
+
 
     # 2. Stop the StellaIcarus Ada Daemons
     if 'stella_icarus_daemon_manager' in globals() and stella_icarus_daemon_manager:
@@ -660,6 +671,7 @@ def shutdown_app_services():
     logger.info("Shutting down Self Reflector and File Indexer...")
     stop_self_reflector()
     stop_file_indexer()
+
 
     # The database log writer and compression hooks registered with atexit elsewhere will run after this.
     logger.info("--- Graceful shutdown sequence initiated. ---")
@@ -6722,6 +6734,9 @@ def download_content_sync(url: str, download_dir: str, filename_prefix: str, tim
         logger.exception("Download Unexpected Error Traceback:") # Log full traceback for unexpected errors
         return False
 
+# --- Global SSE Notification Queue ---
+# A thread-safe queue to hold messages that need to be pushed to the client.
+sse_notification_queue = queue.Queue()
 # Helper to format SSE data (can be reused)
 def format_sse(data: Dict[str, Any], event_type: Optional[str] = None) -> str:
     """Formats data as a Server-Sent Event string."""
@@ -6731,6 +6746,13 @@ def format_sse(data: Dict[str, Any], event_type: Optional[str] = None) -> str:
         sse_string = f"event: {event_type}\n{sse_string}"
     return sse_string + "\n"
 
+
+def format_sse_notification(data: dict, event: str = None) -> str:
+    """Formats a dictionary into a Server-Sent Event string for the notification stream."""
+    msg = f"data: {json.dumps(data)}\n"
+    if event:
+        msg = f"event: {event}\n{msg}"
+    return f"{msg}\n"
 
 
 # --- OpenAI Response Formatting Helpers ---
@@ -7923,29 +7945,77 @@ def get_current_configurable_settings():
             
     return settings
 
-# --- End Helpers or helper function ---
 
+async def _run_proactive_sse_push_loop():
+    """
+    A background loop that has a random chance to revisit old conversations
+    and PUSHES the thought into the global SSE queue.
+    """
+    if not ENABLE_SSE_NOTIFICATIONS:
+        logger.info("Proactive SSE push loop is disabled by configuration.")
+        return
 
-# === Global AI Instances ===
-ai_agent: Optional[AmaryllisAgent] = None
-cortex_backbone_provider: Optional[CortexEngine] = None # Defined globally
-ai_chat: Optional[CortexThoughts] = None # Define ai_chat globally too
+    logger.info("💡 Proactive SSE push loop started (Two-Step Recall Logic).")
+    while True:
+        try:
+            logger.info(f"💡 awaiting {PROACTIVE_MESSAGE_CYCLE_SECONDS} seconds")
+            await asyncio.sleep(PROACTIVE_MESSAGE_CYCLE_SECONDS)
+            logger.info(f"💡 Proactive SSE wait passed")
 
-try:
-    cortex_backbone_provider = CortexEngine(PROVIDER) # <<< cortex_backbone_provider is initialized here
-    global_cortex_backbone_provider_ref = cortex_backbone_provider
-    ai_chat = CortexThoughts(cortex_backbone_provider)
-    AGENT_CWD = os.path.dirname(os.path.abspath(__file__))
-    SUPPORTS_COMPUTER_USE = True # Or determine dynamically
-    ai_agent = AmaryllisAgent(cortex_backbone_provider, AGENT_CWD, SUPPORTS_COMPUTER_USE)
-    logger.success("✅ AI Instances Initialized.")
-except Exception as e:
-    logger.critical(f"🔥🔥 Failed AI init: {e}")
-    logger.exception("AI Init Traceback:")
-    # Ensure cortex_backbone_provider is None if init fails
-    cortex_backbone_provider = None # <<< Add this line
-    sys.exit(1)
+            # Using 'if True' for testing as requested
+            if True:
+                logger.info("💡 Proactive message chance MET. Finding an old interaction to evaluate...")
+                db = SessionLocal()
+                try:
+                    past_interaction = db.query(Interaction).filter(
+                        Interaction.input_type == 'text',
+                        Interaction.user_input.isnot(None),
+                        Interaction.llm_response.isnot(None)
+                    ).order_by(func.random()).first()
 
+                    if not past_interaction:
+                        continue
+
+                    decision_chain = ChatPromptTemplate.from_template(PROMPT_XMPP_SHOULD_I_RECALL) | ai_chat.provider.get_model("general_fast") | StrOutputParser()
+                    decision = await asyncio.to_thread(decision_chain.invoke, {
+                        "past_user_input": past_interaction.user_input,
+                        "past_ai_response": past_interaction.llm_response
+                    })
+                    
+                    if "yes" in decision.lower():
+                        revisit_prompt = PROMPT_XMPP_PROACTIVE_REVISIT.format(
+                            past_user_input=past_interaction.user_input,
+                            past_ai_response=past_interaction.llm_response
+                        )
+                        proactive_message = await ai_chat.direct_generate(db, revisit_prompt, "proactive_thought_session")
+                        
+                        is_logical = True
+                        for bad_phrase in XMPP_PROACTIVE_BAD_RESPONSE_MARKERS:
+                            if fuzz.partial_ratio(bad_phrase.lower(), proactive_message.lower()) > 85:
+                                is_logical = False
+                                break
+                        
+                        if proactive_message and is_logical:
+                            logger.info(f"💡 Pushing proactive message to SSE queue: '{proactive_message[:70]}...'")
+                            
+                            sse_event = format_sse_notification(
+                                data={"message": proactive_message, "source_interaction_id": past_interaction.id},
+                                event_type="proactive_thought"
+                            )
+                            sse_notification_queue.put(sse_event)
+                            
+                            add_interaction(db, session_id=f"proactive_sse", mode="proactive_event",
+                                            input_type="proactive_message",
+                                            user_input=f"[REVISITING ID: {past_interaction.id}]",
+                                            llm_response=proactive_message)
+                            db.commit()
+                finally:
+                    db.close()
+        except asyncio.CancelledError:
+            logger.info("Proactive SSE push loop cancelled.")
+            break
+        except Exception as e:
+            logger.error(f"Error in proactive SSE push loop: {e}")
 
 def _create_personal_assistant_stub_response(endpoint_name: str, method: str, resource_id: Optional[str] = None, custom_status: str = "not_applicable_personal_assistant"):
     """
@@ -8542,6 +8612,30 @@ def handle_legacy_completions():
         resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
 
     return resp
+
+# --- NEW: SSE Notification Endpoint ---
+@app.route("/v1/stream/notifications")
+def sse_notification_stream():
+    """
+    This endpoint streams notifications to the client using SSE.
+    """
+    logger.info("SSE Client connected to notification stream.")
+    def generate():
+        try:
+            yield format_sse_notification({"status": "connected"}, event="connection_ack")
+            while True:
+                try:
+                    message = sse_notification_queue.get(timeout=30)
+                    if message is None:
+                        break
+                    yield message
+                except queue.Empty:
+                    yield ": keep-alive\n\n"
+        except GeneratorExit:
+            logger.warning("SSE notification stream generator exited (client likely disconnected).")
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
 
 @app.route("/v1/chat/completions", methods=["POST"])
 @app.route("/api/chat", methods=["POST"]) # <<< ADD THIS LINE
@@ -11353,6 +11447,13 @@ async def startup_tasks():
     else:
         logger.info("APP.PY: startup_tasks: Self Reflection and its Vector Store are DISABLED by config.")
 
+    logger.info("Starting up SSE Notification Push Loop Component Thread...")
+    if 'ENABLE_SSE_NOTIFICATIONS' in globals() and ENABLE_SSE_NOTIFICATIONS:
+        logger.info("Scheduling proactive SSE push loop on the main event loop...")
+        asyncio.create_task(_run_proactive_sse_push_loop())
+    else:
+        logger.info("Proactive SSE notifications disabled by configuration.")
+    
     task_duration = time.monotonic() - task_start_time
     logger.info(f"APP.PY: >>> Exiting startup_tasks (async). Total Duration: {task_duration:.2f}s <<<")
 

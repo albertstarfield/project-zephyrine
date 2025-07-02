@@ -9,6 +9,7 @@ logger.info("Attempting to load environment variables from .env file...")
 
 # --- General Settings ---
 MODULE_DIR=os.path.dirname(__file__)
+ROOT_DIR=MODULE_DIR
 PROVIDER = os.getenv("PROVIDER", "llama_cpp") # llama_cpp or "ollama" or "fireworks"
 MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20)) #Max at 20
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *quick* answers (token generation? I forgot)
@@ -300,7 +301,7 @@ REFINEMENT_SAMPLE_METHOD = os.getenv("REFINEMENT_SAMPLE_METHOD", "dpmpp2mv2") #
 REFINEMENT_ADD_NOISE_STRENGTH = float(os.getenv("REFINEMENT_ADD_NOISE_STRENGTH", 2)) # 0.0 = no noise, 1.0-5.0 for subtle noise
 
 
-# --- END NEW ---
+
 
 #DOC EXTENSION To be scanned?
 
@@ -410,6 +411,37 @@ DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY = [
 DEFECTIVE_WORD_THRESHOLD = int(os.getenv("DEFECTIVE_WORD_THRESHOLD",65))
 DefectiveWordDirectGenerateArray=DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY
 
+# --- XMPP Interaction Proactive Zephyrine ---
+# --- XMPP Real-Time Interaction Settings (Server Mode) ---
+ENABLE_XMPP_INTEGRATION = os.getenv("ENABLE_XMPP_INTEGRATION", "true").lower() in ('true', '1', 't')
+
+# Server component settings
+XMPP_COMPONENT_JID = os.getenv("XMPP_COMPONENT_JID", "zephy.localhost") # e.g., a subdomain for your bot
+XMPP_COMPONENT_SECRET = os.getenv("XMPP_COMPONENT_SECRET", "a_very_strong_secret_for_local_use")
+XMPP_SERVER_HOST = os.getenv("XMPP_SERVER_HOST", "127.0.0.1") # The IP of the XMPP server Zephy will connect to
+XMPP_SERVER_PORT = int(os.getenv("XMPP_SERVER_PORT", 5269)) # Standard component port
+
+# User JID that Zephy will interact with
+XMPP_RECIPIENT_JID = os.getenv("XMPP_RECIPIENT_JID", "albert@localhost")
+
+
+ENABLE_SSE_NOTIFICATIONS = os.getenv("ENABLE_SSE_NOTIFICATIONS", "true").lower() in ('true', '1', 't')
+# How often the proactive loop checks if it should send a message (in seconds).
+PROACTIVE_MESSAGE_CYCLE_SECONDS = int(os.getenv("PROACTIVE_MESSAGE_CYCLE_SECONDS", 30)) # 5 minutes
+# Chance (0.0 to 1.0) for Zephy to proactively send a message.
+PROACTIVE_MESSAGE_CHANCE = float(os.getenv("PROACTIVE_MESSAGE_CHANCE", 0.99)) # 99% chance per cycle
+
+# --- NEW: List of "bad" or "canned" responses to filter from proactive messages ---
+XMPP_PROACTIVE_BAD_RESPONSE_MARKERS = [
+    "I'm not sure",
+    "I cannot answer",
+    "I do not have enough information",
+    "That's an interesting question",
+    "As an AI language model"
+]
+
+## --- Parameters CONFIGURATION END ---
+
 CHATML_START_TOKEN = "<|im_start|>"
 CHATML_END_TOKEN = "<|im_end|>"
 CHATML_NL = "\n"
@@ -429,6 +461,31 @@ PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = f"""you are person named Adelaide Zephyr
 User: {{input}} (only answer this!)
 ==============================================================================================================================================================================================================================================================================================================================================================================================================================================
 Response:
+"""
+
+
+# --- Prompts for XMPP Proactive Logic ---
+PROMPT_XMPP_SHOULD_I_RECALL = """Analyze the following past conversation snippet. Is this topic interesting, deep, or unresolved enough to be worth revisiting with a new thought or follow-up question?
+Respond ONLY with the word "YES" or "NO".
+
+--- Past Interaction ---
+User: {past_user_input}
+AI: {past_ai_response}
+---
+
+Is this worth recalling? (YES/NO):
+"""
+
+PROMPT_XMPP_PROACTIVE_REVISIT = """You are Adelaide Zephyrine Charlotte. You are reviewing a past conversation and a new, related thought or question has occurred to you.
+
+Based on the previous interaction below, generate a single, short, and natural follow-up message to send to the user. It should sound like you've just remembered something or had a new idea. Do not be overly formal.
+
+--- Past Interaction Context ---
+User said: {past_user_input}
+You replied: {past_ai_response}
+---
+
+Your new, proactive message (output only the message text):
 """
 
 PROMPT_LATEX_REFINEMENT = """Given the following initial analysis of an image:
