@@ -79,7 +79,7 @@ pix2tex = None
 
 # Database imports
 try:
-    from database import SessionLocal, FileIndex, add_interaction, init_db # Import add_interaction if logging indexer status
+    from database import SessionLocal, FileIndex, add_interaction, init_db, IndexStatusEnum # Import add_interaction if logging indexer status
     from sqlalchemy import update, select
     from sqlalchemy.exc import SQLAlchemyError
 except ImportError:
@@ -862,6 +862,79 @@ class FileIndexer:
             logger.warning(
                 f"⏹️ Phase 1 Scan for {root_path} interrupted. Processed in this root-cycle: {total_processed_this_root_scan}, Errors: {total_errors_this_root_scan}")
 
+    async def _embed_and_store(self, record: FileIndex, text_to_embed: str, db_session: Session, is_final_embedding: bool):
+        """
+        Handles the core logic of chunking, embedding, and storing vectors in ChromaDB.
+        This is now called by both Phase 1 (for initial text) and Phase 2 (for enriched text).
+        """
+        log_prefix = f"Embed|ID:{record.id}"
+        
+        if not self.embedding_model:
+            logger.error(f"{log_prefix}: Embedding model not available. Cannot proceed.")
+            record.index_status = IndexStatusEnum.error_embedding
+            record.processing_error = "Embedding model not configured."
+            db_session.commit()
+            return
+
+        if not text_to_embed:
+            logger.warning(f"{log_prefix}: No text content provided to embed. Marking as indexed_meta.")
+            record.index_status = IndexStatusEnum.indexed_meta
+            db_session.commit()
+            return
+            
+        try:
+            # Chunk the text
+            chunks = self.text_splitter.split_text(text_to_embed)
+            if not chunks: raise ValueError("Text splitter produced no chunks.")
+            
+            # Embed the chunks (as a background task)
+            chunk_embeddings = await asyncio.to_thread(
+                self.embedding_model.embed_documents, chunks, priority=ELP0
+            )
+            if not chunk_embeddings or len(chunk_embeddings) != len(chunks):
+                raise ValueError("Embedding model returned empty or mismatched vectors.")
+
+            # Update ChromaDB
+            global_file_vs = get_global_file_index_vectorstore()
+            if not global_file_vs:
+                raise RuntimeError("Global file vector store is not available for updating.")
+            
+            # Always delete old entries for this file_id to ensure atomicity
+            await asyncio.to_thread(global_file_vs.delete, where={"file_id": record.id})
+
+            chunk_ids = [f"file_{record.id}_chunk_{i}" for i in range(len(chunks))]
+            chunk_metadatas = [{
+                "file_id": record.id,
+                "file_path": record.file_path,
+                "file_name": record.file_name,
+                "chunk_index": i,
+                "is_final_vlm": is_final_embedding # Add flag for search-time filtering if needed
+            } for i in range(len(chunks))]
+
+            await asyncio.to_thread(
+                global_file_vs.add_embeddings,
+                embeddings=chunk_embeddings,
+                metadatas=chunk_metadatas,
+                ids=chunk_ids
+            )
+            
+            # Update the record's final status in the database
+            record.index_status = IndexStatusEnum.indexed_complete if is_final_embedding else IndexStatusEnum.indexed_text
+            record.processing_error = None # Clear previous errors
+            logger.success(f"✅ {log_prefix}: Successfully embedded {len(chunks)} chunks. Final Status: {record.index_status.value}")
+
+        except TaskInterruptedException as tie:
+            logger.warning(f"🚦 {log_prefix}: Embedding INTERRUPTED: {tie}. Status will remain pending.")
+            # Keep status as 'pending_embedding' to allow retry
+            record.index_status = IndexStatusEnum.pending_embedding
+        except Exception as e:
+            logger.error(f"❌ {log_prefix}: Failed to embed or update vector store: {e}", exc_info=True)
+            record.index_status = IndexStatusEnum.error_embedding
+            record.processing_error = f"Embedding/Chroma update failed: {str(e)[:255]}"
+        
+        finally:
+            db_session.commit()
+
     async def _embed_and_update_vector_store(self, record: FileIndex, db_session: Session):
         """
         Takes a FileIndex record, combines its text fields, chunks, embeds,
@@ -1029,94 +1102,154 @@ class FileIndexer:
             logger.error(f"{log_prefix}: Failed to extract text from Office file '{file_path}': {e}")
             return f"[Error extracting text from Office file: {e}]"
 
-    def _process_file_phase1(self, file_path: str, db_session: Session):
+    async def _process_file_phase1(self, file_path: str, db_session: Session):
         """
-        Phase 1: Gets metadata, hash, and extracts raw text/OCR.
-        Saves text to DB and marks file for embedding or VLM processing.
-        DOES NOT generate embeddings itself.
+        Phase 1: Gets metadata, hash, extracts text, AND performs an
+        initial text-only embedding to make the file searchable immediately.
+        This version is fully self-contained and handles errors gracefully.
         """
-        if self.stop_event.is_set(): return
+        if self.stop_event.is_set():
+            return
         log_prefix = f"P1-File|{os.path.basename(file_path)[:20]}"
 
         try:
-            file_metadata = self._get_file_metadata(file_path)
-            file_size = file_metadata.get('size_bytes')
-            if file_size is None: raise OSError("Could not retrieve file metadata.")
-            if file_size > FILE_INDEX_MAX_SIZE_MB * 1024 * 1024: return
-            if file_size < FILE_INDEX_MIN_SIZE_KB * 1024: return
-        except OSError as e_stat:
-            logger.warning(f"{log_prefix}: Stat failed: {e_stat}. Skipping.")
-            return
+            # Step 1: Initial file validation and metadata gathering
+            # =======================================================
+            try:
+                if not os.path.exists(file_path) or not os.path.isfile(file_path):
+                    logger.debug(f"{log_prefix}: Path does not exist or is not a file. Skipping.")
+                    return
 
-        if self._wait_if_server_busy(): return
+                file_metadata = self._get_file_metadata(file_path)
+                file_size = file_metadata.get('size_bytes')
 
-        current_md5 = self._calculate_md5(file_path, file_size)
-        if not current_md5 and file_size <= MAX_HASH_FILE_SIZE_BYTES:
-            logger.warning(f"{log_prefix}: MD5 failed for hashable file, skipping.")
-            return
+                if file_size is None:
+                    raise PermissionError("Could not retrieve file metadata, likely a permission issue.")
+                if file_size > FILE_INDEX_MAX_SIZE_MB * 1024 * 1024:
+                    return
+                if file_size < FILE_INDEX_MIN_SIZE_KB * 1024:
+                    return
 
-        existing_record = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
-        values_to_update: Dict[str, Any] = {'md5_hash': current_md5}
+            except (OSError, PermissionError) as e_stat:
+                logger.warning(f"{log_prefix}: Stat failed or permission denied: {e_stat}. Logging error and skipping file.")
+                # Log a specific error status to the DB and stop processing this file
+                existing_rec = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
+                if not existing_rec:
+                    err_record = FileIndex(
+                        file_path=file_path, file_name=os.path.basename(file_path),
+                        index_status=IndexStatusEnum.error_permission,
+                        processing_error=f"Initial file access/stat failed: {e_stat}"
+                    )
+                    db_session.add(err_record)
+                    db_session.commit()
+                return
 
-        needs_processing = False
-        if not existing_record:
-            needs_processing = True
-            logger.info(f"-> {log_prefix}: New file detected.")
-        else:
-            mtime_os_check = file_metadata.get('last_modified_os')
-            hashes_match = (current_md5 is not None and existing_record.md5_hash == current_md5)
-            large_file_is_unchanged = (
-                        current_md5 is None and existing_record.md5_hash is None and existing_record.size_bytes == file_size and mtime_os_check and existing_record.last_modified_os and mtime_os_check <= existing_record.last_modified_os)
-            if hashes_match or large_file_is_unchanged:
-                if not existing_record.indexed_content and not existing_record.index_status == 'error_read':
-                    needs_processing = True
-                    logger.info(f"-> {log_prefix}: Unchanged file is missing text content. Re-processing.")
-                else:
-                    logger.trace(f"{log_prefix}: Unchanged and already processed. Skipping."); return
-            else:
+            if self._wait_if_server_busy():
+                return
+
+            # Step 2: Check for modifications using MD5 hash
+            # =================================================
+            current_md5 = self._calculate_md5(file_path, file_size)
+            if not current_md5 and file_size <= MAX_HASH_FILE_SIZE_BYTES:
+                logger.warning(f"{log_prefix}: MD5 calculation failed for a hashable file size. Skipping.")
+                return
+
+            existing_record = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
+            values_to_update: Dict[str, Any] = {'md5_hash': current_md5}
+            values_to_update.update(file_metadata)
+
+            needs_processing = False
+            if not existing_record:
                 needs_processing = True
-                logger.info(f"-> {log_prefix}: File modified. Re-processing.")
-
-        if needs_processing:
-            content: Optional[str] = None
-            file_ext = os.path.splitext(file_path)[1].lower()
-
-            if file_ext in OCR_TARGET_EXTENSIONS:
-                content = self._extract_text_with_ocr_fallback(file_path, file_ext)
-                if file_ext in VLM_TARGET_EXTENSIONS:
-                    values_to_update['vlm_processing_status'] = 'pending_vlm'
-                    values_to_update['index_status'] = 'pending_embedding'  # Will be embedded after VLM
+                logger.info(f"-> {log_prefix}: New file detected.")
+            else:
+                mtime_os_check = file_metadata.get('last_modified_os')
+                hashes_match = (current_md5 is not None and existing_record.md5_hash == current_md5)
+                large_file_is_unchanged = (
+                    current_md5 is None and existing_record.md5_hash is None and
+                    existing_record.size_bytes == file_size and
+                    mtime_os_check and existing_record.last_modified_os and
+                    mtime_os_check <= existing_record.last_modified_os
+                )
+                if hashes_match or large_file_is_unchanged:
+                    if not existing_record.indexed_content and existing_record.index_status not in [IndexStatusEnum.error_read, IndexStatusEnum.error_permission, IndexStatusEnum.skipped_type]:
+                        needs_processing = True
+                        logger.info(f"-> {log_prefix}: Unchanged file is missing text content. Re-processing.")
+                    else:
+                        logger.trace(f"{log_prefix}: Unchanged and already processed. Skipping.")
+                        return
                 else:
-                    values_to_update['index_status'] = 'pending_embedding'  # OCR-only images go straight to embedding
-            elif file_ext in TEXT_EXTENSIONS:
-                content = self._extract_text(file_path, file_size)
-                values_to_update['index_status'] = 'pending_embedding'
-            elif file_ext in OFFICE_EXTENSIONS:
-                content = self._extract_office_text(file_path)
-                if file_ext in VLM_TARGET_EXTENSIONS:
-                    values_to_update['vlm_processing_status'] = 'pending_vlm'
-                    values_to_update['index_status'] = 'pending_embedding'  # Will be embedded after VLM
+                    needs_processing = True
+                    logger.info(f"-> {log_prefix}: File modified. Re-processing.")
+
+            # Step 3: Extract Text and Set Initial Status
+            # ===============================================
+            if needs_processing:
+                content: Optional[str] = None
+                file_ext = os.path.splitext(file_path)[1].lower()
+
+                try:
+                    if file_ext in OCR_TARGET_EXTENSIONS:
+                        content = self._extract_text_with_ocr_fallback(file_path, file_ext)
+                        if file_ext in VLM_TARGET_EXTENSIONS:
+                            values_to_update['vlm_processing_status'] = 'pending_vlm'
+                        values_to_update['index_status'] = IndexStatusEnum.pending_embedding
+                    elif file_ext in TEXT_EXTENSIONS:
+                        content = self._extract_text(file_path, file_size)
+                        values_to_update['index_status'] = IndexStatusEnum.pending_embedding
+                    elif file_ext in OFFICE_EXTENSIONS:
+                        content = self._extract_office_text(file_path)
+                        if file_ext in VLM_TARGET_EXTENSIONS:
+                            values_to_update['vlm_processing_status'] = 'pending_vlm'
+                        values_to_update['index_status'] = IndexStatusEnum.pending_embedding
+                    else:
+                        values_to_update['index_status'] = IndexStatusEnum.skipped_type
+
+                except PermissionError:
+                    logger.warning(f"{log_prefix} Permission denied during text extraction.")
+                    values_to_update['index_status'] = IndexStatusEnum.error_permission
+                    values_to_update['processing_error'] = "Permission denied during text extraction."
+                except Exception as e_extract:
+                    logger.error(f"{log_prefix} Error during text extraction: {e_extract}", exc_info=True)
+                    values_to_update['index_status'] = IndexStatusEnum.error_read
+                    values_to_update['processing_error'] = f"Text extraction failed: {str(e_extract)[:255]}"
+
+                values_to_update['last_indexed_db'] = datetime.datetime.now(datetime.timezone.utc)
+                
+                # Step 4: Create/Update DB Record Before Embedding
+                # ====================================================
+                record_to_embed: Optional[FileIndex] = None
+                if existing_record:
+                    if values_to_update.get('vlm_processing_status') == 'pending_vlm':
+                        values_to_update['latex_representation'] = None
+                        values_to_update['latex_explanation'] = None
+                    
+                    db_session.execute(update(FileIndex).where(FileIndex.id == existing_record.id).values(**values_to_update))
+                    db_session.commit()
+                    record_to_embed = existing_record
                 else:
-                    values_to_update['index_status'] = 'pending_embedding'
+                    new_record_data = {
+                        "file_path": file_path, 
+                        "file_name": os.path.basename(file_path), 
+                        **values_to_update
+                    }
+                    record_to_embed = FileIndex(**new_record_data)
+                    db_session.add(record_to_embed)
+                    db_session.commit()
+                    db_session.refresh(record_to_embed)
 
-            if content:
-                values_to_update['indexed_content'] = content[:DB_TEXT_TRUNCATE_LEN]
-            else:  # No content extracted, mark as meta only and we're done with this file.
-                values_to_update['index_status'] = 'indexed_meta'
+                # Step 5: Perform Initial Embedding
+                # =====================================
+                if content and record_to_embed:
+                    logger.info(f"{log_prefix}: Text extracted. Proceeding to initial embedding...")
+                    await self._embed_and_store(record_to_embed, content, db_session, is_final_embedding=False)
+                elif not content:
+                    logger.debug(f"{log_prefix}: No content extracted, skipping initial embedding.")
 
-        values_to_update['last_indexed_db'] = datetime.datetime.now(datetime.timezone.utc)
-        if existing_record:
-            if values_to_update.get('vlm_processing_status') == 'pending_vlm':  # Reset VLM fields if re-processing
-                values_to_update['latex_representation'] = None
-                values_to_update['latex_explanation'] = None
-            db_session.execute(update(FileIndex).where(FileIndex.id == existing_record.id).values(**values_to_update))
-            logger.debug(f"{log_prefix}: Updating DB record ID {existing_record.id}")
-        else:
-            new_record_data = {**file_metadata, **values_to_update}
-            db_session.add(FileIndex(**new_record_data))  # type: ignore
-            logger.debug(f"{log_prefix}: Creating new DB record.")
-
-        db_session.commit()
+        except Exception as e_phase1:
+            logger.error(f"{log_prefix}: Unhandled error in Phase 1 for {file_path}: {e_phase1}", exc_info=True)
+            if db_session.is_active:
+                db_session.rollback()
 
     def _cleanup_llm_output(self, text: str, replacement_char: str = ' ') -> str:
         """
@@ -1407,83 +1540,59 @@ class FileIndexer:
     # --- (Existing run method - orchestrates Phase 1 then Phase 2) ---
     def run(self):
         """
-        The main loop for the file indexer thread. This method is the target for the
-        threading.Thread object created in app.py. It orchestrates scanning,
-        VLM processing, and final embedding in sequential cycles.
+        The main loop for the file indexer thread. This version uses separate DB sessions
+        for each phase to increase resilience.
         """
-        logger.info(f"✅ {self.thread_name} started (Multi-Phase Indexing Logic).")
-
-        # This is a background thread, so we set up a new asyncio event loop.
+        logger.info(f"✅ {self.thread_name} started (Multi-Phase, Isolated Session Logic).")
+        
         loop = asyncio.new_event_loop()
         asyncio.set_event_loop(loop)
 
-        # --- THIS IS THE FIX ---
-        # The original code called a non-existent method. We now call the correct
-        # global initialization function and pass the provider instance.
         try:
-            logger.info(f"--- {self.thread_name}: Initializing Vector Stores... ---")
-            # This calls the async initialization function and runs it to completion.
             loop.run_until_complete(initialize_global_file_index_vectorstore(self.provider))
         except Exception as e_init_vs:
-            logger.error(
-                f"CRITICAL: Initial vector store loading failed in {self.thread_name}: {e_init_vs}. Thread will exit.")
+            logger.error(f"CRITICAL: Vector store loading failed: {e_init_vs}. Thread will exit.")
             return
-        # --- END OF FIX ---
 
         while not self.stop_event.is_set():
             cycle_start_time = time.monotonic()
-            db_session: Optional[Session] = None
 
+            # --- Phase 1 ---
             try:
-                db_session = SessionLocal()  # type: ignore
-                if not db_session:
-                    raise RuntimeError("Failed to create database session for indexer cycle.")
+                with SessionLocal() as db_session: # Session for Phase 1
+                    logger.info(f"--- {self.thread_name}: Starting Phase 1 (Scan & Text Extraction) ---")
+                    for root_path in self._get_root_paths():
+                        self._scan_directory(root_path, db_session)
+                        if self.stop_event.is_set(): break
+            except Exception as e_phase1:
+                logger.error(f"💥 Unhandled error in Phase 1: {e_phase1}", exc_info=True)
+            
+            if self.stop_event.is_set(): break
 
-                # --- Run the full pipeline sequentially in each cycle ---
+            # --- Phase 2 ---
+            try:
+                with SessionLocal() as db_session: # New Session for Phase 2
+                    logger.info(f"--- {self.thread_name}: Starting Phase 2 (VLM & LaTeX-OCR) ---")
+                    loop.run_until_complete(self._process_pending_vlm_files(db_session))
+            except Exception as e_phase2:
+                logger.error(f"💥 Unhandled error in Phase 2: {e_phase2}", exc_info=True)
 
-                # Phase 1: Scan for new/modified files and do initial text extraction
-                logger.info(f"--- {self.thread_name}: Starting Phase 1 (Scan & Text Extraction) ---")
-                # This calls the async _scan_directory method (assuming it's defined elsewhere in your class)
-                # For this fix, let's assume you have a method that orchestrates the scan.
-                # If _scan_directory_and_process_phase1 is not defined, you would replace it with the correct call.
-                # await self._scan_directory_and_process_phase1(db_session)
-                self._scan_directory(self._get_root_paths()[0], db_session) # Example call if scanning from a single root
-                if self.stop_event.is_set(): break
+            if self.stop_event.is_set(): break
 
-                # Phase 2: Process files needing VLM/LaTeX-OCR analysis
-                logger.info(f"--- {self.thread_name}: Starting Phase 2 (VLM & LaTeX-OCR) ---")
-                loop.run_until_complete(self._process_pending_vlm_files(db_session))
-                if self.stop_event.is_set(): break
-
-                # Phase 3: Process files ready for final embedding
-                logger.info(f"--- {self.thread_name}: Starting Phase 3 (Final Embedding) ---")
-                loop.run_until_complete(self._process_pending_embeddings(db_session))
-                if self.stop_event.is_set(): break
-
-            except Exception as e_cycle:
-                logger.error(f"💥 Unhandled error in {self.thread_name} main run loop: {e_cycle}")
-                logger.exception(f"{self.thread_name} main loop traceback:")
-                if db_session:
-                    try:
-                        db_session.rollback()
-                    except:
-                        pass
-            finally:
-                if db_session:
-                    try:
-                        db_session.close()
-                    except:
-                        pass
+            # --- Phase 3 ---
+            try:
+                with SessionLocal() as db_session: # New Session for Phase 3
+                    logger.info(f"--- {self.thread_name}: Starting Phase 3 (Final Embedding) ---")
+                    loop.run_until_complete(self._process_pending_embeddings(db_session))
+            except Exception as e_phase3:
+                logger.error(f"💥 Unhandled error in Phase 3: {e_phase3}", exc_info=True)
 
             cycle_duration = time.monotonic() - cycle_start_time
             logger.info(f"--- {self.thread_name}: Full pipeline cycle finished in {cycle_duration:.2f} seconds. ---")
-
-            # Wait before starting the next full cycle
+            
             wait_time = FILE_INDEXER_IDLE_WAIT_SECONDS
             logger.debug(f"{self.thread_name} waiting for {wait_time}s before next full cycle...")
-            stopped = self.stop_event.wait(timeout=wait_time)
-            if stopped:
-                logger.info(f"{self.thread_name} received stop signal during idle wait.")
+            if self.stop_event.wait(timeout=wait_time):
                 break
 
         try:

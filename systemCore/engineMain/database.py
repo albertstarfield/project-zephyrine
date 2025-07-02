@@ -9,6 +9,7 @@ import shutil
 import hashlib
 import subprocess
 import tempfile
+import enum
 import threading  # For the snapshotter thread
 
 from sqlalchemy.cyextension import collections
@@ -25,7 +26,7 @@ except ImportError:
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, DateTime, Float, Boolean,
     ForeignKey, Index, MetaData, update, desc, select, inspect as sql_inspect,
-    UniqueConstraint, text, CheckConstraint
+    UniqueConstraint, text, CheckConstraint, Enum
 )
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base, Session
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
@@ -207,6 +208,26 @@ class AppleScriptAttempt(Base):
     )
 
 
+class IndexStatusEnum(enum.Enum):
+    pending = "pending"
+    indexed_text = "indexed_text"
+    indexed_meta = "indexed_meta"
+    skipped_size = "skipped_size"
+    skipped_type = "skipped_type"
+    error_read = "error_read"
+    error_permission = "error_permission"
+    processing = "processing"
+    error_embedding = "error_embedding"
+    error_hash = "error_hash"
+    error_vlm = "error_vlm"
+    partial_vlm_error = "partial_vlm_error"
+    error_conversion = "error_conversion"
+    pending_vlm = "pending_vlm"
+    pending_embedding = "pending_embedding"
+    success = "success"
+    # This is the new status that will replace 'indexed_complete'
+    indexed_complete = "indexed_complete" 
+
 class FileIndex(Base):
     __tablename__ = "file_index"
     id = Column(Integer, primary_key=True)
@@ -216,7 +237,17 @@ class FileIndex(Base):
     mime_type = Column(String, nullable=True)
     last_modified_os = Column(DateTime(timezone=False), nullable=True)
     last_indexed_db = Column(DateTime(timezone=True), server_default=func.now(), onupdate=func.now(), nullable=False)
-    index_status = Column(String, default='pending', index=True, nullable=False)
+    
+    # --- MODIFICATION START ---
+    # Replaced the String column and CheckConstraint with a native Enum type
+    index_status = Column(
+        Enum(IndexStatusEnum),
+        default=IndexStatusEnum.pending,
+        index=True,
+        nullable=False
+    )
+    # --- MODIFICATION END ---
+    
     indexed_content = Column(Text, nullable=True)
     embedding_json = Column(Text, nullable=True)
     md5_hash = Column(String(32), nullable=True, index=True)
@@ -1305,6 +1336,45 @@ def init_db():
     if SessionLocal is None:
         SessionLocal = sessionmaker(autocommit=False, autoflush=False)
         logger.debug("database.py init_db: SessionLocal factory created.")
+
+    # --- Self-Healing Logic ---
+    db_path = RUNTIME_DB_PATH
+    if os.path.exists(db_path) and os.path.getsize(db_path) > 0:
+        logger.info("Performing pre-check for stale database schema...")
+        temp_engine = None
+        try:
+            # Create a temporary, minimal engine to inspect the schema
+            temp_engine = create_engine(f"sqlite:///{db_path}")
+            inspector = sql_inspect(temp_engine)
+            if inspector.has_table("file_index"):
+                columns = inspector.get_columns('file_index')
+                status_col = next((c for c in columns if c['name'] == 'index_status'), None)
+                
+                # The signature of a stale DB is a VARCHAR type for the status column.
+                # A correct, modern Enum schema will not report as VARCHAR.
+                if status_col and 'VARCHAR' in str(status_col['type']).upper():
+                    logger.critical("‼️ Stale database schema detected (faulty CHECK constraint is present).")
+                    logger.warning("Triggering automatic schema repair. This will backup and recreate the database.")
+                    
+                    # --- The "Nuke and Pave" Autofix ---
+                    backup_path = f"{db_path}.stale_schema_backup_{int(time.time())}"
+                    logger.info(f"Backing up current database to: {backup_path}")
+                    shutil.copy(db_path, backup_path)
+                    
+                    logger.info(f"Removing stale database file to force recreation: {db_path}")
+                    os.remove(db_path)
+                    logger.success("✅ Stale database removed. A new, correct database will now be created.")
+                else:
+                    logger.info("✅ Pre-check passed: Database schema appears up-to-date.")
+            else:
+                logger.info("Pre-check: 'file_index' table not found, assuming new database will be created.")
+
+        except Exception as e:
+            logger.warning(f"Could not perform schema pre-check due to error: {e}. Proceeding with standard init.")
+        finally:
+            if temp_engine:
+                temp_engine.dispose()
+
 
     # --- 1. Get/Prepare Engine and Ensure DB File is Ready ---
     # get_engine() handles archive decompression, snapshot restore, basic integrity checks.
