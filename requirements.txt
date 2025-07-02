@@ -16,6 +16,9 @@ frontend
 fastparquet
 libp2p
 zeroconf
+slixmpp # for XMPP Messaging bridge
+aioxmpp # aio XMPP library
+xmpppy # XMPP library
 
 
 # fitz # This is the import name for PyMuPDF; PyMuPDF below is the package to install
