@@ -24,7 +24,7 @@ RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 10))
 FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 512)) #Extreme or vanquish (Max at 512)
 FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
-FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 0))
+FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 300))
 BENCHMARK_ELP1_TIME_MS = 30000.0 #before hard defined error timeout (30 seconds max)
 
 _default_max_bg_tasks = 1000000
@@ -49,8 +49,8 @@ FUZZY_SEARCH_THRESHOLD = int(os.getenv("FUZZY_SEARCH_THRESHOLD", 79)) #Max at 85
 MIN_RAG_RESULTS = int(os.getenv("MIN_RAG_RESULTS", 1)) # Unused
 YOUR_REFLECTION_CHUNK_SIZE = int(os.getenv("YOUR_REFLECTION_CHUNK_SIZE", 450))
 ENABLE_PROACTIVE_RE_REFLECTION = True
-PROACTIVE_RE_REFLECTION_CHANCE = 0.9 #(Have chance 90% to re-remember old memory and re-imagine and rethought)
-MIN_AGE_FOR_RE_REFLECTION_DAYS = 1 #(Minimum age of the memory to re-reflect)
+PROACTIVE_RE_REFLECTION_CHANCE = 0.9 #(have chance 90% to re-remember old memory and re-imagine and rethought)
+MIN_AGE_FOR_RE_REFLECTION_DAYS = 1 #(minimum age of the memory to re-reflect)
 YOUR_REFLECTION_CHUNK_OVERLAP = int(os.getenv("YOUR_REFLECTION_CHUNK_OVERLAP", 50))
 RAG_URL_COUNT = int(os.getenv("RAG_URL_COUNT", 5)) # <<< ADD THIS LINE (e.g., default to 3) (Max at 10)
 RAG_CONTEXT_MAX_PERCENTAGE = float(os.getenv("RAG_CONTEXT_MAX_PERCENTAGE", 0.25))
@@ -318,7 +318,7 @@ SELF_REFLECTION_FIXER_MODEL = os.getenv("SELF_REFLECTION_FIXER_MODEL", "code") #
 REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 10)
 # --- Add/Ensure these constants for the reflection loop timing ---
 # How long the reflector thread waits if NO work was found in a full active cycle
-IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 1)) # e.g., 5 minutes
+IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 1)) # 5 minutes
 # How long the reflector thread waits briefly between processing batches IF work IS being processed in an active cycle
 ACTIVE_CYCLE_PAUSE_SECONDS = float(os.getenv("REFLECTION_ACTIVE_CYCLE_PAUSE_SECONDS", 0.1)) # e.g., 0.1 seconds, very short
 

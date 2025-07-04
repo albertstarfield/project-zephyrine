@@ -7854,6 +7854,7 @@ def _generate_simulated_avionics_data() -> Dict[str, Any]:
         return payload
 
 
+
 def get_current_configurable_settings():
     """
     Reads the current values of all adjustable settings from the CortexConfiguration module.
@@ -7944,6 +7945,66 @@ def get_current_configurable_settings():
             logger.warning(f"Config API: Variable '{var_name}' not found in CortexConfiguration.py")
             
     return settings
+def _get_and_process_proactive_interaction():
+    """
+    This is a synchronous function that performs all the blocking DB and LLM work.
+    It will be run in a separate thread.
+    """
+    db = SessionLocal()
+    try:
+        # 1. Blocking Database Query
+        past_interaction = db.query(Interaction).filter(
+            Interaction.input_type == 'text',
+            Interaction.user_input.isnot(None),
+            Interaction.llm_response.isnot(None)
+        ).order_by(func.random()).first()
+
+        if not past_interaction:
+            logger.info("💡 No suitable past interaction found to revisit.")
+            return None # Return None if nothing was found
+
+        # 2. Blocking LLM Call (invoke is synchronous)
+        decision_chain = ChatPromptTemplate.from_template(PROMPT_XMPP_SHOULD_I_RECALL) | ai_chat.provider.get_model("general_fast") | StrOutputParser()
+        decision = decision_chain.invoke({
+            "past_user_input": past_interaction.user_input,
+            "past_ai_response": past_interaction.llm_response
+        })
+        
+        if "yes" not in decision.lower():
+            logger.info("💡 AI decided not to revisit this interaction.")
+            return None
+
+        # 3. Another Blocking LLM Call
+        revisit_prompt = PROMPT_XMPP_PROACTIVE_REVISIT.format(
+            past_user_input=past_interaction.user_input,
+            past_ai_response=past_interaction.llm_response
+        )
+        proactive_message = ai_chat.direct_generate(db, revisit_prompt, "proactive_thought_session")
+        
+        is_logical = True
+        for bad_phrase in XMPP_PROACTIVE_BAD_RESPONSE_MARKERS:
+            if fuzz.partial_ratio(bad_phrase.lower(), proactive_message.lower()) > 85:
+                is_logical = False
+                break
+        
+        if proactive_message and is_logical:
+            # 4. Blocking Database Write
+            add_interaction(db, session_id=f"proactive_sse", mode="proactive_event",
+                            input_type="proactive_message",
+                            user_input=f"[REVISITING ID: {past_interaction.id}]",
+                            llm_response=proactive_message)
+            db.commit()
+            
+            # Return the data needed by the async part
+            return {
+                "message": proactive_message, 
+                "source_interaction_id": past_interaction.id
+            }
+
+    finally:
+        db.close()
+    
+    return None
 
 
 async def _run_proactive_sse_push_loop():
@@ -7959,63 +8020,32 @@ async def _run_proactive_sse_push_loop():
     while True:
         try:
             logger.info(f"💡 awaiting {PROACTIVE_MESSAGE_CYCLE_SECONDS} seconds")
-            await asyncio.sleep(PROACTIVE_MESSAGE_CYCLE_SECONDS)
+            #await asyncio.sleep(PROACTIVE_MESSAGE_CYCLE_SECONDS)
             logger.info(f"💡 Proactive SSE wait passed")
 
-            # Using 'if True' for testing as requested
-            if True:
-                logger.info("💡 Proactive message chance MET. Finding an old interaction to evaluate...")
-                db = SessionLocal()
-                try:
-                    past_interaction = db.query(Interaction).filter(
-                        Interaction.input_type == 'text',
-                        Interaction.user_input.isnot(None),
-                        Interaction.llm_response.isnot(None)
-                    ).order_by(func.random()).first()
+            if True: # Using 'if True' for testing
+                logger.info("💡 Proactive message chance MET. Finding and processing interaction in background thread...")
+                
+                # Run the entire blocking function in a separate thread
+                result = await asyncio.to_thread(_get_and_process_proactive_interaction)
 
-                    if not past_interaction:
-                        continue
-
-                    decision_chain = ChatPromptTemplate.from_template(PROMPT_XMPP_SHOULD_I_RECALL) | ai_chat.provider.get_model("general_fast") | StrOutputParser()
-                    decision = await asyncio.to_thread(decision_chain.invoke, {
-                        "past_user_input": past_interaction.user_input,
-                        "past_ai_response": past_interaction.llm_response
-                    })
+                if result:
+                    logger.info(f"💡 Pushing proactive message to SSE queue: '{result['message'][:70]}...'")
                     
-                    if "yes" in decision.lower():
-                        revisit_prompt = PROMPT_XMPP_PROACTIVE_REVISIT.format(
-                            past_user_input=past_interaction.user_input,
-                            past_ai_response=past_interaction.llm_response
-                        )
-                        proactive_message = await ai_chat.direct_generate(db, revisit_prompt, "proactive_thought_session")
-                        
-                        is_logical = True
-                        for bad_phrase in XMPP_PROACTIVE_BAD_RESPONSE_MARKERS:
-                            if fuzz.partial_ratio(bad_phrase.lower(), proactive_message.lower()) > 85:
-                                is_logical = False
-                                break
-                        
-                        if proactive_message and is_logical:
-                            logger.info(f"💡 Pushing proactive message to SSE queue: '{proactive_message[:70]}...'")
-                            
-                            sse_event = format_sse_notification(
-                                data={"message": proactive_message, "source_interaction_id": past_interaction.id},
-                                event_type="proactive_thought"
-                            )
-                            sse_notification_queue.put(sse_event)
-                            
-                            add_interaction(db, session_id=f"proactive_sse", mode="proactive_event",
-                                            input_type="proactive_message",
-                                            user_input=f"[REVISITING ID: {past_interaction.id}]",
-                                            llm_response=proactive_message)
-                            db.commit()
-                finally:
-                    db.close()
+                    sse_event = format_sse_notification(
+                        data=result,
+                        event_type="proactive_thought"
+                    )
+                    # sse_notification_queue.put() is synchronous, which is fine
+                    # for a queue.Queue, but if it's an asyncio.Queue, use await .put()
+                    sse_notification_queue.put(sse_event)
+
         except asyncio.CancelledError:
             logger.info("Proactive SSE push loop cancelled.")
             break
         except Exception as e:
-            logger.error(f"Error in proactive SSE push loop: {e}")
+            # It's good practice to log the traceback for better debugging
+            logger.exception(f"Error in proactive SSE push loop: {e}")
 
 def _create_personal_assistant_stub_response(endpoint_name: str, method: str, resource_id: Optional[str] = None, custom_status: str = "not_applicable_personal_assistant"):
     """
@@ -8614,7 +8644,7 @@ def handle_legacy_completions():
     return resp
 
 # --- NEW: SSE Notification Endpoint ---
-@app.route("/v1/stream/notifications")
+@app.route("/v1/chat/notification")
 def sse_notification_stream():
     """
     This endpoint streams notifications to the client using SSE.
@@ -11448,7 +11478,7 @@ async def startup_tasks():
         logger.info("APP.PY: startup_tasks: Self Reflection and its Vector Store are DISABLED by config.")
 
     logger.info("Starting up SSE Notification Push Loop Component Thread...")
-    if 'ENABLE_SSE_NOTIFICATIONS' in globals() and ENABLE_SSE_NOTIFICATIONS:
+    if ENABLE_SSE_NOTIFICATIONS:
         logger.info("Scheduling proactive SSE push loop on the main event loop...")
         asyncio.create_task(_run_proactive_sse_push_loop())
     else:
