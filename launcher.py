@@ -94,6 +94,11 @@ GNAT_TAR_FILENAME = "gnat-community-2021.tar.gz"
 # --- END GNAT Configuration ---
 
 
+# --- START of new retry logic ---
+MAX_SETUP_ATTEMPTS = 4  # Initial run + 3 retries
+final_setup_failures = []
+
+
 running_processes = [] # For services started by the current script instance
 process_lock = threading.Lock()
 relaunched_conda_process_obj = None
@@ -2246,6 +2251,37 @@ def launch_and_manage_zephymesh_node():
         zephymesh_process = None
         zephymesh_api_url = None
 
+def _perform_pre_attempt_cleanup(attempt_number: int):
+    """Performs cleanup actions before a setup retry."""
+    if attempt_number == 1:
+        # No cleanup on the first attempt
+        return
+
+    print_warning(f"Setup attempt {attempt_number-1} failed. Performing pre-retry cleanup for attempt {attempt_number}.")
+
+    # Attempt 2 (first failure): Remove all install flags except license.
+    if attempt_number == 2:
+        print_system("Cleanup Action: Removing installation flag files...")
+        # Create a list of flags to remove, excluding the license file
+        flags_to_clear = [f for f in FLAG_FILES_TO_RESET_ON_ENV_RECREATE if f != LICENSE_FLAG_FILE]
+        _remove_flag_files(flags_to_clear)
+
+    # Attempts 3 and 4 (second and third failures): Remove flags AND the Conda environment.
+    elif attempt_number >= 3:
+        print_system("Cleanup Action: Removing installation flag files AND the Conda environment.")
+        # Remove all flags (including the ones for the env itself)
+        _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
+
+        if os.path.isdir(TARGET_CONDA_ENV_PATH):
+            print_warning(f"Removing Conda environment directory: {TARGET_CONDA_ENV_PATH}")
+            try:
+                shutil.rmtree(TARGET_CONDA_ENV_PATH)
+                print_system("Conda environment directory removed successfully.")
+            except Exception as e:
+                print_error(f"CRITICAL ERROR during cleanup: Could not remove Conda env '{TARGET_CONDA_ENV_PATH}': {e}")
+                print_error("Manual intervention is required. Please delete the directory and restart.")
+                sys.exit(1) # This is a cleanup failure, which is critical.
+    time.sleep(2) # Give a moment for filesystem to catch up
 
 def start_service_thread(target_func, name):
     print_system(f"Preparing to start service: {name}")
@@ -2261,790 +2297,820 @@ def start_service_thread(target_func, name):
 # and global configurations (ROOT_DIR, REQUIRED_NODE_MAJOR, etc.) are defined correctly above this block.
 
 if __name__ == "__main__":
-    print_system("--- Project Zephyrine Launcher ---")
-    print_system(f"Root directory: {ROOT_DIR}")
-    print_system(f"Target Conda environment path: {TARGET_CONDA_ENV_PATH}")
-    print_system(f"Initial Python: {sys.version.split()[0]} on {platform.system()} ({platform.machine()})")
+    for attempt in range(1, MAX_SETUP_ATTEMPTS + 1):
+        print_colored("SYSTEM", f"--- Starting Setup Attempt {attempt}/{MAX_SETUP_ATTEMPTS} ---", "SUCCESS")
+        setup_failures = [] # Reset failures for this attempt
+        print_system("--- Project Zephyrine Launcher ---")
+        print_system(f"Root directory: {ROOT_DIR}")
+        print_system(f"Target Conda environment path: {TARGET_CONDA_ENV_PATH}")
+        print_system(f"Initial Python: {sys.version.split()[0]} on {platform.system()} ({platform.machine()})")
 
-    current_conda_env_path_check = os.getenv("CONDA_PREFIX")
-    is_already_in_correct_env = False
-    if current_conda_env_path_check:
-        try:
-            norm_current_env_path = os.path.normcase(os.path.realpath(current_conda_env_path_check))
-            norm_target_env_path = os.path.normcase(os.path.realpath(TARGET_CONDA_ENV_PATH))
-            if os.path.isdir(norm_current_env_path) and \
-                    os.path.isdir(norm_target_env_path) and \
-                    norm_current_env_path == norm_target_env_path and \
-                    os.getenv("ZEPHYRINE_RELAUNCHED_IN_CONDA") == "1":  # Check the relaunch flag
-                is_already_in_correct_env = True
-                ACTIVE_ENV_PATH = current_conda_env_path_check
-        except Exception as e_path_check:
-            print_warning(f"Error comparing Conda paths during initial check: {e_path_check}")
-
-    if is_already_in_correct_env:
-        # --- This is the RELAUNCHED script, running inside the correct Conda environment ---
-        print_system(f"Running inside target Conda environment (Prefix: {ACTIVE_ENV_PATH})")
-
-        # Clean up the relaunch flag as we are now inside the relaunched script
-        if "ZEPHYRINE_RELAUNCHED_IN_CONDA" in os.environ:
-            del os.environ["ZEPHYRINE_RELAUNCHED_IN_CONDA"]
-
-        # Ensure CONDA_EXECUTABLE is set in the relaunched script context
-        if globals().get('CONDA_EXECUTABLE') is None:
-            print_system("Relaunched script: CONDA_EXECUTABLE is None. Attempting to load from cache or PATH...")
-            loaded_from_cache = False
-            if os.path.exists(CONDA_PATH_CACHE_FILE):
-                try:
-                    with open(CONDA_PATH_CACHE_FILE, 'r', encoding='utf-8') as f_cache:
-                        cached_path = f_cache.read().strip()
-                    if cached_path and _verify_conda_path(cached_path):
-                        globals()['CONDA_EXECUTABLE'] = cached_path
-                        print_system(f"Using Conda executable from cache in relaunched script: {CONDA_EXECUTABLE}")
-                        loaded_from_cache = True
-                    else:
-                        print_warning("Cached Conda path invalid/unverified in relaunched script.")
-                except Exception as e_cache_read:
-                    print_warning(f"Error reading Conda cache in relaunched script: {e_cache_read}")
-            if not loaded_from_cache:
-                conda_exe_from_which = shutil.which("conda.exe" if IS_WINDOWS else "conda")
-                if conda_exe_from_which and _verify_conda_path(conda_exe_from_which):
-                    globals()['CONDA_EXECUTABLE'] = conda_exe_from_which
-                    print_system(f"Found Conda via shutil.which in relaunched script: {CONDA_EXECUTABLE}")
-                else:
-                    print_error("CRITICAL: Conda executable could not be determined. Conda package installs will fail.")
-
-        if globals().get('CONDA_EXECUTABLE') is None:
-            print_error("CRITICAL: CONDA_EXECUTABLE is still None. Subsequent Conda operations WILL FAIL.")
-            sys.exit(1)
-
-        # --- Read AUTODETECTED environment variables ---
-        AUTO_PRIMARY_GPU_BACKEND = os.getenv("AUTODETECTED_PRIMARY_GPU_BACKEND", "cpu")
-        AUTO_CUDA_AVAILABLE = os.getenv("AUTODETECTED_CUDA_AVAILABLE") == "1"
-        AUTO_METAL_AVAILABLE = os.getenv("AUTODETECTED_METAL_AVAILABLE") == "1"
-        AUTO_VULKAN_AVAILABLE = os.getenv("AUTODETECTED_VULKAN_AVAILABLE") == "1"
-        AUTO_COREML_POSSIBLE = os.getenv("AUTODETECTED_COREML_POSSIBLE") == "1"
-        print_system(
-            f"Auto-detected preferences received: GPU_BACKEND='{AUTO_PRIMARY_GPU_BACKEND}', CUDA={AUTO_CUDA_AVAILABLE}, METAL={AUTO_METAL_AVAILABLE}, VULKAN={AUTO_VULKAN_AVAILABLE}, COREML_POSSIBLE={AUTO_COREML_POSSIBLE}")
-
-        # Set up core Python executable paths (already in Conda env)
-        _sys_exec_dir = os.path.dirname(sys.executable)
-        PYTHON_EXECUTABLE = sys.executable
-        PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
-        if not os.path.exists(PIP_EXECUTABLE): PIP_EXECUTABLE = shutil.which("pip") or "pip" # Fallback if direct path missing
-        HYPERCORN_EXECUTABLE = os.path.join(_sys_exec_dir, "hypercorn.exe" if IS_WINDOWS else "hypercorn")
-        if not os.path.exists(HYPERCORN_EXECUTABLE): HYPERCORN_EXECUTABLE = shutil.which("hypercorn") or "hypercorn" # Fallback
-
-        print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
-        print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
-
-        # Ensure core pip components are up-to-date (essential for reliable pip installs)
-        if not run_command([PIP_EXECUTABLE, "install", "--upgrade", "pip", "setuptools", "wheel"], ROOT_DIR,
-                           "PIP-UPGRADE-CORE"):
-            print_warning("Pip/setuptools/wheel upgrade failed. Proceeding, but further pip issues may occur.")
-
-        # Install fundamental Python libraries (requests for downloads, tqdm for progress)
-        if not run_command([PIP_EXECUTABLE, "install", "tqdm", "requests"], ROOT_DIR, "PIP-UTILS"):
-            print_error("tqdm/requests install failed. Exiting as these are crucial for further setup."); sys.exit(1)
-
-        # Initialize requests session for file downloads
-        try:
-            import requests; from tqdm import tqdm # Import here to ensure they are available after pip install
-        except ImportError:
-            print_error("Failed to import requests/tqdm after installation. Exiting."); sys.exit(1)
-        requests_session = requests.Session()
-        adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=20)
-        requests_session.mount('http://', adapter)
-        requests_session.mount('https://', adapter)
-
-        # --- START: Robust Node.js & npm setup (MOVED HERE) ---
-        print_system("--- Ensuring Node.js & npm Dependencies ---")
-
-        node_package_spec = f"nodejs={REQUIRED_NODE_MAJOR}"
-        needs_node_install_or_reinstall = False
-
-        try:
-            # Attempt to detect the currently active Node.js/npm versions
-            # Use subprocess.run to capture output and check return code.
-            # Running them via PYTHON_EXECUTABLE -c "import subprocess..." ensures it uses the Conda Python's PATH.
-            node_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['node', '-v'], text=True, stderr=subprocess.DEVNULL).strip())"]
-            npm_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['npm', '-v'], text=True, stderr=subprocess.DEVNULL).strip())"]
-
-            node_proc = subprocess.run(node_check_cmd, capture_output=True, text=True, check=False, timeout=10)
-            npm_proc = subprocess.run(npm_check_cmd, capture_output=True, text=True, check=False, timeout=10)
-
-            current_node_version_output = node_proc.stdout.strip() if node_proc.returncode == 0 else ""
-            current_npm_version_output = npm_proc.stdout.strip() if npm_proc.returncode == 0 else ""
-
-            current_node_major = 0
-            if current_node_version_output:
-                try:
-                    current_node_major = int(current_node_version_output[1:].split('.')[0]) # Remove 'v' prefix
-                except ValueError:
-                    print_warning(f"Could not parse Node.js version: '{current_node_version_output}'. Assuming old or invalid.")
-
-            current_npm_major = 0
-            if current_npm_version_output:
-                try:
-                    current_npm_major = int(current_npm_version_output.split('.')[0])
-                except ValueError:
-                    print_warning(f"Could not parse npm version: '{current_npm_version_output}'. Assuming old or invalid.")
-
-            print_system(f"Currently active Node.js version: {current_node_version_output or 'Not Found'} (Major: {current_node_major})")
-            print_system(f"Currently active npm version: {current_npm_version_output or 'Not Found'} (Major: {current_npm_major})")
-
-            # Decision logic: If node/npm not found, or found but too old
-            if current_node_major < REQUIRED_NODE_MAJOR or current_npm_major < REQUIRED_NPM_MAJOR:
-                print_warning(f"Active Node.js/npm version is too old or not found. Required: Node {REQUIRED_NODE_MAJOR}+, npm {REQUIRED_NPM_MAJOR}+. Found: Node {current_node_major}, npm {current_npm_major}.")
-                needs_node_install_or_reinstall = True
-            else:
-                print_system("Active Node.js/npm versions meet requirements.")
-                # Warn if Node.js/npm is significantly newer than specified (usually okay, but good to note)
-                if current_node_major > REQUIRED_NODE_MAJOR:
-                    print_warning(f"Installed Node.js version ({current_node_major}) is newer than specified ({REQUIRED_NODE_MAJOR}). Proceeding.")
-                if current_npm_major > REQUIRED_NPM_MAJOR:
-                    print_warning(f"Installed npm version ({current_npm_major}) is newer than specified ({REQUIRED_NPM_MAJOR}). Proceeding.")
-
-        except Exception as e:
-            # Catch all errors during initial version detection (e.g., command not found)
-            print_warning(f"Could not reliably determine current Node.js/npm versions ({e}). Assuming fresh install/reinstall is needed.")
-            needs_node_install_or_reinstall = True
-
-        if needs_node_install_or_reinstall:
-            print_system(f"Attempting to install/reinstall Node.js ({node_package_spec}) and npm...")
-
-            # CRITICAL: Force removal of 'nodejs' from the Conda environment before reinstalling.
-            # This ensures that even if a corrupted or old version exists *inside* the Conda env,
-            # it's properly removed before the new install.
-            print_system(f"Attempting to remove old 'nodejs' packages from '{os.path.basename(TARGET_CONDA_ENV_PATH)}' before reinstall...")
-            # Use check=False because the package might not be there, or removal might fail partially,
-            # but we still want to try the install.
-            remove_cmd = [CONDA_EXECUTABLE, "remove", "--yes", "--prefix", TARGET_CONDA_ENV_PATH, "nodejs", "npm"]
-            if not run_command(remove_cmd, cwd=ROOT_DIR, name="CONDA-REMOVE-NODEJS-NPM", check=False):
-                print_warning("Failed to fully remove existing nodejs/npm packages. Proceeding with install, but issues may persist.")
-            else:
-                print_system("Old nodejs/npm packages removed (if present).")
-
-            # Now, proceed with the install via _ensure_conda_package.
-            # This call will actually run the `conda install` command.
-            if not _ensure_conda_package(node_package_spec, executable_to_check="node", is_critical=True):
-                print_error(f"Failed to install Node.js {REQUIRED_NODE_MAJOR}.x in Conda environment. Exiting.")
-                sys.exit(1)
-            print_system(f"Node.js {REQUIRED_NODE_MAJOR}.x and bundled npm should now be installed.")
-
-            # Re-verify immediately after installation to ensure success
+        current_conda_env_path_check = os.getenv("CONDA_PREFIX")
+        is_already_in_correct_env = False
+        if current_conda_env_path_check:
             try:
-                post_install_node_version_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['node', '-v'], text=True, stderr=subprocess.PIPE).strip())"]
-                post_install_npm_version_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['npm', '-v'], text=True, stderr=subprocess.PIPE).strip())"]
+                norm_current_env_path = os.path.normcase(os.path.realpath(current_conda_env_path_check))
+                norm_target_env_path = os.path.normcase(os.path.realpath(TARGET_CONDA_ENV_PATH))
+                if os.path.isdir(norm_current_env_path) and \
+                        os.path.isdir(norm_target_env_path) and \
+                        norm_current_env_path == norm_target_env_path and \
+                        os.getenv("ZEPHYRINE_RELAUNCHED_IN_CONDA") == "1":  # Check the relaunch flag
+                    is_already_in_correct_env = True
+                    ACTIVE_ENV_PATH = current_conda_env_path_check
+            except Exception as e_path_check:
+                print_warning(f"Error comparing Conda paths during initial check: {e_path_check}")
 
-                post_install_node_version = subprocess.check_output(post_install_node_version_check_cmd, text=True, stderr=subprocess.PIPE).strip()
-                post_install_npm_version = subprocess.check_output(post_install_npm_version_check_cmd, text=True, stderr=subprocess.PIPE).strip()
+        if is_already_in_correct_env:
+            # --- This is the RELAUNCHED script, running inside the correct Conda environment ---
+            print_system(f"Running inside target Conda environment (Prefix: {ACTIVE_ENV_PATH})")
 
-                post_install_node_major = int(post_install_node_version[1:].split('.')[0])
-                post_install_npm_major = int(post_install_npm_version.split('.')[0])
+            # Clean up the relaunch flag as we are now inside the relaunched script
+            if "ZEPHYRINE_RELAUNCHED_IN_CONDA" in os.environ:
+                del os.environ["ZEPHYRINE_RELAUNCHED_IN_CONDA"]
 
-                if post_install_node_major < REQUIRED_NODE_MAJOR or post_install_npm_major < REQUIRED_NPM_MAJOR:
-                    print_error(f"ERROR: Node.js/npm still too old AFTER installation attempt. Node: {post_install_node_version}, npm: {post_install_npm_version}")
-                    print_error("This indicates a deeper Conda environment or PATH issue. Manual intervention needed (e.g., `rm -rf zephyrineCondaVenv` then retry).")
-                    sys.exit(1)
+            # Ensure CONDA_EXECUTABLE is set in the relaunched script context
+            if globals().get('CONDA_EXECUTABLE') is None:
+                print_system("Relaunched script: CONDA_EXECUTABLE is None. Attempting to load from cache or PATH...")
+                loaded_from_cache = False
+                if os.path.exists(CONDA_PATH_CACHE_FILE):
+                    try:
+                        with open(CONDA_PATH_CACHE_FILE, 'r', encoding='utf-8') as f_cache:
+                            cached_path = f_cache.read().strip()
+                        if cached_path and _verify_conda_path(cached_path):
+                            globals()['CONDA_EXECUTABLE'] = cached_path
+                            print_system(f"Using Conda executable from cache in relaunched script: {CONDA_EXECUTABLE}")
+                            loaded_from_cache = True
+                        else:
+                            print_warning("Cached Conda path invalid/unverified in relaunched script.")
+                    except Exception as e_cache_read:
+                        print_warning(f"Error reading Conda cache in relaunched script: {e_cache_read}")
+                if not loaded_from_cache:
+                    conda_exe_from_which = shutil.which("conda.exe" if IS_WINDOWS else "conda")
+                    if conda_exe_from_which and _verify_conda_path(conda_exe_from_which):
+                        globals()['CONDA_EXECUTABLE'] = conda_exe_from_which
+                        print_system(f"Found Conda via shutil.which in relaunched script: {CONDA_EXECUTABLE}")
+                    else:
+                        print_error("CRITICAL: Conda executable could not be determined. Conda package installs will fail.")
+
+            if globals().get('CONDA_EXECUTABLE') is None:
+                print_error("CRITICAL: CONDA_EXECUTABLE is still None. Subsequent Conda operations WILL FAIL.")
+                setup_failures.append("Failed to install/ensure critical tool: conda is not found on operational runtime")
+
+            # --- Read AUTODETECTED environment variables ---
+            AUTO_PRIMARY_GPU_BACKEND = os.getenv("AUTODETECTED_PRIMARY_GPU_BACKEND", "cpu")
+            AUTO_CUDA_AVAILABLE = os.getenv("AUTODETECTED_CUDA_AVAILABLE") == "1"
+            AUTO_METAL_AVAILABLE = os.getenv("AUTODETECTED_METAL_AVAILABLE") == "1"
+            AUTO_VULKAN_AVAILABLE = os.getenv("AUTODETECTED_VULKAN_AVAILABLE") == "1"
+            AUTO_COREML_POSSIBLE = os.getenv("AUTODETECTED_COREML_POSSIBLE") == "1"
+            print_system(
+                f"Auto-detected preferences received: GPU_BACKEND='{AUTO_PRIMARY_GPU_BACKEND}', CUDA={AUTO_CUDA_AVAILABLE}, METAL={AUTO_METAL_AVAILABLE}, VULKAN={AUTO_VULKAN_AVAILABLE}, COREML_POSSIBLE={AUTO_COREML_POSSIBLE}")
+
+            # Set up core Python executable paths (already in Conda env)
+            _sys_exec_dir = os.path.dirname(sys.executable)
+            PYTHON_EXECUTABLE = sys.executable
+            PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
+            if not os.path.exists(PIP_EXECUTABLE): PIP_EXECUTABLE = shutil.which("pip") or "pip" # Fallback if direct path missing
+            HYPERCORN_EXECUTABLE = os.path.join(_sys_exec_dir, "hypercorn.exe" if IS_WINDOWS else "hypercorn")
+            if not os.path.exists(HYPERCORN_EXECUTABLE): HYPERCORN_EXECUTABLE = shutil.which("hypercorn") or "hypercorn" # Fallback
+
+            print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
+            print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
+
+            # Ensure core pip components are up-to-date (essential for reliable pip installs)
+            if not run_command([PIP_EXECUTABLE, "install", "--upgrade", "pip", "setuptools", "wheel"], ROOT_DIR,
+                            "PIP-UPGRADE-CORE"):
+                print_warning("Pip/setuptools/wheel upgrade failed. Proceeding, but further pip issues may occur.")
+
+            # Install fundamental Python libraries (requests for downloads, tqdm for progress)
+            if not run_command([PIP_EXECUTABLE, "install", "tqdm", "requests"], ROOT_DIR, "PIP-UTILS"):
+                print_error("tqdm/requests install failed. Exiting as these are crucial for further setup."); setup_failures.append("failed to install tqdm and requests for file downloads")
+
+            # Initialize requests session for file downloads
+            try:
+                import requests; from tqdm import tqdm # Import here to ensure they are available after pip install
+            except ImportError:
+                print_error("Failed to import requests/tqdm after installation. Exiting."); setup_failures.append("Failed to install/ensure critical tool: failed to import requests and tqdm")
+            requests_session = requests.Session()
+            adapter = requests.adapters.HTTPAdapter(pool_connections=10, pool_maxsize=20)
+            requests_session.mount('http://', adapter)
+            requests_session.mount('https://', adapter)
+
+            # --- START: Robust Node.js & npm setup (MOVED HERE) ---
+            print_system("--- Ensuring Node.js & npm Dependencies ---")
+
+            node_package_spec = f"nodejs={REQUIRED_NODE_MAJOR}"
+            needs_node_install_or_reinstall = False
+
+            try:
+                # Attempt to detect the currently active Node.js/npm versions
+                # Use subprocess.run to capture output and check return code.
+                # Running them via PYTHON_EXECUTABLE -c "import subprocess..." ensures it uses the Conda Python's PATH.
+                node_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['node', '-v'], text=True, stderr=subprocess.DEVNULL).strip())"]
+                npm_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['npm', '-v'], text=True, stderr=subprocess.DEVNULL).strip())"]
+
+                node_proc = subprocess.run(node_check_cmd, capture_output=True, text=True, check=False, timeout=10)
+                npm_proc = subprocess.run(npm_check_cmd, capture_output=True, text=True, check=False, timeout=10)
+
+                current_node_version_output = node_proc.stdout.strip() if node_proc.returncode == 0 else ""
+                current_npm_version_output = npm_proc.stdout.strip() if npm_proc.returncode == 0 else ""
+
+                current_node_major = 0
+                if current_node_version_output:
+                    try:
+                        current_node_major = int(current_node_version_output[1:].split('.')[0]) # Remove 'v' prefix
+                    except ValueError:
+                        print_warning(f"Could not parse Node.js version: '{current_node_version_output}'. Assuming old or invalid.")
+
+                current_npm_major = 0
+                if current_npm_version_output:
+                    try:
+                        current_npm_major = int(current_npm_version_output.split('.')[0])
+                    except ValueError:
+                        print_warning(f"Could not parse npm version: '{current_npm_version_output}'. Assuming old or invalid.")
+
+                print_system(f"Currently active Node.js version: {current_node_version_output or 'Not Found'} (Major: {current_node_major})")
+                print_system(f"Currently active npm version: {current_npm_version_output or 'Not Found'} (Major: {current_npm_major})")
+
+                # Decision logic: If node/npm not found, or found but too old
+                if current_node_major < REQUIRED_NODE_MAJOR or current_npm_major < REQUIRED_NPM_MAJOR:
+                    print_warning(f"Active Node.js/npm version is too old or not found. Required: Node {REQUIRED_NODE_MAJOR}+, npm {REQUIRED_NPM_MAJOR}+. Found: Node {current_node_major}, npm {current_npm_major}.")
+                    needs_node_install_or_reinstall = True
                 else:
-                    print_system(f"SUCCESS: Node.js {post_install_node_version} and npm {post_install_npm_version} are now active and meet requirements.")
+                    print_system("Active Node.js/npm versions meet requirements.")
+                    # Warn if Node.js/npm is significantly newer than specified (usually okay, but good to note)
+                    if current_node_major > REQUIRED_NODE_MAJOR:
+                        print_warning(f"Installed Node.js version ({current_node_major}) is newer than specified ({REQUIRED_NODE_MAJOR}). Proceeding.")
+                    if current_npm_major > REQUIRED_NPM_MAJOR:
+                        print_warning(f"Installed npm version ({current_npm_major}) is newer than specified ({REQUIRED_NPM_MAJOR}). Proceeding.")
 
-            except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
-                print_error(f"CRITICAL: Failed to verify Node.js/npm versions immediately after installation attempt: {e}")
-                sys.exit(1)
-        # End if needs_node_install_or_reinstall
+            except Exception as e:
+                # Catch all errors during initial version detection (e.g., command not found)
+                print_warning(f"Could not reliably determine current Node.js/npm versions ({e}). Assuming fresh install/reinstall is needed.")
+                needs_node_install_or_reinstall = True
 
-        # Final update of global NPM_CMD variable with the path to the now-correct npm
-        npm_exe_name = "npm.cmd" if IS_WINDOWS else "npm"
-        # Use shutil.which to get the *absolute path* from the now-activated Conda environment
-        globals()['NPM_CMD'] = shutil.which(npm_exe_name) or npm_exe_name # Fallback to name if not found for some reason
+            if needs_node_install_or_reinstall:
+                print_system(f"Attempting to install/reinstall Node.js ({node_package_spec}) and npm...")
 
-        # Also check for node itself, as npm depends on it
-        if not globals()['NPM_CMD'] or not shutil.which("node"):
-            print_error(f"CRITICAL: '{npm_exe_name}' or 'node' executable not found in Conda environment PATH after all installation attempts. Node.js setup failed. Exiting.")
-            sys.exit(1)
-        print_system(f"Using NPM_CMD: {globals()['NPM_CMD']}")
-        print_system("--- Node.js & npm setup complete ---")
-        # --- END: Robust Node.js & npm setup ---
+                # CRITICAL: Force removal of 'nodejs' from the Conda environment before reinstalling.
+                # This ensures that even if a corrupted or old version exists *inside* the Conda env,
+                # it's properly removed before the new install.
+                print_system(f"Attempting to remove old 'nodejs' packages from '{os.path.basename(TARGET_CONDA_ENV_PATH)}' before reinstall...")
+                # Use check=False because the package might not be there, or removal might fail partially,
+                # but we still want to try the install.
+                remove_cmd = [CONDA_EXECUTABLE, "remove", "--yes", "--prefix", TARGET_CONDA_ENV_PATH, "nodejs", "npm"]
+                if not run_command(remove_cmd, cwd=ROOT_DIR, name="CONDA-REMOVE-NODEJS-NPM", check=False):
+                    print_warning("Failed to fully remove existing nodejs/npm packages. Proceeding with install, but issues may persist.")
+                else:
+                    print_system("Old nodejs/npm packages removed (if present).")
 
+                # Now, proceed with the install via _ensure_conda_package.
+                # This call will actually run the `conda install` command.
+                if not _ensure_conda_package(node_package_spec, executable_to_check="node", is_critical=True):
+                    print_error(f"Failed to install Node.js {REQUIRED_NODE_MAJOR}.x in Conda environment. Exiting.")
+                    setup_failures.append("Failed to install/ensure critical legacy tool: node.js failed to install or mismatch on the version")
+                print_system(f"Node.js {REQUIRED_NODE_MAJOR}.x and bundled npm should now be installed.")
 
-        # --- Core Command-Line Tools (conda-installed) ---
-        print_system("--- Ensuring core command-line tools (git, cmake, go, ffmpeg, aria2c) ---")
-        if not _ensure_conda_package("git", executable_to_check="git", is_critical=True): sys.exit(1)
-        if not _ensure_conda_package("cmake", executable_to_check="cmake", is_critical=True): sys.exit(1)
-        # Ensure Go is installed for ZephyMesh and Backend
-        if not _ensure_conda_package("go", executable_to_check="go", conda_channel="conda-forge", is_critical=True): sys.exit(1)
-        # Ensure Alire/GNAT for Ada compilation
-        if not _ensure_alire_and_gnat_toolchain(): sys.exit(1)
-
-        # ffmpeg (non-critical, can fallback)
-        _ensure_conda_package("ffmpeg", executable_to_check="ffmpeg", is_critical=False)
-
-        # Aria2c (command-line tool)
-        print_system("--- Ensuring Aria2c (for multi-connection downloads) via Conda ---")
-        if not _ensure_conda_package(package_spec="aria2", executable_to_check="aria2c", is_critical=False):
-            print_warning(
-                "aria2c (command-line tool) could not be installed via Conda. Multi-connection downloads will be unavailable, falling back to requests.")
-        else:
-            print_system("aria2c command-line tool checked/installed via Conda.")
-
-        # Install Python wrapper for Aria2 (aria2p) via Pip (if not already done)
-        if not os.path.exists(ARIA2P_INSTALLED_FLAG_FILE):
-            print_system("--- Installing Python wrapper for Aria2 (aria2p) ---")
-            if not run_command([PIP_EXECUTABLE, "install", "aria2p"], ROOT_DIR, "PIP-ARIA2P"):
-                print_warning(
-                    "Failed to install 'aria2p' Python library. Multi-connection downloads via Aria2 will not be available if chosen as the download method.")
-            else:
-                print_system("'aria2p' Python library installed successfully.")
+                # Re-verify immediately after installation to ensure success
                 try:
-                    with open(ARIA2P_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_aria2p:
-                        f_aria2p.write(f"Installed on: {datetime.now().isoformat()}\n")
-                    print_system("aria2p installation flag created.")
-                except IOError as flag_err_aria2p:
-                    print_error(f"Could not create aria2p installation flag file: {flag_err_aria2p}")
-        else:
-            print_system("Python wrapper for Aria2 (aria2p) previously installed (flag file found).")
-        print_system("--- Core command-line tools check/install complete ---")
+                    post_install_node_version_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['node', '-v'], text=True, stderr=subprocess.PIPE).strip())"]
+                    post_install_npm_version_check_cmd = [PYTHON_EXECUTABLE, "-c", "import subprocess; print(subprocess.check_output(['npm', '-v'], text=True, stderr=subprocess.PIPE).strip())"]
 
-        # --- Frontend Node.js Dependencies ---
-        print_system("--- Installing/Checking Frontend Node.js Dependencies ---")
-        # This will now use the Node.js/npm ensured by the block above
-        if not run_command([NPM_CMD, "install"], FRONTEND_DIR, "NPM-FRONTEND"):
-            print_error("NPM Frontend install failed. Exiting."); sys.exit(1)
-        print_system("--- Frontend Node.js Dependencies installed ---")
+                    post_install_node_version = subprocess.check_output(post_install_node_version_check_cmd, text=True, stderr=subprocess.PIPE).strip()
+                    post_install_npm_version = subprocess.check_output(post_install_npm_version_check_cmd, text=True, stderr=subprocess.PIPE).strip()
 
+                    post_install_node_major = int(post_install_node_version[1:].split('.')[0])
+                    post_install_npm_major = int(post_install_npm_version.split('.')[0])
 
-        # Ensure `tiktoken` for license reading time estimation
-        try:
-            import tiktoken; TIKTOKEN_AVAILABLE = True
-        except ImportError:
-            TIKTOKEN_AVAILABLE = False; print_warning("tiktoken not available. License reading time estimation will be less accurate.")
-
-        # Windows-specific curses support
-        if IS_WINDOWS:
-            if not run_command([PIP_EXECUTABLE, "install", "windows-curses"], ROOT_DIR, "PIP-WINCURSES"):
-                print_warning("windows-curses install failed. Curses-based license prompt may not work fully.")
-        try:
-            import curses
-        except ImportError:
-            print_error("curses import failed. License agreement cannot be displayed. Exiting."); sys.exit(1)
-
-        # License Acceptance
-        if not os.path.exists(LICENSE_FLAG_FILE):
-            print_system("License agreement required.")
-            _, combined_license_text = load_licenses()
-            estimated_reading_seconds = calculate_reading_time(combined_license_text)
-            accepted, time_taken = curses.wrapper(display_license_prompt, combined_license_text.splitlines(),
-                                                  estimated_reading_seconds) # type: ignore
-            if not accepted: print_error("License not accepted. Exiting."); sys.exit(1)
-            with open(LICENSE_FLAG_FILE, 'w', encoding='utf-8') as f_license:
-                f_license.write(f"Accepted: {datetime.now().isoformat()}\nTime: {time_taken:.2f}s\n")
-            print_system(f"Licenses accepted by user in {time_taken:.2f}s.")
-            if estimated_reading_seconds > 30 and time_taken < (estimated_reading_seconds * 0.1):
-                print_warning("Warning: Licenses accepted quickly. Ensure you understood terms.")
-                time.sleep(3)
-        else:
-            print_system("License previously accepted.")
-
-
-        # --- Start ZephyMesh Node in a Background Thread ---
-        print_system("--- Preparing to launch ZephyMesh Node in the background ---")
-        zephymesh_thread = threading.Thread(
-            target=launch_and_manage_zephymesh_node,
-            name="ZephyMeshManagerThread",
-            daemon=True  # Ensures the thread exits when the main app does
-        )
-        zephymesh_thread.start()
-        # ZephyMesh start print moved to the function itself.
-
-
-        print_system(f"--- Checking Static Model Pool: {STATIC_MODEL_POOL_PATH} ---")
-        os.makedirs(STATIC_MODEL_POOL_PATH, exist_ok=True)
-        all_models_ok = True # Keep track if all critical models downloaded successfully
-        for model_info in MODELS_TO_DOWNLOAD:
-            dest_path = os.path.join(STATIC_MODEL_POOL_PATH, model_info["filename"])
-            if not os.path.exists(dest_path):
-                print_warning(f"Model '{model_info['description']}' ({model_info['filename']}) not found. Downloading.")
-                if not download_file_with_progress(model_info["url"], dest_path, model_info["description"],
-                                                   requests_session):
-                    print_error(f"Failed download for {model_info['filename']}. This model may be required.")
-                    all_models_ok = False
-            else:
-                print_system(f"Model '{model_info['description']}' ({model_info['filename']}) already present.")
-        print_system(f"Static model pool checked. All critical models {'OK' if all_models_ok else 'NOT OK'}.")
-        if not all_models_ok:
-            print_error("Some critical models failed to download. Functionality may be limited. Proceeding with caution.")
-            # Decide if this is a hard exit or just a warning based on criticality of models.
-            # sys.exit(1) # Uncomment if model download failure should halt startup.
-
-
-        # --- ChatterboxTTS Installation (NEW) ---
-        if not os.path.exists(CHATTERBOX_TTS_INSTALLED_FLAG_FILE):
-            print_system(f"--- ChatterboxTTS First-Time Setup from {CHATTERBOX_TTS_PATH} ---")
-            if not os.path.isdir(CHATTERBOX_TTS_PATH):
-                print_error(f"ChatterboxTTS directory not found at: {CHATTERBOX_TTS_PATH}")
-                print_error("Please ensure the submodule/directory exists. Skipping ChatterboxTTS installation.")
-            else:
-                print_system(f"Installing ChatterboxTTS in editable mode from: {CHATTERBOX_TTS_PATH}")
-                if not run_command([PIP_EXECUTABLE, "install", "-e", "."], CHATTERBOX_TTS_PATH,
-                                   "PIP-CHATTERBOX-EDITABLE"):
-                    print_error("ChatterboxTTS installation failed. Check pip logs above.")
-                else:
-                    print_system("ChatterboxTTS installed successfully in editable mode.")
-                    try:
-                        with open(CHATTERBOX_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_chatterbox_flag:
-                            f_chatterbox_flag.write(f"ChatterboxTTS installed on: {datetime.now().isoformat()}\n")
-                        print_system("ChatterboxTTS installation flag created.")
-                    except IOError as flag_err_chatterbox:
-                        print_error(f"Could not create ChatterboxTTS installation flag file: {flag_err_chatterbox}")
-        else:
-            print_system("ChatterboxTTS previously installed (flag file found).")
-        # --- END ChatterboxTTS Installation ---
-
-        # --- start of MELOTTS ---
-        if not os.path.exists(MELO_TTS_INSTALLED_FLAG_FILE):
-            print_system(f"--- MeloTTS First-Time Setup from {MELO_TTS_PATH} ---")
-            if not os.path.isdir(MELO_TTS_PATH):
-                print_error(f"MeloTTS dir missing: {MELO_TTS_PATH}. Skipping MeloTTS installation.");
-                # Decide if this is critical, or just warn and continue. For now, continue.
-                # sys.exit(1) # Uncomment if MeloTTS is critical.
-            else:
-                if not run_command([PIP_EXECUTABLE, "install", "-e", "."], MELO_TTS_PATH, "PIP-MELO-EDITABLE"):
-                    print_error("MeloTTS install failed.")
-                else:
-                    # Unidic download is often flaky or not strictly necessary for basic usage, so warning is fine.
-                    if not run_command([PYTHON_EXECUTABLE, "-m", "unidic", "download"], MELO_TTS_PATH, "UNIDIC-DOWNLOAD"):
-                        print_warning("unidic download failed. Some MeloTTS features might be affected.")
-                    # audio_worker_script_path_for_melo_test is not used here.
-                    with open(MELO_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_melo_flag:
-                        f_melo_flag.write(f"Tested: {datetime.now().isoformat()}")
-                    print_system("MeloTTS setup and flag created.")
-        else:
-            print_system("MeloTTS previously installed/tested.")
-
-        # --- PyWhisperCpp Installation (with auto-detection fallback) ---
-        if not os.path.exists(PYWHISPERCPP_INSTALLED_FLAG_FILE):
-            print_system(f"--- PyWhisperCpp Installation (from local clone) ---")
-            if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]):
-                print_error("'git' not found. Skipping PyWhisperCpp source install.")
-            else:
-                if os.path.exists(PYWHISPERCPP_CLONE_PATH): shutil.rmtree(PYWHISPERCPP_CLONE_PATH)
-                if not run_command([GIT_CMD, "clone", PYWHISPERCPP_REPO_URL, PYWHISPERCPP_CLONE_PATH], ROOT_DIR,
-                                   "GIT-CLONE-PYWHISPERCPP"):
-                    print_error("Clone pywhispercpp failed.")
-                elif not run_command([GIT_CMD, "submodule", "update", "--init", "--recursive"], PYWHISPERCPP_CLONE_PATH,
-                                     "GIT-SUBMODULE-PYWHISPERCPP"):
-                    print_error("Pywhispercpp submodule update failed.")
-                else:
-                    pip_cmd_whisper = [PIP_EXECUTABLE, "install", "."]
-                    env_whisper = {}
-                    backend_whisper = "cpu (default)"
-                    user_ggml_cuda = os.getenv("GGML_CUDA")
-                    user_whisper_coreml = os.getenv("WHISPER_COREML")
-                    user_ggml_vulkan = os.getenv("GGML_VULKAN")
-                    user_ggml_blas = os.getenv("GGML_BLAS")
-                    user_whisper_openvino = os.getenv("WHISPER_OPENVINO")
-
-                    if user_ggml_cuda == '1':
-                        env_whisper['GGML_CUDA'] = '1'; backend_whisper = "CUDA (User)"
-                    elif user_whisper_coreml == '1' and AUTO_COREML_POSSIBLE:
-                        env_whisper['WHISPER_COREML'] = '1'; backend_whisper = "CoreML (User)"
-                    elif user_ggml_vulkan == '1':
-                        env_whisper['GGML_VULKAN'] = '1'; backend_whisper = "Vulkan (User)"
-                    elif user_ggml_blas == '1':
-                        env_whisper['GGML_BLAS'] = '1'; backend_whisper = "OpenBLAS (User)"
-                    elif user_whisper_openvino == '1':
-                        env_whisper['WHISPER_OPENVINO'] = '1'; backend_whisper = "OpenVINO (User)"
-                    elif AUTO_CUDA_AVAILABLE:
-                        env_whisper['GGML_CUDA'] = '1'; backend_whisper = "CUDA (Auto)"
-                    elif AUTO_COREML_POSSIBLE and (AUTO_PRIMARY_GPU_BACKEND == "metal" or platform.system() == "Darwin"):
-                        env_whisper['WHISPER_COREML'] = '1'; backend_whisper = "CoreML (Auto for Apple)"
-                    elif AUTO_METAL_AVAILABLE and AUTO_PRIMARY_GPU_BACKEND == "metal":
-                        backend_whisper = "Metal (Auto Default for Apple)"
-                    elif AUTO_VULKAN_AVAILABLE:
-                        env_whisper['GGML_VULKAN'] = '1'; backend_whisper = "Vulkan (Auto)"
+                    if post_install_node_major < REQUIRED_NODE_MAJOR or post_install_npm_major < REQUIRED_NPM_MAJOR:
+                        print_error(f"ERROR: Node.js/npm still too old AFTER installation attempt. Node: {post_install_node_version}, npm: {post_install_npm_version}")
+                        print_error("This indicates a deeper Conda environment or PATH issue. Manual intervention needed (e.g., `rm -rf zephyrineCondaVenv` then retry).")
+                        setup_failures.append("Failed to install/ensure critical tool: Version mismatch or unsupported old version after installation")
                     else:
-                        backend_whisper = "CPU (Default - Attempting OpenBLAS)"; env_whisper['GGML_BLAS'] = '1'
+                        print_system(f"SUCCESS: Node.js {post_install_node_version} and npm {post_install_npm_version} are now active and meet requirements.")
 
-                    print_system(
-                        f"Attempting pywhispercpp install. Effective Backend: {backend_whisper}. Build Env: {env_whisper}")
-                    if not run_command(pip_cmd_whisper, PYWHISPERCPP_CLONE_PATH, "PIP-PYWHISPERCPP",
-                                       env_override=env_whisper if env_whisper else None):
-                        print_error("pywhispercpp install failed.")
-                    else:
-                        print_system("pywhispercpp installed.")
-                        print_warning("For non-WAV ASR, ensure FFmpeg is in PATH (via conda install ffmpeg).")
-                        with open(PYWHISPERCPP_INSTALLED_FLAG_FILE, 'w',
-                                  encoding='utf-8') as f_pwc_flag:
-                            f_pwc_flag.write(backend_whisper)
-                        print_system("PyWhisperCpp installation flag created.")
-        else:
-            print_system("PyWhisperCpp previously installed.")
+                except (subprocess.CalledProcessError, FileNotFoundError, ValueError) as e:
+                    print_error(f"CRITICAL: Failed to verify Node.js/npm versions immediately after installation attempt: {e}")
+                    setup_failures.append(f"Failed to install/ensure critical tool: Version mismatch or unsupported old version after installation: {e}")
+            # End if needs_node_install_or_reinstall
 
-        # --- Install Local LaTeX-OCR Sub-Engine ---
-        if not os.path.exists(LATEX_OCR_INSTALLED_FLAG_FILE):
-            print_system(f"--- First-Time Setup for local LaTeX_OCR-SubEngine ---")
-            if not os.path.isdir(LATEX_OCR_PATH):
-                print_error(f"LaTeX-OCR Sub-Engine directory not found at: {LATEX_OCR_PATH}")
-                print_error("Please ensure the submodule/directory exists. Skipping LaTeX-OCR installation.")
+            # Final update of global NPM_CMD variable with the path to the now-correct npm
+            npm_exe_name = "npm.cmd" if IS_WINDOWS else "npm"
+            # Use shutil.which to get the *absolute path* from the now-activated Conda environment
+            globals()['NPM_CMD'] = shutil.which(npm_exe_name) or npm_exe_name # Fallback to name if not found for some reason
+
+            # Also check for node itself, as npm depends on it
+            if not globals()['NPM_CMD'] or not shutil.which("node"):
+                print_error(f"CRITICAL: '{npm_exe_name}' or 'node' executable not found in Conda environment PATH after all installation attempts. Node.js setup failed. Exiting.")
+                setup_failures.append(f"Failed to install/ensure critical tool: '{npm_exe_name}' or 'node' executable not found in Conda environment PATH after all installation attempts. Node.js setup failed. Exiting.")
+            print_system(f"Using NPM_CMD: {globals()['NPM_CMD']}")
+            print_system("--- Node.js & npm setup complete ---")
+            # --- END: Robust Node.js & npm setup ---
+
+
+            # --- Core Command-Line Tools (conda-installed) ---
+            print_system("--- Ensuring core command-line tools (git, cmake, go, ffmpeg, aria2c) ---")
+            if not _ensure_conda_package("git", executable_to_check="git", is_critical=True): sys.exit(1)
+            if not _ensure_conda_package("cmake", executable_to_check="cmake", is_critical=True): sys.exit(1)
+            # Ensure Go is installed for ZephyMesh and Backend
+            if not _ensure_conda_package("go", executable_to_check="go", conda_channel="conda-forge", is_critical=True): sys.exit(1)
+            # Ensure Alire/GNAT for Ada compilation
+            if not _ensure_alire_and_gnat_toolchain(): setup_failures.append(f"Failed to install/ensure critical tool: Ada toolchain failed to install")
+
+            # ffmpeg (non-critical, can fallback)
+            _ensure_conda_package("ffmpeg", executable_to_check="ffmpeg", is_critical=False)
+
+            # Aria2c (command-line tool)
+            print_system("--- Ensuring Aria2c (for multi-connection downloads) via Conda ---")
+            if not _ensure_conda_package(package_spec="aria2", executable_to_check="aria2c", is_critical=False):
+                print_warning(
+                    "aria2c (command-line tool) could not be installed via Conda. Multi-connection downloads will be unavailable, falling back to requests.")
             else:
-                print_system(f"Installing local LaTeX-OCR in editable mode from: {LATEX_OCR_PATH}")
-                pip_cmd_latex_ocr_local = [PIP_EXECUTABLE, "install", "-e", "."]
-                if not run_command(pip_cmd_latex_ocr_local, LATEX_OCR_PATH, "PIP-LATEX-OCR-LOCAL"):
-                    print_error(
-                        "Failed to install local LaTeX-OCR Sub-Engine. This functionality will be unavailable.")
-                else:
-                    print_system("Local LaTeX-OCR Sub-Engine installed successfully.")
-                    try:
-                        with open(LATEX_OCR_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
-                            f.write(f"Installed from local Sub-Engine on: {datetime.now().isoformat()}\n")
-                        print_system("Local LaTeX-OCR installation flag created.")
-                    except IOError as flag_err:
-                        print_error(f"Could not create local LaTeX-OCR installation flag file: {flag_err}")
-        else:
-            print_system("Local LaTeX-OCR Sub-Engine previously installed (flag file found).")
+                print_system("aria2c command-line tool checked/installed via Conda.")
 
-        # --- Custom llama-cpp-python Installation ---
-        if os.getenv("PROVIDER", "llama_cpp").lower() == "llama_cpp":
-            if not os.path.exists(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE):
-                print_system("--- Custom llama-cpp-python Installation ---")
+            # Install Python wrapper for Aria2 (aria2p) via Pip (if not already done)
+            if not os.path.exists(ARIA2P_INSTALLED_FLAG_FILE):
+                print_system("--- Installing Python wrapper for Aria2 (aria2p) ---")
+                if not run_command([PIP_EXECUTABLE, "install", "aria2p"], ROOT_DIR, "PIP-ARIA2P"):
+                    print_warning(
+                        "Failed to install 'aria2p' Python library. Multi-connection downloads via Aria2 will not be available if chosen as the download method.")
+                else:
+                    print_system("'aria2p' Python library installed successfully.")
+                    try:
+                        with open(ARIA2P_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_aria2p:
+                            f_aria2p.write(f"Installed on: {datetime.now().isoformat()}\n")
+                        print_system("aria2p installation flag created.")
+                    except IOError as flag_err_aria2p:
+                        print_error(f"Could not create aria2p installation flag file: {flag_err_aria2p}")
+            else:
+                print_system("Python wrapper for Aria2 (aria2p) previously installed (flag file found).")
+            print_system("--- Core command-line tools check/install complete ---")
+
+            # --- Frontend Node.js Dependencies ---
+            print_system("--- Installing/Checking Frontend Node.js Dependencies ---")
+            # This will now use the Node.js/npm ensured by the block above
+            if not run_command([NPM_CMD, "install"], FRONTEND_DIR, "NPM-FRONTEND"):
+                print_error("NPM Frontend install failed. Exiting."); setup_failures.append(f"Failed to install/ensure critical legacy tool: npm node failed to install")
+            print_system("--- Frontend Node.js Dependencies installed ---")
+
+
+            # Ensure `tiktoken` for license reading time estimation
+            try:
+                import tiktoken; TIKTOKEN_AVAILABLE = True
+            except ImportError:
+                TIKTOKEN_AVAILABLE = False; print_warning("tiktoken not available. License reading time estimation will be less accurate.")
+
+            # Windows-specific curses support
+            if IS_WINDOWS:
+                if not run_command([PIP_EXECUTABLE, "install", "windows-curses"], ROOT_DIR, "PIP-WINCURSES"):
+                    print_warning("windows-curses install failed. Curses-based license prompt may not work fully.")
+            try:
+                import curses
+            except ImportError:
+                print_error("curses import failed. License agreement cannot be displayed. Exiting."); setup_failures.append(f"Failed to ensure License acceptance. Jurisdiction comprimised")
+
+            # License Acceptance
+            if not os.path.exists(LICENSE_FLAG_FILE):
+                print_system("License agreement required.")
+                _, combined_license_text = load_licenses()
+                estimated_reading_seconds = calculate_reading_time(combined_license_text)
+                accepted, time_taken = curses.wrapper(display_license_prompt, combined_license_text.splitlines(),
+                                                    estimated_reading_seconds) # type: ignore
+                if not accepted: print_error("License not accepted. Exiting."); sys.exit(1)
+                with open(LICENSE_FLAG_FILE, 'w', encoding='utf-8') as f_license:
+                    f_license.write(f"Accepted: {datetime.now().isoformat()}\nTime: {time_taken:.2f}s\n")
+                print_system(f"Licenses accepted by user in {time_taken:.2f}s.")
+                if estimated_reading_seconds > 30 and time_taken < (estimated_reading_seconds * 0.1):
+                    print_warning("Warning: Licenses accepted quickly. Ensure you understood terms.")
+                    time.sleep(3)
+            else:
+                print_system("License previously accepted.")
+
+
+            # --- Start ZephyMesh Node in a Background Thread ---
+            print_system("--- Preparing to launch ZephyMesh Node in the background ---")
+            zephymesh_thread = threading.Thread(
+                target=launch_and_manage_zephymesh_node,
+                name="ZephyMeshManagerThread",
+                daemon=True  # Ensures the thread exits when the main app does
+            )
+            zephymesh_thread.start()
+            # ZephyMesh start print moved to the function itself.
+
+
+            print_system(f"--- Checking Static Model Pool: {STATIC_MODEL_POOL_PATH} ---")
+            os.makedirs(STATIC_MODEL_POOL_PATH, exist_ok=True)
+            all_models_ok = True # Keep track if all critical models downloaded successfully
+            for model_info in MODELS_TO_DOWNLOAD:
+                dest_path = os.path.join(STATIC_MODEL_POOL_PATH, model_info["filename"])
+                if not os.path.exists(dest_path):
+                    print_warning(f"Model '{model_info['description']}' ({model_info['filename']}) not found. Downloading.")
+                    if not download_file_with_progress(model_info["url"], dest_path, model_info["description"],
+                                                    requests_session):
+                        print_error(f"Failed download for {model_info['filename']}. This model may be required.")
+                        all_models_ok = False
+                else:
+                    print_system(f"Model '{model_info['description']}' ({model_info['filename']}) already present.")
+            print_system(f"Static model pool checked. All critical models {'OK' if all_models_ok else 'NOT OK'}.")
+            if not all_models_ok:
+                print_error("Some critical models failed to download. Functionality may be limited. Proceeding with caution.")
+                # Decide if this is a hard exit or just a warning based on criticality of models.
+                setup_failures.append(f"Models failed to download, check static model pool. functionality compromised")
+
+
+            # --- ChatterboxTTS Installation (NEW) ---
+            if not os.path.exists(CHATTERBOX_TTS_INSTALLED_FLAG_FILE):
+                print_system(f"--- ChatterboxTTS First-Time Setup from {CHATTERBOX_TTS_PATH} ---")
+                if not os.path.isdir(CHATTERBOX_TTS_PATH):
+                    print_error(f"ChatterboxTTS directory not found at: {CHATTERBOX_TTS_PATH}")
+                    print_error("Please ensure the submodule/directory exists. Skipping ChatterboxTTS installation.")
+                else:
+                    print_system(f"Installing ChatterboxTTS in editable mode from: {CHATTERBOX_TTS_PATH}")
+                    if not run_command([PIP_EXECUTABLE, "install", "-e", "."], CHATTERBOX_TTS_PATH,
+                                    "PIP-CHATTERBOX-EDITABLE"):
+                        print_error("ChatterboxTTS installation failed. Check pip logs above.")
+                    else:
+                        print_system("ChatterboxTTS installed successfully in editable mode.")
+                        try:
+                            with open(CHATTERBOX_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_chatterbox_flag:
+                                f_chatterbox_flag.write(f"ChatterboxTTS installed on: {datetime.now().isoformat()}\n")
+                            print_system("ChatterboxTTS installation flag created.")
+                        except IOError as flag_err_chatterbox:
+                            print_error(f"Could not create ChatterboxTTS installation flag file: {flag_err_chatterbox}")
+            else:
+                print_system("ChatterboxTTS previously installed (flag file found).")
+            # --- END ChatterboxTTS Installation ---
+
+            # --- start of MELOTTS ---
+            if not os.path.exists(MELO_TTS_INSTALLED_FLAG_FILE):
+                print_system(f"--- MeloTTS First-Time Setup from {MELO_TTS_PATH} ---")
+                if not os.path.isdir(MELO_TTS_PATH):
+                    print_error(f"MeloTTS dir missing: {MELO_TTS_PATH}. Skipping MeloTTS installation.");
+                    # Decide if this is critical, or just warn and continue. For now, continue.
+                    setup_failures.append(f"MeloTTS directory missing, check MeloTTS submodule. functionality compromised")
+                else:
+                    if not run_command([PIP_EXECUTABLE, "install", "-e", "."], MELO_TTS_PATH, "PIP-MELO-EDITABLE"):
+                        print_error("MeloTTS install failed.")
+                    else:
+                        # Unidic download is often flaky or not strictly necessary for basic usage, so warning is fine.
+                        if not run_command([PYTHON_EXECUTABLE, "-m", "unidic", "download"], MELO_TTS_PATH, "UNIDIC-DOWNLOAD"):
+                            print_warning("unidic download failed. Some MeloTTS features might be affected.")
+                        # audio_worker_script_path_for_melo_test is not used here.
+                        with open(MELO_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_melo_flag:
+                            f_melo_flag.write(f"Tested: {datetime.now().isoformat()}")
+                        print_system("MeloTTS setup and flag created.")
+            else:
+                print_system("MeloTTS previously installed/tested.")
+
+            # --- PyWhisperCpp Installation (with auto-detection fallback) ---
+            if not os.path.exists(PYWHISPERCPP_INSTALLED_FLAG_FILE):
+                print_system(f"--- PyWhisperCpp Installation (from local clone) ---")
                 if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]):
-                    print_error("'git' not found. Skipping source install.")
+                    print_error("'git' not found. Skipping PyWhisperCpp source install.")
                 else:
-                    if os.path.exists(LLAMA_CPP_PYTHON_CLONE_PATH): shutil.rmtree(LLAMA_CPP_PYTHON_CLONE_PATH)
-                    if not run_command([GIT_CMD, "clone", LLAMA_CPP_PYTHON_REPO_URL, LLAMA_CPP_PYTHON_CLONE_PATH],
-                                       ROOT_DIR, "GIT-CLONE-LLAMA") or \
-                            not run_command([GIT_CMD, "submodule", "update", "--init", "--recursive"],
-                                            LLAMA_CPP_PYTHON_CLONE_PATH, "GIT-SUBMODULE-LLAMA"):
-                        print_error("llama-cpp-python clone or submodule update failed.")
+                    if os.path.exists(PYWHISPERCPP_CLONE_PATH): shutil.rmtree(PYWHISPERCPP_CLONE_PATH)
+                    if not run_command([GIT_CMD, "clone", PYWHISPERCPP_REPO_URL, PYWHISPERCPP_CLONE_PATH], ROOT_DIR,
+                                    "GIT-CLONE-PYWHISPERCPP"):
+                        print_error("Clone pywhispercpp failed.")
+                    elif not run_command([GIT_CMD, "submodule", "update", "--init", "--recursive"], PYWHISPERCPP_CLONE_PATH,
+                                        "GIT-SUBMODULE-PYWHISPERCPP"):
+                        print_error("Pywhispercpp submodule update failed.")
                     else:
-                        build_env_llama = {'FORCE_CMAKE': '1'}
-                        cmake_args_list_llama = ["-DLLAMA_BUILD_EXAMPLES=OFF", "-DLLAMA_BUILD_TESTS=OFF"]
-                        chosen_llama_backend = os.getenv("LLAMA_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
-                        backend_log_llama = "cpu"
-                        if chosen_llama_backend == "cuda" and AUTO_CUDA_AVAILABLE:
-                            cmake_args_list_llama.append("-DGGML_CUDA=ON"); backend_log_llama = "CUDA"
-                        elif chosen_llama_backend == "metal" and AUTO_METAL_AVAILABLE:
-                            cmake_args_list_llama.append("-DGGML_METAL=ON"); backend_log_llama = "Metal"
-                        elif chosen_llama_backend == "vulkan" and AUTO_VULKAN_AVAILABLE:
-                            cmake_args_list_llama.append("-DGGML_VULKAN=ON"); backend_log_llama = "Vulkan"
-                        else:
-                            cmake_args_list_llama.append("-DLLAMA_OPENMP=ON"); backend_log_llama = "CPU (OpenMP)"
-                        print_system(f"Configuring llama-cpp-python build with: {backend_log_llama}")
-                        build_env_llama['CMAKE_ARGS'] = " ".join(cmake_args_list_llama)
-                        if not run_command([PIP_EXECUTABLE, "install", ".", "--verbose"],
-                                           LLAMA_CPP_PYTHON_CLONE_PATH, "PIP-BUILD-LLAMA",
-                                           env_override=build_env_llama):
-                            print_error("Build llama-cpp-python failed.")
-                        else:
-                            print_system("llama-cpp-python installed.")
-                            with open(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE, 'w',
-                                      encoding='utf-8') as f_lcpp_flag:
-                                f_lcpp_flag.write(backend_log_llama)
-            else:
-                print_system("Custom llama-cpp-python previously installed.")
+                        pip_cmd_whisper = [PIP_EXECUTABLE, "install", "."]
+                        env_whisper = {}
+                        backend_whisper = "cpu (default)"
+                        user_ggml_cuda = os.getenv("GGML_CUDA")
+                        user_whisper_coreml = os.getenv("WHISPER_COREML")
+                        user_ggml_vulkan = os.getenv("GGML_VULKAN")
+                        user_ggml_blas = os.getenv("GGML_BLAS")
+                        user_whisper_openvino = os.getenv("WHISPER_OPENVINO")
 
-        # --- Custom stable-diffusion-cpp-python Installation ---
-        if not os.path.exists(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE):
-            print_system("--- Custom stable-diffusion-cpp-python Installation ---")
-            if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]) or not CMAKE_CMD or not shutil.which(
-                CMAKE_CMD.split()[0]):
-                print_error("'git' or 'cmake' not found. Skipping source install.")
+                        if user_ggml_cuda == '1':
+                            env_whisper['GGML_CUDA'] = '1'; backend_whisper = "CUDA (User)"
+                        elif user_whisper_coreml == '1' and AUTO_COREML_POSSIBLE:
+                            env_whisper['WHISPER_COREML'] = '1'; backend_whisper = "CoreML (User)"
+                        elif user_ggml_vulkan == '1':
+                            env_whisper['GGML_VULKAN'] = '1'; backend_whisper = "Vulkan (User)"
+                        elif user_ggml_blas == '1':
+                            env_whisper['GGML_BLAS'] = '1'; backend_whisper = "OpenBLAS (User)"
+                        elif user_whisper_openvino == '1':
+                            env_whisper['WHISPER_OPENVINO'] = '1'; backend_whisper = "OpenVINO (User)"
+                        elif AUTO_CUDA_AVAILABLE:
+                            env_whisper['GGML_CUDA'] = '1'; backend_whisper = "CUDA (Auto)"
+                        elif AUTO_COREML_POSSIBLE and (AUTO_PRIMARY_GPU_BACKEND == "metal" or platform.system() == "Darwin"):
+                            env_whisper['WHISPER_COREML'] = '1'; backend_whisper = "CoreML (Auto for Apple)"
+                        elif AUTO_METAL_AVAILABLE and AUTO_PRIMARY_GPU_BACKEND == "metal":
+                            backend_whisper = "Metal (Auto Default for Apple)"
+                        elif AUTO_VULKAN_AVAILABLE:
+                            env_whisper['GGML_VULKAN'] = '1'; backend_whisper = "Vulkan (Auto)"
+                        else:
+                            backend_whisper = "CPU (Default - Attempting OpenBLAS)"; env_whisper['GGML_BLAS'] = '1'
+
+                        print_system(
+                            f"Attempting pywhispercpp install. Effective Backend: {backend_whisper}. Build Env: {env_whisper}")
+                        if not run_command(pip_cmd_whisper, PYWHISPERCPP_CLONE_PATH, "PIP-PYWHISPERCPP",
+                                        env_override=env_whisper if env_whisper else None):
+                            print_error("pywhispercpp install failed.")
+                        else:
+                            print_system("pywhispercpp installed.")
+                            print_warning("For non-WAV ASR, ensure FFmpeg is in PATH (via conda install ffmpeg).")
+                            with open(PYWHISPERCPP_INSTALLED_FLAG_FILE, 'w',
+                                    encoding='utf-8') as f_pwc_flag:
+                                f_pwc_flag.write(backend_whisper)
+                            print_system("PyWhisperCpp installation flag created.")
             else:
-                if os.path.exists(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH): shutil.rmtree(
-                    STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH)
-                if not run_command([GIT_CMD, "clone", "--recursive", STABLE_DIFFUSION_CPP_PYTHON_REPO_URL,
-                                    STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH], ROOT_DIR, "GIT-CLONE-SD"):
-                    print_error("Clone SD failed.")
+                print_system("PyWhisperCpp previously installed.")
+
+            # --- Install Local LaTeX-OCR Sub-Engine ---
+            if not os.path.exists(LATEX_OCR_INSTALLED_FLAG_FILE):
+                print_system(f"--- First-Time Setup for local LaTeX_OCR-SubEngine ---")
+                if not os.path.isdir(LATEX_OCR_PATH):
+                    print_error(f"LaTeX-OCR Sub-Engine directory not found at: {LATEX_OCR_PATH}")
+                    print_error("Please ensure the submodule/directory exists. Skipping LaTeX-OCR installation.")
                 else:
-                    sd_cpp_sub_path = os.path.join(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH, "vendor",
-                                                   "stable-diffusion.cpp")
-                    sd_cpp_build_path = os.path.join(sd_cpp_sub_path, "build")
-                    os.makedirs(sd_cpp_build_path, exist_ok=True)
-                    cmake_args_sd_lib = []
-                    chosen_sd_backend = os.getenv("SD_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
-                    backend_log_sd = "cpu"
-                    if chosen_sd_backend == "cuda" and AUTO_CUDA_AVAILABLE:
-                        cmake_args_sd_lib.append("-DSD_CUDA=ON"); backend_log_sd = "CUDA"
-                    elif chosen_sd_backend == "metal" and AUTO_METAL_AVAILABLE:
-                        cmake_args_sd_lib.append("-DSD_METAL=ON"); backend_log_sd = "Metal"
-                    elif chosen_sd_backend == "vulkan" and AUTO_VULKAN_AVAILABLE:
-                        cmake_args_sd_lib.append("-DSD_VULKAN=ON"); backend_log_sd = "Vulkan"
+                    print_system(f"Installing local LaTeX-OCR in editable mode from: {LATEX_OCR_PATH}")
+                    pip_cmd_latex_ocr_local = [PIP_EXECUTABLE, "install", "-e", "."]
+                    if not run_command(pip_cmd_latex_ocr_local, LATEX_OCR_PATH, "PIP-LATEX-OCR-LOCAL"):
+                        print_error(
+                            "Failed to install local LaTeX-OCR Sub-Engine. This functionality will be unavailable.")
                     else:
-                        backend_log_sd = "CPU (Default)"
-                    print_system(f"Configuring stable-diffusion.cpp library build with: {backend_log_sd}")
-                    if not run_command([CMAKE_CMD, ".."] + cmake_args_sd_lib, sd_cpp_build_path, "CMAKE-SD-LIB-CFG"):
-                        print_error("CMake SD lib config failed.")
-                    elif not run_command([CMAKE_CMD, "--build", "."] + (["--config", "Release"] if IS_WINDOWS else []),
-                                         sd_cpp_build_path, "CMAKE-BUILD-SD-LIB"):
-                        print_error("Build SD lib failed.")
-                    else:
-                        pip_build_env_sd = {'FORCE_CMAKE': '1'}
-                        if cmake_args_sd_lib: pip_build_env_sd['CMAKE_ARGS'] = " ".join(cmake_args_sd_lib)
-                        if not run_command([PIP_EXECUTABLE, "install", "."], STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH,
-                                           "PIP-SD-BINDINGS", env_override=pip_build_env_sd):
-                            print_error("Install SD bindings failed.")
-                        else:
-                            print_system("stable-diffusion-cpp-python installed.")
-                            with open(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE, 'w',
-                                      encoding='utf-8') as f_sd_flag:
-                                f_sd_flag.write(backend_log_sd)
-        else:
-            print_system("Custom stable-diffusion-cpp-python previously installed.")
-
-
-        # --- Engine Python Dependencies (requirements.txt) ---
-        engine_req_path = os.path.join(ROOT_DIR, "requirements.txt")
-        if not os.path.exists(engine_req_path): print_error(f"requirements.txt not found: {engine_req_path}"); sys.exit(1)
-        pip_install_success = False
-        MAX_PIP_RETRIES = int(os.getenv("PIP_INSTALL_RETRIES", 3)) # Reduced from 99999 to 3 for more realistic retry
-        PIP_RETRY_DELAY_SECONDS = 5
-
-        print_system(f"--- Installing Python dependencies from {os.path.basename(engine_req_path)} ---")
-        for attempt in range(MAX_PIP_RETRIES):
-            if run_command([PIP_EXECUTABLE, "install", "-r", engine_req_path], ENGINE_MAIN_DIR, "PIP-ENGINE-REQ"):
-                pip_install_success = True
-                break
+                        print_system("Local LaTeX-OCR Sub-Engine installed successfully.")
+                        try:
+                            with open(LATEX_OCR_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
+                                f.write(f"Installed from local Sub-Engine on: {datetime.now().isoformat()}\n")
+                            print_system("Local LaTeX-OCR installation flag created.")
+                        except IOError as flag_err:
+                            print_error(f"Could not create local LaTeX-OCR installation flag file: {flag_err}")
             else:
-                print_warning(
-                    f"pip install failed on attempt {attempt + 1}/{MAX_PIP_RETRIES}. Retrying in {PIP_RETRY_DELAY_SECONDS} seconds...")
-                time.sleep(PIP_RETRY_DELAY_SECONDS)
+                print_system("Local LaTeX-OCR Sub-Engine previously installed (flag file found).")
 
-        if not pip_install_success:
-            print_error(f"Failed to install Python dependencies for Engine after {MAX_PIP_RETRIES} attempts. Exiting.")
-            sys.exit(1)
-        print_system("--- Python dependencies for Engine installed ---")
-
-        # Global command variable final sanity check (should point to conda env versions now)
-        globals()['GIT_CMD'] = shutil.which("git") or ('git.exe' if IS_WINDOWS else 'git')
-        globals()['CMAKE_CMD'] = shutil.which("cmake") or ('cmake.exe' if IS_WINDOWS else 'cmake')
-        # NPM_CMD is already set by the Node.js block, but this re-confirms or falls back if needed.
-        npm_exe_name_check = "npm.cmd" if IS_WINDOWS else "npm"
-        globals()['NPM_CMD'] = shutil.which(npm_exe_name_check) or npm_exe_name_check # Ensure this is updated from the conda env
-
-        print_system(f"Using GIT_CMD: {GIT_CMD}")
-        print_system(f"Using CMAKE_CMD: {CMAKE_CMD}")
-        print_system(f"Using NPM_CMD: {NPM_CMD}")
-        # One final comprehensive check for all critical tools
-        if not all([
-            GIT_CMD and shutil.which(GIT_CMD.split()[0]),
-            CMAKE_CMD and shutil.which(CMAKE_CMD.split()[0]),
-            NPM_CMD and shutil.which(NPM_CMD.split('.')[0]),
-            shutil.which("node"), # Directly check 'node' executable
-            shutil.which("go"), # Directly check 'go' executable
-            shutil.which("alr"), # Directly check 'alr' executable
-        ]):
-            print_error("One or more critical tools (git, cmake, node, npm, go, alr) not found after attempts. Exiting.")
-            sys.exit(1)
-
-
-        print_system("--- Starting All Services ---")
-        # Compile Watchtowers before starting services that might rely on them or their functionality
-        if not _compile_watchtowers():
-            print_error("One or more watchdog components failed to compile. Halting startup.")
-            sys.exit(1)
-
-        service_threads = []
-        # Start Engine Main
-        service_threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
-        time.sleep(3) # Give engine a moment to start
-        engine_ready = any(proc.poll() is None and name_s == "ENGINE" for proc, name_s in running_processes)
-        if not engine_ready:
-            print_error("Engine Main failed to start. Exiting."); sys.exit(1)
-
-        # Start Backend Service
-        service_threads.append(start_service_thread(start_backend_service, "BackendServiceThread"))
-        time.sleep(2) # Give backend a moment to start
-
-        # Start Frontend Service
-        service_threads.append(start_service_thread(start_frontend, "FrontendThread"))
-
-        print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.")
-        try:
-            while True:
-                all_ok = True
-                active_procs_found = False
-                with process_lock:
-                    current_procs_snapshot = list(running_processes) # Make a copy to iterate
-                
-                # If there are no services managed by this script, break or indicate completion
-                if not current_procs_snapshot and service_threads: # If threads were started but no procs remain
-                    all_ok = False # Consider it not OK if expected services are gone
-                
-                for proc, name_s in current_procs_snapshot:
-                    if proc.poll() is None: # Process is still running
-                        active_procs_found = True
+            # --- Custom llama-cpp-python Installation ---
+            if os.getenv("PROVIDER", "llama_cpp").lower() == "llama_cpp":
+                if not os.path.exists(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE):
+                    print_system("--- Custom llama-cpp-python Installation ---")
+                    if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]):
+                        print_error("'git' not found. Skipping source install.")
                     else:
-                        print_error(f"Service '{name_s}' exited unexpectedly (RC: {proc.poll()})."); all_ok = False
-                
-                if not all_ok:
-                    print_error("One or more services terminated. Shutting down launcher."); break
-                if not active_procs_found and service_threads: # If all services have exited (and there were services to begin with)
-                    print_system("All services seem to have finished. Exiting launcher."); break
-                
-                time.sleep(5) # Check every 5 seconds
-        except KeyboardInterrupt:
-            print_system("\nKeyboardInterrupt received by main thread (relaunched script). Shutting down...")
-        finally:
-            print_system("Launcher main loop (relaunched script) finished. Ensuring cleanup via atexit...")
+                        if os.path.exists(LLAMA_CPP_PYTHON_CLONE_PATH): shutil.rmtree(LLAMA_CPP_PYTHON_CLONE_PATH)
+                        if not run_command([GIT_CMD, "clone", LLAMA_CPP_PYTHON_REPO_URL, LLAMA_CPP_PYTHON_CLONE_PATH],
+                                        ROOT_DIR, "GIT-CLONE-LLAMA") or \
+                                not run_command([GIT_CMD, "submodule", "update", "--init", "--recursive"],
+                                                LLAMA_CPP_PYTHON_CLONE_PATH, "GIT-SUBMODULE-LLAMA"):
+                            print_error("llama-cpp-python clone or submodule update failed.")
+                        else:
+                            build_env_llama = {'FORCE_CMAKE': '1'}
+                            cmake_args_list_llama = ["-DLLAMA_BUILD_EXAMPLES=OFF", "-DLLAMA_BUILD_TESTS=OFF"]
+                            chosen_llama_backend = os.getenv("LLAMA_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
+                            backend_log_llama = "cpu"
+                            if chosen_llama_backend == "cuda" and AUTO_CUDA_AVAILABLE:
+                                cmake_args_list_llama.append("-DGGML_CUDA=ON"); backend_log_llama = "CUDA"
+                            elif chosen_llama_backend == "metal" and AUTO_METAL_AVAILABLE:
+                                cmake_args_list_llama.append("-DGGML_METAL=ON"); backend_log_llama = "Metal"
+                            elif chosen_llama_backend == "vulkan" and AUTO_VULKAN_AVAILABLE:
+                                cmake_args_list_llama.append("-DGGML_VULKAN=ON"); backend_log_llama = "Vulkan"
+                            else:
+                                cmake_args_list_llama.append("-DLLAMA_OPENMP=ON"); backend_log_llama = "CPU (OpenMP)"
+                            print_system(f"Configuring llama-cpp-python build with: {backend_log_llama}")
+                            build_env_llama['CMAKE_ARGS'] = " ".join(cmake_args_list_llama)
+                            if not run_command([PIP_EXECUTABLE, "install", ".", "--verbose"],
+                                            LLAMA_CPP_PYTHON_CLONE_PATH, "PIP-BUILD-LLAMA",
+                                            env_override=build_env_llama):
+                                print_error("Build llama-cpp-python failed.")
+                            else:
+                                print_system("llama-cpp-python installed.")
+                                with open(CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE, 'w',
+                                        encoding='utf-8') as f_lcpp_flag:
+                                    f_lcpp_flag.write(backend_log_llama)
+                else:
+                    print_system("Custom llama-cpp-python previously installed.")
 
-    else:  # Initial launcher instance (is_already_in_correct_env is False)
-        print_system(f"--- Initial Launcher: Conda Setup & Hardware Detection ---")
+            # --- Custom stable-diffusion-cpp-python Installation ---
+            if not os.path.exists(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE):
+                print_system("--- Custom stable-diffusion-cpp-python Installation ---")
+                if not GIT_CMD or not shutil.which(GIT_CMD.split()[0]) or not CMAKE_CMD or not shutil.which(
+                    CMAKE_CMD.split()[0]):
+                    print_error("'git' or 'cmake' not found. Skipping source install.")
+                else:
+                    if os.path.exists(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH): shutil.rmtree(
+                        STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH)
+                    if not run_command([GIT_CMD, "clone", "--recursive", STABLE_DIFFUSION_CPP_PYTHON_REPO_URL,
+                                        STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH], ROOT_DIR, "GIT-CLONE-SD"):
+                        print_error("Clone SD failed.")
+                    else:
+                        sd_cpp_sub_path = os.path.join(STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH, "vendor",
+                                                    "stable-diffusion.cpp")
+                        sd_cpp_build_path = os.path.join(sd_cpp_sub_path, "build")
+                        os.makedirs(sd_cpp_build_path, exist_ok=True)
+                        cmake_args_sd_lib = []
+                        chosen_sd_backend = os.getenv("SD_CPP_BACKEND") or AUTO_PRIMARY_GPU_BACKEND
+                        backend_log_sd = "cpu"
+                        if chosen_sd_backend == "cuda" and AUTO_CUDA_AVAILABLE:
+                            cmake_args_sd_lib.append("-DSD_CUDA=ON"); backend_log_sd = "CUDA"
+                        elif chosen_sd_backend == "metal" and AUTO_METAL_AVAILABLE:
+                            cmake_args_sd_lib.append("-DSD_METAL=ON"); backend_log_sd = "Metal"
+                        elif chosen_sd_backend == "vulkan" and AUTO_VULKAN_AVAILABLE:
+                            cmake_args_sd_lib.append("-DSD_VULKAN=ON"); backend_log_sd = "Vulkan"
+                        else:
+                            backend_log_sd = "CPU (Default)"
+                        print_system(f"Configuring stable-diffusion.cpp library build with: {backend_log_sd}")
+                        if not run_command([CMAKE_CMD, ".."] + cmake_args_sd_lib, sd_cpp_build_path, "CMAKE-SD-LIB-CFG"):
+                            print_error("CMake SD lib config failed.")
+                        elif not run_command([CMAKE_CMD, "--build", "."] + (["--config", "Release"] if IS_WINDOWS else []),
+                                            sd_cpp_build_path, "CMAKE-BUILD-SD-LIB"):
+                            print_error("Build SD lib failed.")
+                        else:
+                            pip_build_env_sd = {'FORCE_CMAKE': '1'}
+                            if cmake_args_sd_lib: pip_build_env_sd['CMAKE_ARGS'] = " ".join(cmake_args_sd_lib)
+                            if not run_command([PIP_EXECUTABLE, "install", "."], STABLE_DIFFUSION_CPP_PYTHON_CLONE_PATH,
+                                            "PIP-SD-BINDINGS", env_override=pip_build_env_sd):
+                                print_error("Install SD bindings failed.")
+                            else:
+                                print_system("stable-diffusion-cpp-python installed.")
+                                with open(CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE, 'w',
+                                        encoding='utf-8') as f_sd_flag:
+                                    f_sd_flag.write(backend_log_sd)
+            else:
+                print_system("Custom stable-diffusion-cpp-python previously installed.")
 
-        autodetected_build_env_vars = _detect_and_prepare_acceleration_env_vars()
 
-        if not find_conda_executable():
-            print_error("Conda executable not located. Exiting.")
-            _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
-            sys.exit(1)
-        print_system(f"Using Conda executable: {CONDA_EXECUTABLE}")
+            # --- Engine Python Dependencies (requirements.txt) ---
+            engine_req_path = os.path.join(ROOT_DIR, "requirements.txt")
+            if not os.path.exists(engine_req_path): print_error(f"requirements.txt not found: {engine_req_path}"); setup_failures.append(f"Guru Meditation: requirements.txt not found")
+            pip_install_success = False
+            MAX_PIP_RETRIES = int(os.getenv("PIP_INSTALL_RETRIES", 3)) # Reduced from 99999 to 3 for more realistic retry
+            PIP_RETRY_DELAY_SECONDS = 5
 
-        # Run the health check on the existing environment before proceeding.
-        # If it returns False, it means the environment was corrupt and has been deleted.
-        if not _check_and_repair_conda_env(TARGET_CONDA_ENV_PATH):
-            print_warning("Environment was repaired by deletion. The launcher will now create a fresh one.")
+            print_system(f"--- Installing Python dependencies from {os.path.basename(engine_req_path)} ---")
+            for attempt in range(MAX_PIP_RETRIES):
+                if run_command([PIP_EXECUTABLE, "install", "-r", engine_req_path], ENGINE_MAIN_DIR, "PIP-ENGINE-REQ"):
+                    pip_install_success = True
+                    break
+                else:
+                    print_warning(
+                        f"pip install failed on attempt {attempt + 1}/{MAX_PIP_RETRIES}. Retrying in {PIP_RETRY_DELAY_SECONDS} seconds...")
+                    time.sleep(PIP_RETRY_DELAY_SECONDS)
 
-        if not (os.path.isdir(TARGET_CONDA_ENV_PATH) and os.path.exists(
-                os.path.join(TARGET_CONDA_ENV_PATH, 'conda-meta'))):
-            print_system(f"Target Conda env '{TARGET_CONDA_ENV_PATH}' not found/invalid. Creating...")
-            _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
-            target_python_versions = get_conda_python_versions_to_try()
-            if not create_conda_env(TARGET_CONDA_ENV_PATH, target_python_versions):
-                print_error(f"Failed to create Conda env at '{TARGET_CONDA_ENV_PATH}'. Exiting.")
-                sys.exit(1)
-        else:
-            print_system(f"Target Conda env '{TARGET_CONDA_ENV_PATH}' exists.")
+            if not pip_install_success:
+                print_error(f"Failed to install Python dependencies for Engine after {MAX_PIP_RETRIES} attempts. Exiting.")
+                setup_failures.append(f"Pip failed to install Engine dependencies")
+            print_system("--- Python dependencies for Engine installed ---")
 
-        # --- Conda install NVIDIA CUDA Toolkit if detected ---
-        if autodetected_build_env_vars.get("AUTODETECTED_CUDA_AVAILABLE") == "1":
-            print_system("CUDA acceleration detected by initial launcher.")
-            if not os.path.exists(CUDA_TOOLKIT_INSTALLED_FLAG_FILE):
-                print_warning("NVIDIA CUDA Toolkit not yet marked as installed in the Conda environment. Attempting installation...")
-                print_warning("This may take several minutes and download a significant amount of data (>2 GB).")
+            # Global command variable final sanity check (should point to conda env versions now)
+            globals()['GIT_CMD'] = shutil.which("git") or ('git.exe' if IS_WINDOWS else 'git')
+            globals()['CMAKE_CMD'] = shutil.which("cmake") or ('cmake.exe' if IS_WINDOWS else 'cmake')
+            # NPM_CMD is already set by the Node.js block, but this re-confirms or falls back if needed.
+            npm_exe_name_check = "npm.cmd" if IS_WINDOWS else "npm"
+            globals()['NPM_CMD'] = shutil.which(npm_exe_name_check) or npm_exe_name_check # Ensure this is updated from the conda env
 
-                cuda_install_cmd = [
-                    CONDA_EXECUTABLE, 'install', '--yes',
-                    '--prefix', TARGET_CONDA_ENV_PATH,
-                    '-c', 'nvidia',
-                    'cuda-toolkit'
-                ]
+            print_system(f"Using GIT_CMD: {GIT_CMD}")
+            print_system(f"Using CMAKE_CMD: {CMAKE_CMD}")
+            print_system(f"Using NPM_CMD: {NPM_CMD}")
+            # One final comprehensive check for all critical tools
+            if not all([
+                GIT_CMD and shutil.which(GIT_CMD.split()[0]),
+                CMAKE_CMD and shutil.which(CMAKE_CMD.split()[0]),
+                NPM_CMD and shutil.which(NPM_CMD.split('.')[0]),
+                shutil.which("node"), # Directly check 'node' executable
+                shutil.which("go"), # Directly check 'go' executable
+                shutil.which("alr"), # Directly check 'alr' executable
+            ]):
+                print_error("One or more critical tools (git, cmake, node, npm, go, alr) not found after attempts. Exiting.")
+                setup_failures.append(f"At final check, critical tools not found after all attempts, this maybe these or other tools are not installed in the conda environment(git, cmake, node, npm, go, alr)")
 
-                if IS_WINDOWS and CONDA_EXECUTABLE and CONDA_EXECUTABLE.lower().endswith(".bat"):
-                    cuda_install_cmd = ['cmd', '/c'] + cuda_install_cmd
 
-                print_system(f"Executing: {' '.join(cuda_install_cmd)}")
-                try:
-                    process = subprocess.Popen(cuda_install_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors='replace')
-                    stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, "CUDA-INSTALL-OUT"), daemon=True)
-                    stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, "CUDA-INSTALL-ERR"), daemon=True)
+            print_system("--- Starting All Services ---")
+            # Compile Watchtowers before starting services that might rely on them or their functionality
+            if not _compile_watchtowers():
+                print_error("One or more watchdog components failed to compile. Halting startup.")
+                setup_failures.append(f"Watchdog components failed to compile, check if the tools are installed in the conda environment(git, cmake, node, npm, go, alr)")
+
+            service_threads = []
+            # Start Engine Main
+            service_threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
+            time.sleep(3) # Give engine a moment to start
+            engine_ready = any(proc.poll() is None and name_s == "ENGINE" for proc, name_s in running_processes)
+            if not engine_ready:
+                print_error("Engine Main failed to start. Exiting."); setup_failures.append(f"Engine Main failed to start, check if there's conflicting installations or other issues from previous runs")
+
+            # Start Backend Service
+            service_threads.append(start_service_thread(start_backend_service, "BackendServiceThread"))
+            time.sleep(2) # Give backend a moment to start
+
+            # Start Frontend Service
+            service_threads.append(start_service_thread(start_frontend, "FrontendThread"))
+
+            print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.")
+            try:
+                while True:
+                    all_ok = True
+                    active_procs_found = False
+                    with process_lock:
+                        current_procs_snapshot = list(running_processes) # Make a copy to iterate
+                    
+                    # If there are no services managed by this script, break or indicate completion
+                    if not current_procs_snapshot and service_threads: # If threads were started but no procs remain
+                        all_ok = False # Consider it not OK if expected services are gone
+                    
+                    for proc, name_s in current_procs_snapshot:
+                        if proc.poll() is None: # Process is still running
+                            active_procs_found = True
+                        else:
+                            print_error(f"Service '{name_s}' exited unexpectedly (RC: {proc.poll()})."); all_ok = False
+                    
+                    if not all_ok:
+                        print_error("One or more services terminated. Shutting down launcher."); break
+                    if not active_procs_found and service_threads: # If all services have exited (and there were services to begin with)
+                        print_system("All services seem to have finished. Exiting launcher."); break
+                    
+                    time.sleep(5) # Check every 5 seconds
+            except KeyboardInterrupt:
+                print_system("\nKeyboardInterrupt received by main thread (relaunched script). Shutting down...")
+            finally:
+                print_system("Launcher main loop (relaunched script) finished. Ensuring cleanup via atexit...")
+
+        else:  # Initial launcher instance (is_already_in_correct_env is False)
+            print_system(f"--- Initial Launcher: Conda Setup & Hardware Detection ---")
+
+            autodetected_build_env_vars = _detect_and_prepare_acceleration_env_vars()
+
+            if not find_conda_executable():
+                print_error("Conda executable not located. Exiting.")
+                _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
+                setup_failures.append(f"Weird, how did we get here? Conda executable not located. Exiting.")
+            print_system(f"Using Conda executable: {CONDA_EXECUTABLE}")
+
+            # Run the health check on the existing environment before proceeding.
+            # If it returns False, it means the environment was corrupt and has been deleted.
+            if not _check_and_repair_conda_env(TARGET_CONDA_ENV_PATH):
+                print_warning("Environment was repaired by deletion. The launcher will now create a fresh one.")
+
+            if not (os.path.isdir(TARGET_CONDA_ENV_PATH) and os.path.exists(
+                    os.path.join(TARGET_CONDA_ENV_PATH, 'conda-meta'))):
+                print_system(f"Target Conda env '{TARGET_CONDA_ENV_PATH}' not found/invalid. Creating...")
+                _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
+                target_python_versions = get_conda_python_versions_to_try()
+                if not create_conda_env(TARGET_CONDA_ENV_PATH, target_python_versions):
+                    print_error(f"Failed to create Conda env at '{TARGET_CONDA_ENV_PATH}'. Exiting.")
+                    setup_failures.append(f"Weird, how did we get here? Conda env creation failed")
+            else:
+                print_system(f"Target Conda env '{TARGET_CONDA_ENV_PATH}' exists.")
+
+            # --- Conda install NVIDIA CUDA Toolkit if detected ---
+            if autodetected_build_env_vars.get("AUTODETECTED_CUDA_AVAILABLE") == "1":
+                print_system("CUDA acceleration detected by initial launcher.")
+                if not os.path.exists(CUDA_TOOLKIT_INSTALLED_FLAG_FILE):
+                    print_warning("NVIDIA CUDA Toolkit not yet marked as installed in the Conda environment. Attempting installation...")
+                    print_warning("This may take several minutes and download a significant amount of data (>2 GB).")
+
+                    cuda_install_cmd = [
+                        CONDA_EXECUTABLE, 'install', '--yes',
+                        '--prefix', TARGET_CONDA_ENV_PATH,
+                        '-c', 'nvidia',
+                        'cuda-toolkit'
+                    ]
+
+                    if IS_WINDOWS and CONDA_EXECUTABLE and CONDA_EXECUTABLE.lower().endswith(".bat"):
+                        cuda_install_cmd = ['cmd', '/c'] + cuda_install_cmd
+
+                    print_system(f"Executing: {' '.join(cuda_install_cmd)}")
+                    try:
+                        process = subprocess.Popen(cuda_install_cmd, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, errors='replace')
+                        stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, "CUDA-INSTALL-OUT"), daemon=True)
+                        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, "CUDA-INSTALL-ERR"), daemon=True)
+                        stdout_thread.start()
+                        stderr_thread.start()
+
+                        process.wait()
+                        stdout_thread.join(timeout=5)
+                        stderr_thread.join(timeout=5)
+
+                        if process.returncode == 0:
+                            print_system("NVIDIA CUDA Toolkit successfully installed into Conda environment.")
+                            with open(CUDA_TOOLKIT_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_flag:
+                                f_flag.write(f"Installed on: {datetime.now().isoformat()}\n")
+                        else:
+                            print_error(f"Failed to install NVIDIA CUDA Toolkit (return code: {process.returncode}).")
+                            print_error("The launcher will continue, but builds requiring 'nvcc' will likely fail.")
+                            print_error("Please check the 'CUDA-INSTALL-ERR' logs above for details.")
+                    except Exception as e_cuda_install:
+                        print_error(f"An exception occurred during CUDA toolkit installation: {e_cuda_install}")
+                        print_error("The launcher will continue, but CUDA support will likely be unavailable.")
+                else:
+                    print_system("NVIDIA CUDA Toolkit is already marked as installed in Conda environment (flag file found).")
+            # --- END Conda install NVIDIA CUDA Toolkit ---
+
+            # Prepare relaunch command
+            script_to_run_abs_path = os.path.abspath(__file__)
+            conda_run_cmd_list_base = [CONDA_EXECUTABLE, 'run', '--prefix', TARGET_CONDA_ENV_PATH]
+
+            conda_supports_no_capture = False
+            try:
+                # Check if 'conda run' supports '--no-capture-output' for direct streaming
+                test_no_capture_cmd = [CONDA_EXECUTABLE, 'run', '--help']
+                help_output = subprocess.check_output(test_no_capture_cmd, text=True, stderr=subprocess.STDOUT, timeout=5)
+                if '--no-capture-output' in help_output:
+                    conda_supports_no_capture = True
+                    conda_run_cmd_list_base.insert(2, '--no-capture-output') # Insert after 'run'
+            except Exception:
+                pass # Ignore errors if `conda run --help` fails
+
+            conda_run_cmd_list = conda_run_cmd_list_base + ['python', script_to_run_abs_path] + sys.argv[1:]
+            if IS_WINDOWS and CONDA_EXECUTABLE and CONDA_EXECUTABLE.lower().endswith(".bat"):
+                conda_run_cmd_list = ['cmd', '/c'] + conda_run_cmd_list
+
+            display_cmd_list = [str(c) if c is not None else "<CRITICAL_NONE_ERROR>" for c in conda_run_cmd_list]
+            if "<CRITICAL_NONE_ERROR>" in display_cmd_list:
+                print_error(f"FATAL: None value in conda_run_cmd_list: {display_cmd_list}"); setup_failures.append(f"Critical Error: None value in conda_run_cmd_list")
+            print_system(f"Relaunching script using 'conda run': {' '.join(display_cmd_list)}")
+
+            os.makedirs(RELAUNCH_LOG_DIR, exist_ok=True)
+            popen_env = os.environ.copy()
+            popen_env.update(autodetected_build_env_vars)
+            popen_env["ZEPHYRINE_RELAUNCHED_IN_CONDA"] = "1" # Set flag for relaunched script
+
+            log_stream_threads = []
+            common_popen_kwargs_relaunch = {"text": True, "errors": 'replace', "bufsize": 1, "env": popen_env}
+            if IS_WINDOWS:
+                common_popen_kwargs_relaunch["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+            else:
+                common_popen_kwargs_relaunch["preexec_fn"] = os.setsid
+
+            process_conda_run = None
+            try:
+                if conda_supports_no_capture:
+                    print_system("Parent: Relaunched script output should stream directly.")
+                    process_conda_run = subprocess.Popen(conda_run_cmd_list, **common_popen_kwargs_relaunch)
+                else:
+                    print_system(
+                        f"Parent: Relaunched script output via logs: STDOUT='{RELAUNCH_STDOUT_LOG}', STDERR='{RELAUNCH_STDERR_LOG}'")
+                    with open(RELAUNCH_STDOUT_LOG, 'w', encoding='utf-8') as f_stdout, \
+                            open(RELAUNCH_STDERR_LOG, 'w', encoding='utf-8') as f_stderr:
+                        file_capture_kwargs = common_popen_kwargs_relaunch.copy()
+                        file_capture_kwargs["stdout"] = f_stdout
+                        file_capture_kwargs["stderr"] = f_stderr
+                        process_conda_run = subprocess.Popen(conda_run_cmd_list, **file_capture_kwargs)
+
+                if not process_conda_run: raise RuntimeError("Popen for conda run failed.")
+                relaunched_conda_process_obj = process_conda_run # Store for atexit cleanup
+
+                if not conda_supports_no_capture:
+                    # Start threads to stream captured logs from files
+                    stdout_thread = threading.Thread(target=_stream_log_file,
+                                                    args=(RELAUNCH_STDOUT_LOG, relaunched_conda_process_obj, "STDOUT"),
+                                                    daemon=True)
+                    stderr_thread = threading.Thread(target=_stream_log_file,
+                                                    args=(RELAUNCH_STDERR_LOG, relaunched_conda_process_obj, "STDERR"),
+                                                    daemon=True)
+                    log_stream_threads.extend([stdout_thread, stderr_thread])
                     stdout_thread.start()
                     stderr_thread.start()
 
-                    process.wait()
-                    stdout_thread.join(timeout=5)
-                    stderr_thread.join(timeout=5)
+                exit_code_from_conda_run = -1
+                if relaunched_conda_process_obj:
+                    try:
+                        relaunched_conda_process_obj.wait() # Wait for the relaunched script to complete
+                        exit_code_from_conda_run = relaunched_conda_process_obj.returncode
+                    except KeyboardInterrupt:
+                        print_system("Parent script's wait for 'conda run' interrupted. Shutting down...")
+                        # If SIGINT, exit with 130 (common for Ctrl+C)
+                        if not getattr(sys, 'exitfunc_called', False): sys.exit(130)
 
-                    if process.returncode == 0:
-                        print_system("NVIDIA CUDA Toolkit successfully installed into Conda environment.")
-                        with open(CUDA_TOOLKIT_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_flag:
-                            f_flag.write(f"Installed on: {datetime.now().isoformat()}\n")
-                    else:
-                        print_error(f"Failed to install NVIDIA CUDA Toolkit (return code: {process.returncode}).")
-                        print_error("The launcher will continue, but builds requiring 'nvcc' will likely fail.")
-                        print_error("Please check the 'CUDA-INSTALL-ERR' logs above for details.")
-                except Exception as e_cuda_install:
-                    print_error(f"An exception occurred during CUDA toolkit installation: {e_cuda_install}")
-                    print_error("The launcher will continue, but CUDA support will likely be unavailable.")
-            else:
-                print_system("NVIDIA CUDA Toolkit is already marked as installed in Conda environment (flag file found).")
-        # --- END Conda install NVIDIA CUDA Toolkit ---
+                    if log_stream_threads:
+                        print_system("Parent: Relaunched script finished. Waiting for log streamers (max 2s)...")
+                        for t in log_stream_threads:
+                            if t.is_alive(): t.join(timeout=1.0)
+                        print_system("Parent: Log streamers finished.")
 
-        # Prepare relaunch command
-        script_to_run_abs_path = os.path.abspath(__file__)
-        conda_run_cmd_list_base = [CONDA_EXECUTABLE, 'run', '--prefix', TARGET_CONDA_ENV_PATH]
+                    print_system(f"'conda run' process finished with code: {exit_code_from_conda_run}.")
+                    relaunched_conda_process_obj = None # Mark as handled for atexit
+                    sys.exit(exit_code_from_conda_run) # Exit parent with child's return code
+                else:
+                    print_error("Failed to start 'conda run' process. This should not happen after Popen check."); setup_failures.append(f"conda run process failed to start on the last phase Popen check issue?")
+            except Exception as e_outer:
+                print_error(f"Error during 'conda run' or wait: {e_outer}"); traceback.print_exc(); setup_failures.append(f"another error or timed out during wait on conda")
 
-        conda_supports_no_capture = False
-        try:
-            # Check if 'conda run' supports '--no-capture-output' for direct streaming
-            test_no_capture_cmd = [CONDA_EXECUTABLE, 'run', '--help']
-            help_output = subprocess.check_output(test_no_capture_cmd, text=True, stderr=subprocess.STDOUT, timeout=5)
-            if '--no-capture-output' in help_output:
-                conda_supports_no_capture = True
-                conda_run_cmd_list_base.insert(2, '--no-capture-output') # Insert after 'run'
-        except Exception:
-            pass # Ignore errors if `conda run --help` fails
-
-        conda_run_cmd_list = conda_run_cmd_list_base + ['python', script_to_run_abs_path] + sys.argv[1:]
-        if IS_WINDOWS and CONDA_EXECUTABLE and CONDA_EXECUTABLE.lower().endswith(".bat"):
-            conda_run_cmd_list = ['cmd', '/c'] + conda_run_cmd_list
-
-        display_cmd_list = [str(c) if c is not None else "<CRITICAL_NONE_ERROR>" for c in conda_run_cmd_list]
-        if "<CRITICAL_NONE_ERROR>" in display_cmd_list:
-            print_error(f"FATAL: None value in conda_run_cmd_list: {display_cmd_list}"); sys.exit(1)
-        print_system(f"Relaunching script using 'conda run': {' '.join(display_cmd_list)}")
-
-        os.makedirs(RELAUNCH_LOG_DIR, exist_ok=True)
-        popen_env = os.environ.copy()
-        popen_env.update(autodetected_build_env_vars)
-        popen_env["ZEPHYRINE_RELAUNCHED_IN_CONDA"] = "1" # Set flag for relaunched script
-
-        log_stream_threads = []
-        common_popen_kwargs_relaunch = {"text": True, "errors": 'replace', "bufsize": 1, "env": popen_env}
-        if IS_WINDOWS:
-            common_popen_kwargs_relaunch["creationflags"] = subprocess.CREATE_NEW_PROCESS_GROUP
+        if not setup_failures:
+            print_colored("SUCCESS", f"Setup completed successfully on attempt {attempt}!", "SUCCESS")
+            break  # Exit the retry loop
         else:
-            common_popen_kwargs_relaunch["preexec_fn"] = os.setsid
+            print_colored("ERROR", f"Setup attempt {attempt} failed with the following errors:", "ERROR")
+            for failure in setup_failures:
+                print_error(f"  - {failure}")
+            final_setup_failures = setup_failures # Save the last set of failures for the final report
 
-        process_conda_run = None
-        try:
-            if conda_supports_no_capture:
-                print_system("Parent: Relaunched script output should stream directly.")
-                process_conda_run = subprocess.Popen(conda_run_cmd_list, **common_popen_kwargs_relaunch)
-            else:
-                print_system(
-                    f"Parent: Relaunched script output via logs: STDOUT='{RELAUNCH_STDOUT_LOG}', STDERR='{RELAUNCH_STDERR_LOG}'")
-                with open(RELAUNCH_STDOUT_LOG, 'w', encoding='utf-8') as f_stdout, \
-                        open(RELAUNCH_STDERR_LOG, 'w', encoding='utf-8') as f_stderr:
-                    file_capture_kwargs = common_popen_kwargs_relaunch.copy()
-                    file_capture_kwargs["stdout"] = f_stdout
-                    file_capture_kwargs["stderr"] = f_stderr
-                    process_conda_run = subprocess.Popen(conda_run_cmd_list, **file_capture_kwargs)
+    # --- This code runs AFTER the for loop is finished (either by 'break' or exhaustion) ---
+    if final_setup_failures:
+        print_colored("FATAL", "="*60, "ERROR")
+        print_colored("FATAL", "           PROJECT ZEPHYRINE LAUNCHER FAILED OR GONE INOP", "ERROR")
+        print_colored("FATAL", "="*60, "ERROR")
+        print_error(f"All {MAX_SETUP_ATTEMPTS} setup attempts have failed. Giving up.")
+        print_error("The final set of errors encountered was:")
+        for i, failure in enumerate(final_setup_failures, 1):
+            print_error(f"  {i}. {failure}")
 
-            if not process_conda_run: raise RuntimeError("Popen for conda run failed.")
-            relaunched_conda_process_obj = process_conda_run # Store for atexit cleanup
-
-            if not conda_supports_no_capture:
-                # Start threads to stream captured logs from files
-                stdout_thread = threading.Thread(target=_stream_log_file,
-                                                 args=(RELAUNCH_STDOUT_LOG, relaunched_conda_process_obj, "STDOUT"),
-                                                 daemon=True)
-                stderr_thread = threading.Thread(target=_stream_log_file,
-                                                 args=(RELAUNCH_STDERR_LOG, relaunched_conda_process_obj, "STDERR"),
-                                                 daemon=True)
-                log_stream_threads.extend([stdout_thread, stderr_thread])
-                stdout_thread.start()
-                stderr_thread.start()
-
-            exit_code_from_conda_run = -1
-            if relaunched_conda_process_obj:
-                try:
-                    relaunched_conda_process_obj.wait() # Wait for the relaunched script to complete
-                    exit_code_from_conda_run = relaunched_conda_process_obj.returncode
-                except KeyboardInterrupt:
-                    print_system("Parent script's wait for 'conda run' interrupted. Shutting down...")
-                    # If SIGINT, exit with 130 (common for Ctrl+C)
-                    if not getattr(sys, 'exitfunc_called', False): sys.exit(130)
-
-                if log_stream_threads:
-                    print_system("Parent: Relaunched script finished. Waiting for log streamers (max 2s)...")
-                    for t in log_stream_threads:
-                        if t.is_alive(): t.join(timeout=1.0)
-                    print_system("Parent: Log streamers finished.")
-
-                print_system(f"'conda run' process finished with code: {exit_code_from_conda_run}.")
-                relaunched_conda_process_obj = None # Mark as handled for atexit
-                sys.exit(exit_code_from_conda_run) # Exit parent with child's return code
-            else:
-                print_error("Failed to start 'conda run' process. This should not happen after Popen check."); sys.exit(1)
-        except Exception as e_outer:
-            print_error(f"Error during 'conda run' or wait: {e_outer}"); traceback.print_exc(); sys.exit(1)
+        print_warning("\n--- Recommended Actions Memo ---")
+        print_warning("0. Make sure you are not running Windows or NT based system/environemtn, because this script is not tested on Windows.")
+        print_warning("1. Review the logs above for specific error messages (e.g., from pip, cmake, git).")
+        print_warning("2. Ensure you have a stable internet connection.")
+        print_warning("3. Check for sufficient disk space.")
+        print_warning(f"4. As a last resort, manually delete the '{CONDA_ENV_FOLDER_NAME}' directory and all '.flag' files in the root folder, then run this script again.")
+        sys.exit(1)

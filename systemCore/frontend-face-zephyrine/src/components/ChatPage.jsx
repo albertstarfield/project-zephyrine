@@ -174,6 +174,7 @@ function ChatPage({
           
 
           const currentContent = accumulatedContentRef.current;
+          const displayContent = currentContent.replace(/<think>[\s\S]*?<\/think>/g, "");
           const hasOpenThink = currentContent.includes("<think>") && !currentContent.includes("</think>");
           const isCurrentlyThinking = hasOpenThink;
           
@@ -185,7 +186,8 @@ function ChatPage({
             return {
               id: newId,
               sender: "assistant",
-              content: accumulatedContentRef.current,
+              //content: accumulatedContentRef.current, // (It's too long, and it's not needed most of the time)
+              content: displayContent,
               chat_id: chatId,
               created_at: prev?.created_at || new Date().toISOString(),
               isLoading: true,
@@ -197,7 +199,7 @@ function ChatPage({
         case "end":
           setIsGenerating(false);
           const finalContent = accumulatedContentRef.current;
-          const hasOpenThinkFinal = finalContent.includes("<think>") && !finalContent.includes("</think>");
+          const hasOpenThinkFinal = finalContent.replace(/<think>[\s\S]*?<\/think>/g, "");
           const isCurrentlyThinkingFinal = hasOpenThinkFinal;
 
           if (finalContent && currentAssistantMessageId.current) {

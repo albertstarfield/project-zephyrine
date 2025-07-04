@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"bufio"
 	"log"
 	"math"
 	"math/rand"
@@ -42,6 +43,8 @@ type Config struct {
 	DBPath              string
 	AllowedFileTypes    map[string]bool
 	LLMAPIRoot          string
+	ProactiveMessageCycleSeconds int // <-- ADD THIS
+	LLMNotificationURL  string // <-- ADD THIS
 }
 
 // Define the structure for buffered messages
@@ -63,6 +66,7 @@ func loadConfig() (*Config, error) {
 	tempStr := getEnv("LLM_TEMPERATURE", "0.7")
 	topCapStr := getEnv("LLM_TOPCAP_TOKENS", "2048")
 	topPStr := getEnv("LLM_TOP_P", "1.0")
+	llmNotificationURL := getEnv("LLM_NOTIFICATION_URL", "") // <-- ADD THIS. Default to empty string to make it optional.
 
 	temp, err := strconv.ParseFloat(tempStr, 32)
 	if err != nil {
@@ -98,6 +102,7 @@ func loadConfig() (*Config, error) {
 		LLMTopP:             float32(topP),
 		AllowedFileTypes:    allowedFileTypes,
 		LLMAPIRoot:          strings.TrimSuffix(apiBaseURL, "/v1"),
+		LLMNotificationURL:  llmNotificationURL, // <-- ADD THIS
 	}, nil
 }
 
@@ -126,6 +131,11 @@ type App struct {
 
 	ongoingStreams    map[string]context.CancelFunc
 	ongoingStreamsMux sync.Mutex
+
+	// --- NEW: Connection Manager for Proactive Messages ---
+	// Maps a userId to their active WebSocket connection.
+	activeConnections map[string]*websocket.Conn
+	connectionsMux    sync.RWMutex // RWMutex is efficient for many reads (lookups) and fewer writes (registrations)
 }
 
 // PrimedReadyState simulates the readiness check.
@@ -134,6 +144,12 @@ type PrimedReadyState struct {
 	IsReady          bool
 	BenchmarkMS      float64
 	InitialStartTime time.Time
+}
+
+type ProactiveMessagePayload struct {
+	UserID  string `json:"userId"`
+	ChatID  string `json:"chatId"`
+	Message string `json:"message"`
 }
 
 // --- Database Setup ---
@@ -196,6 +212,222 @@ func initDB(dbPath string) (*sql.DB, error) {
 	return db, nil
 }
 
+// --- NEW: Connection Management Functions ---
+
+// registerConnection adds a user's connection to the manager.
+func (app *App) registerConnection(userID string, conn *websocket.Conn) {
+	app.connectionsMux.Lock()
+	defer app.connectionsMux.Unlock()
+	app.activeConnections[userID] = conn
+	log.Printf("Connection registered for user: %s", userID)
+}
+
+// deregisterConnection removes a user's connection.
+func (app *App) deregisterConnection(userID string) {
+	app.connectionsMux.Lock()
+	defer app.connectionsMux.Unlock()
+	if _, ok := app.activeConnections[userID]; ok {
+		delete(app.activeConnections, userID)
+		log.Printf("Connection deregistered for user: %s", userID)
+	}
+}
+
+func (app *App) handleProactiveNotification(w http.ResponseWriter, r *http.Request) {
+	var payload ProactiveMessagePayload
+	if err := json.NewDecoder(r.Body).Decode(&payload); err != nil {
+		respondWithError(w, http.StatusBadRequest, "Invalid request body")
+		return
+	}
+	if payload.UserID == "" || payload.ChatID == "" || payload.Message == "" {
+		respondWithError(w, http.StatusBadRequest, "userId, chatId, and message are required fields.")
+		return
+	}
+
+	log.Printf("Received proactive message via HTTP POST for user %s in chat %s", payload.UserID, payload.ChatID)
+
+	// Find the user's active WebSocket connection
+	conn, found := app.findConnection(payload.UserID)
+	if !found {
+		log.Printf("Could not find active WebSocket connection for user %s. Message not sent.", payload.UserID)
+		respondWithError(w, http.StatusNotFound, "User is not currently connected via WebSocket.")
+		return
+	}
+
+	// The client will expect a specific payload structure.
+	proactivePayload := map[string]string{
+		"chatId":  payload.ChatID,
+		"message": payload.Message,
+	}
+
+	// This is a simplified version of the WSMessage struct from websocket_handler.go
+	// to avoid import cycle issues.
+	type WsMsg struct {
+		Type    string      `json:"type"`
+		Payload interface{} `json:"payload,omitempty"`
+	}
+
+	msgToSend := WsMsg{Type: "proactive_thought", Payload: proactivePayload}
+	
+    // We must lock when writing to the connection from a different goroutine
+    // than the one that owns the read loop.
+	app.connectionsMux.Lock()
+	err := conn.WriteJSON(msgToSend)
+	app.connectionsMux.Unlock()
+
+	if err != nil {
+		log.Printf("Failed to send proactive message to user %s: %v", payload.UserID, err)
+		// The connection might be broken. Clean it up.
+		app.deregisterConnection(payload.UserID)
+		respondWithError(w, http.StatusInternalServerError, "Failed to write message to client's WebSocket.")
+		return
+	}
+
+	log.Printf("Successfully sent proactive message to user %s.", payload.UserID)
+	respondWithJSON(w, http.StatusAccepted, map[string]string{"status": "message_queued_for_delivery"})
+}
+
+func (app *App) handleProactiveThoughtEvent(jsonData string) {
+	var payload struct {
+		UserID  string `json:"userId"`
+		ChatID  string `json:"chatId"`
+		Message string `json:"message"`
+	}
+
+	if err := json.Unmarshal([]byte(jsonData), &payload); err != nil {
+		log.Printf("ERROR: Could not unmarshal proactive_thought data: %v. Data: %s", err, jsonData)
+		return
+	}
+
+	if payload.UserID == "" || payload.ChatID == "" {
+		log.Printf("WARNING: Received proactive_thought event with missing userId or chatId. Data: %s", jsonData)
+		return
+	}
+
+	log.Printf("Received proactive thought from LLM for user %s", payload.UserID)
+
+	// Find the user's active WebSocket connection
+	conn, found := app.findConnection(payload.UserID)
+	if !found {
+		log.Printf("Could not find active WebSocket for user %s. Proactive message from LLM was not delivered.", payload.UserID)
+		return
+	}
+	
+	// Create the payload to send to the client
+	wsPayload := map[string]string{
+		"chatId":  payload.ChatID,
+		"message": payload.Message,
+	}
+
+	// This function is in websocket_handler.go. We need to make sure it's accessible.
+	// For now, let's assume `sendWsMessage` is a public function or we reimplement the write logic here.
+	// Let's use the safer direct write method to avoid import cycle issues.
+	msgToSend := WSMessage{Type: "proactive_thought", Payload: wsPayload}
+	
+	// We need to lock the connection when writing from a different goroutine
+	app.connectionsMux.Lock()
+	err := conn.WriteJSON(msgToSend)
+	app.connectionsMux.Unlock()
+
+	if err != nil {
+		log.Printf("Failed to forward proactive LLM message to user %s: %v", payload.UserID, err)
+		// Connection is likely broken, so we deregister the user.
+		app.deregisterConnection(payload.UserID)
+	} else {
+		log.Printf("Successfully forwarded proactive LLM thought to user %s.", payload.UserID)
+	}
+}
+
+// findConnection safely retrieves a connection by userID.
+func (app *App) findConnection(userID string) (*websocket.Conn, bool) {
+	app.connectionsMux.RLock()
+	defer app.connectionsMux.RUnlock()
+	conn, found := app.activeConnections[userID]
+	return conn, found
+}
+
+func (app *App) listenForLLMNotifications(ctx context.Context) {
+	log.Printf("Starting LLM notification listener for URL: %s", app.Config.LLMNotificationURL)
+
+	for {
+		select {
+		case <-ctx.Done():
+			log.Println("Shutting down LLM notification listener.")
+			return
+		default:
+			// This structure allows for automatic reconnection on error
+			req, err := http.NewRequestWithContext(ctx, "GET", app.Config.LLMNotificationURL, nil)
+			if err != nil {
+				log.Printf("ERROR: Failed to create LLM notification request: %v. Retrying in 15s.", err)
+				time.Sleep(15 * time.Second)
+				continue
+			}
+
+			client := &http.Client{}
+			resp, err := client.Do(req)
+			if err != nil {
+				log.Printf("ERROR: Failed to connect to LLM notification stream: %v. Retrying in 15s.", err)
+				time.Sleep(15 * time.Second)
+				continue
+			}
+
+			if resp.StatusCode != http.StatusOK {
+				log.Printf("ERROR: LLM notification stream returned non-200 status: %d. Retrying in 15s.", resp.StatusCode)
+				resp.Body.Close()
+				time.Sleep(15 * time.Second)
+				continue
+			}
+
+			log.Println("Successfully connected to LLM notification stream.")
+			
+			// Process the stream
+			processSSEStream(ctx, resp, app)
+			
+			// If processSSEStream returns, it means the connection was closed or an error occurred.
+			// The loop will then automatically try to reconnect after a short delay.
+			log.Println("LLM notification stream disconnected. Reconnecting in 5s...")
+			time.Sleep(5 * time.Second)
+		}
+	}
+}
+
+func processSSEStream(ctx context.Context, resp *http.Response, app *App) {
+	defer resp.Body.Close()
+	scanner := bufio.NewScanner(resp.Body)
+	var eventType, eventData string
+
+	for scanner.Scan() {
+		// Check if the parent context has been canceled (e.g., app shutdown)
+		select {
+		case <-ctx.Done():
+			return
+		default:
+		}
+
+		line := scanner.Text()
+		if line == "" { // An empty line marks the end of an event
+			if eventType == "proactive_thought" {
+				app.handleProactiveThoughtEvent(eventData)
+			}
+			// Reset for the next event
+			eventType, eventData = "", ""
+			continue
+		}
+
+		if strings.HasPrefix(line, "event:") {
+			eventType = strings.TrimSpace(strings.TrimPrefix(line, "event:"))
+		} else if strings.HasPrefix(line, "data:") {
+			eventData = strings.TrimSpace(strings.TrimPrefix(line, "data:"))
+		}
+	}
+
+	if err := scanner.Err(); err != nil {
+		// Don't log context canceled errors as they are expected on shutdown
+		if !errors.Is(err, context.Canceled) {
+			log.Printf("ERROR reading from LLM notification stream: %v", err)
+		}
+	}
+}
+
 // --- Main Application ---
 
 func main() {
@@ -234,11 +466,20 @@ func main() {
 		},
 		MessageBuffer: make([]BufferedMessage, 0, 100), // Pre-allocate capacity
 		ongoingStreams: make(map[string]context.CancelFunc),
+
+		// --- NEW: Initialize the Connection Manager ---
+		activeConnections: make(map[string]*websocket.Conn),
 	}
 
 	// Create a context that will be canceled on shutdown
 	ctx, stop := signal.NotifyContext(context.Background(), syscall.SIGINT, syscall.SIGTERM)
 	defer stop()
+
+	if cfg.LLMNotificationURL != "" {
+		go app.listenForLLMNotifications(ctx)
+	} else {
+        log.Println("LLM_NOTIFICATION_URL not set. Skipping proactive LLM message listener.")
+	}
 
 	// Start the background message flusher
 	go app.startMessageFlusher(ctx)
@@ -270,7 +511,11 @@ func main() {
 		r.Get("/images/history", app.handleImageHistory)
 		r.Post("/files", app.handleFileUpload)
 		r.Get("/files", app.handleFileHistory)
+		// --- NEW: Endpoint for proactive notifications ---
+		r.Post("/chat/notification", app.handleProactiveNotification)
 	})
+
+	
 
 	// The WebSocket endpoint, bound to the root path as in the original file.
 	r.Get("/", app.serveWs)
