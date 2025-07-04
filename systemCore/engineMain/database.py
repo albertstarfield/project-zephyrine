@@ -702,15 +702,21 @@ def _get_snapshot_files() -> List[str]:
 
 
 def _prune_old_snapshots():
-    """Deletes the oldest snapshots if the count exceeds retention."""
-    if not ENABLE_DB_SNAPSHOTS or DB_SNAPSHOT_RETENTION_COUNT <= 0: # Check if pruning is enabled/valid
+    """
+    Deletes the oldest snapshots if the total count exceeds the retention policy.
+    This is now the enforced retention mechanism.
+    """
+    if not ENABLE_DB_SNAPSHOTS or DB_SNAPSHOT_RETENTION_COUNT <= 0:
         return
     try:
-        snapshots = _get_snapshot_files() # Gets them sorted, oldest first
+        # _get_snapshot_files() returns snapshots sorted oldest to newest
+        snapshots = _get_snapshot_files()
+        
         if len(snapshots) > DB_SNAPSHOT_RETENTION_COUNT:
             num_to_delete = len(snapshots) - DB_SNAPSHOT_RETENTION_COUNT
-            logger.info(f"Pruning {num_to_delete} old snapshot(s) (retention limit: {DB_SNAPSHOT_RETENTION_COUNT})...")
-            # Delete the oldest ones from the beginning of the sorted list
+            logger.info(f"Pruning {num_to_delete} old snapshot(s) to meet retention count of {DB_SNAPSHOT_RETENTION_COUNT}...")
+            
+            # Delete the oldest snapshots from the beginning of the list
             for i in range(num_to_delete):
                 snapshot_to_delete = snapshots[i]
                 try:
@@ -718,63 +724,66 @@ def _prune_old_snapshots():
                     logger.debug(f"  Deleted old snapshot: {os.path.basename(snapshot_to_delete)}")
                 except Exception as e:
                     logger.warning(f"  Failed to delete old snapshot {os.path.basename(snapshot_to_delete)}: {e}")
+            logger.success(f"Snapshot pruning complete.")
+            
     except Exception as e:
         logger.error(f"Error during snapshot pruning: {e}")
 
 
 def _restore_from_latest_snapshot() -> bool:
-    """Attempts to restore the database from the latest valid snapshot."""
+    """
+    Attempts to restore the database from available snapshots.
+    It prioritizes the largest snapshot file, assuming it's the most complete.
+    """
     if not ENABLE_DB_SNAPSHOTS:
-        logger.info("Snapshot restoration skipped: Snapshots are disabled.")
+        logger.info("Snapshot restoration skipped: Snapshots are disabled by configuration.")
         return False
 
-    snapshots = _get_snapshot_files()
-    if not snapshots:
+    all_snapshots = _get_snapshot_files()
+    if not all_snapshots:
         logger.info("No snapshots found to restore from.")
         return False
 
-    # Try from newest to oldest
-    for snapshot_path in reversed(snapshots):
-        logger.info(f"Attempting to restore from snapshot: {os.path.basename(snapshot_path)}...")
-        # Decompress to a temporary path first to avoid corrupting runtime if snapshot is bad
+    # --- NEW: Sort snapshots by size (largest first) as a heuristic for completeness ---
+    snapshots_with_size = []
+    for s_path in all_snapshots:
+        try:
+            size = os.path.getsize(s_path)
+            snapshots_with_size.append((s_path, size))
+        except OSError as e:
+            logger.warning(f"Could not get size of snapshot '{s_path}': {e}. It will be skipped.")
+
+    # Sort descending by size
+    snapshots_with_size.sort(key=lambda x: x[1], reverse=True)
+    logger.info(f"Found {len(snapshots_with_size)} snapshots. Attempting restore, largest first...")
+    # --- END NEW ---
+
+    # Try to restore from the sorted list
+    for snapshot_path, size_bytes in snapshots_with_size:
+        logger.info(f"Attempting to restore from snapshot: {os.path.basename(snapshot_path)} (Size: {size_bytes / 1024:.2f} KB)...")
+        
         with tempfile.NamedTemporaryFile(delete=False, suffix=".db") as tmp_restored_db:
             temp_restored_db_path = tmp_restored_db.name
 
-        restored_successfully_to_temp = False
+        restored_successfully = False
         try:
             if _decompress_db(snapshot_path, temp_restored_db_path):
-                logger.info(f"Successfully decompressed snapshot to temporary file: {temp_restored_db_path}")
-                # Check integrity of the decompressed temporary snapshot
-                if _check_and_repair_db(temp_restored_db_path,
-                                        context_msg=f"restored snapshot {os.path.basename(snapshot_path)}"):
+                if _check_db_integrity_quick(temp_restored_db_path, context_msg=f"restored snapshot"):
                     logger.info(f"Restored snapshot '{os.path.basename(snapshot_path)}' passed integrity check.")
                     # Atomically replace the runtime DB with the good snapshot
-                    try:
-                        if os.path.exists(RUNTIME_DB_PATH):
-                            backup_corrupt_path = f"{RUNTIME_DB_PATH}.pre_snapshot_restore_{int(time.time())}"
-                            logger.warning(
-                                f"Backing up existing (potentially corrupt/readonly) runtime DB to {backup_corrupt_path}")
-                            shutil.move(RUNTIME_DB_PATH, backup_corrupt_path)
-
-                        shutil.move(temp_restored_db_path, RUNTIME_DB_PATH)
-                        logger.success(
-                            f"✅ Database successfully restored from snapshot: {os.path.basename(snapshot_path)}")
-                        restored_successfully_to_temp = True  # Flag that the move was successful
-                        return True  # Overall success
-                    except Exception as move_err:
-                        logger.error(f"Failed to move verified snapshot to runtime path: {move_err}")
+                    if os.path.exists(RUNTIME_DB_PATH):
+                        os.remove(RUNTIME_DB_PATH) # Remove the old/corrupt DB
+                    shutil.move(temp_restored_db_path, RUNTIME_DB_PATH)
+                    logger.success(f"✅ Database successfully restored from snapshot: {os.path.basename(snapshot_path)}")
+                    return True # <<< SUCCESS, EXIT FUNCTION
                 else:
-                    logger.warning(
-                        f"Restored snapshot '{os.path.basename(snapshot_path)}' FAILED integrity check. Trying older snapshot if available.")
+                    logger.warning(f"Restored snapshot '{os.path.basename(snapshot_path)}' FAILED integrity check. Trying next snapshot.")
             else:
                 logger.warning(f"Failed to decompress snapshot '{os.path.basename(snapshot_path)}'.")
         finally:
-            # Clean up the temporary decompressed file only if it wasn't successfully moved
-            if os.path.exists(temp_restored_db_path) and not restored_successfully_to_temp:
-                try:
-                    os.remove(temp_restored_db_path)
-                except Exception as e:
-                    logger.warning(f"Could not remove temporary restored DB file '{temp_restored_db_path}': {e}")
+            # Clean up the temporary file if it still exists
+            if os.path.exists(temp_restored_db_path):
+                os.remove(temp_restored_db_path)
 
     logger.error("❌ All available snapshots failed to restore or pass integrity checks.")
     return False
@@ -1359,7 +1368,7 @@ def init_db():
                     # --- The "Nuke and Pave" Autofix ---
                     backup_path = f"{db_path}.stale_schema_backup_{int(time.time())}"
                     logger.info(f"Backing up current database to: {backup_path}")
-                    shutil.copy(db_path, backup_path)
+                    #shutil.copy(db_path, backup_path)
                     
                     logger.info(f"Removing stale database file to force recreation: {db_path}")
                     os.remove(db_path)

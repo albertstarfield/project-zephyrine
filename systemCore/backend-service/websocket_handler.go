@@ -61,8 +61,18 @@ func (app *App) serveWs(w http.ResponseWriter, r *http.Request) {
 		log.Println("WebSocket upgrade error:", err)
 		return
 	}
-	defer conn.Close()
 	log.Println("Client connected via WebSocket")
+
+	// --- MODIFIED: Lifecycle Management ---
+	var currentUserID string // Keep track of the user ID for this connection
+	defer func() {
+		// When the loop breaks (client disconnects), deregister them.
+		if currentUserID != "" {
+			app.deregisterConnection(currentUserID)
+		}
+		conn.Close()
+	}()
+	// --- END MODIFICATION ---
 
 	for {
 		messageType, message, err := conn.ReadMessage()
@@ -75,18 +85,38 @@ func (app *App) serveWs(w http.ResponseWriter, r *http.Request) {
 			break
 		}
 		if messageType == websocket.TextMessage {
-			app.handleWebSocketMessage(conn, message)
+			// --- MODIFIED: Register connection on first valid message ---
+			userID, err := app.handleWebSocketMessage(conn, message)
+			if err != nil {
+				log.Printf("Error handling WebSocket message: %v. Disconnecting.", err)
+				break // An error here might mean a malformed message; safer to close.
+			}
+
+			// If we just learned the user ID, register the connection.
+			if userID != "" && currentUserID == "" {
+				currentUserID = userID
+				app.registerConnection(currentUserID, conn)
+			}
+			// --- END MODIFICATION ---
 		}
 	}
 }
 
-func (app *App) handleWebSocketMessage(conn *websocket.Conn, rawMessage []byte) {
+func (app *App) handleWebSocketMessage(conn *websocket.Conn, rawMessage []byte) (string, error) {
 	var msg WebSocketMessage
 	if err := json.Unmarshal(rawMessage, &msg); err != nil {
 		log.Printf("Error parsing WebSocket JSON: %v. Raw message: %s", err, string(rawMessage))
 		sendWsError(conn, "Invalid message format.")
-		return
+		return "", err
 	}
+
+	// --- NEW: Peek at the payload to extract userID for registration ---
+	var genericPayload GenericPayload
+	if err := json.Unmarshal(msg.Payload, &genericPayload); err != nil {
+		// Not all messages may have a userID, that's okay. We just won't be able to register on this message.
+		log.Printf("Could not unmarshal generic payload to find userID for registration: %v", err)
+	}
+	// --- END NEW ---
 
 	ctx := context.Background()
 
@@ -110,7 +140,11 @@ func (app *App) handleWebSocketMessage(conn *websocket.Conn, rawMessage []byte) 
 		log.Printf("Unknown message type received: %s", msg.Type)
 		sendWsError(conn, fmt.Sprintf("Unknown message type: %s", msg.Type))
 	}
+
+	// Return the found userID so the connection can be registered
+	return genericPayload.UserID, nil
 }
+
 
 // wsChat now orchestrates the entire transactional process for a single user turn.
 func (app *App) wsChat(ctx context.Context, conn *websocket.Conn, payload json.RawMessage) {
