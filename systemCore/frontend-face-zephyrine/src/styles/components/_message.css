@@ -303,6 +303,16 @@
   word-break: break-word;
 }
 
+.ghost-feed-spacer {
+  height: 15rem; /* Adjust this value to control the buffer size. */
+                /* This should be roughly the height of your InputArea + desired extra space. */
+                /* For example, if your InputArea is ~150px and you want 50px buffer, set 200px. */
+  flex-shrink: 0; /* Prevent it from shrinking if a flex parent tries to compress it */
+  width: 100%; /* Ensure it takes full width */
+  /* Optional: Add a subtle background for debugging or visual cue */
+  /* background-color: rgba(0, 255, 0, 0.05); */
+}
+
 /* --- Responsive Adjustments --- */
 @media (max-width: 768px) {
   .message {
