@@ -26,7 +26,8 @@ pytesseract
 PyMuPDF
 
 # --- Core Web Framework & ASGI/WSGI Server ---
-Flask
+flask
+flask[async]
 Flask-Cors
 hypercorn
 # uvicorn>=0.15             # Alternative ASGI server (optional) - Kept commented

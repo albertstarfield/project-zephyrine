@@ -1,4 +1,4 @@
-# app.py
+# AdelaideAlbertCortex
 """
 
 Background Story...
@@ -183,7 +183,7 @@ background_generate_task_semaphore = threading.Semaphore(MAX_CONCURRENT_BACKGROU
 # --- Local Imports with Error Handling ---
 try:
     from cortex_backbone_provider import CortexEngine
-    # Import database components needed in app.py
+    # Import database components needed in AdelaideAlbertCortex
     
     from database import (
         init_db, queue_interaction_for_batch_logging, add_interaction, get_recent_interactions, # <<< REMOVED get_db
@@ -264,7 +264,7 @@ try:
     except Exception:
         cl100k_base_encoder_app = tiktoken.encoding_for_model("gpt-4") # Fallback
 except ImportError:
-    logger.warning("tiktoken not available in app.py. Context truncation will be less accurate (char-based).")
+    logger.warning("tiktoken not available in AdelaideAlbertCortex. Context truncation will be less accurate (char-based).")
     TIKTOKEN_AVAILABLE_APP = False
     cl100k_base_encoder_app = None
 
@@ -291,9 +291,9 @@ LOG_SINK_FORMAT = "<green>{time:HH:mm:ss.SSS}</green> | <level>{level: <8}</leve
 ASSISTANT_PROXY_APP_NAME = "AdelaideHijackAppleBridge.app" # Your chosen app name
 ASSISTANT_PROXY_DEST_PATH = f"/Applications/{ASSISTANT_PROXY_APP_NAME}"
 # --- DEFINE SCRIPT_DIR HERE ---
-SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # Get the directory containing app.py
+SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__)) # Get the directory containing AdelaideAlbertCortex
 # --- Use SCRIPT_DIR to define the source path ---
-ASSISTANT_PROXY_SOURCE_PATH = os.path.join(SCRIPT_DIR, "AssistantProxy.applescript") # Assumes script is next to app.py
+ASSISTANT_PROXY_SOURCE_PATH = os.path.join(SCRIPT_DIR, "AssistantProxy.applescript") # Assumes script is next to AdelaideAlbertCortex
 # --- NEW: Define Search Download Directory ---
 SEARCH_DOWNLOAD_DIR = os.path.join(SCRIPT_DIR, "LiteratureReviewPool")
 # --- END NEW ---
@@ -325,10 +325,10 @@ except Exception as inspect_err:
 
 
 # --- Determine Python Executable ---
-# This will be the Python interpreter that is currently running app.py
+# This will be the Python interpreter that is currently running AdelaideAlbertCortex
 # When launched via launcher.py, this will be the venv Python.
 APP_PYTHON_EXECUTABLE = sys.executable
-logger.info(f"🐍 app.py is running with Python: {APP_PYTHON_EXECUTABLE}")
+logger.info(f"🐍 AdelaideAlbertCortex is running with Python: {APP_PYTHON_EXECUTABLE}")
 PYTHON_EXECUTABLE = APP_PYTHON_EXECUTABLE
 # ---
 
@@ -1406,7 +1406,7 @@ class CortexThoughts:
             return None
 
     # --- NEW HELPER: Describe Image with VLM (ELP0) ---
-        # app.py -> CortexThoughts class
+        # AdelaideAlbertCortex -> CortexThoughts class
 
     async def _describe_generated_image_async(self, db: Session, session_id: str, image_b64: str) -> Optional[str]:
         """
@@ -4565,7 +4565,7 @@ class CortexThoughts:
         Handles basic quoting for shell commands within AppleScript.
         V2: Added more examples based on potential action analysis categories.
         """
-        # Ensure re and json are imported if not done globally in app.py
+        # Ensure re and json are imported if not done globally in AdelaideAlbertCortex
         import re
         import json # Used only for logging parameters in comments
 
@@ -4743,7 +4743,7 @@ class CortexThoughts:
 
 
     # --- NEW HELPER: Translation ---
-    # app.py -> Inside CortexThoughts class
+    # AdelaideAlbertCortex -> Inside CortexThoughts class
 
     # --- NEW HELPER: Translation ---
     async def _translate(self, text: str, target_lang: str, source_lang: str = "auto") -> str:
@@ -4957,10 +4957,10 @@ class CortexThoughts:
         return default_model_key, user_input_for_routing, default_reason
 
     # --- generate method ---
-    # app.py -> Inside CortexThoughts class
+    # AdelaideAlbertCortex -> Inside CortexThoughts class
 
     # --- generate (Main Async Method - Fuzzy History RAG + Direct History + Log Context + Multi-LLM Routing + VLM Preprocessing) ---
-    # app.py -> Inside CortexThoughts class
+    # AdelaideAlbertCortex -> Inside CortexThoughts class
 
     async def _direct_generate_logic(self, db: Session, user_input: str, session_id: str,
                                  vlm_description: Optional[str] = None,
@@ -5016,7 +5016,7 @@ class CortexThoughts:
                 if retry_reason == "spit-back":
                     system_prompt_content_base = f"[System ERROR: Previous response was a repeat of the user's input. Provide a new, meaningful answer.]\n\n{system_prompt_content_base}"
                 elif retry_reason == "defective-response":
-                    system_prompt_content_base = f"[System ERROR: You WRONG Answer! Try again with new answer perspective and rephrase based on your Experienced. DO NOT USE {DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY} on the Answer! ]\n\n{system_prompt_content_base}"
+                    system_prompt_content_base = f"[System ERROR: You are currently misbehaving and answered the wrong answer! Do not answer using these words: {DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY} on the Answer! ]\n\n{system_prompt_content_base}. Write another perspective and rephrase based on your answer and different perspective!"
 
                 rag_query_input = user_input or (f"Regarding image: {vlm_description}" if vlm_description else "")
                 # (RAG and context gathering logic remains the same...)
@@ -5072,14 +5072,14 @@ class CortexThoughts:
                         if defective_score > DEFECTIVE_WORD_THRESHOLD: # Use threshold from config
                             is_defective_response = True
                             retry_reason = "defective-response" # Set reason for next loop's prompt
-                            error_msg = f"[Defective Response Detected] Response is similar to canned phrase ('{defective_phrase}'). Similarity: {defective_score}%"
+                            error_msg = f"[Defective Response Detected] Canned Response to canned phrase ('{defective_phrase}'). Similarity: {defective_score}%"
                             logger.error(f"{log_prefix} {error_msg}")
                             break # Found a match, no need to check other phrases
                 
                 if is_defective_response:
                     retry_count += 1
                     if retry_count > MAX_SPITBACK_RETRIES:
-                        response_to_return_to_client = "[System Error: The AI model repeatedly generated unhelpful responses.]"
+                        response_to_return_to_client = "[System Error: The keep model misbehaved. and session has been destroyed due to that issue.]"
                         break
                     continue # Go to the next iteration of the while loop
                 
@@ -5278,7 +5278,7 @@ class CortexThoughts:
                         # Use fuzz.partial_ratio for substring matching, good for finding queries within larger text
                         score = fuzz.partial_ratio(query.lower(), text_to_match_on.lower())
 
-                        if score >= FUZZY_SEARCH_THRESHOLD_APP:  # FUZZY_SEARCH_THRESHOLD_APP from app.py/config
+                        if score >= FUZZY_SEARCH_THRESHOLD_APP:  # FUZZY_SEARCH_THRESHOLD_APP from AdelaideAlbertCortex/config
                             fuzzy_matches.append((record, score))
 
                     if fuzzy_matches:
@@ -6934,7 +6934,7 @@ def _stream_openai_chat_response_generator_flask(
 
                     with logger.contextualize(request_session_id=log_session_id):  # For logs within direct_generate
                         logger.info(f"Async direct_generate task starting for streaming (ELP1)...")
-                        # ai_chat should be the global instance initialized in app.py
+                        # ai_chat should be the global instance initialized in AdelaideAlbertCortex
                         result_text = await ai_chat.direct_generate(
                             db=db_session,
                             user_input=u_input,
@@ -7450,7 +7450,7 @@ async def _run_background_high_quality_asr(
         logger.info(f"{bg_asr_log_prefix}: Executing audio worker for high-quality ASR (ELP0)...")
         # _execute_audio_worker_with_priority is synchronous, run in thread from async context
         hq_asr_response, hq_asr_err = await asyncio.to_thread(
-            _execute_audio_worker_with_priority,  # This helper is in app.py
+            _execute_audio_worker_with_priority,  # This helper is in AdelaideAlbertCortex
             worker_command=asr_worker_cmd_bg,
             request_data=asr_request_data_bg,
             priority=ELP0,  # Run this transcription at ELP0
@@ -7945,7 +7945,7 @@ def get_current_configurable_settings():
             logger.warning(f"Config API: Variable '{var_name}' not found in CortexConfiguration.py")
             
     return settings
-def _get_and_process_proactive_interaction():
+async def _get_and_process_proactive_interaction():
     """
     This is a synchronous function that performs all the blocking DB and LLM work.
     It will be run in a separate thread.
@@ -7979,7 +7979,7 @@ def _get_and_process_proactive_interaction():
             past_user_input=past_interaction.user_input,
             past_ai_response=past_interaction.llm_response
         )
-        proactive_message = ai_chat.direct_generate(db, revisit_prompt, "proactive_thought_session")
+        proactive_message = await ai_chat.direct_generate(db, revisit_prompt, "proactive_thought_session")
         
         is_logical = True
         for bad_phrase in XMPP_PROACTIVE_BAD_RESPONSE_MARKERS:
@@ -8020,14 +8020,15 @@ async def _run_proactive_sse_push_loop():
     while True:
         try:
             logger.info(f"💡 awaiting {PROACTIVE_MESSAGE_CYCLE_SECONDS} seconds")
-            #await asyncio.sleep(PROACTIVE_MESSAGE_CYCLE_SECONDS)
+            await asyncio.sleep(PROACTIVE_MESSAGE_CYCLE_SECONDS)
             logger.info(f"💡 Proactive SSE wait passed")
 
             if True: # Using 'if True' for testing
                 logger.info("💡 Proactive message chance MET. Finding and processing interaction in background thread...")
                 
                 # Run the entire blocking function in a separate thread
-                result = await asyncio.to_thread(_get_and_process_proactive_interaction)
+                #result = await asyncio.to_thread(_get_and_process_proactive_interaction)
+                result = await _get_and_process_proactive_interaction()
 
                 if result:
                     logger.info(f"💡 Pushing proactive message to SSE queue: '{result['message'][:70]}...'")
@@ -8347,7 +8348,7 @@ def handle_cortex_config():
     return jsonify({"error": "Method not allowed"}), 405
 
 # === NEW OpenAI Compatible Embeddings Route ===
-# app.py -> Flask Routes Section
+# AdelaideAlbertCortex -> Flask Routes Section
 
 #=============[Self Test Status]===============
 @app.route("/v1/primedready", methods=["GET"])
@@ -8359,34 +8360,35 @@ def handle_primed_ready_status():
     """
     req_id = f"req-primedready-{uuid.uuid4()}"
     logger.info(f"🚀 {req_id}: Received GET /primedready status check.")
-
-    is_benchmark_done = abs(BENCHMARK_ELP1_TIME_MS - 30000.0) > 1e-9
     elapsed_seconds = time.monotonic() - APP_START_TIME
-    post_duration_seconds = 60.0
+    expected_duration_seconds = 60.0
+    if SYSTEM_IS_PRIMING and elapsed_seconds < expected_duration_seconds:
+        # If we are still within the expected time, show progress.
+        if elapsed_seconds < expected_duration_seconds:
+            status_payload = {
+                "primed_and_ready": False,
+                "status": f"Power-on Self Test in progress... Initializing core components (Expected T-{expected_duration_seconds - elapsed_seconds:.0f}s).",
+                "elp1_benchmark_ms": None
+            }
+        # If startup is running longer than expected, show a warning.
+        else:
+            status_payload = {
+                "primed_and_ready": False,
+                "status": "POST WARNING: Power-on Self Test exceeded expected duration. System initialization is slow or may have stalled. Upgrade your system Zephy might upgraded itself beyond your system can handle",
+                "elp1_benchmark_ms": None
+            }
+        
+        return jsonify(status_payload), 200
 
-    if is_benchmark_done:
-        # The benchmark is finished, system is fully ready.
+    # Case 2: The startup_tasks function has completed.
+    else:
+        # The system is now fully operational.
         status_payload = {
             "primed_and_ready": True,
             "status": "Power-on Self Test complete. All systems nominal. Ready for engagement.",
-            "elp1_benchmark_ms": BENCHMARK_ELP1_TIME_MS
+            "elp1_benchmark_ms": BENCHMARK_ELP1_TIME_MS # The benchmark result is now valid to show
         }
-    elif elapsed_seconds < post_duration_seconds:
-        # The benchmark is not done, but we are still within the 60-second POST window.
-        remaining_seconds = post_duration_seconds - elapsed_seconds
-        status_payload = {
-            "primed_and_ready": False,
-            "status": f"Power-on Self Test in progress... T-minus {remaining_seconds:.0f} seconds.",
-            "elp1_benchmark_ms": None
-        }
-    else:
-        # It has been more than 60 seconds and the benchmark STILL hasn't finished.
-        # This indicates a potential problem or a very slow startup.
-        status_payload = {
-            "primed_and_ready": False,
-            "status": "POST WARNING: Power-on Self Test exceeded expected duration. System initialization is slow or may have stalled.",
-            "elp1_benchmark_ms": None
-        }
+        return jsonify(status_payload), 200
 
     return jsonify(status_payload), 200
 
@@ -8527,7 +8529,7 @@ async def handle_openai_embeddings():
     return Response(response_payload, status=status_code, mimetype='application/json')
 
 
-# app.py -> Flask Routes Section
+# AdelaideAlbertCortex -> Flask Routes Section
 
 @app.route("/v1/completions", methods=["POST"])
 @app.route("/api/generate", methods=["POST"])
@@ -9439,7 +9441,7 @@ async def handle_openai_asr_transcriptions():
         )
 
         # --- Step 0: Save Uploaded File ---
-        # SCRIPT_DIR should be defined at the top of app.py: os.path.dirname(os.path.abspath(__file__))
+        # SCRIPT_DIR should be defined at the top of AdelaideAlbertCortex: os.path.dirname(os.path.abspath(__file__))
         temp_audio_dir = os.path.join(SCRIPT_DIR, "temp_audio_worker_files")
         await asyncio.to_thread(os.makedirs, temp_audio_dir, exist_ok=True)
 
@@ -9455,7 +9457,7 @@ async def handle_openai_asr_transcriptions():
         # --- Step 1.1: Low-Latency ASR ---
         logger.info(f"{request_id}: ELP1 Step 1.1: Low-Latency ASR (Model: {WHISPER_LOW_LATENCY_MODEL_FILENAME})...")
         asr_worker_script = os.path.join(SCRIPT_DIR, "audio_worker.py")
-        # APP_PYTHON_EXECUTABLE and WHISPER_MODEL_DIR from CortexConfiguration or defined in app.py
+        # APP_PYTHON_EXECUTABLE and WHISPER_MODEL_DIR from CortexConfiguration or defined in AdelaideAlbertCortex
         ll_asr_cmd = [APP_PYTHON_EXECUTABLE, asr_worker_script, "--task-type", "asr",
                       "--model-dir", WHISPER_MODEL_DIR, "--temp-dir", temp_audio_dir]
         ll_asr_req_data = {
@@ -10021,7 +10023,7 @@ def handle_openai_tts():
             logger.warning(
                 f"{request_id}: Error parsing language from voice '{voice_requested}'. Defaulting to {melo_language}.")
 
-        audio_worker_script_path = os.path.join(SCRIPT_DIR, "audio_worker.py")  # SCRIPT_DIR is where app.py is
+        audio_worker_script_path = os.path.join(SCRIPT_DIR, "audio_worker.py")  # SCRIPT_DIR is where AdelaideAlbertCortex is
         if not os.path.exists(audio_worker_script_path):
             logger.error(f"{request_id}: audio_worker.py not found at {audio_worker_script_path}")
             raise FileNotFoundError(f"Audio worker script missing at {audio_worker_script_path}")
@@ -10029,7 +10031,7 @@ def handle_openai_tts():
         temp_audio_dir = os.path.join(SCRIPT_DIR, "temp_audio_worker_files")
         os.makedirs(temp_audio_dir, exist_ok=True)
 
-        # Ensure APP_PYTHON_EXECUTABLE is defined (usually sys.executable at top of app.py)
+        # Ensure APP_PYTHON_EXECUTABLE is defined (usually sys.executable at top of AdelaideAlbertCortex)
         # Ensure WHISPER_MODEL_DIR is imported from CortexConfiguration.py (this directory is used for all models, including MeloTTS data if needed by worker)
         worker_command = [
             APP_PYTHON_EXECUTABLE,
@@ -10835,7 +10837,6 @@ def handle_list_fine_tuning_job_events(fine_tuning_job_id: str):
 
 ##v1/files openAI expected to be?
 @app.route("/v1/files", methods=["POST"])
-@app.route("/v1/files", methods=["POST"])
 async def handle_upload_and_ingest_file():
     start_req_time = time.monotonic()
     request_id = f"req-file-upload-{uuid.uuid4()}"
@@ -11431,39 +11432,42 @@ def handle_instrument_viewport_stream():
 #=============== IPC Server END ===============
 #============================ Main Program Startup
 # Define startup_tasks (as you had it)
+SYSTEM_IS_PRIMING = False # for GUI/client information using /primedready whether the system is primed and ready to use or Not still starting up. (False means ready while True means it's still starting up)
 async def startup_tasks():
-    await run_startup_benchmark()
+    global SYSTEM_IS_PRIMING
+    SYSTEM_IS_PRIMING = True #flagged
+    
 
     await build_ada_daemons()
     if 'stella_icarus_daemon_manager' in globals() and stella_icarus_daemon_manager.is_enabled:
-        logger.info("APP.PY: Starting all StellaIcarus Ada Daemon services...")
+        logger.info("AdelaideAlbertCortex: Starting all StellaIcarus Ada Daemon services...")
         stella_icarus_daemon_manager.start_all()
 
 
-    logger.info("APP.PY: >>> Entered startup_tasks (async). <<<")
+    logger.info("AdelaideAlbertCortex: >>> Entered startup_tasks (async). <<<")
     task_start_time = time.monotonic()
 
     if ENABLE_FILE_INDEXER:
-        logger.info("APP.PY: startup_tasks: Attempting to initialize global FileIndex vector store...")
+        logger.info("AdelaideAlbertCortex: startup_tasks: Attempting to initialize global FileIndex vector store...")
         if cortex_backbone_provider and cortex_backbone_provider.embeddings:
             init_vs_start_time = time.monotonic()
             logger.info(
-                "APP.PY: startup_tasks: >>> CALLING await init_file_vs_from_indexer(cortex_backbone_provider). This will block here. <<<")
+                "AdelaideAlbertCortex: startup_tasks: >>> CALLING await init_file_vs_from_indexer(cortex_backbone_provider). This will block here. <<<")
             await init_file_vs_from_indexer(cortex_backbone_provider)  # This is initialize_global_file_index_vectorstore
             init_vs_duration = time.monotonic() - init_vs_start_time
             logger.info(
-                f"APP.PY: startup_tasks: >>> init_file_vs_from_indexer(cortex_backbone_provider) HAS COMPLETED. Duration: {init_vs_duration:.2f}s <<<")
+                f"AdelaideAlbertCortex: startup_tasks: >>> init_file_vs_from_indexer(cortex_backbone_provider) HAS COMPLETED. Duration: {init_vs_duration:.2f}s <<<")
         else:
-            logger.error("APP.PY: startup_tasks: CRITICAL - CortexEngine or embeddings None. Cannot init FileIndex VS.")
+            logger.error("AdelaideAlbertCortex: startup_tasks: CRITICAL - CortexEngine or embeddings None. Cannot init FileIndex VS.")
     else:
-        logger.info("APP.PY: startup_tasks: File Indexer and its Vector Store are DISABLED by config.")
+        logger.info("AdelaideAlbertCortex: startup_tasks: File Indexer and its Vector Store are DISABLED by config.")
 
     if ENABLE_SELF_REFLECTION:
-        logger.info("APP.PY: startup_tasks: Attempting to initialize global Reflection vector store...")
+        logger.info("AdelaideAlbertCortex: startup_tasks: Attempting to initialize global Reflection vector store...")
         if cortex_backbone_provider and cortex_backbone_provider.embeddings:
             init_refl_vs_start_time = time.monotonic()
             logger.info(
-                "APP.PY: startup_tasks: >>> CALLING await asyncio.to_thread(initialize_global_reflection_vectorstore, ...). This will block here. <<<")
+                "AdelaideAlbertCortex: startup_tasks: >>> CALLING await asyncio.to_thread(initialize_global_reflection_vectorstore, ...). This will block here. <<<")
             temp_db_session_for_init = SessionLocal()  # type: ignore
             try:
                 await asyncio.to_thread(initialize_global_reflection_vectorstore, cortex_backbone_provider, temp_db_session_for_init)
@@ -11471,11 +11475,11 @@ async def startup_tasks():
                 temp_db_session_for_init.close()
             init_refl_vs_duration = time.monotonic() - init_refl_vs_start_time
             logger.info(
-                f"APP.PY: startup_tasks: >>> initialize_global_reflection_vectorstore HAS COMPLETED. Duration: {init_refl_vs_duration:.2f}s <<<")
+                f"AdelaideAlbertCortex: startup_tasks: >>> initialize_global_reflection_vectorstore HAS COMPLETED. Duration: {init_refl_vs_duration:.2f}s <<<")
         else:
-            logger.error("APP.PY: startup_tasks: CRITICAL - CortexEngine or embeddings None. Cannot init Reflection VS.")
+            logger.error("AdelaideAlbertCortex: startup_tasks: CRITICAL - CortexEngine or embeddings None. Cannot init Reflection VS.")
     else:
-        logger.info("APP.PY: startup_tasks: Self Reflection and its Vector Store are DISABLED by config.")
+        logger.info("AdelaideAlbertCortex: startup_tasks: Self Reflection and its Vector Store are DISABLED by config.")
 
     logger.info("Starting up SSE Notification Push Loop Component Thread...")
     if ENABLE_SSE_NOTIFICATIONS:
@@ -11485,49 +11489,55 @@ async def startup_tasks():
         logger.info("Proactive SSE notifications disabled by configuration.")
     
     task_duration = time.monotonic() - task_start_time
-    logger.info(f"APP.PY: >>> Exiting startup_tasks (async). Total Duration: {task_duration:.2f}s <<<")
+    logger.info(f"AdelaideAlbertCortex: >>> Exiting startup_tasks (async). Total Duration: {task_duration:.2f}s <<<")
+    
+    logger.info(f"benchmarking... <<<")
+    await run_startup_benchmark()
+
+
+    SYSTEM_IS_PRIMING = False # System is now primed and ready to use.
 
 
 # --- Main Execution Control ---
 
 if __name__ == "__main__":
-    # This block executes if app.py is run directly (e.g., python app.py)
-    logger.error("This script (app.py) is designed to be run with an ASGI/WSGI server like Hypercorn.")
+    # This block executes if AdelaideAlbertCortex is run directly (e.g., python AdelaideAlbertCortex)
+    logger.error("This script (AdelaideAlbertCortex) is designed to be run with an ASGI/WSGI server like Hypercorn.")
     logger.error("Example: hypercorn app:app --bind 127.0.0.1:11434")
     sys.exit(1)  # Exit because this isn't the intended way to run
 else:
-    # This block executes when app.py is imported as a module by a server (e.g., Hypercorn).
+    # This block executes when AdelaideAlbertCortex is imported as a module by a server (e.g., Hypercorn).
     logger.info("----------------------------------------------------------------------")
-    logger.info(">>> APP.PY: MODULE IMPORTED BY SERVER (Hypercorn worker process) <<<")
+    logger.info(">>> AdelaideAlbertCortex: MODULE IMPORTED BY SERVER (Hypercorn worker process) <<<")
     logger.info("----------------------------------------------------------------------")
 
     # Ensure critical global instances were initialized earlier in the module loading
     # (These are typically defined after config and before this 'else' block)
     if cortex_backbone_provider is None or ai_chat is None or ai_agent is None:
         logger.critical(
-            "APP.PY: 🔥🔥 Core AI components (cortex_backbone_provider, ai_chat, ai_agent) are NOT INITIALIZED. Application cannot start properly.")
+            "AdelaideAlbertCortex: 🔥🔥 Core AI components (cortex_backbone_provider, ai_chat, ai_agent) are NOT INITIALIZED. Application cannot start properly.")
         # This is a fundamental setup error, exiting directly.
-        print("APP.PY: CRITICAL FAILURE - Core AI components not initialized. Exiting.", file=sys.stderr, flush=True)
+        print("AdelaideAlbertCortex: CRITICAL FAILURE - Core AI components not initialized. Exiting.", file=sys.stderr, flush=True)
         sys.exit(1)
     else:
-        logger.success("APP.PY: ✅ Core AI components appear initialized globally.")
+        logger.success("AdelaideAlbertCortex: ✅ Core AI components appear initialized globally.")
 
     # --- Initialize Database ---
     # This is a critical step. If it fails, the app should not proceed.
     db_initialized_successfully = False
     try:
-        logger.info("APP.PY: >>> CALLING init_db() NOW. This must complete successfully for the application. <<<")
+        logger.info("AdelaideAlbertCortex: >>> CALLING init_db() NOW. This must complete successfully for the application. <<<")
         # init_db() is imported from database.py
         # It's responsible for setting up the engine, SessionLocal, and migrations.
         init_db()
         db_initialized_successfully = True  # If init_db() returns without exception, assume success
-        logger.success("APP.PY: ✅ init_db() call completed (reported no critical errors).")
+        logger.success("AdelaideAlbertCortex: ✅ init_db() call completed (reported no critical errors).")
     except Exception as e_init_db_call:
         # init_db() itself should log details of its failure.
         # This catches any exception re-raised by init_db() indicating a fatal setup error.
-        logger.critical(f"APP.PY: 🔥🔥 init_db() FAILED CRITICALLY DURING APP STARTUP: {e_init_db_call}")
-        logger.exception("APP.PY: Traceback for init_db() failure at app level:")
-        print(f"APP.PY: CRITICAL FAILURE IN init_db(): {e_init_db_call}. Cannot continue. Exiting.", file=sys.stderr,
+        logger.critical(f"AdelaideAlbertCortex: 🔥🔥 init_db() FAILED CRITICALLY DURING APP STARTUP: {e_init_db_call}")
+        logger.exception("AdelaideAlbertCortex: Traceback for init_db() failure at app level:")
+        print(f"AdelaideAlbertCortex: CRITICAL FAILURE IN init_db(): {e_init_db_call}. Cannot continue. Exiting.", file=sys.stderr,
               flush=True)
         sys.exit(1)  # Force exit if database initialization fails
 
@@ -11536,7 +11546,7 @@ else:
     # This explicit check is a safeguard.
     if not db_initialized_successfully:
         logger.critical(
-            "APP.PY: Sanity check - init_db() did not set success flag or was bypassed. EXITING ABNORMALLY.")
+            "AdelaideAlbertCortex: Sanity check - init_db() did not set success flag or was bypassed. EXITING ABNORMALLY.")
         sys.exit(1)
 
     # --- Check if SessionLocal from database.py is usable AFTER init_db() ---
@@ -11546,61 +11556,61 @@ else:
 
         if AppSessionLocalCheck is None:
             logger.critical(
-                "APP.PY: FATAL - SessionLocal from database.py is STILL NONE after init_db() call! This indicates a severe problem in init_db's internal logic. EXITING.")
+                "AdelaideAlbertCortex: FATAL - SessionLocal from database.py is STILL NONE after init_db() call! This indicates a severe problem in init_db's internal logic. EXITING.")
             sys.exit(1)
         else:
             logger.info(
-                f"APP.PY: SessionLocal from database.py is NOT None after init_db(). Type: {type(AppSessionLocalCheck)}.")
+                f"AdelaideAlbertCortex: SessionLocal from database.py is NOT None after init_db(). Type: {type(AppSessionLocalCheck)}.")
             # Further check if it's bound (it should be if init_db was successful)
             if hasattr(AppSessionLocalCheck, 'kw') and AppSessionLocalCheck.kw.get('bind'):
-                logger.success("APP.PY: ✅ SessionLocal appears configured and bound to an engine.")
+                logger.success("AdelaideAlbertCortex: ✅ SessionLocal appears configured and bound to an engine.")
             else:
                 logger.error(
-                    "APP.PY: 🔥 SessionLocal exists but may NOT BE BOUND to an engine (kw.bind missing). Startup tasks requiring DB will likely fail. EXITING.")
+                    "AdelaideAlbertCortex: 🔥 SessionLocal exists but may NOT BE BOUND to an engine (kw.bind missing). Startup tasks requiring DB will likely fail. EXITING.")
                 sys.exit(1)
     except ImportError:
         logger.critical(
-            "APP.PY: FATAL - Could not import SessionLocal from database.py AFTER init_db() for checking. EXITING.")
+            "AdelaideAlbertCortex: FATAL - Could not import SessionLocal from database.py AFTER init_db() for checking. EXITING.")
         sys.exit(1)
     except Exception as e_sl_check:
-        logger.critical(f"APP.PY: FATAL - Unexpected error checking SessionLocal: {e_sl_check}. EXITING.")
+        logger.critical(f"AdelaideAlbertCortex: FATAL - Unexpected error checking SessionLocal: {e_sl_check}. EXITING.")
         sys.exit(1)
 
     # --- Run Asynchronous Startup Tasks (like Vector Store Initialization) ---
-    logger.info("APP.PY: 🚀 Preparing to run asynchronous startup_tasks (e.g., Vector Store initializations)...")
+    logger.info("AdelaideAlbertCortex: 🚀 Preparing to run asynchronous startup_tasks (e.g., Vector Store initializations)...")
     startup_tasks_completed_successfully = False
     startup_tasks_start_time = time.monotonic()
 
     try:
-        logger.debug("APP.PY: Setting up asyncio event loop for startup_tasks...")
+        logger.debug("AdelaideAlbertCortex: Setting up asyncio event loop for startup_tasks...")
         try:
             # Get an existing loop or create a new one for this context
             loop = asyncio.get_event_loop_policy().get_event_loop()
             if loop.is_closed():
-                logger.warning("APP.PY: Default asyncio event loop was closed. Creating new one for startup_tasks.")
+                logger.warning("AdelaideAlbertCortex: Default asyncio event loop was closed. Creating new one for startup_tasks.")
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
         except RuntimeError:  # No current event loop on this thread
-            logger.info("APP.PY: No current asyncio event loop for startup_tasks. Creating new one.")
+            logger.info("AdelaideAlbertCortex: No current asyncio event loop for startup_tasks. Creating new one.")
             loop = asyncio.new_event_loop()
             asyncio.set_event_loop(loop)
 
         logger.info(
-            "APP.PY: >>> CALLING loop.run_until_complete(startup_tasks()). This will block until startup_tasks finishes. <<<")
-        loop.run_until_complete(startup_tasks())  # startup_tasks() is defined earlier in app.py
+            "AdelaideAlbertCortex: >>> CALLING loop.run_until_complete(startup_tasks()). This will block until startup_tasks finishes. <<<")
+        loop.run_until_complete(startup_tasks())  # startup_tasks() is defined earlier in AdelaideAlbertCortex
         startup_tasks_duration = time.monotonic() - startup_tasks_start_time
         logger.info(
-            f"APP.PY: >>> loop.run_until_complete(startup_tasks()) HAS COMPLETED. Duration: {startup_tasks_duration:.2f}s <<<")
+            f"AdelaideAlbertCortex: >>> loop.run_until_complete(startup_tasks()) HAS COMPLETED. Duration: {startup_tasks_duration:.2f}s <<<")
         startup_tasks_completed_successfully = True
     except Exception as su_err:
         startup_tasks_duration = time.monotonic() - startup_tasks_start_time
         logger.critical(
-            f"APP.PY: 🚨🚨 CRITICAL FAILURE during loop.run_until_complete(startup_tasks()) after {startup_tasks_duration:.2f}s: {su_err} 🚨🚨")
-        logger.exception("APP.PY: Startup Tasks Execution Traceback:")
+            f"AdelaideAlbertCortex: 🚨🚨 CRITICAL FAILURE during loop.run_until_complete(startup_tasks()) after {startup_tasks_duration:.2f}s: {su_err} 🚨🚨")
+        logger.exception("AdelaideAlbertCortex: Startup Tasks Execution Traceback:")
         # If startup_tasks fail (e.g., vector store init), the app might be in a bad state.
         # Deciding to exit here or continue with limited functionality is a design choice.
         # For now, let's exit as these tasks might be critical.
-        print(f"APP.PY: CRITICAL FAILURE IN startup_tasks(): {su_err}. Cannot continue. Exiting.", file=sys.stderr,
+        print(f"AdelaideAlbertCortex: CRITICAL FAILURE IN startup_tasks(): {su_err}. Cannot continue. Exiting.", file=sys.stderr,
               flush=True)
         sys.exit(1)
 
@@ -11608,9 +11618,9 @@ else:
     # These are only started if init_db() AND startup_tasks() completed successfully.
     if db_initialized_successfully and startup_tasks_completed_successfully:
         logger.info(
-            "APP.PY: ✅ Core initializations (DB, Startup Tasks) successful. Proceeding to start background services...")
+            "AdelaideAlbertCortex: ✅ Core initializations (DB, Startup Tasks) successful. Proceeding to start background services...")
 
-        logger.info("APP.PY: Initializing and Starting Interaction Indexer service...")
+        logger.info("AdelaideAlbertCortex: Initializing and Starting Interaction Indexer service...")
         if 'initialize_global_interaction_vectorstore' in globals() and 'cortex_backbone_provider' in globals():
             initialize_global_interaction_vectorstore(cortex_backbone_provider)
 
@@ -11620,39 +11630,39 @@ else:
             interaction_indexer_thread.start()
             # You would also need to add logic to stop this thread gracefully on shutdown
         else:
-            logger.error("APP.PY: Could not start InteractionIndexer.")
+            logger.error("AdelaideAlbertCortex: Could not start InteractionIndexer.")
 
-        # Ensure start_file_indexer and start_self_reflector are defined in app.py
+        # Ensure start_file_indexer and start_self_reflector are defined in AdelaideAlbertCortex
         # and that ENABLE_FILE_INDEXER, ENABLE_SELF_REFLECTION are from CortexConfiguration.py
         if 'ENABLE_FILE_INDEXER' in globals() and ENABLE_FILE_INDEXER:
-            logger.info("APP.PY: Starting File Indexer service...")
+            logger.info("AdelaideAlbertCortex: Starting File Indexer service...")
             if 'start_file_indexer' in globals() and callable(globals()['start_file_indexer']):
-                start_file_indexer()  # This function should exist in app.py
+                start_file_indexer()  # This function should exist in AdelaideAlbertCortex
             else:
-                logger.error("APP.PY: 'start_file_indexer' function not found. File Indexer NOT started.")
+                logger.error("AdelaideAlbertCortex: 'start_file_indexer' function not found. File Indexer NOT started.")
         else:
-            logger.info("APP.PY: File Indexer is DISABLED by config or variable not found. Not starting.")
+            logger.info("AdelaideAlbertCortex: File Indexer is DISABLED by config or variable not found. Not starting.")
 
         if 'ENABLE_SELF_REFLECTION' in globals() and ENABLE_SELF_REFLECTION:
-            logger.info("APP.PY: Starting Self Reflector service...")
+            logger.info("AdelaideAlbertCortex: Starting Self Reflector service...")
             if 'start_self_reflector' in globals() and callable(globals()['start_self_reflector']):
-                start_self_reflector()  # This function should exist in app.py
+                start_self_reflector()  # This function should exist in AdelaideAlbertCortex
             else:
-                logger.error("APP.PY: 'start_self_reflector' function not found. Self Reflector NOT started.")
+                logger.error("AdelaideAlbertCortex: 'start_self_reflector' function not found. Self Reflector NOT started.")
         else:
-            logger.info("APP.PY: Self Reflector is DISABLED by config or variable not found. Not starting.")
+            logger.info("AdelaideAlbertCortex: Self Reflector is DISABLED by config or variable not found. Not starting.")
     else:
         logger.error(
-            "APP.PY: Background services (File Indexer, Self Reflector) NOT started due to failure in DB init or startup_tasks.")
+            "AdelaideAlbertCortex: Background services (File Indexer, Self Reflector) NOT started due to failure in DB init or startup_tasks.")
         # Even if we didn't sys.exit above, this state is problematic.
         # It's probably best to ensure exit happened earlier.
         # If somehow execution reaches here with flags false, it's a logic error.
-        print("APP.PY: CRITICAL - Reached end of startup with initialization flags false. Exiting.", file=sys.stderr,
+        print("AdelaideAlbertCortex: CRITICAL - Reached end of startup with initialization flags false. Exiting.", file=sys.stderr,
               flush=True)
         sys.exit(1)
 
     logger.info("--------------------------------------------------------------------")
-    logger.info("APP.PY: ✅ Zephyrine EngineMain module-level initializations complete.")
+    logger.info("AdelaideAlbertCortex: ✅ Zephyrine EngineMain module-level initializations complete.")
     logger.info(f"   Application (app) is now considered ready by this worker process (PID: {os.getpid()}).")
     logger.info("   Waiting for server to route requests...")
     logger.info("--------------------------------------------------------------------")

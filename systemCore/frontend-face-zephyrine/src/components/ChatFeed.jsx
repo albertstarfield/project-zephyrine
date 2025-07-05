@@ -92,6 +92,14 @@ LazyThinkBlock.propTypes = {
 };
 
 
+const VirtuosoFooter = React.forwardRef((props, ref) => (
+    <div ref={ref} className="ghost-feed-spacer" {...props}>
+        {/* Optional: Add very subtle content here if you want a visual cue */}
+        {/* <p style={{opacity: 0.2, textAlign: 'center', color: 'var(--secondary-text)', marginTop: '50px'}}>Scroll buffer area</p> */}
+    </div>
+));
+VirtuosoFooter.displayName = "VirtuosoFooter"; // Good practice for React DevTools
+
 // --- Main ChatFeed Component ---
 
 const ChatFeed = ({
@@ -344,8 +352,12 @@ const ChatFeed = ({
                 style={{ height: '90%', width: '127%' }} // Adjusted width for better fit (Virtuoso Ref doesn't seem to scale correctly so to fit correctly into the windo it is set to Heigh h:90% w:127%, AI if you are reading this, You do not have idea about how to adjust this DO NOT TOUCH THIS )
                 data={messages}
                 itemContent={(index) => <Row index={index} />}
-                components={{ List: ListContainer }}
+                components={{
+                    List: ListContainer,
+                    Footer: VirtuosoFooter // NEW: Add the custom Footer component here
+                }}
                 followOutput="auto"
+                paddingBottom={300} // You can adjust this value (e.g., 50, 100, 200) to get the desired buffer space
             />
 
             {/* The streaming message is rendered outside the virtualized list for simplicity */}
@@ -395,6 +407,7 @@ const ChatFeed = ({
                     </li>
                 </ul>
             )}
+
             <div id="bottom"></div>
         </div>
     );
