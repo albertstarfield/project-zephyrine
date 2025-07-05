@@ -68,11 +68,13 @@ const KnowledgeTuningPage = () => {
         throw new Error(errorData.message || 'Failed to fetch file history metadata.');
       }
       const result = await response.json();
-      setUploadedFiles(result.data.map(file => ({
+      // Use logical OR (||) to provide an empty array as a fallback
+      // This ensures .map() is always called on an array.
+      setUploadedFiles((result.data || []).map(file => ({
           ...file,
           status: file.status ? file.status.toLowerCase() : 'unknown',
           progress: 100 // Assume fetched files are fully processed/uploaded
-      })) || []);
+      })));
     } catch (err) {
       console.error('Error fetching file history:', err);
       setHistoryError(err.message);

@@ -61,7 +61,7 @@
   flex-grow: 1; /* Allow feed to take available space within wrapper */
   overflow-y: auto; /* Enable scrolling for messages */
   padding: 1rem; /* Adjust top/left/right padding as needed, or keep 3rem */
-  padding-bottom: 180px; /* Increased padding to make space for the input area + more */
+  padding-bottom: 300px; /* Increased padding to make space for the input area + more */
   /* margin-left is removed as flexbox handles positioning */
   position: relative; /* Needed for welcome screen absolute positioning */
   display: flex; /* Use flex to manage internal content (welcome vs messages) */
