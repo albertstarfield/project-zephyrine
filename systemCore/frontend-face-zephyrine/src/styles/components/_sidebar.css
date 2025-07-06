@@ -74,11 +74,7 @@
   transform: translateX(-8px);
 }
 
-@media (max-width: 767px) {
-  .sidebar-toggle-desktop {
-    display: none;
-  }
-}
+
 
 .sidebar-hamburger-button {
   display: none;
@@ -89,11 +85,7 @@
   background-color: var(--background-mid);
 }
 
-@media (max-width: 767px) {
-  .sidebar-hamburger-button {
-    display: flex;
-  }
-}
+
 
 .sidebar-top-actions {
   padding: 0.25rem;
@@ -399,6 +391,12 @@
 
 /* --- Responsive (Mobile) --- */
 @media (max-width: 767px) {
+  .sidebar-toggle-desktop {
+    display: none;
+  }
+  .sidebar-hamburger-button {
+    display: flex;
+  }
   /* Hide desktop toggle button on mobile */
   .sidebar-toggle-desktop {
     display: none;
@@ -422,6 +420,10 @@
   /* When sidebar has 'open' class (manually toggled open on mobile) */
   .sidebar.open {
     transform: translateX(0);
+  }
+
+  .sidebar.sidebar--expanded-visual { /* CHANGED from .sidebar.open */
+    transform: translateX(0); /* Make it visible */
   }
 
   /* For mobile, disable hover-to-expand as it's not a common pattern */
