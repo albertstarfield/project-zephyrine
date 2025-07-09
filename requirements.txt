@@ -16,9 +16,8 @@ frontend
 fastparquet
 libp2p
 zeroconf
-slixmpp # for XMPP Messaging bridge
-aioxmpp # aio XMPP library
-xmpppy # XMPP library
+textual
+psutil
 
 
 # fitz # This is the import name for PyMuPDF; PyMuPDF below is the package to install
@@ -58,6 +57,9 @@ beautifulsoup4
 selenium
 webdriver-manager
 lxml
+crawl4ai
+playwright
+beautifulsoup4
 
 # --- Data Handling, Utilities & Logging ---
 python-dotenv

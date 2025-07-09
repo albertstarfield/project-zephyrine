@@ -157,7 +157,7 @@ const InputArea = ({
         </div>
       </div>
       <p className="disclaimer-text">
-      Pre-Alpha Developmental Version! Instabilities, Repeating, Unexpected Behaviour, or Self-awareness incident may occour! Use it with caution!
+      Beta Developmental Version! Unexpected Behaviour or Self-awareness/Self-Consciousness incident/accident may occour! Use it with caution! And this is NOT AGI. Do not use as such!
       </p>
     </div>
   );

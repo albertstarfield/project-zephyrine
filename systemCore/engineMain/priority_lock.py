@@ -138,7 +138,7 @@ class PriorityQuotaLock:
             if self._relaxation_thread.is_alive():
                 logger.warning("AgenticRelaxationThread did not stop in time.")
 
-    def acquire(self, priority: int, proc: Optional[subprocess.Popen] = None, timeout: Optional[float] = None) -> bool:
+    def acquire(self, priority: int, timeout: Optional[float] = None) -> bool:
         acquire_start_time = time.monotonic()
         requesting_thread_ident = threading.get_ident()
         log_prefix = f"PQLock|ACQ|ELP{priority}|Thr{requesting_thread_ident}"  # Changed prefix for acquire
