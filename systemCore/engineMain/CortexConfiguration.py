@@ -25,7 +25,7 @@ RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 10))
 FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 512)) #Extreme or vanquish (Max at 512)
 FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
 FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 300))
-BENCHMARK_ELP1_TIME_MS = 30000.0 #before hard defined error timeout (30 seconds max)
+BENCHMARK_ELP1_TIME_MS = 600000.0 #before hard defined error timeout (30 seconds max)
 
 _default_max_bg_tasks = 1000000
 MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = int(os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks))
@@ -345,6 +345,13 @@ if ENABLE_SELF_REFLECTION:
 #---- JSON TWEAKS ----
 JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT = int(os.getenv("JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT", 2)) # e.g., 2 attempts on the reformatted output
 
+
+#---- Network Engines to Use for External knowledge ---- 
+engines_to_use = [
+    'ddg', 'google', 'searx', 'semantic_scholar', 'google_scholar', 
+    'base', 'core', 'sciencegov', 'baidu_scholar', 'refseek', 
+    'scidirect', 'mdpi', 'tandf', 'ieee', 'springer'
+]
 
 # --- New Prompt ---
 
@@ -1109,6 +1116,33 @@ Log Context: {log_context}
 Direct History: {recent_direct_history}
 """
 
+PROMPT_GENERATE_BASH_SCRIPT = """You are a Linux/Unix systems expert. Your task is to generate a Bash script to perform the requested action. The script should be self-contained and echo a meaningful success or error message.
+
+**CRITICAL OUTPUT FORMAT:** Respond ONLY with the raw Bash script code block. Do NOT include any explanations, comments outside the script, or markdown formatting like ```bash ... ```.
+
+**Action Details:**
+Action Type: {action_type}
+Parameters (JSON): {parameters_json}
+
+**Past Attempts (for context, most recent first):**
+{past_attempts_context}
+
+Generate Bash Script:
+"""
+
+PROMPT_GENERATE_POWERSHELL_SCRIPT = """You are a Windows systems expert. Your task is to generate a PowerShell script to perform the requested action. The script should handle basic errors and use Write-Host or return a string for output.
+
+**CRITICAL OUTPUT FORMAT:** Respond ONLY with the raw PowerShell script code block. Do NOT include any explanations, comments outside the script, or markdown formatting like ```powershell ... ```.
+
+**Action Details:**
+Action Type: {action_type}
+Parameters (JSON): {parameters_json}
+
+**Past Attempts (for context, most recent first):**
+{past_attempts_context}
+
+Generate PowerShell Script:
+"""
 
 
 PROMPT_GENERATE_APPLESCRIPT = """You are an developer. Your task is to generate an AppleScript to perform the requested action based on the provided type and parameters. Ensure the script handles basic errors and returns a meaningful success or error message string via the 'return' statement.
@@ -1156,6 +1190,59 @@ Why is this failing? Write and fix the issue!
 YOU MUST MAKE DIFFERENT SCRIPT!
 Generate Corrected AppleScript:
 """
+
+
+PROMPT_REFINE_BASH_SCRIPT = """You are a Linux/Unix systems expert and debugger. A Bash script generated previously failed. Your goal is to fix the specific error reported.
+
+**CRITICAL INSTRUCTIONS:**
+1.  **Analyze the Failure:** Examine the 'Failed Script' and the 'Execution Error' (`stderr`, `stdout`, `return_code`).
+2.  **Correct the Script:** Generate a *revised* Bash script that specifically fixes the identified error. Do not simply repeat the failed script.
+3.  **Output ONLY Raw Code:** Respond ONLY with the raw, corrected Bash code block. Do NOT include explanations or markdown.
+
+**Original Request:**
+Action Type: {action_type}
+Parameters (JSON): {parameters_json}
+
+**Failed Script:**
+```bash
+{failed_script}
+Execution Error:
+Return Code: {return_code}
+Stderr: {stderr}
+Stdout: {stdout}
+Error Summary: {error_summary}
+
+Generate Corrected Bash Script:
+"""
+
+PROMPT_REFINE_POWERSHELL_SCRIPT = """You are a Windows systems expert and PowerShell debugger. A PowerShell script generated previously failed. Your goal is to fix the specific error reported.
+
+CRITICAL INSTRUCTIONS:
+
+Analyze the Failure: Examine the 'Failed Script' and the 'Execution Error' (stderr, stdout, return_code).
+
+Correct the Script: Generate a revised PowerShell script that specifically fixes the identified error. Do not simply repeat the failed script.
+
+Output ONLY Raw Code: Respond ONLY with the raw, corrected PowerShell code block. Do NOT include explanations or markdown.
+
+Original Request:
+Action Type: {action_type}
+Parameters (JSON): {parameters_json}
+
+Failed Script:
+
+PowerShell
+
+{failed_script}
+Execution Error:
+Return Code: {return_code}
+Stderr: {stderr}
+Stdout: {stdout}
+Error Summary: {error_summary}
+
+Generate Corrected PowerShell Script:
+"""
+
 
 
 
