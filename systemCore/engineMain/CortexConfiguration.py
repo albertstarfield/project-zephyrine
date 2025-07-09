@@ -414,8 +414,8 @@ DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY = [
     "I am an AI assistant",
     "I am an AI",
 ]
-# Fuzzy match threshold for detecting defective words (0-100, higher is stricter)
-DEFECTIVE_WORD_THRESHOLD = int(os.getenv("DEFECTIVE_WORD_THRESHOLD",65))
+# Fuzzy match threshold for detecting defective words (0-100, higher is more sensitive to detect the pattern)
+DEFECTIVE_WORD_THRESHOLD = int(os.getenv("DEFECTIVE_WORD_THRESHOLD",90))
 DefectiveWordDirectGenerateArray=DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY
 
 # --- XMPP Interaction Proactive Zephyrine ---
