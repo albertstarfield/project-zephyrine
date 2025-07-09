@@ -110,12 +110,12 @@ If you have a particular file, your application may help make it available to ot
 [Click here to see the general troubleshooting](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/Troubleshooting%20Quick%20Guide.md)
 
 ## Warning
-> A Warning to Al Users or potential Investor from Zephyrine Foundation
+> A Warning to AI Users or potential Investor from Zephyrine Foundation
 > 
 > **(Please Read Carefully)**
 > 
 >We've noted a societal preference towards immediate consumption or process in various forms, including food and information consumption. consider this:
->This AI assistant/agent is designed to learn directly from you and effort resoure allocation from you, the user. Your engagement and guidance are fundamental to its development (her personality, her knowledge compass, and her moral compass). You are the one responsible for your action of the agent and the Al self-awareness.
+>This AI assistant/agent is designed to learn directly from you and effort resoure allocation from you, the user. Your engagement and guidance are fundamental to its development (her personality, her knowledge compass, and her moral compass). You are the one responsible for your action of the agent and the Al self-awareness/self-consciousness.
 >If you are seeking an Al that delivers instant, highly refined insights (chatGPT, Direct GPT40/o3, Deepseek R1, Claude 3.5/3.7/4, Gemini 2.5 Pro, ollama or LocalAI highly capable ready to use models) without your thoughtful participation or iterative effort - if your preference is for readily/instant digestible facts, something like passively consuming doomscrolling streams of content (such as on TikTok, YouTube Shorts, or Instagram Reels), rather than investing in collaborative dialogue that leads to deeper understanding or searching the singularity of a fact.
 >
 > **This product is not for you.**

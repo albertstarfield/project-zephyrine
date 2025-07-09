@@ -1,4 +1,4 @@
-# ai_provider.py
+# cortex_backbone_provider.py
 import os
 import sys
 import time
@@ -12,6 +12,7 @@ import shlex       # <<< --- ADD THIS LINE --- >>>
 import asyncio
 import re
 import signal
+from loguru import logger # Logging library
 
 # --- NEW: Import the custom lock ---
 
@@ -93,14 +94,15 @@ except ImportError:
 
 try:
     from priority_lock import PriorityQuotaLock, ELP0, ELP1
+    # Formally define the type for our lock variable
+    LockType = Union[PriorityQuotaLock, threading.Lock]
 except ImportError:
     logger.critical("❌ Failed to import PriorityQuotaLock. Priority locking disabled.")
-    # Fallback to standard lock to allow basic functionality? Or exit?
-    # For now, define dummies to prevent crashing later code, but log error.
-    PriorityQuotaLock = threading.Lock # Fallback to standard lock (no priority)
+    # Fallback to standard lock to allow basic functionality
+    PriorityQuotaLock = threading.Lock # This is a class, not an instance
+    LockType = threading.Lock # In the fallback case, the type is just a standard lock
     ELP0 = 0
     ELP1 = 1
-    # sys.exit("Priority Lock implementation missing") # Optionally exit
 
 # --- Local Imports ---
 try:
@@ -342,7 +344,7 @@ class LlamaCppChatWrapper(SimpleChatModel):
 
         # --- Main Loop ---
         for msg in messages:
-            role = "user";
+            role = "user"
             if isinstance(msg, HumanMessage): role = "user"
             elif isinstance(msg, AIMessage): role = "assistant"
             elif isinstance(msg, SystemMessage): role = "system"
@@ -453,6 +455,7 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
 
 # === AI Provider Class ===
 class CortexEngine:
+    _priority_quota_lock: LockType
     def __init__(self, provider_name):
         # ... (other initialization lines) ...
         self.provider_name = provider_name.lower()
@@ -523,7 +526,7 @@ class CortexEngine:
             A dictionary with the result from the worker.
         """
         log_prefix = f"KV_SAVE|ELP{priority}|{model_role}"
-        self.logger.info(f"{log_prefix}: Requesting to save session state '{state_name}'.")
+        logger.info(f"{log_prefix}: Requesting to save session state '{state_name}'.")
         
         request_data = {
             "state_name": state_name
@@ -552,7 +555,7 @@ class CortexEngine:
             A dictionary with the result from the worker.
         """
         log_prefix = f"KV_LOAD|ELP{priority}|{model_role}"
-        self.logger.info(f"{log_prefix}: Requesting to load session state '{state_name}'.")
+        logger.info(f"{log_prefix}: Requesting to load session state '{state_name}'.")
 
         request_data = {
             "state_name": state_name
@@ -744,7 +747,8 @@ class CortexEngine:
                     with self.active_workers_lock:
                         self.active_workers[worker_process.pid] = worker_process
                     logger.debug(f"Registered worker PID {worker_process.pid} for role {model_role}")
-                if priority == ELP0: self._priority_quota_lock.set_holder_process(worker_process)
+                if priority == ELP0 and isinstance(self._priority_quota_lock, PriorityQuotaLock):
+                    self._priority_quota_lock.set_holder_process(worker_process)
 
                 input_json = json.dumps(request_data)
                 provider_logger.debug(
@@ -759,7 +763,7 @@ class CortexEngine:
                 except subprocess.TimeoutExpired:
                     provider_logger.error(
                         f"{worker_log_prefix}: Worker process timed out after {LLAMA_WORKER_TIMEOUT}s.")
-                    worker_process.kill();
+                    worker_process.kill()
                     stdout_data, stderr_data = worker_process.communicate()
                     self._priority_quota_lock.release()
                     return {"error": "Worker process timed out"}
@@ -936,7 +940,7 @@ class CortexEngine:
                         provider_logger.debug(f"Registered imagination worker PID {current_worker_process.pid}")
 
                     # If it's a background priority task, register its process with the lock
-                    if priority == ELP0:
+                    if priority == ELP0 and isinstance(self._priority_quota_lock, PriorityQuotaLock):
                         self._priority_quota_lock.set_holder_process(current_worker_process)
 
                     # Convert request data to JSON and send to worker

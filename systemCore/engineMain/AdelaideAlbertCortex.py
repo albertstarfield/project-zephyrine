@@ -1,4 +1,4 @@
-# AdelaideAlbertCortex
+# AdelaideAlbertCortex.py
 """
 
 Background Story...
@@ -97,6 +97,10 @@ except ImportError as e:
     TimeoutException = TimeoutError
     logger.error(f"❌ Failed to import Selenium/WebDriverManager: {e}. Web scraping/download tools disabled.")
     logger.error("   Install dependencies: pip install selenium webdriver-manager requests beautifulsoup4")
+from network_internet_knowledge_fetcher import search_and_scrape_web_async
+
+
+
 
 # --- SQLAlchemy Imports ---
 from sqlalchemy.orm import Session, sessionmaker, attributes # Import sessionmaker
@@ -189,7 +193,7 @@ try:
         init_db, queue_interaction_for_batch_logging, add_interaction, get_recent_interactions, # <<< REMOVED get_db
         get_past_tot_interactions, Interaction, SessionLocal, AppleScriptAttempt, # Added AppleScriptAttempt if needed here
         get_global_recent_interactions, get_pending_tot_result, mark_tot_delivered,
-        get_past_applescript_attempts, FileIndex, search_file_index, UploadedFileRecord, add_interaction_no_commit # Added new DB function
+        get_past_applescript_attempts, FileIndex, search_file_index, UploadedFileRecord, add_interaction_no_commit, AppleScriptAttempt # Added new DB function
     )
     # Import all config variables (prompts, settings, etc.)
     from CortexConfiguration import * # Ensure this includes the SQLite DATABASE_URL and all prompts/models
@@ -1111,6 +1115,46 @@ class CortexThoughts:
             prompt_parts.append(f"{CHATML_START_TOKEN}assistant{CHATML_NL}")
 
         return "".join(prompt_parts)
+    #Legacy Backup for generate Method class! change when needed since this is uses ELP1 and eats the time response and not "router" class, cautious!
+    async def generate(self, db: Session, user_input: str, session_id: str, classification: str = "chat_simple") -> str:
+        """
+        Main entry point for generating a response.
+        This method acts as a dispatcher to the appropriate generation logic
+        based on the provided classification. For requests expecting a direct
+        string response, it primarily uses the direct_generate (ELP1) path.
+        For more complex, non-blocking tasks, the caller should use background_generate directly.
+        """
+        req_id = f"gen-dispatcher-{uuid.uuid4()}"
+        log_prefix = f"🧠 {req_id}"
+        logger.info(f"{log_prefix} Dispatching generate call. Session: {session_id}, Class: {classification}")
+
+        # For a direct, blocking-style call that returns a string,
+        # we will always use the ELP1 direct_generate path.
+        # The 'classification' can be used for logging or minor adjustments if needed.
+        # The more complex logic (like spawning ToT) is handled by background_generate.
+
+        if not ai_chat:
+            logger.error(f"{log_prefix} ai_chat (CortexThoughts) instance is not available.")
+            return "Error: AI chat instance is not initialized."
+
+        try:
+            # We use direct_generate for all calls that expect an immediate string response.
+            # It's designed to be fast and provide the ELP1 answer.
+            # The dual-generate logic in /v1/chat/completions will handle spawning
+            # the ELP0 background_generate task separately.
+            response_text = await self.direct_generate(
+                db=db,
+                user_input=user_input,
+                session_id=session_id,
+                # No VLM description or image for these text-only generate calls
+                vlm_description=None,
+                image_b64=None
+            )
+            return response_text
+
+        except Exception as e:
+            logger.error(f"{log_prefix} Error in generate dispatcher: {e}", exc_info=True)
+            return f"An internal error occurred while generating a response: {e}"
 
     def _count_tokens(self, text: str) -> int:
         """Counts tokens using tiktoken if available, else estimates by characters."""
@@ -1550,12 +1594,16 @@ class CortexThoughts:
             # Manually embed with priority, then create the Chroma store
             embeddings = self.provider.embeddings.embed_documents(texts_to_embed, priority=priority)
             if embeddings and len(embeddings) == len(texts_to_embed):
-                temp_vs = Chroma.from_embeddings(
-                    texts=texts_to_embed, 
-                    embeddings=embeddings, 
-                    embedding_function=self.provider.embeddings, 
-                    metadatas=metadata_map
+                # Create Document objects, which is the expected format for from_documents
+                documents_to_add = [
+                    Document(page_content=text, metadata=meta) for text, meta in zip(texts_to_embed, metadata_map)
+                ]
+                # Use the correct from_documents method
+                temp_vs = Chroma.from_documents(
+                    documents=documents_to_add,
+                    embedding=self.provider.embeddings  # Pass the embedding function
                 )
+                # Now we can search it
                 vector_results = temp_vs.similarity_search_by_vector(query_vector, k=RAG_HISTORY_COUNT // 2)
                 retrieved_docs.extend(vector_results)
                 logger.info(f"{log_prefix} On-the-fly vector search found {len(vector_results)} docs.")
@@ -1650,7 +1698,7 @@ class CortexThoughts:
                         temp_vs._collection.add(
                             embeddings=on_the_fly_embeddings,
                             documents=recent_texts_to_embed,
-                            ids=[f"onthefly_{i.id}" for i, interaction in enumerate(recent_unindexed_interactions)]
+                            ids=[f"onthefly_{interaction.id}" for i, interaction in enumerate(recent_unindexed_interactions)]
                         )
                     on_the_fly_docs = temp_vs.similarity_search(user_input_for_rag_query, k=RAG_HISTORY_COUNT // 2)
                     logger.info(f"[RAG VERBOSITY] In-memory vector search found {len(on_the_fly_docs)} documents.")
@@ -1856,1405 +1904,6 @@ class CortexThoughts:
 
         return context_str if context_str else "No relevant files found in the index."
 
-    def _run_search_and_download_sync(self, query: str, session_id: str, num_results: int, timeout: int, engines: List[str], download: bool, download_dir: str, dedup_mode: str, similarity_threshold: float):
-        """
-        Synchronous function to perform web scraping and downloading.
-        Designed to be run in a separate thread via asyncio.to_thread.
-        """
-        search_logger = logger.bind(task="web_search", session=session_id)
-        search_logger.info(f"Starting synchronous search task for query: '{query}'")
-
-        if not SELENIUM_AVAILABLE:
-            search_logger.error("Cannot perform search: Selenium/WebDriver is not available.")
-            # Log failure to DB
-            db = SessionLocal()
-            try: add_interaction(db, session_id=session_id, mode="chat", input_type="log_error", user_input=f"Web Search Failed: {query}", llm_response="Selenium components missing.")
-            finally: db.close()
-            return # Exit if no Selenium
-
-        # --- Engine Mapping (Internal) ---
-        engine_map = {
-            'ddg': self._scrape_duckduckgo, 'google': self._scrape_google,
-            'searx': self._scrape_searx, 'sem': self._scrape_semantic_scholar,
-            'scholar': self._scrape_google_scholar, 'base': self._scrape_base,
-            'core': self._scrape_core, 'scigov': self._scrape_sciencegov,
-            'baidu': self._scrape_baidu_scholar, 'refseek': self._scrape_refseek,
-            'scidirect': self._scrape_sciencedirect, 'mdpi': self._scrape_mdpi,
-            'tandf': self._scrape_tandf, 'ieee': self._scrape_ieee,
-            'springer': self._scrape_springer
-            # Add other implemented _scrape_ methods here
-        }
-        selected_engines = [e for e in engines if e in engine_map]
-        if not selected_engines:
-             search_logger.warning("No valid/implemented engines selected for search.")
-             return # Nothing to do
-
-        all_results = {}
-        deduplicated_results = {}
-        total_found_dedup = 0
-        download_tasks = []
-        download_success_count = 0
-
-        # --- Execute Scrapers using WebDriver ---
-        # Use the managed_webdriver context manager
-        # Note: 'no_images' could be added as a parameter if needed
-        with managed_webdriver(no_images=True) as driver:
-            if driver is None:
-                search_logger.error("WebDriver failed to initialize. Aborting search.")
-                db = SessionLocal()  # Log failure to DB
-                try: add_interaction(db, session_id=session_id, mode="chat", input_type="log_error", user_input=f"Web Search Failed: {query}", llm_response="WebDriver initialization failed.")
-                finally: db.close()
-                return # Exit if driver failed
-
-            search_logger.info(f"WebDriver ready. Scraping engines: {selected_engines}")
-            for engine_name in selected_engines:
-                scraper_func = engine_map.get(engine_name)
-                if not scraper_func: continue # Should not happen if selected_engines is filtered
-
-                # Prepare args (adjust based on specific scraper needs)
-                scraper_args = [driver, query, num_results, timeout]
-                if engine_name in ['ddg', 'google', 'scholar']: scraper_args.append(1) # Add max_pages=1 for now
-                # Add SearX instance handling if needed (requires config access or passing instances)
-                # if engine_name == 'searx': scraper_args.insert(1, random_searx_instance)
-
-                try:
-                    search_logger.info(f"--- Scraping {engine_name.upper()} ---")
-                    start_time = time.time()
-                    # Call the internal scraper method
-                    result_list = scraper_func(*scraper_args)
-                    end_time = time.time()
-                    search_logger.info(f"--- Finished {engine_name.upper()} in {end_time - start_time:.2f}s ({len(result_list or [])} results) ---")
-                    all_results[engine_name] = result_list if result_list else []
-                except Exception as exc:
-                    search_logger.error(f"Error during scraping for {engine_name}: {exc}")
-                    search_logger.exception("Scraper Traceback:")
-                    all_results[engine_name] = []
-                # Add a small delay between engines?
-                time.sleep(random.uniform(0.5, 1.5))
-
-        # --- Deduplication ---
-        search_logger.info(f"Performing deduplication (Mode: {dedup_mode})...")
-        # (Copy deduplication logic from search_cli.py main(), adapting variable names)
-        deduplicated_results = {engine: [] for engine in all_results}
-        total_found_dedup = 0
-        engine_order = selected_engines # Process in the order they were run
-
-        if dedup_mode == 'url':
-            seen_urls = set()
-            for engine in engine_order:
-                if engine in all_results:
-                    for res in all_results[engine]:
-                        url = res.get('url')
-                        if url and url.startswith('http') and url not in seen_urls:
-                            deduplicated_results[engine].append(res); seen_urls.add(url); total_found_dedup += 1
-        elif dedup_mode == 'title':
-            seen_titles = []; seen_urls_for_title_dedup = set()
-            for engine in engine_order:
-                 if engine in all_results:
-                    for res in all_results[engine]:
-                        title = res.get('title', '').lower().strip(); url = res.get('url')
-                        if not title or (url and url in seen_urls_for_title_dedup): continue
-                        # Handle raw link special case from original cli if needed
-                        is_duplicate = False; matcher = difflib.SequenceMatcher(None, "", title)
-                        for seen_title in seen_titles:
-                            matcher.set_seq1(seen_title)
-                            if not seen_title or not title: continue
-                            try:
-                                if matcher.ratio() >= similarity_threshold: is_duplicate = True; break
-                            except Exception as e: search_logger.warning(f"Error comparing titles: {e}")
-                        if not is_duplicate:
-                            deduplicated_results[engine].append(res); seen_titles.append(title)
-                            if url: seen_urls_for_title_dedup.add(url)
-                            total_found_dedup += 1
-        else: # No deduplication
-             deduplicated_results = all_results; total_found_dedup = sum(len(v) for v in all_results.values())
-        search_logger.info(f"Deduplication complete. Found {total_found_dedup} unique results.")
-
-
-        # --- Download Content ---
-        if download:
-            search_logger.info(f"Starting downloads (Saving to: {download_dir})...")
-            urls_to_download = set()
-            download_tasks = [] # List of (url, prefix) tuples
-
-            for engine, results_list in deduplicated_results.items():
-                 for i, res in enumerate(results_list):
-                     main_url = res.get('url'); pdf_url = res.get('pdf_url')
-                     prefix = sanitize_filename(res.get('title', f'result_{engine}_{i}')) or f'download_{engine}_{i}'
-
-                     # Add main URL task if valid and not already added
-                     if main_url and main_url.startswith('http') and main_url not in urls_to_download:
-                         urls_to_download.add(main_url); download_tasks.append((main_url, prefix))
-                     # Add PDF URL task if valid and not already added
-                     if pdf_url and pdf_url.startswith('http') and pdf_url not in urls_to_download:
-                         urls_to_download.add(pdf_url); download_tasks.append((pdf_url, f"{prefix}_pdf"))
-
-            search_logger.info(f"Found {len(download_tasks)} unique URLs/PDFs to attempt download.")
-            download_success_count = 0
-            for i, (url, file_prefix) in enumerate(download_tasks):
-                 search_logger.info(f"Downloading item {i+1}/{len(download_tasks)}: {url}")
-                 # Call the synchronous download utility
-                 if download_content_sync(url, download_dir, filename_prefix=file_prefix):
-                     download_success_count += 1
-                 # Add delay between downloads to be polite
-                 time.sleep(random.uniform(1.0, 2.0))
-
-            search_logger.info(f"Downloads finished ({download_success_count}/{len(download_tasks)} successful).")
-
-        # --- Log Final Outcome ---
-        outcome_summary = f"Web search completed. Found {total_found_dedup} unique results."
-        if download: outcome_summary += f" Attempted {len(download_tasks)} downloads ({download_success_count} successful)."
-
-        db = SessionLocal() # New session for final log
-        try:
-             add_interaction(db, session_id=session_id, mode="chat", input_type="log_info",
-                             user_input=f"[Web Search Task Complete: {query[:100]}...]",
-                             llm_response=outcome_summary
-                            )
-        finally: db.close()
-        search_logger.success("Search and download task finished.")
-    
-    async def _trigger_web_search(self, db: Session, session_id: str, query: str) -> str:
-        """
-        Launches the internal _run_search_and_download_sync method in a separate thread
-        to perform web search and download results asynchronously from the main flow.
-        Returns an immediate confirmation message.
-        """
-        req_id = f"searchtrigger-{uuid.uuid4()}"
-        logger.info(f"🚀 {req_id} Triggering internal background web search task for query: '{query}'")
-
-        # --- Default settings for the search ---
-        num_results_per_engine = 7 # Or get from CortexConfiguration
-        timeout_per_engine = 20    # Or get from CortexConfiguration
-        # Use all implemented engines by default
-        # Note: Filter this list based on which _scrape_ methods you actually implemented!
-        engines_to_use = ['ddg', 'google'] # Add other implemented keys: 'sem', 'scholar', 'base', 'core', 'scigov', 'baidu', 'refseek', 'scidirect', 'mdpi', 'tandf', 'ieee', 'springer'
-        download = True # Always download for this integration
-        download_dir_path = os.path.abspath(SEARCH_DOWNLOAD_DIR) # Use constant
-        dedup_mode = 'url' # Default deduplication
-        similarity_threshold = 0.8 # For title deduplication if used
-
-        # Ensure download directory exists (synchronous check okay here before background task)
-        try:
-            os.makedirs(download_dir_path, exist_ok=True)
-            logger.info(f"{req_id} Ensured download directory exists: {download_dir_path}")
-        except OSError as e:
-            logger.error(f"{req_id} Failed to create download directory '{download_dir_path}': {e}")
-            # Log failure to DB
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_error", user_input="Web Search Trigger Failed", llm_response=f"Cannot create download dir: {e}")
-            return f"Error: Could not create the directory needed for search results ('{os.path.basename(download_dir_path)}')."
-
-        # Log the initiation of the search action
-        add_interaction(
-            db, session_id=session_id, mode="chat", input_type="log_info",
-            user_input="Web Search Action Triggered",
-            llm_response=f"Query: '{query}'. Engines: {engines_to_use}. Results -> '{download_dir_path}'",
-            assistant_action_type="search_web",
-            assistant_action_params=json.dumps({"query": query, "engines": engines_to_use}),
-            assistant_action_executed=True, # Mark as launched
-            assistant_action_result="[Search process launched in background]"
-        )
-        db.flush() # Commit this log before returning
-
-        # --- Schedule Background Task ---
-        try:
-            logger.info(f"{req_id} Scheduling internal search/download task in background thread...")
-            # Get the current running event loop
-            loop = asyncio.get_running_loop()
-            # Schedule the SYNCHRONOUS function to run in the loop's default executor (ThreadPoolExecutor)
-            # This prevents the blocking Selenium/requests code from stalling the main async loop
-            loop.create_task(
-                asyncio.to_thread(
-                    self._run_search_and_download_sync, # Target synchronous function
-                    # Pass arguments needed by the sync function
-                    query, session_id, num_results_per_engine, timeout_per_engine,
-                    engines_to_use, download, download_dir_path, dedup_mode, similarity_threshold
-                )
-            )
-            logger.info(f"{req_id} Internal search/download task scheduled.")
-
-            # --- Immediate Return ---
-            return f"Okay, I've started a web search for '{query}' in the background. Relevant findings will be downloaded."
-
-        except Exception as e:
-            logger.error(f"{req_id} Error scheduling search task: {e}")
-            logger.exception(f"{req_id} Scheduling Traceback:")
-            # Log failure to DB
-            add_interaction(db, session_id=session_id, mode="chat", input_type="log_error", user_input="Web Search Trigger Failed", llm_response=f"Failed to schedule background task: {e}")
-            return f"Error: Failed to start the web search background process ({type(e).__name__})."
-    
-
-
-    def _check_for_captcha(self, driver: WebDriver):
-        """Checks for common CAPTCHA indicators and pauses if found."""
-        # Use specific logger
-        captcha_logger = logger.bind(task="captcha_check")
-        captcha_detected = False
-        # Increase wait slightly?
-        wait_time = 3
-        try:
-            # Check common iframe indicators first (less likely to raise immediate timeout)
-            captcha_iframes = driver.find_elements(By.CSS_SELECTOR, "iframe[title*='captcha'], iframe[src*='hcaptcha'], iframe[src*='recaptcha']")
-            if captcha_iframes: captcha_logger.warning("CAPTCHA iframe detected."); captcha_detected = True
-
-            # Check specific site elements/URLs after brief wait
-            body = WebDriverWait(driver, wait_time).until(EC.presence_of_element_located((By.TAG_NAME, 'body')))
-            if "google.com/sorry/" in driver.current_url: captcha_logger.warning("Google 'sorry' page detected."); captcha_detected = True
-            if driver.find_elements(By.ID, "gs_captcha_f"): captcha_logger.warning("Google Scholar CAPTCHA form detected."); captcha_detected = True
-            # Add other site-specific checks here if needed
-
-        except TimeoutException:
-             captcha_logger.debug(f"No CAPTCHA indicators found within {wait_time}s.")
-             pass # No CAPTCHA found within timeout is normal
-        except WebDriverException as e:
-             captcha_logger.error(f"Error checking for CAPTCHA: {e}")
-             # Don't pause if check fails, but log the error
-
-        if captcha_detected:
-            captcha_logger.critical("CAPTCHA DETECTED. Manual intervention required in browser window.")
-            # This part is tricky for a background process. Ideally, it should signal failure.
-            # For now, we'll just log and return True, assuming it cannot be solved automatically.
-            # In a real unattended system, you'd likely use anti-captcha services or stop.
-            # input("[?] CAPTCHA detected. Please solve it... ") # Cannot use input() in background
-            return True
-        return False
-
-    def _extract_pdf_link(self, block_element: WebElement) -> str | None:
-        """Attempts to find a direct PDF link within a result block element."""
-        pdf_logger = logger.bind(task="pdf_extract")
-        # Prioritize common direct PDF link patterns
-        # Look for links ending in .pdf, containing /pdf/, or with specific text
-        selectors = [
-            'a[href$=".pdf"]',                 # Ends with .pdf
-            'a[href*=".pdf?"]',                # Ends with .pdf?params...
-            'a[href*="/pdf"]',                 # Contains /pdf/ path part
-            'a[href*="/content/pdf"]',         # Common pattern
-            'div.gs_ggsd a',                 # Google Scholar specific PDF link div
-            'a.pdf-download-link',           # Example class name
-            'a:contains("[PDF]")',           # Link containing text [PDF] (case-insensitive via JS usually)
-            'a:contains("Download PDF")',      # Link containing text Download PDF
-            'a:contains("Full text PDF")'     # Link containing text Full text PDF
-        ]
-
-        # Try selectors first
-        for selector in selectors[:6]: # Prioritize direct href checks
-            try:
-                pdf_link_tag = block_element.find_element(By.CSS_SELECTOR, selector)
-                pdf_href = pdf_link_tag.get_attribute('href')
-                # Basic validation
-                if pdf_href and pdf_href.startswith('http') and ('javascript:' not in pdf_href.lower()):
-                    pdf_logger.debug(f"Found potential PDF link via selector '{selector}': {pdf_href}")
-                    # Stronger check if it actually points to a PDF file type if possible
-                    if pdf_href.lower().endswith('.pdf') or '.pdf?' in pdf_href.lower() or '/pdf' in pdf_href.lower():
-                        return pdf_href
-                    else:
-                        pdf_logger.trace(f"Ignoring link from selector '{selector}' as it doesn't look like PDF: {pdf_href}")
-            except NoSuchElementException:
-                continue # Try next selector
-            except InvalidSelectorException:
-                pdf_logger.warning(f"Invalid PDF selector used: {selector}")
-            except Exception as e:
-                pdf_logger.warning(f"Error extracting PDF link via selector '{selector}': {e}")
-
-        # Fallback: Check all links within the block by text content or path
-        try:
-            all_links = block_element.find_elements(By.TAG_NAME, 'a')
-            for link in all_links:
-                try:
-                    link_text = link.text.lower().strip()
-                    pdf_href = link.get_attribute('href')
-
-                    if pdf_href and pdf_href.startswith('http') and ('javascript:' not in pdf_href.lower()):
-                        # Check common PDF indicators in text or URL path
-                        is_pdf_link = (
-                            pdf_href.lower().endswith('.pdf') or
-                            '.pdf?' in pdf_href.lower() or
-                            '/pdf' in pdf_href.lower() or
-                            '/download' in pdf_href.lower() or # Common download path
-                            "[pdf]" in link_text or
-                            "download pdf" in link_text or
-                            "full text pdf" in link_text or
-                            "view pdf" in link_text
-                        )
-                        if is_pdf_link:
-                            pdf_logger.debug(f"Found potential PDF link via fallback check: {pdf_href}")
-                            return pdf_href
-                except Exception as inner_e:
-                    pdf_logger.trace(f"Error checking individual link in fallback: {inner_e}")
-                    continue # Skip this link if error occurs
-        except Exception as e:
-            pdf_logger.warning(f"Error during fallback PDF link check: {e}")
-
-        return None # No PDF link found
-
-    # --- Individual Scraper Methods ---
-
-    def _scrape_duckduckgo(self, driver: WebDriver, query, num_results, timeout, max_pages=1):
-        """Scrapes DuckDuckGo using Selenium, supporting pagination."""
-        engine_name = "DuckDuckGo"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}' (Max Pages: {max_pages})...")
-        results = []
-        search_url = f"https://duckduckgo.com/?q={quote_plus(query)}&ia=web"
-        processed_urls = set()
-
-        for page_num in range(max_pages):
-            scraper_logger.info(f"Processing page {page_num + 1}...")
-            if page_num > 0: # Try to load more results
-                try:
-                    # DDG uses dynamically loaded results, wait for a known static element or timeout
-                    WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.ID, "search_form_input_homepage"))) # Wait for search bar again?
-                    more_results_button = driver.find_element(By.ID, "more-results")
-                    # Scroll button into view and click using JavaScript
-                    driver.execute_script("arguments[0].scrollIntoView(true);", more_results_button)
-                    time.sleep(0.5) # Brief pause before click
-                    driver.execute_script("arguments[0].click();", more_results_button)
-                    time.sleep(1.5) # Wait for results to potentially load after click
-                    scraper_logger.info(f"Clicked 'More results' for page {page_num + 1}.")
-                except (NoSuchElementException, TimeoutException):
-                    scraper_logger.info(f"No 'More results' button found or timed out. Stopping pagination.")
-                    break
-                except Exception as e:
-                     scraper_logger.error(f"Error clicking 'More results': {e}. Stopping pagination.")
-                     break
-            else: # First page navigation
-                try:
-                    scraper_logger.info(f"Navigating to {search_url}")
-                    driver.get(search_url)
-                    # Wait for a stable element indicating results might be present
-                    WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, "#links, .results--main")))
-                    scraper_logger.info(f"Page loaded.")
-                except TimeoutException: scraper_logger.error(f"Timed out waiting for page content. Aborting."); return results
-                except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-            if self._check_for_captcha(driver): # Use self._
-                 scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-                 return results # Abort if CAPTCHA needed
-
-            # --- Parse Results ---
-            page_results_found = 0
-            try:
-                # Refresh result blocks search on each page/after load
-                result_blocks = driver.find_elements(By.CSS_SELECTOR, "article[data-testid='result']")
-                scraper_logger.info(f"Page {page_num + 1}: Found {len(result_blocks)} potential result blocks.")
-
-                for block in result_blocks:
-                    if len(results) >= num_results: break
-                    title, url, snippet, pdf_url = None, None, None, None
-                    try:
-                        # Extract elements, handle potential NoSuchElementException for each part
-                        title_tag = block.find_element(By.CSS_SELECTOR, "h2 a span")
-                        link_tag = block.find_element(By.CSS_SELECTOR, "div[data-testid='result-extras-url'] a")
-                        snippet_tag = block.find_element(By.CSS_SELECTOR, "div[data-testid='result-extras'] span")
-
-                        url = link_tag.get_attribute('href')
-                        title = title_tag.text.strip()
-                        snippet = snippet_tag.text.strip()
-
-                        if not url or not title or url in processed_urls: continue
-
-                        pdf_url = self._extract_pdf_link(block) # Use self._
-
-                    except NoSuchElementException:
-                         scraper_logger.warning(f"Page {page_num + 1}: Skipping block, missing expected element.")
-                         continue # Skip this block if essential parts missing
-                    except Exception as e:
-                         scraper_logger.error(f"Page {page_num + 1}: Error parsing result block: {e}. Skipping.")
-                         continue
-
-                    # Append valid result
-                    result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                    if pdf_url: result_data['pdf_url'] = pdf_url
-                    results.append(result_data)
-                    processed_urls.add(url)
-                    page_results_found += 1
-
-                scraper_logger.info(f"Page {page_num + 1}: Added {page_results_found} results this page.")
-                if len(results) >= num_results: scraper_logger.info(f"Reached target results ({num_results})."); break
-                # Check if 'more results' exists for pagination decision
-                if page_num < max_pages - 1:
-                    try: driver.find_element(By.ID, "more-results")
-                    except NoSuchElementException: scraper_logger.info("No 'More results' button found for next page."); break
-
-            except WebDriverException as e: scraper_logger.error(f"Error finding result blocks on page {page_num + 1}: {e}"); break
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_google(self, driver: WebDriver, query, num_results, timeout, max_pages=1):
-        """Scrapes Google using Selenium. Supports pagination. Includes fallback."""
-        engine_name = "Google"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}' (Max Pages: {max_pages})...")
-        results = []
-        search_url_base = "https://www.google.com/search"
-        results_per_page = 10 # Google usually shows 10
-        processed_urls = set()
-        result_selectors = ["div.kvH3mc", "div.MjjYud", "div.g", "div.Gx5Zad.fP1Qef.xpd.EtOod.pkphOe"] # Common result block divs
-        wait_container_selector = "#search" # Wait for main search container
-
-        for page_num in range(max_pages):
-            current_start = page_num * results_per_page
-            search_url = f"{search_url_base}?q={quote_plus(query)}&num={results_per_page}&start={current_start}&hl=en" # Force English
-            scraper_logger.info(f"Processing page {page_num + 1} (start={current_start})...")
-
-            try:
-                scraper_logger.info(f"Navigating to {search_url}")
-                driver.get(search_url)
-                WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_container_selector)))
-                scraper_logger.info(f"Page loaded.")
-            except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_container_selector}). Aborting page."); break
-            except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); break
-
-            if self._check_for_captcha(driver): # Use self._
-                scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-                return results # Abort if CAPTCHA needed
-
-            # --- Parse Results ---
-            page_results_found = 0
-            result_blocks = []
-            used_selector = "None"
-
-            try:
-                # Find result blocks using the list of selectors
-                for selector in result_selectors:
-                    try:
-                        result_blocks = driver.find_elements(By.CSS_SELECTOR, selector)
-                        if result_blocks:
-                            used_selector = selector
-                            scraper_logger.info(f"Page {page_num + 1}: Found {len(result_blocks)} potential blocks using '{used_selector}'.")
-                            break # Use the first selector that yields results
-                    except InvalidSelectorException:
-                        scraper_logger.warning(f"Invalid selector '{selector}', skipping.")
-                        continue
-
-                if not result_blocks:
-                    # Check for explicit "no results" message
-                    page_text = driver.find_element(By.TAG_NAME, 'body').text
-                    if "did not match any documents" in page_text or "No results found for" in page_text:
-                        scraper_logger.info(f"Page {page_num + 1}: 'No results found' message detected.")
-                    else:
-                        scraper_logger.warning(f"Page {page_num + 1}: No result blocks found using any primary selector.")
-                    # Don't try raw link extraction here, too noisy for Google
-                    break # Stop pagination if no results found
-
-                # Process found blocks
-                for block in result_blocks:
-                    if len(results) >= num_results: break
-                    title, url, snippet, pdf_url = None, None, None, None
-                    try:
-                        # Extract link first
-                        link_tag = block.find_element(By.CSS_SELECTOR, 'a[href]')
-                        url = link_tag.get_attribute('href')
-                        if not url or url.startswith('#') or "google.com" in urlparse(url).netloc: continue # Skip internal/invalid links
-
-                        # Clean Google redirect URLs
-                        if url.startswith('/url?q='):
-                            try: url = parse_qs(urlparse(url).query)['q'][0]
-                            except (KeyError, IndexError): pass # Keep original if parsing fails
-
-                        if not url.startswith('http') or url in processed_urls: continue # Skip relative or duplicate URLs
-
-                        # Extract title
-                        try: h3_tag = block.find_element(By.CSS_SELECTOR, 'h3') ; title = h3_tag.text.strip()
-                        except NoSuchElementException: title = "No Title Found"
-
-                        # Extract snippet (try multiple common selectors)
-                        try: snippet_div = block.find_element(By.CSS_SELECTOR, 'div.VwiC3b, div.Uroaid, div.s, div.gGQDAb, div[data-sncf="1"], span.aCOpRe span')
-                        except NoSuchElementException:
-                             try: # Fallback: get all text in block minus title
-                                 all_text = block.text; snippet = all_text.replace(title, '').strip() if title != "No Title Found" else all_text
-                             except Exception: snippet = None
-                        else: snippet = snippet_div.text.strip() if snippet_div else None
-
-                        if not title: continue # Skip if title is empty
-
-                        pdf_url = self._extract_pdf_link(block) # Use self._
-
-                    except NoSuchElementException:
-                         # Sometimes blocks are just ads or featured snippets without standard links/titles
-                         scraper_logger.trace(f"Page {page_num + 1}: Skipping block, missing core elements (likely not a standard result).")
-                         continue
-                    except Exception as e:
-                         scraper_logger.error(f"Page {page_num + 1}: Error parsing block with selector '{used_selector}': {e}. Skipping.")
-                         continue
-
-                    # Append valid result
-                    result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                    if pdf_url: result_data['pdf_url'] = pdf_url
-                    results.append(result_data)
-                    processed_urls.add(url)
-                    page_results_found += 1
-
-                scraper_logger.info(f"Page {page_num + 1}: Added {page_results_found} structured results.")
-
-                # --- Pagination Check ---
-                if len(results) >= num_results: scraper_logger.info(f"Reached target results ({num_results})."); break
-                if result_blocks and page_num < max_pages - 1:
-                    try: driver.find_element(By.CSS_SELECTOR, 'a#pnnext, a[aria-label="Next page"]')
-                    except NoSuchElementException: scraper_logger.info(f"Page {page_num + 1}: No 'Next' link found."); break
-
-            except WebDriverException as e: scraper_logger.error(f"WebDriver error during parsing on page {page_num + 1}: {e}"); break
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-    
-    # --- Add other _scrape_... methods here, converted similarly ---
-    # _scrape_searx, _scrape_semantic_scholar, _scrape_google_scholar, etc.
-    # Remember to:
-    #   - Add self parameter
-    #   - Replace print with logger.bind(scraper=...).info/warning/error
-    #   - Call helpers using self._check_for_captcha / self._extract_pdf_link
-    #   - Adapt selectors and logic as needed based on the original scrapers.py
-    #   - Return results list
-
-    # Placeholder for remaining scrapers - IMPLEMENT THESE
-    def _scrape_searx(self, driver: WebDriver, instance_url: str, query: str, num_results: int, timeout: int):
-        """Scrapes a SearXNG instance using Selenium."""
-        engine_name = "SearxNG" # More specific name
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search on instance '{instance_url}' for '{query}'...")
-        results = []
-        # Ensure instance URL is clean and build search URL
-        search_url = f"{instance_url.rstrip('/')}/search?q={quote_plus(query)}"
-        processed_urls = set()
-        wait_selector = "#results, div.results-container" # Common containers
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        # No automatic CAPTCHA handling for SearX usually needed, but keep the check just in case
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected on SearX instance. Cannot proceed automatically.")
-             return results
-
-        try:
-            # Common selectors across SearXNG themes
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'div.result, article.result, div.result-default')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract elements; SearXNG structure can vary slightly by theme
-                    link_tag = block.find_element(By.CSS_SELECTOR, 'a[href]') # Usually the main link
-                    title_tag = block.find_element(By.CSS_SELECTOR, 'h3 > a, h4 > a, h3, h4, .result-title a, .title a') # More title selectors
-                    # Snippet selectors
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'p.description, p.content, div.snippet, div.description, p.result-content')
-                    except NoSuchElementException: snippet_tag = None
-
-                    url = link_tag.get_attribute('href')
-                    title = title_tag.text.strip()
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    # Handle relative URLs sometimes found in SearXNG instances
-                    if url and not urlparse(url).scheme: url = urljoin(instance_url, url)
-
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_semantic_scholar(self, driver: WebDriver, query: str, num_results: int, timeout: int):
-        """Scrapes Semantic Scholar using Selenium."""
-        engine_name = "SemanticScholar"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}'...")
-        results = []
-        search_url = f"https://www.semanticscholar.org/search?q={quote_plus(query)}&sort=relevance"
-        processed_urls = set()
-        wait_selector = "#main-content, div[data-test-id='search-result-list']" # Wait for main content area or result list
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-             return results
-
-        try:
-            # Selector for result cards
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'div[data-test-id="search-result-card"], div.search-result--compact, div.search-result')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract title and link
-                    title_link_tag = block.find_element(By.CSS_SELECTOR, 'a[data-test-id="title-link"], h3 > a, a[data-heap-id="result-title"]')
-                    url = title_link_tag.get_attribute('href')
-                    title = title_link_tag.text.strip()
-
-                    # Extract snippet
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'span[data-test-id="text-truncator-abstract"], span.abstract-truncator, div.abstract')
-                    except NoSuchElementException: snippet_tag = None
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    # Resolve relative URLs and check validity
-                    if url and url.startswith('/'): url = urljoin("https://www.semanticscholar.org/", url)
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_google_scholar(self, driver: WebDriver, query: str, num_results: int, timeout: int, max_pages: int = 1):
-        """Scrapes Google Scholar using Selenium. Highly unstable. Supports pagination."""
-        engine_name = "GoogleScholar"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}' (Max Pages: {max_pages})...")
-        results = []
-        search_url_base = "https://scholar.google.com/scholar"
-        results_per_page = 10
-        processed_urls = set()
-        wait_container_selector = "#gs_res_ccl_mid" # Container for results
-
-        for page_num in range(max_pages):
-            current_start = page_num * results_per_page
-            search_url = f"{search_url_base}?hl=en&q={quote_plus(query)}&num={results_per_page}&start={current_start}"
-            scraper_logger.info(f"Processing page {page_num + 1} (start={current_start})...")
-
-            try:
-                scraper_logger.info(f"Navigating to {search_url}")
-                driver.get(search_url)
-                WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_container_selector)))
-                scraper_logger.info(f"Page loaded.")
-            except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_container_selector}). Aborting page."); break
-            except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); break
-
-            if self._check_for_captcha(driver):
-                scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-                return results # Abort
-
-            # --- Parse Results ---
-            page_results_found = 0
-            try:
-                result_blocks = driver.find_elements(By.CSS_SELECTOR, 'div.gs_r.gs_or.gs_scl')
-                scraper_logger.info(f"Page {page_num + 1}: Found {len(result_blocks)} potential result blocks.")
-
-                if not result_blocks and page_num == 0: # Check for no results message on first page only
-                     page_text = driver.find_element(By.TAG_NAME, 'body').text
-                     if "did not match any articles" in page_text: scraper_logger.info("Page 1: 'No results found' message detected.")
-                     else: scraper_logger.warning("Page 1: No result blocks found.")
-
-                for block in result_blocks:
-                    if len(results) >= num_results: break
-                    title, url, snippet, pdf_url = None, None, None, None
-                    try:
-                        # Extract elements
-                        title_link_tag = block.find_element(By.CSS_SELECTOR, 'h3.gs_rt a')
-                        url = title_link_tag.get_attribute('href')
-                        title = title_link_tag.text.strip()
-
-                        try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'div.gs_rs')
-                        except NoSuchElementException: snippet_tag = None
-                        snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                        if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                        pdf_url = self._extract_pdf_link(block)
-
-                    except NoSuchElementException:
-                         scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                         continue
-                    except Exception as e:
-                         scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                         continue
-
-                    # Append valid result
-                    result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                    if pdf_url: result_data['pdf_url'] = pdf_url
-                    results.append(result_data)
-                    processed_urls.add(url)
-                    page_results_found += 1
-
-                scraper_logger.info(f"Page {page_num + 1}: Added {page_results_found} results.")
-
-                # --- Pagination Check ---
-                if len(results) >= num_results: scraper_logger.info(f"Reached target results ({num_results})."); break
-                if result_blocks and page_num < max_pages - 1: # Only check if we found results this page
-                    try: driver.find_element(By.LINK_TEXT, 'Next')
-                    except NoSuchElementException: scraper_logger.info(f"Page {page_num + 1}: No 'Next' link found."); break
-
-            except WebDriverException as e: scraper_logger.error(f"Error finding/parsing result blocks on page {page_num + 1}: {e}"); break
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_base(self, driver: WebDriver, query: str, num_results: int, timeout: int):
-        """Scrapes BASE (Bielefeld Academic Search Engine) using Selenium."""
-        engine_name = "BASE"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}'...")
-        results = []
-        search_url = f"https://www.base-search.net/Search/Results?lookfor={quote_plus(query)}&limit={num_results}&sort=relevant"
-        processed_urls = set()
-        wait_selector = "#results" # Main results container
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-             return results
-
-        try:
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'div.record')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract elements
-                    title_link_tag = block.find_element(By.CSS_SELECTOR, 'a.title')
-                    url = title_link_tag.get_attribute('href')
-                    title = title_link_tag.text.strip()
-
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'div.abstract')
-                    except NoSuchElementException: snippet_tag = None
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_core(self, driver: WebDriver, query: str, num_results: int, timeout: int):
-        """Scrapes CORE (core.ac.uk) using Selenium."""
-        engine_name = "CORE"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}'...")
-        results = []
-        search_url = f"https://core.ac.uk/search?q={quote_plus(query)}"
-        processed_urls = set()
-        # Wait for results list or main content area
-        wait_selector = "ul[class*='StyledList'], div.content, ul.results-list"
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-             return results
-
-        try:
-            # Selectors for result items (can vary)
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'div.result-item, li.result-list-item, div[class*="styles__cardContainer"]')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract title and link
-                    title_link_tag = block.find_element(By.CSS_SELECTOR, 'h3 > a, div[class*="title"] > a, a[data-testid="result-title"]')
-                    url = title_link_tag.get_attribute('href')
-                    title = title_link_tag.text.strip()
-
-                    # Extract snippet
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'div.abstract, p.abstract, div[class*="abstract"]')
-                    except NoSuchElementException: snippet_tag = None
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    # Resolve relative URLs and check validity
-                    if url and not url.startswith('http'): url = urljoin(driver.current_url, url)
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_sciencegov(self, driver: WebDriver, query: str, num_results: int, timeout: int):
-        """Scrapes Science.gov using Selenium."""
-        engine_name = "ScienceGov"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}'...")
-        results = []
-        search_url = f"https://www.science.gov/scigov/desktop/en/results.html?q={quote_plus(query)}"
-        processed_urls = set()
-        wait_selector = "#resultsList" # Main results list ID
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-             return results
-
-        try:
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'div.result')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract elements
-                    title_link_tag = block.find_element(By.CSS_SELECTOR, 'div.title > a')
-                    url = title_link_tag.get_attribute('href')
-                    title = title_link_tag.text.strip()
-
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'div.abstract')
-                    except NoSuchElementException: snippet_tag = None
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_baidu_scholar(self, driver: WebDriver, query: str, num_results: int, timeout: int):
-        """Scrapes Baidu Scholar (xueshu.baidu.com) using Selenium."""
-        engine_name = "BaiduScholar"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}'...")
-        results = []
-        search_url = f"https://xueshu.baidu.com/s?wd={quote_plus(query)}&sc_f_para=sc_tasktype%3D%7BfirstSimpleSearch%7D" # Added para might help
-        processed_urls = set()
-        wait_selector = "#content_wrap" # Main content area ID
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-             return results
-
-        try:
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'div.result.sc_default_result')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract elements
-                    title_link_tag = block.find_element(By.CSS_SELECTOR, 'h3 > a')
-                    url = title_link_tag.get_attribute('href')
-                    title = title_link_tag.text.strip()
-
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'div.c_abstract')
-                    except NoSuchElementException: snippet_tag = None
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_refseek(self, driver: WebDriver, query: str, num_results: int, timeout: int):
-        """Scrapes RefSeek (uses Google Custom Search Engine) using Selenium."""
-        engine_name = "RefSeek"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}'...")
-        results = []
-        search_url = f"https://www.refseek.com/search?q={quote_plus(query)}"
-        processed_urls = set()
-        # Wait for the CSE results box to be visible
-        wait_selector = "div.gsc-resultsbox-visible"
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-             return results
-
-        try:
-            # Results are within the Google CSE structure
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'div.gsc-webResult.gsc-result')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract elements (CSE structure)
-                    title_link_tag = block.find_element(By.CSS_SELECTOR, 'a.gs-title')
-                    url = title_link_tag.get_attribute('href') # URL is direct here
-                    title = title_link_tag.text.strip()
-
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'div.gs-bidi-start-align.gs-snippet')
-                    except NoSuchElementException: snippet_tag = None
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_sciencedirect(self, driver: WebDriver, query: str, num_results: int, timeout: int):
-        """Scrapes ScienceDirect (Elsevier) using Selenium."""
-        engine_name = "ScienceDirect"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}'...")
-        results = []
-        search_url = f"https://www.sciencedirect.com/search?qs={quote_plus(query)}"
-        processed_urls = set()
-        wait_selector = "#results-list" # Wait for the results list container
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-             return results
-
-        try:
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'li.ResultItem')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract elements
-                    link_tag = block.find_element(By.CSS_SELECTOR, 'a.result-list-title-link')
-                    title_tag = link_tag.find_element(By.CSS_SELECTOR, 'span.title-text') # Title is inside link
-                    url = link_tag.get_attribute('href')
-                    title = title_tag.text.strip()
-
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'div.abstract-snippet-container div.snippet-text, div.SubType')
-                    except NoSuchElementException: snippet_tag = None
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_mdpi(self, driver: WebDriver, query: str, num_results: int, timeout: int):
-        """Scrapes MDPI using Selenium."""
-        engine_name = "MDPI"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}'...")
-        results = []
-        search_url = f"https://www.mdpi.com/search?q={quote_plus(query)}"
-        processed_urls = set()
-        wait_selector = "div.article-items" # Container for article results
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-             return results
-
-        try:
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'article.article-item')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract elements
-                    title_link_tag = block.find_element(By.CSS_SELECTOR, 'a.title-link')
-                    url = title_link_tag.get_attribute('href')
-                    title = title_link_tag.text.strip()
-
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'div.abstract-full, div.abstract-content')
-                    except NoSuchElementException: snippet_tag = None
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    # Resolve relative URLs and check validity
-                    if url and not url.startswith('http'): url = urljoin(driver.current_url, url)
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_tandf(self, driver: WebDriver, query: str, num_results: int, timeout: int):
-        """Scrapes Taylor & Francis Online using Selenium."""
-        engine_name = "T&F"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}'...")
-        results = []
-        search_url = f"https://www.tandfonline.com/action/doSearch?AllField={quote_plus(query)}"
-        processed_urls = set()
-        wait_selector = "div.search-results, div.results-list" # Container selectors
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-             return results
-
-        try:
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'div.searchResultItem, li.search-result')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract elements
-                    title_link_tag = block.find_element(By.CSS_SELECTOR, 'a.hlFld-Title, span.hlFld-Title > a')
-                    url = title_link_tag.get_attribute('href')
-                    title = title_link_tag.text.strip()
-
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'div.abstractSection.hidden, div.search-result__snippet')
-                    except NoSuchElementException: snippet_tag = None
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    # Resolve relative URLs and check validity
-                    if url and not url.startswith('http'): url = urljoin(driver.current_url, url)
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_ieee(self, driver: WebDriver, query: str, num_results: int, timeout: int):
-        """Scrapes IEEE Xplore using Selenium. Prone to breaking due to dynamic content."""
-        engine_name = "IEEE"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}'...")
-        results = []
-        search_url = f"https://ieeexplore.ieee.org/search/searchresult.jsp?newsearch=true&queryText={quote_plus(query)}"
-        processed_urls = set()
-        # Wait for main content area or results list (structure varies)
-        wait_selector = "#xplMainContent, div.List-results-items, section[aria-label='search results']"
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            # Increase wait time slightly for IEEE as it can be slow
-            WebDriverWait(driver, timeout + 5).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-             return results
-
-        try:
-            # Selectors for result items (can change frequently)
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'div.List-results-items, xpl-results-item')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract elements (selectors might need frequent updates)
-                    title_link_tag = block.find_element(By.CSS_SELECTOR, 'h2 a, h3 a, a[data-artnum]')
-                    url = title_link_tag.get_attribute('href')
-                    title = title_link_tag.text.strip()
-
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'div.abstract span, span.text-body-sm, div.description')
-                    except NoSuchElementException: snippet_tag = None
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    # Resolve relative URLs and check validity
-                    if url and not url.startswith('http'): url = urljoin(driver.current_url, url)
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
-    def _scrape_springer(self, driver: WebDriver, query: str, num_results: int, timeout: int):
-        """Scrapes SpringerLink using Selenium."""
-        engine_name = "Springer"
-        scraper_logger = logger.bind(scraper=engine_name)
-        scraper_logger.info(f"Starting search for '{query}'...")
-        results = []
-        search_url = f"https://link.springer.com/search?query={quote_plus(query)}"
-        processed_urls = set()
-        wait_selector = "#results-list, ol.app-search-results-list" # Container for results
-
-        try:
-            scraper_logger.info(f"Navigating to {search_url}")
-            driver.get(search_url)
-            WebDriverWait(driver, timeout).until(EC.presence_of_element_located((By.CSS_SELECTOR, wait_selector)))
-            scraper_logger.info(f"Page loaded.")
-        except TimeoutException: scraper_logger.error(f"Timed out waiting for page content ({wait_selector}). Aborting."); return results
-        except WebDriverException as e: scraper_logger.error(f"Error navigating to {search_url}: {e}"); return results
-
-        if self._check_for_captcha(driver):
-             scraper_logger.error("CAPTCHA detected. Cannot proceed automatically.")
-             return results
-
-        try:
-            result_blocks = driver.find_elements(By.CSS_SELECTOR, 'li.results-list__item, article.app-search-results-item')
-            scraper_logger.info(f"Found {len(result_blocks)} potential result blocks.")
-
-            for block in result_blocks:
-                if len(results) >= num_results: break
-                title, url, snippet, pdf_url = None, None, None, None
-                try:
-                    # Extract elements
-                    title_link_tag = block.find_element(By.CSS_SELECTOR, 'h2 a, a.app-card-title, a[data-test="title"]')
-                    url = title_link_tag.get_attribute('href')
-                    title = title_link_tag.text.strip()
-
-                    try: snippet_tag = block.find_element(By.CSS_SELECTOR, 'p.app-card-snippet, p.snippet, div.content')
-                    except NoSuchElementException: snippet_tag = None
-                    snippet = snippet_tag.text.strip() if snippet_tag else None
-
-                    # Resolve relative URLs and check validity
-                    if url and not url.startswith('http'): url = urljoin(driver.current_url, url)
-                    if not url or not title or not url.startswith('http') or url in processed_urls: continue
-
-                    pdf_url = self._extract_pdf_link(block)
-
-                except NoSuchElementException:
-                     scraper_logger.warning("Skipping block, missing expected elements (title/link).")
-                     continue
-                except Exception as e:
-                     scraper_logger.error(f"Error parsing result block: {e}. Skipping.")
-                     continue
-
-                # Append valid result
-                result_data = {'title': title, 'url': url, 'snippet': snippet if snippet else "N/A"}
-                if pdf_url: result_data['pdf_url'] = pdf_url
-                results.append(result_data)
-                processed_urls.add(url)
-
-        except WebDriverException as e: scraper_logger.error(f"Error finding result blocks: {e}")
-
-        scraper_logger.info(f"Finished scraping. Total results: {len(results)}")
-        return results
-
     def _cleanup_llm_output(self, text: str) -> str:
         """Removes potential log lines, extra processing messages, think tags, and leaked analysis from LLM output."""
         if not isinstance(text, str):
@@ -3300,7 +1949,70 @@ class CortexThoughts:
 
 
         return cleaned_text
+    async def _trigger_web_search(self, db: Session, session_id: str, query: str) -> str:
+        """
+        Launches the new playwright-based web search as a background task.
+        """
+        req_id = f"websearch-{uuid.uuid4()}"
+        logger.info(f"🔍 {req_id} Triggering background web search task for query: '{query}'")
 
+        # --- Define which engines to use for this search ---
+        # This can be made more dynamic later if needed
+        engines_to_use = [
+            'ddg', 'google', 'searx', 'semantic_scholar', 'google_scholar', 
+            'base', 'core', 'sciencegov', 'baidu_scholar', 'refseek', 
+            'scidirect', 'mdpi', 'tandf', 'ieee', 'springer'
+        ]
+        
+        # Log the initiation of the search action
+        add_interaction(
+            db, session_id=session_id, mode="chat", input_type="log_info",
+            user_input=f"Web Search Action Triggered: {query}",
+            assistant_action_type="search_web",
+            assistant_action_params=json.dumps({"query": query, "engines": engines_to_use}),
+            assistant_action_executed=True
+        )
+        db.commit()
+
+        async def run_search_and_log_result():
+            """The actual task that runs in the background."""
+            search_results = await search_and_scrape_web_async(query=query, engines=engines_to_use)
+            
+            bg_db = SessionLocal()
+            try:
+                if search_results:
+                    # Format the results into a single text block for logging
+                    formatted_results = "\n\n".join([
+                        f"--- Result from {res.get('source_engine', 'N/A')} ---\n"
+                        f"Title: {res.get('title', 'No Title')}\n"
+                        f"URL: {res.get('url')}\n"
+                        f"Snippet: {res.get('snippet', 'N/A')}"
+                        for res in search_results
+                    ])
+                    
+                    logger.success(f"{req_id} Web search successful. Logging {len(search_results)} results to DB.")
+                    add_interaction(
+                        bg_db, session_id=session_id, mode="chat",
+                        input_type="web_search_result",
+                        user_input=f"[Results for Web Search: {query}]",
+                        llm_response=formatted_results
+                    )
+                else:
+                    logger.error(f"{req_id} Web search failed or returned no content.")
+                    add_interaction(
+                        bg_db, session_id=session_id, mode="chat", input_type="log_error",
+                        user_input=f"[Web Search Failed: {query}]",
+                        llm_response="The web search process failed to retrieve any content."
+                    )
+                bg_db.commit()
+            finally:
+                bg_db.close()
+
+        # Schedule the background task
+        asyncio.create_task(run_search_and_log_result())
+        
+        return f"Okay, I've started a web search for '{query}' in the background. I will analyze the results from {', '.join(engines_to_use)} shortly."
+    
     async def _correct_response(self, db: Session, session_id: str, original_input: str, context: Dict, draft_response: str) -> str:
         """
         Uses the corrector LLM (ELP0) to refine a draft response.
@@ -3438,277 +2150,206 @@ class CortexThoughts:
 
     async def _execute_assistant_action(self, db: Session, session_id: str, action_details: Dict[str, Any], triggering_interaction: Interaction) -> str:
         """
-        Executes the specified action using LLM-generated AppleScript (macOS) or background search.
-        Includes RAG, generation, execution, refinement loop, and fallbacks.
-        V3: Added model logging and reinforced error passing for refinement.
+        Executes the specified action by detecting the OS, generating an appropriate script via the agent,
+        and running it. Includes a RAG-based refinement loop for script generation.
+        V4: Multi-platform script generation (AppleScript, Bash, PowerShell).
         """
         action_type = action_details.get("action_type", "unknown")
         parameters = action_details.get("parameters", {})
         req_id = f"act-{uuid.uuid4()}"
-        logger.info(f"🚀 {req_id} Handling assistant action: '{action_type}' with params: {parameters} (Trigger ID: {triggering_interaction.id if triggering_interaction else 'N/A'})")
+        platform = sys.platform  # 'darwin', 'win32', or 'linux'
+        script_lang = 'applescript' if platform == 'darwin' else 'powershell' if platform == 'win32' else 'bash'
 
-        # Define Fallback Messages
-        mac_exec_fallback = f"Okay, I tried to perform the macOS action '{action_type}', but couldn't get it to work after {AGENT_MAX_SCRIPT_RETRIES} attempts. The script kept having errors. You might need to do it manually or check system permissions."
-        non_mac_fallback = f"Action '{action_type}' seems to be macOS-specific and cannot be performed on this OS ({sys.platform})."
+        logger.info(f"🚀 {req_id} Handling assistant action: '{action_type}' on platform '{platform}' (Trigger ID: {triggering_interaction.id})")
+
+        # --- Define Fallback Messages ---
+        # These are used if the entire process fails after all retries.
+        exec_fallback = f"Okay, I tried to perform the '{action_type}' action, but couldn't get it to work after {AGENT_MAX_SCRIPT_RETRIES} attempts. The script kept having errors. You might need to do it manually or check system permissions."
+        generation_fallback = f"Sorry, I had trouble figuring out the exact steps to perform the '{action_type}' action. My script generation attempts failed."
         search_exec_fallback = f"Sorry, I encountered an error while trying to start the web search for '{parameters.get('query', 'that topic')}'. Please try again later."
-        generation_fallback = f"Sorry, I had trouble figuring out the exact steps to perform the '{action_type}' action. Please try phrasing your request differently."
-
+        
+        # Use a separate DB session for this self-contained action to avoid conflicts.
         exec_db = SessionLocal()
-
         try:
-            # --- Handle Web Search (Non-AppleScript) ---
+            # --- Handle Web Search (Non-Script Action) ---
             if action_type == "search" and parameters.get("query"):
-                logger.info(f"{req_id} Handling 'search' action type. Triggering background web search...")
-                trigger_id_for_log = triggering_interaction.id if triggering_interaction else None
-                add_interaction(exec_db,
-                                session_id=session_id, mode="chat", input_type="log_info",
-                                user_input=f"Triggering Web Search: {parameters['query']}",
-                                assistant_action_type=action_type, assistant_action_params=json.dumps(parameters),
-                                assistant_action_executed=True, assistant_action_result="[Search process launched]",
-                            )
+                logger.info(f"{req_id} Handling 'search' action type. Triggering background web search.")
+                try:
+                    # Log the trigger of the search action
+                    add_interaction(exec_db, session_id=session_id, mode="chat", input_type="log_info",
+                                    user_input=f"Triggering Web Search: {parameters['query']}",
+                                    assistant_action_type=action_type, assistant_action_params=json.dumps(parameters),
+                                    assistant_action_executed=True, assistant_action_result="[Search process launched]")
+                    exec_db.commit()
+                    # Await the trigger function and get the confirmation message
+                    confirmation_message = await self._trigger_web_search(exec_db, session_id, parameters["query"])
+                    if triggering_interaction:
+                        triggering_interaction.assistant_action_executed = True
+                        triggering_interaction.assistant_action_result = confirmation_message
+                        exec_db.merge(triggering_interaction)
+                        exec_db.commit()
+                    return confirmation_message
+                except Exception as search_err:
+                    logger.error(f"{req_id} Error during web search trigger: {search_err}")
+                    exec_db.rollback()
+                    return search_exec_fallback
+
+            # --- Platform-Aware Script Generation and Execution Loop ---
+            params_json = json.dumps(parameters, sort_keys=True)
+            script_to_execute: Optional[str] = None
+            last_error_summary: str = "No previous errors."
+            last_stderr: str = ""
+            last_stdout: str = ""
+            last_rc: int = 0
+
+            # This loop handles retries for script GENERATION and EXECUTION.
+            for attempt in range(1, AGENT_MAX_SCRIPT_RETRIES + 1):
+                logger.info(f"{req_id} {script_lang.capitalize()} Script Attempt {attempt}/{AGENT_MAX_SCRIPT_RETRIES} for '{action_type}'")
+
+                # --- 1. LLM: Generate or Refine Script ---
+                # This logic now resides in the AmaryllisAgent.
+                script_llm = self.provider.get_model("code")
+                if not script_llm:
+                    return generation_fallback + " (Code model unavailable)"
+                
+                # Determine prompt templates based on platform
+                if platform == 'darwin':
+                    gen_prompt = PROMPT_GENERATE_APPLESCRIPT; refine_prompt = PROMPT_REFINE_APPLESCRIPT
+                elif platform == 'win32':
+                    gen_prompt = PROMPT_GENERATE_POWERSHELL_SCRIPT; refine_prompt = PROMPT_REFINE_POWERSHELL_SCRIPT
+                else: # Linux/other
+                    gen_prompt = PROMPT_GENERATE_BASH_SCRIPT; refine_prompt = PROMPT_REFINE_BASH_SCRIPT
+
+                llm_prompt_template = gen_prompt if attempt == 1 else refine_prompt
+                
+                # RAG: Get past attempts for context
+                past_attempts = await asyncio.to_thread(get_past_applescript_attempts, exec_db, action_type, params_json, limit=5)
+                past_attempts_context = self._format_script_rag_context(past_attempts)
+
+                llm_input = {
+                    "action_type": action_type,
+                    "parameters_json": params_json,
+                    "past_attempts_context": past_attempts_context
+                }
+                if attempt > 1:
+                    llm_input.update({
+                        "failed_script": script_to_execute or "[Script Missing]",
+                        "return_code": last_rc,
+                        "stderr": last_stderr,
+                        "stdout": last_stdout,
+                        "error_summary": last_error_summary,
+                    })
+
+                script_chain = ChatPromptTemplate.from_template(llm_prompt_template) | script_llm | StrOutputParser()
+                
+                try:
+                    generated_script_raw = await asyncio.to_thread(script_chain.invoke, llm_input)
+                    script_to_execute = re.sub(rf"^```(?:{script_lang})?\s*|```\s*$", "", generated_script_raw, flags=re.MULTILINE).strip()
+                    if not script_to_execute:
+                        logger.warning(f"{req_id} LLM returned empty script on attempt {attempt}.")
+                        last_error_summary = "LLM generated an empty script."
+                        continue # Go to next attempt
+                    logger.info(f"{req_id} LLM {'generated' if attempt == 1 else 'refined'} a {script_lang} script.")
+                except Exception as gen_err:
+                    logger.error(f"{req_id} Error calling LLM for script attempt {attempt}: {gen_err}")
+                    last_error_summary = f"LLM call failed: {gen_err}"
+                    if attempt == AGENT_MAX_SCRIPT_RETRIES: return generation_fallback
+                    continue
+
+                # --- 2. Execute Script ---
+                exec_command: List[str] = []
+                if platform == 'darwin':
+                    exec_command = ["osascript", "-e", script_to_execute]
+                elif platform == 'win32':
+                    exec_command = ["powershell.exe", "-ExecutionPolicy", "Bypass", "-Command", script_to_execute]
+                else: # Linux and other Unix-like systems
+                    exec_command = ["bash", "-c", script_to_execute]
+
+                logger.debug(f"{req_id} Running command: {' '.join(exec_command)}")
+                exec_start_time = time.monotonic()
+                process = await asyncio.to_thread(subprocess.run, exec_command, capture_output=True, text=True, timeout=120, check=False)
+                exec_duration_ms = (time.monotonic() - exec_start_time) * 1000
+                
+                stdout = process.stdout.strip()
+                stderr = process.stderr.strip()
+                rc = process.returncode
+                logger.info(f"{req_id} Script finished in {exec_duration_ms:.0f}ms. RC={rc}.")
+                if stdout: logger.debug(f"  STDOUT: {stdout}")
+                if stderr: logger.error(f"  STDERR: {stderr}")
+
+                # --- 3. Store Attempt Result (Crucial for RAG) ---
+                success = (rc == 0)
+                error_summary = f"RC={rc}. Stderr: {stderr}" if not success else None
+                
+                attempt_record = AppleScriptAttempt(
+                    session_id=session_id,
+                    triggering_interaction_id=triggering_interaction.id,
+                    action_type=action_type, parameters_json=params_json, attempt_number=attempt,
+                    generated_script=script_to_execute, execution_success=success,
+                    execution_return_code=rc, execution_stdout=stdout, execution_stderr=stderr,
+                    execution_duration_ms=exec_duration_ms,
+                    error_summary=error_summary[:1000] if error_summary else None
+                )
+                exec_db.add(attempt_record)
                 exec_db.commit()
-                confirmation_message = await self._trigger_web_search(exec_db, session_id, parameters["query"])
-                if triggering_interaction:
-                    triggering_interaction.assistant_action_executed = True
-                    triggering_interaction.assistant_action_result = confirmation_message
-                    # Safely merge triggering_interaction state back if needed (assuming it might be detached)
-                    exec_db.merge(triggering_interaction)
-                    exec_db.commit()
-                return confirmation_message
 
-            # --- Handle macOS AppleScript Actions ---
-            elif sys.platform == 'darwin':
-                logger.info(f"{req_id} Running on macOS. Attempting LLM-based AppleScript execution.")
-                params_json = json.dumps(parameters, sort_keys=True)
+                # --- 4. Check Outcome ---
+                if success:
+                    logger.success(f"✅ {req_id} Script execution successful on attempt {attempt}.")
+                    final_result = stdout or f"Action '{action_type}' completed."
+                    if triggering_interaction:
+                        triggering_interaction.assistant_action_executed = True
+                        triggering_interaction.assistant_action_result = final_result
+                        exec_db.merge(triggering_interaction)
+                        exec_db.commit()
+                    return final_result
+                else: # Failure
+                    logger.error(f"❌ {req_id} {script_lang.capitalize()} attempt {attempt} FAILED. Error: {error_summary}")
+                    last_error_summary, last_stderr, last_stdout, last_rc = error_summary, stderr, stdout, rc
+                    # Loop continues to the next attempt for refinement...
 
-                script_to_execute = None
-                last_error_summary = "No previous errors."
-                last_stderr = ""
-                last_stdout = ""
-                last_rc = 0
-
-                for attempt in range(1, AGENT_MAX_SCRIPT_RETRIES + 1):
-                    logger.info(f"{req_id} AppleScript Attempt {attempt}/{AGENT_MAX_SCRIPT_RETRIES} for '{action_type}'")
-
-                    # --- 1. RAG: Get Past Attempts ---
-                    past_attempts = await asyncio.to_thread(
-                        get_past_applescript_attempts, exec_db, action_type, params_json, limit=5 # Fetch last 5 attempts for this specific action/params
-                    )
-                    past_attempts_context = self._format_applescript_rag_context(past_attempts)
-                    logger.trace(f"Past attempts context for RAG:\n{past_attempts_context}")
-
-                    # --- 2. LLM: Generate or Refine Script ---
-                    script_llm = self.provider.get_model("code")
-                    if not script_llm:
-                        logger.error(f"{req_id} Code model not available for AppleScript generation.")
-                        if triggering_interaction:
-                            triggering_interaction.assistant_action_executed = False
-                            triggering_interaction.assistant_action_result = generation_fallback + " (Code model unavailable)"
-                            triggering_interaction.input_type = "log_error"
-                            exec_db.merge(triggering_interaction)
-                            exec_db.commit()
-                        return generation_fallback
-
-                    # --- Log the model being used ---
-                    model_name_used = "Unknown Code Model"
-                    if hasattr(script_llm, 'model'): # For Ollama
-                        model_name_used = script_llm.model
-                    elif hasattr(script_llm, 'model_name'): # Generic Langchain attribute
-                        model_name_used = script_llm.model_name
-                    logger.debug(f"{req_id} Using code model '{model_name_used}' for {'generation' if attempt == 1 else 'refinement'}.")
-                    # --- End model logging ---
-
-                    llm_prompt_template = None
-                    llm_input = {}
-
-                    if attempt == 1:
-                        llm_prompt_template = ChatPromptTemplate.from_template(PROMPT_GENERATE_APPLESCRIPT)
-                        llm_input = {
-                            "action_type": action_type,
-                            "parameters_json": params_json,
-                            "past_attempts_context": past_attempts_context # Include RAG context
-                        }
-                    else:
-                        # Ensure all error details are passed for refinement
-                        llm_prompt_template = ChatPromptTemplate.from_template(PROMPT_REFINE_APPLESCRIPT)
-                        llm_input = {
-                            "action_type": action_type,
-                            "parameters_json": params_json,
-                            "failed_script": script_to_execute or "[Script Missing]",
-                            "return_code": last_rc,
-                            "stderr": last_stderr, # Pass the captured stderr
-                            "stdout": last_stdout, # Pass the captured stdout
-                            "error_summary": last_error_summary, # Pass the summary string
-                            "past_attempts_context": past_attempts_context # Include RAG context
-                        }
-                    logger.debug(f"{req_id} Calling LLM with this submitted prompt... {llm_prompt_template} {script_llm}")
-                    script_chain = llm_prompt_template | script_llm | StrOutputParser()
-                    logger.debug(f"{req_id} Calling LLM...")
-                    try:
-                        # Add context about the attempt number to the logger
-                        with logger.contextualize(applescript_attempt=attempt):
-                            logger.debug(f"{req_id} Calling LLM with this submitted prompt llm_input... {llm_input}")
-                            generated_script_raw = await asyncio.to_thread(script_chain.invoke, llm_input)
-                        
-                        script_to_execute = re.sub(r"^```(?:applescript)?\s*|```\s*$", "", generated_script_raw, flags=re.MULTILINE).strip()
-                        if not script_to_execute:
-                            logger.warning(f"{req_id} LLM returned empty script on attempt {attempt}.")
-                            last_error_summary = "LLM generated an empty script."
-                            if attempt == AGENT_MAX_SCRIPT_RETRIES:
-                                if triggering_interaction:
-                                    triggering_interaction.assistant_action_executed = False
-                                    triggering_interaction.assistant_action_result = generation_fallback + f" (Empty script on final attempt {attempt})"
-                                    triggering_interaction.input_type = "log_error"
-                                    exec_db.merge(triggering_interaction)
-                                    exec_db.commit()
-                                return generation_fallback
-                            continue
-                        logger.info(f"{req_id} LLM {'generated' if attempt == 1 else 'refined'} script (length: {len(script_to_execute)}).")
-                        logger.trace(f"Script attempt {attempt}:\n{script_to_execute}")
-
-                    except Exception as gen_err:
-                        logger.error(f"{req_id} Error calling LLM for script attempt {attempt}: {gen_err}")
-                        last_error_summary = f"LLM call failed: {gen_err}"
-                        if attempt == AGENT_MAX_SCRIPT_RETRIES:
-                            if triggering_interaction:
-                                triggering_interaction.assistant_action_executed = False
-                                triggering_interaction.assistant_action_result = generation_fallback + f" (LLM error on final attempt {attempt}: {gen_err})"
-                                triggering_interaction.input_type = "log_error"
-                                exec_db.merge(triggering_interaction)
-                                exec_db.commit()
-                            return generation_fallback
-                        continue
-
-                    # --- 3. Execute Script ---
-                    osa_command = ["osascript", "-e", script_to_execute]
-                    logger.debug(f"{req_id} Running osascript command for attempt {attempt}...")
-                    exec_start_time = time.monotonic()
-                    process = await asyncio.to_thread(
-                        subprocess.run,
-                        osa_command, capture_output=True, text=True, timeout=90, check=False
-                    )
-                    exec_duration_ms = (time.monotonic() - exec_start_time) * 1000
-                    stdout = process.stdout.strip(); stderr = process.stderr.strip(); rc = process.returncode
-                    logger.info(f"{req_id} osascript attempt {attempt} finished in {exec_duration_ms:.0f}ms. RC={rc}.")
-                    # Log full stdout/stderr only at DEBUG level to reduce noise otherwise
-                    logger.debug(f"{req_id} Attempt {attempt} STDOUT:\n{stdout}")
-                    logger.debug(f"{req_id} Attempt {attempt} STDERR:\n{stderr}")
-
-                    # --- 4. Store Attempt Result (Crucial for RAG) ---
-                    success = (rc == 0)
-                    # Create error summary ONLY if failed
-                    error_summary = f"RC={rc}. Stderr: {stderr}" if not success else None
-                    attempt_record = AppleScriptAttempt(
-                        session_id=session_id,
-                        triggering_interaction_id=triggering_interaction.id if triggering_interaction else None,
-                        action_type=action_type,
-                        parameters_json=params_json,
-                        attempt_number=attempt,
-                        generated_script=script_to_execute,
-                        execution_success=success,
-                        execution_return_code=rc,
-                        execution_stdout=stdout,
-                        execution_stderr=stderr,
-                        execution_duration_ms=exec_duration_ms,
-                        error_summary=error_summary[:1000] if error_summary else None
-                    )
-                    exec_db.add(attempt_record)
-                    exec_db.commit()
-                    logger.debug(f"{req_id} Stored attempt {attempt} record ID {attempt_record.id}.")
-                    # --- RAG data is now updated for the *next* loop iteration ---
-
-                    # --- 5. Check Outcome ---
-                    if success:
-                        logger.success(f"{req_id} AppleScript execution successful on attempt {attempt} for '{action_type}'.")
-                        if triggering_interaction:
-                            triggering_interaction.assistant_action_executed = True
-                            triggering_interaction.assistant_action_result = stdout or f"Action '{action_type}' completed successfully."
-                            if hasattr(triggering_interaction, 'execution_time_ms'):
-                                triggering_interaction.execution_time_ms = exec_duration_ms
-                            else:
-                                logger.warning("Interaction model missing 'execution_time_ms', skipping update.")
-                            triggering_interaction.input_type = "text" # Reset from potential previous error state
-                            exec_db.merge(triggering_interaction)
-                            exec_db.commit()
-                        return stdout or f"Action '{action_type}' completed."
-                    else:
-                        # --- VERBOSE FAILURE LOGGING (Already implemented in previous step) ---
-                        logger.error(f"❌ {req_id} AppleScript Attempt {attempt} FAILED for action '{action_type}'.")
-                        logger.error(f"  [FAIL Attempt {attempt}] Return Code: {rc}")
-                        logger.error(f"  [FAIL Attempt {attempt}] Error Summary: {error_summary}") # Contains stderr
-                        logger.error(f"  [FAIL Attempt {attempt}] Stderr:\n---\n{stderr}\n---")
-                        logger.error(f"  [FAIL Attempt {attempt}] Stdout:\n---\n{stdout}\n---")
-                        logger.error(f"  [FAIL Attempt {attempt}] Script Executed:\n--- Start Failed Script ---\n{script_to_execute}\n--- End Failed Script ---")
-                        # --- End Verbose Logging ---
-
-                        # Store details for next refinement attempt
-                        last_error_summary = error_summary # Used in the next loop's prompt
-                        last_stderr = stderr             # Used in the next loop's prompt
-                        last_stdout = stdout             # Used in the next loop's prompt
-                        last_rc = rc                     # Used in the next loop's prompt
-                        # Loop continues...
-
-                # --- End of Loop ---
-                logger.error(f"{req_id} AppleScript execution failed after {AGENT_MAX_SCRIPT_RETRIES} attempts for '{action_type}'.")
-                logger.error(f"  [FINAL FAIL] Last Error Summary: {last_error_summary}")
-                logger.error(f"  [FINAL FAIL] Last RC: {last_rc}")
-                logger.error(f"  [FINAL FAIL] Last Stderr:\n---\n{last_stderr}\n---")
-                logger.error(f"  [FINAL FAIL] Last Stdout:\n---\n{last_stdout}\n---")
-                logger.error(f"  [FINAL FAIL] Last Script Attempted (Attempt {AGENT_MAX_SCRIPT_RETRIES}):\n--- Start Final Failed Script ---\n{script_to_execute or '[Script Unavailable]'}\n--- End Final Failed Script ---")
-
-                if triggering_interaction:
-                    triggering_interaction.assistant_action_executed = True # It was attempted to exhaustion
-                    triggering_interaction.assistant_action_result = f"Failed after {AGENT_MAX_SCRIPT_RETRIES} attempts. Last Error: {last_error_summary}"
-                    triggering_interaction.input_type = "log_error"
-                    exec_db.merge(triggering_interaction)
-                    exec_db.commit()
-
-                return mac_exec_fallback # Return fallback message after max retries
-
-            # --- Handle Non-macOS platform ---
-            else:
-                logger.warning(f"{req_id} Action '{action_type}' skipped: Not web search and not on macOS. Platform: {sys.platform}")
-                if triggering_interaction:
-                    triggering_interaction.assistant_action_executed = False
-                    triggering_interaction.assistant_action_result = non_mac_fallback
-                    triggering_interaction.input_type = "log_warning"
-                    exec_db.merge(triggering_interaction)
-                    exec_db.commit()
-                return non_mac_fallback
+            # --- End of Loop ---
+            logger.error(f"❌ {req_id} Script execution failed after all {AGENT_MAX_SCRIPT_RETRIES} attempts.")
+            if triggering_interaction:
+                triggering_interaction.assistant_action_executed = True # It was attempted to exhaustion
+                triggering_interaction.assistant_action_result = f"Failed after {AGENT_MAX_SCRIPT_RETRIES} attempts. Last Error: {last_error_summary}"
+                triggering_interaction.input_type = "log_error"
+                exec_db.merge(triggering_interaction)
+                exec_db.commit()
+            return exec_fallback
 
         except Exception as e:
             err_msg = f"Unexpected error during action execution for '{action_type}': {e}"
-            logger.error(f"{req_id} {err_msg}")
-            logger.exception(f"{req_id} Action Execution Traceback:")
+            logger.error(f"{req_id} {err_msg}", exc_info=True)
+            if exec_db: exec_db.rollback()
             try:
                 if triggering_interaction:
-                    triggering_interaction.assistant_action_executed = True
+                    triggering_interaction.assistant_action_executed = True # Attempted
                     triggering_interaction.assistant_action_result = err_msg[:1000]
                     triggering_interaction.input_type = "log_error"
                     exec_db.merge(triggering_interaction)
                     exec_db.commit()
-            except Exception as log_err: logger.error(f"Failed to log final action execution error: {log_err}")
+            except Exception as log_err:
+                logger.error(f"Failed to log final action execution error: {log_err}")
+                if exec_db: exec_db.rollback()
             return f"Sorry, I encountered an unexpected internal issue while trying the '{action_type}' action."
         finally:
             if exec_db: exec_db.close()
 
-    def _format_applescript_rag_context(self, attempts: List[AppleScriptAttempt]) -> str:
-        """Formats past attempts for the LLM prompt context."""
+    def _format_script_rag_context(self, attempts: List[Any]) -> str:
+        """Helper to format past script attempts for RAG context. (Kept from original)"""
         if not attempts:
             return "None available."
         context_str = ""
         for i, attempt in enumerate(attempts):
-            context_str += f"--- Attempt {i+1} ({attempt.timestamp.isoformat()}) ---\n"
-            context_str += f"Script:\n```applescript\n{attempt.generated_script or '[Script Missing]'}\n```\n"
+            context_str += f"--- Past Attempt {i+1} ({attempt.timestamp.isoformat()}) ---\n"
+            context_str += f"Script:\n```\n{attempt.generated_script or '[Script Missing]'}\n```\n"
             context_str += f"Success: {attempt.execution_success}\n"
             if not attempt.execution_success:
                 context_str += f"  RC: {attempt.execution_return_code}\n"
                 context_str += f"  Error Summary: {attempt.error_summary}\n"
-                # Optionally include short stderr/stdout snippets
-                # context_str += f"  Stderr: {attempt.execution_stderr[:100]}...\n"
-                # context_str += f"  Stdout: {attempt.execution_stdout[:100]}...\n"
             context_str += "---\n"
-            if len(context_str) > 2000: # Limit context size
+            if len(context_str) > 2000:
                 context_str += "[Context truncated]...\n"
                 break
         return context_str
@@ -4164,7 +2805,12 @@ class CortexThoughts:
         rag_context_str = self._format_docs(rag_context_docs, source_type="URL")
         history_rag_str = self._format_interaction_list_to_string(history_rag_interactions) # Format Interaction list
 
-        chain = (self.tot_prompt | self.provider.model | StrOutputParser())
+        tot_model = self.provider.get_model("router")
+        if not tot_model:
+            logger.error("ToT model ('router') not available. Cannot run Tree of Thoughts.")
+            return "Error: Deep analysis model is not configured."
+
+        chain = (self.tot_prompt | tot_model | StrOutputParser())
         tot_result = "Error during ToT analysis."
         try:
             llm_result = self._call_llm_with_timing(
@@ -4554,193 +3200,6 @@ class CortexThoughts:
             await asyncio.to_thread(db.rollback)
 
         return final_fallback_action
-
-
-
-    def _generate_applescript_for_action(self, action_type: str, params: Dict[str, Any]) -> Optional[str]:
-        """
-        Generates a specific, predefined AppleScript code string based on the
-        action_type and parameters. This is a deterministic mapping, not LLM/RAG based generation.
-        Returns the AppleScript string if a match is found, otherwise None.
-        Handles basic quoting for shell commands within AppleScript.
-        V2: Added more examples based on potential action analysis categories.
-        """
-        # Ensure re and json are imported if not done globally in AdelaideAlbertCortex
-        import re
-        import json # Used only for logging parameters in comments
-
-        req_id = f"scriptgen-{uuid.uuid4()}" # For logging this specific generation attempt
-        logger.debug(f"{req_id} Attempting to generate AppleScript for action '{action_type}' with params: {params}")
-
-        # --- Helper for escaping AppleScript strings ---
-        def escape_applescript_string(s: str) -> str:
-            """Escapes double quotes and backslashes for AppleScript string literals."""
-            if not isinstance(s, str): return ""
-            return s.replace('\\', '\\\\').replace('"', '\\"')
-
-        # --- Helper for quoting for shell script ---
-        def quote_for_shell(s: str) -> str:
-            """Uses shlex.quote for robust shell quoting (requires shlex import)."""
-            import shlex
-            if not isinstance(s, str): return "''"
-            return shlex.quote(s)
-
-        # --- Basic Script Structure ---
-        script_lines = [
-            'use AppleScript version "2.4"',
-            'use scripting additions',
-            '',
-            f'-- Request ID: {req_id}', # Link script back to log
-            f'-- Action: {action_type}',
-            f'-- Parameters: {json.dumps(params)}',
-            '',
-            'try',
-        ]
-        success_result_code = f'return "Action \'{action_type}\' reported as completed."' # Default success return
-        action_implemented = False # Flag to track if we found a match
-
-        # --- Action Mapping Logic (Deterministic Rules) ---
-
-        # --- Category: File/App Interaction ---
-        # Example: Open a specific application, file, or URL target
-        if params.get("target"):
-            target = params["target"]
-            escaped_target_log = escape_applescript_string(target) # For AS log string
-            quoted_target_shell = quote_for_shell(target) # For shell command
-            script_lines.append(f'  log "Action: Opening target: {escaped_target_log}"')
-            script_lines.append(f'  do shell script "open " & {quoted_target_shell}')
-            success_result_code = f'return "Attempted to open: {escape_applescript_string(target)}"'
-            action_implemented = True
-
-        # --- Category: Search ---
-        # Example: Web Search
-        elif action_type == "search" and params.get("query"):
-            query = params["query"]
-            escaped_query_log = escape_applescript_string(query)
-            # Basic URL encoding might be needed here for robust search URLs
-            # For simplicity, just using query directly in Google Search URL
-            search_url = f'https://www.google.com/search?q={query}'
-            quoted_url_shell = quote_for_shell(search_url)
-            script_lines.append(f'  log "Action: Performing web search for: {escaped_query_log}"')
-            script_lines.append(f'  do shell script "open " & {quoted_url_shell}')
-            success_result_code = f'return "Opened web search for: {escaped_query_log}"'
-            action_implemented = True
-
-        # Example: Find Files (Basic using mdfind/spotlight)
-        elif action_type == "search" and params.get("file_name"):
-            file_name = params["file_name"]
-            escaped_name_log = escape_applescript_string(file_name)
-            quoted_name_shell = quote_for_shell(file_name)
-            script_lines.append(f'  log "Action: Searching for file name containing: {escaped_name_log}"')
-            # Use mdfind for Spotlight search - searches filenames and content
-            shell_cmd = f'mdfind "kMDItemFSName == \'{file_name}\'c" || mdfind {quoted_name_shell}' # Try exact name then general
-            script_lines.append(f'  set searchResults to do shell script "{shell_cmd}"')
-            script_lines.append('  if searchResults is "" then')
-            script_lines.append(f'    return "No files found containing name: {escaped_name_log}"')
-            script_lines.append('  else')
-            script_lines.append('    return "Files Found:\\n" & searchResults')
-            script_lines.append('  end if')
-            # Success result is handled within the script logic here
-            success_result_code = None # Override default
-            action_implemented = True
-
-        # --- Category: Basics / System Info ---
-        # Example: Check Disk Space
-        elif action_type == "basics" and params.get("check_disk_space", False): # Check boolean flag
-            script_lines.append('  log "Action: Checking available disk space on /."')
-            awk_script = "'{print $4 \" available\"}'" # Note the quoting
-            shell_cmd = f'df -h / | tail -n 1 | awk {awk_script}'
-            # Escape double quotes within the shell command string for AppleScript
-            escaped_shell_cmd = shell_cmd.replace('"', '\\"')
-            script_lines.append(f'  set diskSpace to do shell script "{escaped_shell_cmd}"')
-            success_result_code = 'return "Boot Volume Disk Space: " & diskSpace'
-            action_implemented = True
-
-        # Example: Get Current Volume
-        elif action_type == "basics" and params.get("get_volume", False):
-            script_lines.append('  log "Action: Getting current output volume level."')
-            script_lines.append('  set volLevel to output volume of (get volume settings)')
-            success_result_code = 'return "Current output volume: " & (volLevel as string) & "%"'
-            action_implemented = True
-
-        # Example: Basic Calculation (less ideal via AppleScript, better in Python)
-        # Placeholder - prefer Python for calculations
-        elif action_type == "basics" and params.get("calculate"):
-             logger.warning("Calculation requested via AppleScript - Python is preferred.")
-             success_result_code = 'return "Calculation via AppleScript not implemented. Perform in Python."'
-             action_implemented = True # Treat as handled (by saying not implemented)
-
-
-        # --- Category: Scheduling ---
-        # Example: Open Calendar App
-        elif action_type == "scheduling" and params.get("open_calendar", False):
-             script_lines.append('  log "Action: Opening Calendar application."')
-             script_lines.append('  tell application "Calendar"')
-             script_lines.append('    activate') # Bring Calendar to front
-             script_lines.append('  end tell')
-             success_result_code = 'return "Opened Calendar application."'
-             action_implemented = True
-
-        # Example: Create a simple reminder (requires Reminders permission)
-        elif action_type == "scheduling" and params.get("reminder_text"):
-             reminder = params["reminder_text"]
-             list_name = params.get("reminder_list", "Reminders") # Default list
-             escaped_reminder = escape_applescript_string(reminder)
-             escaped_list = escape_applescript_string(list_name)
-             script_lines.append(f'  log "Action: Creating reminder \'{escaped_reminder}\' in list \'{escaped_list}\'."')
-             script_lines.append('  tell application "Reminders"')
-             script_lines.append('    -- Ensure the list exists, otherwise use default')
-             script_lines.append(f'    if not (exists list "{escaped_list}") then')
-             script_lines.append(f'      log "List \'{escaped_list}\' not found, using default Reminders list."')
-             script_lines.append('      set targetList to list "Reminders"')
-             script_lines.append('    else')
-             script_lines.append(f'      set targetList to list "{escaped_list}"')
-             script_lines.append('    end if')
-             script_lines.append('    -- Create the reminder')
-             script_lines.append(f'    make new reminder at end of targetList with properties {{name:"{escaped_reminder}"}}')
-             script_lines.append('  end tell')
-             success_result_code = f'return "Created reminder: {escaped_reminder}"'
-             action_implemented = True
-
-
-        # --- Category: Communication (Placeholders - Require more complex scripts/permissions) ---
-        # Example: Placeholder for sending text (requires Messages access & complex contact lookup)
-        elif action_type == "basics" and params.get("send_text_message"):
-             contact = params.get("contact_name", "Unknown")
-             message = params.get("message_body", "")
-             logger.warning("Send text message via AppleScript requested - Placeholder only.")
-             success_result_code = f'return "Placeholder: Would attempt to send \'{escape_applescript_string(message)}\' to {escape_applescript_string(contact)}."'
-             action_implemented = True # Mark as "handled" by placeholder
-
-        # --- Add more ELIF blocks for other desired actions ---
-        # elif action_type == "..." and params.get("..."):
-        #    ... script lines ...
-        #    action_implemented = True
-
-
-        # --- Finalize Script Assembly ---
-        if action_implemented:
-            if success_result_code: # Add the return line if one was set
-                script_lines.append(f'  {success_result_code}')
-            # Add standard error handling block
-            script_lines.append('on error errMsg number errNum')
-            script_lines.append(f'  log "AppleScript Error ({req_id}) for Action \'{action_type}\': " & errMsg & " (" & errNum & ")"')
-            # Return an error message that includes the AppleScript error
-            script_lines.append('  return "Error executing action \'' + action_type + '\': " & errMsg')
-            script_lines.append('end try')
-
-            # Join lines into final script string
-            final_script = "\n".join(script_lines)
-            logger.info(f"{req_id} Generated AppleScript for '{action_type}'. Length: {len(final_script)}")
-            logger.trace(f"{req_id} Generated Script:\n---\n{final_script}\n---")
-            return final_script
-        else:
-            # No matching action implementation found
-            logger.warning(f"{req_id} No specific AppleScript implemented for action '{action_type}' with params {params}. Cannot execute directly.")
-            return None # Signal that script generation failed
-        
-    
-
 
     # --- NEW HELPER: Translation ---
     # AdelaideAlbertCortex -> Inside CortexThoughts class
@@ -7779,8 +6238,8 @@ def _generate_simulated_avionics_data() -> Dict[str, Any]:
         last_yaw = _sim_state["yaw"]
 
         # Attitude random walk
-        _sim_state["roll"] = max(-60, min(60, last_roll + random.uniform(-1, 1) * delta_t * 10))
-        _sim_state["pitch"] = max(-30, min(30, last_pitch + random.uniform(-0.5, 0.5) * delta_t * 5))
+        _sim_state["roll"] = max(-60, min(60, last_roll + random.uniform(-1, 1) * delta_t * 2))
+        _sim_state["pitch"] = max(-30, min(30, last_pitch + random.uniform(-0.5, 0.5) * delta_t * 1))
 
         # Calculate rates based on attitude change
         _sim_state["roll_rate"] = (_sim_state["roll"] - last_roll) / delta_t
@@ -7800,9 +6259,13 @@ def _generate_simulated_avionics_data() -> Dict[str, Any]:
         _sim_state["altitude"] += _sim_state["vertical_speed"] * delta_t / 60.0
         _sim_state["keas"] = max(60, min(700, _sim_state["keas"] + random.uniform(-2, 2) * delta_t * 5))
         try:
-            _sim_state["mach"] = _sim_state["keas"] / (661.47 * (1.0 - _sim_state["altitude"] / 145442.0) ** 2.5)
-        except ZeroDivisionError:
-            _sim_state["mach"] = 0.0
+            # Calculate the raw Mach number based on physics
+            raw_mach = _sim_state["keas"] / (661.47 * (1.0 - _sim_state["altitude"] / 145442.0) ** 2.5)
+            # Clamp the final value to the desired range
+            _sim_state["mach"] = max(0.5, min(20.0, raw_mach))
+        except (ZeroDivisionError, ValueError): # Added ValueError for potential math domain errors
+            # If calculation fails, default to a safe value within the range
+            _sim_state["mach"] = 0.8
         _sim_state["angle_of_attack"] = 2.5 + _sim_state["pitch"] / 4.0 - (_sim_state["keas"] - 150.0) / 50.0
 
         # --- Simulate Flight Controls (mirroring pilot input) ---

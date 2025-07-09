@@ -12,6 +12,7 @@ import shlex # For safely splitting command strings
 from loguru import logger
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional, Tuple, Union
+import uuid
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser
@@ -20,7 +21,7 @@ from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
 # Assuming these are in your config.py and accessible
 # Import necessary constants from CortexConfiguration (ensure they are defined there)
 try:
-    from CortexConfiguration import PROVIDER, TOPCAP_TOKENS, RAG_HISTORY_COUNT
+    from CortexConfiguration import *
 except ImportError:
     # Fallbacks if config import fails during agent initialization (less ideal)
     logger.error("Failed to import config constants in agent.py")
@@ -28,7 +29,7 @@ except ImportError:
 
 # Import necessary DB functions and session factory
 try:
-    from database import add_interaction, get_recent_interactions, SessionLocal, Interaction # Import Interaction model
+    from database import add_interaction, get_recent_interactions, get_past_applescript_attempts, SessionLocal, Interaction
 except ImportError:
     logger.error("Failed to import database components in agent.py")
     # Define dummy functions/classes if needed for basic loading, but app will likely fail
@@ -375,6 +376,146 @@ class AmaryllisAgent:
         logger.debug(f"Final parsed parameters for tool '{tool_name}': {parameters}")
         return tool_name, parameters
 
+    async def _generate_and_refine_os_script(
+            self,
+            db: Session,
+            action_type: str,
+            params: Dict[str, Any],
+            platform: str,
+            triggering_interaction_id: int,
+            session_id: str,
+            **kwargs  # Accepts optional context for refinement
+    ) -> Tuple[Optional[str], Optional[str]]:
+        """
+        Generates or refines an OS-specific script using an LLM.
+
+        This is the "brain" for script creation. It selects the correct prompts based
+        on the operating system and whether it's an initial generation or a refinement
+        of a failed script.
+
+        If 'failed_script_context' is provided via kwargs, it uses the refinement prompt.
+
+        Args:
+            db: The SQLAlchemy database session for RAG.
+            action_type: The type of action requested (e.g., 'scheduling', 'search').
+            params: A dictionary of parameters for the action.
+            platform: The OS identifier from sys.platform ('darwin', 'win32', 'linux').
+            triggering_interaction_id: The ID of the interaction that started this action.
+            session_id: The current session ID.
+            **kwargs: Can contain 'failed_script_context' (a dict with error details) for refinement.
+
+        Returns:
+            A tuple containing:
+            - The generated script string, or None on failure.
+            - An error message string if generation failed, otherwise None.
+        """
+        # Safely get the context from the previous failed attempt, if provided
+        failed_script_context = kwargs.get('failed_script_context')
+
+        # Setup for logging and identification
+        req_id = f"scriptgen-{platform}-{uuid.uuid4()}"
+        log_prefix = f"🤖 {req_id}"
+        is_refinement = failed_script_context is not None
+
+        logger.info(
+            f"{log_prefix} Generating script for platform '{platform}', action '{action_type}' (Refinement: {is_refinement})")
+
+        # --- 1. Select the correct LLM and Prompts for the platform ---
+        script_llm = self.provider.get_model("code")
+        if not script_llm:
+            logger.error(f"{log_prefix} 'code' model is not available in CortexEngine.")
+            return None, "Code generation model is not configured."
+
+        params_json = json.dumps(params, sort_keys=True)
+
+        # Determine the script language and the appropriate prompt templates
+        if platform == 'darwin':
+            gen_prompt_template = PROMPT_GENERATE_APPLESCRIPT
+            refine_prompt_template = PROMPT_REFINE_APPLESCRIPT
+            script_lang = 'applescript'
+        elif platform == 'win32':
+            gen_prompt_template = PROMPT_GENERATE_POWERSHELL_SCRIPT
+            refine_prompt_template = PROMPT_REFINE_POWERSHELL_SCRIPT
+            script_lang = 'powershell'
+        else:  # Default to Bash for Linux and other Unix-like systems
+            gen_prompt_template = PROMPT_GENERATE_BASH_SCRIPT
+            refine_prompt_template = PROMPT_REFINE_BASH_SCRIPT
+            script_lang = 'bash'
+
+        # Choose the final prompt template based on whether this is a refinement attempt
+        if is_refinement:
+            llm_prompt_template_str = refine_prompt_template
+            logger.info(f"{log_prefix} Using REFINEMENT prompt for {script_lang.capitalize()}.")
+        else:
+            llm_prompt_template_str = gen_prompt_template
+            logger.info(f"{log_prefix} Using initial GENERATION prompt for {script_lang.capitalize()}.")
+
+        # --- 2. Build the LLM Input ---
+
+        # a. Get RAG context from past attempts
+        past_attempts = await asyncio.to_thread(
+            get_past_applescript_attempts, db, action_type, params_json, limit=5
+        )
+        past_attempts_context = self._format_script_rag_context(past_attempts)
+
+        # b. Construct the full input dictionary for the prompt template
+        llm_input = {
+            "action_type": action_type,
+            "parameters_json": params_json,
+            "past_attempts_context": past_attempts_context
+        }
+
+        # c. If it's a refinement attempt, add the detailed failure context
+        if is_refinement and isinstance(failed_script_context, dict):
+            llm_input.update(failed_script_context)
+
+        # --- 3. Invoke the LLM ---
+
+        # Create the full LangChain runnable
+        script_chain = ChatPromptTemplate.from_template(llm_prompt_template_str) | script_llm | StrOutputParser()
+
+        try:
+            # Run the synchronous LangChain invoke method in a separate thread
+            generated_script_raw = await asyncio.to_thread(script_chain.invoke, llm_input)
+
+            # Clean the raw output to remove markdown code blocks and excess whitespace
+            script_to_execute = re.sub(rf"^```(?:{script_lang})?\s*|```\s*$", "", generated_script_raw,
+                                       flags=re.MULTILINE).strip()
+
+            if not script_to_execute:
+                logger.warning(f"{log_prefix} LLM returned an empty script.")
+                return None, "LLM generated an empty script."
+
+            logger.success(
+                f"{log_prefix} Successfully generated {script_lang} script. Length: {len(script_to_execute)}.")
+            logger.trace(f"{log_prefix} Generated Script:\n---\n{script_to_execute}\n---")
+
+            # Return the clean script and no error
+            return script_to_execute, None
+
+        except Exception as gen_err:
+            logger.error(f"{log_prefix} An exception occurred during the LLM call for script generation: {gen_err}",
+                         exc_info=True)
+            # Return no script and the error message
+            return None, f"LLM call failed: {gen_err}"
+
+    def _format_script_rag_context(self, attempts: List[Any]) -> str:
+        # (This function remains unchanged from your original)
+        if not attempts: return "None available."
+        context_str = ""
+        for i, attempt in enumerate(attempts):
+            context_str += f"--- Past Attempt {i+1} ({attempt.timestamp.isoformat()}) ---\n"
+            context_str += f"Script:\n```\n{attempt.generated_script or '[Script Missing]'}\n```\n"
+            context_str += f"Success: {attempt.execution_success}\n"
+            if not attempt.execution_success:
+                context_str += f"  RC: {attempt.execution_return_code}\n"
+                context_str += f"  Error Summary: {attempt.error_summary}\n"
+            context_str += "---\n"
+            if len(context_str) > 2000:
+                context_str += "[Context truncated]...\n"
+                break
+        return context_str
+    
 
     async def _execute_agent_tool(self, tool_name: str, parameters: Dict[str, Any], db: Session) -> str:
         """Executes the requested agent tool using the AgentTools instance."""
@@ -519,6 +660,7 @@ class AmaryllisAgent:
         # --- Define the marker string for interruption ---
         interruption_error_marker = "Worker task interrupted by higher priority request"
         # ---
+        task_start_time = time.monotonic()
 
         try:
             db = SessionLocal() # Get a new DB session for this background task
@@ -609,7 +751,7 @@ class AmaryllisAgent:
                      if db and initial_interaction:
                          initial_interaction.llm_response = f"[Agent task {initial_interaction_id} failed on turn {turn_count} due to LLM error: {llm_err}]"
                          initial_interaction.classification = "task_failed_llm_error"
-                         initial_interaction.execution_time_ms = (time.monotonic() - initial_interaction.timestamp.timestamp()) * 1000
+                         
                          db.commit()
                      break # Exit the while loop
 
@@ -617,10 +759,10 @@ class AmaryllisAgent:
                 if isinstance(agent_llm_response, str) and interruption_error_marker in agent_llm_response:
                     logger.warning(f"🚦 Agent Task {initial_interaction_id}: Turn {turn_count} INTERRUPTED by higher priority task.")
                     # Log interruption to DB (associate with the original interaction)
-                    if db and initial_interaction and initial_interaction.timestamp: # Check timestamp exists
+                    if db and initial_interaction: # Check timestamp exists
                         initial_interaction.llm_response = f"[Agent task {initial_interaction_id} interrupted by ELP1 on turn {turn_count}]"
                         initial_interaction.classification = "task_failed_interrupted"
-                        initial_interaction.execution_time_ms = (time.monotonic() - initial_interaction.timestamp.timestamp()) * 1000
+                        
                         try:
                             db.commit()
                             logger.info(f"Marked interaction {initial_interaction_id} as interrupted in DB.")
@@ -691,9 +833,9 @@ class AmaryllisAgent:
                          continue # Go to next LLM turn with this result
 
                     # --- Update initial interaction record with the final state ---
-                    if initial_interaction and initial_interaction.timestamp: # Check timestamp exists
+                    if initial_interaction: # Check timestamp exists
                         initial_interaction.llm_response = final_agent_response # Store meaningful final output
-                        initial_interaction.execution_time_ms = (time.monotonic() - initial_interaction.timestamp.timestamp()) * 1000
+                        
                         db.commit() # Commit final state of original interaction
                     else:
                          logger.error(f"Could not update final state for task {initial_interaction_id}: initial_interaction record missing or timestamp invalid.")
@@ -709,12 +851,12 @@ class AmaryllisAgent:
             # --- End of while loop ---
             if turn_count >= max_turns:
                  # Check if initial_interaction was loaded before accessing timestamp
-                 if initial_interaction and initial_interaction.timestamp:
+                 if initial_interaction:
                      is_already_marked = (initial_interaction.llm_response or "").startswith("[Agent task reached max turns")
                      if not is_already_marked:
                          logger.warning(f"Agent Task {initial_interaction_id} reached max turns ({max_turns}).")
                          initial_interaction.llm_response = "[Agent task reached max turns without completing]"
-                         initial_interaction.execution_time_ms = (time.monotonic() - initial_interaction.timestamp.timestamp()) * 1000
+                         
                          initial_interaction.classification = "task_failed_max_turns"
                          db.commit()
                  else:
@@ -733,8 +875,6 @@ class AmaryllisAgent:
                     if interaction_to_update:
                          existing_response = interaction_to_update.llm_response or ""
                          interaction_to_update.llm_response = (existing_response + f"\n---\nERROR: {e}")[:4000] # Append error, limit length
-                         if interaction_to_update.timestamp: # Check timestamp exists
-                             interaction_to_update.execution_time_ms = (time.monotonic() - interaction_to_update.timestamp.timestamp()) * 1000
                          interaction_to_update.classification = "task_failed" # Generic failure classification
                          db.commit()
                     else:
@@ -746,13 +886,28 @@ class AmaryllisAgent:
                     logger.error(f"Failed to log Agent BG error to DB: {db_err}")
                     if db: db.rollback() # Rollback if logging the error failed
 
+
         finally:
-            # Ensure the database session is closed for this background task
+            # --- THIS ENTIRE FINALLY BLOCK IS THE REPLACEMENT ---
+            if db and initial_interaction:
+                try:
+                    # Correctly calculate total execution time using the monotonic clock
+                    total_duration_ms = (time.monotonic() - task_start_time) * 1000
+                    initial_interaction.execution_time_ms = total_duration_ms
+                    # Commit all changes made to initial_interaction during the task
+                    # (e.g., llm_response, classification, and now the correct execution_time_ms)
+                    db.commit()
+                    logger.info(
+                        f"✅ Final state for agent task {initial_interaction_id} committed to DB. Total time: {total_duration_ms:.2f}ms.")
+                except Exception as final_commit_err:
+                    logger.error(
+                        f"Failed to commit final state for agent task {initial_interaction_id}: {final_commit_err}")
+                    db.rollback()
             if db:
                 try:
                     db.close()
                 except Exception as close_err:
-                     logger.error(f"Error closing DB session for Agent Task {initial_interaction_id}: {close_err}")
+                    logger.error(f"Error closing DB session for Agent Task {initial_interaction_id}: {close_err}")
             logger.warning(f"🧵 Agent background task thread finished for ID: {initial_interaction_id}")
 
 

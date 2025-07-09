@@ -34,6 +34,17 @@ except ImportError:
     logger.success = success
     logger.warning("Loguru not found. Falling back to standard Python logging.")
 
+# --- TUI Imports (with fallback) ---
+try:
+    from textual.app import App, ComposeResult
+    from textual.containers import Grid
+    from textual.widgets import Header, Footer, Log, Static
+    from textual.reactive import reactive
+    import psutil
+    TUI_AVAILABLE = True
+except ImportError:
+    TUI_AVAILABLE = False
+# --- End TUI Imports ---
 
 # --- Configuration ---
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -63,6 +74,10 @@ CHATTERBOX_TTS_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".chatterbox_tts_ins
 LATEX_OCR_SUBMODULE_DIR_NAME = "LaTeX_OCR-SubEngine"
 LATEX_OCR_PATH = os.path.join(ENGINE_MAIN_DIR, LATEX_OCR_SUBMODULE_DIR_NAME)
 LATEX_OCR_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".latex_ocr_subengine_installed_v1")
+
+# --- Playwright Flag Configuration
+
+PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".playwright_browsers_installed_v1")
 
 # --- Conda Configuration ---
 # CONDA_ENV_NAME is no longer used for creation if prefix is used, but can be a descriptive base for the folder
@@ -102,6 +117,7 @@ final_setup_failures = []
 running_processes = [] # For services started by the current script instance
 process_lock = threading.Lock()
 relaunched_conda_process_obj = None
+tui_shutdown_event = threading.Event()
 
 # --- Executable Paths (will be redefined after Conda activation) ---
 IS_WINDOWS = os.name == 'nt'
@@ -242,7 +258,8 @@ FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     PYWHISPERCPP_INSTALLED_FLAG_FILE,
     ARIA2P_INSTALLED_FLAG_FILE, # From previous step
     CHATTERBOX_TTS_INSTALLED_FLAG_FILE,
-    LATEX_OCR_INSTALLED_FLAG_FILE
+    LATEX_OCR_INSTALLED_FLAG_FILE,
+    PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE
 ]
 
 
@@ -352,6 +369,39 @@ def _compile_watchtowers() -> bool:
     print_system("--- All ZephyWatchtower components compiled successfully. ---")
     return True
 
+def _compile_and_run_watchdogs():
+    """
+    Compiles both watchdogs and then runs them. This version is corrected
+    to not require any arguments, as the start_service_process function
+    now handles logging to files automatically.
+    """
+    # First, call the existing compile function
+    if not _compile_watchtowers():
+        # _compile_watchtowers already prints detailed errors
+        print_error("Halting watchdog startup due to compilation failure.")
+        return
+
+    print_system("--- Launching Watchdog Services ---")
+
+    # Run Go Watchdog
+    go_watchdog_dir = os.path.join(ROOT_DIR, "ZephyWatchtower")
+    go_exe_name = "watchdog_thread1.exe" if IS_WINDOWS else "watchdog_thread1"
+    go_exe_path = os.path.join(go_watchdog_dir, go_exe_name)
+    if os.path.exists(go_exe_path):
+        # The 'name' here will be used for the log file name, e.g., "GO-WATCHDOG.log"
+        start_service_process([go_exe_path], go_watchdog_dir, "GO-WATCHDOG")
+    else:
+        print_error(f"Go watchdog executable not found after compile: {go_exe_path}")
+
+    # Run Ada Watchdog
+    ada_watchdog_dir = os.path.join(ROOT_DIR, "ZephyWatchtower", "watchdog_thread2")
+    ada_exe_name = "watchdog_thread2.exe" if IS_WINDOWS else "watchdog_thread2"
+    ada_exe_path = os.path.join(ada_watchdog_dir, "bin", ada_exe_name)
+    if os.path.exists(ada_exe_path):
+        start_service_process([ada_exe_path], os.path.dirname(ada_exe_path), "ADA-WATCHDOG")
+    else:
+        print_error(f"Ada watchdog executable not found after compile: {ada_exe_path}")
+
 def _compile_and_get_watchdog_path() -> Optional[str]:
     """
     Ensures the Go watchdog binary is compiled and returns its path.
@@ -411,50 +461,101 @@ def _compile_and_get_watchdog_path() -> Optional[str]:
         print_error(f"An unexpected error occurred during watchdog build: {e}")
         return None
 
+
 def terminate_relaunched_process(process_obj, name="Relaunched Conda Process"):
+    """
+    Terminates a process and its entire descendant tree robustly using psutil.
+    Falls back to OS-specific commands if psutil is not available.
+    """
+    # First, check if the process object is valid and running.
     if not process_obj or process_obj.poll() is not None:
-        return # Process doesn't exist or already terminated
+        return  # Process doesn't exist or has already terminated.
 
     pid = process_obj.pid
-    print_system(f"Attempting to terminate {name} (PID: {pid}) and its process tree...")
+    print_system(f"Attempting to terminate '{name}' (PID: {pid}) and its entire process tree...")
+
+    # --- The psutil Method (Preferred) ---
+    try:
+        # We import psutil here, inside the function.
+        # This makes it an optional dependency for cleanup. If it's not installed,
+        # we can fall back gracefully to the less reliable method.
+        import psutil
+        print_system(f"Using psutil for robust process tree termination.")
+
+        # Get the psutil Process object for our main target process.
+        parent = psutil.Process(pid)
+
+        # Get a list of all children, recursively.
+        # This will include the 'conda run' shell, the relaunched python script,
+        # hypercorn, node, etc.
+        children = parent.children(recursive=True)
+
+        # First, terminate all the descendant processes.
+        # It's good practice to terminate children before the parent.
+        for child in children:
+            print_system(f"  -> Terminating child process '{child.name()}' (PID: {child.pid})")
+            try:
+                child.terminate()
+            except psutil.NoSuchProcess:
+                pass  # Child already disappeared, that's fine.
+
+        # Wait for the children to die.
+        gone, alive = psutil.wait_procs(children, timeout=3)
+
+        # If any children are still alive, kill them forcefully.
+        for p in alive:
+            print_warning(f"  -> Child process {p.pid} did not terminate gracefully. Killing.")
+            try:
+                p.kill()
+            except psutil.NoSuchProcess:
+                pass  # Already gone, fine.
+
+        # Finally, terminate the main parent process itself.
+        print_system(f"  -> Terminating main process '{parent.name()}' (PID: {parent.pid})")
+        try:
+            parent.terminate()
+            parent.wait(timeout=5)
+        except psutil.NoSuchProcess:
+            print_system(f"Main process (PID: {pid}) already gone.")
+        except psutil.TimeoutExpired:
+            print_warning(f"Main process (PID: {pid}) did not terminate gracefully. Killing.")
+            parent.kill()
+
+        print_system(f"Termination of '{name}' (PID: {pid}) tree complete.")
+        return  # Success
+
+    except ImportError:
+        print_warning("`psutil` library not found. Falling back to less reliable OS-level termination.")
+    except psutil.NoSuchProcess:
+        print_system(f"Process {pid} for '{name}' was already gone when cleanup started.")
+        return  # Success, it's already dead
+    except Exception as e:
+        print_error(f"An unexpected error occurred during psutil termination: {e}")
+        # Continue to fallback method.
+
+    # --- Fallback Method (Your Original Code) ---
+    # This block runs if psutil is not installed or if it failed unexpectedly.
+    print_system(f"Executing fallback termination for '{name}' (PID: {pid})...")
     try:
         if IS_WINDOWS:
             # Use taskkill to terminate the process tree. /F for force, /T for tree.
             kill_cmd = ['taskkill', '/F', '/T', '/PID', str(pid)]
-            print_system(f"Executing: {' '.join(kill_cmd)}")
-            result = subprocess.run(kill_cmd, check=False, capture_output=True, text=True)
-            if result.returncode == 0:
-                print_system(f"Taskkill command for {name} (PID: {pid}) executed successfully.")
-            else:
-                print_warning(f"Taskkill for {name} (PID: {pid}) exited with {result.returncode}. stdout: {result.stdout.strip()}, stderr: {result.stderr.strip()}")
+            subprocess.run(kill_cmd, check=False, capture_output=True, text=True)
         else:
             # On Unix, send SIGTERM to the entire process group.
-            # This requires process_obj to have been started with preexec_fn=os.setsid.
             pgid = os.getpgid(pid)
-            print_system(f"Sending SIGTERM to process group {pgid} for {name} (PID: {pid}).")
             os.killpg(pgid, signal.SIGTERM)
 
-        # Wait for the process to terminate
-        try:
-            process_obj.wait(timeout=5)
-            print_system(f"{name} (PID: {pid}) and its tree terminated gracefully.")
-        except subprocess.TimeoutExpired:
-            print_warning(f"{name} (PID: {pid}) tree did not terminate gracefully after initial signal/command.")
-            if IS_WINDOWS:
-                if process_obj.poll() is None: # Check if it's still running
-                    print_warning(f"{name} (PID: {pid}) might still be running after taskkill /F /T. Manual check may be needed.")
-            else:
-                # If SIGTERM failed, escalate to SIGKILL for the process group.
-                print_system(f"Sending SIGKILL to process group {pgid} for {name} (PID: {pid}).")
-                os.killpg(pgid, signal.SIGKILL)
-                process_obj.wait(timeout=2) # Give SIGKILL a moment
-                print_system(f"{name} (PID: {pid}) tree killed.")
-    except ProcessLookupError:
-        print_system(f"{name} (PID: {pid}) process or group already gone.")
+        process_obj.wait(timeout=5)
+        print_system(f"Fallback termination for '{name}' completed.")
+    except (ProcessLookupError, subprocess.TimeoutExpired):
+        # If it times out, try a more forceful kill on the original process
+        print_warning(f"Fallback termination for '{name}' timed out or failed. Attempting final kill.")
+        process_obj.kill()
     except Exception as e:
-        print_error(f"Error during termination of {name} (PID: {pid}) tree: {e}")
+        print_error(f"Error during fallback termination of '{name}' tree: {e}")
 
-
+#=-=-=-=- this is Printing style for the log sysout syserr on stdio, wait, this is python
 def print_system(message): print_colored("SYSTEM", message)
 
 
@@ -464,29 +565,39 @@ def print_error(message): print_colored("ERROR", message)
 def print_warning(message): print_colored("WARNING", message)
 
 
-def stream_output(pipe, name=None, color=None):
+def stream_output(pipe, name=None, tui_log_widget: Optional['Log'] = None):
+    """
+    Streams output from a subprocess pipe. If a Textual Log widget is provided,
+    writes to it in a thread-safe manner; otherwise, prints to stdout.
+    """
     try:
+        # Use iter(pipe.readline, '') to read line by line
         for line in iter(pipe.readline, ''):
             if line:
-                if name:
-                    output_color = "\033[90m"
-                    reset_color = "\033[0m"
-                    if sys.stdout.isatty():
-                        sys.stdout.write(f"{output_color}[{name.upper()}] {line.strip()}{reset_color}\n")
-                    else:
-                        sys.stdout.write(f"[{name.upper()}] {line.strip()}\n")
+                # If a TUI widget was provided...
+                if tui_log_widget:
+                    # Use call_from_thread to safely update the UI from this background thread.
+                    # This is the critical fix.
+                    tui_log_widget.app.call_from_thread(tui_log_widget.write, f"[{name.upper()}] {line.strip()}")
                 else:
-                    sys.stdout.write(line)
-                sys.stdout.flush()
+                    # Fallback to simple terminal output if not in TUI mode
+                    sys.stdout.write(f"[{name.upper()}] {line.strip()}\n")
+                    sys.stdout.flush()
     except Exception as e:
+        # Avoid printing errors for closed files, which is normal on shutdown
         if 'read of closed file' not in str(e).lower() and 'Stream is closed' not in str(e):
-            print(f"[STREAM_ERROR] Error reading output stream for pipe {pipe} (process: {name}): {e}")
+            # Log the error using the appropriate method
+            log_line = f"[STREAM_ERROR] Error in stream '{name}': {e}"
+            if tui_log_widget:
+                tui_log_widget.app.call_from_thread(tui_log_widget.write, log_line)
+            else:
+                print_error(log_line)
     finally:
         if pipe:
             try:
                 pipe.close()
             except Exception:
-                pass
+                pass # Ignore errors on closing a pipe that might already be closed
 
 
 def _remove_flag_files(flags_to_remove: list):
@@ -560,41 +671,111 @@ def run_command(command, cwd, name, color=None, check=True, capture_output=False
         return False
 
 
+# --- Service Start Functions ---
 def start_service_process(command, cwd, name, use_shell_windows=False):
-    # This is the helper function moved from launcher.py
-    logger.info(f"[{name}] Launching: {' '.join(command)} in {os.path.basename(cwd)}")
+    """
+    Launches a service as a background process and redirects its
+    stdout and stderr to a dedicated log file in the ./logs/ directory.
+    """
+    log_dir = os.path.join(ROOT_DIR, "logs")
+    os.makedirs(log_dir, exist_ok=True)
+    
+    # Create a clean log file name, e.g., "ENGINE.log"
+    log_file_path = os.path.join(log_dir, f"{name.replace(' ', '_')}.log")
+    
+    print_system(f"Launching {name}: {' '.join(command)} in {os.path.basename(cwd)}")
+    print_system(f"  --> Log output will be streamed to: {log_file_path}")
+    
     try:
+        # Open the log file in write mode, which will truncate it on each start
+        log_file_handle = open(log_file_path, 'w', encoding='utf-8')
+        
         shell_val = use_shell_windows if IS_WINDOWS else False
-        # Simplified process startup for clarity
+        
+        # Redirect both stdout and stderr to the same log file handle
         process = subprocess.Popen(
-            command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, encoding='utf-8', errors='replace', bufsize=1,
+            command,
+            cwd=cwd,
+            stdout=log_file_handle,
+            stderr=log_file_handle,
+            text=True,
+            encoding='utf-8',
+            errors='replace',
             shell=shell_val
         )
+        
+        # Keep track of the process and its log file for the TUI to use
         with process_lock:
-            running_processes.append((process, name))
+            running_processes.append((process, name, log_file_path, log_file_handle))
 
-        # Optional: Add threads to stream stdout/stderr if you want to see their output
-        def stream_output(pipe, pipe_name):
-            for line in iter(pipe.readline, ''):
-                logger.info(f"[{pipe_name}] {line.strip()}")
-        
-        stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, f"{name}-OUT"), daemon=True)
-        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{name}-ERR"), daemon=True)
-        stdout_thread.start()
-        stderr_thread.start()
-        
         return process
+        
+    except FileNotFoundError:
+        print_error(f"Command failed for {name}: '{command[0]}' not found.")
+        sys.exit(1)
     except Exception as e:
-        logger.error(f"[{name}] Failed to start: {e}")
-        # In a real scenario, you might want to exit if a critical service fails
-        # For now, we just log the error.
+        print_error(f"Failed to start {name}: {e}")
+        sys.exit(1)
 
+
+def _terminate_service_robustly(process: subprocess.Popen, name: str):
+    """Uses psutil to terminate a process and its entire descendant tree."""
+    if process.poll() is not None:
+        print_system(f"{name} already exited (return code: {process.poll()}).")
+        return
+
+    print_system(f"Terminating {name} (PID: {process.pid}) and its children...")
+    try:
+        import psutil
+        parent = psutil.Process(process.pid)
+        children = parent.children(recursive=True)
+
+        for child in children:
+            try:
+                print_system(f"  -> Terminating child {child.name()} (PID: {child.pid}) of {name}")
+                child.terminate()
+            except psutil.NoSuchProcess:
+                pass # Already gone
+
+        # Wait for children to die
+        gone, alive = psutil.wait_procs(children, timeout=3)
+        for p in alive:
+            print_warning(f"  -> Child {p.pid} of {name} did not terminate. Killing.")
+            try:
+                p.kill()
+            except psutil.NoSuchProcess:
+                pass
+
+        # Now terminate the main process
+        try:
+            parent.terminate()
+            parent.wait(timeout=5)
+            print_system(f"{name} terminated gracefully.")
+        except psutil.TimeoutExpired:
+            print_warning(f"{name} did not terminate gracefully, killing (PID: {parent.pid})...")
+            parent.kill()
+            parent.wait(timeout=2)
+            print_system(f"{name} killed.")
+
+    except (ImportError, psutil.NoSuchProcess):
+        # Fallback to the original method if psutil is not found or the process is already gone
+        print_warning(f"psutil not found or process gone. Using standard terminate for {name}.")
+        process.terminate()
+        try:
+            process.wait(timeout=5)
+        except subprocess.TimeoutExpired:
+            process.kill()
+    except Exception as e:
+        print_error(f"Error terminating {name} (PID: {process.pid}): {e}")
+        # Final resort: kill the original process handle
+        if process.poll() is None:
+            process.kill()
 
 def cleanup_processes():
     print_system("\nShutting down services...")
-    # FIX 2: Removed 'global zephymesh_process' as it's redundant and causes a SyntaxError
-    # with type-annotated variables. The variable is only read, not reassigned here.
+    
+    # Use global to ensure we are modifying the correct variables
+    global zephymesh_process, relaunched_conda_process_obj
 
     # --- Shutdown ZephyMesh Node First ---
     if zephymesh_process and zephymesh_process.poll() is None:
@@ -606,41 +787,30 @@ def cleanup_processes():
         except subprocess.TimeoutExpired:
             print_warning("ZephyMesh Node did not terminate gracefully, killing...")
             zephymesh_process.kill()
-    # The mesh node's own shutdown hook should clean up the port file.
-
-    # --- Handle the main relaunched 'conda run' process first ---
-    # This is relevant if the *initial* launcher instance is exiting (e.g., Ctrl+C)
-    # while it was waiting for 'conda run' to complete.
-    global relaunched_conda_process_obj # Ensure we're using the global
+    
+    # --- Handle the main relaunched 'conda run' process ---
     if relaunched_conda_process_obj and relaunched_conda_process_obj.poll() is None:
-        print_system("Initial launcher instance is shutting down; terminating the 'conda run' process and its children...")
+        print_system("Terminating the 'conda run' process and its children...")
         terminate_relaunched_process(relaunched_conda_process_obj, "Relaunched 'conda run' process")
-        relaunched_conda_process_obj = None # Mark as handled
+        relaunched_conda_process_obj = None
 
-    # --- Handle locally managed services (e.g., Engine, Backend, Frontend) ---
-    # This is relevant for the *relaunched* script instance cleaning up its own services,
-    # or if the initial script ever started services directly.
+    # --- Handle locally managed services (Engine, Backend, etc.) ---
     with process_lock:
-        procs_to_terminate = list(running_processes) # Make a copy
-        running_processes.clear() # Clear the global list
+        # Make a copy to avoid issues while iterating and modifying
+        procs_to_terminate = list(running_processes) 
+        running_processes.clear()
 
-    for proc, name in reversed(procs_to_terminate):
-        if proc.poll() is None: # Check if process is still running
-            print_system(f"Terminating {name} (PID: {proc.pid})...")
-            try:
-                proc.terminate() # Send SIGTERM (or Windows equivalent)
-                try:
-                    proc.wait(timeout=5) # Wait for graceful shutdown
-                    print_system(f"{name} terminated gracefully.")
-                except subprocess.TimeoutExpired:
-                    print_warning(f"{name} did not terminate gracefully, killing (PID: {proc.pid})...")
-                    proc.kill() # Send SIGKILL (or Windows equivalent)
-                    proc.wait(timeout=2) # Wait for kill
-                    print_system(f"{name} killed.")
-            except Exception as e:
-                print_error(f"Error terminating/killing {name} (PID: {proc.pid}): {e}")
-        else:
-            print_system(f"{name} already exited (return code: {proc.poll()}).")
+    # Iterate over the copied list
+    for proc, name, log_path, log_handle in reversed(procs_to_terminate):
+        # First, ensure the log file handle is closed
+        try:
+            if log_handle and not log_handle.closed:
+                log_handle.close()
+        except Exception:
+            pass  # Ignore errors on closing handle
+
+        # Now, use our new robust terminator for the process
+        _terminate_service_robustly(proc, name) #Use the helper function instead of coagulate into one position
 
 atexit.register(cleanup_processes)
 
@@ -656,34 +826,35 @@ signal.signal(signal.SIGINT, signal_handler)
 if not IS_WINDOWS: # SIGTERM is not really a thing for console apps on Windows this way for Ctrl+C
     signal.signal(signal.SIGTERM, signal_handler) # Handle SIGTERM for graceful shutdown requests on Unix
 
-
-# --- Service Start Functions ---
-def start_service_process(command, cwd, name, use_shell_windows=False):
-    print_system(f"Launching {name}: {' '.join(command)} in {os.path.basename(cwd)}")
+def tail_log_to_widget(log_file_path: str, widget: 'Log'):
+    """
+    A function to be run in a background thread that tails a log file
+    and writes new lines to a Textual Log widget.
+    """
+    logger.info(f"Tailing '{log_file_path}' to widget '#{widget.id}'...")
     try:
-        shell_val = use_shell_windows if IS_WINDOWS else False
-        process = subprocess.Popen(
-            command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
-            text=True, encoding='utf-8', errors='replace', bufsize=1,
-            shell=shell_val
-        )
-        with process_lock:
-            running_processes.append((process, name))
-
-        stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, f"{name}-OUT"), daemon=True)
-        stderr_thread = threading.Thread(target=stream_output, args=(process.stderr, f"{name}-LogStream"), daemon=True)
-        stdout_thread.start()
-        stderr_thread.start()
-        return process
+        with open(log_file_path, "r", encoding="utf-8", errors="replace") as f:
+            f.seek(0, 2)
+            # CHANGE THIS LINE:
+            while not tui_shutdown_event.is_set():
+                line = f.readline()
+                if not line:
+                    time.sleep(0.1)
+                    continue
+                # Check the event AGAIN before calling the app thread
+                if tui_shutdown_event.is_set():
+                    break
+                widget.app.call_from_thread(widget.write, line)
     except FileNotFoundError:
-        print_error(f"Command failed for {name}: '{command[0]}' not found.")
-        sys.exit(1)
+        if not tui_shutdown_event.is_set():  # Only log if not shutting down
+            widget.app.call_from_thread(widget.write, f"[ERROR] Log file not found: {log_file_path}")
     except Exception as e:
-        print_error(f"Failed to start {name}: {e}")
-        sys.exit(1)
+        if not tui_shutdown_event.is_set():  # Only log if not shutting down
+            error_msg = f"[ERROR] Tailing failed for {os.path.basename(log_file_path)}: {e}"
+            logger.error(error_msg)
+            widget.app.call_from_thread(widget.write, error_msg)
 
-
-def start_engine_main():
+def start_engine_main(): # Add argument
     name = "ENGINE"
     MAX_UPLOAD_SIZE_BYTES = 2 ** 63  # Set this to 2 to the power of 63
     command = [
@@ -711,20 +882,22 @@ def start_backend_service():
     if not os.path.isdir(BACKEND_SERVICE_DIR):
         print_error(f"Backend service directory not found: {BACKEND_SERVICE_DIR}")
         sys.exit(1) # This is a critical failure
+    backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
+    backend_exe_path = os.path.join(BACKEND_SERVICE_DIR, backend_exe_name) #pointing to the compiled backend temp golang binary
 
     # --- Step 1: Run 'go mod tidy' ---
     # We use your 'run_command' helper because this is a one-off task we need to wait for.
-    print_system(f"Running 'go mod tidy' in {os.path.basename(BACKEND_SERVICE_DIR)}...")
-    tidy_command = ["go", "mod", "tidy"]
-    if not run_command(tidy_command, cwd=BACKEND_SERVICE_DIR, name=f"{name}-MOD-TIDY", check=True):
-        print_error("Failed to run 'go mod tidy'. Backend service cannot start.")
+    print_system(f"Building Go backend binary to: {backend_exe_path}")
+    build_command = ["go", "build", "-o", backend_exe_path, "."]
+    # We use run_command here because building is a one-time task we must wait for.
+    if not run_command(build_command, cwd=BACKEND_SERVICE_DIR, name=f"{name}-BUILD", check=True):
+        print_error("Failed to build Go backend. Backend service cannot start.")
         sys.exit(1)
 
     # --- Step 2: Launch 'go run .' ---
     # We use your 'start_service_process' helper as it correctly handles
     # long-running services, adds them to the cleanup list, and streams output.
-    run_command_go = ["go", "run", "."]
-    start_service_process(run_command_go, BACKEND_SERVICE_DIR, name)
+    start_service_process([backend_exe_path], BACKEND_SERVICE_DIR, name)
 
 
 def start_frontend():
@@ -2251,6 +2424,37 @@ def launch_and_manage_zephymesh_node():
         zephymesh_process = None
         zephymesh_api_url = None
 
+def _ensure_playwright_browsers():
+    """Checks if Playwright browsers are installed and installs them if not, using a flag file."""
+    # First, check if the flag file exists. If so, we can skip the whole process.
+    if os.path.exists(PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE):
+        print_system("Playwright browsers previously installed (flag file found).")
+        return True
+
+    # If the flag doesn't exist, proceed with the installation.
+    # The message is now more accurate, reflecting a one-time setup action.
+    print_system("--- Installing/Verifying Playwright browser binaries for the first time ---")
+    try:
+        playwright_install_command = [
+            PYTHON_EXECUTABLE, "-m", "playwright", "install", "--with-deps"
+        ]
+
+        # Use run_command for its nice logging and error handling.
+        if not run_command(playwright_install_command, ROOT_DIR, "PLAYWRIGHT-INSTALL-BROWSERS"):
+            print_error("Failed to install Playwright browsers. Web scraping features may be disabled.")
+            return False
+
+        # If the command succeeds, create the flag file to prevent this from running again.
+        print_system("✅ Playwright browsers are installed and up-to-date.")
+        with open(PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f_flag:
+            f_flag.write(f"Installed on: {datetime.now().isoformat()}\n")
+        print_system("Playwright browsers installation flag created.")
+        return True
+
+    except Exception as e:
+        print_error(f"An error occurred during Playwright browser setup: {e}")
+        return False
+
 def _perform_pre_attempt_cleanup(attempt_number: int):
     """Performs cleanup actions before a setup retry."""
     if attempt_number == 1:
@@ -2291,6 +2495,201 @@ def start_service_thread(target_func, name):
 
 
 # --- End Helper Logic ---
+# --- Textual TUI Application (Self-Contained) ---
+
+if TUI_AVAILABLE:
+    class SystemStats(Static):
+        """A widget to display real-time system stats."""
+        cpu_usage = reactive(0.0)
+        ram_usage = reactive(0.0)
+        disk_free = reactive(0.0)
+
+        def render(self) -> str:
+            return (f"💻 CPU: {self.cpu_usage:>5.1f}% | "
+                    f"🧠 RAM: {self.ram_usage:>5.1f}% | "
+                    f"💾 Disk Free: {self.disk_free:.1f} GB")
+        
+    
+
+    class ZephyrineTUI(App):
+        """A Textual UI for monitoring the Zephyrine Engine and its daemons."""
+        log_tail_threads = [] #initializing tail array Before we use it for parent child Processing tracking
+
+        CSS = """
+        Grid {
+            grid-size: 2 3; /* 2 columns, 3 rows */
+            grid-gutter: 1;
+            height: 0.3fr;
+        }
+        #engine {
+            column-span: 2; /* Span all 2 columns */
+        }
+        #stats {
+            column-span: 2; /* Make it span both columns */
+            height: 0.4fr;    /* Give it less vertical space (e.g., 1/3 of available) */
+        }
+        Log {
+            border-title-align: center;
+        }
+        """
+
+        def compose(self) -> ComposeResult:
+            """Create child widgets for the TUI."""
+            yield Header(show_clock=True)
+
+            # The Grid will now contain ALL the main panels
+            with Grid():
+                yield Log(id="engine", max_lines=256)
+                yield Log(id="watchdog1", max_lines=256)
+                yield Log(id="watchdog2", max_lines=256)
+                yield SystemStatsGraph(id="stats")
+
+            # The Footer is now the only thing outside the grid
+            yield Footer()
+
+        def on_mount(self) -> None:
+            """Called when the app is mounted."""
+
+            # Set the border titles correctly after the widgets are created
+            self.query_one("#engine", Log).border_title = "🚀 Main Engine & Services"
+            self.query_one("#watchdog1", Log).border_title = "🛡️ Watchdog (Go)"
+            self.query_one("#watchdog2", Log).border_title = "🛡️ Watchdog (Ada)"
+
+
+            # Start system stats updates
+            self.update_stats()
+            self.set_interval(2, self.update_stats)
+
+            # Start all services in background threads
+            self.start_all_services_in_background()
+        
+
+        def update_stats(self) -> None:
+            """Update the system stats widget with percentages for the bars."""
+            # Target the new widget class
+            stats_widget = self.query_one(SystemStatsGraph)
+            
+            # Update CPU and RAM percentages directly
+            stats_widget.cpu_percent = psutil.cpu_percent()
+            stats_widget.ram_percent = psutil.virtual_memory().percent
+            
+            # Get disk usage info
+            disk_usage = psutil.disk_usage('/')
+            stats_widget.disk_percent = disk_usage.percent
+            stats_widget.disk_free_gb = disk_usage.free / (1024 ** 3)
+
+        def start_all_services_in_background(self):
+            """
+            Starts all services. The `start_service_process` function now handles
+            redirecting their output to log files. After they are started, we
+            begin tailing those log files to the appropriate widgets.
+            """
+            logger.info("TUI: Starting all services and log file tailing...")
+
+            # --- Start the main services ---
+            start_engine_main()
+            start_backend_service()
+            start_frontend()
+            _compile_and_run_watchdogs() # This function will also use start_service_process
+
+            # --- Wait a moment for log files to be created ---
+            time.sleep(1.0)
+            
+            # --- THIS IS THE FIX: Tail the log files ---
+            log_dir = os.path.join(ROOT_DIR, "logs")
+            # Define which services write to which widget
+            widget_service_map = {
+                "engine": ["ENGINE", "BACKEND", "FRONTEND"],
+                "watchdog1": ["GO-WATCHDOG"],
+                "watchdog2": ["ADA-WATCHDOG"],
+            }
+
+            tailed_files = set() # Keep track of files we are already tailing
+
+            for widget_id, service_names in widget_service_map.items():
+                widget = self.query_one(f"#{widget_id}", Log)
+                for service_name in service_names:
+                    log_file = os.path.join(log_dir, f"{service_name}.log")
+
+                    # Only start a tailing thread if we haven't already for this file
+                    if log_file not in tailed_files:
+                        logger.info(f"TUI: Starting tail for '{log_file}' -> '#{widget_id}'")
+                        
+                        tail_thread = threading.Thread(
+                            target=tail_log_to_widget,
+                            args=(log_file, widget),
+                            name=f"TuiTail-{service_name}",
+                            daemon=True
+                        )
+                        tail_thread.start()
+
+                        self.log_tail_threads.append(tail_thread) #add and append into the array we initialized for PID tracking!
+                        tailed_files.add(log_file)
+
+        from textual.binding import Binding
+
+        BINDINGS = [
+            Binding(key="ctrl+c", action="quit", description="Quit App", show=True),
+            Binding(key="ctrl+q", action="quit", description="Quit App", show=True),
+        ]
+
+        def action_quit(self) -> None:
+            """An action to quit the application gracefully."""
+            # You can log this to the TUI itself for user feedback
+            self.query_one("#engine", Log).write("\n[SYSTEM] Shutdown requested. Terminating services...")
+            # self.exit() will trigger the on_unmount event and then quit
+
+            tui_shutdown_event.set() #making sure that the quit TUI event is stated
+            self.exit()
+
+        def on_unmount(self) -> None:
+            """Perform cleanup when the TUI is unmounted (quitting)."""
+            # This is the new, primary cleanup location for TUI mode.
+            # We call the same logic as the atexit handler.
+            logger.info("TUI is unmounting. Initiating process cleanup...")
+            cleanup_processes()
+            logger.info("Waiting for log tailing threads to exit...")
+            for thread in self.log_tail_threads:
+                # We give each thread a moment to finish its loop and exit.
+                thread.join(timeout=2.0)
+
+    from textual.widgets import Static
+    from textual.reactive import reactive
+    from rich.table import Table
+    from rich.progress_bar import ProgressBar
+
+    class SystemStatsGraph(Static):
+        """A widget to display real-time system stats with graphical bars."""
+        
+        # Define reactive variables to hold the data
+        cpu_percent = reactive(0.0)
+        ram_percent = reactive(0.0)
+        disk_percent = reactive(0.0)
+        disk_free_gb = reactive(0.0)
+
+        def render(self) -> Table:
+            """Render the stats into a Rich Table with progress bars."""
+            # A Table is a perfect layout tool for this
+            stats_table = Table.grid(expand=True, padding=(0, 1))
+            stats_table.add_column("label", width=5)
+            stats_table.add_column("bar") # The bar column will expand
+            stats_table.add_column("value", width=8, justify="right")
+
+            # Create ProgressBar instances for each stat
+            # `width=None` allows the bar to fill the available space in its column
+            cpu_bar = ProgressBar(total=100, completed=self.cpu_percent, width=None, style="bright_green", complete_style="green")
+            ram_bar = ProgressBar(total=100, completed=self.ram_percent, width=None, style="bright_cyan", complete_style="cyan")
+            disk_bar = ProgressBar(total=100, completed=self.disk_percent, width=None, style="bright_magenta", complete_style="magenta")
+
+            # Add a row for each statistic
+            stats_table.add_row("CPU", cpu_bar, f"{self.cpu_percent:>5.1f}%")
+            stats_table.add_row("RAM", ram_bar, f"{self.ram_percent:>5.1f}%")
+            stats_table.add_row("Disk", disk_bar, f"{self.disk_free_gb:>5.1f}G")
+
+            return stats_table
+    # --- End of new widget ---
+
+# --- End of TUI Application Block ---
 
 # --- Main Execution Logic ---
 # Assuming all your helper functions (print_system, run_command, _ensure_conda_package, etc.)
@@ -2395,6 +2794,8 @@ if __name__ == "__main__":
             requests_session.mount('http://', adapter)
             requests_session.mount('https://', adapter)
 
+            _ensure_playwright_browsers()
+
             # --- START: Robust Node.js & npm setup (MOVED HERE) ---
             print_system("--- Ensuring Node.js & npm Dependencies ---")
 
@@ -2496,7 +2897,15 @@ if __name__ == "__main__":
             # Final update of global NPM_CMD variable with the path to the now-correct npm
             npm_exe_name = "npm.cmd" if IS_WINDOWS else "npm"
             # Use shutil.which to get the *absolute path* from the now-activated Conda environment
-            globals()['NPM_CMD'] = shutil.which(npm_exe_name) or npm_exe_name # Fallback to name if not found for some reason
+            conda_bin_dir = os.path.dirname(PYTHON_EXECUTABLE)
+            explicit_npm_path = os.path.join(conda_bin_dir, npm_exe_name)
+            if os.path.exists(explicit_npm_path):
+                globals()['NPM_CMD'] = explicit_npm_path
+            else:
+                # If for some reason it's not there, fall back to shutil.which as a last resort.
+                print_warning(
+                    f"Could not find npm at expected path '{explicit_npm_path}'. Falling back to PATH search.")
+                globals()['NPM_CMD'] = shutil.which(npm_exe_name) or npm_exe_name
 
             # Also check for node itself, as npm depends on it
             if not globals()['NPM_CMD'] or not shutil.which("node"):
@@ -2840,13 +3249,13 @@ if __name__ == "__main__":
             PIP_RETRY_DELAY_SECONDS = 5
 
             print_system(f"--- Installing Python dependencies from {os.path.basename(engine_req_path)} ---")
-            for attempt in range(MAX_PIP_RETRIES):
+            for attempt_pip in range(MAX_PIP_RETRIES):
                 if run_command([PIP_EXECUTABLE, "install", "-r", engine_req_path], ENGINE_MAIN_DIR, "PIP-ENGINE-REQ"):
                     pip_install_success = True
                     break
                 else:
                     print_warning(
-                        f"pip install failed on attempt {attempt + 1}/{MAX_PIP_RETRIES}. Retrying in {PIP_RETRY_DELAY_SECONDS} seconds...")
+                        f"pip install failed on attempt {attempt_pip + 1}/{MAX_PIP_RETRIES}. Retrying in {PIP_RETRY_DELAY_SECONDS} seconds...")
                     time.sleep(PIP_RETRY_DELAY_SECONDS)
 
             if not pip_install_success:
@@ -2876,56 +3285,88 @@ if __name__ == "__main__":
                 print_error("One or more critical tools (git, cmake, node, npm, go, alr) not found after attempts. Exiting.")
                 setup_failures.append(f"At final check, critical tools not found after all attempts, this maybe these or other tools are not installed in the conda environment(git, cmake, node, npm, go, alr)")
 
-
-            print_system("--- Starting All Services ---")
-            # Compile Watchtowers before starting services that might rely on them or their functionality
-            if not _compile_watchtowers():
-                print_error("One or more watchdog components failed to compile. Halting startup.")
-                setup_failures.append(f"Watchdog components failed to compile, check if the tools are installed in the conda environment(git, cmake, node, npm, go, alr)")
-
-            service_threads = []
-            # Start Engine Main
-            service_threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
-            time.sleep(3) # Give engine a moment to start
-            engine_ready = any(proc.poll() is None and name_s == "ENGINE" for proc, name_s in running_processes)
-            if not engine_ready:
-                print_error("Engine Main failed to start. Exiting."); setup_failures.append(f"Engine Main failed to start, check if there's conflicting installations or other issues from previous runs")
-
-            # Start Backend Service
-            service_threads.append(start_service_thread(start_backend_service, "BackendServiceThread"))
-            time.sleep(2) # Give backend a moment to start
-
-            # Start Frontend Service
-            service_threads.append(start_service_thread(start_frontend, "FrontendThread"))
-
-            print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.")
+            # --- [NEW] TUI vs. Fallback Logic ---
+            TUI_AVAILABLE = False
             try:
-                while True:
-                    all_ok = True
-                    active_procs_found = False
-                    with process_lock:
-                        current_procs_snapshot = list(running_processes) # Make a copy to iterate
-                    
-                    # If there are no services managed by this script, break or indicate completion
-                    if not current_procs_snapshot and service_threads: # If threads were started but no procs remain
-                        all_ok = False # Consider it not OK if expected services are gone
-                    
-                    for proc, name_s in current_procs_snapshot:
-                        if proc.poll() is None: # Process is still running
-                            active_procs_found = True
-                        else:
-                            print_error(f"Service '{name_s}' exited unexpectedly (RC: {proc.poll()})."); all_ok = False
-                    
-                    if not all_ok:
-                        print_error("One or more services terminated. Shutting down launcher."); break
-                    if not active_procs_found and service_threads: # If all services have exited (and there were services to begin with)
-                        print_system("All services seem to have finished. Exiting launcher."); break
-                    
-                    time.sleep(5) # Check every 5 seconds
-            except KeyboardInterrupt:
-                print_system("\nKeyboardInterrupt received by main thread (relaunched script). Shutting down...")
-            finally:
-                print_system("Launcher main loop (relaunched script) finished. Ensuring cleanup via atexit...")
+                # The TUI class should be defined in a separate file for clarity.
+                # Assuming it's in `zephyrine_tui.py` in the project root.
+                import textual
+                import psutil
+                TUI_AVAILABLE = True
+            except ImportError:
+                TUI_AVAILABLE = False
+
+            if TUI_AVAILABLE:
+                # --- TUI LAUNCH ---
+                print_system("TUI libraries found. Launching Zephyrine Terminal UI...")
+                time.sleep(1) # Give user a moment to see the message
+                try:
+                    # The TUI class will now be responsible for starting and monitoring
+                    # all the project's services (Engine, Backend, Frontend, etc.).
+                    app = ZephyrineTUI()
+                    app.run()
+                    print_system("TUI has exited. Launcher finished.")
+                except Exception as e_tui:
+                    print_error(f"The Terminal UI encountered a fatal error: {e_tui}")
+                    traceback.print_exc()
+                    print_error("TUI failed. The application will now exit.")
+                    setup_failures.append("Zephyrine TUI failed to run.")
+            else:
+                # --- FALLBACK TO SIMPLE LOGGING ---
+                print_warning("Textual or psutil not found. Falling back to simple terminal output.")
+                print_system("--- Starting All Services (Fallback Mode) ---")
+
+                # Compile Watchtowers before starting services that might rely on them or their functionality
+                if not _compile_watchtowers():
+                    print_error("One or more watchdog components failed to compile. Halting startup.")
+                    setup_failures.append(f"Watchdog components failed to compile, check if the tools are installed in the conda environment(git, cmake, node, npm, go, alr)")
+
+                if not setup_failures:
+                    service_threads = []
+                    # Start Engine Main
+                    service_threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
+                    time.sleep(3) # Give engine a moment to start
+                    engine_ready = any(proc.poll() is None and name_s == "ENGINE" for proc, name_s in running_processes)
+                    if not engine_ready:
+                        print_error("Engine Main failed to start. Exiting."); setup_failures.append(f"Engine Main failed to start, check if there's conflicting installations or other issues from previous runs")
+
+                    if not setup_failures:
+                        # Start Backend Service
+                        service_threads.append(start_service_thread(start_backend_service, "BackendServiceThread"))
+                        time.sleep(2) # Give backend a moment to start
+
+                        # Start Frontend Service
+                        service_threads.append(start_service_thread(start_frontend, "FrontendThread"))
+
+                        print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.", "SUCCESS")
+                        try:
+                            while True:
+                                all_ok = True
+                                active_procs_found = False
+                                with process_lock:
+                                    current_procs_snapshot = list(running_processes) # Make a copy to iterate
+
+                                # If there are no services managed by this script, break or indicate completion
+                                if not current_procs_snapshot and service_threads: # If threads were started but no procs remain
+                                    all_ok = False # Consider it not OK if expected services are gone
+
+                                for proc, name_s in current_procs_snapshot:
+                                    if proc.poll() is None: # Process is still running
+                                        active_procs_found = True
+                                    else:
+                                        print_error(f"Service '{name_s}' exited unexpectedly (RC: {proc.poll()})."); all_ok = False
+
+                                if not all_ok:
+                                    print_error("One or more services terminated. Shutting down launcher."); break
+                                if not active_procs_found and service_threads: # If all services have exited (and there were services to begin with)
+                                    print_system("All services seem to have finished. Exiting launcher."); break
+
+                                time.sleep(5) # Check every 5 seconds
+                        except KeyboardInterrupt:
+                            print_system("\nKeyboardInterrupt received by main thread. Shutting down...")
+                        finally:
+                            print_system("Launcher main loop finished. Ensuring cleanup via atexit...")
+            # --- End of [NEW] TUI vs. Fallback Logic ---
 
         else:  # Initial launcher instance (is_already_in_correct_env is False)
             print_system(f"--- Initial Launcher: Conda Setup & Hardware Detection ---")
