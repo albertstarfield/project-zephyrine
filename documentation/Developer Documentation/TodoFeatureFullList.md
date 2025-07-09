@@ -24,7 +24,7 @@
 - [x] Global Vector Database for Context (divided into Interactions and File Index).
 - [x] Auto Idle auto general Model Remorphing (Inserting new knowledge nonSFT and SFT Fragment Variant), specLM or specialized Language Model will NOT recieve this treatment!.
 - [x] Autoexec for generated commands (unstable alpha).
-- [x] Decentralized model storage via ZephyMesh Network.
+- [x] Decentralized model storage via ZephyMesh P2P Distribution.
 - [x] Advanced Image Generation Engine (FLUX.1 Schnell hybrid implementation).
 - [x] Advanced Audio I/O (Whisper ASR + Dual TTS Engine implementation).
 - [x] Mobile HTML5 UI.
@@ -36,12 +36,17 @@
 - [x] Agent-based tool invocation (agent.py implementation, inspired by CoPilot/Pinokio).
 - [x] Screen context capture via Qwen2.5 VL (replaces original CvT plan).
 - [x] StellaIcarus realtime hook response for all API ELP1
-- [x] Self Learning iterative global vectoring. 
+- [x] Self Learning iterative global vectoring. (There's better alternative probably, Darwin-Godel Machine by Sakana AI if you want more professional ready to use cloud version setup and being supported by multi institution)
 - [x] Initial Flight Interface
 - [x] I/O Swappable KV Shared Cache/State (LLM/VLM Qwen2.5) (for more serialized faster loading model swapping)
 
 #### High Priority
-- [ ] Implementing Self writing StellaIcarus realtime hook response for ELP1 on Ada and Python code
+
+- [ ] Implementing Multi-stage Decomposition Append Response ELP1.
+- [ ] Implementing Self writing StellaIcarus realtime hook response for ELP1 on Ada and Python code.
+- [ ] Building Zephy Spell Moral Compass. ELP0 Vector building
+- [ ] I/O Swappable state for Tensor State for other Models for TTS and STT and Stable Diffusion?
+- [ ] Paper Referencing Listing to prepare publication
 - [ ] Redraw Zephy by Hand instead of AI generated.
 
 #### Low Priority
@@ -50,7 +55,7 @@
 - [ ] Multi format communication Real-time communication and collaboration (Audio, Video, Actuator)
 - [ ] Adding Docker Support
 - [ ] AI Blackbox Issue required Reference if its plausible be like Bing AI on the referencing system (Adapt as factual seeker) (APA7 based referencing system and formatting)
-- - [ ] Categorize into Classes based on the subsystem drawio for cleaner Code and easier debugging (for the base architecture)
+- [ ] Categorize into Classes based on the subsystem drawio for cleaner Code and easier debugging (for the base architecture)
 
 
 #### Cancelled
