@@ -95,16 +95,6 @@ The installation process is now managed by a single, cross-platform launcher scr
     **First-Time Setup:** The first time you run the launcher, it will set up the Conda environment and download several gigabytes of model files. This process can take a notable amount of time, depending on your internet connection. Please be patient.
 
     **Subsequent Launches:** After the initial setup, subsequent launches will generally be much faster.
-
-### ZephyMesh P2P Distribution
-To help improve download speeds and reliability, this project incorporates ZephyMesh, a peer-to-peer network feature.
-
-When you run the launcher, your application can optionally become a peer on this network.
-
-If you are a new user, the launcher will first try to find the required models and files from other users on your local network or the internet. This can sometimes be faster than downloading directly from centralized sources.
-
-If you have a particular file, your application may help make it available to other new users once you've downloaded it.
-
 ## 🔧 Troubleshooting
 
 [Click here to see the general troubleshooting](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/Troubleshooting%20Quick%20Guide.md)
