@@ -72,6 +72,7 @@ python-Levenshtein
 thefuzz
 zstandard
 datasets
+easyocr
 
 # --- Document Processing & Text Extraction ---
 xlrd
