@@ -49,8 +49,8 @@ except ImportError:
 # --- Configuration ---
 ROOT_DIR = os.path.dirname(os.path.abspath(__file__))
 ENGINE_MAIN_DIR = os.path.join(ROOT_DIR, "systemCore", "engineMain")
-BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "backend-service")
-FRONTEND_DIR = os.path.join(ROOT_DIR, "systemCore", "frontend-face-zephyrine")
+BACKEND_SERVICE_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "backend-service")
+FRONTEND_DIR = os.path.join(ROOT_DIR, "systemCore", "UIEngine", "frontend-face-zephyrine")
 LICENSE_DIR = os.path.join(ROOT_DIR, "licenses")
 LICENSE_FLAG_FILE = os.path.join(ROOT_DIR, ".license_accepted_v1")
 CUDA_TOOLKIT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".CUDA_Toolkit_Installed")

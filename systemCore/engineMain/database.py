@@ -26,7 +26,7 @@ except ImportError:
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, DateTime, Float, Boolean,
     ForeignKey, Index, MetaData, update, desc, select, inspect as sql_inspect,
-    UniqueConstraint, text, CheckConstraint, Enum
+    UniqueConstraint, text, CheckConstraint, Enum, JSON
 )
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base, Session
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
@@ -163,7 +163,7 @@ class Interaction(Base):
     last_modified_db = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
     imagined_image_prompt = Column(Text, nullable=True)
-    imagined_image_b64 = Column(Text, nullable=True)  # For AI-generated image b64 snippet
+    imagined_image_avif_b64 = Column(Text, nullable=True)  # For AI-generated image b64 snippet
     imagined_image_vlm_description = Column(Text, nullable=True)  # For VLM desc of AI-generated image
 
     reflection_indexed_in_vs = Column(Boolean, nullable=False, server_default=text("0"),

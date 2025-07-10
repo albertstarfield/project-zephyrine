@@ -1,0 +1,55 @@
+/* styles/layout/_header.css */
+
+.form-header {
+  display: flex;
+  flex-direction: column;
+  justify-content: flex-start;
+  align-items: stretch; /* Ensure buttons fill width */
+  margin: 0;
+  width: 2.5rem; /* Default width */
+  min-width: 2.5rem; /* Default width */
+  background-color: var(--background);
+  height: calc(100vh - 1rem); /* Corresponds to #main padding/position */
+  overflow: hidden auto;
+  border-radius: 1rem;
+  position: fixed;
+  left: 0.25rem; /* Default position */
+  top: 0.25rem; /* Default position */
+  z-index: 11; /* Above #main content, below potential modals */
+  padding: 0.5rem 0; /* Add some internal padding */
+}
+
+.form-header * {
+  color: var(--primary-text);
+}
+
+/* Responsive adjustments for the header/sidebar */
+@media (min-width: 1024px) {
+  .form-header {
+    width: 4rem;
+    min-width: 4rem;
+    left: 0.5rem;
+    top: 0.5rem;
+  }
+}
+
+@media (max-width: 1023px) and (min-width: 768px) {
+  .form-header {
+    width: 3.5rem;
+    min-width: 3.5rem;
+  }
+}
+
+@media (max-width: 767px) {
+  .form-header {
+    width: 3rem;
+    min-width: 3rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .form-header {
+    width: 2.5rem;
+    min-width: 2.5rem;
+  }
+}
