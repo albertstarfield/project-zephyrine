@@ -364,6 +364,7 @@ engines_to_use = [
 DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY = [
     "I'm sorry, I can't assist with that.",
     "As an AI, I cannot",
+    "I'm sorry, but I'm unable to assist with that request.",
     "I am unable to",
     "I do not have the capacity to",
     "My apologies, but I can't provide",
@@ -413,9 +414,12 @@ DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY = [
     "How can I assist",
     "I am an AI assistant",
     "I am an AI",
+    "Combined RAG Context",
+    "Relevant Context",
+    "User: "
 ]
 # Fuzzy match threshold for detecting defective words (0-100, higher is more sensitive to detect the pattern)
-DEFECTIVE_WORD_THRESHOLD = int(os.getenv("DEFECTIVE_WORD_THRESHOLD",90))
+DEFECTIVE_WORD_THRESHOLD = int(os.getenv("DEFECTIVE_WORD_THRESHOLD",80))
 DefectiveWordDirectGenerateArray=DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY
 
 # --- XMPP Interaction Proactive Zephyrine ---
