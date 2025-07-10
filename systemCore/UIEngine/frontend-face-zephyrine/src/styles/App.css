@@ -1,0 +1,42 @@
+/* styles/App.css */
+
+/* 1. Variables (if defined in CSS, otherwise handled globally/JS) */
+/* @import "base/_variables.css"; */
+
+/* 2. Fonts */
+@import "base/_fonts.css";
+
+/* 3. Base styles & Resets */
+@import "base/_base.css";
+
+/* 4. Layout */
+@import "layout/_main.css";
+@import "layout/_header.css"; /* Sidebar */
+
+/* 5. Components */
+@import "components/_background.css";
+@import "components/_button.css";
+@import "components/_card.css";
+@import "components/_character.css";
+@import "components/_entity.css";
+@import "components/_input.css";
+@import "components/_logo.css";
+@import "components/_message.css";
+@import "components/_tab.css";
+@import "components/_titlebar.css";
+@import 'components/_cloudiaSky.css'; /* Day Themed */
+@import 'components/_nightSky.css'; /* Dark Themed */
+@import 'components/_splashScreen.css'; /* NEW: Splash screen styles */
+@import 'components/_preSplashScreen.css'; /* NEW: Pre-splash screen styles */
+@import 'components/_shuttleDisplay.css';
+@import 'components/_settingsModal.css';
+
+
+
+/* 6. Views / Page-specific styles */
+@import "views/_welcomeScreen.css";
+
+/* 7. Utilities & Helpers */
+@import "utils/_animations.css";
+@import "utils/_helpers.css";
+@import "utils/_overlay.css"; /* Load last or near last */

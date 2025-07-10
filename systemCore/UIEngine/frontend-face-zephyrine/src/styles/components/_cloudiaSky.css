@@ -1,0 +1,93 @@
+.background-container {
+  position: fixed;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: -1;
+  overflow: hidden;
+  /* * Default to a dark "night sky" gradient. 
+   * This will be the background for dark mode.
+   * The starfield canvas from the hook will be drawn on top of this.
+  */
+  background: linear-gradient(to bottom, #020111, #191621);
+  transition: background 0.5s ease;
+}
+
+/* * This rule ONLY applies when the theme is 'light'.
+ * It overrides the default dark gradient with the "day sky".
+*/
+html.light .background-container {
+  background: linear-gradient(to bottom, #87ceeb, #f0f8ff);
+}
+
+/* * The cloud container and individual cloud styles below are correct,
+ * but they will now only be visible in light mode because the
+ * parent .clouds div is only rendered by App.jsx when theme === 'light'.
+*/
+.clouds {
+  position: absolute;
+  top: 0;
+  left: 0;
+  width: 100%;
+  height: 100%;
+  z-index: 0; /* ADDED: Ensures clouds are rendered above the background container's gradient */
+}
+
+.cloud {
+  position: absolute;
+  background: white;
+  border-radius: 50%;
+  opacity: 0.8;
+  filter: blur(2px);
+  animation: moveClouds 60s linear infinite;
+}
+
+.cloud.c1 {
+  width: 200px;
+  height: 60px;
+  top: 10%;
+  left: -250px;
+}
+
+.cloud.c2 {
+  width: 300px;
+  height: 90px;
+  top: 20%;
+  left: -350px;
+}
+
+.cloud.c3 {
+  width: 150px;
+  height: 50px;
+  top: 35%;
+  left: -200px;
+}
+
+/* Shared pseudo-elements for cloud shape */
+.cloud::before,
+.cloud::after {
+  content: '';
+  position: absolute;
+  background: white;
+  border-radius: 50%;
+}
+
+/* Specific shapes for each cloud */
+.cloud.c1::before { width: 100px; height: 100px; top: -50px; left: 50px; }
+.cloud.c1::after { width: 140px; height: 140px; top: -70px; right: 30px; }
+
+.cloud.c2::before { width: 150px; height: 150px; top: -75px; left: 75px; }
+.cloud.c2::after { width: 180px; height: 180px; top: -90px; right: 60px; }
+
+.cloud.c3::before { width: 80px; height: 80px; top: -40px; left: 40px; }
+.cloud.c3::after { width: 100px; height: 100px; top: -50px; right: 20px; }
+
+@keyframes moveClouds {
+    from {
+      transform: translateX(0);
+    }
+    to {
+      transform: translateX(calc(100vw + 400px));
+    }
+}
