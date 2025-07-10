@@ -223,12 +223,12 @@ def main():
     except FileNotFoundError as fe_flux:
         log_worker("CRITICAL",
                    f"Failed to load Stage 1 FLUX model (File Not Found): {fe_flux}\n{traceback.format_exc()}")
-        print(json.dumps({"error": f"Worker critical error: FLUX model file missing: {fe_flux}"}), flush=True);
+        print(json.dumps({"error": f"Worker critical error: FLUX model file missing: {fe_flux}"}), flush=True)
         sys.exit(1)
     except Exception as e_flux_load:
         log_worker("CRITICAL",
                    f"Failed to load Stage 1 FLUX model (Other Error): {e_flux_load}\n{traceback.format_exc()}")
-        print(json.dumps({"error": f"Worker critical error: Failed to load FLUX model: {e_flux_load}"}), flush=True);
+        print(json.dumps({"error": f"Worker critical error: Failed to load FLUX model: {e_flux_load}"}), flush=True)
         sys.exit(1)
 
     if args.test_mode:
@@ -260,7 +260,7 @@ def main():
             width=768, height=448, seed=-1,
         )
         if not stage1_test_images:
-            log_worker("ERROR", "[Test Mode] Stage 1 FLUX generation failed to produce an image.");
+            log_worker("ERROR", "[Test Mode] Stage 1 FLUX generation failed to produce an image.")
             sys.exit(1)
 
         final_test_image: Image.Image = stage1_test_images[0]
@@ -457,17 +457,18 @@ def main():
         if response_format == "b64_json":
             current_image_item_data = {}
             try:
-                png_byte_buffer = BytesIO();
+                png_byte_buffer = BytesIO()
                 final_output_image.save(png_byte_buffer, format="PNG")
                 current_image_item_data["b64_json"] = base64.b64encode(png_byte_buffer.getvalue()).decode('utf-8')
                 if PIL_AVIF_PLUGIN_POSSIBLY_AVAILABLE:
                     try:
-                        avif_byte_buffer = BytesIO();
+                        avif_byte_buffer = BytesIO()
                         final_output_image.save(avif_byte_buffer, format="AVIF", quality=80)
                         current_image_item_data["b64_avif"] = base64.b64encode(avif_byte_buffer.getvalue()).decode(
                             'utf-8')
                     except Exception as avif_e:
-                        current_image_item_data["b64_avif"] = None; log_worker("WARNING",
+                        current_image_item_data["b64_avif"] = None
+                        log_worker("WARNING",
                                                                                f"AVIF encoding failed: {avif_e}")
                 else:
                     current_image_item_data["b64_avif"] = None
@@ -479,16 +480,38 @@ def main():
             log_worker("WARNING", "response_format 'url' requested, but worker returns b64_json as fallback.")
             current_image_item_data = {"comment": "URL format requested, returning b64_json as fallback."}
             try:
-                png_byte_buffer = BytesIO();
+                png_byte_buffer = BytesIO()
                 final_output_image.save(png_byte_buffer, format="PNG")
                 current_image_item_data["b64_json"] = base64.b64encode(png_byte_buffer.getvalue()).decode('utf-8')
-                if PIL_AVIF_PLUGIN_POSSIBLY_AVAILABLE:
+                if response_format == "b64_json":
+                    current_image_item_data = {}
                     try:
-                        avif_byte_buffer = BytesIO(); final_output_image.save(avif_byte_buffer, format="AVIF",
-                                                                              quality=80); current_image_item_data[
-                            "b64_avif"] = base64.b64encode(avif_byte_buffer.getvalue()).decode('utf-8')
-                    except:
-                        current_image_item_data["b64_avif"] = None
+                        # Create the standard PNG version for immediate VLM use
+                        png_byte_buffer = BytesIO()
+                        final_output_image.save(png_byte_buffer, format="PNG")
+                        current_image_item_data["b64_json"] = base64.b64encode(png_byte_buffer.getvalue()).decode(
+                            'utf-8')
+
+                        # Now, create the efficient AVIF version for storage
+                        if PIL_AVIF_PLUGIN_POSSIBLY_AVAILABLE:
+                            try:
+                                avif_byte_buffer = BytesIO()
+                                # *** THIS IS THE ONLY CHANGE NEEDED ***
+                                # Change the quality from 80 to the requested 40
+                                final_output_image.save(avif_byte_buffer, format="AVIF", quality=40)
+                                current_image_item_data["b64_avif"] = base64.b64encode(
+                                    avif_byte_buffer.getvalue()).decode('utf-8')
+                                log_worker("INFO", "Successfully encoded final image to AVIF with quality=40.")
+                            except Exception as avif_e:
+                                current_image_item_data["b64_avif"] = None
+                                log_worker("WARNING", f"AVIF encoding failed with quality=40: {avif_e}")
+                        else:
+                            current_image_item_data["b64_avif"] = None  # Indicate AVIF is not available
+
+                        output_data_list_final.append(current_image_item_data)
+                    except Exception as final_encode_error:
+                        log_worker("ERROR", f"Final image encoding (PNG) failed: {final_encode_error}")
+                        output_data_list_final.append({"error": f"Final image encoding failed: {final_encode_error}"})
                 else:
                     current_image_item_data["b64_avif"] = None
                 output_data_list_final.append(current_image_item_data)
@@ -512,10 +535,12 @@ def main():
     except ValueError as e:
         log_worker("ERROR", f"Input Validation Error: {e}"); result_payload = {"error": f"Worker Input Error: {e}"}
     except RuntimeError as e:
-        log_worker("ERROR", f"Runtime Error (Image Gen): {e}\n{traceback.format_exc()}"); result_payload = {
+        log_worker("ERROR", f"Runtime Error (Image Gen): {e}\n{traceback.format_exc()}")
+        result_payload = {
             "error": f"Worker Image Gen Error: {e}"}
     except Exception as e:
-        log_worker("ERROR", f"Unexpected Error: {e}\n{traceback.format_exc()}"); result_payload = {
+        log_worker("ERROR", f"Unexpected Error: {e}\n{traceback.format_exc()}")
+        result_payload = {
             "error": f"Worker Unexpected Error: {e}"}
 
     try:

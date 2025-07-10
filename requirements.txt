@@ -20,6 +20,7 @@ textual
 psutil
 
 
+
 # fitz # This is the import name for PyMuPDF; PyMuPDF below is the package to install
 pytesseract
 PyMuPDF
@@ -65,6 +66,7 @@ beautifulsoup4
 python-dotenv
 loguru
 Pillow
+pillow-avif-plugin
 numpy
 python-Levenshtein
 thefuzz
@@ -121,7 +123,6 @@ langid
 tensorboard
 #colorama                  # Removed as launcher.py was modified to not use it directly
 tiktoken
-
 # --- High-Performance Computing & Scientific Libraries ---
 # These are often for specific numerical tasks or model optimization.
 numba

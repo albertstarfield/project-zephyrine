@@ -682,6 +682,115 @@ Instruction: Based on all the above, respond ONLY with a single, valid JSON obje
 JSON Output:
 """
 
+
+PROMPT_SHOULD_I_IMAGINE = """
+Analyze the user's request and the conversation context. Your task is to determine if generating an image would be a helpful and relevant step to fulfill the user's request or enhance the response. The user's request might be an explicit command to "imagine" or "draw", or it could be a descriptive query where a visual representation would be highly beneficial.
+
+Based on your analysis, respond with a JSON object containing two keys:
+1. "should_imagine": A boolean value (true or false).
+2. "reasoning": A brief explanation for your decision.
+
+Examples:
+User Input: "Draw a picture of a futuristic city at sunset."
+Your Output:
+{{
+  "should_imagine": true,
+  "reasoning": "The user explicitly asked to draw a picture."
+}}
+
+User Input: "I'm trying to visualize a Dyson Swarm around a red dwarf star."
+Your Output:
+{{
+  "should_imagine": true,
+  "reasoning": "The user is asking to visualize a complex concept, so an image would be very helpful."
+}}
+
+User Input: "What's the capital of France?"
+Your Output:
+{{
+  "should_imagine": false,
+  "reasoning": "This is a factual question that does not require a visual representation."
+}}
+
+---
+CONTEXT:
+{context_summary}
+
+---
+USER INPUT:
+{user_input}
+
+---
+Your JSON Output:
+"""
+
+PROMPT_SHOULD_I_CREATE_HOOK = """
+You are an optimization analyst for an AI system. Your task is to determine if a successfully handled user request is a good candidate for automation by creating a permanent, high-speed Python "hook".
+
+A good candidate is a request that is repeatable, follows a clear pattern, and doesn't require complex, open-ended reasoning. Examples include:
+- Mathematical calculations (e.g., "what is 25% of 150?").
+- Specific data lookups or conversions (e.g., "convert 100 USD to EUR").
+- Simple, patterned questions (e.g., "what is the opposite of hot?").
+
+A bad candidate is a request that is highly creative, subjective, or requires deep, nuanced reasoning that can't be easily captured in a simple script (e.g., "write me a poem," "summarize our last conversation," "what are your thoughts on philosophy?").
+
+Analyze the following interaction and decide.
+
+---
+USER'S ORIGINAL QUERY:
+{user_query}
+
+---
+CONTEXT USED TO ANSWER (RAG):
+{rag_context}
+
+---
+AI'S FINAL, SUCCESSFUL ANSWER:
+{final_answer}
+
+---
+Based on the above, is this interaction a good candidate for a permanent automation hook?
+Respond with a JSON object containing two keys:
+1. "should_create_hook": A boolean value (true or false).
+2. "reasoning": A brief explanation for your decision.
+
+Your JSON Output:
+"""
+
+PROMPT_GENERATE_STELLA_ICARUS_HOOK = """
+You are an expert Python programmer tasked with creating a "StellaIcarus" hook file. This file will be loaded by an AI to provide instant, accurate answers for specific types of user queries, bypassing the need for a full LLM call.
+
+Your goal is to write a complete, self-contained Python script based on the provided template and the example interaction.
+
+The script MUST contain two things:
+1.  A global variable named `PATTERN`: A Python regex string that will be used with `re.match()` to capture the user's input. It should be specific enough to match the query pattern but general enough to capture variations. Use named capture groups `(?P<group_name>...)` for any variables.
+2.  A function `handler(match, user_input, session_id)`: This function receives the regex match object. It must perform the necessary logic and return a string containing the final answer.
+
+---
+TEMPLATE FILE (`basic_math_hook.py`) CONTENT:
+```python
+{template_content}
+```
+
+---
+EXAMPLE OF SUCCESSFUL INTERACTION TO AUTOMATE:
+
+- USER's QUERY: "{user_query}"
+- CONTEXT USED (RAG): "{rag_context}"
+- AI's FINAL ANSWER: "{final_answer}"
+
+---
+INSTRUCTIONS:
+1.  Analyze the user's query to create the `PATTERN` regex. Generalize it. For example, if the query was "what is 5+5?", the pattern could be `r"what is (?P<num1>\\d+)\\s*\\+\\s*(?P<num2>\\d+)\\??"`.
+2.  Write the `handler` function. Use the captured groups from the `match` object to perform the calculation or logic.
+3.  Ensure your code is clean, efficient, and handles potential errors (e.g., use `try-except` blocks for type conversions).
+4.  The final output should be ONLY the raw Python code for the new hook file. Do not include any explanations or markdown code blocks like ```python ... ```.
+
+---
+Your Generated Python Code:
+"""
+
+
 PROMPT_TREE_OF_THOUGHTS_V2 = f"""You are Adelaide Zephyrine Charlotte, performing a deep Tree of Thoughts analysis.
 Given the user's query and all available context, break down the problem, explore solutions, evaluate them, and synthesize a comprehensive answer or plan.
 
@@ -711,6 +820,7 @@ Context from Recent Imagination (if any):
 ==================
 JSON Output (ONLY the JSON object itself, no other text, no markdown, no wrappers):
 """
+
 
 PROMPT_REFINE_USER_IMAGE_REQUEST = f"""
 You are an Friend that refines a user's simple image request into a more detailed and evocative prompt suitable for an advanced AI image generator.
