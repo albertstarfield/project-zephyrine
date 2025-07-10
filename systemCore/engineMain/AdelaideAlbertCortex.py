@@ -73,6 +73,18 @@ from urllib.parse import urlparse, parse_qs, quote_plus, urljoin
 import langcodes
 import math
 import cmath
+import easyocr
+
+try:
+    ocr_reader = easyocr.Reader(['en'], gpu=True) # Use GPU if available
+    logger.success("✅ EasyOCR Reader initialized successfully (using GPU).")
+except Exception:
+    try:
+        ocr_reader = easyocr.Reader(['en'], gpu=False)
+        logger.success("✅ EasyOCR Reader initialized successfully (using CPU).")
+    except Exception as e:
+        ocr_reader = None
+        logger.error(f"❌ Failed to initialize EasyOCR Reader. OCR functionality will be disabled. Error: {e}")
 
 # --- Selenium Imports (add if not present) ---
 try:
@@ -1916,24 +1928,50 @@ class CortexThoughts:
             
             # 2c. Combine all history results into a single retriever
             if all_history_docs:
-                unique_docs = {doc.page_content: doc for doc in all_history_docs}.values()
-                
-                combined_texts = [doc.page_content for doc in unique_docs]
-                combined_metadatas = [doc.metadata for doc in unique_docs]
+                # First, de-duplicate the documents based on their content
+                unique_docs_dict = {doc.page_content: doc for doc in all_history_docs}
+                unique_docs = list(unique_docs_dict.values())
+
+                combined_texts = []
+                combined_metadatas = []
+
+                # <<< FIX: Iterate and validate/fix metadata for each document >>>
+                for doc in unique_docs:
+                    # Ensure page_content is a string
+                    page_content_str = str(doc.page_content or "")
+                    combined_texts.append(page_content_str)
+
+                    # Ensure metadata is a valid, non-empty dictionary
+                    metadata = doc.metadata or {}  # Start with an empty dict if metadata is None
+                    if not isinstance(metadata, dict):
+                        metadata = {"source": "unknown", "original_metadata_type": str(type(metadata))}
+
+                    # If the dictionary is empty, add a placeholder key
+                    if not metadata:
+                        metadata["source"] = "history_combined_placeholder"
+
+                    combined_metadatas.append(metadata)
+
                 ids_for_combined_vs = [f"combined_{i}" for i in range(len(unique_docs))]
 
-                temp_combined_vs = Chroma(embedding_function=self.provider.embeddings)
-                
-                # We need to re-embed the combined list to create the final temporary store
-                combined_embeddings = self.provider.embeddings.embed_documents(combined_texts, priority=priority)
-                if combined_embeddings:
-                    temp_combined_vs._collection.add(
-                        embeddings=combined_embeddings,
-                        documents=combined_texts,
-                        metadatas=combined_metadatas,
-                        ids=ids_for_combined_vs
-                    )
-                session_history_retriever = temp_combined_vs.as_retriever(search_kwargs={"k": RAG_HISTORY_COUNT})
+                # Ensure we don't proceed with empty lists if something went wrong
+                if not combined_texts or not combined_metadatas:
+                    logger.warning(
+                        f"{log_prefix} No valid documents left after cleaning for combined history. Skipping.")
+                else:
+                    temp_combined_vs = Chroma(embedding_function=self.provider.embeddings)
+
+                    # We need to re-embed the combined list to create the final temporary store
+                    combined_embeddings = self.provider.embeddings.embed_documents(combined_texts, priority=priority)
+                    if combined_embeddings:
+                        # This call is now safe because `combined_metadatas` is guaranteed to contain non-empty dicts
+                        temp_combined_vs._collection.add(
+                            embeddings=combined_embeddings,
+                            documents=combined_texts,
+                            metadatas=combined_metadatas,
+                            ids=ids_for_combined_vs
+                        )
+                    session_history_retriever = temp_combined_vs.as_retriever(search_kwargs={"k": RAG_HISTORY_COUNT})
 
             # --- Step 3: Persistent Reflection Retriever ---
             reflection_vs = get_global_reflection_vectorstore()
@@ -3301,18 +3339,13 @@ class CortexThoughts:
   "explanation": "string (your reasoning for the choice)"
 }"""
 
-            # Create the input dictionary with BOTH required variables.
+
+
             reformat_prompt_input = {
                 "faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop,
+                "\"action_type\"": "{dummy_value}",  # Provide the exact key the error asks for
                 "json_structure_example": json_example_string
             }
-
-            reformat_prompt_input = {
-                "faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop,
-                "\"action_type\"": "{dummy_value}"  # Provide the exact key the error asks for
-            }
-            # --- END OF THE FIX ---
-
             reformat_chain = ChatPromptTemplate.from_template(
                 PROMPT_REFORMAT_TO_ACTION_JSON) | action_analysis_model | StrOutputParser()
 
@@ -3657,20 +3690,20 @@ class CortexThoughts:
 
                 rag_context_block = self._format_docs(all_retrieved_rag_docs, "Combined RAG Context")
                 final_system_prompt_content = f"{system_prompt_content_base}\n\n--- Relevant Context ---\n{rag_context_block}\n--- End RAG ---"
-                
+
                 # (Direct history and ChatML prompt construction logic remains the same...)
                 direct_history_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
                 historical_turns_for_chatml = [] # Simplified for this example
                 raw_chatml_prompt_string = self._construct_raw_chatml_prompt(
-                    system_content=final_system_prompt_content, 
-                    history_turns=historical_turns_for_chatml, 
+                    system_content=final_system_prompt_content,
+                    history_turns=historical_turns_for_chatml,
                     current_turn_content=user_input
                 )
 
                 # --- LLM Call ---
                 current_temp = min(1.5, DEFAULT_LLM_TEMPERATURE + (0.1 * retry_count))
                 raw_llm_response = await asyncio.to_thread(fast_model._call, messages=raw_chatml_prompt_string, stop=[CHATML_END_TOKEN], priority=ELP1, temperature=current_temp)
-                
+
                 response_to_return_to_client = self._cleanup_llm_output(raw_llm_response)
                 interaction_data_for_log['llm_response'] = response_to_return_to_client
 
@@ -3699,14 +3732,14 @@ class CortexThoughts:
                             error_msg = f"[Defective Response Detected] Canned Response to canned phrase ('{defective_phrase}'). Similarity: {defective_score}%"
                             logger.error(f"{log_prefix} {error_msg}")
                             break # Found a match, no need to check other phrases
-                
+
                 if is_defective_response:
                     retry_count += 1
                     if retry_count > MAX_SPITBACK_RETRIES:
                         response_to_return_to_client = "[System Error: The keep model misbehaved. and session has been destroyed due to that issue.]"
                         break
                     continue # Go to the next iteration of the while loop
-                
+
                 # If all checks pass, we have a valid response, so we break the loop
                 break
 
@@ -3714,7 +3747,7 @@ class CortexThoughts:
                 logger.error(f"❌ {log_prefix}: Error during direct_generate logic: {e_direct_path}", exc_info=True)
                 response_to_return_to_client = f"[Error generating direct response (ELP1): {type(e_direct_path).__name__}]"
                 break
-        
+
         # --- Final Logging and Return ---
         final_duration_ms = (time.monotonic() - direct_start_time) * 1000.0
         interaction_data_for_log['execution_time_ms'] = final_duration_ms
@@ -3979,35 +4012,74 @@ class CortexThoughts:
             # Neither vector nor fuzzy search yielded results
             return "No relevant file content found via vector or fuzzy search for the query."
 
+    async def _extract_text_with_ocr_async(self, image_bytes: bytes) -> str:
+        """
+        Performs OCR on the given image bytes and returns all detected text as a single string.
+        """
+        log_prefix = f"👁️ OCR|{self.current_session_id}"
+
+        if not ocr_reader:
+            logger.warning(f"{log_prefix}: EasyOCR reader not available. Skipping OCR.")
+            return "OCR processing is not available."
+
+        try:
+            logger.info(f"{log_prefix}: Starting OCR text extraction...")
+            # EasyOCR's readtext is a blocking, CPU/GPU-bound operation. Run in a thread.
+            results = await asyncio.to_thread(ocr_reader.readtext, image_bytes)
+
+            if not results:
+                logger.info(f"{log_prefix}: No text detected by OCR.")
+                return "No text detected."
+
+            # Combine all detected text snippets into a single block for the VLM.
+            # We only care about the text content for this purpose.
+            detected_texts = [text for (bbox, text, prob) in results]
+            combined_text = "\n".join(detected_texts)
+
+            logger.info(f"{log_prefix}: OCR successful. Found {len(detected_texts)} text fragments.")
+            logger.trace(f"{log_prefix}: OCR Raw Text -> {combined_text}")
+
+            return combined_text
+
+        except Exception as e:
+            logger.error(f"{log_prefix}: An error occurred during OCR processing: {e}", exc_info=True)
+            return f"An error occurred during OCR processing: {e}"
+
     async def _describe_image_async(self, db: Session, session_id: str, image_b64: str,
                                     prompt_type: str = "initial_description", priority: int = ELP0,
                                     is_avif: bool = False) -> Tuple[Optional[str], Optional[str]]:
         """
-        Generic async helper to send a base64 image to the VLM and get a textual description.
-        Returns (description, error_message_if_any).
-        `prompt_type` can be "initial_description" or "describe_generated_image".
+        Generates a comprehensive image description using a two-stage OCR + VLM pipeline.
+
+        This function orchestrates the entire image analysis process. It first prepares the
+        image data, handling AVIF to PNG conversion if necessary. It then runs OCR to
+        extract any text. Finally, it provides both the image and the extracted text to a
+        Vision-Language Model (VLM) with a specialized prompt, instructing it to generate
+        a description that is visually accurate and grounded by the OCR text.
+
+        Args:
+            db: The active SQLAlchemy database session.
+            session_id: The session ID for the current interaction.
+            image_b64: The base64 encoded string of the image (can be PNG or AVIF).
+            prompt_type: A string to identify the context of the call (e.g., "initial_description").
+            priority: The execution priority for the LLM call (ELP0 or ELP1).
+            is_avif: A boolean flag indicating if the provided `image_b64` is in AVIF format.
+
+        Returns:
+            A tuple containing:
+            - The final description string if successful, otherwise None.
+            - An error message string if any part of the process fails, otherwise None.
         """
         req_id = f"vlm_desc-{uuid.uuid4()}"
         log_prefix = f"🖼️ {req_id}|ELP{priority}"
-        logger.info(f"{log_prefix} Requesting VLM desc (type: {prompt_type}, is_avif: {is_avif}).")
+        logger.info(f"{log_prefix} Requesting augmented VLM description (type: {prompt_type}, is_avif: {is_avif}).")
 
+        # --- Get VLM model ---
         vlm_model = self.provider.get_model("vlm")
         if vlm_model is None:
-            error_msg = f"VLM model not available for image description (type: {prompt_type})."
+            error_msg = f"VLM model not available for image description."
             logger.error(f"❌ {log_prefix}: {error_msg}")
-            # Attempt to log this error to DB (best effort, don't re-raise to crash caller if possible)
             try:
-                png_b64_for_vlm = image_b64
-                if is_avif:
-                    logger.info(f"{log_prefix} Input is AVIF, converting to PNG for VLM...")
-                    converted_png = await asyncio.to_thread(self._convert_avif_to_png_b64, image_b64)
-                    if not converted_png:
-                        error_msg = "Failed to convert stored AVIF image to PNG for VLM analysis."
-                        logger.error(f"{log_prefix} {error_msg}")
-                        return None, error_msg
-                    png_b64_for_vlm = converted_png
-                    logger.info(f"{log_prefix} AVIF to PNG conversion successful.")
-                image_uri = f"data:image/png;base64,{png_b64_for_vlm}"
                 add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
                                 user_input=f"[VLM Desc Failed - Model Unavailable - {prompt_type}]",
                                 llm_response=error_msg)
@@ -4016,86 +4088,85 @@ class CortexThoughts:
             return None, error_msg
 
         try:
-            # 1. Convert PIL Image to base64 data URI for the VLM prompt
-            # Assuming image_b64 is already a valid base64 string from the user or previous step
-            image_uri = f"data:image/png;base64,{image_b64}" # Assuming PNG or similar
+            # --- 1. Prepare Image Bytes (Handle AVIF -> PNG) ---
+            image_bytes_for_processing: Optional[bytes] = None
+            png_b64_for_vlm: str = ""
 
-            # 2. Prepare the prompt based on type
-            vlm_prompt_text = ""
-            if prompt_type == "initial_description":
-                vlm_prompt_text = PROMPT_VLM_INITIAL_ANALYSIS # from CortexConfiguration.py
-            elif prompt_type == "describe_generated_image":
-                vlm_prompt_text = PROMPT_VLM_DESCRIBE_GENERATED_IMAGE # from CortexConfiguration.py
+            if is_avif:
+                logger.info(f"{log_prefix} Input is AVIF, converting to PNG for processing...")
+                converted_png_b64 = await asyncio.to_thread(self._convert_avif_to_png_b64, image_b64)
+                if not converted_png_b64:
+                    error_msg = "Failed to convert stored AVIF image to PNG for VLM analysis."
+                    logger.error(f"{log_prefix} {error_msg}")
+                    return None, error_msg
+                png_b64_for_vlm = converted_png_b64
+                logger.info(f"{log_prefix} AVIF to PNG conversion successful.")
             else:
-                logger.warning(f"{log_prefix}: Unknown prompt_type '{prompt_type}'. Using default description prompt.")
-                vlm_prompt_text = "Describe this image."
+                # The input is already in a VLM-compatible format (e.g., PNG from user upload)
+                png_b64_for_vlm = image_b64
 
-            # 3. Prepare the messages for the VLM (multi-modal input)
+            # Decode the final PNG base64 to bytes for the OCR step
+            image_bytes_for_processing = base64.b64decode(png_b64_for_vlm)
+
+            # --- 2. Stage 1: Run OCR ---
+            extracted_ocr_text = await self._extract_text_with_ocr_async(image_bytes_for_processing)
+
+            # --- 3. Stage 2: Call VLM with Augmented Prompt ---
+            logger.info(f"{log_prefix} Calling VLM with image and OCR data...")
+
+            image_uri = f"data:image/png;base64,{png_b64_for_vlm}"
+
+            # Use the augmented prompt from CortexConfiguration.py
+            vlm_prompt_text = PROMPT_VLM_AUGMENTED_ANALYSIS.format(ocr_text=extracted_ocr_text)
+
             image_content_part = {"type": "image_url", "image_url": {"url": image_uri}}
             text_content_part = {"type": "text", "text": vlm_prompt_text}
             vlm_messages = [HumanMessage(content=[image_content_part, text_content_part])]
 
-            # 4. Create the Langchain chain
             vlm_chain = vlm_model | StrOutputParser()
+            timing_data = {"session_id": session_id, "mode": f"vlm_ocr_description_{prompt_type}"}
 
-            # 5. Call the LLM (VLM) via the timing helper
-            timing_data = {"session_id": session_id, "mode": f"vlm_description_{prompt_type}", "execution_time_ms": 0}
-
-            # _call_llm_with_timing is synchronous, so wrap it for our async context
             response_text = await asyncio.to_thread(
-                self._call_llm_with_timing, # Use the CortexThoughts's internal LLM call helper
-                vlm_chain,
-                vlm_messages, # Pass messages directly as input to the model in the chain
-                timing_data,
-                priority=priority # Use the provided priority
+                self._call_llm_with_timing, vlm_chain, vlm_messages, timing_data, priority=priority
             )
 
-            # 6. Process the response
-            if response_text and not (isinstance(response_text, str) and "ERROR" in response_text.upper() and "TRACEBACK" in response_text.upper()):
+            # --- 4. Process and Return Result ---
+            if response_text and not (isinstance(response_text, str) and "ERROR" in response_text.upper()):
                 description_output = self._cleanup_llm_output(response_text.strip())
-                logger.trace(f"{log_prefix}: VLM description successful. Snippet: '{description_output[:100]}...'")
-                # Log success to DB
-                try:
-                    add_interaction(db, session_id=session_id, mode="chat", input_type="log_debug",
-                                    user_input=f"[VLM Desc Success - {prompt_type}]",
-                                    llm_response=f"VLM Desc ({prompt_type}): {description_output[:500]}")
-                except Exception as db_log_err:
-                    logger.error(f"Failed to log VLM success: {db_log_err}")
-                return description_output, None # Return description, no error
+                logger.success(f"{log_prefix}: VLM augmented description successful.")
+
+                # Log the OCR text along with the final description for full traceability
+                log_llm_response = f"OCR Text:\n---\n{extracted_ocr_text}\n---\n\nVLM Description:\n---\n{description_output[:2000]}"
+                await asyncio.to_thread(
+                    add_interaction, db, session_id=session_id, mode="chat", input_type="log_debug",
+                    user_input=f"[VLM+OCR Success - {prompt_type}]", llm_response=log_llm_response
+                )
+                return description_output, None
             else:
                 error_output = f"[VLM description call failed or returned error: {response_text}]"
                 logger.warning(f"{log_prefix} {error_output}")
-                # Log failure to DB
-                try:
-                    add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                                    user_input=f"[VLM Desc Failed - {prompt_type}]",
-                                    llm_response=error_output)
-                except Exception as db_log_err:
-                    logger.error(f"Failed to log VLM failure: {db_log_err}")
+                await asyncio.to_thread(
+                    add_interaction, db, session_id=session_id, mode="chat", input_type="log_error",
+                    user_input=f"[VLM Desc Failed - {prompt_type}]", llm_response=error_output
+                )
                 return None, error_output
 
         except TaskInterruptedException as tie:
             logger.warning(f"🚦 {log_prefix} VLM description INTERRUPTED: {tie}")
             error_output = "[VLM Description Interrupted]"
-            # Log interruption to DB
-            try:
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_warning",
-                                user_input=f"[VLM Desc Interrupted - {prompt_type}]",
-                                llm_response=str(tie))
-            except Exception as db_log_err:
-                logger.error(f"Failed to log VLM interruption: {db_log_err}")
-            raise # Re-raise to propagate interruption
+            await asyncio.to_thread(
+                add_interaction, db, session_id=session_id, mode="chat", input_type="log_warning",
+                user_input=f"[VLM Desc Interrupted - {prompt_type}]", llm_response=str(tie)
+            )
+            raise  # Re-raise to propagate interruption
 
         except Exception as e:
-            logger.error(f"{log_prefix} VLM description call failed: {e}", exc_info=True)
-            error_output = f"[VLM Description Error: {type(e).__name__} - {str(e)[:100]}]"
-            # Log general error to DB
-            try:
-                add_interaction(db, session_id=session_id, mode="chat", input_type="log_error",
-                                user_input=f"[VLM Desc Error - {prompt_type}]",
-                                llm_response=error_output)
-            except Exception as db_log_err:
-                logger.error(f"Failed to log VLM error: {db_log_err}")
+            logger.error(f"{log_prefix} VLM/OCR pipeline failed: {e}", exc_info=True)
+            error_output = f"[VLM/OCR Pipeline Error: {type(e).__name__}]"
+            await asyncio.to_thread(
+                add_interaction, db, session_id=session_id, mode="chat", input_type="log_error",
+                user_input=f"[VLM/OCR Desc Error - {prompt_type}]", llm_response=str(e)
+            )
             return None, error_output
 
     
@@ -5152,7 +5223,8 @@ class CortexThoughts:
                             "input": current_input_for_analysis, "recent_direct_history": direct_hist_prompt_final,
                             "context": url_context_str, "history_rag": history_rag_str,
                             "file_index_context": vec_file_ctx_result_str, "log_context": log_ctx_prompt_final,
-                            "emotion_analysis": emotion_analysis_str_final, "pending_tot_result": "None."
+                            "emotion_analysis": emotion_analysis_str_final, "pending_tot_result": "None.",
+                            "imagined_image_vlm_description": interaction_data.get('imagined_image_vlm_description', 'None.')
                         }
                         role, query, reason = await self._route_to_specialist(db, session_id,
                                                                               current_input_for_analysis,
@@ -6705,7 +6777,7 @@ async def _get_and_process_proactive_interaction():
         })
         
         if "yes" not in decision.lower():
-            logger.info("💡 AI decided not to revisit this interaction.")
+            logger.info(f"💡 AI decided not to revisit this interaction. verb: {decision.lower()}")
             return None
 
         # 3. Another Blocking LLM Call

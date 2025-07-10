@@ -39,12 +39,14 @@
 - [x] Self Learning iterative global vectoring. (There's better alternative probably, Darwin-Godel Machine by Sakana AI if you want more professional ready to use cloud version setup and being supported by multi institution)
 - [x] Initial Flight Interface
 - [x] I/O Swappable KV Shared Cache/State (LLM/VLM Qwen2.5) (for more serialized faster loading model swapping)
+- [x] Implementing Self writing StellaIcarus realtime hook response for ELP1 on Python code.
+
 
 #### High Priority
-
 - [ ] Implementing Multi-stage Decomposition Append Response ELP1.
-- [ ] Implementing Self writing StellaIcarus realtime hook response for ELP1 on Ada and Python code.
+- [ ] Implementing Self writing StellaIcarus realtime hook response for ELP1 on Ada code using alire.
 - [ ] Building Zephy Spell Moral Compass. ELP0 Vector building
+- [ ] Hardened runtime self data Parity correction against Intense radiation corruption using par2 and memory integrity operational check
 - [ ] I/O Swappable state for Tensor State for other Models for TTS and STT and Stable Diffusion?
 - [ ] Paper Referencing Listing to prepare publication
 - [ ] Redraw Zephy by Hand instead of AI generated.
