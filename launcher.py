@@ -969,6 +969,132 @@ def _verify_conda_path(conda_path_to_verify):
     return False
 
 
+def _install_miniforge() -> Optional[str]:
+    """
+    Downloads and installs Miniforge silently if Conda is not found.
+    The installation is self-contained within the project directory.
+
+    Returns:
+        The path to the newly installed conda executable, or None on failure.
+    """
+    print_warning("--- Conda Not Found: Initiating Miniforge Auto-Installation ---")
+
+    try:
+        import platform
+        import urllib.request
+    except ImportError as e:
+        print_error(f"Missing essential built-in modules for installation: {e}")
+        return None
+
+    # --- 1. Determine OS, Architecture, and Installer Details ---
+    os_name = platform.system()
+    machine_arch = platform.machine()
+
+    installer_filename = ""
+    install_path = os.path.join(ROOT_DIR, "miniforge3_local")
+
+    if os_name == "Linux":
+        py_os = "Linux"
+        py_arch = "x86_64" if "x86_64" in machine_arch else "aarch64"
+        installer_filename = f"Miniforge3-{py_os}-{py_arch}.sh"
+    elif os_name == "Darwin":  # macOS
+        py_os = "MacOSX"
+        py_arch = "x86_64" if "x86_64" in machine_arch else "arm64"  # Note: arm64 for macOS
+        installer_filename = f"Miniforge3-{py_os}-{py_arch}.sh"
+    elif os_name == "Windows":
+        py_os = "Windows"
+        py_arch = "x86_64"
+        installer_filename = f"Miniforge3-{py_os}-{py_arch}.exe"
+    else:
+        print_error(f"Unsupported Operating System for auto-installation: {os_name}")
+        return None
+
+    download_url = f"https://github.com/conda-forge/miniforge/releases/latest/download/{installer_filename}"
+    installer_local_path = os.path.join(ROOT_DIR, installer_filename)
+
+    # --- 2. Download the Installer ---
+    print_system(f"Downloading Miniforge installer for {py_os}-{py_arch}...")
+    print_system(f"  from: {download_url}")
+    print_system(f"  to:   {installer_local_path}")
+
+    try:
+        with urllib.request.urlopen(download_url) as response, open(installer_local_path, 'wb') as out_file:
+            total_size = int(response.info().get('Content-Length', 0))
+            bytes_so_far = 0
+            chunk_size = 8192
+
+            while True:
+                chunk = response.read(chunk_size)
+                if not chunk:
+                    break
+                out_file.write(chunk)
+                bytes_so_far += len(chunk)
+
+                if total_size > 0:
+                    percent = float(bytes_so_far) / total_size * 100
+                    # Simple text progress bar
+                    sys.stdout.write(
+                        f"\r  Progress: [{int(percent / 5) * '#'}{int(20 - percent / 5) * ' '}] {percent:.1f}%")
+                    sys.stdout.flush()
+        print("\nDownload complete.")
+    except Exception as e:
+        print_error(f"\nFailed to download Miniforge installer: {e}")
+        if os.path.exists(installer_local_path):
+            os.remove(installer_local_path)
+        return None
+
+    # --- 3. Run the Installer Silently ---
+    print_system(f"Installing Miniforge to local directory: {install_path}")
+    if os.path.exists(install_path):
+        print_warning(f"Removing existing local installation at: {install_path}")
+        shutil.rmtree(install_path)
+
+    try:
+        if os_name in ["Linux", "Darwin"]:
+            # Make installer executable and run it
+            os.chmod(installer_local_path, 0o755)
+            install_cmd = ["/bin/bash", installer_local_path, "-b", "-p", install_path]
+            subprocess.run(install_cmd, check=True, capture_output=True, text=True)
+        elif os_name == "Windows":
+            # Run silent installer
+            install_cmd = [
+                installer_local_path,
+                "/S",  # Silent mode
+                "/InstallationType=JustMe",
+                "/RegisterPython=0",  # Do NOT register as default python
+                f"/D={install_path}"  # Install directory
+            ]
+            # Use start /wait behavior
+            subprocess.run(install_cmd, check=True, capture_output=True, text=True)
+
+        print_system("✅ Miniforge installed successfully.")
+    except subprocess.CalledProcessError as e:
+        print_error("Miniforge installation failed.")
+        print_error(f"Return Code: {e.returncode}")
+        print_error(f"Stdout: {e.stdout}")
+        print_error(f"Stderr: {e.stderr}")
+        return None
+    except Exception as e:
+        print_error(f"An unexpected error occurred during installation: {e}")
+        return None
+    finally:
+        # --- 4. Clean up the installer file ---
+        if os.path.exists(installer_local_path):
+            print_system(f"Cleaning up installer: {installer_local_path}")
+            os.remove(installer_local_path)
+
+    # --- 5. Return the path to the new conda executable ---
+    if os_name == "Windows":
+        conda_exe_path = os.path.join(install_path, "Scripts", "conda.exe")
+    else:  # Linux/macOS
+        conda_exe_path = os.path.join(install_path, "bin", "conda")
+
+    if os.path.exists(conda_exe_path):
+        return conda_exe_path
+    else:
+        print_error(f"Installation seemed to succeed, but conda executable not found at: {conda_exe_path}")
+        return None
+
 def find_conda_executable():
     global CONDA_EXECUTABLE
 
@@ -2274,6 +2400,7 @@ def _ensure_alire_and_gnat_toolchain():
     return True
 
 
+
 def _check_and_repair_conda_env(env_path: str) -> bool:
     """
     Runs `conda doctor` on the specified environment and triggers a repair if needed.
@@ -3374,9 +3501,23 @@ if __name__ == "__main__":
             autodetected_build_env_vars = _detect_and_prepare_acceleration_env_vars()
 
             if not find_conda_executable():
-                print_error("Conda executable not located. Exiting.")
-                _remove_flag_files(FLAG_FILES_TO_RESET_ON_ENV_RECREATE)
-                setup_failures.append(f"Weird, how did we get here? Conda executable not located. Exiting.")
+                # --- NEW LOGIC: AUTO-INSTALL MINIFORGE ---
+                newly_installed_conda_path = _install_miniforge()
+                if newly_installed_conda_path:
+                    print_system(f"Miniforge auto-installation successful. Using new executable.")
+                    CONDA_EXECUTABLE = newly_installed_conda_path  # Set the global variable directly
+                    # Write to cache so the relaunched script can find it easily
+                    try:
+                        with open(CONDA_PATH_CACHE_FILE, 'w', encoding='utf-8') as f_cache:
+                            f_cache.write(CONDA_EXECUTABLE)
+                        print_system(f"Cached new Conda path: {CONDA_EXECUTABLE}")
+                    except IOError as e_cache_write:
+                        print_warning(f"Could not write to Conda path cache file: {e_cache_write}")
+                else:
+                    print_error("Automated Miniforge installation failed.")
+                    print_error("Please install Miniconda or Miniforge manually and ensure 'conda' is in your PATH.")
+                    setup_failures.append(f"Miniforge failure not found and auto-install failed.")
+                    # This will cause the retry loop to fail and the script to exit.
             print_system(f"Using Conda executable: {CONDA_EXECUTABLE}")
 
             # Run the health check on the existing environment before proceeding.
