@@ -969,16 +969,233 @@ def _verify_conda_path(conda_path_to_verify):
     return False
 
 
-def _install_miniforge() -> Optional[str]:
+def _find_shell_executable() -> Optional[str]:
+    """
+    Finds a suitable shell executable on non-Windows systems.
+    It checks for 'bash', then 'sh', then 'ash' in the system's PATH.
+
+    Returns:
+        The absolute path to the first shell found, or None if none are found.
+    """
+    print_system("Searching for a suitable shell (bash, sh, ash)...")
+    # A prioritized list of shells to search for.
+    # Bash is often preferred if available, but sh is the most portable.
+    shells_to_try = ["bash", "sh", "ash"]
+    for shell in shells_to_try:
+        # shutil.which is the correct, cross-platform way to find an executable in the PATH.
+        found_path = shutil.which(shell)
+        if found_path:
+            print_system(f"Found shell: {found_path}")
+            return found_path
+
+    print_error("Could not find a suitable shell (bash, sh, or ash) in the system's PATH.")
+    return None
+
+
+def _handle_android_become_smartphone_setup() -> None:
+    """
+    Handles the fully automated setup of a proot-distro environment on Termux.
+    It creates a resumable, one-time execution script in .bashrc that first
+    sanitizes the build environment, injects compiler flags to prevent build
+    failures, builds the custom graphics stack, and finally executes the launcher.
+    This function does not return, as it replaces the current process.
+    """
+    PROOT_ALIAS = "zephyglibccompatlayer"
+    MAX_PROOT_INSTALL_ATTEMPTS = 3
+
+    # --- The Easter Egg ---
+    print_colored("WARNING", "Ah hell, manual compilation. What's the difference with this and using Gentoo?",
+                  "WARNING")
+    print_colored("SYSTEM", "Right, this one has no Manual... AAAAA", "SYSTEM")
+    time.sleep(2)
+    print_colored("SYSTEM", "--- Starting Fully Automated Smartphone Super-User Setup ---", "SUCCESS")
+
+    # 1. Ensure proot-distro is installed via pkg
+    print_system("Checking for 'proot-distro' package...")
+    proot_distro_path = shutil.which("proot-distro")
+    if not proot_distro_path:
+        print_warning("'proot-distro' not found. Attempting to install with 'pkg'...")
+        try:
+            subprocess.run(["pkg", "update", "-y"], check=True, capture_output=True)
+            subprocess.run(["pkg", "install", "proot-distro", "-y"], check=True)
+            proot_distro_path = shutil.which("proot-distro")
+            if not proot_distro_path:
+                raise RuntimeError("pkg install seemed to succeed, but 'proot-distro' is still not in PATH.")
+            print_system("✅ 'proot-distro' installed successfully.")
+        except Exception as e:
+            print_error(f"Failed to install 'proot-distro': {e}")
+            if isinstance(e, subprocess.CalledProcessError):
+                print_error(f"Stderr: {e.stderr.decode(errors='ignore')}")
+            print_error("Please install it manually ('pkg install proot-distro') and restart.")
+            sys.exit(1)
+
+    # 2. Reliably find the base path for proot-distro root filesystems
+    prefix = os.environ.get("PREFIX", "/data/data/com.termux/files/usr")
+    distro_base_path = os.path.join(prefix, "var/lib/proot-distro/installed-rootfs")
+    distro_fs_path = os.path.join(distro_base_path, PROOT_ALIAS)
+
+    # 3. Ensure the Ubuntu distribution is fully installed
+    print_system(f"Checking for proot-distro environment at: {distro_fs_path}")
+    if not os.path.isdir(distro_fs_path):
+        install_successful = False
+        for attempt in range(1, MAX_PROOT_INSTALL_ATTEMPTS + 1):
+            print_warning(
+                f"Distro '{PROOT_ALIAS}' not found or incomplete. Installing (Attempt {attempt}/{MAX_PROOT_INSTALL_ATTEMPTS})...")
+            print_system(f"Performing pre-install reset: Removing '{PROOT_ALIAS}'...")
+            subprocess.run([proot_distro_path, "remove", PROOT_ALIAS], check=False, capture_output=True)
+            print_system("Reset complete.")
+            print_warning("This will download the Ubuntu rootfs and may take a long time.")
+            try:
+                install_cmd = [proot_distro_path, "install", "ubuntu", "--override-alias", PROOT_ALIAS]
+                subprocess.run(install_cmd, check=True, capture_output=True)
+                print_system(f"✅ Ubuntu distro '{PROOT_ALIAS}' installed successfully.")
+                install_successful = True
+                break
+            except subprocess.CalledProcessError as e:
+                print_error(f"Installation attempt {attempt} failed: {e.stderr.decode(errors='ignore').strip()}")
+                if attempt < MAX_PROOT_INSTALL_ATTEMPTS:
+                    print_warning("Retrying in 5 seconds...")
+                    time.sleep(5)
+        if not install_successful:
+            print_error(f"Failed to install proot-distro environment after {MAX_PROOT_INSTALL_ATTEMPTS} attempts.")
+            sys.exit(1)
+    else:
+        print_system(f"Found existing and valid distro directory: '{PROOT_ALIAS}'.")
+
+    # 4. OVERWRITE the .bashrc inside the proot environment with our build script
+    print_system("Generating and writing one-time build script to proot environment...")
+    try:
+        bashrc_path = os.path.join(distro_fs_path, "root", ".bashrc")
+
+        # This comprehensive shell script is the new .bashrc.
+        auto_exec_script = f"""#!/bin/bash
+# This is a one-time execution script generated by the Zephyrine Launcher.
+set -e
+
+# --- Step 0: CRITICAL Environment Sanitization and Configuration ---
+echo "--> Sanitizing build environment to prevent contamination from Termux..."
+unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH CFLAGS CXXFLAGS LDFLAGS
+export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
+
+# Apply compiler flags to disable specific errors that halt the build.
+echo "--> Applying compiler flags to work around implicit declaration errors..."
+export CFLAGS="-Wno-error=implicit-function-declaration"
+export CXXFLAGS="-Wno-error=implicit-function-declaration"
+
+echo "--- Zephyrine Proot Setup: Starting environment build ---"
+
+# --- Step 1: Update system and install essential build packages ---
+echo "--> Updating package lists and installing dependencies..."
+export DEBIAN_FRONTEND=noninteractive
+apt-get update
+apt-get upgrade -y
+apt-get install -y build-essential ca-certificates cmake git meson ninja-build pkg-config python3-pip libvulkan-dev libudev-dev
+
+# --- Step 2: Robustly enable source repositories and install Mesa build deps ---
+echo "--> Enabling source repositories for 'apt-get build-dep'..."
+SOURCES_FILE="/etc/apt/sources.list.d/zephyrine-mesa-build.list"
+grep -v '^#' /etc/apt/sources.list | sed -e 's/^deb /deb-src /' > "$SOURCES_FILE"
+apt-get update
+echo "--> Installing Mesa build dependencies..."
+apt-get build-dep mesa -y
+
+# --- Step 3: Clone or update the official Mesa repository ---
+echo "--> Cloning or updating official Mesa repository..."
+cd /root
+if [ -d "mesa-build" ]; then
+    echo "--> 'mesa-build' directory found. Updating repository..."
+    cd mesa-build
+    git reset --hard HEAD
+    git pull
+else
+    echo "--> 'mesa-build' directory not found. Cloning repository..."
+    git clone --depth 1 https://gitlab.freedesktop.org/mesa/mesa.git mesa-build
+    cd mesa-build
+fi
+
+# --- Step 4: Detect CPU and build GPU-specific Vulkan drivers ---
+echo "--> Detecting CPU for custom graphics driver build..."
+if [ -d "build" ]; then
+    echo "--> Found stale build directory. Removing for a clean configuration."
+    rm -rf build
+fi
+
+BASE_MESON_ARGS="-D platforms=x11,wayland -D egl=enabled -D gles2=enabled -D glx=dri -D cpp_rtti=false --prefix /usr --buildtype=release"
+CPU_INFO_FILE="/proc/cpuinfo"
+
+if grep -q -E "CPU implementer\\s*:\\s*0x51" "$CPU_INFO_FILE" || \\
+   (grep -q -E "CPU implementer\\s*:\\s*0x41" "$CPU_INFO_FILE" && grep -q -E "CPU part\\s*:\\s*(0xd0[3458cd]|0xd4[0-8]|0xd81)" "$CPU_INFO_FILE"); then
+    echo "--> Snapdragon (Qualcomm) hardware detected. Building Mesa with Freedreno/Turnip..."
+    meson setup build $BASE_MESON_ARGS -D vulkan-drivers=freedreno -D gallium-drivers=freedreno,zink,virgl -D freedreno-kgsl=true -D valgrind=disabled
+elif grep -q -iE "mediatek|exynos" "$CPU_INFO_FILE"; then
+    echo "--> Mediatek or Exynos hardware detected. Building Mesa with Panfrost driver..."
+    meson setup build $BASE_MESON_ARGS -D vulkan-drivers=panfrost -D gallium-drivers=panfrost,zink,virgl
+else
+    echo "--> Generic or unknown hardware detected. Building Mesa with auto-detected drivers..."
+    meson setup build $BASE_MESON_ARGS -D vulkan-drivers=auto -D gallium-drivers=auto
+fi
+
+# --- Step 5: Compile and install the custom Mesa build ---
+echo "--> Compiling and installing custom Mesa build... (This will take a long time)"
+ninja -C build install
+
+echo "--- Zephyrine Proot Setup: Environment build complete! ---"
+
+# --- Step 6: Restore a clean .bashrc and execute the launcher ---
+echo "--> Restoring .bashrc and launching application..."
+echo 'export PS1="[\\\\u@\\\\h \\\\W]\\\\$ "' > ~/.bashrc
+if [ -n "$ZEPHYRINE_LAUNCH_DIR" ]; then
+    cd "$ZEPHYRINE_LAUNCH_DIR"
+    python3 launcher.py
+fi
+
+# --- Final Step: Exit the shell after the launcher finishes ---
+echo "--- Zephyrine Launcher: Proot execution finished. Exiting shell. ---"
+exit $?
+"""
+        with open(bashrc_path, "w", encoding="utf-8") as f:
+            f.write(auto_exec_script)
+        os.chmod(bashrc_path, 0o755)
+
+        print_system("✅ Proot environment configured for build and execution.")
+
+    except Exception as e:
+        print_error(f"Failed to write build script to proot environment: {e}")
+        traceback.print_exc()
+        sys.exit(1)
+
+    # 5. Re-execute the script inside the proot environment
+    print_colored("SYSTEM", "--- Relaunching inside glibc Compatibility Layer for Build ---", "SUCCESS")
+    relaunch_env = os.environ.copy()
+    relaunch_env["ZEPHYRINE_LAUNCH_DIR"] = ROOT_DIR
+    proot_distro_path = shutil.which("proot-distro")
+    relaunch_cmd = [proot_distro_path, "login", PROOT_ALIAS]
+    try:
+        os.execve(relaunch_cmd[0], relaunch_cmd, relaunch_env)
+    except Exception as e:
+        print_error(f"FATAL: Failed to execve into proot-distro: {e}")
+        print_error("Your environment is likely set up. Please try running manually:")
+        print_colored("COMMAND", f"proot-distro login {PROOT_ALIAS}", "SUCCESS")
+        sys.exit(1)
+
+def _install_miniforge_and_check_overall_environment() -> Optional[str]:
     """
     Downloads and installs Miniforge silently if Conda is not found.
-    The installation is self-contained within the project directory.
+    This version correctly handles different C libraries and environments by delegating
+    or providing specific instructions.
 
     Returns:
         The path to the newly installed conda executable, or None on failure.
     """
-    print_warning("--- Conda Not Found: Initiating Miniforge Auto-Installation ---")
+    # === Termux (Android) Special Handling ===
+    if "TERMUX_VERSION" in os.environ:
+        _handle_android_become_smartphone_setup()
+        # The above function either exits or replaces the process, so we should never get here.
+        # But as a safeguard, we return None to indicate failure to proceed.
+        return None
 
+    # --- Standard Installation for non-Termux systems ---
+    print_warning("--- Conda Not Found: Initiating Miniforge Auto-Installation ---")
     try:
         import platform
         import urllib.request
@@ -986,20 +1203,37 @@ def _install_miniforge() -> Optional[str]:
         print_error(f"Missing essential built-in modules for installation: {e}")
         return None
 
-    # --- 1. Determine OS, Architecture, and Installer Details ---
     os_name = platform.system()
     machine_arch = platform.machine()
-
     installer_filename = ""
     install_path = os.path.join(ROOT_DIR, "miniforge3_local")
 
     if os_name == "Linux":
-        py_os = "Linux"
         py_arch = "x86_64" if "x86_64" in machine_arch else "aarch64"
+        is_musl = False
+        try:
+            libc_name, _ = platform.libc_ver()
+            if 'musl' in libc_name.lower(): is_musl = True
+        except Exception:
+            if os.path.exists(f"/lib/ld-musl-{py_arch}.so.1"): is_musl = True
+
+        if is_musl:
+            print_warning("Detected 'musl' C library (e.g., Alpine Linux). Checking for glibc compatibility layer...")
+            if not os.path.exists("/lib/libgcompat.so.0"):
+                print_colored("ERROR", "------------------ ACTION REQUIRED (Alpine/musl) ------------------", "ERROR")
+                print_error("This 'musl'-based system requires a compatibility layer to run Miniforge.")
+                print_system("Please run the following command with root privileges, then restart this launcher:")
+                print_colored("COMMAND", "    sudo apk add gcompat", "SUCCESS")
+                print_colored("ERROR", "-------------------------------------------------------------------", "ERROR")
+                return None
+            else:
+                print_system("Found 'gcompat' compatibility layer. Proceeding with standard installer.")
+        py_os = "Linux"
         installer_filename = f"Miniforge3-{py_os}-{py_arch}.sh"
+
     elif os_name == "Darwin":  # macOS
         py_os = "MacOSX"
-        py_arch = "x86_64" if "x86_64" in machine_arch else "arm64"  # Note: arm64 for macOS
+        py_arch = "x86_64" if "x86_64" in machine_arch else "arm64"
         installer_filename = f"Miniforge3-{py_os}-{py_arch}.sh"
     elif os_name == "Windows":
         py_os = "Windows"
@@ -1012,11 +1246,10 @@ def _install_miniforge() -> Optional[str]:
     download_url = f"https://github.com/conda-forge/miniforge/releases/latest/download/{installer_filename}"
     installer_local_path = os.path.join(ROOT_DIR, installer_filename)
 
-    # --- 2. Download the Installer ---
+    # Download logic
     print_system(f"Downloading Miniforge installer for {py_os}-{py_arch}...")
     print_system(f"  from: {download_url}")
     print_system(f"  to:   {installer_local_path}")
-
     try:
         with urllib.request.urlopen(download_url) as response, open(installer_local_path, 'wb') as out_file:
             total_size = int(response.info().get('Content-Length', 0))
@@ -1025,75 +1258,63 @@ def _install_miniforge() -> Optional[str]:
 
             while True:
                 chunk = response.read(chunk_size)
-                if not chunk:
-                    break
+                if not chunk: break
                 out_file.write(chunk)
                 bytes_so_far += len(chunk)
-
                 if total_size > 0:
                     percent = float(bytes_so_far) / total_size * 100
-                    # Simple text progress bar
                     sys.stdout.write(
                         f"\r  Progress: [{int(percent / 5) * '#'}{int(20 - percent / 5) * ' '}] {percent:.1f}%")
                     sys.stdout.flush()
         print("\nDownload complete.")
     except Exception as e:
         print_error(f"\nFailed to download Miniforge installer: {e}")
-        if os.path.exists(installer_local_path):
-            os.remove(installer_local_path)
+        if os.path.exists(installer_local_path): os.remove(installer_local_path)
         return None
 
-    # --- 3. Run the Installer Silently ---
+    # Installation logic
     print_system(f"Installing Miniforge to local directory: {install_path}")
     if os.path.exists(install_path):
         print_warning(f"Removing existing local installation at: {install_path}")
         shutil.rmtree(install_path)
-
     try:
         if os_name in ["Linux", "Darwin"]:
-            # Make installer executable and run it
+            shell_executable = _find_shell_executable()
+            if not shell_executable: raise RuntimeError("Installation failed: No suitable shell found.")
             os.chmod(installer_local_path, 0o755)
-            install_cmd = ["/bin/bash", installer_local_path, "-b", "-p", install_path]
+            install_cmd = [shell_executable, installer_local_path, "-b", "-p", install_path]
             subprocess.run(install_cmd, check=True, capture_output=True, text=True)
         elif os_name == "Windows":
-            # Run silent installer
-            install_cmd = [
-                installer_local_path,
-                "/S",  # Silent mode
-                "/InstallationType=JustMe",
-                "/RegisterPython=0",  # Do NOT register as default python
-                f"/D={install_path}"  # Install directory
-            ]
-            # Use start /wait behavior
+            install_cmd = [installer_local_path, "/S", "/InstallationType=JustMe", "/RegisterPython=0",
+                           f"/D={install_path}"]
             subprocess.run(install_cmd, check=True, capture_output=True, text=True)
-
         print_system("✅ Miniforge installed successfully.")
-    except subprocess.CalledProcessError as e:
+    except (subprocess.CalledProcessError, RuntimeError) as e:
         print_error("Miniforge installation failed.")
-        print_error(f"Return Code: {e.returncode}")
-        print_error(f"Stdout: {e.stdout}")
-        print_error(f"Stderr: {e.stderr}")
-        return None
-    except Exception as e:
-        print_error(f"An unexpected error occurred during installation: {e}")
+        if isinstance(e, subprocess.CalledProcessError):
+            print_error(f"Return Code: {e.returncode}")
+            if e.stdout: print_error(f"Stdout: {e.stdout.strip()}")
+            if e.stderr: print_error(f"Stderr: {e.stderr.strip()}")
+        else:
+            print_error(f"Reason: {e}")
         return None
     finally:
-        # --- 4. Clean up the installer file ---
         if os.path.exists(installer_local_path):
             print_system(f"Cleaning up installer: {installer_local_path}")
             os.remove(installer_local_path)
 
-    # --- 5. Return the path to the new conda executable ---
+    # Return path logic
     if os_name == "Windows":
         conda_exe_path = os.path.join(install_path, "Scripts", "conda.exe")
-    else:  # Linux/macOS
+    else:
         conda_exe_path = os.path.join(install_path, "bin", "conda")
-
     if os.path.exists(conda_exe_path):
         return conda_exe_path
     else:
         print_error(f"Installation seemed to succeed, but conda executable not found at: {conda_exe_path}")
         return None
+
+
 
 def find_conda_executable():
     global CONDA_EXECUTABLE
@@ -3501,23 +3722,33 @@ if __name__ == "__main__":
             autodetected_build_env_vars = _detect_and_prepare_acceleration_env_vars()
 
             if not find_conda_executable():
-                # --- NEW LOGIC: AUTO-INSTALL MINIFORGE ---
-                newly_installed_conda_path = _install_miniforge()
+                newly_installed_conda_path = _install_miniforge_and_check_overall_environment()
                 if newly_installed_conda_path:
-                    print_system(f"Miniforge auto-installation successful. Using new executable.")
-                    CONDA_EXECUTABLE = newly_installed_conda_path  # Set the global variable directly
-                    # Write to cache so the relaunched script can find it easily
-                    try:
+                    print_system("Miniforge auto-installation successful. Using new executable.")
+                    # The find_conda_executable() function already sets the global CONDA_EXECUTABLE
+                    # and caches the path, but we can re-set it here for absolute certainty.
+                    CONDA_EXECUTABLE = newly_installed_conda_path
+                    try:  # Ensure the cache is written with the newly installed path
                         with open(CONDA_PATH_CACHE_FILE, 'w', encoding='utf-8') as f_cache:
                             f_cache.write(CONDA_EXECUTABLE)
                         print_system(f"Cached new Conda path: {CONDA_EXECUTABLE}")
                     except IOError as e_cache_write:
                         print_warning(f"Could not write to Conda path cache file: {e_cache_write}")
                 else:
+                    # If installation fails, we MUST mark this attempt as a failure and stop.
                     print_error("Automated Miniforge installation failed.")
-                    print_error("Please install Miniconda or Miniforge manually and ensure 'conda' is in your PATH.")
-                    setup_failures.append(f"Miniforge failure not found and auto-install failed.")
-                    # This will cause the retry loop to fail and the script to exit.
+                    print_error(
+                        "Please try installing Miniconda or Miniforge manually and ensure 'conda' is in your PATH.")
+                    setup_failures.append("Conda not found and auto-install failed.")
+                    # Continue to the end of the loop to trigger the retry/failure logic
+                    continue
+
+                # At this point, CONDA_EXECUTABLE *must* be set. If not, something is fundamentally wrong.
+            if not CONDA_EXECUTABLE:
+                print_error("CRITICAL: Conda executable is not set after search and install attempts.")
+                setup_failures.append("Failed to find or install a Conda executable.")
+                continue  # Skip to the next attempt
+
             print_system(f"Using Conda executable: {CONDA_EXECUTABLE}")
 
             # Run the health check on the existing environment before proceeding.
