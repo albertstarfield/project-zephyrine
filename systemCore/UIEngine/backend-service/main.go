@@ -66,7 +66,7 @@ func loadConfig() (*Config, error) {
 	tempStr := getEnv("LLM_TEMPERATURE", "0.7")
 	topCapStr := getEnv("LLM_TOPCAP_TOKENS", "2048")
 	topPStr := getEnv("LLM_TOP_P", "1.0")
-	llmNotificationURL := getEnv("LLM_NOTIFICATION_URL", "") // <-- ADD THIS. Default to empty string to make it optional.
+	llmNotificationURL := getEnv("LLM_NOTIFICATION_URL", "http://localhost:11434/v1/chat/notification") // <-- ADD THIS. Default to empty string to make it optional.
 
 	temp, err := strconv.ParseFloat(tempStr, 32)
 	if err != nil {

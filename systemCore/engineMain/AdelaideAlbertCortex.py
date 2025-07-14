@@ -148,15 +148,6 @@ from langchain.text_splitter import RecursiveCharacterTextSplitter
 
 # --- END PROVIDER IMPORTS ---
 
-# --- XMPP Imports ---
-import aioxmpp
-import aioxmpp.service
-import aioxmpp.chatstates
-from aioxmpp import stanza as Stanza
-from aioxmpp import JID, Message
-import slixmpp
-
-
 
 # --- Fuzzy Search Imports ---
 try:
