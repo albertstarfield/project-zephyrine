@@ -615,11 +615,26 @@ def _remove_flag_files(flags_to_remove: list):
 def run_command(command, cwd, name, color=None, check=True, capture_output=False, env_override=None):
     log_name_prefix = name if name else os.path.basename(command[0])
     print_system(f"Running command in '{os.path.basename(cwd)}' for '{log_name_prefix}': {' '.join(command)}")
-    current_env = os.environ.copy()
+    # Manually construct the environment to ensure Conda's paths are prioritized.
+    env = os.environ.copy()
+
+    conda_bin_path = os.path.dirname(PYTHON_EXECUTABLE)
+    conda_lib_path = os.path.join(TARGET_CONDA_ENV_PATH, "lib")
+
+    # Force Conda's bin directory to be at the front of the PATH
+    env['PATH'] = f"{conda_bin_path}{os.pathsep}{env.get('PATH', '')}"
+
+    # Force Conda's lib directory to be at the front of the linker path
+    if platform.system() == "Linux":
+        env['LD_LIBRARY_PATH'] = f"{conda_lib_path}{os.pathsep}{env.get('LD_LIBRARY_PATH', '')}"
+    elif platform.system() == "Darwin":  # macOS
+        env['DYLD_LIBRARY_PATH'] = f"{conda_lib_path}{os.pathsep}{env.get('DYLD_LIBRARY_PATH', '')}"
+
+    # Apply any specific overrides from the caller *after* setting our base env
     if env_override:
         str_env_override = {k: str(v) for k, v in env_override.items()}
         print_system(f"  with custom env for '{log_name_prefix}': {str_env_override}")
-        current_env.update(str_env_override)
+        env.update(str_env_override)
 
     command = [str(c) for c in command]
     use_shell = False
@@ -631,7 +646,7 @@ def run_command(command, cwd, name, color=None, check=True, capture_output=False
         process = subprocess.Popen(
             command, cwd=cwd, stdout=subprocess.PIPE, stderr=subprocess.PIPE,
             text=True, encoding='utf-8', errors='replace', bufsize=1,
-            shell=use_shell, env=current_env
+            shell=use_shell, env=env
         )
 
         stdout_thread = threading.Thread(target=stream_output, args=(process.stdout, f"{log_name_prefix}-OUT"),
@@ -995,13 +1010,34 @@ def _find_shell_executable() -> Optional[str]:
 def _handle_android_become_smartphone_setup() -> None:
     """
     Handles the fully automated setup of a proot-distro environment on Termux.
-    It creates a resumable, one-time execution script in .bashrc that first
-    sanitizes the build environment, injects compiler flags to prevent build
-    failures, builds the custom graphics stack, and finally executes the launcher.
+    It creates a resumable, one-time execution script in .bashrc that provides
+    critical user warnings, sanitizes the build environment, installs a comprehensive
+    set of dependencies, builds a custom graphics stack, and finally executes the launcher.
     This function does not return, as it replaces the current process.
     """
     PROOT_ALIAS = "zephyglibccompatlayer"
     MAX_PROOT_INSTALL_ATTEMPTS = 3
+
+    # --- Step -1: CRITICAL User Warning ---
+    print_colored("ERROR", "---------- CRITICAL SMARTPHONE USAGE WARNING ----------", "ERROR")
+    print_warning("Running this application on a standard smartphone is NOT RECOMMENDED.")
+    print_system("This entire process can consume over 5.69 GB of RAM and significant processing time.")
+    print_system("Smartphones are consumer devices designed for media consumption and doomscrolling;")
+    print_system("they are not designed to be locally and independently 'smart'. Remember that You own nothing and be happy.")
+    print_error("The Android OS is EXTREMELY AGGRESSIVE in killing background processes (SIGKILL 9) to save resources.")
+    print_warning("A device with 12GB of RAM or more is highly recommended for a chance of success.")
+    print_warning("An unlocked bootloader (superuser/root) is recommended to properly disable these limitations.")
+    print_colored("ERROR", "---------------------------------------------------------", "ERROR")
+    print_colored("SYSTEM", "--- RECOMMENDED ACTION TO PREVENT RANDOM KILLS ---", "SYSTEM")
+    print_system("To disable Android's 'Phantom Process Killer', run these commands via ADB from a PC:")
+    print_colored("COMMAND", '    adb shell "/system/bin/device_config set_sync_disabled_for_tests persistent"',
+                  "SUCCESS")
+    print_colored("COMMAND",
+                  '    adb shell "/system/bin/device_config put activity_manager max_phantom_processes 2147483647"',
+                  "SUCCESS")
+    print_colored("COMMAND", '    adb shell settings put global settings_enable_monitor_phantom_procs false', "SUCCESS")
+    print_system("\nPausing for 10 seconds. Press Ctrl+C to abort if your device is not prepared...")
+    time.sleep(10)
 
     # --- The Easter Egg ---
     print_colored("WARNING", "Ah hell, manual compilation. What's the difference with this and using Gentoo?",
@@ -1048,7 +1084,7 @@ def _handle_android_become_smartphone_setup() -> None:
             try:
                 install_cmd = [proot_distro_path, "install", "ubuntu", "--override-alias", PROOT_ALIAS]
                 subprocess.run(install_cmd, check=True, capture_output=True)
-                print_system(f"✅ Ubuntu distro '{PROOT_ALIAS}' installed successfully.")
+                print_system(f"✅ Virtual Environment '{PROOT_ALIAS}' installed successfully.")
                 install_successful = True
                 break
             except subprocess.CalledProcessError as e:
@@ -1078,78 +1114,112 @@ unset C_INCLUDE_PATH CPLUS_INCLUDE_PATH CPATH CFLAGS CXXFLAGS LDFLAGS
 export PATH="/usr/local/sbin:/usr/local/bin:/usr/sbin:/usr/bin:/sbin:/bin"
 
 # Apply compiler flags to disable specific errors that halt the build.
-echo "--> Applying compiler flags to work around implicit declaration errors..."
-export CFLAGS="-Wno-error=implicit-function-declaration"
-export CXXFLAGS="-Wno-error=implicit-function-declaration"
+echo "--> Applying compiler flags to work around build errors..."
+export CFLAGS="-Wno-error=implicit-function-declaration -Wno-error=unused-result"
+export CXXFLAGS="-Wno-error=implicit-function-declaration -Wno-error=unused-result"
 
-echo "--- Zephyrine Proot Setup: Starting environment build ---"
+# This is the flag file to check if the intensive build has already been done.
+MESA_BUILD_FLAG="/root/.mesa_build_complete_v1"
 
-# --- Step 1: Update system and install essential build packages ---
-echo "--> Updating package lists and installing dependencies..."
-export DEBIAN_FRONTEND=noninteractive
 apt-get update
 apt-get upgrade -y
-apt-get install -y build-essential ca-certificates cmake git meson ninja-build pkg-config python3-pip libvulkan-dev libudev-dev
+apt-get install -y --install-recommends \\
+    build-essential ca-certificates cmake git gettext \\
+    python3-pip python3-dev libc6-dev libc6 \\
+    libvulkan-dev vulkan-tools libudev-dev llvm-dev \\
+    libgmp-dev libssl-dev libffi-dev 
 
-# --- Step 2: Robustly enable source repositories and install Mesa build deps ---
-echo "--> Enabling source repositories for 'apt-get build-dep'..."
-SOURCES_FILE="/etc/apt/sources.list.d/zephyrine-mesa-build.list"
-grep -v '^#' /etc/apt/sources.list | sed -e 's/^deb /deb-src /' > "$SOURCES_FILE"
-apt-get update
-echo "--> Installing Mesa build dependencies..."
-apt-get build-dep mesa -y
+echo "--> Removing any system-level Node.js and npm to avoid conflicts..."
+# Use || true to prevent the script from failing if the packages aren't installed.
+apt-get remove --purge nodejs npm -y || true
+apt-get autoremove -y || true
+echo "--> System-level Node.js removed."
 
-# --- Step 3: Clone or update the official Mesa repository ---
-echo "--> Cloning or updating official Mesa repository..."
-cd /root
-if [ -d "mesa-build" ]; then
-    echo "--> 'mesa-build' directory found. Updating repository..."
-    cd mesa-build
-    git reset --hard HEAD
-    git pull
+if [ ! -f "$MESA_BUILD_FLAG" ]; then
+    echo "--- Zephyrine Proot Setup: Mesa build flag not found. Starting environment build ---"
+
+    # --- Step 1: Update system and install a comprehensive set of build packages ---
+    echo "--> Updating package lists and installing dependencies..."
+    export DEBIAN_FRONTEND=noninteractive
+    
+
+    # --- Step 2: Update Linker Cache ---
+    echo "--> Updating dynamic linker cache..."
+    ldconfig
+
+    # --- Step 3: Robustly enable source repositories and install Mesa build deps ---
+    echo "--> Enabling source repositories for 'apt-get build-dep'..."
+    SOURCES_FILE="/etc/apt/sources.list.d/zephyrine-mesa-build.list"
+    grep -v '^#' /etc/apt/sources.list | sed -e 's/^deb /deb-src /' > "$SOURCES_FILE"
+    apt-get update
+    echo "--> Installing Mesa build dependencies..."
+    apt-get build-dep mesa -y
+
+    # --- Step 4: Clone or update the Mesa repository ---
+    echo "--> Cloning or updating Mesa repository..."
+    cd /root
+    if [ -d "mesa-build" ]; then
+        echo "--> 'mesa-build' directory found. Updating repository..."
+        cd mesa-build
+        git reset --hard HEAD
+        git pull
+    else
+        echo "--> 'mesa-build' directory not found. Cloning repository..."
+        git clone --depth 1 https://gitlab.freedesktop.org/mesa/mesa.git mesa-build
+        cd mesa-build
+    fi
+
+    # --- Step 5: Detect CPU and LLVM RTTI status, then build GPU-specific drivers ---
+    echo "--> Detecting CPU and LLVM RTTI status for custom graphics driver build..."
+    if [ -d "build" ]; then
+        echo "--> Found stale build directory. Removing for a clean configuration."
+        rm -rf build
+    fi
+
+    BASE_MESON_ARGS="-D platforms=x11,wayland -D egl=enabled -D gles2=enabled -D glx=dri --prefix /usr --buildtype=release"
+    echo "--> Checking system LLVM RTTI support..."
+    LLVM_CXX_FLAGS=$(llvm-config --cxxflags)
+    if echo "$LLVM_CXX_FLAGS" | grep -q -- "-fno-rtti"; then
+        echo "--> System LLVM was built WITHOUT RTTI. Disabling RTTI for Mesa."
+        BASE_MESON_ARGS="$BASE_MESON_ARGS -D cpp_rtti=false"
+    else
+        echo "--> System LLVM was built WITH RTTI. Enabling RTTI for Mesa (default)."
+    fi
+
+    CPU_INFO_FILE="/proc/cpuinfo"
+    if grep -q -E "CPU implementer\\s*:\\s*0x51" "$CPU_INFO_FILE" || \\
+       (grep -q -E "CPU implementer\\s*:\\s*0x41" "$CPU_INFO_FILE" && grep -q -E "CPU part\\s*:\\s*(0xd0[3458cd]|0xd4[0-8]|0xd81)" "$CPU_INFO_FILE"); then
+        echo "--> Snapdragon (Qualcomm) hardware detected. Building Mesa with Freedreno/Turnip..."
+        meson setup build $BASE_MESON_ARGS -D vulkan-drivers=freedreno -D gallium-drivers=freedreno,zink,virgl
+    elif grep -q -iE "mediatek|exynos" "$CPU_INFO_FILE"; then
+        echo "--> Mediatek or Exynos hardware detected. Building Mesa with Panfrost driver..."
+        meson setup build $BASE_MESON_ARGS -D vulkan-drivers=panfrost -D gallium-drivers=panfrost,zink,virgl
+    else
+        echo "--> Generic or unknown hardware detected. Building Mesa with auto-detected drivers..."
+        meson setup build $BASE_MESON_ARGS -D vulkan-drivers=auto -D gallium-drivers=auto
+    fi
+
+    # --- Step 6: Compile and install the custom Mesa build ---
+    echo "--> Compiling and installing custom Mesa build... (This will take a long time)"
+    ninja -C build install
+    echo "--- Zephyrine Proot Setup: Environment build complete! ---"
+    touch "$MESA_BUILD_FLAG"
+    echo "--> Created Mesa build flag file. Build will be skipped on next launch."
 else
-    echo "--> 'mesa-build' directory not found. Cloning repository..."
-    git clone --depth 1 https://gitlab.freedesktop.org/mesa/mesa.git mesa-build
-    cd mesa-build
+    echo "--- Zephyrine Proot Setup: Mesa build flag found. Skipping intensive build process. ---"
 fi
 
-# --- Step 4: Detect CPU and build GPU-specific Vulkan drivers ---
-echo "--> Detecting CPU for custom graphics driver build..."
-if [ -d "build" ]; then
-    echo "--> Found stale build directory. Removing for a clean configuration."
-    rm -rf build
-fi
-
-BASE_MESON_ARGS="-D platforms=x11,wayland -D egl=enabled -D gles2=enabled -D glx=dri -D cpp_rtti=false --prefix /usr --buildtype=release"
-CPU_INFO_FILE="/proc/cpuinfo"
-
-if grep -q -E "CPU implementer\\s*:\\s*0x51" "$CPU_INFO_FILE" || \\
-   (grep -q -E "CPU implementer\\s*:\\s*0x41" "$CPU_INFO_FILE" && grep -q -E "CPU part\\s*:\\s*(0xd0[3458cd]|0xd4[0-8]|0xd81)" "$CPU_INFO_FILE"); then
-    echo "--> Snapdragon (Qualcomm) hardware detected. Building Mesa with Freedreno/Turnip..."
-    meson setup build $BASE_MESON_ARGS -D vulkan-drivers=freedreno -D gallium-drivers=freedreno,zink,virgl -D freedreno-kgsl=true -D valgrind=disabled
-elif grep -q -iE "mediatek|exynos" "$CPU_INFO_FILE"; then
-    echo "--> Mediatek or Exynos hardware detected. Building Mesa with Panfrost driver..."
-    meson setup build $BASE_MESON_ARGS -D vulkan-drivers=panfrost -D gallium-drivers=panfrost,zink,virgl
-else
-    echo "--> Generic or unknown hardware detected. Building Mesa with auto-detected drivers..."
-    meson setup build $BASE_MESON_ARGS -D vulkan-drivers=auto -D gallium-drivers=auto
-fi
-
-# --- Step 5: Compile and install the custom Mesa build ---
-echo "--> Compiling and installing custom Mesa build... (This will take a long time)"
-ninja -C build install
-
-echo "--- Zephyrine Proot Setup: Environment build complete! ---"
-
-# --- Step 6: Restore a clean .bashrc and execute the launcher ---
+# --- Final Step: Restore a clean .bashrc and execute the launcher ---
 echo "--> Restoring .bashrc and launching application..."
+LAUNCH_DIR="{ROOT_DIR}"
 echo 'export PS1="[\\\\u@\\\\h \\\\W]\\\\$ "' > ~/.bashrc
-if [ -n "$ZEPHYRINE_LAUNCH_DIR" ]; then
-    cd "$ZEPHYRINE_LAUNCH_DIR"
+if [ -d "$LAUNCH_DIR" ]; then
+    cd "$LAUNCH_DIR"
     python3 launcher.py
+else
+    echo "ERROR: Could not find launcher directory: $LAUNCH_DIR"
 fi
 
-# --- Final Step: Exit the shell after the launcher finishes ---
 echo "--- Zephyrine Launcher: Proot execution finished. Exiting shell. ---"
 exit $?
 """
@@ -1167,7 +1237,6 @@ exit $?
     # 5. Re-execute the script inside the proot environment
     print_colored("SYSTEM", "--- Relaunching inside glibc Compatibility Layer for Build ---", "SUCCESS")
     relaunch_env = os.environ.copy()
-    relaunch_env["ZEPHYRINE_LAUNCH_DIR"] = ROOT_DIR
     proot_distro_path = shutil.which("proot-distro")
     relaunch_cmd = [proot_distro_path, "login", PROOT_ALIAS]
     try:
@@ -1832,112 +1901,397 @@ def display_license_prompt(stdscr, licenses_text_lines: list, estimated_seconds:
     return accepted, time_taken_to_decide
 
 
-def _ensure_conda_package(package_spec: str, # <--- CHANGED: Now accepts a spec like "nodejs=20"
+def _ensure_libiconv_copy() -> bool:
+    """
+    Ensures libiconv is installed. On Linux, it also ensures a physical copy of
+    libiconv.so.2 exists as libiconv.so.1 if .so.1 is missing. This is a robust
+    fix for environments with dependencies on both legacy and modern versions,
+    avoiding symlink issues.
+    """
+    # --- CRITICAL FIX: This entire special logic ONLY applies to Linux ---
+    if platform.system() != "Linux":
+        print_system("libiconv copy/check logic is for Linux only. Skipping on other OS.")
+        # On non-Linux systems, the standard package is sufficient and correct.
+        return _ensure_conda_package("libiconv", conda_channel="conda-forge", is_critical=True)
+
+    print_system("--- [Linux-Only] Checking and enforcing libiconv shared library files ---")
+
+    # 1. Ensure the modern package is installed.
+    if not _ensure_conda_package("libiconv", conda_channel="conda-forge", is_critical=True):
+        print_error("Failed to install the base 'libiconv' package.")
+        return False
+
+    lib_dir = os.path.join(TARGET_CONDA_ENV_PATH, "lib")
+    so_2_path = os.path.join(lib_dir, "libiconv.so.2")
+    so_1_path = os.path.join(lib_dir, "libiconv.so.1")
+
+    # 2. Verify that the source of our copy (.so.2) exists.
+    if not os.path.exists(so_2_path):
+        print_error(f"CRITICAL: 'libiconv.so.2' not found at '{so_2_path}' after installation.")
+        return False
+
+    # 3. If .so.1 is missing, create a physical copy.
+    if not os.path.exists(so_1_path):
+        print_warning(f"'libiconv.so.1' not found. Creating a physical copy from 'libiconv.so.2'.")
+        try:
+            shutil.copy2(so_2_path, so_1_path)
+            # copy2 also copies permission bits, so it should be executable if the original is.
+            print_colored("SUCCESS", f"Successfully created copy: {so_1_path}", "SUCCESS")
+        except Exception as e:
+            print_error(f"Failed to create copy of libiconv: {e}")
+            return False
+    else:
+        print_system("'libiconv.so.1' already exists. No action needed.")
+
+    # 4. Final verification of both files
+    if os.path.exists(so_1_path) and os.path.exists(so_2_path):
+        print_system("Verified: Both libiconv.so.1 and libiconv.so.2 are present.")
+        return True
+    else:
+        print_error("Final verification failed. One or more required libiconv files are missing.")
+        return False
+
+def _ensure_legacy_libiconv_so() -> bool:
+    """
+    Ensures that both modern and legacy libiconv shared libraries are available.
+
+    This function implements a "install modern, inject legacy" strategy:
+    1. It ensures the latest `libiconv` from conda-forge is installed, which
+       provides `libiconv.so.2`.
+    2. It then checks for `libiconv.so.1`.
+    3. If `.so.1` is missing, it downloads an older `libiconv` package from a
+       legacy channel and surgically extracts *only* the `.so.1` files into the
+       environment's `lib/` directory, leaving the modern version intact.
+    """
+    # This check is only relevant for non-Windows systems with .so files.
+    if IS_WINDOWS:
+        print_system("Legacy libiconv check skipped on Windows.")
+        return _ensure_conda_package("libiconv", conda_channel="conda-forge", is_critical=True)
+
+    lib_dir = os.path.join(TARGET_CONDA_ENV_PATH, "lib")
+    required_libs = {
+        "libiconv.so.2": False,
+        "libiconv.so.1": False
+    }
+
+    # --- Initial check: See what's already there ---
+    for lib_name in required_libs:
+        if os.path.exists(os.path.join(lib_dir, lib_name)):
+            required_libs[lib_name] = True
+
+    if all(required_libs.values()):
+        print_system("All required libiconv versions (.so.1 and .so.2) are already present.")
+        return True
+
+    print_system("Performing check/repair for required libiconv versions...")
+
+    # --- Step 1: Install the modern version to guarantee libiconv.so.2 ---
+    print_system("Ensuring modern 'libiconv' is installed to provide libiconv.so.2...")
+    if not _ensure_conda_package("libiconv", conda_channel="conda-forge", is_critical=True):
+        print_error("Failed to install the base 'libiconv' package. Cannot proceed.")
+        return False
+
+    # Re-check for .so.2
+    if os.path.exists(os.path.join(lib_dir, "libiconv.so.2")):
+        print_system("Verified: 'libiconv.so.2' is present.")
+        required_libs["libiconv.so.2"] = True
+    else:
+        print_error("Critical error: 'libiconv.so.2' is NOT present after installing the package.")
+        # This shouldn't happen, but we check to be safe.
+        return False
+
+    # --- Step 2: If .so.1 is missing, surgically add it ---
+    if not required_libs["libiconv.so.1"]:
+        print_warning("'libiconv.so.1' is missing. Attempting to inject it from a legacy package.")
+
+        legacy_channels_to_try = [
+            "conda-forge/label/cf202003::libiconv",
+            "conda-forge/label/cf201901::libiconv",
+            "conda-forge/label/gcc7::libiconv"
+        ]
+
+        legacy_lib_found = False
+        for package_spec in legacy_channels_to_try:
+            print_system(f"Attempting to download legacy package: {package_spec}")
+
+            # Use --download-only to fetch the package without installing it
+            download_cmd = [
+                CONDA_EXECUTABLE, "install", "--yes", "--download-only",
+                "--prefix", TARGET_CONDA_ENV_PATH,
+                "-c", "conda-forge",
+                package_spec
+            ]
+            if not run_command(download_cmd, ROOT_DIR, f"CONDA-DOWNLOAD-ONLY-LIBICONV", check=True):
+                print_warning(f"Could not download package spec '{package_spec}'. Trying next.")
+                continue
+
+            # Find the downloaded .tar.bz2 file in the conda package cache
+            try:
+                info_json = subprocess.check_output([CONDA_EXECUTABLE, "info", "--json"], text=True)
+                conda_info = json.loads(info_json)
+                pkg_cache_dir = conda_info['pkgs_dirs'][0]
+
+                # The package name is 'libiconv'. We find the downloaded file.
+                # Example filename: libiconv-1.16-h516909a_2.tar.bz2
+                import glob
+                downloaded_files = glob.glob(os.path.join(pkg_cache_dir, "libiconv-*.tar.bz2"))
+                if not downloaded_files:
+                    raise FileNotFoundError("Could not find downloaded libiconv tarball in cache.")
+
+                # Sort by modification time to get the most recently downloaded one
+                package_tarball_path = max(downloaded_files, key=os.path.getmtime)
+                print_system(f"Found downloaded package: {package_tarball_path}")
+
+                # Surgically extract the .so.1 files
+                import tarfile
+                with tarfile.open(package_tarball_path, 'r:bz2') as tar:
+                    members_to_extract = [
+                        m for m in tar.getmembers()
+                        if m.name.startswith("lib/libiconv.so.1") and m.isfile()
+                    ]
+                    if not members_to_extract:
+                        print_warning(f"Package '{package_spec}' did not contain 'libiconv.so.1'. Trying next.")
+                        continue
+
+                    print_system(f"Extracting {len(members_to_extract)} legacy lib files into '{lib_dir}'...")
+                    # We need to extract them to the root of the environment, tarfile will handle the `lib/` part.
+                    tar.extractall(path=TARGET_CONDA_ENV_PATH, members=members_to_extract)
+
+                    # Create the main symlink `libiconv.so.1` -> `libiconv.so.1.x.y` if it doesn't exist
+                    # This is often handled by post-link scripts, but we do it manually to be safe.
+                    real_so_file = None
+                    for m in members_to_extract:
+                        if ".so.1." in m.name:  # find the real file, e.g. libiconv.so.1.1.1
+                            real_so_file = os.path.basename(m.name)
+                            break
+
+                    if real_so_file and not os.path.exists(os.path.join(lib_dir, "libiconv.so.1")):
+                        print_system(f"Creating missing symlink: libiconv.so.1 -> {real_so_file}")
+                        os.symlink(real_so_file, os.path.join(lib_dir, "libiconv.so.1"))
+
+                    legacy_lib_found = True
+                    break  # Success, exit the loop
+
+            except Exception as e:
+                print_error(f"An error occurred during legacy lib injection: {e}")
+                traceback.print_exc()
+                continue
+
+        if legacy_lib_found and os.path.exists(os.path.join(lib_dir, "libiconv.so.1")):
+            required_libs["libiconv.so.1"] = True
+            print_system("Verified: 'libiconv.so.1' is now present.")
+        else:
+            print_error("Failed to inject 'libiconv.so.1' from any legacy package.")
+
+    # --- Step 3: Final Verification ---
+    if all(required_libs.values()):
+        print_colored("SUCCESS", "All required libiconv versions (.so.1 and .so.2) are present.", "SUCCESS")
+        return True
+    else:
+        missing = [lib for lib, found in required_libs.items() if not found]
+        print_error(f"FATAL: Final libiconv check failed. Missing: {', '.join(missing)}")
+        return False
+
+
+def _ensure_conda_package_version(package_name: str, executable_name: str, required_major_version: int,
+                                  version_arg_prefix: str = "-v") -> bool:
+    """
+    Ensures a specific major version of a Conda package is installed.
+
+    This is an aggressive function that will:
+    1. Check the version of the `executable_name`.
+    2. If the major version is incorrect, it forcefully removes the package.
+    3. It then installs the package with the correct major version string.
+
+    Args:
+        package_name: The name of the package in Conda (e.g., "nodejs").
+        executable_name: The command to run to check the version (e.g., "node").
+        required_major_version: The integer of the major version required (e.g., 20).
+        version_arg_prefix: The argument to get the version (e.g., "-v" or "--version").
+
+    Returns:
+        True on success, False on failure.
+    """
+    print_system(f"--- Aggressively checking for {package_name} major version {required_major_version} ---")
+    current_major = 0
+
+    try:
+        # Use run_command to ensure we are using the correct PATH from the Conda env
+        # We need to capture the output here, so we modify the Popen call temporarily.
+        check_command = [executable_name, version_arg_prefix]
+        process = subprocess.run(check_command, capture_output=True, text=True, check=False, timeout=10,
+                                 env=run_command.__globals__.get(
+                                     'env'))  # Hacky way to get env from run_command's scope if it was set
+
+        output = process.stdout.strip()
+        if process.returncode == 0 and output:
+            # Handle versions like "v20.12.2" or just "20.12.2"
+            version_str = output.lstrip('v')
+            current_major = int(version_str.split('.')[0])
+            print_system(f"Found installed version of {executable_name}: {output} (Major: {current_major})")
+        else:
+            print_system(f"{executable_name} not found or version check failed. Will proceed with installation.")
+    except (FileNotFoundError, ValueError, IndexError):
+        print_system(f"Could not determine version for {executable_name}. Assuming installation is required.")
+    except Exception as e:
+        print_warning(
+            f"Unexpected error during version check for {executable_name}: {e}. Assuming install is required.")
+
+    if current_major == required_major_version:
+        print_system(f"{package_name} is already at the correct major version {required_major_version}.")
+        return True
+
+    # --- If version is wrong or not found, be aggressive ---
+    if current_major != 0:
+        print_warning(f"Incorrect version of {package_name} found (Major: {current_major}). Forcing removal.")
+        remove_cmd = [CONDA_EXECUTABLE, "remove", "--yes", "--force", "--prefix", TARGET_CONDA_ENV_PATH, package_name]
+        if not run_command(remove_cmd, cwd=ROOT_DIR, name=f"FORCE-REMOVE-{package_name.upper()}", check=False):
+            print_error(f"Failed to forcefully remove {package_name}. The update may fail.")
+
+    # --- Install the correct version ---
+    print_system(f"Installing {package_name} with specified major version: {required_major_version}")
+    package_spec = f"{package_name}={required_major_version}"
+    install_cmd = [
+        CONDA_EXECUTABLE, "install", "--yes",
+        "--prefix", TARGET_CONDA_ENV_PATH,
+        "-c", "conda-forge",
+        package_spec
+    ]
+    if not run_command(install_cmd, cwd=ROOT_DIR, name=f"INSTALL-{package_name.upper()}-V{required_major_version}",
+                       check=True):
+        print_error(f"Failed to install {package_spec}. Setup cannot continue.")
+        return False
+
+    if platform.system() == "Linux":
+        print_system(f"--- Performing post-install patching on '{executable_name}' ---")
+        try:
+            # Find the absolute path to the newly installed executable
+            executable_path = shutil.which(executable_name, path=os.path.join(TARGET_CONDA_ENV_PATH, "bin"))
+            if not executable_path:
+                raise FileNotFoundError(f"Could not find '{executable_name}' in Conda bin directory after install.")
+
+            # Define the library path we need to bake into the executable
+            lib_path = os.path.join(TARGET_CONDA_ENV_PATH, "lib")
+
+            # The RPATH is a special section in an ELF executable.
+            # '$ORIGIN' is a special token that means 'the directory where this executable is'.
+            # So, '$ORIGIN/../lib' resolves to the correct `lib` directory relative to the `bin` directory.
+            rpath_to_set = f"$ORIGIN/../lib"
+
+            print_system(f"Patching '{executable_path}' to set RPATH to '{rpath_to_set}'...")
+            patch_cmd = ["patchelf", "--set-rpath", rpath_to_set, executable_path]
+
+            if not run_command(patch_cmd, cwd=ROOT_DIR, name=f"PATCHELF-{executable_name.upper()}", check=True):
+                raise RuntimeError("patchelf command failed.")
+
+            print_system(f"Successfully patched {executable_name}.")
+        except Exception as e:
+            print_error(f"FATAL: Failed to patch {executable_name} after installation: {e}")
+            print_error("The application will likely fail to run. Check if 'patchelf' is installed correctly.")
+            return False
+        
+    # --- Final verification ---
+    try:
+        post_install_process = subprocess.run([executable_name, version_arg_prefix], capture_output=True, text=True,
+                                              check=True, timeout=10)
+        post_install_version = post_install_process.stdout.strip().lstrip('v')
+        post_install_major = int(post_install_version.split('.')[0])
+        if post_install_major == required_major_version:
+            print_colored("SUCCESS",
+                          f"Successfully installed and verified {package_name} version {post_install_version}.",
+                          "SUCCESS")
+            return True
+        else:
+            print_error(f"FATAL: Installed {package_name} but version is still wrong! Found {post_install_version}.")
+            return False
+    except Exception as e:
+        print_error(f"FATAL: Failed to verify {package_name} after installation: {e}")
+        return False
+
+def _ensure_conda_package(package_spec: str,
                           executable_to_check: Optional[str] = None,
                           conda_channel: str = "conda-forge",
                           is_critical: bool = True) -> bool:
     """
-    Checks if an executable (related to a Conda package) is available.
-    If not, attempts to install the Conda package into the TARGET_CONDA_ENV_PATH.
-    This function should be called when the script is running *inside* the target Conda environment.
-
-    Args:
-        package_spec (str): The Conda package specification (e.g., "nodejs", "nodejs=20", "cmake").
-        executable_to_check (Optional[str]): The name of the executable to check for availability
-                                            (e.g., "node", "npm", "git", "cmake"). If None,
-                                            it defaults to the base package name from package_spec.
-        conda_channel (str): The Conda channel to install from (e.g., "conda-forge").
-        is_critical (bool): If True, exits the script if installation fails.
-
-    Returns:
-        bool: True if the package/executable is found or successfully installed, False otherwise.
+    Ensures a Conda package is installed in the target environment.
+    This function is bimodal:
+    - If 'executable_to_check' IS provided, it searches for that executable.
+    - If 'executable_to_check' is NOT provided, it uses `conda list` to
+      check if the package itself is installed (ideal for libraries).
     """
-    # Extract package name for logging if spec includes version (e.g., "nodejs" from "nodejs=20")
     log_package_name = package_spec.split('=')[0]
+    is_already_installed = False
 
-    # Determine the actual executable name to check (e.g., "node" for "nodejs", "npm" for "nodejs")
-    check_exe = executable_to_check if executable_to_check else log_package_name
-
-    print_system(f"Checking for executable '{check_exe}' (from Conda package '{log_package_name}')...")
-
-    # When this function runs, we expect to be *inside* the activated zephyrineCondaVenv (or about to be).
-    # So, shutil.which should find executables installed in this environment's bin/Scripts directory.
-    found_path = shutil.which(check_exe)
-
-    is_in_env = False
-    if found_path:
+    # --- Verification Step ---
+    if executable_to_check:
+        # --- Mode 1: Check for an executable ---
+        print_system(f"Checking for executable '{executable_to_check}' (from Conda package '{log_package_name}')...")
+        found_path = shutil.which(executable_to_check)
+        if found_path:
+            try:
+                norm_found_path = os.path.normcase(os.path.realpath(found_path))
+                norm_target_env_path = os.path.normcase(os.path.realpath(TARGET_CONDA_ENV_PATH))
+                if norm_found_path.startswith(norm_target_env_path):
+                    is_already_installed = True
+                    print_system(f"Executable '{executable_to_check}' found in target Conda environment: {found_path}")
+                else:
+                    print_warning(
+                        f"Executable '{executable_to_check}' found at '{found_path}', but it's OUTSIDE the target env. Will reinstall into env.")
+            except Exception as e_path:
+                print_warning(f"Error verifying path for '{executable_to_check}': {e_path}. Assuming not in env.")
+    else:
+        # --- Mode 2: Check for the library/package via `conda list` ---
+        print_system(f"Checking for Conda library/package '{log_package_name}'...")
+        if not CONDA_EXECUTABLE:
+            print_error("Cannot check for library: CONDA_EXECUTABLE path is not set.")
+            return False  # Cannot proceed
         try:
-            # Normalize paths for reliable comparison across OS (e.g., C:/path vs C:\path)
-            norm_found_path = os.path.normcase(os.path.realpath(found_path))
-            norm_target_env_path = os.path.normcase(os.path.realpath(TARGET_CONDA_ENV_PATH))
-
-            # Check if the found executable's path starts with our target Conda environment's path.
-            # This is robust for both Unix (bin) and Windows (Scripts, Library/bin) structures.
-            if norm_found_path.startswith(norm_target_env_path):
-                is_in_env = True
-                print_system(f"Executable '{check_exe}' found in target Conda environment: {found_path}")
+            list_cmd = [CONDA_EXECUTABLE, "list", "-p", TARGET_CONDA_ENV_PATH, log_package_name]
+            result = subprocess.run(list_cmd, capture_output=True, text=True, check=False)
+            # A successful find will have stdout containing the package name. An empty result means not found.
+            if result.returncode == 0 and log_package_name in result.stdout:
+                print_system(f"Package '{log_package_name}' found in Conda environment.")
+                is_already_installed = True
             else:
-                print_warning(
-                    f"Executable '{check_exe}' found at '{found_path}', but it's OUTSIDE the target Conda env '{TARGET_CONDA_ENV_PATH}'. Will attempt install into env.")
-        except Exception as e_path:
-            print_warning(f"Error verifying path for '{check_exe}': {e_path}. Assuming not in env.")
+                print_system(f"Package '{log_package_name}' not found.")
+        except Exception as e:
+            print_warning(f"An exception occurred while checking for Conda package '{log_package_name}': {e}")
+            is_already_installed = False  # Assume not installed on error
 
-    if not found_path or not is_in_env:
-        if not found_path:
-            print_warning(f"Executable '{check_exe}' (for package '{log_package_name}') not found in PATH.")
-
-        print_system(
-            f"Attempting to install '{package_spec}' from channel '{conda_channel}' into Conda env '{os.path.basename(TARGET_CONDA_ENV_PATH)}' using prefix...")
-
-        # CONDA_EXECUTABLE should be the path to the conda binary (e.g., from base or miniconda).
-        # TARGET_CONDA_ENV_PATH is the prefix of the environment we are installing into.
+    # --- Installation Step ---
+    if not is_already_installed:
+        print_system(f"Attempting to install '{package_spec}' from channel '{conda_channel}' into Conda env...")
         conda_install_cmd = [
             CONDA_EXECUTABLE, "install", "--yes",
-            "--prefix", TARGET_CONDA_ENV_PATH,  # Crucial for installing into the correct environment
+            "--prefix", TARGET_CONDA_ENV_PATH,
             "-c", conda_channel,
-            package_spec # <--- CHANGED: Use package_spec here (e.g., "nodejs=20")
+            package_spec
         ]
-
-        # The run_command function will execute this.
-        # It inherits the environment, but CONDA_EXECUTABLE should work correctly.
-        if not run_command(conda_install_cmd, cwd=ROOT_DIR,
-                           name=f"CONDA-INSTALL-{log_package_name.upper().replace('-', '_')}",
-                           check=True):  # check=True will raise error on failure
-            print_error(f"Failed to install Conda package '{package_spec}'.") # <--- CHANGED: Use package_spec here
+        if not run_command(conda_install_cmd, cwd=ROOT_DIR, name=f"CONDA-INSTALL-{log_package_name.upper()}",
+                           check=True):
+            print_error(f"Failed to install Conda package '{package_spec}'.")
             if is_critical:
-                print_error(f"'{package_spec}' is a critical dependency. Exiting.") # <--- CHANGED: Use package_spec here
+                print_error(f"'{package_spec}' is a critical dependency. Exiting.")
                 sys.exit(1)
             return False
         else:
-            print_system(f"Successfully installed Conda package '{package_spec}'. Verifying executable...") # <--- CHANGED: Use package_spec here
-            # Re-check after install attempt to confirm it's now found and within the correct environment
-            found_path_after_install = shutil.which(check_exe)
-            if found_path_after_install:
-                norm_found_path_after = os.path.normcase(os.path.realpath(found_path_after_install))
-                norm_target_env_path_after = os.path.normcase(os.path.realpath(TARGET_CONDA_ENV_PATH))
-                if norm_found_path_after.startswith(norm_target_env_path_after):
-                    print_system(f"Executable '{check_exe}' now found in Conda environment: {found_path_after_install}")
-                    # Update global command variables if they were previously system-wide or not set
-                    # This ensures subsequent `run_command` calls use the Conda-installed versions.
-                    if check_exe == "git" and 'GIT_CMD' in globals() and globals()['GIT_CMD'] != found_path_after_install:
-                        globals()['GIT_CMD'] = found_path_after_install
-                    if check_exe == "cmake" and 'CMAKE_CMD' in globals() and globals()['CMAKE_CMD'] != found_path_after_install:
-                        globals()['CMAKE_CMD'] = found_path_after_install
-                    if check_exe == "npm" and 'NPM_CMD' in globals() and globals()['NPM_CMD'] != found_path_after_install:
-                        globals()['NPM_CMD'] = found_path_after_install
-                    # Note: 'node' executable is typically not stored in a global CMD var but directly called.
-                    return True
-                else:
-                    print_error(
-                        f"'{check_exe}' installed by Conda but found at '{found_path_after_install}', which is not in the target env '{TARGET_CONDA_ENV_PATH}'. This indicates a PATH or conda setup issue.")
-                    if is_critical: sys.exit(1)
-                    return False
+            print_system(f"Successfully installed Conda package '{package_spec}'.")
+            # If we just installed a library, there's no executable to re-verify, so we're done.
+            if not executable_to_check:
+                return True
+
+            # Re-verify executable path after install
+            found_path_after = shutil.which(executable_to_check)
+            if found_path_after and os.path.normcase(os.path.realpath(found_path_after)).startswith(
+                    os.path.normcase(os.path.realpath(TARGET_CONDA_ENV_PATH))):
+                print_system(f"Executable '{executable_to_check}' now correctly located in Conda environment.")
             else:
                 print_error(
-                    f"Executable '{check_exe}' still not found after Conda install attempt for package '{package_spec}'.") # <--- CHANGED: Use package_spec here
+                    f"Executable '{executable_to_check}' still not found in the correct Conda path after installation.")
                 if is_critical: sys.exit(1)
                 return False
-    return True  # Already found in env, or successfully installed and verified
+
+    return True
 
 
 def _detect_and_prepare_acceleration_env_vars() -> Dict[str, str]:
@@ -2518,39 +2872,36 @@ def _ensure_gnat_compiler_from_source():
 def _ensure_alire_and_gnat_toolchain():
     """
     Ensures the Alire package manager and the GNAT toolchain are available.
-    The primary goal is to install 'alr' and then use it to get GNAT.
+    This version correctly detects the system architecture to download the
+    proper Alire binary (e.g., aarch64 vs x86_64).
     """
-    # 1. Check if the final flag file exists. If so, the entire process is complete.
     if os.path.exists(GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE):
         print_system("GNAT toolchain previously installed via Alire (flag file found).")
         return True
 
-    # Also check if gnat is in the path, in case the flag was deleted.
     if shutil.which("gnat"):
         print_system("GNAT compiler found in PATH. Assuming Alire setup is complete.")
-        # Re-create the flag file for future runs
         with open(GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE, 'w') as f:
             f.write(f"Found at {shutil.which('gnat')} on {datetime.now().isoformat()}")
         return True
 
     alire_install_dir = os.path.join(ROOT_DIR, "alire_installer")
 
-    # 2. Ensure Alire ('alr') is installed. If not, download the pre-compiled binary.
     if not shutil.which("alr"):
         print_warning("Alire 'alr' command not found. Downloading pre-compiled binary...")
 
         # --- Determine Correct Alire Binary for OS/Arch ---
         os_name = platform.system().lower()
-        machine_arch = platform.machine().lower()
+        machine_arch_raw = platform.machine().lower()
+        machine_arch = "" # Reset machine_arch to ensure it's set correctly below
 
         if os_name == "darwin":
             os_name = "macos"
-            if machine_arch == "arm64":
-                machine_arch = "aarch64"
+            machine_arch = "aarch64" if "arm64" in machine_arch_raw else "x86_64"
         elif os_name == "linux":
-            machine_arch = "x86_64"
-
-        if os_name not in ["macos", "linux"]:
+            # THIS IS THE FIX: Dynamically determine the architecture instead of hardcoding.
+            machine_arch = "aarch64" if "aarch64" in machine_arch_raw else "x86_64"
+        else:
             print_error(f"Automated Alire download is not supported for OS: {os_name}")
             return False
 
@@ -2559,7 +2910,6 @@ def _ensure_alire_and_gnat_toolchain():
         alire_filename = f"alr-{alire_version_str}-bin-{machine_arch}-{os_name}.zip"
         alire_url = f"https://github.com/alire-project/alire/releases/download/{alire_release_tag}/{alire_filename}"
 
-        # Clean up previous attempts and download
         if os.path.exists(alire_install_dir):
             shutil.rmtree(alire_install_dir)
         os.makedirs(alire_install_dir)
@@ -2569,7 +2919,7 @@ def _ensure_alire_and_gnat_toolchain():
         try:
             import requests
             from tqdm import tqdm
-            print_system(f"Downloading Alire from: {alire_url}")
+            print_system(f"Downloading Alire for {machine_arch} from: {alire_url}")
             with requests.get(alire_url, stream=True) as r:
                 r.raise_for_status()
                 total_size = int(r.headers.get('content-length', 0))
@@ -2588,7 +2938,9 @@ def _ensure_alire_and_gnat_toolchain():
         try:
             shutil.unpack_archive(zip_path, alire_install_dir)
 
+            # The path to the 'alr' executable inside the extracted archive
             alr_binary_path = os.path.join(alire_install_dir, "bin", "alr")
+            # The destination path inside our Conda environment's bin directory
             conda_bin_path = os.path.join(TARGET_CONDA_ENV_PATH, "bin")
 
             if not os.path.exists(alr_binary_path):
@@ -2597,8 +2949,10 @@ def _ensure_alire_and_gnat_toolchain():
             print_system(f"Installing 'alr' executable to {conda_bin_path}...")
             os.makedirs(conda_bin_path, exist_ok=True)
             shutil.copy(alr_binary_path, conda_bin_path)
+            # Ensure the copied binary is executable
             os.chmod(os.path.join(conda_bin_path, "alr"), 0o755)
 
+            # Clean up the temporary download directory
             shutil.rmtree(alire_install_dir)
             print_system("✅ Alire 'alr' executable installed successfully.")
         except Exception as e:
@@ -2607,14 +2961,14 @@ def _ensure_alire_and_gnat_toolchain():
 
     # 3. Use Alire to get the GNAT toolchain
     print_system("Using Alire to install the GNAT toolchain and gprbuild for Ada Compiler. This may take a moment...")
-    alr_get_gnat_command = ["alr", "toolchain", "--select", "gnat_native", "gprbuild", "gnat"]
+    # Now that 'alr' is in the Conda env's bin, it should be found in the PATH.
+    alr_get_gnat_command = ["alr", "toolchain", "--select", "gnat_native", "gprbuild"]
 
     if not run_command(alr_get_gnat_command, cwd=ROOT_DIR, name="ALIRE-GET-GNAT"):
         print_error("Alire failed to install the GNAT toolchain.")
         return False
 
     print_system("✅ GNAT toolchain successfully installed via Alire.")
-    # Create the flag file to skip this entire process next time
     with open(GNAT_TOOLCHAIN_INSTALLED_FLAG_FILE, 'w') as f:
         f.write(f"Installed via Alire on {datetime.now().isoformat()}")
 
@@ -2648,7 +3002,7 @@ def _check_and_repair_conda_env(env_path: str) -> bool:
             capture_output=True,
             text=True,
             check=False, # We need to check output manually, not just return code
-            timeout=180
+            timeout=3600
         )
 
         output = process.stdout + "\n" + process.stderr
@@ -2699,11 +3053,9 @@ def launch_and_manage_zephymesh_node():
     for its port file, and then sets the global API URL.
     This function is designed to be run in a separate thread.
     """
-    # Use global variables to update the main script's state
     global zephymesh_process, zephymesh_api_url
 
     try:
-        # --- Auto-Setup & Compilation ---
         if not os.path.exists(ZEPHYMESH_NODE_BINARY):
             print_warning(f"ZephyMesh node binary not found at {ZEPHYMESH_NODE_BINARY}.")
             print_system("Preparing to compile the Go mesh node...")
@@ -2726,7 +3078,8 @@ def launch_and_manage_zephymesh_node():
 
             print_system("Compiling the Go mesh node with 'go build'...")
             go_package_path = "./cmd/zephymesh_node"
-            compile_command = ["go", "build", "-o", ZEPHYMESH_NODE_BINARY, go_package_path]
+            # Add -buildvcs=false for resilience against git issues
+            compile_command = ["go", "build", "-buildvcs=false", "-o", ZEPHYMESH_NODE_BINARY, go_package_path]
 
             if not run_command(compile_command, cwd=go_source_dir, name="GO-COMPILE-MESHNODE"):
                 print_error("Failed to compile the Go ZephyMesh node. ZephyMesh cannot start.")
@@ -2748,7 +3101,7 @@ def launch_and_manage_zephymesh_node():
         print_system(f"Waiting for ZephyMesh port file: {ZEPHYMESH_PORT_INFO_FILE}")
         port_file_wait_start = time.monotonic()
         api_ready = False
-        while time.monotonic() - port_file_wait_start < 30:  # 30-second timeout
+        while time.monotonic() - port_file_wait_start < 30:
             if zephymesh_process.poll() is not None:
                 raise RuntimeError("ZephyMesh node process exited prematurely while waiting for port file.")
             if os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
@@ -3214,7 +3567,9 @@ if __name__ == "__main__":
 
                 # Now, proceed with the install via _ensure_conda_package.
                 # This call will actually run the `conda install` command.
-                if not _ensure_conda_package(node_package_spec, executable_to_check="node", is_critical=True):
+
+
+                if not _ensure_conda_package_version("nodejs", "node", REQUIRED_NODE_MAJOR):
                     print_error(f"Failed to install Node.js {REQUIRED_NODE_MAJOR}.x in Conda environment. Exiting.")
                     setup_failures.append("Failed to install/ensure critical legacy tool: node.js failed to install or mismatch on the version")
                 print_system(f"Node.js {REQUIRED_NODE_MAJOR}.x and bundled npm should now be installed.")
@@ -3265,7 +3620,22 @@ if __name__ == "__main__":
 
 
             # --- Core Command-Line Tools (conda-installed) ---
-            print_system("--- Ensuring core command-line tools (git, cmake, go, ffmpeg, aria2c) ---")
+            print_system("--- Ensuring core command-line tools (libiconv, git, cmake, go, ffmpeg, aria2c) ---")
+            if not _ensure_libiconv_copy():
+                # The function handles its own error printing. We just need to record the failure.
+                setup_failures.append("Failed to install a compatible version of libiconv providing libiconv.so.1")
+            print_system("--- Ensuring executable patching utility (patchelf) ---")
+            if not _ensure_conda_package("patchelf", is_critical=True):
+                setup_failures.append("Failed to install patchelf, which is critical for fixing library paths.")
+            if not _ensure_conda_package("ncurses", is_critical=True):
+                setup_failures.append("Failed to install ncurses, which is critical for terminal operations.")
+            if AUTO_VULKAN_AVAILABLE:
+                print_system("--- Ensuring Vulkan build tools (shaderc for glslc) ---")
+                if not _ensure_conda_package("shaderc", executable_to_check="glslc", is_critical=True):
+                    print_warning("Failed to install 'shaderc' via Conda. Vulkan-accelerated builds will likely fail.")
+                    # We mark it non-critical; the build will fall back to CPU.
+
+
             if not _ensure_conda_package("git", executable_to_check="git", is_critical=True): sys.exit(1)
             if not _ensure_conda_package("cmake", executable_to_check="cmake", is_critical=True): sys.exit(1)
             # Ensure Go is installed for ZephyMesh and Backend
