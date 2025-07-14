@@ -148,6 +148,7 @@ systemCore/backend-service/project_zephyrine_chats.db
 *.sqlite3
 zephymesh_identity.key
 zephymesh_node_compiled
+miniforge3_local/**
 zephymesh_ports.json
 .gnat_toolchain_installed_v1
 .sync.ffs_db

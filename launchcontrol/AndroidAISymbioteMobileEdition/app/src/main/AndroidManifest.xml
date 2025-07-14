@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<manifest xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:tools="http://schemas.android.com/tools">
+
+    <!-- =================================================================== -->
+    <!-- PERMISSIONS for a powerful On-Device Agent AI                       -->
+    <!-- These permissions need to be justified and may require runtime prompts -->
+    <!-- =================================================================== -->
+
+    <!-- Basic Network Access -->
+    <uses-permission android:name="android.permission.INTERNET" />
+    <uses-permission android:name="android.permission.ACCESS_NETWORK_STATE" />
+    <uses-permission android:name="android.permission.ACCESS_WIFI_STATE" />
+
+    <!-- Foreground Service & Background Operations -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE" />
+    <!-- Required for Android 14+ for dataSync type -->
+    <uses-permission android:name="android.permission.FOREGROUND_SERVICE_DATA_SYNC" />
+    <!-- To start service on device boot (if implemented) -->
+    <uses-permission android:name="android.permission.RECEIVE_BOOT_COMPLETED" />
+    <!-- Required for Android 13+ to show notifications -->
+    <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+
+    <!-- Device Control & Sensors -->
+    <uses-permission android:name="android.permission.BLUETOOTH" />
+    <uses-permission android:name="android.permission.BLUETOOTH_ADMIN" />
+    <!-- For Bluetooth Classic & BLE scan results -->
+    <uses-permission android:name="android.permission.BLUETOOTH_CONNECT" />
+    <!-- For precise location (GPS) -->
+    <uses-permission android:name="android.permission.ACCESS_FINE_LOCATION" />
+    <!-- For approximate location (Wi-Fi, cellular) -->
+    <uses-permission android:name="android.permission.ACCESS_COARSE_LOCATION" />
+    <!-- For location access while app is in background -->
+    <uses-permission android:name="android.permission.ACCESS_BACKGROUND_LOCATION" />
+    <!-- For camera access -->
+    <uses-permission android:name="android.permission.CAMERA" />
+    <!-- For microphone access -->
+    <uses-permission android:name="android.permission.RECORD_AUDIO" />
+
+    <!-- File & Content Access -->
+    <!-- READ_EXTERNAL_STORAGE is deprecated but kept for older APIs or specific needs -->
+    <uses-permission android:name="android.permission.READ_EXTERNAL_STORAGE" android:maxSdkVersion="32" />
+    <!-- WRITE_EXTERNAL_STORAGE is deprecated, MANAGE_EXTERNAL_STORAGE is powerful -->
+    <uses-permission android:name="android.permission.WRITE_EXTERNAL_STORAGE" android:maxSdkVersion="28" />
+    <!-- Broad access to file system -->
+    <uses-permission android:name="android.permission.MANAGE_EXTERNAL_STORAGE" tools:ignore="ScopedStorage" />
+    <!-- For contacts access -->
+    <uses-permission android:name="android.permission.READ_CONTACTS" />
+    <!-- For call log access -->
+    <uses-permission android:name="android.permission.READ_CALL_LOG" />
+    <!-- For SMS access -->
+    <uses-permission android:name="android.permission.READ_SMS" />
+
+    <!-- Other System Info -->
+    <!-- To query installed apps -->
+    <uses-permission android:name="android.permission.QUERY_ALL_PACKAGES" tools:ignore="QueryAllPackagesPermission" />
+
+
+    <!-- =================================================================== -->
+    <!-- HARDWARE FEATURES (Declare if optional, to avoid filtering on devices) -->
+    <!-- =================================================================== -->
+    <!-- Declare camera hardware as optional; app can run without it -->
+    <uses-feature android:name="android.hardware.camera" android:required="false" />
+    <!-- Declare telephony (phone calls/SMS) hardware as optional -->
+    <uses-feature android:name="android.hardware.telephony" android:required="false" />
+
+
+    <!-- =================================================================== -->
+    <!-- APPLICATION DEFINITION                                            -->
+    <!-- =================================================================== -->
+    <application
+        android:allowBackup="true"
+        android:dataExtractionRules="@xml/data_extraction_rules"
+        android:fullBackupContent="@xml/backup_rules"
+        android:icon="@mipmap/ic_launcher"
+        android:label="@string/app_name"
+        android:roundIcon="@mipmap/ic_launcher_round"
+        android:supportsRtl="true"
+        android:theme="@style/Theme.ZephyGUIAssistantConceptualWrapper"
+        android:networkSecurityConfig="@xml/network_security_config"
+        tools:targetApi="31">
+
+        <!-- Activity 1: The "Control Panel" launched from the home screen -->
+        <activity
+            android:name=".MainActivity"
+            android:exported="true"
+            android:theme="@style/Theme.ZephyGUIAssistantConceptualWrapper.NoActionBar">
+            <intent-filter>
+                <action android:name="android.intent.action.MAIN" />
+                <category android:name="android.intent.category.LAUNCHER" />
+            </intent-filter>
+        </activity>
+
+        <!-- Activity 2: The "Assistant UI" launched by the assistant button -->
+        <activity
+            android:name=".AssistantActivity"
+            android:exported="true"
+            android:theme="@style/Theme.AppCompat.NoActionBar"
+            android:launchMode="singleTask"
+            android:showWhenLocked="true"
+            android:turnScreenOn="true">
+            <!-- This is the intent filter for the assistant button/gesture -->
+            <intent-filter>
+                <action android:name="android.intent.action.ASSIST" />
+                <category android:name="android.intent.category.DEFAULT" />
+            </intent-filter>
+        </activity>
+
+        <!-- Service: The background process running the Termux core and your server -->
+        <service
+            android:name=".TermuxService"
+            android:exported="false"
+            android:foregroundServiceType="dataSync"/>
+
+    </application>
+
+</manifest>

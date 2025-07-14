@@ -1,0 +1,5 @@
+<resources>
+    <string name="app_name">ZephyGUI...</string>
+    <string name="open_nav">Open navigation drawer</string>
+    <string name="close_nav">Close navigation drawer</string>
+</resources>
