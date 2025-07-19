@@ -1,5 +1,5 @@
 // src/components/StarParticle.jsx
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 
 const StarSVG = (props) => (
   <svg viewBox="0 0 24 24" fill="none" xmlns="http://www.w3.org/2000/svg" {...props}>
@@ -13,22 +13,39 @@ const StarSVG = (props) => (
 );
 
 const StarParticle = ({ id, top, left, animationDelay, width, height, animationDuration }) => {
-  const randomRotationDeg = Math.random() * 360 - 180;
-  const randomRotation = `${randomRotationDeg}deg`;
+  const [randomRotation, setRandomRotation] = useState(`${Math.random() * 360 - 180}deg`);
+
+  useEffect(() => {
+    let intervalId;
+
+    // After 30 seconds, start updating every 5 seconds.
+    const timeoutId = setTimeout(() => {
+      intervalId = setInterval(() => {
+        setRandomRotation(`${Math.random() * 360 - 180}deg`);
+      }, 5000); // Update every 5 seconds
+    }, 30000); // Wait 30 seconds
+
+    // Cleanup function to clear timers when the component unmounts
+    return () => {
+      clearTimeout(timeoutId);
+      if (intervalId) {
+        clearInterval(intervalId);
+      }
+    };
+  }, []); // Empty dependency array ensures this effect runs only once on mount
 
   return (
     <div
       key={id}
       className="star-particle-svg"
       style={{
-        top: top,
-        left: left,
-        width: width,   // Use the dynamically generated width
-        height: height, // Use the dynamically generated height
-        // NEW: Apply the generated animation duration
+        top,
+        left,
+        width,
+        height,
         animation: `pop-oscillate-fade ${animationDuration} ease-in-out infinite`,
         animationDelay: `${animationDelay}s`,
-        '--random-rotation': randomRotation, // Pass the custom property to CSS
+        '--random-rotation': randomRotation, // Use state for rotation
       }}
     >
       <StarSVG />
@@ -36,5 +53,4 @@ const StarParticle = ({ id, top, left, animationDelay, width, height, animationD
   );
 };
 
-//export default StarParticle;
 export default React.memo(StarParticle);

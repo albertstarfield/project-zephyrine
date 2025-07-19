@@ -400,11 +400,11 @@ def run_self_reflection_loop():
     Main loop for self-reflection. Periodically processes eligible interactions.
     If no new interactions, may proactively re-queue an old one for re-reflection.
     """
-    global cortex_backbone_provider, ai_chat  # Assuming these are global instances
+    global cortex_backbone_provider, cortex_text_interaction  # Assuming these are global instances
     thread_name = threading.current_thread().name
     logger.info(f"✅ {thread_name} started (Continuous Reflection Logic).")
 
-    if not cortex_backbone_provider or not ai_chat:
+    if not cortex_backbone_provider or not cortex_text_interaction:
         logger.error(f"🛑 {thread_name}: CortexEngine or CortexThoughts not initialized. Cannot run reflection.")
         return
 
@@ -485,7 +485,7 @@ def run_self_reflection_loop():
                         # background_generate is async, run it and wait for it to complete
                         # The db session is passed to it.
                         asyncio.run(  # This blocks the current thread until the async function completes
-                            ai_chat.background_generate(  # type: ignore
+                            cortex_text_interaction.background_generate(  # type: ignore
                                 db=db,
                                 user_input=original_input_text,  # This is the content to reflect upon
                                 session_id=reflection_session_id_for_bg,
@@ -1137,8 +1137,8 @@ class CortexThoughts:
         # The 'classification' can be used for logging or minor adjustments if needed.
         # The more complex logic (like spawning ToT) is handled by background_generate.
 
-        if not ai_chat:
-            logger.error(f"{log_prefix} ai_chat (CortexThoughts) instance is not available.")
+        if not cortex_text_interaction:
+            logger.error(f"{log_prefix} cortex_text_interaction (CortexThoughts) instance is not available.")
             return "Error: AI chat instance is not initialized."
 
         try:
@@ -3610,144 +3610,413 @@ class CortexThoughts:
     # --- generate (Main Async Method - Fuzzy History RAG + Direct History + Log Context + Multi-LLM Routing + VLM Preprocessing) ---
     # AdelaideAlbertCortex -> Inside CortexThoughts class
 
+    def _sanitize_context_string(self, context_str: str) -> str:
+        """A final, robust filter to remove any system-internal text from a context block."""
+        if not context_str:
+            return ""
+
+        # Patterns for system logs, errors, and internal monologue markers
+        patterns_to_remove = [
+            r'\[Router Failed for:.*?\]',
+            r'\[Action Analysis Fallback for:.*?\]',
+            r'\[Self-Reflection Result for.*?\]',
+            r'User: Imagination decision analysis for:.*',
+            r'LLM Chain Error \(ELP\d\):.*',
+            r'--- Reflection Task \(ID:.*?\):.*'
+        ]
+
+        sanitized_str = context_str
+        for pattern in patterns_to_remove:
+            sanitized_str = re.sub(pattern, '', sanitized_str, flags=re.DOTALL | re.IGNORECASE)
+
+        # Also remove empty lines that might result from the substitution
+        sanitized_str = "\n".join(line for line in sanitized_str.splitlines() if line.strip())
+
+        return sanitized_str if sanitized_str else "No relevant context found."
+
+    async def _extract_narrative_anchors(self, db: Session, user_input: str) -> str:
+        """Uses an LLM to identify the core questions/anchors of the user's prompt."""
+        log_prefix = f"AnchorExtractor|{self.current_session_id}"
+        summarizer_model = self.provider.get_model("general_fast")
+        if not summarizer_model: return "Could not determine anchors."
+
+        chain = ChatPromptTemplate.from_template(
+            PROMPT_NARRATIVE_ANCHOR_EXTRACTION) | summarizer_model | StrOutputParser()
+        try:
+            anchors = await asyncio.to_thread(chain.invoke, {"user_input": user_input})
+            logger.info(f"{log_prefix} Extracted Narrative Anchors:\n{anchors}")
+            return anchors.strip()
+        except Exception as e:
+            logger.error(f"{log_prefix} Failed to extract narrative anchors: {e}")
+            return "Focus on the user's primary request."
+
+    async def _generate_progression_summary(self, db: Session, full_response_so_far: str, last_chunk: str) -> str:
+        """Uses an LLM to summarize progress and suggest the next step."""
+        log_prefix = f"ProgressionSummarizer|{self.current_session_id}"
+        if not last_chunk: return "Begin the response."
+
+        summarizer_model = self.provider.get_model("general_fast")
+        if not summarizer_model: return "Continue the previous thought."
+
+        chain = ChatPromptTemplate.from_template(PROMPT_PROGRESSION_SUMMARY) | summarizer_model | StrOutputParser()
+        try:
+            summary = await asyncio.to_thread(chain.invoke,
+                                              {"full_response_so_far": full_response_so_far, "last_chunk": last_chunk})
+            cleaned_summary = summary.strip().replace("\n", " ")
+            logger.info(f"{log_prefix} Generated Progression Summary: '{cleaned_summary}'")
+            return cleaned_summary
+        except Exception as e:
+            logger.error(f"{log_prefix} Failed to generate progression summary: {e}")
+            return "Continue building on the last paragraph logically."
+
+    def _extract_themes_from_think_block(self, think_content: str) -> List[str]:
+        """Parses a <think> block to identify key themes mentioned."""
+        themes = []
+        # A simple regex to find words or phrases after "themes:" or "theme:"
+        match = re.search(r'themes?:(.*?)(?:\n|$)', think_content, re.IGNORECASE)
+        if match:
+            theme_str = match.group(1).strip()
+            # Split by comma or semicolon and clean up
+            themes = [theme.strip() for theme in re.split(r'[,;]', theme_str) if theme.strip()]
+        return themes
+
+    async def _generate_topic_summary(self, db: Session, purified_history_interactions: List[Interaction]) -> str:
+        """
+        Uses a fast LLM to generate a clean, one-sentence topic summary of a conversation.
+        This acts as the "master topic driver" for the main generation prompt.
+        This is the complete, non-abbreviated implementation.
+        """
+        # Create a specific log prefix for this operation for easy debugging and tracing.
+        log_prefix = f"TopicDriver|{self.current_session_id}"
+        logger.info(f"{log_prefix} Generating master topic summary...")
+
+        # --- Graceful Handling of an Empty Conversation ---
+        # If this is the very first turn, there's no history to summarize.
+        # We return a clear, default state instead of making an unnecessary LLM call.
+        if not purified_history_interactions:
+            logger.debug(f"{log_prefix} No prior conversation history found. Using default initial summary.")
+            return "The user has just initiated the conversation."
+
+        # --- Prepare the Input for the Summarizer Model ---
+        # We use the existing helper to format the purified history into a simple, readable text block.
+        history_text = self._format_direct_history(purified_history_interactions)
+
+        # This dictionary will be used to fill the placeholder in the prompt template.
+        prompt_input = {"conversation_history": history_text}
+
+        # --- Select a Fast, Efficient Model for this Simple Task ---
+        # This is a perfect use case for the 'general_fast' model role.
+        summarizer_model = self.provider.get_model("general_fast")
+
+        # Gracefully handle the case where the model might not be configured.
+        if not summarizer_model:
+            logger.warning(
+                f"{log_prefix} Summarizer model ('general_fast') not available. Returning a fallback summary.")
+            return "(Context summary generation failed due to missing model configuration)"
+
+        # --- Build the LangChain Execution Chain ---
+        # This chain will take the prompt, send it to the model, and parse the output as a string.
+        chain = ChatPromptTemplate.from_template(PROMPT_TOPIC_SUMMARY) | summarizer_model | StrOutputParser()
+
+        # --- Execute the LLM Call with Robust Error Handling ---
+        try:
+            # Since chain.invoke is a synchronous (blocking) call, we must run it in a separate
+            # thread using asyncio.to_thread to prevent it from stalling the main server event loop.
+            logger.debug(f"{log_prefix} Calling summarizer model...")
+            summary = await asyncio.to_thread(chain.invoke, prompt_input)
+
+            # Clean up the raw output from the model: remove leading/trailing whitespace and any extraneous newlines.
+            cleaned_summary = summary.strip().replace("\n", " ")
+
+            logger.info(f"{log_prefix} Successfully generated topic summary: '{cleaned_summary}'")
+            return cleaned_summary
+
+        except Exception as e:
+            # If anything goes wrong during the LLM call (e.g., worker crash, timeout),
+            # we log the error and return a safe, default string. This prevents the entire
+            # direct_generate process from crashing due to a failure in this helper function.
+            logger.error(f"{log_prefix} An exception occurred while generating the topic summary: {e}", exc_info=True)
+            return "(Context summary generation failed due to a processing error)"
+
+    def _parse_think_speak_output(self, raw_llm_output: str) -> Tuple[str, str]:
+        """
+        Parses the raw output from the LLM to separate the internal monologue (`<think>`)
+        from the final, user-facing conversational response.
+
+        This function enforces the strict "Think vs. Speak" protocol defined in the system prompt.
+        It is designed to be robust against malformed or incomplete outputs from the model.
+
+        Args:
+            raw_llm_output: The complete, raw string generated by the LLM, potentially
+                            containing both a <think> block and the final answer.
+
+        Returns:
+            A tuple containing two strings:
+            - think_content (str): The full, extracted <think>...</think> block, including the tags.
+                                   Returns an empty string if no valid think block is found.
+            - speak_content (str): The cleaned, user-facing text that appeared after the </think> tag.
+                                   If the format is not followed, this will be the cleaned version
+                                   of the entire raw LLM output as a fallback.
+        """
+        log_prefix = f"ThinkSpeakParser|{self.current_session_id}"
+
+        # Initialize return variables to safe defaults.
+        think_content = ""
+        speak_content = ""
+
+        # Check for a complete <think>...</think> block. The closing tag is the most reliable indicator.
+        if "</think>" in raw_llm_output:
+            try:
+                # Split the string only on the *first* occurrence of the closing tag.
+                # This is a robust way to handle cases where the model might generate additional tags.
+                parts = raw_llm_output.split("</think>", 1)
+
+                # The first part is the content of the think block, plus the opening tag.
+                # We re-append the closing tag to make the `think_content` a complete, well-formed block.
+                think_content = parts[0] + "</think>"
+
+                # The second part is everything that came after. This is the user-facing speech.
+                # We must strip any leading/trailing whitespace or newlines.
+                speak_content = parts[1].strip()
+
+                logger.debug(f"{log_prefix} Successfully parsed Think/Speak format.")
+
+            except Exception as e:
+                # This is a safety net in case the split operation fails for an unknown reason.
+                logger.error(f"{log_prefix} Unexpected error during Think/Speak parsing: {e}. Falling back.")
+                # In case of an error, we revert to the fallback behavior.
+                think_content = ""
+                speak_content = self._cleanup_llm_output(raw_llm_output)
+
+        else:
+            # Fallback case: The model did not follow the protocol and did not include a valid </think> tag.
+            # In this scenario, we assume the entire output was intended as the user-facing response.
+            logger.warning(
+                f"{log_prefix} Model did not follow Think/Speak format (no closing </think> tag found). Using entire output as speak content.")
+            think_content = ""  # No valid think block was found.
+            speak_content = self._cleanup_llm_output(raw_llm_output)
+
+        # Return the separated parts. The calling function (`_direct_generate_logic`) will decide
+        # what to do if `speak_content` is empty.
+        return think_content, speak_content
+
+    def _truncate_string_by_tokens(self, text: str, token_limit: int) -> str:
+        """Accurately truncates a string to a maximum token limit using tiktoken."""
+        if not text or token_limit <= 0:
+            return ""
+
+        if not TIKTOKEN_AVAILABLE_APP or not cl100k_base_encoder_app:
+            # Fallback to character-based truncation if tiktoken is not available
+            return text[:token_limit * 4]
+
+        tokens = cl100k_base_encoder_app.encode(text)
+        if len(tokens) <= token_limit:
+            return text
+
+        truncated_tokens = tokens[:token_limit]
+        # .decode can sometimes fail with partial tokens at the end, so we use errors='ignore'
+        return cl100k_base_encoder_app.decode(truncated_tokens, errors='ignore')
+
+    def _build_rag_context_within_token_limit(self, all_rag_docs: List[Any], token_limit: int) -> str:
+        """
+        Builds the RAG context string by including whole documents from the start of the list
+        until the specified token limit is reached.
+        """
+        if not all_rag_docs or token_limit <= 0:
+            return "None."
+
+        context_parts = []
+        tokens_used = 0
+
+        for doc in all_rag_docs:
+            # Ensure we can get content from the document object
+            content = getattr(doc, 'page_content', '')
+            if not content:
+                continue
+
+            doc_tokens = self._count_tokens(content)
+
+            # Check if adding this document would exceed the budget
+            if tokens_used + doc_tokens > token_limit:
+                logger.warning(
+                    f"RAG context pruning: Reached token limit ({tokens_used}/{token_limit}). "
+                    f"Stopping before adding next document ({doc_tokens} tokens)."
+                )
+                break  # Stop adding documents
+
+            # Format the document for inclusion
+            # (This is a simplified version of _format_docs for a single doc)
+            formatted_doc = f"Source Chunk (RAG):\n{content}\n---\n"
+            context_parts.append(formatted_doc)
+            tokens_used += self._count_tokens(formatted_doc)  # Recount with formatting
+
+        if not context_parts:
+            return "No relevant context found within the token limit."
+
+        return "".join(context_parts)
+
     async def _direct_generate_logic(self, db: Session, user_input: str, session_id: str,
-                                 vlm_description: Optional[str] = None,
-                                 image_b64: Optional[str] = None) -> str:
+                                     vlm_description: Optional[str] = None,
+                                     image_b64: Optional[str] = None) -> str:
         """
-        The core logic for direct_generate, now with enhanced retry logic for defective responses.
+        The definitive ELP1 logic, with fixes for empty context handling and hardened
+        quality gates to ensure conversational and relevant responses. This is the complete,
+        unabridged implementation.
         """
-        direct_req_id = f"dgen-logic-{uuid.uuid4()}"
+        direct_req_id = f"dgen-logic-hardened-v2-{uuid.uuid4()}"
         log_prefix = f"⚡️ {direct_req_id}|ELP1"
         logger.info(
-            f"{log_prefix} Logic START -> Session: {session_id}, Input: '{user_input[:50]}...'")
+            f"{log_prefix} HARDENED V2 Logic START -> Session: {session_id}, Input: '{user_input[:50]}...'"
+        )
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
 
-        # Use constants from config for retry logic
-        INPUT_SPITBACK_THRESHOLD = 80 # Could also be from config
-        MAX_SPITBACK_RETRIES = 2      # Could also be from config
+        # --- 1. Initialize & Pre-Loop Setup ---
+        clean_chunks_array = []
+        overused_themes = set()
+        is_generation_finished = False
 
-        retry_count = 0
-        response_to_return_to_client = "[Error: Response not set during direct_generate logic loop]"
-        interaction_data_for_log: Dict[str, Any] = {}
-        retry_reason = "" # To store the reason for the retry
+        fast_model = self.provider.get_model("general_fast")
+        if not fast_model:
+            raise RuntimeError("Fast model 'general_fast' for direct response is not configured.")
 
-        while retry_count <= MAX_SPITBACK_RETRIES:
-            if retry_count > 0:
-                logger.warning(f"{log_prefix} Retrying (Attempt {retry_count + 1}/{MAX_SPITBACK_RETRIES + 1}). Reason: {retry_reason}")
-                await asyncio.sleep(0.5)
+        # --- 2. CONTEXT PURIFICATION & ARCHITECTURAL SETUP ---
+        direct_history_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
+        topic_summary = await self._generate_topic_summary(db, direct_history_interactions)
+        narrative_anchors = await self._extract_narrative_anchors(db, user_input)
+        progression_summary = "Begin the response by addressing the user's primary request."
 
-            interaction_data_for_log = {
-                "session_id": session_id, "mode": "chat",
-                "input_type": "image+text" if vlm_description or image_b64 else "text",
-                "user_input": user_input, "llm_response": "[Processing...]", "execution_time_ms": 0,
-                "image_description": vlm_description, "image_data": image_b64[:20] + "..." if image_b64 else None,
-                "classification": "direct_response_raw_chatml_elp1", "classification_reason": "Direct ELP1 path execution.",
+        # --- 3. DYNAMIC PRUNING LOGIC FOR SHORT PROMPTS ---
+        input_token_count = self._count_tokens(user_input)
+        is_short_prompt = input_token_count < SHORT_PROMPT_TOKEN_THRESHOLD
+        token_budget = 0
+        if is_short_prompt:
+            token_budget = input_token_count * 2
+            logger.warning(
+                f"{log_prefix} Short prompt detected ({input_token_count} tokens). "
+                f"Pruning long-term context (RAG/Topic) to a budget of {token_budget} tokens."
+            )
+
+        # --- 4. ITERATIVE GENERATION LOOP ---
+        for chunk_num in range(MAX_CHUNKS_PER_RESPONSE):
+            logger.info(f"{log_prefix} Preparing chunk {chunk_num + 1}/{MAX_CHUNKS_PER_RESPONSE}...")
+            current_response_so_far = "".join(clean_chunks_array)
+
+            rag_query = user_input if not current_response_so_far else f"Query: '{user_input}'\nContinuation: '{current_response_so_far[-500:]}'"
+            wrapped_rag_result = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db, rag_query, ELP1)
+
+            all_rag_docs: List[Any] = []
+            if wrapped_rag_result.get("status") == "success":
+                rag_data = wrapped_rag_result.get("data", (None, None, None, ""))
+                for retriever in rag_data[:3]:
+                    if retriever:
+                        docs = await asyncio.to_thread(retriever.invoke, rag_query)
+                        if docs: all_rag_docs.extend(docs)
+
+            # --- 4a. Apply Context Pruning and Sanitization ---
+            if is_short_prompt:
+                history_rag_context = self._build_rag_context_within_token_limit(all_rag_docs, token_budget)
+                pruned_topic_summary = self._truncate_string_by_tokens(topic_summary, token_budget)
+            else:
+                history_rag_context = self._sanitize_context_string(self._format_docs(all_rag_docs, "RAG"))
+                pruned_topic_summary = topic_summary
+
+            direct_history = self._sanitize_context_string(self._format_direct_history(direct_history_interactions))
+
+            # --- 4b. Dynamic Prompt Construction ---
+            prompt_placeholders = {
+                "self_termination_token": SELF_TERMINATION_TOKEN, "topic_summary": pruned_topic_summary,
+                "narrative_anchors": narrative_anchors, "progression_summary": progression_summary,
+                "overused_themes": ", ".join(overused_themes) if overused_themes else "None",
+                "history_rag": history_rag_context, "direct_history": direct_history, "input": user_input,
+                "current_response_so_far": current_response_so_far or "N/A", "chunk_num": chunk_num + 1,
+                "max_chunks": MAX_CHUNKS_PER_RESPONSE,
             }
+            system_prompt = PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT.format(**prompt_placeholders)
+
+            current_chat_history = self._convert_interactions_to_chatml_turns(direct_history_interactions)
+            user_input_for_this_iteration = user_input if chunk_num == 0 else None
+
+            raw_chatml_prompt = self._construct_raw_chatml_prompt(
+                system_content=system_prompt, history_turns=current_chat_history,
+                current_turn_content=user_input_for_this_iteration
+            )
 
             try:
-                # --- Check for StellaIcarus Hooks (as before) ---
-                if self.stella_icarus_manager and self.stella_icarus_manager.is_enabled:
-                    hook_response_text = self.stella_icarus_manager.check_and_execute(user_input, session_id)
-                    if hook_response_text is not None:
-                        logger.info(f"{log_prefix} STELLA_ICARUS_HOOK triggered. Bypassing LLM.")
-                        response_to_return_to_client = hook_response_text
-                        break # Exit the loop, we have a valid response
-
-                # --- Prepare and Call the LLM ---
-                fast_model = self.provider.get_model("general_fast")
-                if not fast_model:
-                    raise RuntimeError("Fast model 'general_fast' for direct response is not configured.")
-
-                system_prompt_content_base = PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT
-                # --- MODIFIED: Add specific retry prompts ---
-                if retry_reason == "spit-back":
-                    system_prompt_content_base = f"[System ERROR: Previous response was a repeat of the user's input. Provide a new, meaningful answer.]\n\n{system_prompt_content_base}"
-                elif retry_reason == "defective-response":
-                    system_prompt_content_base = f"[System ERROR: You are currently misbehaving and answered the wrong answer! Do not answer using these words: {DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY} on the Answer! ]\n\n{system_prompt_content_base}. Write another perspective and rephrase based on your answer and different perspective!"
-
-                rag_query_input = user_input or (f"Regarding image: {vlm_description}" if vlm_description else "")
-                # (RAG and context gathering logic remains the same...)
-                wrapped_rag_result = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db, rag_query_input, ELP1)
-                all_retrieved_rag_docs: List[Any] = []
-                if wrapped_rag_result.get("status") == "success":
-                    rag_data_tuple = wrapped_rag_result.get("data", (None, None, None, ""))
-                    url_retriever_obj, session_hist_retriever_obj, reflection_chunk_retriever_obj, _ = rag_data_tuple
-                    retrievers = [(url_retriever_obj, "URL"), (session_hist_retriever_obj, "Session"), (reflection_chunk_retriever_obj, "Reflection")]
-                    for retriever, name in retrievers:
-                        if retriever:
-                            docs = await asyncio.to_thread(retriever.invoke, rag_query_input)
-                            all_retrieved_rag_docs.extend(docs or [])
-
-                rag_context_block = self._format_docs(all_retrieved_rag_docs, "Combined RAG Context")
-                final_system_prompt_content = f"{system_prompt_content_base}\n\n--- Relevant Context ---\n{rag_context_block}\n--- End RAG ---"
-
-                # (Direct history and ChatML prompt construction logic remains the same...)
-                direct_history_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-                historical_turns_for_chatml = [] # Simplified for this example
-                raw_chatml_prompt_string = self._construct_raw_chatml_prompt(
-                    system_content=final_system_prompt_content,
-                    history_turns=historical_turns_for_chatml,
-                    current_turn_content=user_input
+                chunk_text_raw = await asyncio.to_thread(
+                    fast_model._call, messages=raw_chatml_prompt, stop=[CHATML_END_TOKEN, SELF_TERMINATION_TOKEN],
+                    priority=ELP1, max_tokens=MAX_TOKENS_PER_CHUNK, min_p=0.05
                 )
 
-                # --- LLM Call ---
-                current_temp = min(1.5, DEFAULT_LLM_TEMPERATURE + (0.1 * retry_count))
-                raw_llm_response = await asyncio.to_thread(fast_model._call, messages=raw_chatml_prompt_string, stop=[CHATML_END_TOKEN], priority=ELP1, temperature=current_temp)
+                if SELF_TERMINATION_TOKEN in chunk_text_raw:
+                    is_generation_finished = True
+                    chunk_text_raw = chunk_text_raw.split(SELF_TERMINATION_TOKEN)[0]
 
-                response_to_return_to_client = self._cleanup_llm_output(raw_llm_response)
-                interaction_data_for_log['llm_response'] = response_to_return_to_client
+                parsed_think_content, parsed_speak_content = self._parse_think_speak_output(chunk_text_raw)
+                clean_chunk_to_add = parsed_speak_content
 
-                # --- FILTER 1: Check for input spit-back ---
-                if FUZZY_AVAILABLE and fuzz:
-                    similarity_score = fuzz.ratio(user_input.lower(), response_to_return_to_client.lower())
-                    if similarity_score > INPUT_SPITBACK_THRESHOLD:
-                        retry_count += 1
-                        retry_reason = "spit-back" # Set reason for next loop's prompt
-                        error_msg = f"[Spit-Back Detected] LLM re-spitting input. Similarity: {similarity_score}%"
-                        logger.error(f"{log_prefix} {error_msg}")
-                        if retry_count > MAX_SPITBACK_RETRIES:
-                            response_to_return_to_client = "[System Error: The AI model failed to provide a valid response after multiple attempts.]"
-                            break
-                        continue # Go to the next iteration of the while loop
+                if chunk_num > 0 and current_response_so_far:
+                    if fuzz.partial_ratio(current_response_so_far, clean_chunk_to_add) > FUZZY_DUPLICATION_THRESHOLD:
+                        is_generation_finished = True;
+                        clean_chunk_to_add = ""
 
-                # --- FILTER 2: Check for canned/defective responses ---
-                is_defective_response = False
-                if FUZZY_AVAILABLE and fuzz:
-                    # Loop through the list from CortexConfiguration.py
-                    for defective_phrase in DefectiveWordDirectGenerateArray:
-                        defective_score = fuzz.partial_ratio(defective_phrase.lower(), response_to_return_to_client.lower())
-                        if defective_score > DEFECTIVE_WORD_THRESHOLD: # Use threshold from config
-                            is_defective_response = True
-                            retry_reason = "defective-response" # Set reason for next loop's prompt
-                            error_msg = f"[Defective Response Detected] Canned Response to canned phrase ('{defective_phrase}'). Similarity: {defective_score}%"
-                            logger.error(f"{log_prefix} {error_msg}")
-                            break # Found a match, no need to check other phrases
+                if clean_chunk_to_add.strip():
+                    clean_chunks_array.append(clean_chunk_to_add)
+                    new_response_so_far = current_response_so_far + clean_chunk_to_add
+                    progression_summary = await self._generate_progression_summary(db, new_response_so_far,
+                                                                                   clean_chunk_to_add)
+                    new_themes = self._extract_themes_from_think_block(parsed_think_content)
+                    if new_themes:
+                        overused_themes.update(new_themes)
+                elif not is_generation_finished:
+                    is_generation_finished = True
 
-                if is_defective_response:
-                    retry_count += 1
-                    if retry_count > MAX_SPITBACK_RETRIES:
-                        response_to_return_to_client = "[System Error: The keep model misbehaved. and session has been destroyed due to that issue.]"
-                        break
-                    continue # Go to the next iteration of the while loop
+                if not is_generation_finished and not chunk_text_raw.strip():
+                    is_generation_finished = True
 
-                # If all checks pass, we have a valid response, so we break the loop
+                if is_generation_finished: break
+
+            except Exception as e:
+                logger.error(f"{log_prefix} Error in chunk {chunk_num + 1}: {e}", exc_info=True);
                 break
 
-            except Exception as e_direct_path:
-                logger.error(f"❌ {log_prefix}: Error during direct_generate logic: {e_direct_path}", exc_info=True)
-                response_to_return_to_client = f"[Error generating direct response (ELP1): {type(e_direct_path).__name__}]"
-                break
+        # --- 5. FINAL ASSEMBLY & QUALITY GATES ---
+        full_response_text = "".join(clean_chunks_array)
+        response_to_return_to_client = full_response_text
 
-        # --- Final Logging and Return ---
+        if not response_to_return_to_client.strip() or response_to_return_to_client.strip().lower() == "n/a":
+            logger.error(f"{log_prefix} Final response is empty or 'N/A'. Model failed.")
+            response_to_return_to_client = "[System Error: The AI model could not generate a valid response for this request.]"
+
+        if FUZZY_AVAILABLE and fuzz and user_input.strip():
+            normalized_user = ''.join(filter(str.isalnum, user_input.lower()))
+            normalized_response = ''.join(
+                filter(str.isalnum, response_to_return_to_client[:len(user_input) + 20].lower()))
+            if len(normalized_user) > 15 and normalized_response.startswith(normalized_user):
+                logger.error(f"{log_prefix} Spit-back detected! Response starts with user input. Overriding.")
+                response_to_return_to_client = "[System Error: The AI model repeated the input instead of providing a valid response.]"
+
+        # --- 6. Final Logging and Return ---
         final_duration_ms = (time.monotonic() - direct_start_time) * 1000.0
-        interaction_data_for_log['execution_time_ms'] = final_duration_ms
-        # Update the final response text in the log data
-        interaction_data_for_log['llm_response'] = response_to_return_to_client
+        interaction_data_for_log = {
+            "session_id": session_id, "mode": "chat", "input_type": "text", "user_input": user_input,
+            "llm_response": response_to_return_to_client, "execution_time_ms": final_duration_ms,
+            "classification": "direct_response_definitive_elp1",
+        }
         queue_interaction_for_batch_logging(**interaction_data_for_log)
 
         return response_to_return_to_client
 
+    def _convert_interactions_to_chatml_turns(self, interactions: List[Interaction]) -> List[Dict[str, str]]:
+        """Helper to convert a list of Interaction DB objects to the ChatML dictionary format."""
+        turns = []
+        sorted_interactions = sorted(interactions, key=lambda i: i.timestamp)
+        for interaction in sorted_interactions:
+            if interaction.input_type == 'text' and interaction.user_input:
+                turns.append({"role": "user", "content": interaction.user_input})
+            elif interaction.llm_response and interaction.input_type == 'llm_response':
+                turns.append({"role": "assistant", "content": interaction.llm_response})
+        return turns
 
     async def direct_generate(self, db: Session, user_input: str, session_id: str,
                               vlm_description: Optional[str] = None,
@@ -5621,38 +5890,38 @@ GENERATION_DONE_SENTINEL = object()
 def _stream_openai_chat_response_generator_flask(
         session_id: str,
         user_input: str,
-        classification: str,  # Note: direct_generate might not use this for its own logic.
-        image_b64: Optional[str],  # <<< Added image_b64 as parameter
-        model_name: str = "Amaryllis-Adelaide-LegacyMoEArch-IdioticRecursiveLearner-FlaskStream"
+        classification: str,
+        image_b64: Optional[str],
+        model_name: str = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream"
 ):
     """
-    Generator for Flask: Runs ai_chat.direct_generate in a background thread for ELP1 streaming.
-    Streams logs live via a queue, handles errors and cleanup, and yields
-    Server-Sent Events (SSE) formatted chunks.
+    The definitive Server-Sent Events (SSE) generator for Flask. It orchestrates the
+    dual-generate process by running the fast ELP1 logic in a background thread while
+    streaming results. Features configurable live log streaming or a processing animation,
+    and robustly parses the final <think>/<speak> output.
     """
     resp_id = f"chatcmpl-{uuid.uuid4()}"
     timestamp = int(time.time())
-    logger.debug(
-        f"FLASK_STREAM_LIVE {resp_id}: Starting generation for session {session_id}, input: '{user_input[:50]}...'")
+    logger.debug(f"FLASK_STREAM_V3 {resp_id}: Starting definitive generator for session {session_id}")
 
     message_queue = queue.Queue()
     background_thread: Optional[threading.Thread] = None
     final_result_data = {
-        "text": "Error: Generation failed to return result from background thread.",
+        "text": "Error: Generation failed to return a result from the background thread.",
         "finish_reason": "error",
-        "error": None  # Store actual exception object if one occurs
+        "error": None
     }
-    sink_id_holder = [None]  # Use a list to pass sink_id by reference to inner func
+    sink_id_holder = [None]  # Use a list to pass the sink ID by reference
 
     def yield_chunk(delta_content: Optional[str] = None, role: Optional[str] = None,
                     finish_reason: Optional[str] = None):
+        """Helper to format data into the OpenAI SSE chunk structure."""
         delta = {}
         if role: delta["role"] = role
         if delta_content is not None: delta["content"] = delta_content
         chunk_payload = {
             "id": resp_id, "object": "chat.completion.chunk", "created": timestamp,
-            "model": model_name,
-            "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}]
+            "model": model_name, "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}]
         }
         return f"data: {json.dumps(chunk_payload)}\n\n"
 
@@ -5660,286 +5929,148 @@ def _stream_openai_chat_response_generator_flask(
             q: queue.Queue,
             sess_id: str,
             u_input: str,
-            classi_param_ignored: str,  # Classification is not directly used by direct_generate
-            img_b64_param_for_thread: Optional[str]  # <<< This is the new parameter
+            classi_param: str,
+            img_b64_param: Optional[str]
     ):
         """
-        Target function for the background thread.
-        Runs ai_chat.direct_generate, handles logging sink, and puts results/sentinel on queue.
+        Target function for the background thread. Runs the async direct_generate logic
+        in a new event loop, captures logs, and puts the final result onto the queue.
         """
-        nonlocal sink_id_holder  # To modify sink_id in the outer scope
-        db_session: Optional[Session] = None
-        temp_loop: Optional[asyncio.AbstractEventLoop] = None
         log_session_id = f"{sess_id}-{threading.get_ident()}"
-
-        # Default outcomes for this thread
-        thread_final_text_val = "Error: Processing failed within background thread (initial)."
-        thread_final_reason_val = "error"
+        thread_final_text = "Error: Processing failed within the background thread."
+        thread_final_reason = "error"
         thread_final_error_obj = None
+        db_session: Optional[Session] = None
 
         try:
-            try:
-                temp_loop = asyncio.get_event_loop()
-                if temp_loop.is_running():
-                    logger.warning(
-                        f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): Event loop already running in this thread.")
-            except RuntimeError:
-                logger.debug(
-                    f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): Creating new event loop for this thread.")
-                temp_loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(temp_loop)
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
 
             def log_sink(message):
                 record = message.record
-                bound_req_session_id = record.get("extra", {}).get("request_session_id")
-                if bound_req_session_id == log_session_id:
+                if record["extra"].get("request_session_id") == log_session_id:
                     log_entry = f"[{record['time'].strftime('%H:%M:%S.%f')[:-3]} {record['level'].name}] {record['message']}"
                     try:
                         q.put_nowait(("LOG", log_entry))
                     except queue.Full:
                         pass
-                    except Exception as e_log_put:
-                        print(f"ERROR in log_sink putting LOG to queue: {e_log_put}", file=sys.stderr)
 
-            try:
-                # Ensure ai_chat is not None before proceeding
-                if ai_chat is None:
-                    raise RuntimeError("Global ai_chat instance is not initialized.")
-
-                # LOG_SINK_LEVEL and LOG_SINK_FORMAT should be available from CortexConfiguration or defined
-                sink_id_holder[0] = logger.add(log_sink, level=LOG_SINK_LEVEL, format=LOG_SINK_FORMAT,
-                                               filter=lambda record: record["extra"].get(
-                                                   "request_session_id") == log_session_id, enqueue=False)
-                logger.debug(
-                    f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): Log sink {sink_id_holder[0]} added.")
-            except Exception as sink_add_err:
-                logger.error(
-                    f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): CRITICAL - Failed to add Loguru sink: {sink_add_err}")
-                thread_final_error_obj = sink_add_err
-                thread_final_text_val = f"Error setting up internal logging: {sink_add_err}"
-                raise sink_add_err  # Propagate to outer try-except in this function
+            sink_id_holder[0] = logger.add(log_sink, level=LOG_SINK_LEVEL, format=LOG_SINK_FORMAT,
+                                           filter=lambda r: r["extra"].get("request_session_id") == log_session_id)
 
             async def run_generate_with_logging_inner():
-                nonlocal db_session, thread_final_text_val, thread_final_reason_val, thread_final_error_obj
+                nonlocal db_session, thread_final_text, thread_final_reason, thread_final_error_obj
                 try:
-                    db_session = SessionLocal()  # New DB session for this async task within the thread
+                    db_session = SessionLocal()
                     if not db_session: raise RuntimeError("Failed to create DB session for direct_generate.")
 
-                    with logger.contextualize(request_session_id=log_session_id):  # For logs within direct_generate
-                        logger.info(f"Async direct_generate task starting for streaming (ELP1)...")
-                        # ai_chat should be the global instance initialized in AdelaideAlbertCortex
-                        result_text = await ai_chat.direct_generate(
-                            db=db_session,
-                            user_input=u_input,
-                            session_id=sess_id,
-                            vlm_description=None,  # Assuming no VLM desc for this streaming ELP1 path for simplicity,
-                            # if user sends image, it would be pre-processed before calling stream generator.
-                            image_b64=img_b64_param_for_thread  # Pass the image_b64
+                    with logger.contextualize(request_session_id=log_session_id):
+                        # Use the global cortex_text_interaction instance
+                        result_text = await cortex_text_interaction.direct_generate(
+                            db=db_session, user_input=u_input, session_id=sess_id,
+                            vlm_description=None, image_b64=img_b64_param
                         )
-                        thread_final_text_val = result_text if result_text is not None else "Error: Generation returned None."
-
-                        if "interrupted" in thread_final_text_val.lower() or isinstance(thread_final_error_obj,
-                                                                                        TaskInterruptedException):
-                            thread_final_reason_val = "error"  # Or a specific "interrupted" status
-                            logger.warning(f"Async direct_generate task INTERRUPTED or returned interruption message.")
-                        elif "internal error" in thread_final_text_val.lower() or (
-                                thread_final_text_val.lower().startswith(
-                                        "error:") and "encountered a system issue" not in thread_final_text_val.lower()):
-                            thread_final_reason_val = "error"
-                            logger.warning(f"Async direct_generate task completed with internal error indication.")
-                        else:
-                            thread_final_reason_val = "stop"
-                            logger.info(f"Async direct_generate task completed successfully.")
-
-                except TaskInterruptedException as tie_direct_inner:
+                        thread_final_text = result_text
+                        thread_final_reason = "stop"
+                except Exception as e:
                     with logger.contextualize(request_session_id=log_session_id):
-                        logger.error(
-                            f"Async direct_generate task INTERRUPTED by ELP1 TaskInterruptedException: {tie_direct_inner}")
-                    thread_final_error_obj = tie_direct_inner
-                    thread_final_text_val = f"[Critical Error: ELP1 processing was interrupted by another high-priority task: {tie_direct_inner}]"
-                    thread_final_reason_val = "error"
-                except Exception as e_direct_inner:
-                    with logger.contextualize(request_session_id=log_session_id):
-                        logger.error(f"Async direct_generate task EXCEPTION: {e_direct_inner}")
-                        logger.exception("Async Direct Generate (Inner) Traceback:")
-                    thread_final_error_obj = e_direct_inner
-                    thread_final_text_val = f"[Error during direct generation for streaming: {type(e_direct_inner).__name__} - {e_direct_inner}]"
-                    thread_final_reason_val = "error"
+                        logger.error(f"Async direct_generate task EXCEPTION: {e}", exc_info=True)
+                    thread_final_error_obj = e
+                    thread_final_text = f"[Error during direct generation for streaming: {type(e).__name__} - {e}]"
+                    thread_final_reason = "error"
                 finally:
                     if db_session:
-                        try:
-                            db_session.close()
-                            logger.debug(
-                                f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): DB session closed for direct_generate.")
-                        except Exception as ce:
-                            logger.error(f"Error closing DB session for direct_generate: {ce}")
+                        db_session.close()
 
-            temp_loop.run_until_complete(run_generate_with_logging_inner())
+            loop.run_until_complete(run_generate_with_logging_inner())
 
-        except Exception as outer_thread_err:
-            logger.error(
-                f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): Error in outer background thread function: {outer_thread_err}")
-            if thread_final_error_obj is None:  # Only set if not already set by inner errors
-                thread_final_error_obj = outer_thread_err
-                thread_final_text_val = f"Background thread execution error (outer): {outer_thread_err}"
-                thread_final_reason_val = "error"
+        except Exception as e:
+            thread_final_error_obj = e
+            thread_final_text = f"Error in background thread setup: {e}"
+            thread_final_reason = "error"
         finally:
-            logger.debug(
-                f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): FINALLY block in run_async_generate_in_thread. Text: '{thread_final_text_val[:50]}', Reason: {thread_final_reason_val}")
-            try:
-                q.put(("RESULT", (thread_final_text_val, thread_final_reason_val, thread_final_error_obj)))
-                logger.debug(f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): Put RESULT on queue.")
-            except Exception as put_result_err:
-                logger.error(
-                    f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): CRITICAL - FAILED to put RESULT on queue: {put_result_err}")
-            try:
-                q.put(GENERATION_DONE_SENTINEL)
-                logger.debug(f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): Put DONE sentinel on queue.")
-            except Exception as put_done_err:
-                logger.error(
-                    f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): CRITICAL - FAILED to put DONE sentinel: {put_done_err}")
+            q.put(("RESULT", (thread_final_text, thread_final_reason, thread_final_error_obj)))
+            q.put(GENERATION_DONE_SENTINEL)
+            if sink_id_holder[0] is not None:
+                logger.remove(sink_id_holder[0])
+            loop.close()
 
-            current_sink_id = sink_id_holder[0]
-            if current_sink_id is not None:
-                try:
-                    logger.remove(current_sink_id)
-                    logger.debug(
-                        f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): Log sink {current_sink_id} removed.")
-                except Exception as remove_err:
-                    logger.error(f"Failed remove log sink {current_sink_id}: {remove_err}")
-            logger.info(
-                f"FLASK_STREAM_LIVE {resp_id} (Thread {log_session_id}): Background thread function fully finished.")
-
-    # --- Main Generator Logic (Runs in Flask Request Thread) ---
+    # --- Main Generator Logic (Runs in the Flask Request Thread) ---
     try:
-        logger.debug(f"FLASK_STREAM_LIVE {resp_id}: Starting background thread for ELP1 streaming logic...")
         background_thread = threading.Thread(
             target=run_async_generate_in_thread,
-            args=(
-                message_queue,
-                session_id,
-                user_input,
-                classification,  # Pass along
-                image_b64  # <<< Pass the image_b64 received by the generator
-            ),
+            args=(message_queue, session_id, user_input, classification, image_b64),
             daemon=True
         )
         background_thread.start()
-        logger.debug(f"FLASK_STREAM_LIVE {resp_id}: Background thread started (ID: {background_thread.ident}).")
 
         yield yield_chunk(role="assistant", delta_content="<think>\n")
-        time.sleep(0.01)  # Minimal sleep
-        yield yield_chunk(delta_content="Starting live processing...\n---\n")
-        time.sleep(0.01)
 
-        logs_streamed_count = 0
         processing_complete = False
         result_received = False
+        animation_frame = 0
 
         while not processing_complete:
             try:
-                queue_item = message_queue.get(timeout=LOG_QUEUE_TIMEOUT)
+                queue_item = message_queue.get(timeout=STREAM_ANIMATION_DELAY_SECONDS)
+
                 if queue_item is GENERATION_DONE_SENTINEL:
-                    logger.debug(f"FLASK_STREAM_LIVE {resp_id}: Received DONE sentinel.")
                     processing_complete = True
                     continue
-                elif isinstance(queue_item, tuple) and len(queue_item) == 2:
-                    message_type, message_data = queue_item
-                    if message_type == "LOG":
+
+                message_type, message_data = queue_item
+                if message_type == "LOG":
+                    if STREAM_INTERNAL_LOGS:
                         yield yield_chunk(delta_content=message_data + "\n")
-                        logs_streamed_count += 1
-                    elif message_type == "RESULT":
-                        final_result_data["text"], final_result_data["finish_reason"], final_result_data[
-                            "error"] = message_data
-                        result_received = True
-                        logger.debug(
-                            f"FLASK_STREAM_LIVE {resp_id}: Received RESULT from queue. Reason: {final_result_data['finish_reason']}")
-                    else:
-                        logger.warning(f"Unexpected message type from queue: {message_type}")
-                else:
-                    logger.error(f"Unexpected item structure from queue: {type(queue_item)}")
+                elif message_type == "RESULT":
+                    result_received = True
+                    final_result_data["text"], final_result_data["finish_reason"], final_result_data[
+                        "error"] = message_data
+
             except queue.Empty:
-                if not processing_complete and not background_thread.is_alive():
-                    logger.error(
-                        f"FLASK_STREAM_LIVE {resp_id}: Background thread died unexpectedly before DONE sentinel.")
-                    if not result_received:
-                        final_result_data["error"] = RuntimeError("Background thread died before sending result.")
-                        final_result_data["finish_reason"] = "error"
-                        final_result_data["text"] = "[Critical Error: Background processing failed prematurely]"
-                    else:  # Result received, but not DONE
-                        final_result_data["error"] = RuntimeError(
-                            "Background thread died after result, before completion signal.")
-                        final_result_data["finish_reason"] = "error"
-                    processing_complete = True
-            except Exception as q_err:
-                logger.error(f"FLASK_STREAM_LIVE {resp_id}: Error getting from queue: {q_err}")
-                if final_result_data["error"] is None:
-                    final_result_data["error"] = q_err
-                    final_result_data["finish_reason"] = "error"
+                if not STREAM_INTERNAL_LOGS and not result_received:
+                    char = STREAM_ANIMATION_CHARS[animation_frame]
+                    yield yield_chunk(delta_content=f"{char} ")
+                    animation_frame = (animation_frame + 1) % len(STREAM_ANIMATION_CHARS)
+
+            if not processing_complete and not background_thread.is_alive():
+                logger.error(f"FLASK_STREAM_V3 {resp_id}: Background thread died unexpectedly.")
+                if not result_received:
+                    final_result_data["error"] = RuntimeError("Background thread failed.")
+                    final_result_data["text"] = "[Critical Error: Background processing failed prematurely]"
                 processing_complete = True
 
-        logger.debug(
-            f"FLASK_STREAM_LIVE {resp_id}: Exited queue loop. Logs: {logs_streamed_count}. Result recv: {result_received}")
-        yield yield_chunk(delta_content="\n---\nLog stream complete.\n</think>\n\n")
+        yield yield_chunk(delta_content="\nLog stream complete.\n</think>\n\n")
 
         final_text_to_stream = final_result_data["text"]
         final_reason_to_send = final_result_data["finish_reason"]
-        if final_result_data["error"] is not None:  # If any error was captured
-            final_reason_to_send = "error"
-            logger.warning(f"FLASK_STREAM_LIVE {resp_id}: Final result error: {final_result_data['error']}")
+        if final_result_data["error"]: final_reason_to_send = "error"
 
-        cleaned_final_text_for_stream = final_text_to_stream
-        if result_received and isinstance(final_text_to_stream, str):
-            if ai_chat:  # Check if ai_chat instance exists
-                try:
-                    cleaned_final_text_for_stream = ai_chat._cleanup_llm_output(final_text_to_stream)
-                except Exception as e_clean:
-                    logger.error(f"Streamer cleanup error: {e_clean}")
-            else:
-                logger.error(f"ai_chat instance not found for final cleanup in streamer.")
-        elif not result_received:
-            logger.error(f"FLASK_STREAM_LIVE {resp_id}: No valid result received. Streaming default error text.")
+        # Use the robust Think/Speak parser on the final result
+        _, speak_content = cortex_text_interaction._parse_think_speak_output(final_text_to_stream)
 
-        if cleaned_final_text_for_stream:
-            logger.info(
-                f"FLASK_STREAM_LIVE {resp_id}: Streaming final content ({len(cleaned_final_text_for_stream)} chars). Finish: {final_reason_to_send}")
-            # Streaming character by character or small chunks for live effect
-            # This part can be adjusted for desired streaming speed/behavior
-            words = cleaned_final_text_for_stream.split(' ')
-            for word_idx, word in enumerate(words):
-                delta_to_send = word + (' ' if word_idx < len(words) - 1 else '')
-                yield yield_chunk(delta_content=delta_to_send)
-                # Simulate token speed - adjust sleep time as needed
-                # Very short sleep for responsiveness, can be removed if causing too much overhead
-                time.sleep(0.001)  # Use await asyncio.sleep for async generator
+        if speak_content:
+            logger.info(f"FLASK_STREAM_V3 {resp_id}: Streaming final 'speak' content ({len(speak_content)} chars).")
+            words = speak_content.split(' ')
+            for i, word in enumerate(words):
+                yield yield_chunk(delta_content=word + (' ' if i < len(words) - 1 else ''))
+                time.sleep(0.01)
         else:
-            logger.warning(
-                f"FLASK_STREAM_LIVE {resp_id}: Final cleaned response text is empty. Finish: {final_reason_to_send}")
-            if final_reason_to_send != "error": final_reason_to_send = "stop"  # Empty but not error means stop
+            logger.warning(f"FLASK_STREAM_V3 {resp_id}: Final speak content is empty. Reporting error to client.")
+            yield yield_chunk(delta_content="[System Error: Failed to generate a valid response.]")
+            final_reason_to_send = "error"
 
         yield yield_chunk(finish_reason=final_reason_to_send)
         yield "data: [DONE]\n\n"
-        logger.debug(f"FLASK_STREAM_LIVE {resp_id}: Finished streaming response.")
 
     except GeneratorExit:
-        logger.warning(f"FLASK_STREAM_LIVE {resp_id}: Generator exited (client disconnected).")
-    except Exception as e_gen_main:
-        logger.error(f"FLASK_STREAM_LIVE {resp_id}: Unhandled error in streaming generator main: {e_gen_main}")
-        logger.exception("Streaming Orchestration Main Traceback:")
-        try:
-            err_delta = {"content": f"\n\n[STREAMING ORCHESTRATION ERROR: {e_gen_main}]"}
-            err_chunk_payload = {"id": resp_id, "object": "chat.completion.chunk", "created": timestamp,
-                                 "model": model_name,
-                                 "choices": [{"index": 0, "delta": err_delta, "finish_reason": "error"}]}
-            yield f"data: {json.dumps(err_chunk_payload)}\n\n"
-            yield "data: [DONE]\n\n"
-        except Exception as e_final_err:
-            logger.error(f"Failed yield final error chunk: {e_final_err}")
+        logger.warning(f"FLASK_STREAM_V3 {resp_id}: Client disconnected from stream.")
+    except Exception as e:
+        logger.error(f"FLASK_STREAM_V3 {resp_id}: Unhandled error in streaming generator: {e}", exc_info=True)
+        yield yield_chunk(delta_content=f"\n\n[STREAMING ORCHESTRATION ERROR: {e}]", finish_reason="error")
+        yield "data: [DONE]\n\n"
     finally:
-        if background_thread and background_thread.is_alive():
-            logger.warning(
-                f"FLASK_STREAM_LIVE {resp_id}: Generator finished, but BG thread {background_thread.ident} might still be daemonized.")
-        logger.debug(f"FLASK_STREAM_LIVE {resp_id}: Generator function fully finished.")
+        logger.debug(f"FLASK_STREAM_V3 {resp_id}: Generator function fully finished.")
 
 
 @contextlib.contextmanager
@@ -6399,7 +6530,7 @@ async def _run_background_asr_and_translation_analysis(
             # It's async, so we can await it if this function is called via asyncio.create_task
             # or just let it run if this is already a background thread.
             # Since _run_background_asr_and_translation_analysis is async, we can await.
-            await ai_chat.background_generate(  # type: ignore
+            await cortex_text_interaction.background_generate(  # type: ignore
                 db=db_bg_task,  # Pass the DB session for this background task
                 user_input=deep_translation_prompt,
                 session_id=deep_translation_session_id,
@@ -6463,7 +6594,7 @@ async def run_startup_benchmark():
     """
     global BENCHMARK_ELP1_TIME_MS # Declare that we are modifying the global variable
     logger.info("--- Running Startup Benchmark for direct_generate() or ELP1 ---")
-    if not ai_chat:
+    if not cortex_text_interaction:
         logger.error("DETERMENISM_ELP1_CALIBRATION: (CortexThoughts) instance not available. Skipping benchmark.")
         return
 
@@ -6481,7 +6612,7 @@ async def run_startup_benchmark():
         start_time = time.monotonic()
 
         # Calling the direct_generate function to be benchmarked
-        response_text = await ai_chat.direct_generate(
+        response_text = await cortex_text_interaction.direct_generate(
             db=benchmark_db_session,
             user_input=story_prompt,
             session_id=benchmark_session_id
@@ -6761,7 +6892,7 @@ async def _get_and_process_proactive_interaction():
             return None # Return None if nothing was found
 
         # 2. Blocking LLM Call (invoke is synchronous)
-        decision_chain = ChatPromptTemplate.from_template(PROMPT_XMPP_SHOULD_I_RECALL) | ai_chat.provider.get_model("general_fast") | StrOutputParser()
+        decision_chain = ChatPromptTemplate.from_template(PROMPT_XMPP_SHOULD_I_RECALL) | cortex_text_interaction.provider.get_model("general_fast") | StrOutputParser()
         decision = decision_chain.invoke({
             "past_user_input": past_interaction.user_input,
             "past_ai_response": past_interaction.llm_response
@@ -6776,7 +6907,7 @@ async def _get_and_process_proactive_interaction():
             past_user_input=past_interaction.user_input,
             past_ai_response=past_interaction.llm_response
         )
-        proactive_message = await ai_chat.direct_generate(db, revisit_prompt, "proactive_thought_session")
+        proactive_message = await cortex_text_interaction.direct_generate(db, revisit_prompt, "proactive_thought_session")
         
         is_logical = True
         for bad_phrase in XMPP_PROACTIVE_BAD_RESPONSE_MARKERS:
@@ -6963,13 +7094,13 @@ async def handle_interaction():
         # --- Workflow Logic ---
         if reset:
             # Pass the created db session to reset methods
-            ai_chat.reset(db, session_id)
+            cortex_text_interaction.reset(db, session_id)
             ai_agent.reset(db, session_id) # Agent reset might also need db session
             response_text = "Chat and Agent session contexts reset."
             status_code = 200
         elif url:
             # process_url is synchronous, run in thread
-            response_text = await asyncio.to_thread(ai_chat.process_url, db, url, session_id)
+            response_text = await asyncio.to_thread(cortex_text_interaction.process_url, db, url, session_id)
             status_code = 200 if "Error" not in response_text else 500
         elif image_b64:
              if len(image_b64) % 4 != 0 or not all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=' for c in image_b64):
@@ -6981,7 +7112,7 @@ async def handle_interaction():
                  # It now returns description, image_content_part tuple
                  # For this simple endpoint, we just return the description/error text
                  description_or_error, _ = await asyncio.to_thread(
-                     ai_chat.process_image, db, image_b64, session_id
+                     cortex_text_interaction.process_image, db, image_b64, session_id
                  )
                  response_text = description_or_error
                  status_code = 200 if "Error" not in response_text else 500
@@ -6990,7 +7121,7 @@ async def handle_interaction():
             # 1. Classify complexity first (sync in thread)
             classification_data = {"session_id": session_id, "mode": "chat", "input_type": "classification", "user_input": prompt[:100]}
             input_classification = await asyncio.to_thread(
-                ai_chat._classify_input_complexity, db, prompt, classification_data
+                cortex_text_interaction._classify_input_complexity, db, prompt, classification_data
             )
             classification_reason = classification_data.get('classification_reason', 'N/A')
             interaction_data = classification_data # Use this dict for logging later
@@ -7010,7 +7141,7 @@ async def handle_interaction():
             else:
                  # Use the main generate function for chat_simple/chat_complex
                  logger.info(f"🗣️ Running Chat workflow via generate (Classification: {input_classification})...")
-                 response_text = await ai_chat.generate(
+                 response_text = await cortex_text_interaction.generate(
                      db, prompt, session_id, classification=input_classification
                  )
                  status_code = 500 if "internal error" in response_text.lower() or "Error:" in response_text else 200
@@ -7391,7 +7522,7 @@ def handle_legacy_completions():
             # Pass the legacy prompt directly as user_input
             # Classification will be handled inside `generate`
             response_text = asyncio.run(
-                ai_chat.generate(db, prompt, session_id)
+                cortex_text_interaction.generate(db, prompt, session_id)
             )
 
             if "internal error" in response_text.lower() or "Error:" in response_text or "Traceback" in response_text:
@@ -7527,7 +7658,7 @@ def handle_openai_chat_completion():
         stream_requested_by_client = raw_request_data_dict.get("stream", False)
         model_requested_by_client = raw_request_data_dict.get("model")
         session_id_for_logs = raw_request_data_dict.get("session_id", f"openai_req_{request_id}")
-        if ai_chat: ai_chat.current_session_id = session_id_for_logs  # Set session for CortexThoughts instance
+        if cortex_text_interaction: cortex_text_interaction.current_session_id = session_id_for_logs  # Set session for CortexThoughts instance
 
         logger.debug(
             f"{request_id}: Request parsed - SessionID={session_id_for_logs}, Stream: {stream_requested_by_client}, ModelReq: {model_requested_by_client}")
@@ -7578,7 +7709,7 @@ def handle_openai_chat_completion():
         logger.info(f"{request_id}: Classifying input for background task planning (ELP0 context)...")
         classification_data_for_bg = {"session_id": session_id_for_logs, "mode": "chat", "input_type": "classification"}
         # _classify_input_complexity is synchronous and handles its own ELP0 for LLM calls
-        classification_for_background = ai_chat._classify_input_complexity(db, user_input_from_req,
+        classification_for_background = cortex_text_interaction._classify_input_complexity(db, user_input_from_req,
                                                                            classification_data_for_bg)
         logger.info(
             f"{request_id}: Input classified for background task as: '{classification_for_background}'. Reason: {classification_data_for_bg.get('classification_reason', 'N/A')}")
@@ -7593,10 +7724,10 @@ def handle_openai_chat_completion():
         try:
             if image_b64_from_req:  # If user sent an image
                 logger.info(f"{request_id}: Preprocessing user-provided image for direct_generate (ELP1 context)...")
-                # ai_chat.process_image is synchronous but might call VLM (ELP0)
+                # cortex_text_interaction.process_image is synchronous but might call VLM (ELP0)
                 # For ELP1 path, VLM desc should ideally be fast or direct_generate robust to its absence.
                 # Let's assume process_image is quick enough or handles VLM with ELP0 gracefully.
-                vlm_desc_for_bg_and_direct, _ = ai_chat.process_image(db, image_b64_from_req, session_id_for_logs)
+                vlm_desc_for_bg_and_direct, _ = cortex_text_interaction.process_image(db, image_b64_from_req, session_id_for_logs)
                 if vlm_desc_for_bg_and_direct and "Error:" in vlm_desc_for_bg_and_direct:
                     logger.error(
                         f"{request_id}: VLM preprocessing for direct path failed: {vlm_desc_for_bg_and_direct}")
@@ -7612,7 +7743,7 @@ def handle_openai_chat_completion():
             if not stream_requested_by_client:
                 logger.info(f"{request_id}: Non-streaming path. Calling direct_generate now...")
                 direct_response_text_val = asyncio.run(
-                    ai_chat.direct_generate(
+                    cortex_text_interaction.direct_generate(
                         db,
                         user_input_from_req,
                         session_id_for_logs,
@@ -7706,9 +7837,9 @@ def handle_openai_chat_completion():
                     if acquired_semaphore: background_generate_task_semaphore.release()
                     return
 
-                logger.info(f"{bg_log_prefix_thread} Calling ai_chat.background_generate...")
+                logger.info(f"{bg_log_prefix_thread} Calling cortex_text_interaction.background_generate...")
                 loop.run_until_complete(
-                    ai_chat.background_generate(
+                    cortex_text_interaction.background_generate(
                         db=bg_db_session,
                         user_input=user_input_bg,
                         session_id=session_id_bg,
@@ -7716,7 +7847,7 @@ def handle_openai_chat_completion():
                         image_b64=image_b64_bg
                     )
                 )
-                logger.info(f"{bg_log_prefix_thread} ai_chat.background_generate task completed.")
+                logger.info(f"{bg_log_prefix_thread} cortex_text_interaction.background_generate task completed.")
 
 
             except Exception as task_err:
@@ -7912,7 +8043,7 @@ async def handle_openai_moderations():
 
         # --- Call CortexThoughts.direct_generate() for moderation assessment ---
         # direct_generate runs at ELP1
-        if not ai_chat:  # Should be initialized globally
+        if not cortex_text_interaction:  # Should be initialized globally
             raise RuntimeError("CortexThoughts instance not available.")
 
         moderation_prompt_filled = PROMPT_MODERATION_CHECK.format(input_text_to_moderate=input_text_to_moderate)
@@ -7921,12 +8052,12 @@ async def handle_openai_moderations():
         # or use the session_id_for_log passed in the request if that makes sense for your context.
         # For now, creating a distinct one for the direct_generate call.
         moderation_llm_session_id = f"mod_llm_req_{request_id}"
-        if ai_chat: ai_chat.current_session_id = moderation_llm_session_id
+        if cortex_text_interaction: cortex_text_interaction.current_session_id = moderation_llm_session_id
 
         logger.info(
             f"{request_id}: Calling direct_generate for moderation. Input snippet: '{input_text_to_moderate[:70]}...'")
         # direct_generate is async, and this Flask route is async
-        llm_assessment_text = await ai_chat.direct_generate(
+        llm_assessment_text = await cortex_text_interaction.direct_generate(
             db,  # Pass the current request's DB session
             moderation_prompt_filled,
             moderation_llm_session_id,  # Session ID for this specific LLM call
@@ -8213,11 +8344,11 @@ async def handle_openai_asr_transcriptions():
         response_format_req = request.form.get('response_format', 'json').lower()
 
         session_id_for_log = request.form.get("session_id", session_id_for_log)
-        # Ensure ai_chat instance is available if needed for direct_generate
-        if 'ai_chat' not in globals() or ai_chat is None:
-            logger.error(f"{request_id}: ai_chat instance not available. Cannot proceed with LLM steps.")
+        # Ensure cortex_text_interaction instance is available if needed for direct_generate
+        if 'ai_chat' not in globals() or cortex_text_interaction is None:
+            logger.error(f"{request_id}: cortex_text_interaction instance not available. Cannot proceed with LLM steps.")
             raise RuntimeError("CortexThoughts instance not configured for ASR post-processing.")
-        ai_chat.current_session_id = session_id_for_log  # type: ignore
+        cortex_text_interaction.current_session_id = session_id_for_log  # type: ignore
 
         if audio_file_storage and audio_file_storage.filename:
             uploaded_filename = secure_filename(audio_file_storage.filename)
@@ -8301,9 +8432,9 @@ async def handle_openai_asr_transcriptions():
             correction_prompt_filled = PROMPT_AUTOCORRECT_TRANSCRIPTION.format(
                 raw_transcribed_text=raw_low_latency_transcription)
             correction_session_id = f"correct_asr_{request_id}"
-            ai_chat.current_session_id = correction_session_id  # type: ignore
+            cortex_text_interaction.current_session_id = correction_session_id  # type: ignore
 
-            llm_correction_output = await ai_chat.direct_generate(  # type: ignore
+            llm_correction_output = await cortex_text_interaction.direct_generate(  # type: ignore
                 db, correction_prompt_filled, correction_session_id,
                 vlm_description=None, image_b64=None
             )
@@ -8328,9 +8459,9 @@ async def handle_openai_asr_transcriptions():
             logger.info(f"{request_id}: ELP1 Step 1.3: Diarizing transcript...")
             diarization_prompt_filled = PROMPT_SPEAKER_DIARIZATION.format(transcribed_text=corrected_transcription)
             diarization_session_id = f"diarize_asr_{request_id}"
-            ai_chat.current_session_id = diarization_session_id  # type: ignore
+            cortex_text_interaction.current_session_id = diarization_session_id  # type: ignore
 
-            llm_diarization_output = await ai_chat.direct_generate(  # type: ignore
+            llm_diarization_output = await cortex_text_interaction.direct_generate(  # type: ignore
                 db, diarization_prompt_filled, diarization_session_id,
                 vlm_description=None, image_b64=None
             )
@@ -8498,7 +8629,7 @@ async def handle_openai_audio_translations():
         output_voice_requested = request.form.get('voice')
         output_audio_format = request.form.get('response_format', 'mp3').lower()
         session_id_for_log = request.form.get("session_id", session_id_for_log)
-        if ai_chat: ai_chat.current_session_id = session_id_for_log
+        if cortex_text_interaction: cortex_text_interaction.current_session_id = session_id_for_log
         if audio_file_storage and audio_file_storage.filename: uploaded_filename = secure_filename(
             audio_file_storage.filename)
 
@@ -8542,8 +8673,8 @@ async def handle_openai_audio_translations():
             correction_prompt = PROMPT_AUTOCORRECT_TRANSCRIPTION.format(
                 raw_transcribed_text=raw_low_latency_transcription)
             correction_session_id = f"correct_{request_id}"
-            if ai_chat: ai_chat.current_session_id = correction_session_id
-            llm_correction_output = await ai_chat.direct_generate(db, correction_prompt, correction_session_id, None,
+            if cortex_text_interaction: cortex_text_interaction.current_session_id = correction_session_id
+            llm_correction_output = await cortex_text_interaction.direct_generate(db, correction_prompt, correction_session_id, None,
                                                                   None)
             if llm_correction_output and not (
                     isinstance(llm_correction_output, str) and "ERROR" in llm_correction_output.upper()):
@@ -8559,8 +8690,8 @@ async def handle_openai_audio_translations():
             logger.info(f"{request_id}: ELP1 Step 1.3: Diarizing transcript...")
             diarization_prompt = PROMPT_SPEAKER_DIARIZATION.format(transcribed_text=corrected_transcription)
             diarization_session_id = f"diarize_{request_id}"
-            if ai_chat: ai_chat.current_session_id = diarization_session_id
-            llm_diarization_output = await ai_chat.direct_generate(db, diarization_prompt, diarization_session_id, None,
+            if cortex_text_interaction: cortex_text_interaction.current_session_id = diarization_session_id
+            llm_diarization_output = await cortex_text_interaction.direct_generate(db, diarization_prompt, diarization_session_id, None,
                                                                    None)
             if llm_diarization_output and not (
                     isinstance(llm_diarization_output, str) and "ERROR" in llm_diarization_output.upper()):
@@ -8592,7 +8723,7 @@ async def handle_openai_audio_translations():
         # If direct_generate is called, it handles the threading.
         # For a direct chain invoke like this, we need asyncio.to_thread for the sync _call_llm_with_timing
         quick_translated_text_for_client = await asyncio.to_thread(
-            ai_chat._call_llm_with_timing, trans_chain, trans_prompt_input, trans_timing_data, priority=ELP1
+            cortex_text_interaction._call_llm_with_timing, trans_chain, trans_prompt_input, trans_timing_data, priority=ELP1
             # type: ignore
         )
         if not quick_translated_text_for_client or (isinstance(quick_translated_text_for_client, str) and (
@@ -9009,8 +9140,8 @@ async def handle_openai_image_generations():  # Route is async
 
         session_id_for_log = raw_request_data.get("session_id", session_id_for_log)
 
-        if ai_chat:  # Ensure ai_chat global instance is available
-            ai_chat.current_session_id = session_id_for_log  # Set for helpers in ai_chat
+        if cortex_text_interaction:  # Ensure cortex_text_interaction global instance is available
+            cortex_text_interaction.current_session_id = session_id_for_log  # Set for helpers in cortex_text_interaction
         else:
             logger.error(
                 f"{request_id}: Global 'ai_chat' instance not available. Cannot proceed with image generation context.")
@@ -9055,7 +9186,7 @@ async def handle_openai_image_generations():  # Route is async
         logger.info(f"{request_id}: Refining user prompt for image generation (ELP1)...")
 
         wrapped_rag_result = await asyncio.to_thread(
-            ai_chat._get_rag_retriever_thread_wrapper,
+            cortex_text_interaction._get_rag_retriever_thread_wrapper,
             db_to_use,
             prompt_from_user,  # Use original prompt for RAG context query
             ELP1
@@ -9078,12 +9209,12 @@ async def handle_openai_image_generations():  # Route is async
         if session_hist_retriever_for_refine:
             retrieved_history_docs = await asyncio.to_thread(session_hist_retriever_for_refine.invoke, prompt_from_user)
 
-        history_rag_str = ai_chat._format_docs(retrieved_history_docs, source_type="History RAG")
+        history_rag_str = cortex_text_interaction._format_docs(retrieved_history_docs, source_type="History RAG")
 
         direct_hist_interactions_list = await asyncio.to_thread(get_global_recent_interactions, db_to_use, limit=3)
-        recent_direct_history_str = ai_chat._format_direct_history(direct_hist_interactions_list)
+        recent_direct_history_str = cortex_text_interaction._format_direct_history(direct_hist_interactions_list)
 
-        refined_prompt_for_generation = await ai_chat._refine_direct_image_prompt_async(
+        refined_prompt_for_generation = await cortex_text_interaction._refine_direct_image_prompt_async(
             db=db_to_use, session_id=session_id_for_log, user_image_request=prompt_from_user,
             history_rag_str=history_rag_str, recent_direct_history_str=recent_direct_history_str,
             priority=ELP1
@@ -9323,7 +9454,7 @@ def handle_openai_retrieve_model(model: str):
 try:
     cortex_backbone_provider = CortexEngine(PROVIDER)
     global_cortex_backbone_provider_ref = cortex_backbone_provider
-    ai_chat = CortexThoughts(cortex_backbone_provider)
+    cortex_text_interaction = CortexThoughts(cortex_backbone_provider)
     AGENT_CWD = os.path.dirname(os.path.abspath(__file__))
     SUPPORTS_COMPUTER_USE = True
     ai_agent = AmaryllisAgent(cortex_backbone_provider, AGENT_CWD, SUPPORTS_COMPUTER_USE)
@@ -9412,7 +9543,7 @@ async def handle_create_pseudo_fine_tuning_job():
         # It's crucial to call this via asyncio.create_task to run in the background
         # and not block the API response.
         asyncio.create_task(
-            ai_chat._initiate_file_ingestion_and_reflection(
+            cortex_text_interaction._initiate_file_ingestion_and_reflection(
                 db_session_from_caller=db,  # Pass the session from the route, the helper will create its own
                 uploaded_file_record_id=uploaded_record.id
             )
@@ -9690,7 +9821,7 @@ async def handle_upload_and_ingest_file():
             # Schedule the asynchronous ingestion task to run in the background
             # It's crucial to use asyncio.create_task to not block the current request handler
             asyncio.create_task(
-                ai_chat._initiate_file_ingestion_and_reflection(
+                cortex_text_interaction._initiate_file_ingestion_and_reflection(
                     db_session_from_caller=db,  # FIX: Correct parameter name here
                     uploaded_file_record_id=uploaded_record.id
                 )
@@ -10310,9 +10441,9 @@ else:
 
     # Ensure critical global instances were initialized earlier in the module loading
     # (These are typically defined after config and before this 'else' block)
-    if cortex_backbone_provider is None or ai_chat is None or ai_agent is None:
+    if cortex_backbone_provider is None or cortex_text_interaction is None or ai_agent is None:
         logger.critical(
-            "AdelaideAlbertCortex: 🔥🔥 Core AI components (cortex_backbone_provider, ai_chat, ai_agent) are NOT INITIALIZED. Application cannot start properly.")
+            "AdelaideAlbertCortex: 🔥🔥 Core AI components (cortex_backbone_provider, cortex_text_interaction, ai_agent) are NOT INITIALIZED. Application cannot start properly.")
         # This is a fundamental setup error, exiting directly.
         print("AdelaideAlbertCortex: CRITICAL FAILURE - Core AI components not initialized. Exiting.", file=sys.stderr, flush=True)
         sys.exit(1)
