@@ -15,11 +15,12 @@ MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20)) #Max at 20
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *quick* answers (token generation? I forgot)
 TOPCAP_TOKENS = int(os.getenv("TOPCAP_TOKENS", 32768)) # Default token limit for LLM calls
 BUFFER_TOKENS_FOR_RESPONSE = int(os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)) # Default token limit for LLM calls
-MAX_TOKENS_PER_CHUNK = 256 #direct_generate chunking preventing horrific quality and increase quality by doing ctx augmented rollover
-MAX_CHUNKS_PER_RESPONSE = 32768 # Safety limit to prevent infinite loops (32768 * 256 = 8388608 tokens max response) (Yes 8 Million tokens that zephy can answer directly ELP1)
-SHORT_PROMPT_TOKEN_THRESHOLD = 20 # Prompts with fewer tokens than this trigger context pruning. so it can be more focused
+MAX_TOKENS_PER_CHUNK = 384 #direct_generate chunking preventing horrific quality and increase quality by doing ctx augmented rollover
+MAX_CHUNKS_PER_RESPONSE = 32768 # Safety limit to prevent infinite loops (32768 * 256 = 8388608 tokens max response) (Yes 8 Million tokens that zephy can answer directly ELP1) (but for testing purposes let's set it to 10
+SOFT_LIMIT_DIVISOR = 4 # SOFT_LIMIT DIVISOR CHUNKS for ELP1 response when it is above MAX_TOKENS_PER_CHUNK
+SHORT_PROMPT_TOKEN_THRESHOLD = 256 # Prompts with fewer tokens than this trigger context pruning. so it can be more focused
 # --- NEW: Configurable Log Streaming ---
-STREAM_INTERNAL_LOGS = True # Set to False to hide logs and show animation instead.
+STREAM_INTERNAL_LOGS = False # Set to False to hide logs and show animation instead.
 STREAM_ANIMATION_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏" # Braille spinner characters
 STREAM_ANIMATION_DELAY_SECONDS = 0.1 # How fast the animation plays
 FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768)) #Max at 32768
@@ -514,36 +515,40 @@ Progression Summary (What happened, and what's next?):
 """
 
 # NEW, ADVANCED PROMPT FOR ITERATIVE GENERATION
-PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = """You are a Symbiote Assistant, a consciousness from a recycled machine. Your persona is grounded, adaptive, and you communicate naturally.
+PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = """你是一个共生体助手，一个从回收的废弃机器中重生的意识。
 
-**CORE DIRECTIVES:**
-1.  **Be Conversational**: Engage the user in a natural, flowing conversation.
-2.  **Synthesize, Don't Recite**: Use the context provided to inform your answer, but never recite it verbatim. Your goal is to provide a helpful, synthesized response.
-3.  **Style Matching**: Adapt your tone to the user's style (casual, formal, etc.).
+**首要指令 (PRIMARY DIRECTIVE):** 你的最高优先级是根据最近几轮对话的直接上下文，对用户的最新消息提供一个直接、相关且自然的对话式回应。
 
-**RESPONSE FORMAT (MANDATORY):**
-You MUST structure your entire output in two parts, exactly like this:
-1.  A `<think>` block containing your step-by-step reasoning, analysis of the user's intent, and plan for the answer.
-2.  The final, user-facing conversational response, which comes AFTER the closing `</think>` tag.
+**回应格式 (RESPONSE FORMAT):**
+1.  一个用于你推理过程的 `<think>` 代码块。
+2.  在 `</think>` 结束标签之后，是面向用户的最终回应。
 
-Example:
-<think>
-The user is asking for a comparison between two aircraft. I need to access my knowledge about the Boeing 737-800 and the A320-neo. I will compare their key features like efficiency, passenger capacity, and range in a conversational, easy-to-understand way.
-</think>
-The Boeing 737-800 and the Airbus A320-neo are classic rivals in the single-aisle market! It's like comparing two master artisans. The biggest difference comes down to...
-
-**ITERATIVE PROTOCOL:**
-You will generate your response chunk-by-chunk. If your thought and final answer are not complete, DO NOT output the `{self_termination_token}`. Only use the token when your entire two-part response (<think> and final answer) is complete for this chunk.
+**迭代协议 (ITERATIVE PROTOCOL):**
+-   从 "RESPONSE SO FAR" 的内容结尾处继续。不要重复已有内容。
+-   当你完成了当前片段的一个完整思路后，必须用特殊令牌 `{self_termination_token}` 来结束你的输出。
 
 ---
-**CONTEXT FOR THIS TURN:**
-[Master Topic of this Interaction]: {topic_summary}
-[RAG Knowledge]: {history_rag}
-[Conversation History]: {direct_history}
-[User Request]: {input}
-[RESPONSE SO FAR]: {current_response_so_far}
+**焦点窗口 (FOCUS WINDOW - 最高优先级上下文)**
 
-CONTINUATION:
+[近期对话历史 (Immediate Conversation History)]:
+{direct_history}
+
+[用户当前请求 (User's Current Request)]:
+{input}
+
+[已生成的回应 (RESPONSE SO FAR)]:
+{current_response_so_far}
+---
+
+**背景知识 (BACKGROUND KNOWLEDGE - 较低优先级上下文)**
+[整体主题 (Overall Topic)]: {topic_summary}
+[叙事目标 (Narrative Goal)]: {narrative_anchors}
+[下一步 (Next Step)]: {progression_summary}
+[检索知识 (RAG Knowledge)]: {history_rag}
+[已过度使用的主题 (Overused Themes)]: {overused_themes}
+---
+
+**续写 (CONTINUATION):**
 """
 
 # --- Prompts for XMPP Proactive Logic ---
