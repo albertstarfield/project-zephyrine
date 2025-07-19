@@ -33,7 +33,9 @@ RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 10))
 FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 512)) #Extreme or vanquish (Max at 512)
 FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
-FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 300))
+FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 5))
+
+
 BENCHMARK_ELP1_TIME_MS = 600000.0 #before hard defined error timeout (30 seconds max)
 
 _default_max_bg_tasks = 1000000
@@ -425,10 +427,11 @@ DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY = [
     "I am an AI",
     "Combined RAG Context",
     "Relevant Context",
-    "User: "
+    "User: ",
+    "As an AI"
 ]
 # Fuzzy match threshold for detecting defective words (0-100, higher is more sensitive to detect the pattern)
-DEFECTIVE_WORD_THRESHOLD = int(os.getenv("DEFECTIVE_WORD_THRESHOLD",80))
+DEFECTIVE_WORD_THRESHOLD = int(os.getenv("DEFECTIVE_WORD_THRESHOLD",75))
 DefectiveWordDirectGenerateArray=DEFECTIVE_WORD_DIRECT_GENERATE_ARRAY
 
 # --- XMPP Interaction Proactive Zephyrine ---

@@ -457,7 +457,7 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
 class CortexEngine:
     _priority_quota_lock: LockType
     def __init__(self, provider_name):
-        # ... (other initialization lines) ...
+        self._call_llm_with_timing = None
         self.provider_name = provider_name.lower()
         self.models: Dict[str, Any] = {}
         self.embeddings: Optional[Embeddings] = None
