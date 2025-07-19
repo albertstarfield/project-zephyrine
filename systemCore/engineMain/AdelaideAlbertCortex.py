@@ -3855,18 +3855,100 @@ class CortexThoughts:
 
         return "".join(context_parts)
 
+    # In AdelaideAlbertCortex.py
+    # (Ensure all necessary imports like re, asyncio, ChatPromptTemplate, StrOutputParser are at the top)
+
+    # ==============================================================================
+    # PLACE THIS HELPER FUNCTION INSIDE YOUR `CortexThoughts` CLASS
+    # It should be at the same indentation level as your other helper methods like _direct_generate_logic.
+    # ==============================================================================
+
+    async def _humanize_chunk(self, clean_chunk: str) -> str:
+        """
+        Uses a fast LLM to rewrite a chunk of text to sound more natural and less robotic.
+        This includes introducing subtle imperfections like typos and inconsistent capitalization,
+        making the AI's persona more believable. This is the complete, non-abbreviated implementation.
+        """
+
+        # --- Input Validation ---
+        # If the chunk is very short, empty, or already contains system-like brackets,
+        # it's not worth the overhead to humanize it. Return it as is.
+        if not clean_chunk or len(clean_chunk.split()) < 3 or '[' in clean_chunk:
+            return clean_chunk
+
+        log_prefix = f"Humanizer|{self.current_session_id}"
+        logger.info(f"{log_prefix} Humanizing chunk: '{clean_chunk[:50]}...'")
+
+        # --- Hardcoded Prompt ---
+        # As requested, the prompt is defined directly here to keep CortexConfiguration.py clean
+        # and focused on high-level settings.
+        humanizer_prompt_template = """You are a text humanizer. Your task is to rewrite the following "perfect" AI-generated text to make it sound more like a real person typed it quickly on a messaging app.
+
+    **RULES:**
+    1.  **Introduce Subtle Imperfections**: Add one or two very minor typos (e.g., "teh" for "the", "adn" for "and", or a single missed letter). Don't overdo it.
+    2.  **Vary Capitalization**: Start some sentences with a lowercase letter. It's okay to not capitalize some proper nouns if it feels natural in a casual chat.
+    3.  **Use Contractions**: Aggressively change "do not" to "don't", "it is" to "it's", "I am" to "I'm", etc.
+    4.  **Slightly Rephrase for Flow**: Make minor changes to the phrasing to be more conversational and less formal, but YOU MUST NOT change the core meaning or add any new information.
+    5.  **Keep it Concise**: If the original is wordy, shorten it slightly.
+    6.  **Absolutely NO Emojis or Internet Slang**: Keep the tone authentic and grounded, not like a caricature.
+    7.  Your final output must ONLY be the rewritten text. Do not include any explanations, headers, or the original text.
+
+    **Perfect AI Text:**
+    ---
+    {text_to_humanize}
+    ---
+
+    **Humanized Version:**
+    """
+
+        # --- Model and Chain Setup ---
+        # This task is perfect for a fast, instruction-following model.
+        humanizer_model = self.provider.get_model("general_fast")
+        if not humanizer_model:
+            logger.warning(f"{log_prefix} Humanizer model ('general_fast') not available. Returning original chunk.")
+            return clean_chunk
+
+        chain = ChatPromptTemplate.from_template(humanizer_prompt_template) | humanizer_model | StrOutputParser()
+
+        # --- LLM Execution with Error Handling ---
+        try:
+            # Since chain.invoke is synchronous, we run it in a thread to avoid blocking.
+            humanized_text = await asyncio.to_thread(chain.invoke, {"text_to_humanize": clean_chunk})
+
+            # --- Quality Gate ---
+            # As a safety check, if the humanized text is wildly different in length (more than 50% different),
+            # the model may have hallucinated or failed. In that case, it's safer to fall back to the original.
+            if abs(len(humanized_text) - len(clean_chunk)) > (len(clean_chunk) * 0.5):
+                logger.warning(
+                    f"{log_prefix} Humanized text length is substantially different from original. Falling back to preserve meaning.")
+                return clean_chunk
+
+            # If the output is empty, it's a failure.
+            if not humanized_text.strip():
+                logger.warning(f"{log_prefix} Humanizer returned an empty string. Falling back to original chunk.")
+                return clean_chunk
+
+            logger.info(f"{log_prefix} Humanization successful.")
+            return humanized_text.strip()
+
+        except Exception as e:
+            logger.error(f"{log_prefix} An exception occurred during the humanization LLM call: {e}", exc_info=True)
+            # In case of any processing error, the safest action is always to return the
+            # clean, original, and factually correct chunk.
+            return clean_chunk
+
     async def _direct_generate_logic(self, db: Session, user_input: str, session_id: str,
                                      vlm_description: Optional[str] = None,
                                      image_b64: Optional[str] = None) -> str:
         """
-        The definitive ELP1 logic, with fixes for empty context handling and hardened
-        quality gates to ensure conversational and relevant responses. This is the complete,
-        unabridged implementation.
+        The definitive ELP1 logic, with a dynamic soft limit, token-aware context pruning,
+        progressive augmentation, per-chunk humanization, and hardened quality gates.
+        This is the complete, unabridged implementation.
         """
-        direct_req_id = f"dgen-logic-hardened-v2-{uuid.uuid4()}"
+        direct_req_id = f"dgen-logic-definitive-v4-{uuid.uuid4()}"
         log_prefix = f"⚡️ {direct_req_id}|ELP1"
         logger.info(
-            f"{log_prefix} HARDENED V2 Logic START -> Session: {session_id}, Input: '{user_input[:50]}...'"
+            f"{log_prefix} DEFINITIVE V4 Logic START -> Session: {session_id}, Input: '{user_input[:50]}...'"
         )
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
@@ -3886,20 +3968,27 @@ class CortexThoughts:
         narrative_anchors = await self._extract_narrative_anchors(db, user_input)
         progression_summary = "Begin the response by addressing the user's primary request."
 
-        # --- 3. DYNAMIC PRUNING LOGIC FOR SHORT PROMPTS ---
+        # --- 3. DYNAMIC SOFT LIMIT CALCULATION ---
         input_token_count = self._count_tokens(user_input)
+        soft_limit_chunks = 0
+
+        if input_token_count < MAX_TOKENS_PER_CHUNK:
+            soft_limit_chunks = 1
+        else:
+            calculated_limit = max(1, input_token_count // SOFT_LIMIT_DIVISOR)
+            soft_limit_chunks = min(calculated_limit, MAX_CHUNKS_PER_RESPONSE)
+
+        logger.info(
+            f"{log_prefix} Calculated SOFT LIMIT of {soft_limit_chunks} chunks "
+            f"(capped by {MAX_CHUNKS_PER_RESPONSE}) based on input of {input_token_count} tokens."
+        )
+
         is_short_prompt = input_token_count < SHORT_PROMPT_TOKEN_THRESHOLD
-        token_budget = 0
-        if is_short_prompt:
-            token_budget = input_token_count * 2
-            logger.warning(
-                f"{log_prefix} Short prompt detected ({input_token_count} tokens). "
-                f"Pruning long-term context (RAG/Topic) to a budget of {token_budget} tokens."
-            )
+        token_budget = input_token_count * 2 if is_short_prompt else 0
 
         # --- 4. ITERATIVE GENERATION LOOP ---
-        for chunk_num in range(MAX_CHUNKS_PER_RESPONSE):
-            logger.info(f"{log_prefix} Preparing chunk {chunk_num + 1}/{MAX_CHUNKS_PER_RESPONSE}...")
+        for chunk_num in range(soft_limit_chunks):
+            logger.info(f"{log_prefix} Preparing chunk {chunk_num + 1}/{soft_limit_chunks}...")
             current_response_so_far = "".join(clean_chunks_array)
 
             rag_query = user_input if not current_response_so_far else f"Query: '{user_input}'\nContinuation: '{current_response_so_far[-500:]}'"
@@ -3913,7 +4002,6 @@ class CortexThoughts:
                         docs = await asyncio.to_thread(retriever.invoke, rag_query)
                         if docs: all_rag_docs.extend(docs)
 
-            # --- 4a. Apply Context Pruning and Sanitization ---
             if is_short_prompt:
                 history_rag_context = self._build_rag_context_within_token_limit(all_rag_docs, token_budget)
                 pruned_topic_summary = self._truncate_string_by_tokens(topic_summary, token_budget)
@@ -3923,14 +4011,13 @@ class CortexThoughts:
 
             direct_history = self._sanitize_context_string(self._format_direct_history(direct_history_interactions))
 
-            # --- 4b. Dynamic Prompt Construction ---
             prompt_placeholders = {
                 "self_termination_token": SELF_TERMINATION_TOKEN, "topic_summary": pruned_topic_summary,
                 "narrative_anchors": narrative_anchors, "progression_summary": progression_summary,
                 "overused_themes": ", ".join(overused_themes) if overused_themes else "None",
                 "history_rag": history_rag_context, "direct_history": direct_history, "input": user_input,
                 "current_response_so_far": current_response_so_far or "N/A", "chunk_num": chunk_num + 1,
-                "max_chunks": MAX_CHUNKS_PER_RESPONSE,
+                "max_chunks": soft_limit_chunks,
             }
             system_prompt = PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT.format(**prompt_placeholders)
 
@@ -3955,13 +4042,24 @@ class CortexThoughts:
                 parsed_think_content, parsed_speak_content = self._parse_think_speak_output(chunk_text_raw)
                 clean_chunk_to_add = parsed_speak_content
 
-                if chunk_num > 0 and current_response_so_far:
-                    if fuzz.partial_ratio(current_response_so_far, clean_chunk_to_add) > FUZZY_DUPLICATION_THRESHOLD:
-                        is_generation_finished = True;
+                if clean_chunk_to_add.strip():
+                    is_low_effort = len(clean_chunk_to_add.split()) < 7 and clean_chunk_to_add.endswith('?')
+                    if is_low_effort and chunk_num > 0:
+                        logger.warning(f"{log_prefix} Low-effort question detected. Terminating loop.")
+                        is_generation_finished = True
                         clean_chunk_to_add = ""
 
+                    if not is_generation_finished and chunk_num > 0:
+                        if fuzz.partial_ratio(current_response_so_far,
+                                              clean_chunk_to_add) > FUZZY_DUPLICATION_THRESHOLD:
+                            logger.warning(f"{log_prefix} Fuzzy duplication detected. Terminating loop.")
+                            is_generation_finished = True
+                            clean_chunk_to_add = ""
+
                 if clean_chunk_to_add.strip():
-                    clean_chunks_array.append(clean_chunk_to_add)
+                    humanized_chunk = await self._humanize_chunk(clean_chunk_to_add)
+                    clean_chunks_array.append(humanized_chunk)
+
                     new_response_so_far = current_response_so_far + clean_chunk_to_add
                     progression_summary = await self._generate_progression_summary(db, new_response_so_far,
                                                                                    clean_chunk_to_add)
@@ -3998,12 +4096,12 @@ class CortexThoughts:
 
         # --- 6. Final Logging and Return ---
         final_duration_ms = (time.monotonic() - direct_start_time) * 1000.0
-        interaction_data_for_log = {
+        interaction_data = {
             "session_id": session_id, "mode": "chat", "input_type": "text", "user_input": user_input,
             "llm_response": response_to_return_to_client, "execution_time_ms": final_duration_ms,
-            "classification": "direct_response_definitive_elp1",
+            "classification": "direct_response_humanized_elp1",
         }
-        queue_interaction_for_batch_logging(**interaction_data_for_log)
+        queue_interaction_for_batch_logging(**interaction_data)
 
         return response_to_return_to_client
 
