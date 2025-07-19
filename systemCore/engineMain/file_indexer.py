@@ -28,6 +28,7 @@ import pytesseract
 from chromadb.config import Settings
 
 from langchain_core.messages import HumanMessage
+from langchain.text_splitter import RecursiveCharacterTextSplitter
 from langchain_core.output_parsers import StrOutputParser
 
 # Optional imports - handle gracefully if libraries are missing
@@ -78,21 +79,59 @@ except ImportError:
 pix2tex = None
 
 # Database imports
+DATABASE_AVAILABLE = False
 try:
-    from database import SessionLocal, FileIndex, add_interaction, init_db, IndexStatusEnum # Import add_interaction if logging indexer status
+    # This is the normal path. All real classes are imported.
+    from database import SessionLocal, FileIndex, add_interaction, init_db, IndexStatusEnum
     from sqlalchemy import update, select
     from sqlalchemy.exc import SQLAlchemyError
+    DATABASE_AVAILABLE = True
+    logger.trace("Successfully imported real database components.")
+
 except ImportError:
-    logger.critical("❌ Failed to import database components in file_indexer.py. Indexer cannot run.")
-    # Define dummy classes/functions to allow loading but prevent execution
-    class SessionLocal: # type: ignore
-        def __call__(self): return None # type: ignore
-    class FileIndex: pass # type: ignore
-    def add_interaction(*args, **kwargs): pass # type: ignore
-    def init_db(): pass # type: ignore
-    SQLAlchemyError = Exception # type: ignore
-    # Exit if DB cannot be imported
-    # sys.exit("Indexer failed: Database components missing.") # Comment out for potential testing
+    # This is the fallback path for the static analyzer.
+    logger.critical("❌ Failed to import database components. Indexer functionality will be disabled.")
+
+    # --- NEW: A dummy class to mimic an enum member ---
+    # This class has the .value attribute the linter is looking for.
+    class _DummyEnumMember:
+        def __init__(self, value: str):
+            self.value = value
+
+    class SessionLocal:
+        def __call__(self): return None
+
+    # This dummy class now uses the _DummyEnumMember to satisfy the linter.
+    class FileIndex:
+        def __init__(self):
+            self.id: int = 0
+            self.file_path: str = ""
+            self.file_name: str = ""
+            self.size_bytes: int = 0
+            self.last_modified_os: object = None
+            self.last_indexed_db: object = None
+            # --- MODIFIED LINE ---
+            self.index_status = _DummyEnumMember("dummy_status")
+            self.indexed_content: str = ""
+            self.embedding_json: str = ""
+            self.md5_hash: str = ""
+            self.processing_error: str = ""
+            self.latex_representation: str = ""
+            self.latex_explanation: str = ""
+            self.vlm_processing_status: str = ""
+
+    # Dummy Enum to satisfy type hints and imports
+    class IndexStatusEnum:
+        pending = _DummyEnumMember("pending")
+        error_permission = _DummyEnumMember("error_permission")
+        # You can add other statuses here if needed for other parts of the code
+
+    # Dummy functions and classes
+    def add_interaction(*args, **kwargs): pass
+    def init_db(): pass
+    class SQLAlchemyError(Exception): pass
+    def update(*args, **kwargs): return None
+    def select(*args, **kwargs): return None
 
 class TaskInterruptedException(Exception):
     """Custom exception raised when a lower-priority task is interrupted by a higher-priority one."""
@@ -149,36 +188,61 @@ class FileIndexer:
         self.stop_event = stop_event
         self.provider = provider
         self.embedding_model = provider.embeddings
-        # --- CHANGE: Get both models ---
-        self.vlm_model = provider.get_model("vlm") # For initial analysis
-        self.latex_model = provider.get_model("latex") # For refinement
-        # --- END CHANGE ---
+        self.vlm_model = provider.get_model("vlm")
+        self.latex_model = provider.get_model("latex")
         self.thread_name = "FileIndexerThread"
         self.server_busy_event = server_busy_event
 
-        # --- Logging updated to reflect both models ---
-        emb_model_info = getattr(self.embedding_model, 'model', getattr(self.embedding_model, 'model_name', type(self.embedding_model).__name__)) if self.embedding_model else "Not Available"
-        vlm_model_info = getattr(self.vlm_model, 'model', getattr(self.vlm_model, 'model_name', type(self.vlm_model).__name__)) if self.vlm_model else "Not Available"
-        latex_model_info = getattr(self.latex_model, 'model', getattr(self.latex_model, 'model_name', type(self.latex_model).__name__)) if self.latex_model else "Not Available"
+        # --- FIX #1: ADD CRITICAL ERROR HANDLING FOR VECTOR STORE ---
+        # Acquire the vector store instance during initialization. This is a blocking call.
+        logger.info(f"🧵 {self.thread_name}: Acquiring vector store instance...")
+        self.vectorstore = get_global_file_index_vectorstore()  # This can block for a long time
+        if self.vectorstore is None:
+            # If it returns None, the indexer cannot function. Log a critical error.
+            # The thread will still start, but its main loop will likely fail,
+            # which is better than crashing on a NoneType error.
+            logger.critical(
+                f"🔥🔥 {self.thread_name}: FAILED to acquire vector store instance. Indexer will not be able to store embeddings.")
+        else:
+            logger.success(f"✅ {self.thread_name}: Successfully acquired vector store instance.")
 
-        logger.info(f"🧵 FileIndexer Embedding Model: {emb_model_info}")
-        logger.info(f"🧵 FileIndexer VLM (Initial Analysis) Model: {vlm_model_info}")
-        logger.info(f"🧵 FileIndexer LaTeX/TikZ Refinement Model: {latex_model_info}")
+        # --- FIX #2: INITIALIZE THE TEXT SPLITTER ---
+        # This is required for chunking documents before embedding.
+        self.text_splitter = RecursiveCharacterTextSplitter(
+            chunk_size=1000,
+            chunk_overlap=200,
+            length_function=len,
+        )
+
+        # Consolidated Logging for models
+        emb_model_info = getattr(self.embedding_model, 'model', getattr(self.embedding_model, 'model_name', type(
+            self.embedding_model).__name__)) if self.embedding_model else "Not Available"
+        vlm_model_info = getattr(self.vlm_model, 'model', getattr(self.vlm_model, 'model_name', type(
+            self.vlm_model).__name__)) if self.vlm_model else "Not Available"
+        latex_model_info = getattr(self.latex_model, 'model', getattr(self.latex_model, 'model_name', type(
+            self.latex_model).__name__)) if self.latex_model else "Not Available"
+
+        logger.info(f"🧵 {self.thread_name} Initialized with:")
+        logger.info(f"   - Embedding Model: {emb_model_info}")
+        logger.info(f"   - VLM (Analysis) Model: {vlm_model_info}")
+        logger.info(f"   - LaTeX (Refinement) Model: {latex_model_info}")
+        logger.info(
+            f"   - Text Splitter: Chunk Size={self.text_splitter._chunk_size}, Overlap={self.text_splitter._chunk_overlap}")
 
         if not self.embedding_model: logger.warning("⚠️ Embeddings disabled.")
-        if not self.vlm_model or not self.latex_model: logger.warning("⚠️ VLM->LaTeX processing disabled (one or both models missing).")
-        # Initialize LatexOCR model once
+        if not self.vlm_model or not self.latex_model: logger.warning(
+            "⚠️ VLM->LaTeX processing disabled (one or both models missing).")
+
+        # Initialize LatexOCR model once (this part is fine as it is)
         self.latex_ocr_model = None
         if PIX2TEX_AVAILABLE and pix2tex:
             try:
                 logger.info("Initializing LatexOCR model for file indexer...")
-                # This will download the model weights on first run
                 self.latex_ocr_model = pix2tex.LatexOCR()
                 logger.success("LatexOCR model initialized successfully.")
             except Exception as e_pix2tex_init:
                 logger.error(f"Failed to initialize LatexOCR model: {e_pix2tex_init}")
                 self.latex_ocr_model = None
-    # --- END MODIFICATION ---
 
     def _wait_if_server_busy(self, check_interval=0.5, log_wait=True):
         """Checks the busy event and sleeps if set."""
@@ -228,26 +292,25 @@ class FileIndexer:
                 is_image_based = True
 
                 # First pass: check for a text layer
-                # --- CORRECTED LINE: Added type hint for 'page' ---
+                # --- FIX: Add type hint here to resolve warning on line 240 ---
                 page: fitz.Page
                 for page in doc:
-                    # --- END CORRECTION ---
-                    text_from_page = page.get_text("text")  # IDE now knows this method exists
+                    text_from_page = page.get_text("text") #type: ignore
                     if text_from_page and len(text_from_page.strip()) > 20:
                         is_image_based = False
                         break
 
                 if not is_image_based:
                     log_worker("INFO", f"{log_prefix}: PDF has text layer, extracting directly.")
-                    full_text = "\n".join([page.get_text() for page in doc])
+                    # --- FIX: The type hint above also resolves the warning on line 247 ---
+                    full_text = "\n".join([page.get_text() for page in doc]) #type: ignore
                 else:
                     log_worker("INFO", f"{log_prefix}: PDF has no text layer, performing OCR...")
                     ocr_texts = []
-                    # --- CORRECTED LINE: Added type hint for 'page' ---
+                    # --- FIX: Add type hint again here to resolve warning on line 253 ---
                     page: fitz.Page
                     for page_num, page in enumerate(doc):
-                        # --- END CORRECTION ---
-                        pix = page.get_pixmap(dpi=300)  # IDE now knows this method exists
+                        pix = page.get_pixmap(dpi=300)  #type: ignore
                         img = Image.frombytes("RGB", [pix.width, pix.height], pix.samples)
                         try:
                             ocr_texts.append(pytesseract.image_to_string(img))
@@ -422,62 +485,6 @@ class FileIndexer:
                 # Handle other errors
                 logger.error(f"LaTeX model refinement call failed: {e}", exc_info=True)
                 return None, f"[LaTeX Refinement Error: {e}]" # Generic error marker
-
-
-    def _get_latex_from_image(self, image: Image.Image) -> Tuple[Optional[str], Optional[str]]:
-        """Sends a single PIL image to VLM and parses LaTeX."""
-        # <<< ADD CHECK/WAIT HERE >>>
-        if self._wait_if_server_busy(): # Check if server busy before VLM call
-            return None, "[VLM Skipped - Server Busy]"
-        # Check stop event again after potentially waiting
-        if self.stop_event.is_set():
-            return None, "[VLM Skipped - Stop Requested]"
-        # <<< END CHECK/WAIT >>>
-        if not self.vlm_model: return None, None
-        logger.trace("Sending image page to VLM for LaTeX extraction...")
-        try:
-            # Convert PIL Image to base64
-            buffered = BytesIO()
-            image.save(buffered, format="JPEG") # Convert to JPEG for smaller size
-            img_str = base64.b64encode(buffered.getvalue()).decode('utf-8')
-            image_uri = f"data:image/jpeg;base64,{img_str}"
-
-            # Prepare VLM input (similar to CortexThoughts.process_image but using LaTeX prompt)
-            image_content_part = {"type": "image_url", "image_url": {"url": image_uri}}
-            # Use the specific LaTeX prompt
-            vlm_messages = [HumanMessage(content=[
-                image_content_part,
-                {"type": "text", "text": PROMPT_IMAGE_TO_LATEX} # Ensure PROMPT_IMAGE_TO_LATEX is accessible
-            ])]
-            vlm_chain = self.vlm_model | StrOutputParser()
-
-            # No timing/DB logging here, called within _process_file loop
-            response_markdown = vlm_chain.invoke(vlm_messages) # Synchronous call OK within thread
-
-            # Parse the response (basic parsing)
-            latex_code = None
-            explanation = response_markdown.strip() # Default explanation is full response
-            try:
-                parts = response_markdown.split("```latex", 1)
-                if len(parts) > 1:
-                    desc_part = parts[0].strip() # Description before code
-                    rest = parts[1]
-                    code_and_explanation = rest.split("```", 1)
-                    latex_code = code_and_explanation[0].strip()
-                    if len(code_and_explanation) > 1:
-                        explanation = f"{desc_part}\n\nExplanation:\n{code_and_explanation[1].strip()}"
-                    else:
-                        explanation = desc_part
-                    logger.trace("  VLM returned LaTeX block.")
-                # else: keep explanation as full response if no block found
-            except Exception as parse_e:
-                logger.warning(f"Could not parse LaTeX from VLM response: {parse_e}")
-
-            return latex_code, explanation
-
-        except Exception as e:
-            logger.error(f"VLM call failed during LaTeX extraction: {e}")
-            return None, f"[VLM Error: {e}]" # Return error in explanation field
 
     # --- NEW: MD5 Hashing Helper ---
     def _calculate_md5(self, file_path: str, size_bytes: Optional[int]) -> Optional[str]:
@@ -822,7 +829,7 @@ class FileIndexer:
                                     update(FileIndex).where(FileIndex.id == existing_rec.id).values(**err_vals))
                             else:
                                 db_session.add(
-                                    FileIndex(file_path=file_path, file_name=filename, **err_vals))  # type: ignore
+                                    FileIndex(file_path=file_path, file_name=filename, **err_vals))  
                             db_session.commit()
                         except Exception as db_perm_err:
                             logger.error(
@@ -905,17 +912,26 @@ class FileIndexer:
             chunk_ids = [f"file_{record.id}_chunk_{i}" for i in range(len(chunks))]
             chunk_metadatas = [{
                 "file_id": record.id,
-                "file_path": record.file_path,
-                "file_name": record.file_name,
+                "file_path": record.file_path, 
+                "file_name": record.file_name, 
                 "chunk_index": i,
                 "is_final_vlm": is_final_embedding # Add flag for search-time filtering if needed
             } for i in range(len(chunks))]
 
+            # await asyncio.to_thread(
+            #     global_file_vs.add_embeddings,
+            #     embeddings=chunk_embeddings,
+            #     metadatas=chunk_metadatas,
+            #     ids=chunk_ids
+            # )
+
+            # --- NEW, CORRECTED CODE ---
             await asyncio.to_thread(
-                global_file_vs.add_embeddings,
+                global_file_vs._collection.add,  # Access the underlying collection
                 embeddings=chunk_embeddings,
                 metadatas=chunk_metadatas,
-                ids=chunk_ids
+                ids=chunk_ids,
+                documents=chunks  # It's good practice to add the document text as well
             )
             
             # Update the record's final status in the database
@@ -940,8 +956,9 @@ class FileIndexer:
         Takes a FileIndex record, combines its text fields, chunks, embeds,
         and updates the Chroma vector store. This is the final step for any file.
         """
-        log_prefix = f"Embed|{os.path.basename(record.file_path)[:15]}"
-        logger.info(f"--> {log_prefix}: Starting final embedding process for File ID {record.id}")
+
+        log_prefix = f"Embed|{os.path.basename(record.file_path)[:15]}" #type: ignore
+        logger.info(f"--> {log_prefix}: Starting final embedding process for File ID {record.id}") #type: ignore
 
         if not self.embedding_model:
             logger.error(
@@ -974,7 +991,7 @@ class FileIndexer:
         try:
             # RecursiveCharacterTextSplitter is initialized in self.vector_store_init_and_load
             # Assuming self.text_splitter is available
-            chunks = self.text_splitter.split_text(master_document_text)  # type: ignore
+            chunks = self.text_splitter.split_text(master_document_text)  
             logger.info(f"{log_prefix}: Split combined document into {len(chunks)} chunks.")
             if not chunks:
                 raise ValueError("Text splitter produced no chunks.")
@@ -987,9 +1004,10 @@ class FileIndexer:
 
         # 3. Embed the chunks
         try:
+            vectorstore = get_global_file_index_vectorstore()
             # Use a lower priority for this background embedding task
             chunk_embeddings = await asyncio.to_thread(
-                self.embedding_model.embed_documents, chunks, priority=ELP0  # type: ignore
+                self.embedding_model.embed_documents, chunks, priority=ELP0  
             )
             if not chunk_embeddings or len(chunk_embeddings) != len(chunks):
                 raise ValueError("Embedding model returned empty or mismatched number of vectors.")
@@ -999,7 +1017,7 @@ class FileIndexer:
 
             # Delete any existing vectors for this file ID to avoid duplicates
             await asyncio.to_thread(
-                self.vectorstore.delete,  # type: ignore
+                self.vectorstore.delete,  
                 where={"file_id": record.id}
             )
 
@@ -1007,16 +1025,25 @@ class FileIndexer:
             chunk_ids = [f"file_{record.id}_chunk_{i}" for i in range(len(chunks))]
             chunk_metadatas = [{
                 "file_id": record.id,
-                "file_path": record.file_path,
-                "file_name": record.file_name,
+                "file_path": record.file_path, 
+                "file_name": record.file_name, 
                 "chunk_index": i
             } for i in range(len(chunks))]
 
+            # await asyncio.to_thread(
+            #     self.vectorstore.add_embeddings,  
+            #     embeddings=chunk_embeddings,
+            #     metadatas=chunk_metadatas,
+            #     ids=chunk_ids
+            # )
+
+            # --- NEW, CORRECTED CODE ---
             await asyncio.to_thread(
-                self.vectorstore.add_embeddings,  # type: ignore
+                self.vectorstore._collection.add,   # Access the underlying collection
                 embeddings=chunk_embeddings,
                 metadatas=chunk_metadatas,
-                ids=chunk_ids
+                ids=chunk_ids,
+                documents=chunks  # Also add the document text
             )
 
             record.index_status = 'indexed_complete'  # New final status
@@ -1154,7 +1181,8 @@ class FileIndexer:
                 logger.warning(f"{log_prefix}: MD5 calculation failed for a hashable file size. Skipping.")
                 return
 
-            existing_record = db_session.query(FileIndex).filter(FileIndex.file_path == file_path).first()
+            existing_record: Optional[FileIndex] = db_session.query(FileIndex).filter(
+                FileIndex.file_path == file_path).first()
             values_to_update: Dict[str, Any] = {'md5_hash': current_md5}
             values_to_update.update(file_metadata)
 
@@ -1324,7 +1352,7 @@ class FileIndexer:
             timing_data = {"session_id": session_id_for_log, "mode": "vlm_initial_description", "execution_time_ms": 0}
 
             response_text = await asyncio.to_thread(
-                self.provider._call_llm_with_timing,  # type: ignore
+                self.provider._call_llm_with_timing,  
                 vlm_chain,
                 vlm_messages,  # Pass messages directly as input to the model in the chain
                 timing_data,
@@ -1386,28 +1414,33 @@ class FileIndexer:
                 logger.info("Phase 2: No more files pending VLM/OCR processing in this batch.")
                 break  # Exit cycle if no more files are found
 
+            record: FileIndex
             for record in pending_vlm_files:
                 if self.stop_event.is_set():
                     logger.info("Phase 2: Stop signal received during batch processing.")
                     break
 
                 processed_in_cycle += 1
-                log_prefix = f"P2-VLM|{os.path.basename(record.file_path)[:15]}"
+                log_prefix = f"P2-VLM|{os.path.basename(record.file_path)[:15]}" #type: ignore
                 logger.info(f"--> {log_prefix}: Starting Phase 2 processing for File ID {record.id}")
 
                 images: Optional[List[Image.Image]] = None
                 temp_pdf_to_process: Optional[str] = None
 
                 try:
+                    # --- FIX APPLIED HERE ---
+                    # Get the file extension from the file_path attribute
+                    file_ext = os.path.splitext(record.file_path)[1].lower() #type: ignore
+
                     # Step 1: Convert file to a list of PIL Images
-                    if record.file_ext == '.pdf':
-                        images = await asyncio.to_thread(self._convert_pdf_to_images, record.file_path)
-                    elif record.file_ext in OFFICE_EXTENSIONS:
-                        temp_pdf_to_process = await asyncio.to_thread(self._convert_office_to_pdf, record.file_path)
+                    if file_ext == '.pdf':
+                        images = await asyncio.to_thread(self._convert_pdf_to_images, record.file_path) #type: ignore
+                    elif file_ext in OFFICE_EXTENSIONS:
+                        temp_pdf_to_process = await asyncio.to_thread(self._convert_office_to_pdf, record.file_path) #type: ignore
                         if temp_pdf_to_process and os.path.exists(temp_pdf_to_process):
                             images = await asyncio.to_thread(self._convert_pdf_to_images, temp_pdf_to_process)
-                    elif record.file_ext in VLM_TARGET_EXTENSIONS:  # For single images like PNG, JPG
-                        images = [Image.open(record.file_path)]
+                    elif file_ext in VLM_TARGET_EXTENSIONS:  # For single images like PNG, JPG
+                        images = [Image.open(record.file_path)] #type: ignore
 
                     if not images:
                         raise ValueError("Failed to convert or load file into images for VLM/OCR processing.")
@@ -1512,13 +1545,14 @@ class FileIndexer:
                 logger.info("Phase 3: No more files pending final embedding in this batch.")
                 break
 
+            record: FileIndex
             for record in pending_embedding_files:
                 if self.stop_event.is_set():
                     logger.info("Phase 3: Stop signal received during batch processing.")
                     break
 
                 processed_in_cycle += 1
-                log_prefix = f"P3-Embed|{os.path.basename(record.file_path)[:15]}"
+                log_prefix = f"P3-Embed|{os.path.basename(record.file_path)[:15]}" #type: ignore
                 logger.info(f"--> {log_prefix}: Starting final embedding for File ID {record.id}")
 
                 try:
@@ -1543,6 +1577,12 @@ class FileIndexer:
         The main loop for the file indexer thread. This version uses separate DB sessions
         for each phase to increase resilience.
         """
+
+        if not DATABASE_AVAILABLE:
+            logger.critical(
+                f"🛑 {self.thread_name} cannot start because database components are missing. Thread is shutting down.")
+            return  # Exit the run method immediately
+
         logger.info(f"✅ {self.thread_name} started (Multi-Phase, Isolated Session Logic).")
         
         loop = asyncio.new_event_loop()
@@ -1678,8 +1718,8 @@ def _locked_initialization_task(provider_ref: CortexEngine) -> Dict[str, Any]:
                         collection_count = 0
                         # Check if the collection attribute exists and is not None before calling count()
                         if hasattr(loaded_store,
-                                   '_collection') and loaded_store._collection is not None:  # type: ignore
-                            collection_count = loaded_store._collection.count()  # type: ignore
+                                   '_collection') and loaded_store._collection is not None:  
+                            collection_count = loaded_store._collection.count()  
                         else:
                             logger.warning(
                                 f"Loaded Chroma store from '{_persist_dir_to_use}' appears to have no active collection attribute or it's None. Will attempt rebuild.")
@@ -1716,7 +1756,7 @@ def _locked_initialization_task(provider_ref: CortexEngine) -> Dict[str, Any]:
             if should_rebuild_from_sql:
                 logger.info(">>> FileIndex VS Init: Proceeding to rebuild from SQL Database. <<<")
                 current_stage_start_time_s2: float = time.monotonic()
-                db_session = SessionLocal()  # type: ignore
+                db_session = SessionLocal()  
                 if not db_session:  # Should not happen if SessionLocal is configured by init_db
                     task_status = "error_db_session_rebuild"
                     task_message = "Failed to create DB session for rebuild phase."
@@ -1727,7 +1767,7 @@ def _locked_initialization_task(provider_ref: CortexEngine) -> Dict[str, Any]:
                     return {"status": task_status, "message": task_message}
 
                 logger.info(f">>> FileIndex VS Init: Stage 2: Querying SQL DB for records with embeddings... <<<")
-                indexed_files = db_session.query(FileIndex).filter(  # type: ignore
+                indexed_files = db_session.query(FileIndex).filter(  
                     FileIndex.embedding_json.isnot(None), FileIndex.indexed_content.isnot(None),
                     FileIndex.index_status.in_(['indexed_text', 'success', 'partial_vlm_error'])
                 ).all()
@@ -1832,9 +1872,9 @@ def _locked_initialization_task(provider_ref: CortexEngine) -> Dict[str, Any]:
                             batch_add_start = time.monotonic()
                             try:
                                 if not temp_chroma_store._collection: raise RuntimeError(
-                                    "Chroma collection not initialized.")  # type: ignore
+                                    "Chroma collection not initialized.")  
                                 temp_chroma_store._collection.add(ids=b_ids, embeddings=b_embs, metadatas=b_metas,
-                                                                  documents=b_texts)  # type: ignore
+                                                                  documents=b_texts)  
                                 logger.info(
                                     f"  Batch {i + 1} added successfully in {time.monotonic() - batch_add_start:.2f}s.")
                             except Exception as e_batch_add_exc:
@@ -2008,7 +2048,7 @@ if __name__ == "__main__":
         if file_vs:
             logger.success("Successfully retrieved global file index vector store instance.")
             try:
-                collection_count = file_vs._collection.count() # type: ignore
+                collection_count = file_vs._collection.count() 
                 logger.info(f"File index Chroma collection contains {collection_count} items.")
             except Exception as e_count:
                 logger.warning(f"Could not get count from Chroma collection: {e_count}")
