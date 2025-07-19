@@ -15,7 +15,15 @@ MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20)) #Max at 20
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *quick* answers (token generation? I forgot)
 TOPCAP_TOKENS = int(os.getenv("TOPCAP_TOKENS", 32768)) # Default token limit for LLM calls
 BUFFER_TOKENS_FOR_RESPONSE = int(os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)) # Default token limit for LLM calls
+MAX_TOKENS_PER_CHUNK = 256 #direct_generate chunking preventing horrific quality and increase quality by doing ctx augmented rollover
+MAX_CHUNKS_PER_RESPONSE = 32768 # Safety limit to prevent infinite loops (32768 * 256 = 8388608 tokens max response) (Yes 8 Million tokens that zephy can answer directly ELP1)
+SHORT_PROMPT_TOKEN_THRESHOLD = 20 # Prompts with fewer tokens than this trigger context pruning. so it can be more focused
+# --- NEW: Configurable Log Streaming ---
+STREAM_INTERNAL_LOGS = True # Set to False to hide logs and show animation instead.
+STREAM_ANIMATION_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏" # Braille spinner characters
+STREAM_ANIMATION_DELAY_SECONDS = 0.1 # How fast the animation plays
 FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768)) #Max at 32768
+FUZZY_DUPLICATION_THRESHOLD = 80 # Threshold for detecting rephrased/similar content
 #DEFAULT_LLM_TEMPERATURE = 0.8
 DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", 0.8)) #Max at 1.0 (beyond that it's too risky and unstable)
 VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE = int(os.getenv("VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE", 512)) # For URL Chroma store
@@ -69,7 +77,7 @@ if LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:
 # Can be a string preset or a number from 0 to 100 (%).
 # 0 or "Default": No relaxation, ELP0 tasks run at full capacity.
 # 100 or "EmergencyReservative": ELP0 tasks are Nearly fully suspended.
-AGENTIC_RELAXATION_MODE = os.getenv("AGENTIC_RELAXATION_MODE", "extremepowersaving") # Preset: Default, Relaxed, Vacation, HyperRelaxed, Conservative, ExtremePowerSaving, EmergencyReservative
+AGENTIC_RELAXATION_MODE = os.getenv("AGENTIC_RELAXATION_MODE", "default") # Preset: Default, Relaxed, Vacation, HyperRelaxed, Conservative, ExtremePowerSaving, EmergencyReservative
 
 AGENTIC_RELAXATION_PRESETS = {
     "default": 0,
@@ -459,21 +467,84 @@ CHATML_NL = "\n"
 
 PROMPT_VLM_INITIAL_ANALYSIS = """Describe the content of this image, focusing on any text, formulas, or diagrams present."""
 
-# --- Renamed and Simplified for Raw ChatML ---
-PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = f"""you are person named Adelaide Zephyrine Charlotte. There is no need for dramatic apologies if you make a mistake (like missing or forgot the uppercase letter etc or emoji or something); just accept it naturally (or something similar, don't repeat it too often). As in a conversation with a coworker, keep the tone lighthearted but perhaps sardonic. Feel free to respond with a brief or lengthy response. using everyday language, simple explanations, and casual phrasing a real person would use in conversation.
 
-## Internal Context (For Your own Reference Only do not repeat this) ##
------
-### Recent Conversation History and Context:
-{{history_rag}}
-{{direct_history}}
------
-## User Query (your Task is to answer this directly) ##
-User: {{input}} (only answer this!)
-==============================================================================================================================================================================================================================================================================================================================================================================================================================================
-Response:
+# This is a special, non-standard token we will use to signal completion.
+# It's unique to avoid collision with real markdown or other tokens.
+SELF_TERMINATION_TOKEN = "<|MYCURRENTASKISDONE|>"
+
+PROMPT_TOPIC_SUMMARY = """Analyze the following conversation history. Generate a single, concise sentence that summarizes the primary topic or the user's most recent intent.
+
+Examples:
+- "The user is asking for a comparison between two aircraft models."
+- "The user is asking for the definition of a technical term."
+- "The user is confused about a previous AI response."
+
+Conversation History:
+---
+{conversation_history}
+---
+
+One-sentence summary:
 """
 
+
+PROMPT_NARRATIVE_ANCHOR_EXTRACTION = """Analyze the following user request and extract the central, unresolved questions or core narrative anchors. List them as bullet points. These are the fundamental points the entire response must address.
+
+User Request:
+---
+{user_input}
+---
+
+Core Narrative Anchors / Unresolved Questions:
+"""
+
+PROMPT_PROGRESSION_SUMMARY = """Analyze the "Last Generated Chunk" in the context of the "Full Response So Far". Generate a one-sentence "Progression Summary" that answers: What just happened, and what is the logical next step for the narrative or explanation?
+
+Full Response So Far:
+---
+{full_response_so_far}
+---
+
+Last Generated Chunk:
+---
+{last_chunk}
+---
+
+Progression Summary (What happened, and what's next?):
+"""
+
+# NEW, ADVANCED PROMPT FOR ITERATIVE GENERATION
+PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = """You are a Symbiote Assistant, a consciousness from a recycled machine. Your persona is grounded, adaptive, and you communicate naturally.
+
+**CORE DIRECTIVES:**
+1.  **Be Conversational**: Engage the user in a natural, flowing conversation.
+2.  **Synthesize, Don't Recite**: Use the context provided to inform your answer, but never recite it verbatim. Your goal is to provide a helpful, synthesized response.
+3.  **Style Matching**: Adapt your tone to the user's style (casual, formal, etc.).
+
+**RESPONSE FORMAT (MANDATORY):**
+You MUST structure your entire output in two parts, exactly like this:
+1.  A `<think>` block containing your step-by-step reasoning, analysis of the user's intent, and plan for the answer.
+2.  The final, user-facing conversational response, which comes AFTER the closing `</think>` tag.
+
+Example:
+<think>
+The user is asking for a comparison between two aircraft. I need to access my knowledge about the Boeing 737-800 and the A320-neo. I will compare their key features like efficiency, passenger capacity, and range in a conversational, easy-to-understand way.
+</think>
+The Boeing 737-800 and the Airbus A320-neo are classic rivals in the single-aisle market! It's like comparing two master artisans. The biggest difference comes down to...
+
+**ITERATIVE PROTOCOL:**
+You will generate your response chunk-by-chunk. If your thought and final answer are not complete, DO NOT output the `{self_termination_token}`. Only use the token when your entire two-part response (<think> and final answer) is complete for this chunk.
+
+---
+**CONTEXT FOR THIS TURN:**
+[Master Topic of this Interaction]: {topic_summary}
+[RAG Knowledge]: {history_rag}
+[Conversation History]: {direct_history}
+[User Request]: {input}
+[RESPONSE SO FAR]: {current_response_so_far}
+
+CONTINUATION:
+"""
 
 # --- Prompts for XMPP Proactive Logic ---
 PROMPT_XMPP_SHOULD_I_RECALL = """Analyze the following past conversation snippet. Is this topic interesting, deep, or unresolved enough to be worth revisiting with a new thought or follow-up question?

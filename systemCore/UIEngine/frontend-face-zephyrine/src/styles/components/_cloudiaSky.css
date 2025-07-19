@@ -87,7 +87,10 @@ html.light .background-container {
     from {
       transform: translateX(0);
     }
-    to {
-      transform: translateX(calc(100vw + 400px));
+    25% {
+      transform: translateX(calc(100vw + 400px)); /* Move across the screen */
+    }
+    50%, 100% {
+      transform: translateX(calc(100vw + 400px)); /* Hold position for 5 seconds */
     }
 }
