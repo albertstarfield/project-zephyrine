@@ -71,8 +71,14 @@ class AlignmentStreamAnalyzer:
             - When `output_attentions=True`, `LlamaSdpaAttention.forward` calls `LlamaAttention.forward`.
             - `attn_output` has shape [B, H, T0, T0] for the 0th entry, and [B, H, 1, T0+i] for the rest i-th.
             """
-            step_attention = output[1].cpu() # (B, 16, N, N)
-            self.last_aligned_attn = step_attention[0].mean(0) # (N, N)
+            # --- START OF THE CORRECT FIX ---
+            # The 'output' tuple from the attention layer only contains weights (at index 1)
+            # if they are explicitly requested AND the attention implementation supports it.
+            # This check ensures we only try to access the weights if they actually exist.
+            if len(output) > 1 and output[1] is not None:
+                step_attention = output[1].cpu() # (B, 16, N, N)
+                self.last_aligned_attn = step_attention[0].mean(0) # (N, N)
+            # --- END OF THE CORRECT FIX ---
 
         target_layer = tfmr.layers[alignment_layer_idx].self_attn
         hook_handle = target_layer.register_forward_hook(attention_forward_hook)
