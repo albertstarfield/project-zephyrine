@@ -15,18 +15,27 @@ class T3HuggingfaceBackend(LlamaPreTrainedModel, GenerationMixin):
     """
 
     def __init__(
-        self,
-        config: LlamaConfig,
-        llama: LlamaModel,
-        *,
-        speech_enc,
-        speech_head,
-        latents_queue=None,
-        logits_queue=None,
-        alignment_stream_analyzer: 'AlignmentStreamAnalyzer'=None,
+            self,
+            config: LlamaConfig,
+            llama: LlamaModel,
+            *,
+            speech_enc,
+            speech_head,
+            latents_queue=None,
+            logits_queue=None,
+            alignment_stream_analyzer: 'AlignmentStreamAnalyzer' = None,
     ):
         super().__init__(config)
         self.model = llama
+
+        # --- START OF THE DEFINITIVE FIX ---
+        # Directly reconfigure the provided LlamaModel instance to resolve the attention conflict.
+        # This forces the model to use the 'eager' implementation, which is compatible with
+        # the library's internal hooks that require attention weight output.
+        self.model.config.attn_implementation = "eager"
+        self.model.config.output_attentions = True
+        # --- END OF THE DEFINITIVE FIX ---
+
         self.speech_enc = speech_enc
         self.speech_head = speech_head
         self._added_cond = False
@@ -91,6 +100,8 @@ class T3HuggingfaceBackend(LlamaPreTrainedModel, GenerationMixin):
         assert not (is_large_input and has_cache)
         assert return_dict
         assert output_hidden_states
+
+        output_attentions = True
 
         tfmr_out = self.model(
             inputs_embeds=inputs_embeds,

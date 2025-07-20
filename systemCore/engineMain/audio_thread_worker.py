@@ -10,6 +10,7 @@ import soundfile as sf
 import tempfile
 import hashlib
 import threading  # For the monitoring thread
+from CortexConfiguration import *
 
 # --- Psutil for memory monitoring ---
 PSUTIL_AVAILABLE = False
@@ -207,227 +208,151 @@ def initialize_models(worker_config):
     global CHATTERBOX_TTS_AVAILABLE_THREAD, ChatterboxTTS_class_ref_thread
     global PYWHISPERCPP_AVAILABLE_THREAD, WhisperModel_thread
     global chatterbox_model_instance_global, whisper_model_instance_global
-    global current_device_global, TORCH_AUDIO_AVAILABLE
+    global current_device_global, TORCH_AUDIO_AVAILABLE, PSUTIL_AVAILABLE, torch
 
     if not PSUTIL_AVAILABLE:
-        log_thread_worker("WARNING",
-                          "psutil library not found during init. Detailed RAM monitoring will be disabled in worker.")
+        log_thread_worker("WARNING", "psutil library not found during init. Detailed RAM monitoring will be disabled.")
 
-    if torch is None or torchaudio is None: TORCH_AUDIO_AVAILABLE = False
+    if torch is None or torchaudio is None:
+        TORCH_AUDIO_AVAILABLE = False
 
     requested_device = worker_config.get("device", "cpu").lower()
 
-    # Determine effective device for PyTorch operations
     if requested_device == "cuda" and TORCH_AUDIO_AVAILABLE and hasattr(torch, "cuda") and torch.cuda.is_available():
         current_device_global = "cuda"
     elif requested_device == "mps" and TORCH_AUDIO_AVAILABLE and hasattr(torch, "backends") and hasattr(torch.backends,
-                                                                                                        "mps") and torch.backends.mps.is_available() and torch.backends.mps.is_built():  # type: ignore
+                                                                                                        "mps") and torch.backends.mps.is_available() and torch.backends.mps.is_built():
         current_device_global = "mps"
     elif requested_device == "vulkan" and TORCH_AUDIO_AVAILABLE and hasattr(torch,
-                                                                            "vulkan") and torch.vulkan.is_available():  # type: ignore
+                                                                            "vulkan") and torch.vulkan.is_available():
         current_device_global = "vulkan"
-        log_thread_worker("INFO",
-                          "Vulkan device type requested. Underlying libraries (e.g., TTS model) must support it or have fallbacks.")
     else:
         if requested_device not in ["cpu", "auto"]:
             log_thread_worker("WARNING",
-                              f"Requested device '{requested_device}' not available or not fully supported by worker's checks, falling back to CPU.")
+                              f"Requested device '{requested_device}' not available or supported, falling back to CPU.")
         current_device_global = "cpu"
 
     log_thread_worker("INFO", f"Worker process effective PyTorch device set to: {current_device_global}")
 
-    # --- MPS Memory Fraction Limit ---
-    if current_device_global == "mps" and TORCH_AUDIO_AVAILABLE and torch and hasattr(torch.mps,
-                                                                                      "set_per_process_memory_fraction"):
-        try:
-            memory_fraction_limit = worker_config.get("mps_memory_fraction_limit", 0.75)  # Default to 75%
-            if 0.1 <= memory_fraction_limit <= 1.0:  # Sanity check the fraction
-                torch.mps.set_per_process_memory_fraction(memory_fraction_limit)  # type: ignore
-                log_thread_worker("INFO",
-                                  f"[MemoryConfig] Set MPS memory fraction limit to {memory_fraction_limit * 100:.0f}%.")
-            else:
-                log_thread_worker("WARNING",
-                                  f"[MemoryConfig] Invalid mps_memory_fraction_limit ({memory_fraction_limit}) in worker_config. Must be between 0.1 and 1.0. Using PyTorch default.")
-        except Exception as e_mps_frac:
-            log_thread_worker("WARNING", f"[MemoryConfig] Failed to set MPS memory fraction: {e_mps_frac}")
-
     # --- TTS Model Initialization ---
     if worker_config.get("enable_tts", False):
-        if not TORCH_AUDIO_AVAILABLE:
-            log_thread_worker("WARNING",
-                              "PyTorch/Torchaudio not available for TTS. ChatterboxTTS cannot be initialized.")
-            CHATTERBOX_TTS_AVAILABLE_THREAD = False
-        else:
-            # Determine the device to pass to ChatterboxTTS
+        is_tts_init_successful = False  # Assume failure until all steps pass
+        try:
+            if not TORCH_AUDIO_AVAILABLE:
+                raise ImportError("PyTorch/Torchaudio not available for TTS.")
+
+            from chatterbox.tts import ChatterboxTTS as ImportedChatterboxTTS_module_class_thread
+            ChatterboxTTS_class_ref_thread = ImportedChatterboxTTS_module_class_thread
+
             effective_tts_device_for_chatterbox = current_device_global
             if current_device_global == "vulkan":
-                # ChatterboxTTS (based on PyTorch) is unlikely to directly support "vulkan" as a device string.
-                # It will likely try to use CPU or error. Forcing CPU is safer here.
                 log_thread_worker("WARNING",
-                                  "Primary device is Vulkan. ChatterboxTTS likely requires CPU/CUDA/MPS. Attempting to load ChatterboxTTS on CPU as fallback for Vulkan.")
+                                  "Primary device is Vulkan. ChatterboxTTS likely requires CPU/CUDA/MPS. Attempting to load on CPU as fallback.")
                 effective_tts_device_for_chatterbox = "cpu"
 
+            log_thread_worker("INFO", f"Loading ChatterboxTTS model on: {effective_tts_device_for_chatterbox}...")
+
+            original_tts_model = ChatterboxTTS_class_ref_thread.from_pretrained(
+                device=effective_tts_device_for_chatterbox
+            )
+            log_thread_worker("INFO", "ChatterboxTTS original model loaded.")
+
             try:
-                from chatterbox.tts import ChatterboxTTS as ImportedChatterboxTTS_module_class_thread
-                ChatterboxTTS_class_ref_thread = ImportedChatterboxTTS_module_class_thread
-                CHATTERBOX_TTS_AVAILABLE_THREAD = True  # Assume import success initially
-                if ChatterboxTTS_class_ref_thread:
-                    log_thread_worker("INFO",
-                                      f"Loading ChatterboxTTS model on: {effective_tts_device_for_chatterbox}...")
-                    # Step 1: Load the original model
-                    original_tts_model = ChatterboxTTS_class_ref_thread.from_pretrained(
-                        device=effective_tts_device_for_chatterbox
-                    )
-                    log_thread_worker("INFO", "ChatterboxTTS original model loaded.")
-                    chatterbox_model_instance_global = original_tts_model  # Default to uncompiled
+                underlying_hf_model_config = original_tts_model.t3.patched_model.model.config
+                log_thread_worker("INFO", "[Manual Patch] Forcing attention implementation to 'eager'.")
+                underlying_hf_model_config.attn_implementation = "eager"
+                log_thread_worker("INFO", "[Manual Patch] Forcing `output_attentions=True`.")
+                underlying_hf_model_config.output_attentions = True
+                log_thread_worker("INFO", "[Manual Patch] Model configuration successfully patched.")
+            except AttributeError as e_patch:
+                raise RuntimeError(f"Failed to patch model config. Internal structure may have changed.") from e_patch
 
-                    # Step 2: Apply torch.compile if configured and possible
-                    if worker_config.get("use_torch_compile_tts", False) and hasattr(torch, 'compiler'):
-                        log_thread_worker("INFO", "[TorchCompile] torch.compile enabled for TTS.")
-                        # Determine artifact path (needs model identifier)
-                        # Using class name as a simple identifier. A version string would be better.
-                        model_id_for_cache = ChatterboxTTS_class_ref_thread.__name__
-                        compile_backend = worker_config.get("tts_compile_backend", "inductor")
+            chatterbox_model_instance_global = original_tts_model
 
-                        artifact_path = None
-                        if COMPILE_CACHE_BASE_DIR:  # Only try caching if base dir is set
-                            artifact_path = get_compile_artifact_path("tts_chatterbox", model_id_for_cache,
-                                                                      effective_tts_device_for_chatterbox,
-                                                                      compile_backend)
+            log_thread_worker("INFO", "Warming up the patched ChatterboxTTS model...")
+            dummy_text = "Chatterbox TTS warm-up sequence initiated."
+            dummy_prompt_path_for_warmup = worker_config.get("dummy_tts_prompt_path_for_warmup")
+            if not dummy_prompt_path_for_warmup or not os.path.exists(dummy_prompt_path_for_warmup):
+                log_thread_worker("WARNING",
+                                  "No valid dummy prompt path for warmup provided. Warmup may be incomplete.")
 
-                        loaded_from_cache = False
-                        if artifact_path and os.path.exists(artifact_path):
-                            try:
-                                log_thread_worker("INFO", f"[TorchCompile] Loading artifacts from: {artifact_path}")
-                                with open(artifact_path, "rb") as f:
-                                    artifact_bytes = f.read()
-                                torch.compiler.load_cache_artifacts(artifact_bytes)  # type: ignore
-                                log_thread_worker("INFO", "[TorchCompile] Artifacts loaded successfully.")
-                                loaded_from_cache = True
-                            except Exception as e:
-                                log_thread_worker("WARNING",
-                                                  f"[TorchCompile] Failed to load artifacts from {artifact_path}: {e}. Will recompile.")
-                                # Potentially delete corrupted artifact: os.remove(artifact_path)
+            _ = chatterbox_model_instance_global.generate(dummy_text, audio_prompt_path=dummy_prompt_path_for_warmup)
+            log_thread_worker("INFO", "ChatterboxTTS model warmed up successfully.")
 
-                        try:
-                            log_thread_worker("INFO",
-                                              f"[TorchCompile] Compiling ChatterboxTTS model with backend '{compile_backend}'...")
-                            # Make sure the model is on the correct device BEFORE compiling
-                            model_to_compile = original_tts_model.to(effective_tts_device_for_chatterbox)
+            is_tts_init_successful = True
 
-                            compiled_tts_model = torch.compile(model_to_compile, backend=compile_backend,
-                                                               fullgraph=False)  # Try fullgraph=True for more speed if it works
-                            chatterbox_model_instance_global = compiled_tts_model  # Use compiled model
-                            log_thread_worker("INFO", "[TorchCompile] Model compiled successfully.")
+        except Exception as e_init_tts:
+            log_thread_worker("CRITICAL",
+                              f"A critical error occurred during the ChatterboxTTS initialization sequence: {e_init_tts}")
+            log_thread_worker("CRITICAL", f"FULL TRACEBACK:\n{traceback.format_exc()}")
 
-                            if artifact_path and not loaded_from_cache:  # Save if newly compiled
-                                log_thread_worker("INFO",
-                                                  f"[TorchCompile] Saving new compile artifacts to: {artifact_path}")
-                                try:
-                                    new_artifact_bytes = torch.compiler.save_cache_artifacts()  # type: ignore
-                                    with open(artifact_path, "wb") as f:
-                                        f.write(new_artifact_bytes)
-                                    log_thread_worker("INFO", "[TorchCompile] New artifacts saved.")
-                                except Exception as e_save:
-                                    log_thread_worker("WARNING",
-                                                      f"[TorchCompile] Failed to save artifacts to {artifact_path}: {e_save}")
-                        except Exception as e_compile:
-                            log_thread_worker("ERROR",
-                                              f"[TorchCompile] Compilation failed: {e_compile}. Using uncompiled model.")
-                            chatterbox_model_instance_global = original_tts_model  # Fallback
-                    else:
-                        if not hasattr(torch, 'compiler'):
-                            log_thread_worker("INFO",
-                                              "[TorchCompile] torch.compiler module not available. Skipping compilation.")
-                        else:
-                            log_thread_worker("INFO",
-                                              "[TorchCompile] use_torch_compile_tts is false. Using uncompiled model.")
-                    # TTS Warmup
-                    try:
-                        dummy_text = "Chatterbox TTS warm-up sequence initiated."
-                        dummy_prompt_path_for_warmup = worker_config.get("dummy_tts_prompt_path_for_warmup")
-                        if dummy_prompt_path_for_warmup and os.path.exists(dummy_prompt_path_for_warmup):
-                            _ = chatterbox_model_instance_global.generate(dummy_text,
-                                                                          audio_prompt_path=dummy_prompt_path_for_warmup)
-                            log_thread_worker("INFO", "ChatterboxTTS model warmed up using provided dummy prompt.")
-                        else:
-                            log_thread_worker("WARNING",
-                                              "ChatterboxTTS: No valid dummy prompt path for warmup provided in worker_config. Warmup may be incomplete or skipped.")
-                    except Exception as e_warmup_tts_gen:
-                        log_thread_worker("WARNING", f"ChatterboxTTS warmup generation call failed: {e_warmup_tts_gen}")
-                else:
-                    CHATTERBOX_TTS_AVAILABLE_THREAD = False
-                    log_thread_worker("ERROR",
-                                      "ChatterboxTTS class reference is None after successful import attempt (should not happen).")
-            except ImportError as e_cb_module_imp:
-                log_thread_worker("WARNING", f"ChatterboxTTS library import failed: {e_cb_module_imp}.")
+        finally:
+            # This block guarantees the final state is set correctly.
+            if is_tts_init_successful:
+                log_thread_worker("INFO",
+                                  "ChatterboxTTS initialization sequence completed successfully. TTS is AVAILABLE.")
+                CHATTERBOX_TTS_AVAILABLE_THREAD = True
+            else:
+                log_thread_worker("CRITICAL",
+                                  "ChatterboxTTS initialization FAILED. TTS will be UNAVAILABLE in this worker.")
                 CHATTERBOX_TTS_AVAILABLE_THREAD = False
-            except Exception as e_cb_model_load:  # Catch other errors during from_pretrained
-                log_thread_worker("ERROR",
-                                  f"Failed to load ChatterboxTTS model: {e_cb_model_load}\n{traceback.format_exc()}")
-                CHATTERBOX_TTS_AVAILABLE_THREAD = False
+                chatterbox_model_instance_global = None
+                gc.collect()
 
     # --- ASR Model Initialization ---
     if worker_config.get("enable_asr", False):
-        log_thread_worker("INFO",
-                          "Initializing ASR (pywhispercpp: uses CPU or its own ggml GPU backend if compiled for it).")
+        is_asr_init_successful = False  # Assume failure
         try:
             from pywhispercpp.model import Model as ImportedWhisperModel_thread
             WhisperModel_thread = ImportedWhisperModel_thread
-            PYWHISPERCPP_AVAILABLE_THREAD = True  # Assume import success
-            if WhisperModel_thread:
-                model_dir = worker_config.get("model_dir")
-                whisper_model_name = worker_config.get("whisper_model_name")
-                if not model_dir or not whisper_model_name:
-                    log_thread_worker("ERROR", "Missing model_dir or whisper_model_name for ASR initialization.")
-                    PYWHISPERCPP_AVAILABLE_THREAD = False
-                else:
-                    full_model_path_asr = os.path.join(model_dir, whisper_model_name)
-                    if not os.path.exists(full_model_path_asr):
-                        log_thread_worker("ERROR", f"Whisper model GGUF file not found: {full_model_path_asr}")
-                        PYWHISPERCPP_AVAILABLE_THREAD = False
-                    else:
-                        log_thread_worker("INFO", f"Loading Whisper model: {full_model_path_asr}...")
-                        whisper_model_instance_global = WhisperModel_thread(
-                            model=full_model_path_asr, print_realtime=False, print_progress=False
-                        )
-                        log_thread_worker("INFO", "Whisper model loaded successfully.")
-                        # ASR Warmup
-                        try:
-                            temp_wav_path_asr_warmup = None
-                            asr_warmup_temp_dir = worker_config.get("temp_dir",
-                                                                    tempfile.gettempdir())  # Use configured temp or system temp
-                            if not os.path.isdir(asr_warmup_temp_dir): asr_warmup_temp_dir = tempfile.gettempdir()
 
-                            with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=asr_warmup_temp_dir,
-                                                             prefix="asr_warmup_") as tmp_asr_wav_f:
-                                temp_wav_path_asr_warmup = tmp_asr_wav_f.name
-                            sr_dummy_asr, dur_dummy_asr = 16000, 0.1
-                            silence_data_asr = np.zeros(int(dur_dummy_asr * sr_dummy_asr), dtype=np.int16)
-                            sf.write(temp_wav_path_asr_warmup, silence_data_asr, sr_dummy_asr, format='WAV',
-                                     subtype='PCM_16')
-                            _ = whisper_model_instance_global.transcribe(temp_wav_path_asr_warmup, language="en")
-                            log_thread_worker("INFO", "Whisper ASR model warmed up.")
-                        except Exception as e_warmup_asr_gen:
-                            log_thread_worker("WARNING",
-                                              f"Whisper ASR warmup transcription call failed: {e_warmup_asr_gen}\n{traceback.format_exc()}")
-                        finally:
-                            if temp_wav_path_asr_warmup and os.path.exists(temp_wav_path_asr_warmup):
-                                try:
-                                    os.remove(temp_wav_path_asr_warmup)
-                                except Exception as e_rm_asr_warmup:
-                                    log_thread_worker("WARNING",
-                                                      f"Could not remove dummy ASR warmup file '{temp_wav_path_asr_warmup}': {e_rm_asr_warmup}")
-            else:  # WhisperModel_thread is None
+            model_dir = worker_config.get("model_dir")
+            whisper_model_name = worker_config.get("whisper_model_name")
+            if not model_dir or not whisper_model_name:
+                raise ValueError("Missing model_dir or whisper_model_name for ASR initialization.")
+
+            full_model_path_asr = os.path.join(model_dir, whisper_model_name)
+            if not os.path.exists(full_model_path_asr):
+                raise FileNotFoundError(f"Whisper model GGUF file not found: {full_model_path_asr}")
+
+            log_thread_worker("INFO", f"Loading Whisper model: {full_model_path_asr}...")
+            whisper_model_instance_global = WhisperModel_thread(
+                model=full_model_path_asr, print_realtime=False, print_progress=False
+            )
+            log_thread_worker("INFO", "Whisper model loaded successfully.")
+
+            log_thread_worker("INFO", "Warming up Whisper ASR model...")
+            temp_wav_path_asr_warmup = None
+            try:
+                asr_warmup_temp_dir = worker_config.get("temp_dir", tempfile.gettempdir())
+                with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=asr_warmup_temp_dir,
+                                                 prefix="asr_warmup_") as tmp_asr_wav_f:
+                    temp_wav_path_asr_warmup = tmp_asr_wav_f.name
+                sr_dummy_asr, dur_dummy_asr = 16000, 0.1
+                silence_data_asr = np.zeros(int(dur_dummy_asr * sr_dummy_asr), dtype=np.int16)
+                sf.write(temp_wav_path_asr_warmup, silence_data_asr, sr_dummy_asr, format='WAV', subtype='PCM_16')
+                _ = whisper_model_instance_global.transcribe(temp_wav_path_asr_warmup, language="en")
+                log_thread_worker("INFO", "Whisper ASR model warmed up.")
+            finally:
+                if temp_wav_path_asr_warmup and os.path.exists(temp_wav_path_asr_warmup):
+                    os.remove(temp_wav_path_asr_warmup)
+
+            is_asr_init_successful = True
+
+        except Exception as e_init_asr:
+            log_thread_worker("CRITICAL", f"A critical error occurred during Whisper ASR initialization: {e_init_asr}")
+            log_thread_worker("CRITICAL", f"FULL TRACEBACK:\n{traceback.format_exc()}")
+
+        finally:
+            if is_asr_init_successful:
+                log_thread_worker("INFO", "Whisper ASR initialization completed successfully. ASR is AVAILABLE.")
+                PYWHISPERCPP_AVAILABLE_THREAD = True
+            else:
+                log_thread_worker("CRITICAL",
+                                  "Whisper ASR initialization FAILED. ASR will be UNAVAILABLE in this worker.")
                 PYWHISPERCPP_AVAILABLE_THREAD = False
-                log_thread_worker("ERROR",
-                                  "WhisperModel class reference is None after successful import attempt (should not happen).")
-        except ImportError as e_wh_module_imp:
-            log_thread_worker("WARNING", f"pywhispercpp library import failed: {e_wh_module_imp}.")
-            PYWHISPERCPP_AVAILABLE_THREAD = False
-        except Exception as e_wh_model_load:  # Catch other errors during Model()
-            log_thread_worker("ERROR", f"Failed to load Whisper model: {e_wh_model_load}\n{traceback.format_exc()}")
-            PYWHISPERCPP_AVAILABLE_THREAD = False
+                whisper_model_instance_global = None
+                gc.collect()
 
 
 def process_tts_chunk(params):
@@ -508,21 +433,46 @@ def process_asr_chunk(params):
 
 def worker_loop(pipe_conn, worker_config):
     global memory_monitor_thread, stop_memory_monitor_event, last_cache_clear_time
+    global chatterbox_model_instance_global, whisper_model_instance_global
+    global CHATTERBOX_TTS_AVAILABLE_THREAD, PYWHISPERCPP_AVAILABLE_THREAD
+    global current_device_global, TORCH_AUDIO_AVAILABLE, PSUTIL_AVAILABLE, torch
+
+    # Step 1: Perform all model initializations immediately.
+    # The entire worker's functionality depends on this block completing successfully.
+    # If any part of this fails, the worker process will exit.
     try:
         initialize_models(worker_config)
+        log_thread_worker("INFO", "Model initialization sequence completed.")
     except Exception as e_init_main_call:
         log_thread_worker("CRITICAL",
-                          f"Model initialization sequence itself raised an unhandled exception: {e_init_main_call}\n{traceback.format_exc()}")
+                          f"Model initialization sequence critically failed and the worker cannot start: {e_init_main_call}\n{traceback.format_exc()}")
+        # Attempt to signal the catastrophic failure back to the orchestrator.
         try:
-            pipe_conn.send({
-                               "error_critical_init": f"Worker model initialization sequence critically failed: {str(e_init_main_call)}"})
+            pipe_conn.send({"status": "failed_init", "error": str(e_init_main_call)})
         except Exception:
+            # If the pipe is broken, we can't do anything else.
             pass
+        # Exit the worker process entirely. It is not functional.
         return
 
-    log_thread_worker("INFO", "Worker models initialized (if configured). Starting main loop and memory monitor.")
+    # Step 2: Send a definitive "ready" signal to the orchestrator.
+    # This signal is sent ONLY if the initialization above succeeded.
+    try:
+        is_ready_payload = {
+            "status": "ready",
+            "task_id": "worker_ready_signal",
+            "tts_available": CHATTERBOX_TTS_AVAILABLE_THREAD,
+            "asr_available": PYWHISPERCPP_AVAILABLE_THREAD
+        }
+        pipe_conn.send(is_ready_payload)
+        log_thread_worker("INFO", f"Worker is ready. Sent signal to orchestrator: {is_ready_payload}")
+    except Exception as e_send_ready:
+        log_thread_worker("CRITICAL",
+                          f"Could not send the 'ready' signal to the orchestrator: {e_send_ready}. The worker will now exit as it cannot communicate.")
+        return
 
-    # Start memory monitor only if prerequisites are met and it's not already running (though it shouldn't be)
+    # Step 3: Start the background memory monitoring thread.
+    log_thread_worker("INFO", "Starting background memory monitor and the main command processing loop.")
     if (PSUTIL_AVAILABLE or (
             TORCH_AUDIO_AVAILABLE and torch and (current_device_global in ["cuda", "mps", "vulkan"]))) and \
             (memory_monitor_thread is None or not memory_monitor_thread.is_alive()):
@@ -530,31 +480,22 @@ def worker_loop(pipe_conn, worker_config):
         memory_monitor_thread = threading.Thread(target=monitor_memory_usage, daemon=True, name="MemoryMonitorThread")
         memory_monitor_thread.start()
     else:
-        if not (PSUTIL_AVAILABLE or (
-                TORCH_AUDIO_AVAILABLE and torch and (current_device_global in ["cuda", "mps", "vulkan"]))):
-            log_thread_worker("INFO", "Memory monitoring prerequisites not met. Monitor disabled.")
-        elif memory_monitor_thread and memory_monitor_thread.is_alive():
-            log_thread_worker("WARNING",
-                              "Memory monitor thread unexpectedly found to be alive before starting. Not restarting.")
+        log_thread_worker("INFO",
+                          "Memory monitoring prerequisites not met or thread already running. Monitor will not be started.")
 
+    # Step 4: Enter the main command processing loop.
     active = True
     while active:
         try:
-            if not pipe_conn.readable and not pipe_conn.writable:
-                log_thread_worker("WARNING", "Pipe seems closed from orchestrator side. Exiting worker loop.")
-                active = False;
-                break
+            # Block and wait for a command from the orchestrator.
+            if not pipe_conn.poll(None):  # Wait indefinitely
+                # This case is unlikely but handles a closed pipe gracefully.
+                log_thread_worker("WARNING", "Pipe poll returned False, suggesting it was closed. Exiting loop.")
+                active = False
+                continue
 
             message = pipe_conn.recv()
-
-            if message is None:
-                log_thread_worker("INFO",
-                                  "Received None message (pipe likely closed by orchestrator). Exiting worker loop.")
-                active = False;
-                break
-
             command = message.get("command")
-            params = message.get("params", {})
             task_id = message.get("task_id", "unknown_task")
             log_thread_worker("DEBUG", f"Received command: '{command}' for task_id: {task_id}")
 
@@ -565,29 +506,28 @@ def worker_loop(pipe_conn, worker_config):
                 response_payload = {"result": "shutdown_ack", "task_id": task_id}
                 active = False
             elif command == "tts_chunk":
-                response_payload = process_tts_chunk(params)
+                response_payload = process_tts_chunk(message.get("params", {}))
                 response_payload["task_id"] = task_id
             elif command == "asr_chunk":
-                response_payload = process_asr_chunk(params)
+                response_payload = process_asr_chunk(message.get("params", {}))
                 response_payload["task_id"] = task_id
 
             pipe_conn.send(response_payload)
             log_thread_worker("DEBUG", f"Sent response for task_id: {task_id}, command: '{command}'")
 
-        except EOFError:
-            log_thread_worker("ERROR", "Orchestrator closed the pipe (EOFError). Exiting worker loop.")
-            active = False
-        except BrokenPipeError:
-            log_thread_worker("ERROR",
-                              "Pipe connection to orchestrator is broken (BrokenPipeError). Exiting worker loop.")
+        except (EOFError, BrokenPipeError):
+            log_thread_worker("ERROR", "Orchestrator closed the pipe connection. Exiting worker loop.")
             active = False
         except KeyboardInterrupt:
             log_thread_worker("INFO", "KeyboardInterrupt received in worker loop. Exiting.")
             active = False
         except Exception as e_loop:
-            log_thread_worker("CRITICAL", f"Unhandled exception in worker_loop: {e_loop}\n{traceback.format_exc()}")
-            current_task_id_err = message.get("task_id",
-                                              "unknown_at_error") if 'message' in locals() else "unknown_at_error"
+            current_task_id_err = "unknown_at_error"
+            if 'message' in locals() and isinstance(message, dict):
+                current_task_id_err = message.get("task_id", "unknown_at_error")
+
+            log_thread_worker("CRITICAL",
+                              f"Unhandled exception in worker_loop for task '{current_task_id_err}': {e_loop}\n{traceback.format_exc()}")
             try:
                 pipe_conn.send({"error_critical_loop": f"Worker loop unhandled exception: {str(e_loop)}",
                                 "task_id": current_task_id_err})
@@ -596,32 +536,32 @@ def worker_loop(pipe_conn, worker_config):
                                   f"Failed to send critical loop error message back to orchestrator: {e_send_crit_err}")
             active = False
 
-    log_thread_worker("INFO", "Worker loop finished. Stopping memory monitor and cleaning up.")
+    # Step 5: Clean up resources after exiting the loop.
+    log_thread_worker("INFO", "Worker loop finished. Stopping memory monitor and cleaning up resources.")
 
+    # Stop the memory monitor thread gracefully.
     if memory_monitor_thread and memory_monitor_thread.is_alive():
         stop_memory_monitor_event.set()
-        monitor_join_timeout = max(MEMORY_MONITOR_INTERVAL_SECONDS, PERIODIC_CACHE_CLEAR_INTERVAL_SECONDS) + 2
-        memory_monitor_thread.join(timeout=monitor_join_timeout)
+        # Give the thread a moment to stop.
+        memory_monitor_thread.join(timeout=5)
         if memory_monitor_thread.is_alive():
-            log_thread_worker("WARNING",
-                              "[MemoryMonitor] Memory monitoring thread did not stop gracefully after timeout.")
+            log_thread_worker("WARNING", "Memory monitoring thread did not stop gracefully after timeout.")
 
+    # Explicitly clean up global model instances to release memory.
     log_thread_worker("DEBUG", "Performing final cleanup of global model instances.")
-    global chatterbox_model_instance_global, whisper_model_instance_global
     if chatterbox_model_instance_global:
-        del chatterbox_model_instance_global;
+        del chatterbox_model_instance_global
         chatterbox_model_instance_global = None
         log_thread_worker("TRACE", "ChatterboxTTS global instance deleted.")
     if whisper_model_instance_global:
-        del whisper_model_instance_global;
+        del whisper_model_instance_global
         whisper_model_instance_global = None
         log_thread_worker("TRACE", "Whisper ASR global instance deleted.")
 
-    # Explicit gc.collect() after model deletion, before final cache clear
+    # Perform a final garbage collection and attempt to clear PyTorch caches.
     gc.collect()
     log_thread_worker("DEBUG", "gc.collect() called after model deletion.")
-
-    _try_clear_pytorch_caches(current_device_global)  # Final cache clear
+    _try_clear_pytorch_caches(current_device_global)
 
     log_thread_worker("INFO", "Worker process cleanup complete. Terminating.")
 

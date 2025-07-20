@@ -1528,10 +1528,12 @@ def main():
         tts_worker_config = {
             "enable_tts": True,
             "enable_asr": False,
-            "device": effective_pytorch_device_orchestrator,  # Worker will use this device
+            "device": effective_pytorch_device_orchestrator,
             "chatterbox_model_id": args.chatterbox_model_id,
-            "dummy_tts_prompt_path_for_warmup": dummy_tts_prompt_path,  # Will be valid if we reached here
-            "temp_dir": args.temp_dir
+            "dummy_tts_prompt_path_for_warmup": dummy_tts_prompt_path,
+            "temp_dir": args.temp_dir,
+            "use_torch_compile_tts": False,  # <--- ADD THIS LINE TO ENABLE COMPILATION
+            "tts_compile_backend": "inductor"  # <--- (Optional but Recommended) Explicitly set the backend
         }
         tts_worker_process, tts_worker_pipe_orch_end = start_persistent_worker("TTS", tts_worker_config)
         if not tts_worker_process or not tts_worker_pipe_orch_end:
@@ -1660,11 +1662,46 @@ def main():
                                f"Sending task {task_id} to TTS worker: synthesize '{text_chunk_content[:30]}...'")
                     tts_worker_pipe_orch_end.send(tts_task_payload)
 
-                    worker_timeout_seconds = getattr(__import__('config', fromlist=['TTS_WORKER_TIMEOUT']),
-                                                     'TTS_WORKER_TIMEOUT', 120)
+                    try:
+                        from CortexConfiguration import TTS_WORKER_TIMEOUT
+                        worker_timeout_seconds = TTS_WORKER_TIMEOUT
+                        log_worker("INFO",
+                                   f"Using TTS worker timeout from CortexConfiguration: {worker_timeout_seconds}s")
+                    except (ImportError, AttributeError):
+                        worker_timeout_seconds = 120  # Default fallback
+                        log_worker("WARNING",
+                                   f"Could not import TTS_WORKER_TIMEOUT from CortexConfiguration. Using default: {worker_timeout_seconds}s")
 
-                    if tts_worker_pipe_orch_end.poll(timeout=worker_timeout_seconds):
-                        chunk_result = tts_worker_pipe_orch_end.recv()
+                    # Wait for the worker's "ready" signal before proceeding.
+                    log_worker("INFO", "Waiting for TTS worker to signal it is ready...")
+                    try:
+                        # Set a generous timeout for model loading (e.g., 5 minutes).
+                        worker_ready_timeout = 300
+                        if tts_worker_pipe_orch_end.poll(timeout=worker_ready_timeout):
+                            ready_message = tts_worker_pipe_orch_end.recv()
+                            # CRITICAL CHECK: Verify the status is 'ready' AND that the required 'tts_available' flag is True.
+                            if ready_message.get("status") == "ready" and ready_message.get("tts_available") is True:
+                                log_worker("INFO", "TTS worker has confirmed it is ready and TTS is available.")
+                            else:
+                                # This will now correctly catch the case where the worker started but failed its own initialization.
+                                error_msg = f"TTS worker started but reported that TTS is UNAVAILABLE. Full signal: {ready_message}"
+                                log_worker("CRITICAL", error_msg)
+                                # We must stop the script here, as it cannot fulfill the TTS task.
+                                raise RuntimeError(error_msg)
+                        else:
+                            # This handles the case where the worker hangs completely and never sends a signal.
+                            error_msg = f"TTS worker process did not become ready within the {worker_ready_timeout}s timeout."
+                            log_worker("CRITICAL", error_msg)
+                            raise RuntimeError(error_msg)
+                    except Exception as e_wait_ready:
+                        log_worker("CRITICAL",
+                                   f"Orchestrator failed while waiting for the TTS worker to become ready: {e_wait_ready}")
+                        # Ensure the failed worker process is cleaned up.
+                        if 'tts_worker_process' in locals() and tts_worker_process:
+                            stop_persistent_worker(tts_worker_process, tts_worker_pipe_orch_end, "TTS")
+                        # Exit with an error, printing the JSON result.
+                        print(json.dumps({"error": f"Failed to initialize TTS worker: {e_wait_ready}"}), flush=True)
+                        sys.exit(1)
                     else:
                         if progress_bar_tts: progress_bar_tts.close()
                         log_worker("ERROR",
@@ -1978,8 +2015,15 @@ def main():
                     log_worker("DEBUG",
                                f"Sending task {asr_task_id} to ASR worker for chunk: {chunk_file_path_for_worker}")
                     asr_worker_pipe_orch_end.send(asr_task_payload)
-                    asr_worker_timeout_seconds = getattr(__import__('config', fromlist=['ASR_WORKER_TIMEOUT']),
-                                                         'ASR_WORKER_TIMEOUT', 300)
+                    try:
+                        from CortexConfiguration import ASR_WORKER_TIMEOUT
+                        asr_worker_timeout_seconds = ASR_WORKER_TIMEOUT
+                        log_worker("INFO",
+                                   f"Using ASR worker timeout from CortexConfiguration: {asr_worker_timeout_seconds}s")
+                    except (ImportError, AttributeError):
+                        asr_worker_timeout_seconds = 300  # Default fallback
+                        log_worker("WARNING",
+                                   f"Could not import ASR_WORKER_TIMEOUT from CortexConfiguration. Using default: {asr_worker_timeout_seconds}s")
 
                     if asr_worker_pipe_orch_end.poll(timeout=asr_worker_timeout_seconds):
                         asr_chunk_result = asr_worker_pipe_orch_end.recv()
