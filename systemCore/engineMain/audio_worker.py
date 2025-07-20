@@ -90,18 +90,90 @@ SCLParser_class_ref_type_hint: type = Any
 
 # --- MeloTTS Imports (depends on SCLParser being defined later for a complete MELO_AVAILABLE check) ---
 # We'll import TTS_melo_class_ref here, and finalize MELO_AVAILABLE after SCLParser is defined.
-try:
-    if TORCH_AUDIO_AVAILABLE:
-        from melo.api import TTS as ImportedTTS_melo_api
-        TTS_melo_class_ref = ImportedTTS_melo_api
-        log_worker("INFO", "MeloTTS API class imported (for sample gen). SCLParser check will follow its definition.")
-    else:
-        # This path won't execute if TORCH_AUDIO_AVAILABLE is False, but as a guard:
-        log_worker("WARNING", "Torch/Torchaudio not available, so MeloTTS cannot be loaded for sample generation.")
-        MELO_AVAILABLE = False # Explicitly
-except ImportError as e_melo_imp:
-    log_worker("WARNING", f"MeloTTS API import failed: {e_melo_imp}. Melo sample gen will fail.")
-    MELO_AVAILABLE = False
+
+
+def _handle_mecab_failure_and_retry_download():
+    """
+    Handles the MeCab initialization failure by attempting to download the
+    required 'unidic' dictionary. It runs in an aggressive, infinite loop
+    to deal with network issues or command hangs.
+    """
+    log_worker("WARNING", "[MeCab Repair] MeCab dictionary failure detected. Initiating repair process.")
+    # Use sys.executable to ensure we use the Python from the correct virtual environment
+    download_command = [sys.executable, "-m", "unidic", "download"]
+
+    while True: # Infinite loop to ensure it eventually succeeds, as requested.
+        log_worker("INFO", f"[MeCab Repair] Attempting to execute: `{' '.join(download_command)}`")
+        process = None
+        try:
+            # We use Popen to monitor the process for hangs.
+            # A 15-second timeout is a reasonable compromise to detect a truly hung process
+            # without killing a slow but legitimate download on a poor connection.
+            process = subprocess.Popen(download_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
+            stdout, stderr = process.communicate(timeout=15)
+
+            if process.returncode == 0:
+                log_worker("INFO", "[MeCab Repair] Download process completed successfully.")
+                log_worker("DEBUG", f"[MeCab Repair STDOUT]:\n{stdout}")
+                return # Success! Exit the function.
+            else:
+                log_worker("ERROR", f"[MeCab Repair] Download process failed with return code {process.returncode}.")
+                log_worker("ERROR", f"[MeCab Repair STDERR]:\n{stderr}")
+
+        except subprocess.TimeoutExpired:
+            log_worker("WARNING", "[MeCab Repair] Download process is unresponsive (hung for >15s). Terminating and will retry.")
+            if process:
+                process.terminate()
+                # Ensure the process is cleaned up before the next loop iteration
+                try:
+                    process.wait(timeout=5)
+                except subprocess.TimeoutExpired:
+                    log_worker("ERROR", "[MeCab Repair] Hung process did not terminate gracefully. Killing it.")
+                    process.kill()
+                finally:
+                    process.wait() # Final wait to clean up the zombie process
+            # The loop will now automatically retry.
+
+        except FileNotFoundError:
+            log_worker("CRITICAL", f"[MeCab Repair] Command failed because '{sys.executable}' or 'unidic' module could not be found. This is unrecoverable.")
+            return # Exit, as we cannot fix this automatically.
+
+        except Exception as e:
+            log_worker("ERROR", f"[MeCab Repair] An unexpected error occurred during the repair attempt: {e}")
+
+        log_worker("INFO", "[MeCab Repair] Retrying the download after a 5-second delay...")
+        time.sleep(5)
+
+melo_import_attempts = 0
+while not MELO_AVAILABLE: # Loop to retry the import after a fix attempt.
+    melo_import_attempts += 1
+    try:
+        if TORCH_AUDIO_AVAILABLE:
+            from melo.api import TTS as ImportedTTS_melo_api
+            TTS_melo_class_ref = ImportedTTS_melo_api
+            # If the import succeeds, MELO_AVAILABLE will be finalized later after SCLParser is defined.
+            # We break the retry loop here because the import itself was successful.
+            log_worker("INFO", "MeloTTS API module imported successfully. Final availability check will follow.")
+            break
+        else:
+            log_worker("WARNING", "Torch/Torchaudio not available, so MeloTTS cannot be loaded.")
+            MELO_AVAILABLE = False
+            break # No point retrying if torch isn't there
+
+    except Exception as e_melo_imp:
+        error_str = str(e_melo_imp).lower()
+        # Check for the specific signature of the MeCab dictionary error.
+        if "mecab" in error_str and ("no such file or directory" in error_str or "failed initializing" in error_str):
+            # This is the error we can fix. Call the handler.
+            _handle_mecab_failure_and_retry_download()
+            # The 'while' loop will now cause us to re-attempt the 'from melo.api...' import.
+            log_worker("INFO", "MeCab repair process finished. Retrying MeloTTS import...")
+            continue # Go to the next iteration of the while loop to retry the import.
+        else:
+            # This is a different, unexpected error during import.
+            log_worker("WARNING", f"MeloTTS API import failed with an unrecoverable error: {e_melo_imp}. Melo sample generation will be unavailable.")
+            MELO_AVAILABLE = False
+            break # Exit the retry loop.
 
 # --- ChatterboxTTS Imports ---
 try:
@@ -1378,6 +1450,7 @@ def main():
     asr_worker_process = None
     asr_worker_pipe_orch_end = None
 
+
     parser = argparse.ArgumentParser(description="Audio Worker Orchestrator (TTS & ASR)")
     parser.add_argument("--task-type", required=True, choices=["tts", "asr"], help="Task to perform")
     parser.add_argument("--model-lang", default="EN", help="Lang for MeloTTS sample or ASR")
@@ -1399,7 +1472,7 @@ def main():
                         help="Save the raw combined audio before post-processing for debugging.")
 
     args = parser.parse_args()
-
+    os.makedirs(args.temp_dir, exist_ok=True)
     result_payload: Dict[str, Any] = {"error": f"Orchestrator failed task: {args.task_type}"}
 
     # Determine PyTorch device for main orchestrator thread (e.g., for SCLParser, MeloTTS)
