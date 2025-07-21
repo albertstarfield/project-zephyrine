@@ -1704,7 +1704,7 @@ def main():
                             suffix=".mp3", dir=job_temp_dir_path, delete=False) as temp_mp3:
                         temp_wav_path, temp_mp3_path = temp_wav.name, temp_mp3.name
                     try:
-                        sf.write(temp_wav_path, final_audio_for_saving, sr_after_post_process, 'WAV', 'PCM_16')
+                        sf.write(temp_wav_path, final_audio_for_saving, sr_after_post_process, format='WAV', subtype='PCM_16')
                         subprocess.run(
                             [ffmpeg_exe_path, "-i", temp_wav_path, "-codec:a", "libmp3lame", "-qscale:a", "2", "-y",
                              temp_mp3_path], check=True, capture_output=True, timeout=60)
