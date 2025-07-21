@@ -9,8 +9,11 @@ import numpy as np
 import soundfile as sf
 import tempfile
 import hashlib
+import requests # Needed for catching network exceptions
+from huggingface_hub.utils import HfHubHTTPError # Specific HF network error
 import threading  # For the monitoring thread
 from CortexConfiguration import *
+import shutil # Needed for deleting the cache directory
 
 # --- Psutil for memory monitoring ---
 PSUTIL_AVAILABLE = False
@@ -63,6 +66,40 @@ MEMORY_MONITOR_INTERVAL_SECONDS = 30  # Log memory usage this often
 PERIODIC_CACHE_CLEAR_INTERVAL_SECONDS = 5  # Attempt cache clear this often
 last_cache_clear_time = 0  # Keep track of when cache was last cleared
 
+
+def _find_and_patch_config(model_object):
+    """
+    Attempts to find and patch the configuration of a loaded ChatterboxTTS model.
+    Returns True on success, False on failure.
+    """
+    log_thread_worker("DEBUG", "Attempting to find and patch model configuration...")
+    potential_paths = [('t3', 'model', 'config'), ('model', 'config'), ('config',)]
+
+    underlying_hf_model_config = None
+    for path_tuple in potential_paths:
+        current_obj = model_object
+        try:
+            for attr in path_tuple:
+                current_obj = getattr(current_obj, attr)
+            underlying_hf_model_config = current_obj
+            path_str = "model_object" + "".join([f".{a}" for a in path_tuple])
+            log_thread_worker("INFO", f"[Manual Patch] Found model config at path: {path_str}")
+            break
+        except AttributeError:
+            continue
+
+    if underlying_hf_model_config:
+        log_thread_worker("INFO", "[Manual Patch] Forcing attention implementation to 'eager'.")
+        underlying_hf_model_config.attn_implementation = "eager"
+        log_thread_worker("INFO", "[Manual Patch] Forcing `output_attentions=True`.")
+        underlying_hf_model_config.output_attentions = True
+        log_thread_worker("INFO", "[Manual Patch] Model configuration successfully patched.")
+        return True
+    else:
+        log_thread_worker("CRITICAL", "Could not locate a valid '.config' object in the loaded model's structure.")
+        log_thread_worker("CRITICAL",
+                          "This is a structural incompatibility, not a download error. The model files are likely intact, but the patching code needs to be updated.")
+        return False
 
 def _try_clear_pytorch_caches(device_type_str):
     """Helper function to attempt clearing PyTorch caches for a given device type."""
@@ -255,21 +292,47 @@ def initialize_models(worker_config):
             original_tts_model = ChatterboxTTS_class_ref_thread.from_pretrained(
                 device=effective_tts_device_for_chatterbox
             )
-            log_thread_worker("INFO", "ChatterboxTTS original model loaded.")
 
-            try:
-                underlying_hf_model_config = original_tts_model.t3.patched_model.model.config
-                log_thread_worker("INFO", "[Manual Patch] Forcing attention implementation to 'eager'.")
-                underlying_hf_model_config.attn_implementation = "eager"
-                log_thread_worker("INFO", "[Manual Patch] Forcing `output_attentions=True`.")
-                underlying_hf_model_config.output_attentions = True
-                log_thread_worker("INFO", "[Manual Patch] Model configuration successfully patched.")
-            except AttributeError as e_patch:
-                raise RuntimeError(f"Failed to patch model config. Internal structure may have changed.") from e_patch
+            max_retries = 2
+            retry_delay_seconds = 15
+            original_tts_model = None
+            last_exception = None
+
+            for attempt in range(max_retries):
+                try:
+                    log_thread_worker("INFO",
+                                      f"Attempting to download/load ChatterboxTTS model (Attempt {attempt + 1}/{max_retries})...")
+
+                    # Call the download/load function. If this succeeds, we are done.
+                    original_tts_model = ChatterboxTTS_class_ref_thread.from_pretrained(
+                        device=effective_tts_device_for_chatterbox
+                    )
+
+                    log_thread_worker("INFO", "ChatterboxTTS model loaded successfully.")
+                    last_exception = None  # Clear any previous network errors
+                    break  # Success! Exit the loop.
+
+                except (requests.exceptions.RequestException, HfHubHTTPError) as e:
+                    last_exception = e
+                    log_thread_worker("WARNING",
+                                      f"A network error occurred during download: {e}. Retrying in {retry_delay_seconds}s...")
+                    time.sleep(retry_delay_seconds)
+                    continue  # Go to the next attempt
+
+                except Exception as e:
+                    # Any other exception is considered fatal.
+                    last_exception = e
+                    log_thread_worker("CRITICAL", f"An unrecoverable error occurred during model initialization: {e}")
+                    log_thread_worker("CRITICAL", f"FULL TRACEBACK:\n{traceback.format_exc()}")
+                    break  # Exit the loop immediately.
+
+            if original_tts_model is None or last_exception is not None:
+                raise RuntimeError("Failed to load ChatterboxTTS model after all retries.") from last_exception
+            # --- END OF FINAL LOOP ---
 
             chatterbox_model_instance_global = original_tts_model
 
-            log_thread_worker("INFO", "Warming up the patched ChatterboxTTS model...")
+            log_thread_worker("INFO", "Warming up the ChatterboxTTS model...")
             dummy_text = "Chatterbox TTS warm-up sequence initiated."
             dummy_prompt_path_for_warmup = worker_config.get("dummy_tts_prompt_path_for_warmup")
             if not dummy_prompt_path_for_warmup or not os.path.exists(dummy_prompt_path_for_warmup):
@@ -284,7 +347,9 @@ def initialize_models(worker_config):
         except Exception as e_init_tts:
             log_thread_worker("CRITICAL",
                               f"A critical error occurred during the ChatterboxTTS initialization sequence: {e_init_tts}")
-            log_thread_worker("CRITICAL", f"FULL TRACEBACK:\n{traceback.format_exc()}")
+            # We already logged the full traceback inside the loop if it happened there.
+            if "FULL TRACEBACK" not in str(e_init_tts):
+                log_thread_worker("CRITICAL", f"FULL TRACEBACK:\n{traceback.format_exc()}")
 
         finally:
             # This block guarantees the final state is set correctly.

@@ -855,9 +855,9 @@ class SCLParser:
                            f"SCLParser Post-process: Added GWL (Distortion). Drive: {drive_db_gwl:.2f}dB. SR for Pedalboard: {current_processing_sr}")
 
             board_effects_list.extend([
-                Reverb(room_size=1.0, damping=0.2, wet_level=0.1069, dry_level=0.5),
+                Reverb(room_size=1.0, damping=0.5, wet_level=0.01069, dry_level=0.9),
                 Chorus(rate_hz=0.4, depth=0.25, centre_delay_ms=7.0, feedback=0.0, mix=0.02),
-                Delay(delay_seconds=0.5, feedback=0.01, mix=0.0002),
+                Delay(delay_seconds=1.4, feedback=0.04, mix=0.0009),
             ])
 
         audio_after_pedalboard_effects_np = audio_for_pedalboard_np  # Default if no effects/pedalboard
@@ -1179,7 +1179,9 @@ Pip, fueled by an insatiable curiosity and a sudden craving for superior hot bev
 ...and that, my friend, is just the beginning of Pip's grand adventure. We'll see how they tackle the sleepy badger, navigate the tricky puzzles, and whether that hot cocoa is truly infinite... another time. For now, let the idea of grand quests and cozy villages lull you into a peaceful rest. Sweet dreams of adventure!
 """
 
-ADELAIDE_EXCITED_TEST_INTRO="Hello there! I hope you have all absolutely fantastic day"
+#ADELAIDE_EXCITED_TEST_INTRO="Hello there! I hope you have all absolutely fantastic day"
+
+ADELAIDE_EXCITED_TEST_INTRO=""
 
 # --- PyTorch Device Auto-Detection Helper ---
 def _get_pytorch_device(requested_device_str: str) -> str:
@@ -1379,6 +1381,8 @@ def start_persistent_worker(task_type: str, worker_config: Dict[str, Any]) -> Tu
         log_worker("INFO", f"Started persistent {task_type} worker (PID: {process.pid}).")
         # child_conn.close() # Child end is used by the child process. Parent uses parent_conn.
         # This was a mistake in previous template, child_conn should NOT be closed in parent.
+        log_worker("DEBUG", "Pausing for a moment to allow the worker process to initialize...")
+        time.sleep(2)  # A 2-second grace period is good for debugging.
         return process, parent_conn
     except Exception as e_proc_start:
         log_worker("CRITICAL", f"Failed to start persistent {task_type} worker process: {e_proc_start}")
@@ -1407,7 +1411,7 @@ def stop_persistent_worker(process: Optional[multiprocessing.Process],
         except Exception as e:
             log_worker("WARNING", f"Error sending shutdown to {task_type} worker (PID: {process.pid}): {e}")
 
-        process.join(timeout=10)  # Wait for worker to exit gracefully
+        process.join(timeout=600)  # Wait for worker to exit gracefully
         if process.is_alive():
             log_worker("WARNING",
                        f"{task_type} worker (PID: {process.pid}) did not terminate gracefully after 10s, attempting to terminate.")
@@ -1445,12 +1449,13 @@ def main():
     global tts_worker_process, tts_worker_pipe_orch_end
     global asr_worker_process, asr_worker_pipe_orch_end
 
+    # Initialize process and pipe variables to None
     tts_worker_process = None
     tts_worker_pipe_orch_end = None
     asr_worker_process = None
     asr_worker_pipe_orch_end = None
 
-
+    # --- 1. ARGUMENT PARSING & INITIAL SETUP ---
     parser = argparse.ArgumentParser(description="Audio Worker Orchestrator (TTS & ASR)")
     parser.add_argument("--task-type", required=True, choices=["tts", "asr"], help="Task to perform")
     parser.add_argument("--model-lang", default="EN", help="Lang for MeloTTS sample or ASR")
@@ -1462,84 +1467,64 @@ def main():
     parser.add_argument("--output-file", default="orchestrator_test_output.wav",
                         help="Output for *orchestrator's* TTS test mode (final combined audio)")
     parser.add_argument("--chatterbox_model_id", default=CHATTERBOX_DEFAULT_MODEL_ID, help="Model ID for ChatterboxTTS")
-    parser.add_argument("--exaggeration", type=float, default=0.5, help="Exaggeration for ChatterboxTTS")
-    parser.add_argument("--cfg_weight", type=float, default=0.8, help="CFG weight for ChatterboxTTS")
+    parser.add_argument("--exaggeration", type=float, default=1.1, help="Exaggeration for ChatterboxTTS")
+    parser.add_argument("--cfg_weight", type=float, default=0.9, help="CFG weight for ChatterboxTTS")
     parser.add_argument("--test-audio-input", default="test_input.wav",
                         help="Filename of test audio for ASR (relative to model-dir or temp-dir)")
     parser.add_argument("--asr-test-model", default=WHISPER_DEFAULT_MODEL_FILENAME_CFG,
                         help="Whisper model filename for ASR test")
     parser.add_argument("--debug-save-raw-combined", action="store_true",
                         help="Save the raw combined audio before post-processing for debugging.")
-
     args = parser.parse_args()
     os.makedirs(args.temp_dir, exist_ok=True)
+
+    try:
+        hf_cache_dir = os.path.join(args.model_dir, 'huggingface_cache')
+        os.makedirs(hf_cache_dir, exist_ok=True)
+        os.environ['HF_HOME'] = hf_cache_dir
+        log_worker("INFO", f"Hugging Face cache directory set to: {os.environ['HF_HOME']}")
+    except Exception as e_hf_cache:
+        log_worker("CRITICAL", f"Failed to set custom Hugging Face cache directory: {e_hf_cache}")
+        sys.exit(1)
+
     result_payload: Dict[str, Any] = {"error": f"Orchestrator failed task: {args.task_type}"}
 
-    # Determine PyTorch device for main orchestrator thread (e.g., for SCLParser, MeloTTS)
-    # and as a suggestion for the worker.
-    effective_pytorch_device_orchestrator = "cpu"  # Default
+    effective_pytorch_device_orchestrator = "cpu"
     if TORCH_AUDIO_AVAILABLE and torch:
         effective_pytorch_device_orchestrator = _get_pytorch_device(args.device)
     elif args.task_type == "tts" and not (TORCH_AUDIO_AVAILABLE and torch):
         log_worker("CRITICAL", "PyTorch/Torchaudio not available in orchestrator. Cannot perform TTS.")
-        print(json.dumps({"error": "PyTorch/Torchaudio missing for TTS orchestration."}), flush=True);
+        print(json.dumps({"error": "PyTorch/Torchaudio missing for TTS orchestration."}), flush=True)
         sys.exit(1)
 
-    # --- Worker Startup ---
-    # A dummy prompt path for TTS worker warmup. Create a tiny silent WAV.
-    dummy_tts_prompt_path = None  # Initialize to None
-
-    if args.task_type == "tts":  # Only create if TTS worker will be started
+    # --- 2. WORKER STARTUP (CRITICAL: Happens BEFORE the main orchestration try block) ---
+    dummy_tts_prompt_path = None
+    if args.task_type == "tts":
         try:
-            # You might want to add an explicit check for args.temp_dir validity here if needed
-            # e.g., if not os.path.isdir(args.temp_dir) or not os.access(args.temp_dir, os.W_OK):
-            #           raise OSError(f"Temporary directory '{args.temp_dir}' is not a writable directory.")
-
             with tempfile.NamedTemporaryFile(suffix=".wav", delete=False, dir=args.temp_dir,
                                              prefix="dummy_prompt_") as tmp_dummy_prompt:
                 dummy_tts_prompt_path = tmp_dummy_prompt.name
-
-            sr_dummy_tts = 24000  # Match a common TTS SR or Chatterbox's expected SR
-            duration_dummy_tts = 0.05  # 50ms
+            sr_dummy_tts = 24000
+            duration_dummy_tts = 0.05
             silence_tts_prompt = np.zeros(int(duration_dummy_tts * sr_dummy_tts), dtype=np.float32)
-
-            sf.write(dummy_tts_prompt_path, silence_tts_prompt, sr_dummy_tts, format='WAV',
-                     subtype='FLOAT')
+            sf.write(dummy_tts_prompt_path, silence_tts_prompt, sr_dummy_tts, format='WAV', subtype='FLOAT')
             log_worker("INFO", f"Created dummy TTS prompt for worker warmup: {dummy_tts_prompt_path}")
-
         except Exception as e_dummy_prompt:
-            # THIS IS THE CORRECTED DETAILED ERROR LOGGING FOR DUMMY PROMPT FAILURE
-            log_worker("ERROR",
-                       f"Failed to create dummy TTS prompt for worker warmup: {e_dummy_prompt}\nFULL TRACEBACK FOR DUMMY PROMPT FAILURE:\n{traceback.format_exc()}")
-            dummy_tts_prompt_path = None  # Ensure it's None if creation failed
-
-        # Critical check: if dummy_tts_prompt_path is still None after attempting creation
-        if dummy_tts_prompt_path is None:
             log_worker("CRITICAL",
-                       "Failed to create essential dummy TTS prompt for worker warmup. Cannot proceed with TTS task.")
-            # Ensure no attempt to use pipe or process if they haven't been initialized for TTS
-            if tts_worker_process and tts_worker_process.is_alive():
-                stop_persistent_worker(tts_worker_process, tts_worker_pipe_orch_end, "TTS_premature_shutdown")
-            print(json.dumps({"error": "Failed to create dummy TTS prompt for worker warmup."}), flush=True)
-            sys.exit(1)  # Script exits here if dummy prompt creation fails
+                       f"Failed to create essential dummy TTS prompt: {e_dummy_prompt}\n{traceback.format_exc()}")
+            print(json.dumps({"error": "Failed to create dummy TTS prompt for worker."}), flush=True)
+            sys.exit(1)
 
-    # --- Setup worker configurations and start workers ---
-    if args.task_type == "tts":
         tts_worker_config = {
-            "enable_tts": True,
-            "enable_asr": False,
-            "device": effective_pytorch_device_orchestrator,
+            "enable_tts": True, "enable_asr": False, "device": effective_pytorch_device_orchestrator,
             "chatterbox_model_id": args.chatterbox_model_id,
-            "dummy_tts_prompt_path_for_warmup": dummy_tts_prompt_path,
-            "temp_dir": args.temp_dir,
-            "use_torch_compile_tts": False,  # <--- ADD THIS LINE TO ENABLE COMPILATION
-            "tts_compile_backend": "inductor"  # <--- (Optional but Recommended) Explicitly set the backend
+            "dummy_tts_prompt_path_for_warmup": dummy_tts_prompt_path, "temp_dir": args.temp_dir
         }
         tts_worker_process, tts_worker_pipe_orch_end = start_persistent_worker("TTS", tts_worker_config)
         if not tts_worker_process or not tts_worker_pipe_orch_end:
-            log_worker("CRITICAL", "Failed to start persistent TTS worker. Exiting.")
+            log_worker("CRITICAL", "Failed to start persistent TTS worker process.")
             if dummy_tts_prompt_path and os.path.exists(dummy_tts_prompt_path): os.remove(dummy_tts_prompt_path)
-            print(json.dumps({"error": "Failed to start TTS worker"}), flush=True);
+            print(json.dumps({"error": "Failed to start TTS worker"}), flush=True)
             sys.exit(1)
 
     elif args.task_type == "asr":
@@ -1548,70 +1533,65 @@ def main():
             asr_model_filename_to_use = args.asr_test_model
         elif 'WHISPER_DEFAULT_MODEL_FILENAME' in globals():
             asr_model_filename_to_use = WHISPER_DEFAULT_MODEL_FILENAME
-
         asr_worker_config = {
-            "enable_tts": False,
-            "enable_asr": True,
-            "device": "cpu",
-            "model_dir": args.model_dir,
-            "whisper_model_name": asr_model_filename_to_use,
-            "temp_dir": args.temp_dir
+            "enable_tts": False, "enable_asr": True, "device": "cpu", "model_dir": args.model_dir,
+            "whisper_model_name": asr_model_filename_to_use, "temp_dir": args.temp_dir
         }
         asr_worker_process, asr_worker_pipe_orch_end = start_persistent_worker("ASR", asr_worker_config)
         if not asr_worker_process or not asr_worker_pipe_orch_end:
             log_worker("CRITICAL", "Failed to start persistent ASR worker. Exiting.")
-            print(json.dumps({"error": "Failed to start ASR worker"}), flush=True);
+            print(json.dumps({"error": "Failed to start ASR worker"}), flush=True)
             sys.exit(1)
 
-    # --- Main Orchestration Logic ---
-    job_temp_dir_path: Optional[str] = None  # To store path for cleanup
+    # --- 3. MAIN ORCHESTRATION LOGIC ---
+    job_temp_dir_path: Optional[str] = None
     try:
         if args.task_type == "tts":
-            log_worker("INFO",
-                       f"TTS Orchestration with persistent worker. Orchestrator/Worker device: '{effective_pytorch_device_orchestrator}'")
-            if not CHATTERBOX_TTS_AVAILABLE:
-                raise RuntimeError(
-                    "ChatterboxTTS library not available in orchestrator (needed for SCL checks or if used directly).")
-
             job_temp_dir_path = tempfile.mkdtemp(prefix="tts_orch_job_", dir=args.temp_dir)
             log_worker("DEBUG", f"Created TTS job temp directory: {job_temp_dir_path}")
 
-            all_audio_chunks_data_tts: List[np.ndarray] = []
-            final_sr_from_chunks_tts: Optional[int] = None  # SR from actual TTS chunks
-            sr_after_post_process: Optional[float] = None  # SR after SCL post-processing
+            # --- 3a. THE HANDSHAKE (First thing inside the try block) ---
+            log_worker("INFO", "Waiting for TTS worker to signal it is ready...")
+            try:
+                from CortexConfiguration import TTS_WORKER_TIMEOUT
+                worker_ready_timeout = TTS_WORKER_TIMEOUT
+            except (ImportError, AttributeError):
+                worker_ready_timeout = 3600
 
+            if tts_worker_pipe_orch_end and tts_worker_pipe_orch_end.poll(timeout=worker_ready_timeout):
+                ready_message = tts_worker_pipe_orch_end.recv()
+                if not (ready_message.get("status") == "ready" and ready_message.get("tts_available") is True):
+                    raise RuntimeError(
+                        f"TTS worker started but is not available or failed initialization. Signal: {ready_message}")
+                log_worker("INFO", "TTS worker has confirmed it is ready. Proceeding with tasks.")
+            else:
+                if tts_worker_process and not tts_worker_process.is_alive():
+                    raise RuntimeError(
+                        "TTS worker process died unexpectedly during initialization. Check console for tracebacks without a log prefix.")
+                else:
+                    raise RuntimeError(
+                        f"TTS worker did not become ready within the timeout period of {worker_ready_timeout}s.")
+
+            # --- 3b. TTS ORCHESTRATION ---
             sclparser_for_text_proc_tts: SCLParser = SCLParser(model=None, device=effective_pytorch_device_orchestrator)
-
-            generated_voice_sample_path_tts: Optional[str] = None
             melo_for_sample_init_tts: Optional[Any] = None
-            sclparser_for_sample_init_tts: Optional[SCLParser] = None
-
             if MELO_AVAILABLE and TTS_melo_class_ref and SCLParser_class_ref:
                 log_worker("INFO", "Initializing MeloTTS for voice sample generation...")
                 melo_for_sample_init_tts = TTS_melo_class_ref(language=args.model_lang.upper(),
                                                               device=effective_pytorch_device_orchestrator)
-                sclparser_for_sample_init_tts = SCLParser_class_ref(model=melo_for_sample_init_tts,
-                                                                    device=effective_pytorch_device_orchestrator)
-            else:
-                log_worker("WARNING",
-                           "MeloTTS or SCLParser class not available. Voice sample generation might fail if sample doesn't exist.")
-
             generated_voice_sample_path_tts = _ensure_voice_sample(args, melo_for_sample_init_tts,
-                                                                   sclparser_for_sample_init_tts,
+                                                                   SCLParser(model=melo_for_sample_init_tts,
+                                                                             device=effective_pytorch_device_orchestrator),
                                                                    effective_pytorch_device_orchestrator)
             if not generated_voice_sample_path_tts:
                 raise RuntimeError("Critical: Failed to find or generate ChatterboxTTS voice sample for orchestration.")
             log_worker("INFO", f"Using voice sample for TTS worker: {generated_voice_sample_path_tts}")
 
-            text_for_synthesis: Optional[str] = None
-            request_data_from_stdin_tts: Dict[str, Any] = {}
-
             if args.test_mode:
                 log_worker("INFO", "TTS Orchestrator in TEST MODE.")
                 text_for_synthesis = ADELAIDE_EXCITED_TEST_INTRO
-                request_data_from_stdin_tts['exaggeration'] = args.exaggeration
-                request_data_from_stdin_tts['cfg_weight'] = args.cfg_weight
-                request_data_from_stdin_tts['response_format'] = "wav"
+                request_data_from_stdin_tts = {'exaggeration': args.exaggeration, 'cfg_weight': args.cfg_weight,
+                                               'response_format': 'wav'}
             else:
                 log_worker("INFO", "TTS Orchestrator Standard Mode: Reading stdin...")
                 input_json_str_from_stdin_tts = sys.stdin.read()
@@ -1626,135 +1606,58 @@ def main():
                 raise RuntimeError("SCLParser failed to split input text into processable segments.")
             log_worker("INFO", f"Split input into {len(text_segments_with_settings_tts)} segments for TTS processing.")
 
+            all_audio_chunks_data_tts: List[np.ndarray] = []
+            final_sr_from_chunks_tts: Optional[int] = None
             current_task_id_counter = 0
-            progress_bar_tts = None
-            if TQDM_AVAILABLE:
-                progress_bar_tts = tqdm(total=len(text_segments_with_settings_tts), unit="segment",
-                                        desc="TTS Processing Segments", ascii=IS_WINDOWS, leave=False)
+            progress_bar_tts = tqdm(total=len(text_segments_with_settings_tts), unit="segment",
+                                    desc="TTS Processing Segments", ascii=IS_WINDOWS,
+                                    leave=False) if TQDM_AVAILABLE else None
 
             for i, segment_info in enumerate(text_segments_with_settings_tts):
                 current_task_id_counter += 1
                 task_id = f"tts_orch_{os.getpid()}_seg_{current_task_id_counter}"
 
                 if segment_info["type"] == "text":
-                    text_chunk_content = segment_info["content"]
-                    chunk_output_filename = f"tts_chunk_{i}_{os.getpid()}.wav"
-                    chunk_output_full_path = os.path.join(job_temp_dir_path, chunk_output_filename)
-                    exaggeration_val = float(request_data_from_stdin_tts.get("exaggeration", args.exaggeration))
-                    cfg_weight_val = float(request_data_from_stdin_tts.get("cfg_weight", args.cfg_weight))
-
+                    chunk_output_full_path = os.path.join(job_temp_dir_path, f"tts_chunk_{i}_{os.getpid()}.wav")
                     tts_task_payload = {
                         "command": "tts_chunk", "task_id": task_id,
                         "params": {
-                            "text_to_synthesize": text_chunk_content,
-                            "chatterbox_model_id": args.chatterbox_model_id,
+                            "text_to_synthesize": segment_info["content"],
                             "voice_prompt_path": generated_voice_sample_path_tts,
-                            "exaggeration": exaggeration_val, "cfg_weight": cfg_weight_val,
+                            "exaggeration": float(request_data_from_stdin_tts.get("exaggeration", args.exaggeration)),
+                            "cfg_weight": float(request_data_from_stdin_tts.get("cfg_weight", args.cfg_weight)),
                             "output_audio_chunk_path": chunk_output_full_path
                         }
                     }
-
-                    if not tts_worker_pipe_orch_end or not tts_worker_process or not tts_worker_process.is_alive():
-                        if progress_bar_tts: progress_bar_tts.close()
-                        raise RuntimeError("TTS Worker process is not available or not alive.")
-
+                    if not tts_worker_process or not tts_worker_process.is_alive():
+                        raise RuntimeError("TTS Worker process died mid-operation.")
                     log_worker("DEBUG",
-                               f"Sending task {task_id} to TTS worker: synthesize '{text_chunk_content[:30]}...'")
+                               f"Sending task {task_id} to TTS worker for text: '{segment_info['content'][:30]}...'")
                     tts_worker_pipe_orch_end.send(tts_task_payload)
 
-                    try:
-                        from CortexConfiguration import TTS_WORKER_TIMEOUT
-                        worker_timeout_seconds = TTS_WORKER_TIMEOUT
-                        log_worker("INFO",
-                                   f"Using TTS worker timeout from CortexConfiguration: {worker_timeout_seconds}s")
-                    except (ImportError, AttributeError):
-                        worker_timeout_seconds = 120  # Default fallback
-                        log_worker("WARNING",
-                                   f"Could not import TTS_WORKER_TIMEOUT from CortexConfiguration. Using default: {worker_timeout_seconds}s")
-
-                    # Wait for the worker's "ready" signal before proceeding.
-                    log_worker("INFO", "Waiting for TTS worker to signal it is ready...")
-                    try:
-                        # Set a generous timeout for model loading (e.g., 5 minutes).
-                        worker_ready_timeout = 300
-                        if tts_worker_pipe_orch_end.poll(timeout=worker_ready_timeout):
-                            ready_message = tts_worker_pipe_orch_end.recv()
-                            # CRITICAL CHECK: Verify the status is 'ready' AND that the required 'tts_available' flag is True.
-                            if ready_message.get("status") == "ready" and ready_message.get("tts_available") is True:
-                                log_worker("INFO", "TTS worker has confirmed it is ready and TTS is available.")
-                            else:
-                                # This will now correctly catch the case where the worker started but failed its own initialization.
-                                error_msg = f"TTS worker started but reported that TTS is UNAVAILABLE. Full signal: {ready_message}"
-                                log_worker("CRITICAL", error_msg)
-                                # We must stop the script here, as it cannot fulfill the TTS task.
-                                raise RuntimeError(error_msg)
-                        else:
-                            # This handles the case where the worker hangs completely and never sends a signal.
-                            error_msg = f"TTS worker process did not become ready within the {worker_ready_timeout}s timeout."
-                            log_worker("CRITICAL", error_msg)
-                            raise RuntimeError(error_msg)
-                    except Exception as e_wait_ready:
-                        log_worker("CRITICAL",
-                                   f"Orchestrator failed while waiting for the TTS worker to become ready: {e_wait_ready}")
-                        # Ensure the failed worker process is cleaned up.
-                        if 'tts_worker_process' in locals() and tts_worker_process:
-                            stop_persistent_worker(tts_worker_process, tts_worker_pipe_orch_end, "TTS")
-                        # Exit with an error, printing the JSON result.
-                        print(json.dumps({"error": f"Failed to initialize TTS worker: {e_wait_ready}"}), flush=True)
-                        sys.exit(1)
+                    if tts_worker_pipe_orch_end.poll(timeout=worker_ready_timeout):
+                        chunk_result = tts_worker_pipe_orch_end.recv()
                     else:
                         if progress_bar_tts: progress_bar_tts.close()
-                        log_worker("ERROR",
-                                   f"TTS Worker timed out (after {worker_timeout_seconds}s) for task {task_id} (segment {i + 1}).")
-                        stop_persistent_worker(tts_worker_process, tts_worker_pipe_orch_end, "TTS")
-                        tts_worker_process, tts_worker_pipe_orch_end = None, None
-                        raise RuntimeError(f"TTS Worker timed out for segment {i + 1}.")
-
+                        raise RuntimeError(f"TTS Worker timed out processing segment {i + 1}.")
                     if chunk_result.get("error"):
-                        if progress_bar_tts: progress_bar_tts.close()
-                        raise RuntimeError(
-                            f"TTS Worker for segment {i + 1} (task {task_id}) reported error: {chunk_result['error']}")
-
+                        raise RuntimeError(f"TTS Worker reported an error for segment {i + 1}: {chunk_result['error']}")
                     result_data = chunk_result.get("result", {})
                     chunk_file_path_from_worker = result_data.get("audio_chunk_path")
                     chunk_sr_from_worker = result_data.get("sample_rate")
-
                     if not chunk_file_path_from_worker or not os.path.exists(
                             chunk_file_path_from_worker) or chunk_sr_from_worker is None:
-                        if progress_bar_tts: progress_bar_tts.close()
-                        raise RuntimeError(
-                            f"TTS Worker for segment {i + 1} returned invalid audio path/SR. Path: '{chunk_file_path_from_worker}'")
-
+                        raise RuntimeError(f"TTS Worker returned an invalid result for segment {i + 1}.")
                     audio_chunk_np, sr_read = sf.read(chunk_file_path_from_worker, dtype='float32')
-                    log_worker("DEBUG",
-                               f"Successfully received/loaded TTS chunk {i + 1} (task {task_id}). Path: {chunk_file_path_from_worker}, SR: {sr_read}, Shape: {audio_chunk_np.shape}")
-
-                    if final_sr_from_chunks_tts is None:
-                        final_sr_from_chunks_tts = sr_read
-                    elif final_sr_from_chunks_tts != sr_read:
-                        log_worker("CRITICAL",
-                                   f"Sample rate mismatch between TTS chunks! Expected {final_sr_from_chunks_tts}, got {sr_read} for chunk {i + 1}. This may cause issues.")
-
+                    if final_sr_from_chunks_tts is None: final_sr_from_chunks_tts = sr_read
                     all_audio_chunks_data_tts.append(audio_chunk_np)
 
                 elif segment_info["type"] == "pause":
-                    if final_sr_from_chunks_tts is None:
-                        log_worker("WARNING",
-                                   "Encountered pause before audio segments. Cannot determine SR for silence. Skipping pause.")
-                    else:
+                    if final_sr_from_chunks_tts:
                         pause_duration_ms = int(segment_info["content"])
                         if pause_duration_ms > 0:
                             silence_samples = int(final_sr_from_chunks_tts * pause_duration_ms / 1000)
-                            num_channels_for_silence = 2
-                            if all_audio_chunks_data_tts and all_audio_chunks_data_tts[0].ndim == 1:
-                                num_channels_for_silence = 1
-                            silence_shape = (silence_samples,
-                                             num_channels_for_silence) if num_channels_for_silence == 2 else (
-                                silence_samples,)
-                            silence_chunk = np.zeros(silence_shape, dtype=np.float32)
-                            all_audio_chunks_data_tts.append(silence_chunk)
-                            log_worker("DEBUG", f"Added silence chunk of {pause_duration_ms}ms for task {task_id}.")
-
+                            all_audio_chunks_data_tts.append(np.zeros((silence_samples, 2), dtype=np.float32))
                 if progress_bar_tts: progress_bar_tts.update(1)
             if progress_bar_tts: progress_bar_tts.close()
 
@@ -1764,313 +1667,169 @@ def main():
             sr_for_crossfade = final_sr_from_chunks_tts or sclparser_for_text_proc_tts.sample_rate or 24000
             log_worker("INFO",
                        f"Combining {len(all_audio_chunks_data_tts)} audio chunks at SR {sr_for_crossfade} for crossfade...")
-
             raw_combined_audio_np = sclparser_for_text_proc_tts.crossfade_segments(all_audio_chunks_data_tts,
                                                                                    sr_for_crossfade)
             if raw_combined_audio_np is None or raw_combined_audio_np.size == 0:
                 raise RuntimeError("SCLParser failed to combine TTS audio chunks or result was empty.")
-            log_worker("INFO",
-                       f"Raw combined audio shape: {raw_combined_audio_np.shape}, SR before post-process: {sr_for_crossfade}")
-
             if args.debug_save_raw_combined:
-                raw_debug_filename = f"debug_raw_combined_{os.getpid()}.wav"
-                raw_debug_filepath = os.path.join(args.temp_dir, raw_debug_filename)
-                try:
-                    audio_to_save_raw = raw_combined_audio_np
-                    if raw_combined_audio_np.ndim == 2 and raw_combined_audio_np.shape[0] < raw_combined_audio_np.shape[
-                        1]:
-                        audio_to_save_raw = raw_combined_audio_np.T
-                    sf.write(raw_debug_filepath, audio_to_save_raw, sr_for_crossfade, format='WAV', subtype='PCM_F32')
-                    log_worker("DEBUG", f"Saved raw combined audio for debugging: {raw_debug_filepath}")
-                except Exception as e_raw_save:
-                    log_worker("WARNING", f"Failed to save raw combined audio for debugging: {e_raw_save}")
-
+                sf.write(os.path.join(args.temp_dir, f"debug_raw_combined_{os.getpid()}.wav"), raw_combined_audio_np,
+                         sr_for_crossfade)
             del all_audio_chunks_data_tts
             gc.collect()
 
             log_worker("INFO", "Applying SCLParser post-processing to combined audio...")
             post_processed_tts_audio_data, sr_after_post_process_float = sclparser_for_text_proc_tts.post_process(
-                raw_combined_audio_np, sr_for_crossfade, sclparser_for_text_proc_tts.zephyloid_settings
-            )
-            sr_after_post_process = int(sr_after_post_process_float)  # Ensure int for soundfile/torchaudio SR params
+                raw_combined_audio_np, sr_for_crossfade, sclparser_for_text_proc_tts.zephyloid_settings)
+            sr_after_post_process = int(sr_after_post_process_float)
             log_worker("INFO",
-                       f"Post-processing complete. Final audio shape: {post_processed_tts_audio_data.shape}, SR after post-process: {sr_after_post_process}")
+                       f"Post-processing complete. Final audio shape: {post_processed_tts_audio_data.shape}, SR: {sr_after_post_process}")
 
             output_format = request_data_from_stdin_tts.get("response_format",
                                                             "mp3").lower() if not args.test_mode else "wav"
             audio_bytes_io = io.BytesIO()
             mime_type = f"audio/{output_format}"
 
-            final_audio_for_saving = post_processed_tts_audio_data
-            audio_to_save_sf = final_audio_for_saving
-            if final_audio_for_saving.ndim == 2 and final_audio_for_saving.shape[0] < final_audio_for_saving.shape[1]:
-                audio_to_save_sf = final_audio_for_saving.T
-
-            audio_to_save_torch = torch.from_numpy(final_audio_for_saving.astype(np.float32))
-            if audio_to_save_torch.ndim == 1: audio_to_save_torch = audio_to_save_torch.unsqueeze(0)
-            if audio_to_save_torch.shape[0] == 1: audio_to_save_torch = audio_to_save_torch.repeat(2, 1)
+            final_audio_for_saving = post_processed_tts_audio_data.T if post_processed_tts_audio_data.ndim == 2 and \
+                                                                        post_processed_tts_audio_data.shape[0] < \
+                                                                        post_processed_tts_audio_data.shape[
+                                                                            1] else post_processed_tts_audio_data
 
             if output_format == "wav":
-                sf.write(audio_bytes_io, audio_to_save_sf, sr_after_post_process, format='WAV', subtype='PCM_16')
-                log_worker("INFO", f"Saved final audio as WAV with SR: {sr_after_post_process}")
+                sf.write(audio_bytes_io, final_audio_for_saving, sr_after_post_process, format='WAV', subtype='PCM_16')
             elif output_format == "mp3":
                 ffmpeg_exe_path = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
-                can_torch_save_mp3_flag = TORCH_AUDIO_AVAILABLE and torchaudio and hasattr(torchaudio, 'save') and \
-                                          (
-                                                      torchaudio.get_audio_backend() == "sox_io" or torchaudio.get_audio_backend() == "soundfile")
-
-                if can_torch_save_mp3_flag:
+                if ffmpeg_exe_path:
+                    with tempfile.NamedTemporaryFile(suffix=".wav", dir=job_temp_dir_path,
+                                                     delete=False) as temp_wav, tempfile.NamedTemporaryFile(
+                            suffix=".mp3", dir=job_temp_dir_path, delete=False) as temp_mp3:
+                        temp_wav_path, temp_mp3_path = temp_wav.name, temp_mp3.name
                     try:
-                        current_audio_for_torch_save = audio_to_save_torch
-                        if current_audio_for_torch_save.ndim == 2 and current_audio_for_torch_save.shape[1] < \
-                                current_audio_for_torch_save.shape[0]:
-                            current_audio_for_torch_save = current_audio_for_torch_save.T
-                        torchaudio.save(audio_bytes_io, current_audio_for_torch_save.cpu(), sr_after_post_process,
-                                        format="mp3")
-                        log_worker("INFO",
-                                   f"Saved final audio as MP3 using torchaudio with SR: {sr_after_post_process}")
-                    except Exception as e_mp3_torch_save:
-                        log_worker("WARNING",
-                                   f"Torchaudio MP3 save failed: {e_mp3_torch_save}. Falling back to ffmpeg if available.")
-                        can_torch_save_mp3_flag = False
-
-                if not can_torch_save_mp3_flag:
-                    if ffmpeg_exe_path:
-                        log_worker("INFO", "Attempting MP3 conversion using ffmpeg.")
-                        with tempfile.NamedTemporaryFile(suffix=".wav", dir=job_temp_dir_path,
-                                                         delete=False) as temp_wav_for_mp3, \
-                                tempfile.NamedTemporaryFile(suffix=".mp3", dir=job_temp_dir_path,
-                                                            delete=False) as temp_mp3_out:
-                            temp_wav_path = temp_wav_for_mp3.name
-                            temp_mp3_path = temp_mp3_out.name
-                        try:
-                            sf.write(temp_wav_path, audio_to_save_sf, sr_after_post_process, format='WAV',
-                                     subtype='PCM_16')
-                            ffmpeg_cmd = [ffmpeg_exe_path, "-i", temp_wav_path, "-codec:a", "libmp3lame", "-qscale:a",
-                                          "2", "-y", temp_mp3_path]
-                            subprocess.run(ffmpeg_cmd, check=True, capture_output=True, timeout=60)
-                            with open(temp_mp3_path, "rb") as f_mp3:
-                                audio_bytes_io.write(f_mp3.read())
-                            log_worker("INFO", f"Successfully converted to MP3 using ffmpeg.")
-                        except Exception as e_ffmpeg_mp3:
-                            log_worker("ERROR",
-                                       f"ffmpeg MP3 conversion failed: {e_ffmpeg_mp3}. Falling back to WAV format.")
-                            audio_bytes_io = io.BytesIO()
-                            sf.write(audio_bytes_io, audio_to_save_sf, sr_after_post_process, format='WAV',
-                                     subtype='PCM_16')
-                            output_format, mime_type = "wav", "audio/wav"
-                            log_worker("INFO", f"Saved final audio as WAV (fallback) with SR: {sr_after_post_process}")
-                        finally:
-                            if os.path.exists(temp_wav_path): os.remove(temp_wav_path)
-                            if os.path.exists(temp_mp3_path): os.remove(temp_mp3_path)
-                    else:
-                        log_worker("WARNING", "ffmpeg not found for MP3 conversion. Falling back to WAV format.")
-                        audio_bytes_io = io.BytesIO()
-                        sf.write(audio_bytes_io, audio_to_save_sf, sr_after_post_process, format='WAV',
-                                 subtype='PCM_16')
-                        output_format, mime_type = "wav", "audio/wav"
-                        log_worker("INFO", f"Saved final audio as WAV (fallback) with SR: {sr_after_post_process}")
+                        sf.write(temp_wav_path, final_audio_for_saving, sr_after_post_process, 'WAV', 'PCM_16')
+                        subprocess.run(
+                            [ffmpeg_exe_path, "-i", temp_wav_path, "-codec:a", "libmp3lame", "-qscale:a", "2", "-y",
+                             temp_mp3_path], check=True, capture_output=True, timeout=60)
+                        with open(temp_mp3_path, "rb") as f:
+                            audio_bytes_io.write(f.read())
+                    finally:
+                        if os.path.exists(temp_wav_path): os.remove(temp_wav_path)
+                        if os.path.exists(temp_mp3_path): os.remove(temp_mp3_path)
+                else:
+                    log_worker("WARNING", "ffmpeg not found. Falling back to WAV.")
+                    sf.write(audio_bytes_io, final_audio_for_saving, sr_after_post_process, format='WAV',
+                             subtype='PCM_16')
+                    output_format, mime_type = "wav", "audio/wav"
             else:
                 log_worker("WARNING", f"Unknown output format '{output_format}'. Defaulting to WAV.")
-                sf.write(audio_bytes_io, audio_to_save_sf, sr_after_post_process, format='WAV', subtype='PCM_16')
+                sf.write(audio_bytes_io, final_audio_for_saving, sr_after_post_process, format='WAV', subtype='PCM_16')
                 output_format, mime_type = "wav", "audio/wav"
-                log_worker("INFO",
-                           f"Saved final audio as WAV (unknown format fallback) with SR: {sr_after_post_process}")
 
             audio_bytes_io.seek(0)
             audio_b64 = base64.b64encode(audio_bytes_io.read()).decode('utf-8')
-            result_payload = {
-                "result": {
-                    "audio_base64": audio_b64, "format": output_format,
-                    "mime_type": mime_type, "sample_rate": sr_after_post_process
-                }
-            }
-
+            result_payload = {"result": {"audio_base64": audio_b64, "format": output_format, "mime_type": mime_type,
+                                         "sample_rate": sr_after_post_process}}
             if args.test_mode:
                 final_test_output_path = os.path.join(args.temp_dir, args.output_file)
                 with open(final_test_output_path, "wb") as f_out_test:
                     audio_bytes_io.seek(0)
                     f_out_test.write(audio_bytes_io.read())
                 log_worker("INFO", f"Saved final TTS test output to: {final_test_output_path}")
-                if "result" in result_payload: result_payload["result"][
-                    "file_path_test_output"] = final_test_output_path
 
         elif args.task_type == "asr":
-            log_worker("INFO", f"ASR Orchestration with persistent worker. Model dir: {args.model_dir}")
             job_temp_dir_path = tempfile.mkdtemp(prefix="asr_orch_job_", dir=args.temp_dir)
+            log_worker("INFO", f"ASR Orchestration with persistent worker. Model dir: {args.model_dir}")
 
-            master_temp_wav_asr: Optional[str] = None
-            all_transcribed_segments_asr: List[str] = []
-            input_audio_path_for_asr: Optional[str] = None
+            # ASR Handshake
+            log_worker("INFO", "Waiting for ASR worker to signal it is ready...")
+            try:
+                from CortexConfiguration import ASR_WORKER_TIMEOUT
+                worker_ready_timeout = ASR_WORKER_TIMEOUT
+            except (ImportError, AttributeError):
+                worker_ready_timeout = 300
 
-            asr_model_to_use_for_task = WHISPER_DEFAULT_MODEL_FILENAME_CFG
-            if args.test_mode and args.asr_test_model:
-                asr_model_to_use_for_task = args.asr_test_model
-            elif 'WHISPER_DEFAULT_MODEL_FILENAME' in globals():
-                asr_model_to_use_for_task = WHISPER_DEFAULT_MODEL_FILENAME
+            if asr_worker_pipe_orch_end and asr_worker_pipe_orch_end.poll(timeout=worker_ready_timeout):
+                ready_message = asr_worker_pipe_orch_end.recv()
+                if not (ready_message.get("status") == "ready" and ready_message.get("asr_available") is True):
+                    raise RuntimeError(
+                        f"ASR worker started but is not available or failed initialization. Signal: {ready_message}")
+                log_worker("INFO", "ASR worker has confirmed it is ready.")
+            else:
+                if asr_worker_process and not asr_worker_process.is_alive():
+                    raise RuntimeError("ASR worker process died unexpectedly during initialization.")
+                else:
+                    raise RuntimeError(
+                        f"ASR worker did not become ready within the timeout period of {worker_ready_timeout}s.")
 
-            asr_lang_to_use_for_task = args.model_lang if args.model_lang else WHISPER_DEFAULT_LANGUAGE_CFG
-
+            # ASR Orchestration
             if args.test_mode:
-                log_worker("INFO", "ASR Orchestrator in TEST MODE.")
                 input_audio_path_for_asr = os.path.join(args.temp_dir, args.test_audio_input)
                 if not os.path.exists(input_audio_path_for_asr):
                     input_audio_path_for_asr = os.path.join(args.model_dir, args.test_audio_input)
-                if not os.path.exists(input_audio_path_for_asr):
-                    raise FileNotFoundError(
-                        f"ASR test audio '{args.test_audio_input}' not found in '{args.temp_dir}' or '{args.model_dir}'.")
             else:
-                log_worker("INFO", "ASR Orchestrator Standard Mode: Reading stdin.")
-                input_json_str_from_stdin_asr = sys.stdin.read()
-                if not input_json_str_from_stdin_asr: raise ValueError("Empty input from stdin for ASR orchestration.")
-                request_data_from_stdin_asr = json.loads(input_json_str_from_stdin_asr)
+                request_data_from_stdin_asr = json.loads(sys.stdin.read())
                 input_audio_path_for_asr = request_data_from_stdin_asr.get("input_audio_path")
-                if not input_audio_path_for_asr or not os.path.exists(input_audio_path_for_asr):
-                    raise FileNotFoundError(
-                        f"ASR input_audio_path '{input_audio_path_for_asr}' missing or does not exist.")
-                asr_model_to_use_for_task = request_data_from_stdin_asr.get("whisper_model_name",
-                                                                            asr_model_to_use_for_task)
-                asr_lang_to_use_for_task = request_data_from_stdin_asr.get("language", asr_lang_to_use_for_task)
 
-            log_worker("INFO",
-                       f"ASR Task: Input Audio='{input_audio_path_for_asr}', Model='{asr_model_to_use_for_task}', Lang='{asr_lang_to_use_for_task}'")
+            if not input_audio_path_for_asr or not os.path.exists(input_audio_path_for_asr):
+                raise FileNotFoundError(f"ASR input audio not found at '{input_audio_path_for_asr}'")
 
             ffmpeg_exe = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
-            if not str(input_audio_path_for_asr).lower().endswith(".wav"):
-                if not ffmpeg_exe: raise RuntimeError(
-                    "ffmpeg is required for non-WAV input to ASR, and ffmpeg was not found.")
-                master_temp_wav_asr = os.path.join(job_temp_dir_path, f"master_asr_input_{os.getpid()}.wav")
-                ffmpeg_cmd_asr = [ffmpeg_exe, '-i', input_audio_path_for_asr, '-vn', '-acodec', 'pcm_s16le', '-ar',
-                                  '16000', '-ac', '1', '-y', master_temp_wav_asr]
-                log_worker("DEBUG", f"Running ffmpeg for ASR pre-processing: {' '.join(ffmpeg_cmd_asr)}")
-                proc_ffmpeg_asr = subprocess.run(ffmpeg_cmd_asr, capture_output=True, text=True, check=False,
-                                                 timeout=300)
-                if proc_ffmpeg_asr.returncode != 0: raise RuntimeError(
-                    f"ffmpeg ASR pre-processing failed. Stderr: {proc_ffmpeg_asr.stderr.strip()}")
-                log_worker("INFO", f"FFmpeg ASR pre-processing successful: {master_temp_wav_asr}")
-            else:
-                if ffmpeg_exe:
-                    master_temp_wav_asr = os.path.join(job_temp_dir_path,
-                                                       f"master_asr_input_standardized_{os.getpid()}.wav")
-                    ffmpeg_cmd_asr_std = [ffmpeg_exe, '-i', input_audio_path_for_asr, '-vn', '-acodec', 'pcm_s16le',
-                                          '-ar', '16000', '-ac', '1', '-y', master_temp_wav_asr]
-                    log_worker("DEBUG", f"Running ffmpeg for ASR WAV standardization: {' '.join(ffmpeg_cmd_asr_std)}")
-                    proc_ffmpeg_asr_std = subprocess.run(ffmpeg_cmd_asr_std, capture_output=True, text=True,
-                                                         check=False, timeout=300)
-                    if proc_ffmpeg_asr_std.returncode != 0:
-                        log_worker("WARNING",
-                                   f"ffmpeg ASR WAV standardization failed. Stderr: {proc_ffmpeg_asr_std.stderr.strip()}. Using original WAV.")
-                        master_temp_wav_asr = input_audio_path_for_asr
-                    else:
-                        log_worker("INFO", f"FFmpeg ASR WAV standardization successful: {master_temp_wav_asr}")
-                else:
-                    log_worker("WARNING", "Input is WAV but ffmpeg not found to ensure 16kHz/mono. Using as-is.")
-                    master_temp_wav_asr = input_audio_path_for_asr
+            if not ffmpeg_exe: raise RuntimeError("ffmpeg not found, but is required for ASR audio pre-processing.")
 
-            if master_temp_wav_asr is None:  # Should not happen if logic above is correct
-                raise RuntimeError("Master temporary WAV for ASR was not set.")
+            master_temp_wav_asr = os.path.join(job_temp_dir_path, f"master_asr_input_{os.getpid()}.wav")
+            ffmpeg_cmd_asr = ['ffmpeg', '-i', input_audio_path_for_asr, '-vn', '-acodec', 'pcm_s16le', '-ar', '16000',
+                              '-ac', '1', '-y', master_temp_wav_asr]
+            subprocess.run(ffmpeg_cmd_asr, check=True, capture_output=True, timeout=300)
 
+            all_transcribed_segments_asr: List[str] = []
             with wave.open(master_temp_wav_asr, 'rb') as wf_asr:
-                nchannels, sampwidth, framerate, nframes, comptype, compname = wf_asr.getparams()
-                if framerate != 16000 or nchannels != 1 or sampwidth != 2:
-                    raise ValueError(
-                        f"Master ASR WAV file '{master_temp_wav_asr}' is not 16kHz mono 16-bit PCM. Params: {wf_asr.getparams()}")
-
+                nchannels, sampwidth, framerate, nframes = wf_asr.getparams()[:4]
                 chunk_duration_seconds, overlap_duration_seconds = 30, 5
-                chunk_len_frames, overlap_frames = chunk_duration_seconds * framerate, overlap_duration_seconds * framerate
-                step_frames = chunk_len_frames - overlap_frames
-                if step_frames <= 0: step_frames = chunk_len_frames // 2
+                chunk_len_frames = chunk_duration_seconds * framerate
+                step_frames = chunk_len_frames - (overlap_duration_seconds * framerate)
 
                 current_pos_frames, chunk_idx = 0, 0
-                total_asr_chunks_to_process = math.ceil(nframes / step_frames) if step_frames > 0 else 1
-                progress_bar_asr = None
-                if TQDM_AVAILABLE: progress_bar_asr = tqdm(total=total_asr_chunks_to_process, unit="chunk",
-                                                           desc="ASR Processing Chunks", ascii=IS_WINDOWS, leave=False)
+                total_asr_chunks = math.ceil(nframes / step_frames) if step_frames > 0 else 1
+                progress_bar_asr = tqdm(total=total_asr_chunks, unit="chunk", desc="ASR Processing Chunks",
+                                        ascii=IS_WINDOWS, leave=False) if TQDM_AVAILABLE else None
 
                 while current_pos_frames < nframes:
                     wf_asr.setpos(current_pos_frames)
-                    frames_to_read = min(chunk_len_frames, nframes - current_pos_frames)
-                    chunk_audio_bytes = wf_asr.readframes(frames_to_read)
+                    chunk_audio_bytes = wf_asr.readframes(chunk_len_frames)
                     if not chunk_audio_bytes: break
 
-                    chunk_file_path_for_worker = os.path.join(job_temp_dir_path,
-                                                              f"asr_chunk_{chunk_idx}_{os.getpid()}.wav")
+                    chunk_file_path_for_worker = os.path.join(job_temp_dir_path, f"asr_chunk_{chunk_idx}.wav")
                     with wave.open(chunk_file_path_for_worker, 'wb') as cfw:
-                        cfw.setnchannels(nchannels);
-                        cfw.setsampwidth(sampwidth);
-                        cfw.setframerate(framerate);
+                        cfw.setparams(
+                            (nchannels, sampwidth, framerate, len(chunk_audio_bytes) // (nchannels * sampwidth), 'NONE',
+                             'not compressed'))
                         cfw.writeframes(chunk_audio_bytes)
 
                     asr_task_id = f"asr_orch_{os.getpid()}_chunk_{chunk_idx}"
-                    asr_task_payload = {
-                        "command": "asr_chunk", "task_id": asr_task_id,
-                        "params": {"input_audio_chunk_path": chunk_file_path_for_worker,
-                                   "language": asr_lang_to_use_for_task}
-                    }
-
-                    if not asr_worker_pipe_orch_end or not asr_worker_process or not asr_worker_process.is_alive():
-                        if progress_bar_asr: progress_bar_asr.close()
-                        raise RuntimeError("ASR Worker process is not available or not alive.")
-
-                    log_worker("DEBUG",
-                               f"Sending task {asr_task_id} to ASR worker for chunk: {chunk_file_path_for_worker}")
+                    asr_task_payload = {"command": "asr_chunk", "task_id": asr_task_id,
+                                        "params": {"input_audio_chunk_path": chunk_file_path_for_worker,
+                                                   "language": args.model_lang}}
                     asr_worker_pipe_orch_end.send(asr_task_payload)
-                    try:
-                        from CortexConfiguration import ASR_WORKER_TIMEOUT
-                        asr_worker_timeout_seconds = ASR_WORKER_TIMEOUT
-                        log_worker("INFO",
-                                   f"Using ASR worker timeout from CortexConfiguration: {asr_worker_timeout_seconds}s")
-                    except (ImportError, AttributeError):
-                        asr_worker_timeout_seconds = 300  # Default fallback
-                        log_worker("WARNING",
-                                   f"Could not import ASR_WORKER_TIMEOUT from CortexConfiguration. Using default: {asr_worker_timeout_seconds}s")
 
-                    if asr_worker_pipe_orch_end.poll(timeout=asr_worker_timeout_seconds):
+                    if asr_worker_pipe_orch_end.poll(timeout=worker_ready_timeout):
                         asr_chunk_result = asr_worker_pipe_orch_end.recv()
+                        if asr_chunk_result.get("error"): raise RuntimeError(
+                            f"ASR worker error on chunk {chunk_idx}: {asr_chunk_result['error']}")
+                        all_transcribed_segments_asr.append(asr_chunk_result.get("result", {}).get("text", ""))
                     else:
-                        if progress_bar_asr: progress_bar_asr.close()
-                        log_worker("ERROR",
-                                   f"ASR Worker timed out (after {asr_worker_timeout_seconds}s) for task {asr_task_id} (chunk {chunk_idx}).")
-                        stop_persistent_worker(asr_worker_process, asr_worker_pipe_orch_end, "ASR")
-                        asr_worker_process, asr_worker_pipe_orch_end = None, None
-                        raise RuntimeError(f"ASR Worker timed out for chunk {chunk_idx}.")
+                        raise RuntimeError(f"ASR Worker timed out on chunk {chunk_idx}.")
 
-                    if asr_chunk_result.get("error"):
-                        if progress_bar_asr: progress_bar_asr.close()
-                        raise RuntimeError(
-                            f"ASR Worker for chunk {chunk_idx} (task {asr_task_id}) reported error: {asr_chunk_result['error']}")
-
-                    transcribed_text_from_chunk = asr_chunk_result.get("result", {}).get("text", "")
-                    all_transcribed_segments_asr.append(transcribed_text_from_chunk)
-                    log_worker("DEBUG",
-                               f"Received ASR result for chunk {chunk_idx}: '{transcribed_text_from_chunk[:30]}...'")
-
-                    if not os.getenv("KEEP_ASR_CHUNKS", "false").lower() == "true":
-                        try:
-                            os.remove(chunk_file_path_for_worker)
-                        except Exception as e_rm_asr_c:
-                            log_worker("WARNING",
-                                       f"Failed to remove ASR chunk file {chunk_file_path_for_worker}: {e_rm_asr_c}")
-
-                    if current_pos_frames + frames_to_read >= nframes and frames_to_read < chunk_len_frames:
-                        pass
-                    elif current_pos_frames + step_frames >= nframes and step_frames < chunk_len_frames:
-                        current_pos_frames = nframes
-                    else:
-                        current_pos_frames += step_frames
-
+                    current_pos_frames += step_frames
                     chunk_idx += 1
                     if progress_bar_asr: progress_bar_asr.update(1)
                 if progress_bar_asr: progress_bar_asr.close()
 
-            final_transcription = " ".join(s.strip() for s in all_transcribed_segments_asr if s.strip()).strip()
-            log_worker("INFO", f"Final combined ASR transcription: '{final_transcription[:100]}...'")
+            final_transcription = " ".join(s.strip() for s in all_transcribed_segments_asr if s.strip())
             result_payload = {"result": {"text": final_transcription}}
 
+    # --- 4. CLEANUP (Happens regardless of success or failure) ---
     except Exception as e_orchestration:
         result_payload = {"error": f"Orchestration error during task '{args.task_type}': {str(e_orchestration)}"}
         log_worker("ERROR", f"Orchestration error: {e_orchestration}")
-        log_worker("ERROR", traceback.format_exc())  # Log traceback for orchestration errors too
+        log_worker("ERROR", traceback.format_exc())
     finally:
         if tts_worker_process:
             stop_persistent_worker(tts_worker_process, tts_worker_pipe_orch_end, "TTS")
@@ -2084,27 +1843,30 @@ def main():
             except Exception as e_rm_job_dir:
                 log_worker("WARNING", f"Failed to clean up job temp directory {job_temp_dir_path}: {e_rm_job_dir}")
 
-        if dummy_tts_prompt_path and os.path.exists(
-                dummy_tts_prompt_path):  # dummy_tts_prompt_path is defined outside try/finally
+        if dummy_tts_prompt_path and os.path.exists(dummy_tts_prompt_path):
             try:
                 os.remove(dummy_tts_prompt_path)
                 log_worker("INFO", f"Cleaned up dummy TTS prompt: {dummy_tts_prompt_path}")
             except Exception as e_rm_dummy:
                 log_worker("WARNING", f"Failed to remove dummy TTS prompt {dummy_tts_prompt_path}: {e_rm_dummy}")
 
-        if 'melo_for_sample_init_tts' in locals() and melo_for_sample_init_tts: del melo_for_sample_init_tts
-        if 'sclparser_for_sample_init_tts' in locals() and sclparser_for_sample_init_tts: del sclparser_for_sample_init_tts
+        if 'melo_for_sample_init_tts' in locals() and melo_for_sample_init_tts:
+            del melo_for_sample_init_tts
 
         gc.collect()
-        if TORCH_AUDIO_AVAILABLE and torch and effective_pytorch_device_orchestrator == "cuda" and torch.cuda.is_available():
-            torch.cuda.empty_cache()
-        elif TORCH_AUDIO_AVAILABLE and torch and effective_pytorch_device_orchestrator == "mps" and hasattr(
-                torch.backends, "mps") and torch.backends.mps.is_available() and hasattr(torch.mps, "empty_cache"):
-            try:
-                torch.mps.empty_cache(); log_worker("INFO", "Orchestrator MPS cache clear attempted.")
-            except Exception as mps_e_final:
-                log_worker("WARNING", f"Orchestrator MPS empty_cache failed: {mps_e_final}")
+        if TORCH_AUDIO_AVAILABLE and torch:
+            if effective_pytorch_device_orchestrator == "cuda" and torch.cuda.is_available():
+                torch.cuda.empty_cache()
+            elif effective_pytorch_device_orchestrator == "mps" and hasattr(torch.backends,
+                                                                            "mps") and torch.backends.mps.is_available() and hasattr(
+                    torch.mps, "empty_cache"):
+                try:
+                    torch.mps.empty_cache()
+                    log_worker("INFO", "Orchestrator MPS cache clear attempted.")
+                except Exception as e:
+                    log_worker("WARNING", f"Orchestrator MPS empty_cache failed: {e}")
 
+    # --- 5. FINAL OUTPUT ---
     try:
         output_json_str_final = json.dumps(result_payload)
         log_worker("DEBUG", f"Sending output JSON (len={len(output_json_str_final)}): {output_json_str_final[:250]}...")
