@@ -9027,14 +9027,7 @@ def handle_openai_tts():
 
         if model_requested != TTS_MODEL_NAME_CLIENT_FACING:  # TTS_MODEL_NAME_CLIENT_FACING from CortexConfiguration.py
             logger.warning(
-                f"{request_id}: Invalid TTS model requested '{model_requested}'. Expected '{TTS_MODEL_NAME_CLIENT_FACING}'.")
-            resp_data, status_code = _create_openai_error_response(
-                f"Invalid model. This endpoint only supports the '{TTS_MODEL_NAME_CLIENT_FACING}' model for TTS.",
-                err_type="invalid_request_error", code="model_not_found", status_code=404
-            )
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code
-            return resp
+                f"{request_id}: Invalid TTS model requested '{model_requested}'. Expected '{TTS_MODEL_NAME_CLIENT_FACING}'. Im just going to fallback to the default Zephyloid")
 
         melo_language = "EN"
         try:
