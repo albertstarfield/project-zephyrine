@@ -33,7 +33,7 @@ class T3HuggingfaceBackend(LlamaPreTrainedModel, GenerationMixin):
         # This forces the model to use the 'eager' implementation, which is compatible with
         # the library's internal hooks that require attention weight output.
         self.model.config.attn_implementation = "eager"
-        self.model.config.output_attentions = True
+        #self.model.config.output_attentions = True
         # --- END OF THE DEFINITIVE FIX ---
 
         self.speech_enc = speech_enc
