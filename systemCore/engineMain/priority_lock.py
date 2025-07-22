@@ -221,7 +221,7 @@ class PriorityQuotaLock:
 
                             # Brief wait for OS to process the kill signal
                             try:
-                                interrupted_proc.wait(timeout=0.5)  # Shorter wait after kill
+                                interrupted_proc.wait(timeout=0.01)  # Shorter wait after kill
                                 logger.info("{}:: ELP0 process PID {} terminated after kill.", log_prefix, pid_to_kill)
                             except subprocess.TimeoutExpired:
                                 logger.warning(
