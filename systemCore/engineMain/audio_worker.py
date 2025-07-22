@@ -1132,9 +1132,11 @@ Pip, fueled by an insatiable curiosity and a sudden craving for superior hot bev
 ...and that, my friend, is just the beginning of Pip's grand adventure. We'll see how they tackle the sleepy badger, navigate the tricky puzzles, and whether that hot cocoa is truly infinite... another time. For now, let the idea of grand quests and cozy villages lull you into a peaceful rest. Sweet dreams of adventure!
 """
 
-ADELAIDE_EXCITED_TEST_INTRO="Wow! A fantastic Velocireaptor hypersonic aircraft just whooshed under our nose!"
+#ADELAIDE_EXCITED_TEST_INTRO="Wow! A fantastic Velocireaptor hypersonic aircraft just whooshed under our nose!"
 
-#ADELAIDE_EXCITED_TEST_INTRO=""
+
+ADELAIDE_EXCITED_TEST_INTRO="Dàjiā hǎo, wǒ shì Ādéláidé·Zéfēilín·Xiàluòtè. Wǒ jiāng tōngguò jièshào jìsuàn liúlìxué yǔ wēijīfēn 3 lái dài nín liǎojiě tòngdiǎn, zhè jiāng shì yālì jùdà de yī tiān!"
+#ADELAIDE_EXCITED_TEST_INTRO="大家好，我是阿德莱德·泽菲琳·夏洛特。我将通过介绍计算流体力学与微积分3来带您了解痛点，这将是压力巨大的一天！"
 
 # --- PyTorch Device Auto-Detection Helper ---
 def _get_pytorch_device(requested_device_str: str) -> str:
