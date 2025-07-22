@@ -20,9 +20,9 @@ MAX_CHUNKS_PER_RESPONSE = 32768 # Safety limit to prevent infinite loops (32768 
 SOFT_LIMIT_DIVISOR = 4 # SOFT_LIMIT DIVISOR CHUNKS for ELP1 response when it is above MAX_TOKENS_PER_CHUNK
 SHORT_PROMPT_TOKEN_THRESHOLD = 256 # Prompts with fewer tokens than this trigger context pruning. so it can be more focused
 # --- NEW: Configurable Log Streaming ---
-STREAM_INTERNAL_LOGS = False # Set to False to hide logs and show animation instead.
+STREAM_INTERNAL_LOGS = False # Set to False to hide logs and show animation instead. Verbosity if needed for ELP1 calls
 STREAM_ANIMATION_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏" # Braille spinner characters
-STREAM_ANIMATION_DELAY_SECONDS = 0.1 # How fast the animation plays
+STREAM_ANIMATION_DELAY_SECONDS = 2 # How fast the animation plays
 FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768)) #Max at 32768
 FUZZY_DUPLICATION_THRESHOLD = 80 # Threshold for detecting rephrased/similar content
 #DEFAULT_LLM_TEMPERATURE = 0.8

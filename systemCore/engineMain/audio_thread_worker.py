@@ -9,6 +9,7 @@ import numpy as np
 import soundfile as sf
 import tempfile
 import hashlib
+import torch.compiler  # <-- Add this import
 import requests # Needed for catching network exceptions
 from huggingface_hub.utils import HfHubHTTPError # Specific HF network error
 import threading  # For the monitoring thread
@@ -135,27 +136,25 @@ def _try_clear_pytorch_caches(device_type_str):
 # Example: <base_cache_dir>/tts_chatterbox/<device>/<torch_version>/<model_hash_or_id>/artifact.ptc
 COMPILE_CACHE_BASE_DIR = None  # To be set from worker_config
 
-
-def get_compile_artifact_path(model_name_key: str, model_identifier: str, device: str, backend: str):
-    """Generates a path for torch.compile artifacts."""
+def get_compile_artifact_path(model_name_key: str, model_identifier: str, device: str):
+    """Generates a unique, persistent path for torch.compile artifacts."""
     if not COMPILE_CACHE_BASE_DIR:
         return None
 
-    torch_version_str = torch.__version__.replace('.', '_') if TORCH_AUDIO_AVAILABLE and torch else "unknown_torch"
-    # Create a somewhat stable hash for the model identifier (e.g., model class name or a version string)
-    model_hash = hashlib.md5(model_identifier.encode()).hexdigest()[:8]
+    torch_version_str = torch.__version__.replace('.', '_').replace('+', '_') if TORCH_AUDIO_AVAILABLE and torch else "unknown_torch"
+    # Create a stable hash for the model identifier
+    model_hash = hashlib.md5(model_identifier.encode()).hexdigest()[:12]
 
-    # Path: <base>/<model_key>/<device>/<backend>/<torch_ver>/<model_hash>/artifact.ptc
+    # Path: <base>/<model_key>/<device>/<torch_ver>/<model_hash>/
     artifact_dir = os.path.join(
         COMPILE_CACHE_BASE_DIR,
         model_name_key,
-        device.replace(':', '_'),  # Sanitize device string for path
-        backend,
+        device.replace(':', '_'),  # Sanitize device string
         torch_version_str,
         model_hash
     )
     os.makedirs(artifact_dir, exist_ok=True)
-    return os.path.join(artifact_dir, "artifact.ptc")
+    return artifact_dir # Return the directory
 
 def monitor_memory_usage():
     """
@@ -241,6 +240,8 @@ def monitor_memory_usage():
     log_thread_worker("INFO", "[MemoryMonitor] Memory monitoring and periodic cache clear thread stopped.")
 
 
+
+
 def initialize_models(worker_config):
     global CHATTERBOX_TTS_AVAILABLE_THREAD, ChatterboxTTS_class_ref_thread
     global PYWHISPERCPP_AVAILABLE_THREAD, WhisperModel_thread
@@ -270,6 +271,26 @@ def initialize_models(worker_config):
         current_device_global = "cpu"
 
     log_thread_worker("INFO", f"Worker process effective PyTorch device set to: {current_device_global}")
+
+    # --- Set the compile cache directory ---
+    model_dir = worker_config.get("model_dir")
+    if model_dir and os.path.isdir(model_dir):
+        COMPILE_CACHE_BASE_DIR = os.path.join(model_dir, "torch_compile_cache")
+        log_thread_worker("INFO", f"Torch compile cache directory set to model directory: {COMPILE_CACHE_BASE_DIR}")
+    else:
+        # Fallback to the temporary directory if model_dir is not provided or invalid.
+        temp_dir = worker_config.get("temp_dir", tempfile.gettempdir())
+        COMPILE_CACHE_BASE_DIR = os.path.join(temp_dir, "torch_compile_cache")
+        log_thread_worker("WARNING",
+                          f"Model directory not available. Falling back to temp compile cache: {COMPILE_CACHE_BASE_DIR}")
+
+    # Ensure the directory exists.
+    try:
+        os.makedirs(COMPILE_CACHE_BASE_DIR, exist_ok=True)
+    except OSError as e_mkdir:
+        log_thread_worker("ERROR",
+                          f"Could not create compile cache directory '{COMPILE_CACHE_BASE_DIR}': {e_mkdir}. Caching will be disabled.")
+        COMPILE_CACHE_BASE_DIR = None
 
     # --- TTS Model Initialization ---
     if worker_config.get("enable_tts", False):
@@ -330,17 +351,60 @@ def initialize_models(worker_config):
                 raise RuntimeError("Failed to load ChatterboxTTS model after all retries.") from last_exception
             # --- END OF FINAL LOOP ---
 
-            chatterbox_model_instance_global = original_tts_model
+            log_thread_worker("INFO", "Attempting to apply torch.compile() to the model...")
 
-            log_thread_worker("INFO", "Warming up the ChatterboxTTS model...")
-            dummy_text = "Chatterbox TTS warm-up sequence initiated."
+            # STEP 1: Check for torch.compile availability first.
+            if not hasattr(torch, "compile"):
+                log_thread_worker("WARNING",
+                                  f"torch.compile() feature not found in your PyTorch version ({torch.__version__}).")
+                log_thread_worker("WARNING",
+                                  "Model will run in 'eager' mode (slower). Upgrade to PyTorch 2.0+ to enable compilation.")
+                chatterbox_model_instance_global = original_tts_model  # Assign the uncompiled model
+            else:
+                # STEP 2: If compile is available, prepare the cache path.
+                log_thread_worker("INFO",
+                                  f"torch.compile() is available (PyTorch version {torch.__version__}). Preparing cache...")
+
+                cache_path = get_compile_artifact_path(
+                    "chatterbox_tts",
+                    original_tts_model.__class__.__name__,
+                    effective_tts_device_for_chatterbox
+                )
+
+                if not cache_path:
+                    log_thread_worker("WARNING",
+                                      "Could not generate a valid cache path because COMPILE_CACHE_BASE_DIR was not set. Caching will be disabled.")
+                    chatterbox_model_instance_global = original_tts_model  # Assign the uncompiled model
+                else:
+                    # STEP 3: If compile and cache path are ready, proceed.
+                    os.environ["PYTORCH_COMPILE_CACHE"] = cache_path
+                    log_thread_worker("INFO", f"Set PYTORCH_COMPILE_CACHE to '{cache_path}' for persistence.")
+
+                    compile_options = {"mode": "reduce-overhead", "fullgraph": False}
+
+                    try:
+                        log_thread_worker("INFO",
+                                          "Compiling the model's 'generate' method. This may be slow on the first run...")
+                        compile_start_time = time.time()
+                        original_tts_model.generate = torch.compile(original_tts_model.generate, **compile_options)
+                        compile_duration = time.time() - compile_start_time
+                        log_thread_worker("INFO", f"torch.compile() finished in {compile_duration:.2f} seconds.")
+                        chatterbox_model_instance_global = original_tts_model  # Assign the COMPILED model
+                    except Exception as e_compile:
+                        log_thread_worker("WARNING",
+                                          f"torch.compile() failed with an error: {e}. The model will run in eager mode.")
+                        log_thread_worker("WARNING", f"Full compile error: {traceback.format_exc()}")
+                        chatterbox_model_instance_global = original_tts_model  # Assign the UNCOMPILED model on failure
+
+            # Warmup is now even more important, as it triggers the actual compilation/cache load.
+            log_thread_worker("INFO", "Warming up the compiled ChatterboxTTS model...")
+            dummy_text = "Compiled model warm-up sequence."
             dummy_prompt_path_for_warmup = worker_config.get("dummy_tts_prompt_path_for_warmup")
             if not dummy_prompt_path_for_warmup or not os.path.exists(dummy_prompt_path_for_warmup):
-                log_thread_worker("WARNING",
-                                  "No valid dummy prompt path for warmup provided. Warmup may be incomplete.")
+                log_thread_worker("WARNING", "No valid dummy prompt path for warmup. Warmup may be incomplete.")
 
             _ = chatterbox_model_instance_global.generate(dummy_text, audio_prompt_path=dummy_prompt_path_for_warmup)
-            log_thread_worker("INFO", "ChatterboxTTS model warmed up successfully.")
+            log_thread_worker("INFO", "Compiled ChatterboxTTS model warmed up successfully.")
 
             is_tts_init_successful = True
 
@@ -418,6 +482,7 @@ def initialize_models(worker_config):
                 PYWHISPERCPP_AVAILABLE_THREAD = False
                 whisper_model_instance_global = None
                 gc.collect()
+
 
 
 def process_tts_chunk(params):
