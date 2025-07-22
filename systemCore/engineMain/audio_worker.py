@@ -10,6 +10,7 @@ import base64
 import io
 import shutil
 import numpy as np
+import scipy.signal
 import soundfile as sf
 import tempfile
 import subprocess
@@ -52,6 +53,7 @@ try:
     import torch
     import torchaudio
     import torchaudio.functional as F_torchaudio # <<<< THIS IS THE IMPORT
+    import torch.compiler  # <-- Add this import
     TORCH_AUDIO_AVAILABLE = True
     log_worker("INFO", "PyTorch and Torchaudio imported successfully.")
 except ImportError as e_torch_imp:
@@ -749,281 +751,232 @@ class SCLParser:
 
         # In SCLParser class, within audio_worker.py
 
+    def _q_to_bandwidth_hz(self, q_factor: float, center_freq_hz: float) -> float:
+        """Converts a Q factor to bandwidth in Hz for FFmpeg's equalizer."""
+        if q_factor <= 0:
+            return center_freq_hz  # Avoid division by zero, return a reasonable default
+        return center_freq_hz / q_factor
+
+    def _generate_reverb_ir(self, path: str, sample_rate: int):
+        """
+        Generates a simple synthetic impulse response for convolution reverb and saves it as a WAV file.
+        This avoids the dependency on a specific FFmpeg build having 'areverb'.
+        """
+        # A simple decaying noise makes for a decent, neutral reverb IR
+        duration_seconds = 1.0  # Short reverb tail
+        decay_rate = -5.0
+
+        num_samples = int(duration_seconds * sample_rate)
+        time_axis = np.linspace(0, duration_seconds, num_samples, endpoint=False)
+
+        # Generate white noise and apply an exponential decay
+        noise = np.random.normal(0, 1, num_samples)
+        decay_envelope = np.exp(decay_rate * time_axis)
+
+        ir_signal = (noise * decay_envelope).astype(np.float32)
+
+        # Normalize to prevent clipping
+        ir_signal /= np.max(np.abs(ir_signal))
+
+        # Save as a mono WAV file
+        sf.write(path, ir_signal, sample_rate, subtype='PCM_16')
+        log_worker("DEBUG", f"Generated synthetic reverb impulse response at: {path}")
+
+    def _run_and_diagnose(
+            self,
+            ffmpeg_exe: str,
+            command: list,
+            input_path: str,
+            output_path: str,
+            stage_name: str
+    ) -> bool:
+        """
+        A robust helper function to run an FFmpeg command and diagnose the audio
+        volume before and after the operation. This is critical for debugging.
+        """
+
+        def get_max_volume(file_path: str) -> Optional[str]:
+            """Runs volumedetect and returns the max_volume as a string."""
+            if not os.path.exists(file_path) or os.path.getsize(file_path) == 0:
+                return "File does not exist or is empty"
+
+            diag_command = [ffmpeg_exe, "-i", file_path, "-af", "volumedetect", "-f", "null", "-"]
+            try:
+                result = subprocess.run(diag_command, capture_output=True, text=True, timeout=60)
+                for line in result.stderr.splitlines():
+                    if "max_volume" in line:
+                        return line.split("max_volume:")[1].strip()
+                return "Not Found"
+            except Exception as e:
+                return f"Error during diagnosis: {e}"
+
+        # --- 1. Diagnose the input file ---
+        vol_in = get_max_volume(input_path)
+        log_worker("INFO", f"[DIAGNOSTIC] Stage '{stage_name}' - Input Max Volume: {vol_in}")
+
+        # --- 2. Run the main processing command ---
+        log_worker("INFO", f"Executing FFmpeg Step '{stage_name}': {' '.join(command)}")
+        try:
+            result = subprocess.run(command, check=True, capture_output=True, text=True, timeout=120)
+            log_worker("DEBUG", f"FFmpeg Step '{stage_name}' stderr:\n{result.stderr}")
+        except subprocess.CalledProcessError as e:
+            log_worker("ERROR", f"FFmpeg Step '{stage_name}' FAILED! Return code: {e.returncode}")
+            log_worker("ERROR", f"FFmpeg stderr:\n{e.stderr}")
+            return False
+        except subprocess.TimeoutExpired as e:
+            log_worker("ERROR", f"FFmpeg Step '{stage_name}' TIMED OUT!")
+            log_worker("ERROR", f"FFmpeg stderr:\n{e.stderr}")
+            return False
+
+        # --- 3. Diagnose the output file ---
+        vol_out = get_max_volume(output_path)
+        log_worker("INFO", f"[DIAGNOSTIC] Stage '{stage_name}' - Output Max Volume: {vol_out}")
+
+        # --- 4. Final sanity check ---
+        if not os.path.exists(output_path) or os.path.getsize(output_path) == 0:
+            log_worker("CRITICAL",
+                       f"FFmpeg Step '{stage_name}' completed but produced an empty or non-existent output file. Aborting.")
+            return False
+
+        return True
+
     def post_process(self, audio_np_in: np.ndarray, input_sample_rate: int, zephyloid_settings: Dict) -> Tuple[
         np.ndarray, float]:
-        # Use a consistent variable for the sample rate of the audio as it enters this function
-        effective_input_sr = float(input_sample_rate)
-        log_worker("IMPORTANT_DEBUG",
-                   f"SCLParser: post_process START. Input_Shape={audio_np_in.shape}, SR_in={effective_input_sr}, Zephyloid_BRI={zephyloid_settings.get('bri', 'N/A')}")
+        """
+        Applies a comprehensive post-processing effects chain using a series of sequential,
+        robust, and instrumented FFmpeg commands. This architecture is designed for
+        maximum reliability and provides clear diagnostics for each step.
 
-        # Ensure necessary libraries are available
-        if not PEDALBOARD_LIBROSA_AVAILABLE or not TORCH_AUDIO_AVAILABLE or not torch or not F_torchaudio:
-            log_worker("WARNING",
-                       "SCLParser Post-process: Missing effects libraries (Pedalboard/Librosa or Torch/Torchaudio). Skipping all effects.")
-            return audio_np_in, effective_input_sr  # Return original audio and its sample rate
+        The processing pipeline is as follows:
+        1. Reverb Generation: Create a "wet-only" reverb signal.
+        2. Wet/Dry Mix: Combine the original audio with the reverb signal.
+        3. Linear Effects: Apply all EQs, chorus, gain, and other tonal effects.
+        4. Volume Normalization & Limiting: Apply a compressor and limiter for a full, polished sound.
+        5. Noise Mixing: Add subtle noise for realism.
 
-        processed_audio_np = audio_np_in.astype(np.float32)
+        Each stage's volume is measured to ensure the audio is flowing correctly.
+        """
+        log_worker("INFO",
+                   f"SCLParser: Post-processing with FFmpeg (Sequential/Diagnosed v3 with Normalizer) START. Input Shape={audio_np_in.shape}, SR={input_sample_rate}")
 
-        # Ensure input is (channels, samples) for effects chain
-        if processed_audio_np.ndim == 1:  # Mono (samples,)
-            log_worker("TRACE", "SCLParser Post-process: Promoting mono input to stereo (2, samples) for effects.")
-            processed_audio_np = np.stack([processed_audio_np, processed_audio_np], axis=0)
-        elif processed_audio_np.ndim == 2:
-            if processed_audio_np.shape[1] == 2 and processed_audio_np.shape[0] > 2:  # (samples, 2)
-                log_worker("TRACE",
-                           "SCLParser Post-process: Transposing input (samples, 2) to (2, samples) for effects.")
-                processed_audio_np = processed_audio_np.T
-            elif processed_audio_np.shape[0] == 1 and processed_audio_np.shape[1] > 2:  # (1, samples) mono
-                log_worker("TRACE",
-                           "SCLParser Post-process: Repeating mono channel input to stereo (2, samples) for effects.")
-                processed_audio_np = np.repeat(processed_audio_np, 2, axis=0)
-            elif processed_audio_np.shape[0] == 2 and processed_audio_np.shape[1] > 2:  # (2, samples) - already correct
-                log_worker("TRACE", "SCLParser Post-process: Input audio already in (2, samples) format.")
-            else:  # Unexpected 2D shape
-                log_worker("ERROR",
-                           f"SCLParser Post-process: Input audio has unexpected 2D shape {processed_audio_np.shape}. Skipping effects.")
-                return audio_np_in, effective_input_sr
-        else:  # ndim > 2
+        # --- Prerequisite Checks ---
+        ffmpeg_exe = shutil.which("ffmpeg") or shutil.which("ffmpeg.exe")
+        if not ffmpeg_exe:
+            log_worker("ERROR", "ffmpeg executable not found. Cannot perform post-processing. Returning raw audio.")
+            return audio_np_in, float(input_sample_rate)
+
+        try:
+            import scipy.signal
+        except ImportError:
             log_worker("ERROR",
-                       f"SCLParser Post-process: Input audio has unexpected ndim {processed_audio_np.ndim}. Skipping effects.")
-            return audio_np_in, effective_input_sr
+                       "scipy is required for generating reverb IR. Cannot perform post-processing. Returning raw audio.")
+            return audio_np_in, float(input_sample_rate)
 
-        # This variable will hold the sample rate of the audio AS IT IS BEING PROCESSED through the chain
-        current_processing_sr = effective_input_sr
-        log_worker("IMPORTANT_DEBUG",
-                   f"SCLParser Post-process: Audio prepared. Shape={processed_audio_np.shape}, Initial current_processing_sr={current_processing_sr}")
+        with tempfile.TemporaryDirectory(prefix="ffmpeg_seq_") as temp_dir:
+            # --- File Path Definitions ---
+            initial_input_path = os.path.join(temp_dir, "00_initial_input.wav")
+            ir_path = os.path.join(temp_dir, "reverb_ir.wav")
+            reverb_wet_only_path = os.path.join(temp_dir, "01_reverb_wet_only.wav")
+            reverb_mixed_path = os.path.join(temp_dir, "02_reverb_mixed.wav")
+            linear_effects_output_path = os.path.join(temp_dir, "03_linear_effects_output.wav")
+            final_output_path = os.path.join(temp_dir, "99_final_output.wav")
 
-        audio_tensor_intermediate = torch.from_numpy(processed_audio_np.copy()).to(self.device)
-        log_worker("TRACE",
-                   f"SCLParser Post-process: Tensor created from input. Shape={audio_tensor_intermediate.shape}, SR={current_processing_sr}")
+            # --- Prepare initial files ---
+            sf.write(initial_input_path, audio_np_in, input_sample_rate, subtype='PCM_16')
+            self._generate_reverb_ir(ir_path, input_sample_rate)
 
-        # 1. DYN gain (PyTorch)
-        dyn_gain_db_val = (zephyloid_settings.get('dyn', 64) - 64) / 64.0 * 12.0
-        if abs(dyn_gain_db_val) > 1e-3:  # Apply only if gain is significant
-            audio_tensor_intermediate = F_torchaudio.gain(audio_tensor_intermediate, dyn_gain_db_val)
-            log_worker("TRACE",
-                       f"SCLParser Post-process: Applied DYN gain ({dyn_gain_db_val:.2f}dB). SR={current_processing_sr}")
+            current_file_path = initial_input_path
 
-        # 2. BRE noise (PyTorch)
-        bre_amount = zephyloid_settings.get('bre', 0) / 127.0 * 0.001
-        if bre_amount > 1e-6:  # Apply only if amount is significant
-            noise_bre_tensor = torch.randn_like(audio_tensor_intermediate) * bre_amount
-            audio_tensor_intermediate = audio_tensor_intermediate + noise_bre_tensor
-            log_worker("TRACE",
-                       f"SCLParser Post-process: Applied BRE noise (amount: {bre_amount:.5f}). SR={current_processing_sr}")
+            # --- STAGE 1: Generate a 100% WET Reverb Signal ---
+            reverb_wet_gen_command = [
+                ffmpeg_exe, "-i", current_file_path, "-i", ir_path,
+                "-filter_complex", f"[0:a][1:a]afir=dry=0:wet=1[out]",
+                "-map", "[out]", "-y", reverb_wet_only_path
+            ]
+            if not self._run_and_diagnose(ffmpeg_exe, reverb_wet_gen_command, current_file_path, reverb_wet_only_path,
+                                          "Reverb Generation (Wet Only)"):
+                log_worker("CRITICAL", "Reverb generation stage failed. Aborting.")
+                return audio_np_in, float(input_sample_rate)
 
-        audio_for_pedalboard_np = audio_tensor_intermediate.cpu().numpy()
-        log_worker("TRACE",
-                   f"SCLParser Post-process: Converted to NumPy for Pedalboard. Shape={audio_for_pedalboard_np.shape}, SR={current_processing_sr}")
+            # --- STAGE 2: Mix the Dry and Wet Signals ---
+            dry_level = 0.9
+            wet_level = 0.01069
+            reverb_mix_command = [
+                ffmpeg_exe, "-i", current_file_path, "-i", reverb_wet_only_path,
+                "-filter_complex", f"[0:a][1:a]amix=inputs=2:weights='{dry_level} {wet_level}':normalize=0[out]",
+                "-map", "[out]", "-y", reverb_mixed_path
+            ]
+            if not self._run_and_diagnose(ffmpeg_exe, reverb_mix_command, current_file_path, reverb_mixed_path,
+                                          "Reverb Wet/Dry Mix"):
+                log_worker("CRITICAL", "Reverb mixing stage failed. Aborting.")
+                return audio_np_in, float(input_sample_rate)
+            current_file_path = reverb_mixed_path
 
-        # 3. Resample for Pedalboard if necessary (Librosa)
-        TARGET_PEDALBOARD_SR = 44100.0
-        if abs(current_processing_sr - TARGET_PEDALBOARD_SR) > 1.0 and PEDALBOARD_LIBROSA_AVAILABLE and librosa:  # Check if substantially different
-            log_worker("IMPORTANT_DEBUG",
-                       f"SCLParser Post-process: RESAMPLING for Pedalboard from {current_processing_sr}Hz to {TARGET_PEDALBOARD_SR}Hz.")
-            resampled_channels_list = []
-            original_length = audio_for_pedalboard_np.shape[1]
-            for ch_idx_pb in range(audio_for_pedalboard_np.shape[0]):
-                # Ensure input to librosa.resample is 1D
-                channel_data = np.ascontiguousarray(audio_for_pedalboard_np[ch_idx_pb, :])
-                resampled_channels_list.append(
-                    librosa.resample(y=channel_data,
-                                     orig_sr=current_processing_sr,
-                                     target_sr=TARGET_PEDALBOARD_SR,
-                                     res_type='kaiser_fast')  # Consider 'soxr_hq' for better quality if speed allows
-                )
-            audio_for_pedalboard_np = np.stack(resampled_channels_list)
-            current_processing_sr = TARGET_PEDALBOARD_SR  # CRITICAL UPDATE of the processing sample rate
-            new_length = audio_for_pedalboard_np.shape[1]
-            log_worker("IMPORTANT_DEBUG",
-                       f"SCLParser Post-process: RESAMPLED. Original Len={original_length}, New Len={new_length}, New SR={current_processing_sr}, Shape={audio_for_pedalboard_np.shape}")
-        else:
-            if not (PEDALBOARD_LIBROSA_AVAILABLE and librosa):
-                log_worker("TRACE", "SCLParser Post-process: Librosa/Pedalboard not available for resampling.")
-            else:
-                log_worker("TRACE",
-                           f"SCLParser Post-process: No resampling for Pedalboard needed (current_sr={current_processing_sr} is close to target or lib/pb missing).")
+            # --- STAGE 3: All Linear Effects (Gain, EQ, Compressor, Limiter) ---
+            linear_filters = []
+            nyquist_freq = input_sample_rate / 2.0
 
-        # 4. Pedalboard Effects Chain
-        board_effects_list = []
-        if PEDALBOARD_LIBROSA_AVAILABLE:  # Guard all Pedalboard class usages
+            # Gain, Distortion, Chorus
+            dyn_gain_db = (zephyloid_settings.get('dyn', 64) - 64) / 64.0 * 12.0
+            if abs(dyn_gain_db) > 1e-3: linear_filters.append(f"volume={10 ** (dyn_gain_db / 20.0):.4f}")
             gwl_amount_factor = zephyloid_settings.get('gwl', 0) / 127.0
-            if gwl_amount_factor > 0:
-                drive_db_gwl = gwl_amount_factor * 20.0
-                board_effects_list.append(Distortion(drive_db=drive_db_gwl))
-                log_worker("TRACE",
-                           f"SCLParser Post-process: Added GWL (Distortion). Drive: {drive_db_gwl:.2f}dB. SR for Pedalboard: {current_processing_sr}")
+            if gwl_amount_factor > 0: linear_filters.append(f"acontrast={gwl_amount_factor * 30.0:.4f}")
+            linear_filters.append("chorus=delays=7.0:depths=0.25:decays=0.0:speeds=0.4")
 
-            board_effects_list.extend([
-                Reverb(room_size=1.0, damping=0.5, wet_level=0.01069, dry_level=0.9),
-                Chorus(rate_hz=0.4, depth=0.25, centre_delay_ms=7.0, feedback=0.0, mix=0.02),
-                Delay(delay_seconds=1.4, feedback=0.04, mix=0.0009),
-            ])
+            # Full EQ chain
+            eq_filters = []
+            final_eq_settings = [(30, 5, 3.4), (100, 4, 1.4), (150, 1.5, 1.4), (250, 2, 1.0), (350, 2, 1.4),
+                                 (450, 2, 1.8),
+                                 (550, -2, 1.4), (2000, 2, 1.0), (2500, 3, 1.4), (3000, 2, 1.4), (3500, 4, 1.8),
+                                 (4000, 3, 1.4), (8000, 3, 1.8), (12000, 3, 1.8), (20000, 1, 1.8)]
+            for freq, gain, q_val in final_eq_settings:
+                clamped_freq = min(float(freq), nyquist_freq - 1)
+                bw = self._q_to_bandwidth_hz(q_val, clamped_freq)
+                eq_filters.append(f"equalizer=f={clamped_freq:.2f}:t=h:w={bw:.2f}:g={gain}")
+            linear_filters.extend(eq_filters)
 
-        audio_after_pedalboard_effects_np = audio_for_pedalboard_np  # Default if no effects/pedalboard
-        if board_effects_list and PEDALBOARD_LIBROSA_AVAILABLE:  # Check again before instantiating Pedalboard
-            try:
-                board = Pedalboard(board_effects_list)  # sample_rate is not passed to constructor
-                log_worker("TRACE",
-                           f"SCLParser Post-process: Applying {len(board_effects_list)} Pedalboard effects at SR: {current_processing_sr}...")
-                audio_after_pedalboard_effects_np = board(audio_for_pedalboard_np,
-                                                          sample_rate=current_processing_sr)  # Pass SR here
-                log_worker("TRACE",
-                           f"SCLParser Post-process: Pedalboard effects applied. Shape={audio_after_pedalboard_effects_np.shape}. SR is still {current_processing_sr}")
-            except Exception as e_pb_apply:
-                log_worker("ERROR",
-                           f"SCLParser Post-process: Error applying Pedalboard effects: {e_pb_apply}. Skipping Pedalboard chain.")
-        elif not PEDALBOARD_LIBROSA_AVAILABLE:
-            log_worker("TRACE", "SCLParser Post-process: Pedalboard not available, skipping this effects chain.")
+            # --- NORMALIZER ADDED HERE ---
+            # `acompressor` evens out the volume, making quiet parts louder and loud parts quieter.
+            # This is applied after EQ to act on the tonally-shaped signal.
+            log_worker("INFO", "Adding Volume Normalizer (acompressor) to the filter chain.")
+            linear_filters.append("acompressor=threshold=-20dB:ratio=20:attack=100:release=1000:makeup=20.0")
 
-        audio_tensor_current = torch.from_numpy(audio_after_pedalboard_effects_np.copy()).to(self.device)
-        log_worker("TRACE",
-                   f"SCLParser Post-process: Converted to Tensor for noise/EQ. Shape={audio_tensor_current.shape}, SR={current_processing_sr}")
+            # Safety Limiter: Applied at the very end of the linear chain to prevent clipping.
+            linear_filters.append(f"alimiter=limit={10 ** (-0.5 / 20.0):.4f}:level=true")
 
-        # --- RE-ADD VERY SIMPLE WHITE NOISE FOR TESTING SAMPLE RATE ---
-        # This section adds simple white noise. If the pitch/speed issue appears
-        # only when this block is active, it points to a very subtle interaction.
-        # However, simple addition of noise with the same number of samples should NOT change SR.
-        if TORCH_AUDIO_AVAILABLE and torch:
-            noise_gain_realism = 0.0001  # Extremely low, adjust if needed, or make it a zephyloid setting
-            if noise_gain_realism > 1e-7:  # Apply only if gain is non-negligible
-                log_worker("IMPORTANT_DEBUG",
-                           f"SCLParser Post-process: Adding simple white noise with gain {noise_gain_realism:.6f} at SR: {current_processing_sr}.")
-                # randn_like creates noise matching the shape of audio_tensor_current.
-                # This operation itself does not change the number of samples or the sample rate.
-                added_realism_noise = torch.randn_like(audio_tensor_current) * noise_gain_realism
-                audio_tensor_current = audio_tensor_current + added_realism_noise
-                log_worker("TRACE",
-                           f"SCLParser Post-process: Simple white noise added. Shape={audio_tensor_current.shape}. SR is still {current_processing_sr}")
-        # --- END RE-ADDED NOISE ---
+            # Execute the full linear effects command
+            linear_effects_command = [
+                ffmpeg_exe, "-i", current_file_path,
+                "-af", ",".join(linear_filters),
+                "-y", linear_effects_output_path
+            ]
+            if not self._run_and_diagnose(ffmpeg_exe, linear_effects_command, current_file_path,
+                                          linear_effects_output_path, "Linear Effects (incl. Normalizer)"):
+                log_worker("CRITICAL", "Linear Effects stage failed. Aborting.")
+                return audio_np_in, float(input_sample_rate)
+            current_file_path = linear_effects_output_path
 
-        # 5. EQ Chain (PyTorch)
-        # All F_torchaudio functions below need the correct sample_rate.
-        # We use current_processing_sr (as float) which should be correct at this point.
-        current_sr_float_for_eq = float(current_processing_sr)  # Ensure float for torchaudio functions
+            # --- STAGE 4: Noise Mixing ---
+            # The final, optional stage to add subtle realism.
+            shutil.copy(current_file_path, final_output_path)  # Default to no noise
+            total_noise_amplitude = zephyloid_settings.get('bre', 0) / 127.0 * 0.001 + 0.00005
+            if total_noise_amplitude > 1e-7:
+                noise_command = [
+                    ffmpeg_exe, "-i", current_file_path,
+                    "-filter_complex",
+                    f"anoisesrc=d=10:c=white:a={total_noise_amplitude:.6f}:r={input_sample_rate}[noise];[0:a][noise]amix=inputs=2:duration=first[out]",
+                    "-map", "[out]", "-y", final_output_path
+                ]
+                if not self._run_and_diagnose(ffmpeg_exe, noise_command, current_file_path, final_output_path,
+                                              "Noise Mixing"):
+                    log_worker("CRITICAL", "Noise Mixing stage failed. Aborting.")
+                    return audio_np_in, float(input_sample_rate)
 
-        # BRI
-        bri_gain_val = (zephyloid_settings.get('bri', 64) - 64) / 64.0 * 6.0
-        if abs(bri_gain_val) > 1e-3:
-            audio_tensor_current = F_torchaudio.equalizer_biquad(audio_tensor_current, current_sr_float_for_eq, 8000.0,
-                                                                 bri_gain_val, 1.0)
-            log_worker("TRACE",
-                       f"SCLParser Post-process: Applied BRI EQ ({bri_gain_val:.2f}dB). SR={current_processing_sr}")
-        # CLE
-        cle_gain_val = (zephyloid_settings.get('cle', 64) - 64) / 64.0 * 4.0
-        if abs(cle_gain_val) > 1e-3:
-            audio_tensor_current = F_torchaudio.equalizer_biquad(audio_tensor_current, current_sr_float_for_eq, 4000.0,
-                                                                 cle_gain_val, 1.2)
-            log_worker("TRACE",
-                       f"SCLParser Post-process: Applied CLE EQ ({cle_gain_val:.2f}dB). SR={current_processing_sr}")
-        # OPE
-        ope_shift_val = (zephyloid_settings.get('ope', 64) - 64) / 64.0
-        if abs(ope_shift_val) > 1e-3:
-            ope_center_freq = 1000.0 + ope_shift_val * 500.0
-            ope_gain = abs(ope_shift_val) * 3.0
-            audio_tensor_current = F_torchaudio.equalizer_biquad(audio_tensor_current, current_sr_float_for_eq,
-                                                                 ope_center_freq, ope_gain, 1.5)
-            log_worker("TRACE",
-                       f"SCLParser Post-process: Applied OPE EQ (Freq:{ope_center_freq:.0f}Hz, Gain:{ope_gain:.2f}dB). SR={current_processing_sr}")
-        # GEN (Formant-like)
-        gen_formant_shift_val = (zephyloid_settings.get('gen', 64) - 64) / 64.0 * 3.0
-        if abs(gen_formant_shift_val) > 1e-3:
-            gen_center_freq = 1500.0 + (zephyloid_settings.get('gen', 64) - 64) / 64.0 * 200.0
-            audio_tensor_current = F_torchaudio.equalizer_biquad(audio_tensor_current, current_sr_float_for_eq,
-                                                                 gen_center_freq, abs(gen_formant_shift_val), 1.2)
-            log_worker("TRACE",
-                       f"SCLParser Post-process: Applied GEN EQ (Freq:{gen_center_freq:.0f}Hz, Gain:{abs(gen_formant_shift_val):.2f}dB). SR={current_processing_sr}")
-
-        # XSY (Cross-synthesis EQ blending)
-        xsy_voicebanks_val = zephyloid_settings.get('xsy_voicebanks')
-        xsy_blend_val = zephyloid_settings.get('xsy', 0) / 127.0
-        # ... (Your XSY logic as before, ensuring current_sr_float_for_eq is used for F_torchaudio.equalizer_biquad) ...
-        # Make sure all freq, gain, q_val are floats when passed to equalizer_biquad
-        if isinstance(xsy_voicebanks_val, list) and xsy_voicebanks_val:  # Check if list is not empty
-            processed_xsy = False
-            if len(xsy_voicebanks_val) == 2 and 0.0 < xsy_blend_val < 1.0:
-                # ... (blend logic as before) ...
-                processed_xsy = True
-            elif xsy_blend_val == 0.0:  # Use first voicebank
-                profile_single_name = xsy_voicebanks_val[0]
-                profile_single = self.xsy_profiles.get(profile_single_name)
-                if profile_single:
-                    log_worker("TRACE",
-                               f"SCLParser Post-process: Applying XSY EQ single profile '{profile_single_name}'. SR={current_processing_sr}")
-                    for freq, gain, q_val in profile_single[
-                        "eq_curve"]: audio_tensor_current = F_torchaudio.equalizer_biquad(audio_tensor_current,
-                                                                                          current_sr_float_for_eq,
-                                                                                          float(freq), float(gain),
-                                                                                          float(q_val))
-                    processed_xsy = True
-            elif xsy_blend_val == 1.0 and len(xsy_voicebanks_val) > 1:  # Use second voicebank
-                profile_single_name = xsy_voicebanks_val[1]
-                profile_single = self.xsy_profiles.get(profile_single_name)
-                if profile_single:
-                    log_worker("TRACE",
-                               f"SCLParser Post-process: Applying XSY EQ single profile '{profile_single_name}'. SR={current_processing_sr}")
-                    for freq, gain, q_val in profile_single[
-                        "eq_curve"]: audio_tensor_current = F_torchaudio.equalizer_biquad(audio_tensor_current,
-                                                                                          current_sr_float_for_eq,
-                                                                                          float(freq), float(gain),
-                                                                                          float(q_val))
-                    processed_xsy = True
-            if processed_xsy:
-                log_worker("TRACE", f"SCLParser Post-process: XSY EQ processing applied. SR={current_processing_sr}")
-
-        # Standard final EQ
-        final_eq_settings = [(30, 5, 3.4), (100, 4, 1.4), (150, 1.5, 1.4), (250, 2, 1.0), (350, 2, 1.4), (450, 2, 1.8),
-                             (550, -2, 1.4), (2000, 2, 1.0), (2500, 3, 1.4), (3000, 2, 1.4), (3500, 4, 1.8),
-                             (4000, 3, 1.4), (8000, 3, 1.8), (12000, 3, 1.8), (20000, 1, 1.8)]
-        log_worker("TRACE", f"SCLParser Post-process: Applying standard final EQ set at SR: {current_processing_sr}")
-        for freq, gain, q_val in final_eq_settings:
-            audio_tensor_current = F_torchaudio.equalizer_biquad(audio_tensor_current, current_sr_float_for_eq,
-                                                                 float(freq), float(gain), float(q_val))
-        log_worker("TRACE", f"SCLParser Post-process: Standard final EQ set applied. SR={current_processing_sr}")
-
-        # 6. Final subtle dither noise and amplitude modulation (PyTorch)
-        if TORCH_AUDIO_AVAILABLE and torch:
-            applied_final_touches = False
-            final_dither_noise_gain = 0.00005
-            if final_dither_noise_gain > 1e-7:
-                audio_tensor_current = audio_tensor_current + (
-                            torch.randn_like(audio_tensor_current) * final_dither_noise_gain)
-                applied_final_touches = True
-
-            mod_freq_final, mod_depth_final = 0.5, 0.005
-            if mod_depth_final > 1e-4:
-                time_axis_final = torch.arange(audio_tensor_current.shape[1],
-                                               device=audio_tensor_current.device) / current_sr_float_for_eq  # Use current_sr_float_for_eq
-                modulation_final = (
-                            1.0 + mod_depth_final * torch.sin(2 * torch.pi * mod_freq_final * time_axis_final)).float()
-                audio_tensor_current = audio_tensor_current * modulation_final.unsqueeze(0)
-                applied_final_touches = True
-            if applied_final_touches:
-                log_worker("TRACE",
-                           f"SCLParser Post-process: Final subtle dither/amp_mod applied. SR={current_processing_sr}")
-
-        final_audio_numpy_for_limiter = audio_tensor_current.cpu().numpy()
-        log_worker("TRACE",
-                   f"SCLParser Post-process: Converted to NumPy for Limiter. Shape={final_audio_numpy_for_limiter.shape}, SR={current_processing_sr}")
-
-        # 7. Final Limiter (Pedalboard)
-        if PEDALBOARD_LIBROSA_AVAILABLE:
-            try:
-                final_limiter_board = Pedalboard([Limiter(threshold_db=-0.5, release_ms=50.0)])
-                log_worker("TRACE", f"SCLParser Post-process: Applying Limiter at SR: {current_processing_sr}...")
-                final_audio_numpy_for_limiter = final_limiter_board(final_audio_numpy_for_limiter,
-                                                                    sample_rate=current_processing_sr)  # Pass SR
-                log_worker("DEBUG",
-                           f"SCLParser Post-process: Final Limiter applied. Shape={final_audio_numpy_for_limiter.shape}. SR still {current_processing_sr}")
-            except Exception as e_final_limiter:
-                log_worker("ERROR", f"SCLParser Post-process: Error applying final Limiter: {e_final_limiter}")
-
-        # The sample rate of the audio at this point is current_processing_sr
-        output_sr = current_processing_sr
-        log_worker("IMPORTANT_DEBUG",
-                   f"SCLParser: post_process END. Final_Shape={final_audio_numpy_for_limiter.shape}, SR_out={output_sr}")
-
-        return final_audio_numpy_for_limiter, output_sr
+            # --- Final Step: Read the result ---
+            processed_audio_np, final_sr = sf.read(final_output_path, dtype='float32')
+            log_worker("INFO",
+                       f"FFmpeg post-processing completed successfully. Final Shape={processed_audio_np.shape}, SR={final_sr}")
+            return processed_audio_np, float(final_sr)
 
     def parse_attributes(self, params_str: str) -> Dict[str, str]:
         attributes = {}
@@ -1179,9 +1132,9 @@ Pip, fueled by an insatiable curiosity and a sudden craving for superior hot bev
 ...and that, my friend, is just the beginning of Pip's grand adventure. We'll see how they tackle the sleepy badger, navigate the tricky puzzles, and whether that hot cocoa is truly infinite... another time. For now, let the idea of grand quests and cozy villages lull you into a peaceful rest. Sweet dreams of adventure!
 """
 
-#ADELAIDE_EXCITED_TEST_INTRO="Hello there! I hope you have all absolutely fantastic day"
+ADELAIDE_EXCITED_TEST_INTRO="Wow! A fantastic Velocireaptor hypersonic aircraft just whooshed under our nose!"
 
-ADELAIDE_EXCITED_TEST_INTRO=""
+#ADELAIDE_EXCITED_TEST_INTRO=""
 
 # --- PyTorch Device Auto-Detection Helper ---
 def _get_pytorch_device(requested_device_str: str) -> str:
@@ -1247,110 +1200,124 @@ def _get_pytorch_device(requested_device_str: str) -> str:
 # Helper function to ensure the voice sample exists for ChatterboxTTS
 def _ensure_voice_sample(
         args: argparse.Namespace,
-        melo_model_instance: Optional[Any],  # Type should be melo.api.TTS if fully typed
-        scl_parser_instance: Optional[SCLParser],  # Using SCLParser class defined in this file
-        effective_device_str: str  # The device string determined by _get_pytorch_device
+        effective_device_str: str
 ) -> Optional[str]:
     """
-    Checks for Chatterbox voice sample, generates it with MeloTTS (via SCLParser) if missing.
-    Returns the path to the sample file, or None if generation fails or prerequisites missing.
+    Checks for the ChatterboxTTS voice sample file. If the file is not found, this
+    function will dynamically initialize the MeloTTS engine, generate the required
+    sample, save it to disk, and then immediately unload MeloTTS to conserve memory
+    and ensure a fast startup on subsequent runs.
+
+    This "lazy loading" approach prevents the costly initialization of MeloTTS when it's
+    not needed.
+
+    Args:
+        args (argparse.Namespace): The parsed command-line arguments.
+        effective_device_str (str): The PyTorch device ('cpu', 'mps', 'cuda') to use for generation.
+
+    Returns:
+        Optional[str]: The full path to the voice sample file if it exists or was
+                       successfully created, otherwise None.
     """
-    # This function is called only if args.task_type == "tts"
-    if not CHATTERBOX_TTS_AVAILABLE:  # From global flag set after ChatterboxTTS import attempt
-        log_worker("WARNING", "_ensure_voice_sample: ChatterboxTTS library not available, cannot ensure voice sample.")
-        return None
-    log_worker("INFO", f"Chatterbox Subengine TTS AVAILABLE? {CHATTERBOX_TTS_AVAILABLE}")
-
-    # Use args.temp_dir for the base of the sample directory
-    if not os.path.isdir(args.temp_dir) or not os.access(args.temp_dir, os.W_OK):
-        log_worker("ERROR",
-                   f"Base temporary directory '{args.temp_dir}' is not a valid or writable directory. Cannot create voice sample directory.")
+    # First, check if the primary TTS engine (Chatterbox) is even available.
+    if not CHATTERBOX_TTS_AVAILABLE:
+        log_worker("WARNING",
+                   "_ensure_voice_sample: ChatterboxTTS library is not available, cannot ensure voice sample.")
         return None
 
+    # Construct the full path where the voice sample should be located.
+    # This path is inside the user-specified temporary directory.
     sample_dir = os.path.join(args.temp_dir, "chatterbox_voice_samples")
+    voice_sample_full_path = os.path.join(sample_dir, CHATTERBOX_VOICE_SAMPLE_FILENAME)
+
+    # Attempt to create the directory if it doesn't exist.
     try:
         os.makedirs(sample_dir, exist_ok=True)
     except OSError as e_mkdir_sample:
         log_worker("ERROR", f"Could not create directory for voice samples '{sample_dir}': {e_mkdir_sample}")
         return None
 
-    voice_sample_full_path = os.path.join(sample_dir, CHATTERBOX_VOICE_SAMPLE_FILENAME)
-
+    # --- THE CORE OPTIMIZATION ---
+    # Check if the file already exists. If it does, our job is done. Return immediately.
+    # This is the "fast path" that avoids all MeloTTS overhead.
     if os.path.exists(voice_sample_full_path):
-        log_worker("INFO", f"ChatterboxTTS voice sample found: {voice_sample_full_path}")
+        log_worker("INFO",
+                   f"ChatterboxTTS voice sample found, skipping MeloTTS initialization: {voice_sample_full_path}")
         return voice_sample_full_path
 
-    log_worker("INFO",
-               f"ChatterboxTTS voice sample not found at '{voice_sample_full_path}'. Attempting generation with MeloTTS...")
+    # --- ON-DEMAND GENERATION BLOCK ---
+    # The following code only executes if the voice sample file was NOT found.
+    log_worker("INFO", f"ChatterboxTTS voice sample not found. Lazily initializing MeloTTS for generation...")
 
-    if not MELO_AVAILABLE or not melo_model_instance or not scl_parser_instance:
+    # Check if the necessary MeloTTS components (the library and our SCLParser) are available.
+    if not MELO_AVAILABLE or not TTS_melo_class_ref or not SCLParser_class_ref:
         log_worker("ERROR",
-                   "MeloTTS essentials (Melo model or SCLParser instance) unavailable for voice sample generation. Cannot proceed if sample is missing.")
+                   "MeloTTS essentials (library or SCLParser) are unavailable. Cannot generate missing voice sample.")
         return None
-    log_worker("INFO", f"MeloTTS Subengine TTS AVAILABLE? {MELO_AVAILABLE}")
 
+    melo_model_instance = None  # Ensure instance is None in case of early failure
     try:
-        # Determine speaker for MeloTTS sample generation
-        melo_speaker_for_sample = f"{args.model_lang.upper()}-US"  # Default to US variant
+        # 1. LAZY INITIALIZATION: Load the MeloTTS model into memory.
+        log_worker("INFO", "Loading MeloTTS model for on-demand sample generation...")
+        load_start_time = time.time()
+        melo_model_instance = TTS_melo_class_ref(language=args.model_lang.upper(), device=effective_device_str)
+        scl_parser_for_sample = SCLParser_class_ref(model=melo_model_instance, device=effective_device_str)
+        log_worker("INFO", f"MeloTTS model loaded in {time.time() - load_start_time:.2f} seconds.")
 
-        # --- REVISED SIMPLER CHECK ---
-        log_worker("DEBUG", f"_ensure_voice_sample: Type of scl_parser_instance: {type(scl_parser_instance)}")
-        if hasattr(scl_parser_instance, 'speaker_ids'):
-            log_worker("DEBUG",
-                       f"_ensure_voice_sample: Type of scl_parser_instance.speaker_ids: {type(scl_parser_instance.speaker_ids)}")
-            log_worker("DEBUG",
-                       f"_ensure_voice_sample: Value of scl_parser_instance.speaker_ids: {scl_parser_instance.speaker_ids}")
-            current_speaker_ids = scl_parser_instance.speaker_ids
-        else:
+        # 2. DETERMINE SPEAKER: Select the correct voice from the loaded Melo model.
+        melo_speaker_for_sample = f"{args.model_lang.upper()}-US"  # Default to a US variant
+        current_speaker_ids = scl_parser_for_sample.speaker_ids
+
+        if not current_speaker_ids:
             log_worker("ERROR",
-                       "_ensure_voice_sample: scl_parser_instance does NOT have attribute 'speaker_ids'. This is unexpected.")
+                       "SCLParser's speaker_ids list is empty. Cannot determine Melo speaker for sample generation.")
             return None
 
-        # Simplified check: Rely on HParams behaving like a dict.
-        # Check if it's not None and if it's not "empty" (in a dict-like sense).
-        # The `not current_speaker_ids` check works for empty dicts and HParams if it implements __bool__ or __len__.
-        if not current_speaker_ids:  # This checks for None or "emptiness" (e.g., no keys)
-            log_worker("ERROR",
-                       f"SCLParser's speaker_ids is None, empty, or not behaving as expected (type: {type(current_speaker_ids)}). Value: {current_speaker_ids}. Cannot determine Melo speaker for sample.")
-            return None
-
-        # Now check if the specific speaker is in current_speaker_ids
-        # The 'in' operator and .keys() should work fine with HParams if it's map-like
         if melo_speaker_for_sample not in current_speaker_ids:
             log_worker("WARNING",
-                       f"Melo speaker '{melo_speaker_for_sample}' not in SCLParser's list for sample (available: {list(current_speaker_ids.keys())}). Using first available.")
-            # We already confirmed current_speaker_ids is not empty if we are here
+                       f"MeloTTS speaker '{melo_speaker_for_sample}' not in model's list. Using first available speaker.")
             melo_speaker_for_sample = list(current_speaker_ids.keys())[0]
-        # else: melo_speaker_for_sample is fine and present in current_speaker_ids
-        # --- END OF REVISED SIMPLER CHECK ---
 
         log_worker("INFO",
                    f"Generating voice sample with MeloTTS. Speaker: {melo_speaker_for_sample}, Text: '{TEXT_FOR_VOICE_SAMPLE[:70]}...'")
 
-        audio_data_np, sample_rate_melo = scl_parser_instance.parse(TEXT_FOR_VOICE_SAMPLE,
-                                                                    speaker=melo_speaker_for_sample)
+        # 3. GENERATE AUDIO: Use the SCLParser's `parse` method, which is hooked to capture audio.
+        audio_data_np, sample_rate_melo = scl_parser_for_sample.parse(TEXT_FOR_VOICE_SAMPLE,
+                                                                      speaker=melo_speaker_for_sample)
 
+        # 4. SAVE TO DISK: If generation was successful, write the captured audio to the target file.
         if audio_data_np is not None and sample_rate_melo is not None:
             log_worker("DEBUG",
-                       f"MeloTTS sample generated by SCLParser. Data shape: {audio_data_np.shape}, SR: {sample_rate_melo}. Saving...")
+                       f"MeloTTS sample generated. Data shape: {audio_data_np.shape}, SR: {sample_rate_melo}. Saving file...")
 
-            audio_to_save_for_sf = audio_data_np
-            if audio_data_np.ndim == 2:
-                if audio_data_np.shape[0] < audio_data_np.shape[1] and audio_data_np.shape[0] <= 2:
-                    audio_to_save_for_sf = audio_data_np.T
-                elif audio_data_np.shape[0] == 1 and audio_data_np.shape[1] > 2:
-                    audio_to_save_for_sf = audio_data_np.squeeze()
+            # Ensure audio is in the correct format for soundfile.write (samples, channels)
+            audio_to_save = audio_data_np.T if audio_data_np.ndim == 2 and audio_data_np.shape[0] < audio_data_np.shape[
+                1] else audio_data_np
 
-            sf.write(voice_sample_full_path, audio_to_save_for_sf, sample_rate_melo, format='WAV', subtype='PCM_16')
+            sf.write(voice_sample_full_path, audio_to_save, sample_rate_melo, format='WAV', subtype='PCM_16')
             log_worker("INFO", f"Successfully generated and saved ChatterboxTTS voice sample: {voice_sample_full_path}")
             return voice_sample_full_path
         else:
-            log_worker("ERROR", "MeloTTS (via SCLParser) failed to return audio data for voice sample.")
+            log_worker("ERROR", "MeloTTS (via SCLParser) failed to return audio data for voice sample generation.")
             return None
-    except Exception as e_sample_gen_final:
-        log_worker("ERROR", f"Failed to generate/save voice sample with MeloTTS: {e_sample_gen_final}")
+
+    except Exception as e_sample_gen:
+        log_worker("ERROR",
+                   f"A critical error occurred during the on-demand generation of the voice sample: {e_sample_gen}")
         log_worker("ERROR", traceback.format_exc())
         return None
+    finally:
+        # 5. CLEANUP: This is critical. We must unload the MeloTTS model from memory
+        # to ensure it doesn't consume resources when it's no longer needed.
+        if melo_model_instance:
+            del melo_model_instance
+            gc.collect()  # Encourage Python to release the memory.
+            if torch and effective_device_str in ["cuda", "mps"]:
+                if effective_device_str == "cuda":
+                    torch.cuda.empty_cache()
+                elif effective_device_str == "mps" and hasattr(torch.mps, "empty_cache"):
+                    torch.mps.empty_cache()
+            log_worker("INFO", "MeloTTS model and resources have been unloaded after sample generation.")
 
 
 def start_persistent_worker(task_type: str, worker_config: Dict[str, Any]) -> Tuple[
@@ -1518,7 +1485,7 @@ def main():
         tts_worker_config = {
             "enable_tts": True, "enable_asr": False, "device": effective_pytorch_device_orchestrator,
             "chatterbox_model_id": args.chatterbox_model_id,
-            "dummy_tts_prompt_path_for_warmup": dummy_tts_prompt_path, "temp_dir": args.temp_dir
+            "dummy_tts_prompt_path_for_warmup": dummy_tts_prompt_path, "temp_dir": args.temp_dir, "model_dir": args.model_dir
         }
         tts_worker_process, tts_worker_pipe_orch_end = start_persistent_worker("TTS", tts_worker_config)
         if not tts_worker_process or not tts_worker_pipe_orch_end:
@@ -1574,15 +1541,10 @@ def main():
 
             # --- 3b. TTS ORCHESTRATION ---
             sclparser_for_text_proc_tts: SCLParser = SCLParser(model=None, device=effective_pytorch_device_orchestrator)
-            melo_for_sample_init_tts: Optional[Any] = None
-            if MELO_AVAILABLE and TTS_melo_class_ref and SCLParser_class_ref:
-                log_worker("INFO", "Initializing MeloTTS for voice sample generation...")
-                melo_for_sample_init_tts = TTS_melo_class_ref(language=args.model_lang.upper(),
-                                                              device=effective_pytorch_device_orchestrator)
-            generated_voice_sample_path_tts = _ensure_voice_sample(args, melo_for_sample_init_tts,
-                                                                   SCLParser(model=melo_for_sample_init_tts,
-                                                                             device=effective_pytorch_device_orchestrator),
-                                                                   effective_pytorch_device_orchestrator)
+            generated_voice_sample_path_tts = _ensure_voice_sample(
+                args,
+                effective_pytorch_device_orchestrator
+            )
             if not generated_voice_sample_path_tts:
                 raise RuntimeError("Critical: Failed to find or generate ChatterboxTTS voice sample for orchestration.")
             log_worker("INFO", f"Using voice sample for TTS worker: {generated_voice_sample_path_tts}")
@@ -1849,9 +1811,6 @@ def main():
                 log_worker("INFO", f"Cleaned up dummy TTS prompt: {dummy_tts_prompt_path}")
             except Exception as e_rm_dummy:
                 log_worker("WARNING", f"Failed to remove dummy TTS prompt {dummy_tts_prompt_path}: {e_rm_dummy}")
-
-        if 'melo_for_sample_init_tts' in locals() and melo_for_sample_init_tts:
-            del melo_for_sample_init_tts
 
         gc.collect()
         if TORCH_AUDIO_AVAILABLE and torch:
