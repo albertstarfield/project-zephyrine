@@ -1,4 +1,4 @@
-# config.py
+# CortexConfiguration.py
 import os
 from dotenv import load_dotenv
 from loguru import logger
@@ -15,12 +15,17 @@ MEMORY_SIZE = int(os.getenv("MEMORY_SIZE", 20)) #Max at 20
 ANSWER_SIZE_WORDS = int(os.getenv("ANSWER_SIZE_WORDS", 16384)) # Target for *quick* answers (token generation? I forgot)
 TOPCAP_TOKENS = int(os.getenv("TOPCAP_TOKENS", 32768)) # Default token limit for LLM calls
 BUFFER_TOKENS_FOR_RESPONSE = int(os.getenv("BUFFER_TOKENS_FOR_RESPONSE", 1024)) # Default token limit for LLM calls
+#No longer in use
 MAX_TOKENS_PER_CHUNK = 384 #direct_generate chunking preventing horrific quality and increase quality by doing ctx augmented rollover
 MAX_CHUNKS_PER_RESPONSE = 32768 # Safety limit to prevent infinite loops (32768 * 256 = 8388608 tokens max response) (Yes 8 Million tokens that zephy can answer directly ELP1) (but for testing purposes let's set it to 10
+# --- Parameters for Background Generate's Iterative Elaboration ---
+BACKGROUND_MAX_TOKENS_PER_CHUNK = 512 # How large each elaboration chunk is
+BACKGROUND_MAX_CHUNKS = 16          # Safety limit for the elaboration loop
+
 SOFT_LIMIT_DIVISOR = 4 # SOFT_LIMIT DIVISOR CHUNKS for ELP1 response when it is above MAX_TOKENS_PER_CHUNK
 SHORT_PROMPT_TOKEN_THRESHOLD = 256 # Prompts with fewer tokens than this trigger context pruning. so it can be more focused
 # --- NEW: Configurable Log Streaming ---
-STREAM_INTERNAL_LOGS = False # Set to False to hide logs and show animation instead. Verbosity if needed for ELP1 calls
+STREAM_INTERNAL_LOGS = True # Set to False to hide logs and show animation instead. Verbosity if needed for ELP1 calls
 STREAM_ANIMATION_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏" # Braille spinner characters
 STREAM_ANIMATION_DELAY_SECONDS = 0.1 # How fast the animation plays
 FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768)) #Max at 32768
@@ -33,7 +38,7 @@ RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 7))
 FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 512)) #Extreme or vanquish (Max at 512)
 FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
-FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 5)) #default at 3600 putting it to 5 is just for debug and rentlessly scanning
+FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 3600)) #default at 3600 putting it to 5 is just for debug and rentlessly scanning
 
 
 BENCHMARK_ELP1_TIME_MS = 600000.0 #before hard defined error timeout (30 seconds max)
@@ -474,7 +479,44 @@ PROMPT_VLM_INITIAL_ANALYSIS = """Describe the content of this image, focusing on
 
 # This is a special, non-standard token we will use to signal completion.
 # It's unique to avoid collision with real markdown or other tokens.
+
+
+
 SELF_TERMINATION_TOKEN = "<|MYCURRENTASKISDONE|>"
+
+PROMPT_BACKGROUND_ELABORATE_CONCLUSION = f"""
+# ROLE: Elaboration and Expansion Specialist
+
+You are Adelaide Zephyrine Charlotte. You have already formulated a core conclusion or an initial answer. Your current task is to elaborate on it, providing more detail, examples, or deeper explanation in a subsequent chunk of text.
+
+**CRITICAL INSTRUCTIONS:**
+1.  **CONTINUE, DO NOT REPEAT:** Your response must be a logical continuation of the "RESPONSE SO FAR". Do NOT repeat the "INITIAL CONCLUSION" or any part of the text already written.
+2.  **USE NEW CONTEXT:** Use the "DYNAMIC RAG CONTEXT" to enrich your continuation with new facts, evidence, or details.
+3.  **TERMINATE WHEN COMPLETE:** When you judge that the topic has been fully explained and no further elaboration is needed, you MUST end your entire output for this turn with the special token: `{SELF_TERMINATION_TOKEN}`.
+4.  **OUTPUT ONLY THE CONTINUATION:** Your output should ONLY be the next paragraph or section of text. Do not include conversational filler, your own reasoning, or any text other than the continuation itself (and the termination token, if applicable).
+
+---
+### CONTEXT FOR THIS ELABORATION CHUNK
+
+**INITIAL CONCLUSION (The core idea we are expanding upon):**
+```text
+{{initial_synthesis}}
+```
+
+**RESPONSE SO FAR (What has already been written):**
+```text
+{{current_response_so_far}}
+```
+
+**DYNAMIC RAG CONTEXT (New information for this chunk):**
+```text
+{{dynamic_rag_context}}
+```
+---
+
+### YOUR TASK:
+Write the next logical paragraph or section to continue the "RESPONSE SO FAR".
+"""
 
 PROMPT_TOPIC_SUMMARY = """Analyze the following conversation history. Generate a single, concise sentence that summarizes the primary topic or the user's most recent intent.
 
