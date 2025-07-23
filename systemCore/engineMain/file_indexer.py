@@ -668,7 +668,7 @@ class FileIndexer:
             logger.error(f"PPTX extraction failed for {file_path}: {e}")
             return None
 
-    def _scan_directory(self, root_path: str, db_session: Session):
+    def _scan_directory(self, root_path: str, db_session: Session, loop: asyncio.AbstractEventLoop):
         """
         Phase 1: Walks through a directory and processes files using _process_file_phase1,
         skipping OS/system dirs/files and hidden dot files/dirs.
@@ -814,7 +814,9 @@ class FileIndexer:
                         if os.path.islink(file_path): continue
                         if not os.path.isfile(file_path): continue
 
-                        self._process_file_phase1(file_path, db_session)
+                        loop.run_until_complete(
+                            self._process_file_phase1(file_path, db_session)
+                        )
                         file_processed_this_iter = True
                     except PermissionError:
                         logger.warning(f"Phase 1 Permission denied processing file: {file_path}")
@@ -1602,7 +1604,8 @@ class FileIndexer:
                 with SessionLocal() as db_session: # Session for Phase 1
                     logger.info(f"--- {self.thread_name}: Starting Phase 1 (Scan & Text Extraction) ---")
                     for root_path in self._get_root_paths():
-                        self._scan_directory(root_path, db_session)
+                        #self._scan_directory(root_path, db_session)
+                        self._scan_directory(root_path, db_session, loop)
                         if self.stop_event.is_set(): break
             except Exception as e_phase1:
                 logger.error(f"💥 Unhandled error in Phase 1: {e_phase1}", exc_info=True)
