@@ -7830,8 +7830,11 @@ def handle_openai_chat_completion():
         logger.info(f"{request_id}: Classifying input for background task planning (ELP0 context)...")
         classification_data_for_bg = {"session_id": session_id_for_logs, "mode": "chat", "input_type": "classification"}
         # _classify_input_complexity is synchronous and handles its own ELP0 for LLM calls
-        classification_for_background = cortex_text_interaction._classify_input_complexity(db, user_input_from_req,
-                                                                           classification_data_for_bg)
+        classification_for_background = asyncio.run(
+            cortex_text_interaction._classify_input_complexity(
+                db, user_input_from_req, classification_data_for_bg
+            )
+        )
         logger.info(
             f"{request_id}: Input classified for background task as: '{classification_for_background}'. Reason: {classification_data_for_bg.get('classification_reason', 'N/A')}")
 
