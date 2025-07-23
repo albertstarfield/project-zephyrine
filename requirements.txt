@@ -18,6 +18,7 @@ libp2p
 zeroconf
 textual
 psutil
+md_to_pdf
 
 
 
