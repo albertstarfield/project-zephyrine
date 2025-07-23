@@ -22,7 +22,7 @@ SHORT_PROMPT_TOKEN_THRESHOLD = 256 # Prompts with fewer tokens than this trigger
 # --- NEW: Configurable Log Streaming ---
 STREAM_INTERNAL_LOGS = False # Set to False to hide logs and show animation instead. Verbosity if needed for ELP1 calls
 STREAM_ANIMATION_CHARS = "⠋⠙⠹⠸⠼⠴⠦⠧⠇⠏" # Braille spinner characters
-STREAM_ANIMATION_DELAY_SECONDS = 2 # How fast the animation plays
+STREAM_ANIMATION_DELAY_SECONDS = 0.1 # How fast the animation plays
 FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768)) #Max at 32768
 FUZZY_DUPLICATION_THRESHOLD = 80 # Threshold for detecting rephrased/similar content
 #DEFAULT_LLM_TEMPERATURE = 0.8
@@ -30,10 +30,10 @@ DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", 0.8)) #Max 
 VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE = int(os.getenv("VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE", 512)) # For URL Chroma store
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 256)) # For URL Chroma store
 RAG_HISTORY_COUNT = MEMORY_SIZE
-RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 10))
+RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 7))
 FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 512)) #Extreme or vanquish (Max at 512)
 FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
-FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 5))
+FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 3600))
 
 
 BENCHMARK_ELP1_TIME_MS = 600000.0 #before hard defined error timeout (30 seconds max)
