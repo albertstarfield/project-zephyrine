@@ -1696,8 +1696,7 @@ class CortexThoughts:
         except Exception as e:
             logger.error(f"{log_prefix} Error during hook generation or saving: {e}", exc_info=True)
 
-    def _get_rag_retriever_thread_wrapper(self, db_session: Session, user_input_str: str, priority_val: int) -> Dict[
-        str, Any]:
+    def _get_rag_retriever_thread_wrapper(self, db_session: Session, user_input_str: str, priority_val: int) -> Dict[str, Any]:
         """
         Synchronous wrapper for _get_rag_retriever to be run in asyncio.to_thread.
         Catches exceptions and returns a structured dictionary.
@@ -1706,7 +1705,7 @@ class CortexThoughts:
         try:
             logger.debug(f"{log_prefix}: Executing _get_rag_retriever in thread...")
             # Call the actual synchronous _get_rag_retriever method
-            result_tuple = self._get_rag_retriever(db_session, user_input_str, priority_val)
+            result_tuple = self._get_rag_retriever(db_session, user_input_str, priority_val) # Passes it correctly
             logger.debug(
                 f"{log_prefix}: _get_rag_retriever completed. Result tuple length: {len(result_tuple) if isinstance(result_tuple, tuple) else 'N/A'}")
             return {"status": "success", "data": result_tuple}
@@ -3634,7 +3633,7 @@ class CortexThoughts:
 
         return sanitized_str if sanitized_str else "No relevant context found."
 
-    async def _extract_narrative_anchors(self, db: Session, user_input: str) -> str:
+    async def _extract_narrative_anchors(self, db: Session, user_input: str, priority: int = ELP0) -> str:
         """Uses an LLM to identify the core questions/anchors of the user's prompt."""
         log_prefix = f"AnchorExtractor|{self.current_session_id}"
         summarizer_model = self.provider.get_model("general_fast")
@@ -3643,14 +3642,17 @@ class CortexThoughts:
         chain = ChatPromptTemplate.from_template(
             PROMPT_NARRATIVE_ANCHOR_EXTRACTION) | summarizer_model | StrOutputParser()
         try:
-            anchors = await asyncio.to_thread(chain.invoke, {"user_input": user_input})
+            timing_data = {"session_id": self.current_session_id, "mode": "chat_helper"}
+            anchors = await asyncio.to_thread(
+                self._call_llm_with_timing, chain, {"user_input": user_input}, timing_data, priority=priority
+            )
             logger.info(f"{log_prefix} Extracted Narrative Anchors:\n{anchors}")
             return anchors.strip()
         except Exception as e:
             logger.error(f"{log_prefix} Failed to extract narrative anchors: {e}")
             return "Focus on the user's primary request."
 
-    async def _generate_progression_summary(self, db: Session, full_response_so_far: str, last_chunk: str) -> str:
+    async def _generate_progression_summary(self, db: Session, full_response_so_far: str, last_chunk: str, priority: int = ELP0) -> str:
         """Uses an LLM to summarize progress and suggest the next step."""
         log_prefix = f"ProgressionSummarizer|{self.current_session_id}"
         if not last_chunk: return "Begin the response."
@@ -3660,8 +3662,14 @@ class CortexThoughts:
 
         chain = ChatPromptTemplate.from_template(PROMPT_PROGRESSION_SUMMARY) | summarizer_model | StrOutputParser()
         try:
-            summary = await asyncio.to_thread(chain.invoke,
-                                              {"full_response_so_far": full_response_so_far, "last_chunk": last_chunk})
+            timing_data = {"session_id": self.current_session_id, "mode": "chat_helper"}
+            summary = await asyncio.to_thread(
+                self._call_llm_with_timing,
+                chain,
+                {"full_response_so_far": full_response_so_far, "last_chunk": last_chunk},
+                timing_data,
+                priority=priority
+            )
             cleaned_summary = summary.strip().replace("\n", " ")
             logger.info(f"{log_prefix} Generated Progression Summary: '{cleaned_summary}'")
             return cleaned_summary
@@ -3680,7 +3688,7 @@ class CortexThoughts:
             themes = [theme.strip() for theme in re.split(r'[,;]', theme_str) if theme.strip()]
         return themes
 
-    async def _generate_topic_summary(self, db: Session, purified_history_interactions: List[Interaction]) -> str:
+    async def _generate_topic_summary(self, db: Session, purified_history_interactions: List[Interaction], priority: int = ELP0) -> str:
         """
         Uses a fast LLM to generate a clean, one-sentence topic summary of a conversation.
         This acts as the "master topic driver" for the main generation prompt.
@@ -3723,7 +3731,10 @@ class CortexThoughts:
             # Since chain.invoke is a synchronous (blocking) call, we must run it in a separate
             # thread using asyncio.to_thread to prevent it from stalling the main server event loop.
             logger.debug(f"{log_prefix} Calling summarizer model...")
-            summary = await asyncio.to_thread(chain.invoke, prompt_input)
+            timing_data = {"session_id": self.current_session_id, "mode": "chat_helper"}
+            summary = await asyncio.to_thread(
+                self._call_llm_with_timing, chain, prompt_input, timing_data, priority=priority
+            )
 
             # Clean up the raw output from the model: remove leading/trailing whitespace and any extraneous newlines.
             cleaned_summary = summary.strip().replace("\n", " ")
@@ -3863,7 +3874,7 @@ class CortexThoughts:
     # It should be at the same indentation level as your other helper methods like _direct_generate_logic.
     # ==============================================================================
 
-    async def _humanize_chunk(self, clean_chunk: str) -> str:
+    async def _humanize_chunk(self, clean_chunk: str, priority: int = ELP0) -> str:
         """
         Uses a fast LLM to rewrite a chunk of text to sound more natural and less robotic.
         This includes introducing subtle imperfections like typos and inconsistent capitalization,
@@ -3913,8 +3924,14 @@ class CortexThoughts:
         # --- LLM Execution with Error Handling ---
         try:
             # Since chain.invoke is synchronous, we run it in a thread to avoid blocking.
-            humanized_text = await asyncio.to_thread(chain.invoke, {"text_to_humanize": clean_chunk})
-
+            timing_data = {"session_id": self.current_session_id, "mode": "chat_helper"}
+            humanized_text = await asyncio.to_thread(
+                self._call_llm_with_timing,
+                chain,
+                {"text_to_humanize": clean_chunk},
+                timing_data,
+                priority=priority
+            )
             # --- Quality Gate ---
             # As a safety check, if the humanized text is wildly different in length (more than 50% different),
             # the model may have hallucinated or failed. In that case, it's safer to fall back to the original.
@@ -3964,8 +3981,11 @@ class CortexThoughts:
 
         # --- 2. CONTEXT PURIFICATION & ARCHITECTURAL SETUP ---
         direct_history_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
-        topic_summary = await self._generate_topic_summary(db, direct_history_interactions)
-        narrative_anchors = await self._extract_narrative_anchors(db, user_input)
+        #topic_summary = await self._generate_topic_summary(db, direct_history_interactions)
+        #narrative_anchors = await self._extract_narrative_anchors(db, user_input)
+
+        topic_summary = await self._generate_topic_summary(db, direct_history_interactions, priority=ELP1)
+        narrative_anchors = await self._extract_narrative_anchors(db, user_input, priority=ELP1)
         progression_summary = "Begin the response by addressing the user's primary request."
 
         # --- 3. DYNAMIC SOFT LIMIT CALCULATION ---
@@ -4057,12 +4077,15 @@ class CortexThoughts:
                             clean_chunk_to_add = ""
 
                 if clean_chunk_to_add.strip():
-                    humanized_chunk = await self._humanize_chunk(clean_chunk_to_add)
+                    #humanized_chunk = await self._humanize_chunk(clean_chunk_to_add)
+                    humanized_chunk = await self._humanize_chunk(clean_chunk_to_add, priority=ELP1)
                     clean_chunks_array.append(humanized_chunk)
 
                     new_response_so_far = current_response_so_far + clean_chunk_to_add
+
                     progression_summary = await self._generate_progression_summary(db, new_response_so_far,
-                                                                                   clean_chunk_to_add)
+                                                                                   clean_chunk_to_add, priority=ELP1)
+
                     new_themes = self._extract_themes_from_think_block(parsed_think_content)
                     if new_themes:
                         overused_themes.update(new_themes)
