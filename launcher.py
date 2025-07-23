@@ -789,10 +789,10 @@ def _terminate_service_robustly(process: subprocess.Popen, name: str):
 def cleanup_processes():
     print_system("\nShutting down services...")
 
-    global port_enforcer_stop_event
-    if port_enforcer_stop_event and not port_enforcer_stop_event.is_set():
-        print_system("Disarming the port enforcer...")
-        port_enforcer_stop_event.set()
+    global port_shield_stop_event
+    if port_shield_stop_event and not port_shield_stop_event.is_set():
+        print_system("Disarming port shield...")
+        port_shield_stop_event.set()
 
     # Use global to ensure we are modifying the correct variables
     global zephymesh_process, relaunched_conda_process_obj
@@ -3200,171 +3200,108 @@ def start_service_thread(target_func, name):
     return thread
 
 
-port_enforcer_stop_event: Optional[threading.Event] = None
+
+port_shield_stop_event: Optional[threading.Event] = None
 
 
-def _port_whack_a_mole_worker(port: int, target_process_name: str, stop_event: threading.Event):
+def _port_shield_worker_daemon(port: int, target_process_name: str, stop_event: threading.Event):
     """
-    The core worker thread. Runs a tight loop to check for a port and kill the process using it.
-    This is designed to be aggressive and CPU-intensive.
+    The daemon worker. It intelligently monitors a port.
+    - When the port is free, it checks with low frequency.
+    - When ANY process binds to the port, it switches to a high-aggression loop.
+    - If the binding process is the target, it is brutally terminated.
     """
-    # Import psutil here as it's only used within this thread
     try:
         import psutil
     except ImportError:
-        print_error("[WHACK-A-MOLE] CRITICAL: psutil library not found. The port enforcer cannot run.")
+        print_error("[PORT SHIELD] CRITICAL: psutil library not found. The shield cannot operate.")
         return
 
-    print_system(f"✅ [WHACK-A-MOLE] Enforcer armed for port {port}, targeting processes named '{target_process_name}'.")
+    print_colored("ERROR",
+                  f"[PORT SHIELD] ACTIVATED. Intelligently monitoring port {port} for illegal binding by '{target_process_name}'.",
+                  "ERROR")
 
-    # This is the "1ns loop" you requested. It's a tight, no-sleep loop.
-    # It will run as fast as the Python interpreter and OS scheduler allow.
     while not stop_event.is_set():
+        process_on_port = None
         try:
-            # Find any process listening on the target port
+            # Check for any process listening on the target port
             for conn in psutil.net_connections(kind='inet'):
-                if conn.status == psutil.CONN_LISTEN and conn.laddr.port == port:
-                    # Found a process on the port. Now, check if it's our target.
-                    try:
-                        p = psutil.Process(conn.pid)
-                        if target_process_name in p.name().lower():
-                            print_error(
-                                f"[WHACK-A-MOLE] Target '{p.name()}' (PID: {p.pid}) detected on port {port}. TERMINATING.")
+                if conn.laddr.port == port and conn.status == psutil.CONN_LISTEN and conn.pid is not None:
+                    process_on_port = conn
+                    break  # Found a process, exit the loop to handle it.
+        except psutil.Error as e:
+            # This can happen if psutil has issues scanning. Pause briefly to avoid spam.
+            print_warning(f"[PORT SHIELD] psutil scan failed: {e}. Pausing.")
+            time.sleep(0.5)
+            continue
 
-                            # --- Aggressive Process Tree Annihilation ---
-                            children = p.children(recursive=True)
-                            for child in children:
-                                try:
-                                    print_error(f"  -> Killing child process {child.name()} (PID: {child.pid})")
-                                    child.kill()  # SIGKILL
-                                except psutil.NoSuchProcess:
-                                    pass  # Already gone
+        # --- This is the core logic change ---
+        if process_on_port:
+            # A process is on the port. ENTER HIGH-AGGRESSION MODE. No sleep.
+            try:
+                p = psutil.Process(process_on_port.pid)
 
-                            print_error(f"  -> Killing parent process {p.name()} (PID: {p.pid})")
-                            p.kill()  # SIGKILL
-                            print_colored("SUCCESS", f"[WHACK-A-MOLE] Process tree for PID {p.pid} terminated.",
-                                          "SUCCESS")
+                # Check if the process is our unwanted target.
+                if target_process_name in p.name().lower():
+                    # Threat confirmed. Annihilate.
+                    print_colored("ERROR",
+                                  f"[PORT SHIELD] Hostile target '{p.name()}' (PID: {p.pid}) has illegally bound to port {port}. ANNIHILATING.",
+                                  "ERROR")
 
-                    except psutil.NoSuchProcess:
-                        # The process disappeared between listing and checking. This is fine.
-                        continue
-                    except (psutil.AccessDenied, psutil.ZombieProcess) as e:
-                        print_warning(
-                            f"[WHACK-A-MOLE] Could not access/kill process on port {port} (PID: {conn.pid}): {e}")
-        except Exception as e:
-            # This catches errors in the main loop, e.g., psutil failing entirely
-            print_error(f"[WHACK-A-MOLE] An unexpected error occurred in the enforcer loop: {e}")
-            # We add a small sleep here ONLY on error to prevent spamming logs if the error is persistent
-            time.sleep(1)
+                    for child in p.children(recursive=True):
+                        try:
+                            child.kill()  # SIGKILL
+                        except psutil.NoSuchProcess:
+                            pass
 
-    print_system("[WHACK-A-MOLE] Enforcer thread received stop signal and has been disarmed.")
+                    p.kill()  # SIGKILL
+
+                    # Minimal sleep ONLY after a kill to allow the OS to reap the process.
+                    time.sleep(0.01)
+
+                # If it's NOT the target (e.g., our own hypercorn), this block is skipped,
+                # and the while loop immediately re-runs, maintaining high-frequency checks.
+
+            except psutil.NoSuchProcess:
+                # THIS IS THE FIX. The process on the port disappeared between checks.
+                # This is normal. We do nothing and let the loop run again immediately.
+                pass
+            except (psutil.AccessDenied, psutil.ZombieProcess) as e:
+                print_warning(f"[PORT SHIELD] Cannot access process on port {port} (PID: {process_on_port.pid}): {e}")
+            except Exception as e_inner:
+                # Catch any other unexpected error during the process handling.
+                print_error(f"[PORT SHIELD] Inner loop error for PID {process_on_port.pid}: {e_inner}")
+
+        else:
+            # Port is free. ENTER LOW-IMPACT MODE.
+            # This honors the "don't run the loop" request by relaxing frequency.
+            # It dramatically reduces CPU usage when idle but remains vigilant.
+            time.sleep(0.2)  # Check 5 times per second when idle.
 
 
-def _start_port_whack_a_mole(port: int, target_process_name: str) -> threading.Event:
+def _start_port_shield_daemon(port: int, target_process_name: str):
     """
-    Creates and starts the daemon thread for the port enforcer.
+    Creates and launches the asynchronous, non-blocking Port Shield daemon thread.
+    This function returns immediately.
     """
-    global port_enforcer_stop_event
-    print_system(f"--- Deploying aggressive port enforcer for port {port} ---")
+    global port_shield_stop_event
+
+    if port_shield_stop_event is not None:
+        print_warning("[PORT SHIELD] Shield daemon already started.")
+        return
+
+    print_system(f"--- Deploying Asynchronous Port Shield ---")
 
     stop_event = threading.Event()
-    port_enforcer_stop_event = stop_event  # Store in global for cleanup
+    port_shield_stop_event = stop_event
 
-    enforcer_thread = threading.Thread(
-        target=_port_whack_a_mole_worker,
+    shield_thread = threading.Thread(
+        target=_port_shield_worker_daemon,
         args=(port, target_process_name.lower(), stop_event),
-        name=f"PortWhackAMole-{port}",
-        daemon=True  # Crucial: Ensures thread exits with main script
+        name=f"PortShieldDaemon-{port}",
+        daemon=True  # CRITICAL: This ensures the thread dies if the main script crashes.
     )
-    enforcer_thread.start()
-    return stop_event
-
-
-def _process_killer_worker(target_process_name: str, duration_seconds: int):
-    """
-    A worker thread that brutally and repeatedly kills a process by name and its children
-    for a fixed duration. This is designed to be CPU-intensive to win race conditions.
-    """
-    try:
-        import psutil
-    except ImportError:
-        print_error("[ENFORCER] CRITICAL: psutil library not found. The process enforcer cannot run.")
-        return
-
-    start_time = time.monotonic()
-    end_time = start_time + duration_seconds
-    kill_count = 0
-
-    print_system(
-        f"[ENFORCER] Armed. Will terminate any process named '{target_process_name}' for the next {duration_seconds} seconds.")
-
-    # This is a tight, no-sleep loop to maximize aggression.
-    while time.monotonic() < end_time:
-        try:
-            # Iterate through all running processes. This is the equivalent of `ps -A`.
-            for proc in psutil.process_iter(['pid', 'name']):
-                # Check if the process name contains our target string (case-insensitive)
-                if target_process_name in proc.info['name'].lower():
-                    try:
-                        p = psutil.Process(proc.info['pid'])
-                        # This is the equivalent of `pkill -9` on the process and its family
-                        print_colored("ERROR",
-                                      f"[ENFORCER] Target '{p.name()}' (PID: {p.pid}) detected. Annihilating process tree.",
-                                      "ERROR")
-
-                        # Kill children first
-                        children = p.children(recursive=True)
-                        for child in children:
-                            try:
-                                child.kill()  # SIGKILL
-                            except psutil.NoSuchProcess:
-                                pass
-
-                        # Kill the main process
-                        p.kill()  # SIGKILL
-                        kill_count += 1
-
-                        # We add a minuscule sleep ONLY after a kill to allow the OS to reap the process
-                        # and prevent the loop from re-killing the same PID before it's gone.
-                        time.sleep(0.01)
-
-                    except psutil.NoSuchProcess:
-                        # Process was found in iterator but gone before we could kill it. Success.
-                        continue
-                    except (psutil.AccessDenied, psutil.ZombieProcess):
-                        # We can't kill it, but we should log it.
-                        print_warning(
-                            f"[ENFORCER] Access denied while trying to kill PID {proc.info['pid']}. It might be a system process.")
-        except Exception as e:
-            # Catch any other error in the loop to prevent the enforcer from crashing.
-            print_error(f"[ENFORCER] An unexpected error occurred: {e}")
-            time.sleep(0.1)  # Brief pause on error to avoid log spam
-
-    print_colored("SUCCESS", f"[ENFORCER] Disarmed. Terminated '{target_process_name}' {kill_count} times.", "SUCCESS")
-
-
-def run_process_enforcer_before_launch(target_process_name: str, duration_seconds: int):
-    """
-    Runs a process-killing thread for a specific duration and BLOCKS until it's done.
-    This is a pre-flight check to ensure a clean environment.
-    """
-    print_colored("ERROR", "---------- PRE-FLIGHT SYSTEM ENFORCEMENT INITIATED ----------", "ERROR")
-    print_warning(f"This script will now enter a {duration_seconds}-second, high-CPU phase to")
-    print_warning(f"aggressively terminate any running '{target_process_name}' processes.")
-    print_warning("This is necessary to prevent conflicts. The UI will be unresponsive.")
-    print_colored("ERROR", "-------------------------------------------------------------", "ERROR")
-    time.sleep(2)  # Give user a moment to read the warning
-
-    enforcer_thread = threading.Thread(
-        target=_process_killer_worker,
-        args=(target_process_name, duration_seconds),
-        name=f"ProcessEnforcer-{target_process_name}",
-    )
-
-    enforcer_thread.start()
-    enforcer_thread.join()  # This is the crucial part: The main script WAITS here.
-
-    print_system("--- Pre-flight enforcement complete. Proceeding with service launch. ---")
+    shield_thread.start()
 
 # --- End Helper Logic ---
 # --- Textual TUI Application (Self-Contained) ---
@@ -3898,6 +3835,7 @@ if __name__ == "__main__":
             else:
                 print_system("License previously accepted.")
 
+            _start_port_shield_daemon(port=11434, target_process_name="ollama")
 
             # --- Start ZephyMesh Node in a Background Thread ---
             print_system("--- Preparing to launch ZephyMesh Node in the background ---")
@@ -4206,8 +4144,6 @@ if __name__ == "__main__":
             ]):
                 print_error("One or more critical tools (git, cmake, node, npm, go, alr) not found after attempts. Exiting.")
                 setup_failures.append(f"At final check, critical tools not found after all attempts, this maybe these or other tools are not installed in the conda environment(git, cmake, node, npm, go, alr)")
-
-            run_process_enforcer_before_launch(target_process_name="ollama", duration_seconds=120)
 
             # --- [NEW] TUI vs. Fallback Logic ---
             TUI_AVAILABLE = False
