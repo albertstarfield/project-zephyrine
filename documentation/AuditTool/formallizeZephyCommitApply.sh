@@ -1,20 +1,26 @@
+#!/bin/bash
+
+# --- FIX: DEFINE THE API URL HERE ---
+# This was the missing variable causing the curl error.
+API_URL="http://localhost:18141/v1/chat/completions"
+
 # Function to rephrase a commit message with diff context
-set -x
 rephrase_commit() {
   local commit_details="$1"
   local commit_author="$2"
 
   if [[ -z "$commit_details" ]]; then
-    echo "Error: No commit details provided to rephrase_commit function."
+    echo "Error: No commit details provided to rephrase_commit function." >&2
     return 1
   fi
   if [[ -z "$commit_author" ]]; then
-    echo "Warning: Commit author not found for current commit. Using 'Unknown Author'."
+    echo "Warning: Commit author not found for current commit. Using 'Unknown Author'." >&2
     commit_author="Unknown Author" # Fallback
   fi
 
   local llm_prompt="Author for this commit: ${commit_author}\n\nRephrase the following Git commit details (including original message, list of files changed, and code diffs) into a formal CM management style. Use the provided diff information to make the description of changes more precise and concrete, referencing specific files or parts of the code where appropriate.\n\n${commit_details}\n\n"
 
+  # Safely build the JSON payload using jq's --arg to handle special characters
   json_payload=$(jq -n \
     --arg model "google/gemma-3n-e4b" \
     --arg system_content "You are a professional technical writer specializing in creating highly detailed, formal commit messages for Configuration Management (CM) in professional avionics software development. You will be provided with full Git commit details, including the original commit message, list of files changed, and the code diffs.
@@ -34,13 +40,14 @@ rephrase_commit() {
     * **Strict Output:** Your output must ONLY be the rephrased commit message, with no conversational filler, introductions, or examples." \
     --arg user_content "$llm_prompt" \
     '{
-      "model": "google/gemma-3n-e4b",
+      "model": $model,
       "messages": [
         { "role": "system", "content": $system_content },
         { "role": "user", "content": $user_content }
       ],
       "temperature": 0.7,
-      "max_tokens": 700
+      "max_tokens": 800,
+      "stream": false
     }')
 
   # Make the API call using curl, piping the json_payload
@@ -48,7 +55,7 @@ rephrase_commit() {
     -X POST \
     -H "Content-Type: application/json" \
     --data-binary @- \
-    "$API_URL")
+    "$API_URL") # <-- This now correctly uses the defined variable
 
   # --- MODIFICATION START ---
   rephrased_message="" # Initialize as empty
@@ -70,11 +77,13 @@ rephrase_commit() {
   echo "$rephrased_message"
 }
 
-# --- Main Script to Read Commits and Rephrase (rest of script remains the same) ---
+# --- Main Script to Read Commits and Rephrase ---
 
 echo "--- Processing Git Commits ---"
 
-git log --pretty=format:%H | while read -r commit_hash; do
+# Use process substitution to avoid the while loop running in a subshell
+# This is a good practice, though not strictly necessary for this script's logic
+while read -r commit_hash; do
   if [[ -n "$commit_hash" ]]; then
     echo "--- Processing Commit: $commit_hash ---"
 
@@ -96,10 +105,9 @@ git log --pretty=format:%H | while read -r commit_hash; do
       C_RED='\033[0;31m' # Red color
       C_NC='\033[0m'    # No Color
       echo -e "${C_RED}No rephrased message was generated. See above for potential API errors.${C_NC}"
-      # The detailed API response will now be printed by the rephrase_commit function itself.
     fi
     echo ""
   fi
-done
+done < <(git log --pretty=format:%H)
 
 echo "--- Processing Complete ---"
