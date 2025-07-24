@@ -1811,6 +1811,53 @@ class CortexThoughts:
         
         return retrieved_docs
 
+    async def _get_direct_rag_context_elp1(self, db: Session, user_input: str, session_id: str) -> str:
+        """
+        A lightweight, fast RAG retriever specifically for the ELP1 direct_generate path.
+        CORRECTED: Now includes a metadata filter to retrieve only actual user/assistant conversational turns.
+        """
+        log_prefix = f"⚡️ DirectRAG|ELP1|{session_id}"
+        logger.info(f"{log_prefix} Performing lightweight, PURIFIED RAG for direct response.")
+
+        interaction_vs = get_global_interaction_vectorstore()
+        if not interaction_vs:
+            logger.warning(f"{log_prefix} Global interaction vector store not available for direct RAG.")
+            return "No historical context is available."
+
+        try:
+            # --- THIS IS THE KEY CHANGE ---
+            # We add a metadata filter to the search.
+            # This tells Chroma to only return documents where the 'input_type' metadata field
+            # is either 'text' (for user inputs) or 'llm_response' (for AI outputs).
+            # This filters out all 'log_error', 'log_info', 'tot_result', etc., entries.
+            search_kwargs = {
+                "k": 3,  # Retrieve only a few, highly relevant documents
+                "filter": {
+                    "input_type": {"$in": ["text", "llm_response"]}
+                }
+            }
+            # --- END OF KEY CHANGE ---
+
+            search_results_docs = await asyncio.to_thread(
+                interaction_vs.similarity_search,
+                query=user_input,
+                **search_kwargs  # Pass the arguments dictionary
+            )
+
+            if not search_results_docs:
+                logger.info(f"{log_prefix} No relevant conversational documents found in persistent store.")
+                return "No specific historical context was found for this query."
+
+            logger.info(f"{log_prefix} Found {len(search_results_docs)} purified documents for direct context.")
+            return self._format_docs(search_results_docs, "History RAG")
+
+        except TaskInterruptedException as tie:
+            logger.warning(f"🚦 {log_prefix} Direct RAG was interrupted: {tie}")
+            return "[Context retrieval interrupted by a higher priority task]"
+        except Exception as e:
+            logger.error(f"❌ {log_prefix} Error during direct RAG retrieval: {e}")
+            return "[An error occurred while retrieving historical context]"
+
     #for ELP1 rag retriever since it's uses small amount of resources for calculation vector and retrieve it's better to put it on ELP1 by default
     def _get_rag_retriever(self, db: Session, user_input_for_rag_query: str, priority: int = ELP1) -> Tuple[
     Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], str
@@ -3958,40 +4005,20 @@ class CortexThoughts:
                                      vlm_description: Optional[str] = None,
                                      image_b64: Optional[str] = None) -> str:
         """
-        MODIFIED: The definitive ELP1 logic, now as a single, direct, non-iterative call.
-        It performs a single, prioritized RAG lookup on interaction history and invokes the LLM
-        once with a large token limit for a complete, high-quality response.
+        CORRECTED: The definitive ELP1 logic. It now uses a dedicated, lightweight RAG
+        function to ensure it meets its performance benchmark.
         """
         direct_req_id = f"dgen-logic-direct-v5-{uuid.uuid4()}"
         log_prefix = f"⚡️ {direct_req_id}|ELP1"
-        logger.info(f"{log_prefix} DIRECT V5 Logic START -> Session: {session_id}, Input: '{user_input[:50]}...'")
+        logger.info(f"{log_prefix} CORRECTED DIRECT V5 Logic START -> Session: {session_id}, Input: '{user_input[:50]}...'")
         direct_start_time = time.monotonic()
         self.current_session_id = session_id
 
         # --- 1. CONTEXT GATHERING (ELP1 Priority) ---
         logger.info(f"{log_prefix} Gathering RAG and direct history context with ELP1 priority.")
 
-        # <<< MODIFIED: Perform a single, prioritized RAG call focusing on interaction history >>>
-        # Use the wrapper to call the RAG retriever in a thread with explicit ELP1 priority.
-        wrapped_rag_result = await asyncio.to_thread(
-            self._get_rag_retriever_thread_wrapper, db, user_input, ELP1 # <<< EXPLICIT ELP1 PRIORITY
-        )
-
-        history_rag_str = "No relevant conversation history found."
-        if wrapped_rag_result.get("status") == "success":
-            # We only care about the session_history_retriever (index 1) as requested.
-            _url_ret, session_history_retriever, _reflection_ret, _ = wrapped_rag_result.get("data", (None, None, None, ""))
-            session_docs = []
-            if session_history_retriever:
-                # Invoke the retriever to get the actual documents, still with ELP1 context.
-                session_docs = await asyncio.to_thread(session_history_retriever.invoke, user_input)
-            history_rag_str = self._format_docs(session_docs, "History RAG")
-        elif wrapped_rag_result.get("status") == "interrupted":
-            logger.warning(f"{log_prefix} RAG context retrieval was interrupted. Proceeding with limited context.")
-            history_rag_str = "[Context retrieval interrupted by higher priority task]"
-        else: # Error case
-            logger.error(f"{log_prefix} RAG context retrieval failed. Error: {wrapped_rag_result.get('error_message')}")
-            history_rag_str = "[Context retrieval failed due to an error]"
+        # <<< MODIFICATION: Call the new, lightweight RAG helper >>>
+        history_rag_str = await self._get_direct_rag_context_elp1(db, user_input, session_id)
 
         # Get the most recent, direct conversation turns for immediate context.
         direct_history_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
@@ -4003,9 +4030,7 @@ class CortexThoughts:
         if not fast_model:
             raise RuntimeError("Fast model 'general_fast' for direct response is not configured.")
 
-        # <<< MODIFIED: Calculate a large, single max_tokens limit >>>
-        # As requested, set to half of the total configured context window.
-        max_response_tokens = LLAMA_CPP_N_CTX // 2 # e.g., 32768 / 2 = 16384
+        max_response_tokens = LLAMA_CPP_N_CTX // 2
 
         prompt_placeholders = {
             "history_rag": history_rag_str,
@@ -4013,32 +4038,28 @@ class CortexThoughts:
             "input": user_input,
         }
 
-        # <<< MODIFIED: Use the simpler, direct prompt and bind the large token limit >>>
-        # Bind max_tokens directly to the model for this call.
         bound_model = fast_model.bind(max_tokens=max_response_tokens, stop=[CHATML_END_TOKEN], priority=ELP1)
         chain = ChatPromptTemplate.from_template(PROMPT_DIRECT_GENERATE) | bound_model | StrOutputParser()
 
         timing_data = {"session_id": session_id, "mode": "chat_direct_elp1"}
         raw_llm_output = ""
         try:
+            # We must use asyncio.to_thread here because _call_llm_with_timing is a synchronous function
             raw_llm_output = await asyncio.to_thread(
                 self._call_llm_with_timing,
                 chain,
                 prompt_placeholders,
                 timing_data,
-                priority=ELP1 # <<< EXPLICIT ELP1 PRIORITY
+                priority=ELP1
             )
         except TaskInterruptedException as tie:
             logger.error(f"🚦 {log_prefix} Direct generation LLM call was INTERRUPTED: {tie}")
-            # Return a specific error message indicating interruption.
             return f"[System Error: The response generation was interrupted by a higher priority request.]"
 
         # --- 3. POST-PROCESSING & FINALIZATION ---
-        # The user specifically requested to cut out the <think> block
         _think_content, speak_content = self._parse_think_speak_output(raw_llm_output)
         final_response_text = speak_content
 
-        # Apply standard quality gates to the final, complete response
         if not final_response_text.strip():
             logger.error(f"{log_prefix} Final response is empty after parsing. Model failed to generate speak content.")
             final_response_text = "[System Error: The AI model could not generate a valid response.]"
@@ -4057,10 +4078,9 @@ class CortexThoughts:
             "llm_response": final_response_text, "execution_time_ms": final_duration_ms,
             "classification": "direct_response_single_call_elp1",
         }
-        # This function adds the log to a queue, which is safe to call from an async context.
         queue_interaction_for_batch_logging(**interaction_data)
 
-        logger.info(f"{log_prefix} DIRECT V5 Logic END. Duration: {final_duration_ms:.2f}ms")
+        logger.info(f"{log_prefix} CORRECTED DIRECT V5 Logic END. Duration: {final_duration_ms:.2f}ms")
         return final_response_text
 
     def _convert_interactions_to_chatml_turns(self, interactions: List[Interaction]) -> List[Dict[str, str]]:
@@ -7662,40 +7682,31 @@ def sse_notification_stream():
 
 
 @app.route("/v1/chat/completions", methods=["POST"])
-@app.route("/api/chat", methods=["POST"]) # <<< ADD THIS LINE
-def handle_openai_chat_completion():
+@app.route("/api/chat", methods=["POST"])
+async def handle_openai_chat_completion():
     """
     Handles requests mimicking OpenAI/Ollama's chat completion endpoint.
+    This is the complete, non-blocking implementation for immediate stream start.
 
-    Implements Dual Generate Logic:
-    1. Calls `ai_chat.direct_generate` (via streaming generator or direct call)
-       to get a fast initial (ELP1) response.
-    2. Formats and returns/streams this initial response.
-    3. Concurrently launches `ai_chat.background_generate` in a separate thread
-       to perform deeper analysis (ELP0) without blocking the initial response.
+    Implements the Dual Generate Logic correctly:
+    1. Immediately launches `background_generate` (ELP0) in a separate thread
+       to perform deep analysis without blocking the API response. The background
+       task will handle its own input classification.
+    2. Immediately proceeds to generate the fast (ELP1) response using either
+       the streaming generator or a direct, awaited call, and returns it to the client.
     """
-    start_req_time_main_handler = time.monotonic()  # Renamed to avoid conflict
+    start_req_time_main_handler = time.monotonic()
     request_id = f"req-chat-{uuid.uuid4()}"
-    logger.info(f"🚀 Flask OpenAI/Ollama Chat Request ID: {request_id} (Dual Generate Logic)")
+    logger.info(f"🚀 Async OpenAI/Ollama Chat Request ID: {request_id} (Corrected Non-Blocking Logic)")
 
     db: Session = g.db  # Use request-bound session from Flask's g
-    response_payload_str: str = ""  # Renamed to avoid conflict
-    status_code_val: int = 500
-    resp_obj: Optional[Response] = None  # Renamed to avoid conflict
-    session_id_for_logs: str = f"openai_req_{request_id}_unassigned"  # Renamed
-    raw_request_data_dict: Optional[Dict] = None  # Renamed
-    request_data_log_snippet: str = "No request data processed"  # Renamed
-
-    # Variables to be extracted from request
-    user_input_from_req: str = ""
-    image_b64_from_req: Optional[str] = None
-    stream_requested_by_client: bool = False
-
-    # This will be passed to background_generate; direct_generate might use a simpler classification
-    classification_for_background = "chat_simple"
+    resp_obj: Optional[Response] = None
+    session_id_for_logs: str = f"openai_req_{request_id}_unassigned"
+    request_data_log_snippet: str = "No request data processed"
+    final_response_status_code: int = 500  # Default to error
 
     try:
-        # --- 1. Get and Validate Request Data ---
+        # --- 1. Get and Parse Request Data (This part is fast and async-native) ---
         try:
             raw_request_data_dict = request.get_json()
             if not raw_request_data_dict:
@@ -7707,7 +7718,8 @@ def handle_openai_chat_completion():
         except Exception as json_err:
             logger.warning(f"{request_id}: Failed to get/parse JSON body: {json_err}")
             try:
-                request_data_log_snippet = request.get_data(as_text=True)[:1000]
+                request_data_log_snippet = request.get_data(as_text=True)
+                request_data_log_snippet = request_data_log_snippet[:1000]
             except:
                 request_data_log_snippet = "Could not read request body"
 
@@ -7715,14 +7727,19 @@ def handle_openai_chat_completion():
                 f"Request body is missing or invalid JSON: {json_err}",
                 err_type="invalid_request_error", status_code=400)
             resp_obj = Response(json.dumps(resp_data_err), status=status_code_val, mimetype='application/json')
-            return resp_obj  # Early return
+            final_response_status_code = status_code_val
+            return resp_obj
 
-        # --- 2. Extract Parameters ---
+        # --- 2. Extract Parameters and Message Content ---
         messages_from_req = raw_request_data_dict.get("messages", [])
         stream_requested_by_client = raw_request_data_dict.get("stream", False)
         model_requested_by_client = raw_request_data_dict.get("model")
         session_id_for_logs = raw_request_data_dict.get("session_id", f"openai_req_{request_id}")
-        if cortex_text_interaction: cortex_text_interaction.current_session_id = session_id_for_logs  # Set session for CortexThoughts instance
+
+        if cortex_text_interaction:
+            cortex_text_interaction.current_session_id = session_id_for_logs
+        else:
+            raise RuntimeError("Critical: cortex_text_interaction instance is not available.")
 
         logger.debug(
             f"{request_id}: Request parsed - SessionID={session_id_for_logs}, Stream: {stream_requested_by_client}, ModelReq: {model_requested_by_client}")
@@ -7730,12 +7747,10 @@ def handle_openai_chat_completion():
         if not messages_from_req or not isinstance(messages_from_req, list):
             raise ValueError("'messages' is required and must be a list.")
 
-        # --- 4. Parse Last User Message for Input and Image ---
-        last_user_msg_obj = None
-        for msg_item in reversed(messages_from_req):  # Renamed loop var
-            if isinstance(msg_item, dict) and msg_item.get("role") == "user":
-                last_user_msg_obj = msg_item
-                break
+        user_input_from_req = ""
+        image_b64_from_req = None
+        last_user_msg_obj = next(
+            (msg for msg in reversed(messages_from_req) if isinstance(msg, dict) and msg.get("role") == "user"), None)
 
         if not last_user_msg_obj: raise ValueError("No message with role 'user' found.")
 
@@ -7743,7 +7758,7 @@ def handle_openai_chat_completion():
         if isinstance(content_from_user_msg, str):
             user_input_from_req = content_from_user_msg
         elif isinstance(content_from_user_msg, list):
-            for item_part in content_from_user_msg:  # Renamed loop var
+            for item_part in content_from_user_msg:
                 if isinstance(item_part, dict):
                     item_type = item_part.get("type")
                     if item_type == "text":
@@ -7753,282 +7768,146 @@ def handle_openai_chat_completion():
                         if img_url.startswith("data:image"):
                             try:
                                 _, potential_b64 = img_url.split(",", 1)
-                                if len(potential_b64) % 4 != 0 or not re.match(r'^[A-Za-z0-9+/=]+$', potential_b64):
-                                    raise ValueError("Invalid base64 characters or padding")
                                 base64.b64decode(potential_b64, validate=True)
                                 image_b64_from_req = potential_b64
                             except Exception as img_err:
-                                raise ValueError(f"Invalid image data: {img_err}")
+                                logger.warning(f"Could not decode base64 image data: {img_err}")
                         else:
-                            raise ValueError("Unsupported image_url format. Only data URIs allowed.")
+                            logger.warning(f"Unsupported image_url format received: {img_url}")
         else:
             raise ValueError("Invalid user message 'content' type.")
 
         if not user_input_from_req and not image_b64_from_req:
             raise ValueError("No text or image content provided in user message.")
 
-        # --- Call CortexEngine to classify complexity for background task planning ---
-        # This runs synchronously here to determine if background_generate needs "chat_complex"
-        # Note: direct_generate (for ELP1 streaming) might do its own simpler/no classification.
-        logger.info(f"{request_id}: Classifying input for background task planning (ELP0 context)...")
-        classification_data_for_bg = {"session_id": session_id_for_logs, "mode": "chat", "input_type": "classification"}
-        # _classify_input_complexity is synchronous and handles its own ELP0 for LLM calls
-        classification_for_background = asyncio.run(
-            cortex_text_interaction._classify_input_complexity(
-                db, user_input_from_req, classification_data_for_bg
-            )
-        )
-        logger.info(
-            f"{request_id}: Input classified for background task as: '{classification_for_background}'. Reason: {classification_data_for_bg.get('classification_reason', 'N/A')}")
+        # --- 3. LAUNCH BACKGROUND (ELP0) TASK IMMEDIATELY ---
+        # We NO LONGER wait for classification here. We launch the background
+        # task and let IT handle classification and all deep analysis internally.
+        logger.info(f"{request_id}: Launching background_generate task immediately in a new thread.")
 
-        # --- 5. Call DIRECT Generate Logic (ELP1) ---
-        # This part handles the immediate response to the client (either streaming or non-streaming)
-        direct_response_text_val = ""
-        vlm_desc_for_bg_and_direct: Optional[str] = None  # VLM desc of user's image
-        status_code_val = 200  # Assume success for direct path unless error
-
-        logger.info(f"{request_id}: Preparing for CortexThoughts.direct_generate (ELP1 path)...")
-        try:
-            if image_b64_from_req:  # If user sent an image
-                logger.info(f"{request_id}: Preprocessing user-provided image for direct_generate (ELP1 context)...")
-                # cortex_text_interaction.process_image is synchronous but might call VLM (ELP0)
-                # For ELP1 path, VLM desc should ideally be fast or direct_generate robust to its absence.
-                # Let's assume process_image is quick enough or handles VLM with ELP0 gracefully.
-                vlm_desc_for_bg_and_direct, _ = cortex_text_interaction.process_image(db, image_b64_from_req, session_id_for_logs)
-                if vlm_desc_for_bg_and_direct and "Error:" in vlm_desc_for_bg_and_direct:
-                    logger.error(
-                        f"{request_id}: VLM preprocessing for direct path failed: {vlm_desc_for_bg_and_direct}")
-                    # Don't set status_code_val to 500 here yet, let direct_generate try text-only
-                    # And log this problem to the DB for the user-provided image.
-                    add_interaction(db, session_id=session_id_for_logs, mode="chat", input_type="log_error",
-                                    user_input="[VLM Preprocessing Error for User Image - ELP1 Path]",
-                                    llm_response=vlm_desc_for_bg_and_direct)
-
-            # Call direct_generate (which is async, so run it if not streaming, or it's called by streamer)
-            # The streaming path calls direct_generate inside its thread via asyncio.run
-            # The non-streaming path calls it here via asyncio.run
-            if not stream_requested_by_client:
-                logger.info(f"{request_id}: Non-streaming path. Calling direct_generate now...")
-                direct_response_text_val = asyncio.run(
-                    cortex_text_interaction.direct_generate(
-                        db,
-                        user_input_from_req,
-                        session_id_for_logs,
-                        vlm_description=vlm_desc_for_bg_and_direct,  # Pass VLM desc of user image
-                        image_b64=image_b64_from_req  # Pass user image b64 for logging within direct_generate
-                    )
-                )
-                if "interrupted" in direct_response_text_val.lower() or \
-                        (
-                                "Error:" in direct_response_text_val and "interrupted" not in direct_response_text_val.lower()) or \
-                        "internal error" in direct_response_text_val.lower():  # Check for error strings
-                    status_code_val = 503 if "interrupted" in direct_response_text_val.lower() else 500
-                logger.info(f"{request_id}: Non-streaming direct_generate completed. Status: {status_code_val}")
-
-        except TaskInterruptedException as tie_direct:
-            logger.error(f"🚦 {request_id}: Direct generation path (ELP1) INTERRUPTED: {tie_direct}")
-            direct_response_text_val = f"[Critical Error: ELP1 Processing Interrupted by Higher Priority Task: {tie_direct}]"
-            status_code_val = 503  # Service Unavailable due to interruption
-        except Exception as direct_gen_err:
-            logger.error(f"{request_id}: Error during direct_generate call/setup: {direct_gen_err}")
-            logger.exception(f"{request_id} Traceback for direct_generate error:")
-            direct_response_text_val = f"Error during initial response generation: {direct_gen_err}"
-            status_code_val = 500
-
-        # --- 6. LAUNCH BACKGROUND Generate Logic (ELP0) in a separate thread ---
-        logger.info(f"{request_id}: Preparing to launch background_generate task (ELP0) in new thread...")
-
-        # Define the target function for the background thread
-        # This function needs to create its own asyncio event loop and DB session
-        def run_background_task_with_new_loop(
-                user_input_bg: str, session_id_bg: str, classification_bg: str,
-                image_b64_bg: Optional[str], vlm_desc_user_img_bg: Optional[str]):  # Add other necessary args
-
+        def run_background_task_with_new_loop(user_input_bg, session_id_bg, image_b64_bg):
             bg_log_prefix_thread = f"[BG Task {request_id} Thr:{threading.get_ident()}]"
-            acquired_semaphore = False
             loop = None
             bg_db_session: Optional[Session] = None
-
-            # --- NEW: Politeness Check Loop ---
-            MAX_POLITENESS_WAIT_SECONDS = 30  # Max total time to wait for ELP1 activity to clear
-            POLITENESS_CHECK_INTERVAL_SECONDS = 1.5  # How often to check
-            politeness_wait_start_time = time.monotonic()
-            initial_check_done = False
-
-            while True:
-                if cortex_backbone_provider and cortex_backbone_provider.is_resource_busy_with_high_priority():
-                    logger.info(
-                        f"{bg_log_prefix_thread} CortexEngine resources busy with ELP1. Pausing background task start...")
-                    initial_check_done = True
-                    time.sleep(POLITENESS_CHECK_INTERVAL_SECONDS)
-                    if time.monotonic() - politeness_wait_start_time > MAX_POLITENESS_WAIT_SECONDS:
-                        logger.warning(
-                            f"{bg_log_prefix_thread} Max politeness wait time ({MAX_POLITENESS_WAIT_SECONDS}s) exceeded. Proceeding despite ELP1 activity.")
-                        break
-                else:
-                    if initial_check_done:  # Log only if we actually waited
-                        logger.info(
-                            f"{bg_log_prefix_thread} CortexEngine resources appear free. Proceeding with background task.")
-                    else:  # Log if we proceed immediately on first check
-                        logger.debug(f"{bg_log_prefix_thread} CortexEngine resources free on initial check. Proceeding.")
-                    break  # Exit politeness loop
-            # --- END NEW: Politeness Check Loop ---
-
             try:
-                logger.debug(f"{bg_log_prefix_thread} Attempting to acquire background_generate_task_semaphore...")
-                background_generate_task_semaphore.acquire()  # This is the main concurrency limiter
-                acquired_semaphore = True
-                logger.info(f"{bg_log_prefix_thread} Acquired background_generate_task_semaphore. Starting processing.")
-                url_context_str = ""
-                history_rag_str = ""
-                vec_file_ctx_result_str = ""
+                # This function runs in a dedicated thread and needs its own event loop and DB session.
+                loop = asyncio.new_event_loop()
+                asyncio.set_event_loop(loop)
 
-                try:
-                    loop = asyncio.get_event_loop()
-                    if loop.is_running():
-                        logger.warning(
-                            f"{bg_log_prefix_thread} Event loop already running in this new thread. This is unexpected.")
-                except RuntimeError:
-                    loop = asyncio.new_event_loop()
-                    asyncio.set_event_loop(loop)
-
-                logger.debug(f"{bg_log_prefix_thread} Creating DB session for background task...")
-                if SessionLocal is None:
-                    logger.error(f"{bg_log_prefix_thread} SessionLocal is None. Cannot create DB session.")
-                    # Release semaphore if acquired, then return
-                    if acquired_semaphore: background_generate_task_semaphore.release()
-                    return
-                bg_db_session = SessionLocal()  # type: ignore
+                bg_db_session = SessionLocal()
                 if not bg_db_session:
-                    logger.error(f"{bg_log_prefix_thread} Failed to create DB session for background task.")
-                    if acquired_semaphore: background_generate_task_semaphore.release()
+                    logger.error(f"{bg_log_prefix_thread}: Failed to create DB session for background task. Aborting.")
                     return
 
-                logger.info(f"{bg_log_prefix_thread} Calling cortex_text_interaction.background_generate...")
+                # The background_generate function will now perform its own classification.
+                # We call it with a general "chat_complex" to ensure it runs the full analysis pipeline.
                 loop.run_until_complete(
                     cortex_text_interaction.background_generate(
                         db=bg_db_session,
                         user_input=user_input_bg,
                         session_id=session_id_bg,
-                        classification=classification_bg,
+                        classification="chat_complex",
                         image_b64=image_b64_bg
                     )
                 )
-                logger.info(f"{bg_log_prefix_thread} cortex_text_interaction.background_generate task completed.")
-
-
             except Exception as task_err:
-                logger.error(f"{bg_log_prefix_thread} Error during background task execution: {task_err}")
-                logger.exception(f"{bg_log_prefix_thread} Background Task Execution Traceback:")
+                logger.error(f"{bg_log_prefix_thread} Error during background task execution: {task_err}",
+                             exc_info=True)
+                # Log the error to the database if possible
                 if bg_db_session:
                     try:
-                        from database import add_interaction
                         add_interaction(bg_db_session, session_id=session_id_bg, mode="chat", input_type="log_error",
                                         user_input=f"Background Task Error ({request_id})",
-                                        llm_response=f"Error: {str(task_err)[:1500]}"
-                                        )
+                                        llm_response=f"Error: {str(task_err)[:1500]}")
+                        bg_db_session.commit()
                     except Exception as db_log_err_bg:
-                        logger.error(f"{bg_log_prefix_thread} Failed to log BG error to DB: {db_log_err_bg}")
+                        logger.error(f"{bg_log_prefix_thread}: Failed to log BG error to DB: {db_log_err_bg}")
+                        bg_db_session.rollback()
             finally:
-                if bg_db_session:
-                    try:
-                        bg_db_session.close(); logger.debug(f"{bg_log_prefix_thread} BG DB session closed.")
-                    except:
-                        pass
-                if loop and hasattr(loop, 'is_closed') and not loop.is_closed():  # Check if loop has is_closed
-                    try:
-                        loop.close(); logger.debug(f"{bg_log_prefix_thread} BG asyncio loop closed.")
-                    except:
-                        pass
-                if acquired_semaphore:
-                    background_generate_task_semaphore.release()
-                    logger.info(f"{bg_log_prefix_thread} Released background_generate_task_semaphore.")
+                if bg_db_session: bg_db_session.close()
+                if loop: loop.close()
                 logger.info(f"{bg_log_prefix_thread} Background thread function finished.")
 
-        try:
-            background_thread_obj = threading.Thread(  # Renamed to avoid conflict
-                target=run_background_task_with_new_loop,
-                args=(user_input_from_req, session_id_for_logs, classification_for_background,
-                      image_b64_from_req, vlm_desc_for_bg_and_direct),  # Pass necessary args
-                daemon=True
-            )
-            background_thread_obj.start()
-            logger.info(f"{request_id}: Launched background_generate in thread {background_thread_obj.ident}.")
-        except Exception as launch_err:
-            logger.error(f"{request_id}: Failed to launch background thread: {launch_err}")
-            # Log this failure as it impacts deeper processing.
-            add_interaction(db, session_id=session_id_for_logs, mode="chat", input_type="log_error",
-                            user_input="Background Task Launch Failed", llm_response=f"Error: {launch_err}")
+        background_thread_obj = threading.Thread(
+            target=run_background_task_with_new_loop,
+            args=(user_input_from_req, session_id_for_logs, image_b64_from_req),
+            daemon=True
+        )
+        background_thread_obj.start()
+        logger.info(f"{request_id}: Launched background_generate in thread {background_thread_obj.ident}.")
 
-        # --- 7. Format and Return/Stream the IMMEDIATE Response (from direct_generate) ---
+        # --- 4. RETURN IMMEDIATE (ELP1) RESPONSE ---
+        # This part now happens instantly after parsing the request and launching the thread.
         model_id_for_response = META_MODEL_NAME_STREAM if stream_requested_by_client else META_MODEL_NAME_NONSTREAM
 
         if stream_requested_by_client:
-            logger.info(f"{request_id}: Client requested stream. Creating SSE generator for direct response.")
-            # The direct_response_text_val for streaming will be generated inside the _stream... generator now
-            # The classification_for_background is what the BG task will use. The streamer might use a simpler one or none.
+            logger.info(f"{request_id}: Returning SSE generator to client immediately.")
             sse_generator = _stream_openai_chat_response_generator_flask(
                 session_id=session_id_for_logs,
                 user_input=user_input_from_req,
-                classification="direct_stream_elp1",  # Indication for the streamer's internal logic
-                image_b64=image_b64_from_req,  # Pass user's image for direct_generate inside streamer
+                classification="direct_stream_elp1",  # This is just a label for the streamer
+                image_b64=image_b64_from_req,
                 model_name=model_id_for_response
             )
             resp_obj = Response(sse_generator, mimetype='text/event-stream')
-            resp_obj.headers['Content-Type'] = 'text/event-stream; charset=utf-8'
-            resp_obj.headers['Cache-Control'] = 'no-cache'
-            resp_obj.headers['Connection'] = 'keep-alive'
-            status_code_val = 200  # Stream initiated successfully
-        else:  # Non-streaming path
-            logger.debug(
-                f"{request_id}: Formatting non-streaming JSON (direct_response_text_val: '{direct_response_text_val[:50]}...')")
-            if status_code_val != 200:  # Error occurred during direct_generate
-                resp_data_err, _ = _create_openai_error_response(direct_response_text_val, status_code=status_code_val)
-                response_payload_str = json.dumps(resp_data_err)
+            final_response_status_code = 200
+        else:
+            logger.info(f"{request_id}: Generating non-streaming direct response (awaiting ELP1 path).")
+            # For non-streaming, we must await the fast response. Since this handler is async, we use `await`.
+            direct_response_text_val = await cortex_text_interaction.direct_generate(
+                db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+            )
+
+            if "interrupted" in direct_response_text_val.lower() or "Error:" in direct_response_text_val:
+                final_response_status_code = 503 if "interrupted" in direct_response_text_val.lower() else 500
+                resp_data_err, _ = _create_openai_error_response(direct_response_text_val,
+                                                                 status_code=final_response_status_code)
+                resp_obj = Response(json.dumps(resp_data_err), status=final_response_status_code,
+                                    mimetype='application/json')
             else:
                 resp_data_ok = _format_openai_chat_response(direct_response_text_val, model_name=model_id_for_response)
-                response_payload_str = json.dumps(resp_data_ok)
-            resp_obj = Response(response_payload_str, status=status_code_val, mimetype='application/json')
+                resp_obj = jsonify(resp_data_ok)
+                final_response_status_code = 200
 
-        final_response_status_code = status_code_val  # Log the status of the immediate response
-
-    except ValueError as ve:  # Catch input validation errors
+    except (ValueError, json.JSONDecodeError) as ve:
         logger.warning(f"{request_id}: Invalid request: {ve}")
-        resp_data_err, status_code_val = _create_openai_error_response(str(ve), err_type="invalid_request_error",
-                                                                       status_code=400)
-        resp_obj = Response(json.dumps(resp_data_err), status=status_code_val, mimetype='application/json')
-        final_response_status_code = status_code_val
-    except TaskInterruptedException as tie_main:  # Catch if direct_generate or RAG prep raised it
+        resp_data, status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
+                                                               status_code=400)
+        resp_obj = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+    except TaskInterruptedException as tie_main:
         logger.error(f"🚦 {request_id}: Main handler caught TaskInterruptedException (ELP1 path): {tie_main}")
-        resp_data_err, status_code_val = _create_openai_error_response(
+        resp_data, status_code = _create_openai_error_response(
             f"Processing interrupted by a higher priority task: {tie_main}",
             err_type="server_error", code="task_interrupted", status_code=503)
-        resp_obj = Response(json.dumps(resp_data_err), status=status_code_val, mimetype='application/json')
-        final_response_status_code = status_code_val
+        resp_obj = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
     except Exception as main_err:
-        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in main handler:")
+        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in main async handler:")
         err_msg_main = f"Internal server error: {type(main_err).__name__}"
-        resp_data_err, status_code_val = _create_openai_error_response(err_msg_main, status_code=500)
-        resp_obj = Response(json.dumps(resp_data_err), status=status_code_val, mimetype='application/json')
-        final_response_status_code = status_code_val
+        resp_data, status_code = _create_openai_error_response(err_msg_main, status_code=500)
+        resp_obj = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
         try:
-            if db: add_interaction(db, session_id=session_id_for_logs, mode="chat", input_type='error',
-                                   user_input=f"Main Handler Error. Req: {request_data_log_snippet}",
-                                   llm_response=err_msg_main[:2000]); db.commit()
+            if db:
+                add_interaction(db, session_id=session_id_for_logs, mode="chat", input_type='error',
+                                user_input=f"Main Handler Error. Req: {request_data_log_snippet}",
+                                llm_response=err_msg_main[:2000])
+                db.commit()
         except Exception as db_err_log:
-            logger.error(f"{request_id}: ❌ Failed log main handler error: {db_err_log}")
+            logger.error(f"{request_id}: ❌ Failed to log main handler error: {db_err_log}")
 
     finally:
         duration_req_main = (time.monotonic() - start_req_time_main_handler) * 1000
         logger.info(
-            f"🏁 OpenAI Chat Request {request_id} (DualGen) handled in {duration_req_main:.2f} ms. Final HTTP Status: {final_response_status_code}")
-        # DB session g.db is closed automatically by @app.teardown_request
+            f"🏁 Async OpenAI Chat Request {request_id} handled in {duration_req_main:.2f} ms. Final HTTP Status: {final_response_status_code}")
+        # The DB session `g.db` is closed automatically by the @app.teardown_request handler.
 
-    if resp_obj is None:  # Safety: Should always have a response object by now
+    if resp_obj is None:
         logger.error(f"{request_id}: Handler finished, but 'resp_obj' is None! Fallback error.")
-        resp_data_err, status_code_val = _create_openai_error_response(
-            "Internal error: Handler did not produce response.", status_code=500)
-        resp_obj = Response(json.dumps(resp_data_err), status=500, mimetype='application/json')
+        resp_data, status_code = _create_openai_error_response(
+            "Internal error: Handler did not produce a response.", status_code=500)
+        resp_obj = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
 
     return resp_obj
 
@@ -8931,49 +8810,30 @@ async def handle_openai_audio_translations():
 
 # === NEW: OpenAI Compatible TTS Endpoint ===
 @app.route("/v1/audio/speech", methods=["POST"])
-def handle_openai_tts():
+async def handle_openai_tts():  # <<< CHANGED to async def
     """
     Handles requests mimicking OpenAI's Text-to-Speech endpoint.
-    Expects model "Zephyloid-Alpha", uses audio_worker.py with ELP1 priority.
+    CORRECTED: Now runs as a non-blocking async route, executing the
+    synchronous audio worker in a separate thread.
     """
     start_req = time.monotonic()
     request_id = f"req-tts-{uuid.uuid4()}"
-    logger.info(f"🚀 Flask OpenAI-Style TTS Request ID: {request_id} (Worker ELP1)")
+    logger.info(f"🚀 Async OpenAI-Style TTS Request ID: {request_id} (Worker ELP1)")
 
     db: Session = g.db
     session_id: str = f"tts_req_default_{request_id}"
     raw_request_data: Optional[Dict[str, Any]] = None
-    input_text: Optional[str] = None
-    model_requested: Optional[str] = None
-    voice_requested: Optional[str] = None
-    response_format_requested: Optional[str] = "mp3"
-
     final_response_status_code: int = 500
     resp: Optional[Response] = None
     request_data_snippet_for_log: str = "No request data processed"
 
     try:
-        try:
-            raw_request_data = request.get_json()
-            if not raw_request_data:
-                raise ValueError("Empty JSON payload received.")
-            try:
-                request_data_snippet_for_log = json.dumps(raw_request_data)[:1000]
-            except:
-                request_data_snippet_for_log = str(raw_request_data)[:1000]
-        except Exception as json_err:
-            logger.warning(f"{request_id}: Failed to get/parse JSON body: {json_err}")
-            try:
-                request_data_snippet_for_log = request.get_data(as_text=True)[:1000]
-            except:
-                request_data_snippet_for_log = "Could not read request body"
-            resp_data, status_code = _create_openai_error_response(
-                f"Request body is missing or invalid JSON: {json_err}",
-                err_type="invalid_request_error", status_code=400
-            )
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code
-            return resp
+        # Use request.get_json() directly as Flask context is available
+        raw_request_data = request.get_json()
+        if not raw_request_data:
+            raise ValueError("Empty JSON payload received.")
+
+        request_data_snippet_for_log = json.dumps(raw_request_data)[:1000]
 
         input_text = raw_request_data.get("input")
         model_requested = raw_request_data.get("model")
@@ -8994,9 +8854,9 @@ def handle_openai_tts():
         if not voice_requested or not isinstance(voice_requested, str):
             raise ValueError("'voice' field (MeloTTS speaker ID, e.g., EN-US) is required.")
 
-        if model_requested != TTS_MODEL_NAME_CLIENT_FACING:  # TTS_MODEL_NAME_CLIENT_FACING from CortexConfiguration.py
+        if model_requested != TTS_MODEL_NAME_CLIENT_FACING:
             logger.warning(
-                f"{request_id}: Invalid TTS model requested '{model_requested}'. Expected '{TTS_MODEL_NAME_CLIENT_FACING}'. Im just going to fallback to the default Zephyloid")
+                f"{request_id}: Invalid TTS model requested '{model_requested}'. Falling back to default.")
 
         melo_language = "EN"
         try:
@@ -9004,58 +8864,44 @@ def handle_openai_tts():
             supported_melo_langs = ["EN", "ZH", "JP", "ES", "FR", "KR", "DE"]
             if lang_part in supported_melo_langs:
                 melo_language = lang_part
-            else:
-                logger.warning(
-                    f"{request_id}: Could not infer a supported language from voice '{voice_requested}'. Defaulting to {melo_language}.")
         except Exception:
             logger.warning(
-                f"{request_id}: Error parsing language from voice '{voice_requested}'. Defaulting to {melo_language}.")
+                f"{request_id}: Could not infer language from voice '{voice_requested}'. Defaulting to EN.")
 
-        audio_worker_script_path = os.path.join(SCRIPT_DIR, "audio_worker.py")  # SCRIPT_DIR is where AdelaideAlbertCortex is
+        audio_worker_script_path = os.path.join(SCRIPT_DIR, "audio_worker.py")
         if not os.path.exists(audio_worker_script_path):
-            logger.error(f"{request_id}: audio_worker.py not found at {audio_worker_script_path}")
             raise FileNotFoundError(f"Audio worker script missing at {audio_worker_script_path}")
 
         temp_audio_dir = os.path.join(SCRIPT_DIR, "temp_audio_worker_files")
         os.makedirs(temp_audio_dir, exist_ok=True)
 
-        # Ensure APP_PYTHON_EXECUTABLE is defined (usually sys.executable at top of AdelaideAlbertCortex)
-        # Ensure WHISPER_MODEL_DIR is imported from CortexConfiguration.py (this directory is used for all models, including MeloTTS data if needed by worker)
         worker_command = [
-            APP_PYTHON_EXECUTABLE,
-            audio_worker_script_path,
-            "--task-type", "tts",  # Specify TTS task for the worker
-            "--model-lang", melo_language,
-            "--device", "auto",  # Or make this configurable via app's config
-            "--model-dir", WHISPER_MODEL_DIR,  # Use the general model pool path from CortexConfiguration.py
+            APP_PYTHON_EXECUTABLE, audio_worker_script_path,
+            "--task-type", "tts", "--model-lang", melo_language,
+            "--device", "auto", "--model-dir", WHISPER_MODEL_DIR,
             "--temp-dir", temp_audio_dir
         ]
-
         worker_request_data = {
-            "input": input_text,
-            "voice": voice_requested,
-            "response_format": response_format_requested,
-            "request_id": request_id
+            "input": input_text, "voice": voice_requested,
+            "response_format": response_format_requested, "request_id": request_id
         }
 
-        logger.info(f"{request_id}: Executing audio worker with ELP1 priority...")
-        # _execute_audio_worker_with_priority is synchronous
-        parsed_response_from_worker, error_string_from_worker = _execute_audio_worker_with_priority(
+        logger.info(f"{request_id}: Executing audio worker with ELP1 priority in a background thread...")
+
+        # <<< KEY CHANGE: Run the blocking function in a thread >>>
+        parsed_response_from_worker, error_string_from_worker = await asyncio.to_thread(
+            _execute_audio_worker_with_priority,
             worker_command=worker_command,
             request_data=worker_request_data,
-            priority=ELP1,  # Use ELP1 for user-facing TTS
+            priority=ELP1,
             worker_cwd=SCRIPT_DIR,
-            timeout=TTS_WORKER_TIMEOUT  # Adjust timeout as needed for TTS generation through config.py TTS_WORKER_TIMEOUT
+            timeout=TTS_WORKER_TIMEOUT
         )
+        # <<< END KEY CHANGE >>>
 
         if error_string_from_worker:
-            logger.error(f"{request_id}: Audio worker execution failed: {error_string_from_worker}")
-            resp_data, status_code = _create_openai_error_response(
-                f"Audio generation failed: {error_string_from_worker}",
-                err_type="server_error", status_code=500
-            )
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code
+            raise RuntimeError(f"Audio generation failed: {error_string_from_worker}")
+
         elif parsed_response_from_worker and "result" in parsed_response_from_worker and "audio_base64" in \
                 parsed_response_from_worker["result"]:
             audio_info = parsed_response_from_worker["result"]
@@ -9064,81 +8910,52 @@ def handle_openai_tts():
             response_mime_type = audio_info.get("mime_type", f"audio/{actual_audio_format}")
 
             logger.info(
-                f"{request_id}: Audio successfully generated by worker. Format: {actual_audio_format}, Length (b64): {len(audio_b64_data)}")
-            try:
-                audio_bytes = base64.b64decode(audio_b64_data)
-                resp = Response(audio_bytes, status=200, mimetype=response_mime_type)
-                final_response_status_code = 200
-            except Exception as decode_err:
-                logger.error(f"{request_id}: Failed to decode base64 audio from worker: {decode_err}")
-                resp_data, status_code = _create_openai_error_response(
-                    "Failed to decode audio data received from worker.",
-                    err_type="server_error", status_code=500
-                )
-                resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-                final_response_status_code = status_code
+                f"{request_id}: Audio successfully generated. Format: {actual_audio_format}, Length (b64): {len(audio_b64_data)}")
+
+            audio_bytes = base64.b64decode(audio_b64_data)
+            resp = Response(audio_bytes, status=200, mimetype=response_mime_type)
+            final_response_status_code = 200
         else:
-            logger.error(
-                f"{request_id}: Audio worker returned invalid or incomplete response: {parsed_response_from_worker}")
-            resp_data, status_code = _create_openai_error_response(
-                "Audio worker returned an invalid response structure.",
-                err_type="server_error", status_code=500
-            )
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-            final_response_status_code = status_code
+            raise RuntimeError(f"Audio worker returned invalid or incomplete response: {parsed_response_from_worker}")
 
     except ValueError as ve:
         logger.warning(f"{request_id}: Invalid TTS request parameters: {ve}")
-        resp_data, status_code = _create_openai_error_response(
-            str(ve), err_type="invalid_request_error", status_code=400)
+        resp_data, status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
+                                                               status_code=400)
         resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
-    except FileNotFoundError as fnf_err:
-        logger.error(f"{request_id}: Server configuration error for TTS: {fnf_err}")
-        resp_data, status_code = _create_openai_error_response(
-            f"Server configuration error for TTS: {fnf_err}", err_type="server_error", status_code=500)
+    except (FileNotFoundError, RuntimeError) as server_err:
+        logger.error(f"{request_id}: Server-side error during TTS: {server_err}")
+        resp_data, status_code = _create_openai_error_response(str(server_err), err_type="server_error",
+                                                               status_code=500)
         resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
     except Exception as main_handler_err:
-        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in TTS endpoint main handler:")
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in TTS endpoint:")
         error_message = f"Internal server error in TTS endpoint: {type(main_handler_err).__name__}"
         resp_data, status_code = _create_openai_error_response(error_message, status_code=500)
         resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
         try:
-            if 'db' in g and g.db:
-                add_interaction(g.db, session_id=session_id, mode="tts", input_type='error',
+            if db:
+                add_interaction(db, session_id=session_id, mode="tts", input_type='error',
                                 user_input=f"TTS Handler Error. Request: {request_data_snippet_for_log}",
                                 llm_response=error_message[:2000])
-                db.commit()  # Ensure commit if add_interaction doesn't do it
-            else:
-                logger.error(f"{request_id}: Cannot log TTS handler error: DB session 'g.db' unavailable.")
+                db.commit()
         except Exception as db_err_log:
             logger.error(f"{request_id}: ❌ Failed log TTS handler error to DB: {db_err_log}")
-            if 'db' in g and g.db: db.rollback()
-
-
+            if db: db.rollback()
     finally:
         duration_req = (time.monotonic() - start_req) * 1000
         logger.info(
-            f"🏁 OpenAI-Style TTS Request {request_id} handled in {duration_req:.2f} ms. Final Status: {final_response_status_code}")
-        # g.db is closed automatically by the @app.teardown_request handler
+            f"🏁 Async OpenAI-Style TTS Request {request_id} handled in {duration_req:.2f} ms. Final Status: {final_response_status_code}")
 
     if resp is None:
         logger.error(f"{request_id}: TTS Handler logic flaw - response object 'resp' was not assigned!")
-        resp_data, _ = _create_openai_error_response(
-            "Internal error: TTS Handler failed to produce a response object.",
-            err_type="server_error", status_code=500
-        )
+        resp_data, _ = _create_openai_error_response("Internal error: Handler failed to produce a response object.",
+                                                     status_code=500)
         resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
-        try:
-            if 'db' in g and g.db:
-                add_interaction(g.db, session_id=session_id, mode="tts", input_type='error',
-                                user_input=f"TTS Handler No Resp Object. Req: {request_data_snippet_for_log}",
-                                llm_response="Critical: No response object created by handler.")
-                db.commit()
-        except:
-            pass  # Best effort at this point
+
     return resp
 
 # === NEW: OpenAI Compatible Image Generation Endpoint (Stub) ===

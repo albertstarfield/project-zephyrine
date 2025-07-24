@@ -1765,8 +1765,8 @@ def get_past_tot_interactions(db: Session, limit=50) -> List[Interaction]:
 def get_global_recent_interactions(db: Session, limit: int = 10) -> List[Interaction]:
     try:
         results = db.query(Interaction).filter(
-            #Interaction.mode == 'chat', Interaction.input_type.in_(['text', 'llm_response', 'image+text'])
-            Interaction.mode == 'chat', Interaction.input_type.in_(['text', 'llm_response'])
+            Interaction.mode == 'chat', Interaction.input_type.in_(['text', 'llm_response', 'image+text'])
+            #Interaction.mode == 'chat', Interaction.input_type.in_(['text', 'llm_response'])
         ).order_by(desc(Interaction.timestamp)).limit(limit).all()
         results.reverse()
         return results
