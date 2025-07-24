@@ -5920,24 +5920,31 @@ def _format_ollama_chat_response_nonstream(
 
 
 def _ollama_pseudo_stream_sync_generator(
-    full_response_text: str,
-    model_name: str,
-    total_duration_ns: int,
-    eval_duration_ns: int
+        full_response_text: str,
+        model_name: str,
+        total_duration_ns: int,
+        eval_duration_ns: int
 ):
     """
     Takes a completed text string and yields it word-by-word in the
-    Ollama-compatible streaming SSE format (application/x-ndjson).
-    This function is fully synchronous to avoid context errors.
+    Ollama-compatible streaming SSE format. This version is robustly designed
+    to prevent client-side 'reading content of undefined' errors.
     """
-    logger.info(f"OLLAMA_STREAM: Streaming pre-generated text ({len(full_response_text)} chars).")
+    logger.info(f"OLLAMA_STREAM_V3: Streaming pre-generated text ({len(full_response_text)} chars).")
 
     try:
-        # 1. Stream the content word by word.
-        # Ollama clients expect each chunk to be a complete JSON object on a new line.
+        # --- Defensive Check for Empty or Invalid Input ---
+        # If the AI somehow produced no text, send a single valid message and finish.
+        if not full_response_text or not full_response_text.strip():
+            logger.warning("OLLAMA_STREAM_V3: The generated response was empty. Sending a placeholder.")
+            full_response_text = "[Empty Response]"
+
+        # --- Stream the content word by word ---
         words = full_response_text.split(' ')
         for i, word in enumerate(words):
+            # The content for this chunk is the word plus a space (unless it's the last word)
             chunk_content = word + (' ' if i < len(words) - 1 else '')
+
             chunk = {
                 "model": model_name,
                 "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
@@ -5948,13 +5955,18 @@ def _ollama_pseudo_stream_sync_generator(
                 "done": False
             }
             yield json.dumps(chunk) + "\n"
-            time.sleep(0.02) # Optional delay for smoother appearance
+            time.sleep(0.02)  # Optional delay for smoother appearance
 
-        # 2. Send the final "done" chunk with statistics.
-        # This chunk signals the end of the stream for Ollama clients.
+        # --- Send the Final "Done" Chunk ---
+        # This chunk is critical. It must contain "done: true" and, to satisfy
+        # buggy clients, it should also contain a final, empty "message" object.
         final_chunk = {
             "model": model_name,
             "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "message": {
+                "role": "assistant",
+                "content": ""
+            },
             "done": True,
             "total_duration": total_duration_ns,
             "load_duration": 1,
@@ -5966,9 +5978,22 @@ def _ollama_pseudo_stream_sync_generator(
         yield json.dumps(final_chunk) + "\n"
 
     except GeneratorExit:
-        logger.warning("OLLAMA_STREAM: Client disconnected from stream.")
+        logger.warning("OLLAMA_STREAM_V3: Client disconnected from stream.")
+    except Exception as e:
+        logger.exception("OLLAMA_STREAM_V3: Unhandled exception during stream generation.")
+        # Attempt to send a final error message if an exception occurs mid-stream
+        try:
+            error_chunk = {
+                "model": model_name,
+                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "done": True,
+                "error": f"Server-side streaming error: {type(e).__name__}"
+            }
+            yield json.dumps(error_chunk) + "\n"
+        except:
+            pass  # The generator may already be closed
     finally:
-        logger.info("OLLAMA_STREAM: Finished sending all chunks.")
+        logger.info("OLLAMA_STREAM_V3: Finished sending all chunks.")
 
 
 # --- OpenAI Response Formatting Helpers ---
