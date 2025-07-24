@@ -1,4 +1,4 @@
-# Replace the entire content of interaction_indexer.py with this corrected version:
+#interaction_indexer.py
 
 import os
 import time
