@@ -16,9 +16,11 @@ try:
 except ImportError:
     PDF_CAPABLE = False
 
+
+
 # ==============================================================================
 # Adversarial Audit & Validation Agent (Pure Python Version)
-# Version: 6.1 - PDF Reporting
+# Version: 6.2 - Bugfix & Refinements
 #
 # This agent performs a multi-pass audit and generates both Markdown and PDF reports.
 #
@@ -39,14 +41,37 @@ except ImportError:
 
 # --- Agent Configuration ---
 CONFIG = {
-    "AUDITOR_NAME": "Adelaide Zephyrine Charlotte (Adversarial Agent v6.1)",
+    "AUDITOR_NAME": "Adelaide Zephyrine Charlotte (Adversarial Agent v6.3)",
     "NOTES_FILE": "AutomatedAuditNotes.txt",
     "REPORT_TEMPLATE": "AuditNote_{date}.md",
     "FEATURE_LIST_PATH": "./documentation/Developer Documentation/TodoFeatureFullList.md",
     "MAX_CHUNK_LINES": 500,
     "LLM_API_ENDPOINT": "http://localhost:18141/v1/chat/completions",
     "LLM_MODEL_NAME": "google/gemma-3n-e4b",
-    "IS_WINDOWS": os.name == 'nt'
+    "IS_WINDOWS": os.name == 'nt',
+    "ALLOWED_EXTENSIONS": {
+        # Code Files
+        '.c', '.py', '.go', '.sh', '.jsx', '.tsx', '.ts', '.js',
+        # Ada Files
+        '.adb', '.ads', '.gpr',
+        # Config & Markup
+        '.md', '.toml', '.txt', '.json', '.html', '.ini', '.mako',
+        # Image Files
+        '.jpg', '.jpeg', '.png', '.bmp', '.ico'
+    },
+    # --- ADDITION: Define additional folders and patterns to ignore ---
+    # These are combined with .gitignore. Use standard .gitignore syntax.
+    "ADDITIONAL_IGNORE_PATTERNS": {
+        # Default ignores for any project
+        ".git", ".vscode", "__pycache__", "node_modules", "build", "dist",
+        "*.pyc", "*.log", "*.egg-info",
+        # Project-specific examples
+        "meshCommunicationRelay", "staticmodelpool", "db_snapshots" ,"temp", "_excludefromRuntime_reverseEngineeringAssets", "alire", "alire*", "deps"
+        # Virtual Environments
+        "zephyrineCondaVenv", "miniforge3_local", "venv", ".venv",
+        # Agent's own output files
+        "AutomatedAuditNotes.txt", "AuditNote_*.md", "AuditNote_*.pdf"
+    }
 }
 
 # --- Agent State (in-memory) ---
@@ -59,10 +84,9 @@ full_codebase_map: Dict[str, str] = {}  # Maps file path to its content
 def fast_file_discovery(repo_root: str) -> List[str]:
     """
     Performs a high-speed, verbose file discovery using an optimized os.walk
-    that intelligently prunes ignored directories as it traverses the tree.
+    that intelligently prunes ignored directories and filters by extension.
     """
     global audited_file_structure
-    global p
     print("   -> Using optimized Python `os.walk` with live pruning for discovery...")
 
     gitignore_patterns_re = [re.compile(p) for p in load_gitignore_patterns_for_re(repo_root)]
@@ -75,6 +99,7 @@ def fast_file_discovery(repo_root: str) -> List[str]:
         print(f"\r   -> [Walker] Scanned {dir_count} directories. Current: {os.path.relpath(root, repo_root)}", end="",
               flush=True)
 
+        # Prune ignored directories
         dirs[:] = [d for d in dirs if not any(
             p.fullmatch(os.path.join(os.path.relpath(root, repo_root), d).replace(os.sep, '/').lstrip('./')) for p in
             gitignore_patterns_re)]
@@ -87,15 +112,24 @@ def fast_file_discovery(repo_root: str) -> List[str]:
 
         filtered_files = []
         for file in files:
+            # --- MODIFICATION START ---
+            # 1. First, perform a quick and cheap check on the file extension.
+            #    We use .lower() to handle cases like .PNG or .JPG.
+            file_ext = os.path.splitext(file)[1].lower()
+            if file_ext not in CONFIG['ALLOWED_EXTENSIONS']:
+                continue  # Skip to the next file if the extension is not allowed
+
+            # 2. If the extension is allowed, proceed with the more expensive gitignore check.
             relative_path = os.path.join(rel_dir, file).replace(os.sep, '/') if rel_dir != "." else file
-            if not any(p.fullmatch(relative_path.lstrip('./'), p_re) for p_re in gitignore_patterns_re):
+            if not any(p_re.fullmatch(relative_path.lstrip('./')) for p_re in gitignore_patterns_re):
                 audited_files.append(os.path.join(root, file))
                 filtered_files.append(file)
+            # --- MODIFICATION END ---
 
         if filtered_files:
             current_level['__files__'] = sorted(filtered_files)
 
-    print()
+    print()  # Newline after the progress indicator
 
     def sort_tree(d):
         if '__files__' in d: d['__files__'].sort()
@@ -108,30 +142,38 @@ def fast_file_discovery(repo_root: str) -> List[str]:
 
 
 def load_gitignore_patterns_for_re(repo_root: str) -> List[str]:
-    """Loads gitignore patterns and converts them into regex."""
+    """
+    Loads gitignore patterns from CONFIG and .gitignore file, then converts them
+    into a list of regex patterns for matching.
+    """
     gitignore_path = os.path.join(repo_root, '.gitignore')
-    patterns = []
 
-    default_ignores = {
-        ".git", ".vscode", "__pycache__", "*.pyc", "*.log", CONFIG['NOTES_FILE'], "AuditNote_*.md",
-        "zephyrineCondaVenv", "miniforge3_local", "build", "dist", "*.egg-info", "node_modules", "logs"
-    }
+    # --- MODIFICATION START ---
+    # 1. Start with the patterns defined in the script's configuration.
+    #    Using a set automatically handles duplicates.
+    all_patterns = set(CONFIG.get("ADDITIONAL_IGNORE_PATTERNS", {}))
 
+    # 2. Add patterns from the project's .gitignore file, if it exists.
     if os.path.exists(gitignore_path):
         with open(gitignore_path, 'r', encoding='utf-8') as f:
             for line in f:
                 line = line.strip()
                 if line and not line.startswith('#'):
-                    default_ignores.add(line)
+                    all_patterns.add(line)
 
-    for line in default_ignores:
+    # 3. Convert all collected patterns to regex.
+    regex_patterns = []
+    for line in all_patterns:
+        # This logic correctly handles gitignore-style patterns for our use case.
         pattern = line.replace('**', '*')  # Simplify globstar for this regex
         pattern = re.escape(pattern).replace(r'\*', '.*')
         if pattern.endswith('/'):
-            pattern += '.*'
-        patterns.append(f"({pattern})$|({pattern}/.*)")
+            pattern += '.*'  # Match anything inside a directory
+        # Match the pattern itself or anything inside a directory with that name
+        regex_patterns.append(f"({pattern})$|({pattern}/.*)")
+    # --- MODIFICATION END ---
 
-    return patterns
+    return regex_patterns
 
 
 def chunk_file_content(file_path: str, MAX_CHUNK_LINES=386):
@@ -180,8 +222,8 @@ def invoke_llm_for_analysis(prompt_text: str, image_b64: Optional[str] = None) -
         return result['choices'][0]['message']['content'].strip()
     except requests.exceptions.RequestException as e:
         return f"LLM API Error: Could not connect or request failed: {e}"
-    except (KeyError, IndexError):
-        return f"LLM API Error: Unexpected response format from server: {response.text}"
+    except (KeyError, IndexError, json.JSONDecodeError) as e:
+        return f"LLM API Error: Unexpected response format from server: {e.text if 'e' in locals() and hasattr(e, 'text') else 'Unknown format'}"
 
 
 def analyze_code_chunk(file_path: str, chunk: str, chunk_num: int):
@@ -219,7 +261,7 @@ def analyze_code_chunk(file_path: str, chunk: str, chunk_num: int):
         llm_prompt = f"You are an expert code auditor. Provide a brief, critical analysis of the following code snippet from the file '{base_filename}'. Focus on potential bugs, anti-patterns, or logical errors. If it looks good, say so. Be concise.\n\nCode:\n```python\n{chunk}\n```"
         llm_analysis = invoke_llm_for_analysis(llm_prompt)
         if "LLM API Error" not in llm_analysis:
-            update_notes("LLM ANALYSIS", file_path, (chunk_num * CONFIG['MAX_CHUNK_LINES']) + 1, chunk[:200] + "...",
+            update_notes("AUTOMATED VALIDATION ANALYSIS", file_path, (chunk_num * CONFIG['MAX_CHUNK_LINES']) + 1, chunk[:200] + "...",
                          llm_analysis)
         else:
             update_notes("POTENTIAL ISSUE", file_path, (chunk_num * CONFIG['MAX_CHUNK_LINES']) + 1, chunk[:200] + "...",
@@ -264,19 +306,20 @@ def perform_cynical_audit():
 
 def generate_file_tree_string(structure, prefix=""):
     tree_lines = []
-    items = sorted(structure.keys(), key=lambda x: (x == '__files__', x))
+    # Separate files from directories to list directories first
+    dirs = sorted([k for k in structure if k != '__files__'])
+    files = sorted(structure.get('__files__', []))
+
+    items = dirs + files
     for i, name in enumerate(items):
-        if name == '__files__': continue
-        is_last = (i == len(items) - 1) or (i == len(items) - 2 and items[-1] == '__files__')
+        is_last = i == len(items) - 1
         connector = "└── " if is_last else "├── "
         tree_lines.append(f"{prefix}{connector}{name}")
-        new_prefix = prefix + ("    " if is_last else "│   ")
-        tree_lines.extend(generate_file_tree_string(structure[name], new_prefix))
-    if '__files__' in structure:
-        for i, filename in enumerate(structure['__files__']):
-            is_last_file = i == len(structure['__files__']) - 1
-            connector = "└── " if is_last_file else "├── "
-            tree_lines.append(f"{prefix}{connector}{filename}")
+
+        if name in dirs:  # It's a directory
+            new_prefix = prefix + ("    " if is_last else "│   ")
+            tree_lines.extend(generate_file_tree_string(structure[name], new_prefix))
+
     return tree_lines
 
 
@@ -284,7 +327,7 @@ def map_finding_type_to_dal(finding_type: str) -> str:
     mapping = {
         "CRITICAL BUG": "DAL A (Fatal)", "LOGICAL FLAW": "DAL A (Fatal)",
         "HIGH RISK": "DAL B (Hazardous)", "POTENTIAL ISSUE": "DAL C (Major)",
-        "LLM ANALYSIS": "DAL D (Minor)", "MATHEMATICAL VALIDATION": "DAL C (Major)",
+        "AUTOMATED VALIDATION ANALYSIS": "DAL D (Minor)", "MATHEMATICAL VALIDATION": "DAL C (Major)",
         "IMPROVEMENT": "DAL D (Minor)", "IMAGE REVIEW": "DAL E (No Safety Effect)"
     }
     return mapping.get(finding_type, "DAL E (No Safety Effect)")
@@ -336,7 +379,7 @@ The following issues and observations were identified during the audit, categori
         for finding in cynical_findings:
             note_suggestion = f"**Note:** {finding['note']}<br><br>**Suggestion:** {finding['suggestion']}"
             report_content += f"| **{finding['type']}** | `{finding['file']}` | {note_suggestion} |\n"
-    severity_order = ["CRITICAL BUG", "HIGH RISK", "POTENTIAL ISSUE", "LLM ANALYSIS", "MATHEMATICAL VALIDATION"]
+    severity_order = ["CRITICAL BUG", "HIGH RISK", "POTENTIAL ISSUE", "AUTOMATED VALIDATION ANALYSIS", "MATHEMATICAL VALIDATION"]
     findings_by_type = defaultdict(list)
     for f in rule_llm_findings: findings_by_type[f['type']].append(f)
     for severity in severity_order:
@@ -393,9 +436,11 @@ The following issues and observations were identified during the audit, categori
                         for f in linked_findings]
                     risks_md = "\n".join(risk_items)
             elif status == "To-Do":
-                scrutiny_notes = "This feature is planned but not yet implemented."; risks_md = "N/A"
+                scrutiny_notes = "This feature is planned but not yet implemented.";
+                risks_md = "N/A"
             elif status == "Cancelled":
-                scrutiny_notes = "This feature has been explicitly cancelled."; risks_md = "N/A"
+                scrutiny_notes = "This feature has been explicitly cancelled.";
+                risks_md = "N/A"
             description_md = description.replace('|', '\\|')
             appendix_md += f"| {description_md} | {status} | {scrutiny_notes} | {risks_md} |\n"
         report_content += appendix_md
@@ -459,7 +504,7 @@ def main():
             continue
         global current_file_context
         current_file_context = {}
-        content_for_chunking = full_codebase_map[rel_path]
+        content_for_chunking = full_codebase_map.get(rel_path, "")
         lines = content_for_chunking.splitlines()
         total_lines = len(lines)
         num_chunks = (total_lines + CONFIG['MAX_CHUNK_LINES'] - 1) // CONFIG[
@@ -485,8 +530,8 @@ def main():
 
     # --- Final Step: Generate PDF ---
     md_report_path = CONFIG['REPORT_FILE']
-    pdf_report_name = f"Automated Quality Assurance Report with {CONFIG['CURRENT_DATE']}.pdf"
-    pdf_report_path = os.path.join(os.getcwd(), pdf_report_name)
+    # FIX: Derive PDF name from MD name to ensure they match
+    pdf_report_path = os.path.splitext(md_report_path)[0] + '.pdf'
     generate_pdf_report(md_report_path, pdf_report_path)
 
 
