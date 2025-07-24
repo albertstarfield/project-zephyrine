@@ -276,8 +276,6 @@ except ImportError:
     TIKTOKEN_AVAILABLE_APP = False
     cl100k_base_encoder_app = None
 
-# Define these near the top, perhaps after imports or before app = Flask(...)
-
 META_MODEL_NAME_STREAM = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream"
 META_MODEL_NAME_NONSTREAM = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia"
 META_MODEL_OWNER = "zephyrine-foundation"
@@ -5902,9 +5900,145 @@ def format_sse_notification(data: dict, event: str = None) -> str:
 
 
 
+# --- ollama helper function formatting
+
+
+def _format_ollama_chat_response_nonstream(
+    response_text: str,
+    model_name: str,
+    total_duration_ns: int,
+    eval_duration_ns: int
+) -> Dict[str, Any]:
+    """
+    Formats a complete response into the Ollama non-streaming JSON structure.
+    """
+    return {
+        "model": model_name,
+        "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+        "message": {
+            "role": "assistant",
+            "content": response_text
+        },
+        "done": True,
+        "total_duration": total_duration_ns,
+        "load_duration": 1,  # Placeholder, not measured
+        "prompt_eval_count": 0,  # Placeholder, not measured
+        "prompt_eval_duration": 1,  # Placeholder, not measured
+        "eval_count": 0,  # Placeholder, not measured
+        "eval_duration": eval_duration_ns,
+    }
+
+
+def _ollama_pseudo_stream_sync_generator(
+    full_response_text: str,
+    model_name: str,
+    total_duration_ns: int,
+    eval_duration_ns: int
+):
+    """
+    Takes a completed text string and yields it word-by-word in the
+    Ollama-compatible streaming SSE format (application/x-ndjson).
+    This function is fully synchronous to avoid context errors.
+    """
+    logger.info(f"OLLAMA_STREAM: Streaming pre-generated text ({len(full_response_text)} chars).")
+
+    try:
+        # 1. Stream the content word by word.
+        # Ollama clients expect each chunk to be a complete JSON object on a new line.
+        words = full_response_text.split(' ')
+        for i, word in enumerate(words):
+            chunk_content = word + (' ' if i < len(words) - 1 else '')
+            chunk = {
+                "model": model_name,
+                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                "message": {
+                    "role": "assistant",
+                    "content": chunk_content
+                },
+                "done": False
+            }
+            yield json.dumps(chunk) + "\n"
+            time.sleep(0.02) # Optional delay for smoother appearance
+
+        # 2. Send the final "done" chunk with statistics.
+        # This chunk signals the end of the stream for Ollama clients.
+        final_chunk = {
+            "model": model_name,
+            "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+            "done": True,
+            "total_duration": total_duration_ns,
+            "load_duration": 1,
+            "prompt_eval_count": 0,
+            "prompt_eval_duration": 1,
+            "eval_count": 0,
+            "eval_duration": eval_duration_ns,
+        }
+        yield json.dumps(final_chunk) + "\n"
+
+    except GeneratorExit:
+        logger.warning("OLLAMA_STREAM: Client disconnected from stream.")
+    finally:
+        logger.info("OLLAMA_STREAM: Finished sending all chunks.")
+
 
 # --- OpenAI Response Formatting Helpers ---
-# ---- Helper function ----
+
+
+# ---- Helper function method----
+
+
+def _pseudo_stream_sync_generator(
+        full_response_text: str,
+        model_name: str = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream"
+):
+    """
+    Takes a completed text string and yields it word-by-word in the
+    OpenAI-compatible SSE format. This function is fully synchronous and
+    avoids any asyncio context conflicts with Flask.
+    """
+    resp_id = f"chatcmpl-syncstream-{uuid.uuid4()}"
+    timestamp = int(time.time())
+    logger.info(f"SYNC_STREAM {resp_id}: Streaming pre-generated text ({len(full_response_text)} chars).")
+
+    def yield_chunk(delta_content: Optional[str] = None, role: Optional[str] = None,
+                    finish_reason: Optional[str] = None):
+        """Helper to format data into the OpenAI SSE chunk structure."""
+        delta = {}
+        if role:
+            delta["role"] = role
+        if delta_content is not None:
+            delta["content"] = delta_content
+
+        chunk_payload = {
+            "id": resp_id, "object": "chat.completion.chunk", "created": timestamp,
+            "model": model_name,
+            "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}]
+        }
+        return f"data: {json.dumps(chunk_payload)}\n\n"
+
+    try:
+        yield yield_chunk(role="assistant", delta_content="")
+
+        if "Error:" in full_response_text or "interrupted" in full_response_text.lower():
+            logger.error(f"SYNC_STREAM {resp_id}: Streaming an error message provided by the main handler.")
+            yield yield_chunk(delta_content=full_response_text)
+            yield yield_chunk(finish_reason="error")
+            return
+
+        words = full_response_text.split(' ')
+        for i, word in enumerate(words):
+            chunk_content = word + (' ' if i < len(words) - 1 else '')
+            yield yield_chunk(delta_content=chunk_content)
+            time.sleep(0.02)
+
+        yield yield_chunk(finish_reason="stop")
+
+    except GeneratorExit:
+        logger.warning(f"SYNC_STREAM {resp_id}: Client disconnected from stream.")
+    finally:
+        yield "data: [DONE]\n\n"
+        logger.info(f"SYNC_STREAM {resp_id}: Finished sending all chunks and [DONE] signal.")
+
 
 def _create_openai_error_response(message: str, err_type="internal_error", code=None, status_code=500):
     """Creates an OpenAI-like error JSON response."""
@@ -7661,72 +7795,6 @@ def handle_legacy_completions():
     return resp
 
 
-def _pseudo_stream_sync_generator(
-        full_response_text: str,
-        model_name: str = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream"
-):
-    """
-    Takes a completed text string and yields it word-by-word in the
-    OpenAI-compatible SSE format. This function is fully synchronous and
-    avoids any asyncio context conflicts with Flask.
-    """
-    resp_id = f"chatcmpl-syncstream-{uuid.uuid4()}"
-    timestamp = int(time.time())
-    logger.info(f"SYNC_STREAM {resp_id}: Streaming pre-generated text ({len(full_response_text)} chars).")
-
-    def yield_chunk(delta_content: Optional[str] = None, role: Optional[str] = None,
-                    finish_reason: Optional[str] = None):
-        """Helper to format data into the OpenAI SSE chunk structure."""
-        delta = {}
-        if role:
-            delta["role"] = role
-        if delta_content is not None:
-            delta["content"] = delta_content
-
-        chunk_payload = {
-            "id": resp_id, "object": "chat.completion.chunk", "created": timestamp,
-            "model": model_name,
-            "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}]
-        }
-        return f"data: {json.dumps(chunk_payload)}\n\n"
-
-    try:
-        # 1. Yield the initial role chunk.
-        yield yield_chunk(role="assistant", delta_content="")
-
-        # 2. Check for errors from the generation step.
-        if "Error:" in full_response_text or "interrupted" in full_response_text.lower():
-            logger.error(f"SYNC_STREAM {resp_id}: Streaming an error message provided by the generator.")
-            yield yield_chunk(delta_content=full_response_text)
-            yield yield_chunk(finish_reason="error")
-            return
-
-        # 3. Stream the text word by word.
-        words = full_response_text.split(' ')
-        for i, word in enumerate(words):
-            chunk_content = word + (' ' if i < len(words) - 1 else '')
-            yield yield_chunk(delta_content=chunk_content)
-            # This small delay is optional but makes the stream feel more natural to the user.
-            time.sleep(0.02)
-
-            # 4. Send the final stop signal.
-        yield yield_chunk(finish_reason="stop")
-
-    except GeneratorExit:
-        # This is normal, happens when the client disconnects.
-        logger.warning(f"SYNC_STREAM {resp_id}: Client disconnected from stream.")
-    except Exception as e:
-        logger.exception(f"SYNC_STREAM {resp_id}: Unhandled exception during synchronous chunk yielding:")
-        # Attempt to send a final error to the client if possible.
-        try:
-            yield yield_chunk(delta_content=f"[Server Error in Streamer: {type(e).__name__}]", finish_reason="error")
-        except:
-            pass
-    finally:
-        # 5. Signal the end of the stream.
-        yield "data: [DONE]\n\n"
-        logger.info(f"SYNC_STREAM {resp_id}: Finished sending all chunks and [DONE] signal.")
-
 # --- NEW: SSE Notification Endpoint ---
 @app.route("/v1/chat/notification")
 def sse_notification_stream():
@@ -7751,226 +7819,197 @@ def sse_notification_stream():
     return Response(stream_with_context(generate()), mimetype="text/event-stream")
 
 
-@app.route("/v1/chat/completions", methods=["POST"])
-@app.route("/api/chat", methods=["POST"])
-async def handle_openai_chat_completion():
+@app.route("/v1/chat/responsezeph", methods=["POST"])
+async def handle_zephyrine_chat_response():
     """
-    Handles requests mimicking OpenAI/Ollama's chat completion endpoint.
-    This is the complete, non-blocking implementation for immediate stream start.
-
-    Implements the Dual Generate Logic correctly:
-    1. Immediately launches `background_generate` (ELP0) in a separate thread
-       to perform deep analysis without blocking the API response. The background
-       task will handle its own input classification.
-    2. Immediately proceeds to generate the fast (ELP1) response using either
-       the streaming generator or a direct, awaited call, and returns it to the client.
+    A custom, high-performance chat endpoint that uses `async def` for the fastest
+    possible ELP1 response time. It does NOT support streaming and will return
+    an error if `stream=true` is requested.
     """
     start_req_time_main_handler = time.monotonic()
-    request_id = f"req-chat-{uuid.uuid4()}"
-    logger.info(f"🚀 Async OpenAI/Ollama Chat Request ID: {request_id} (Unified Non-Streaming Logic)")
+    request_id = f"req-zeph-{uuid.uuid4()}"
+    logger.info(f"🚀 Zeph Custom Async Chat Request ID: {request_id}")
 
-    db: Session = g.db  # Use request-bound session from Flask's g
+    db: Session = g.db
     resp_obj: Optional[Response] = None
-    session_id_for_logs: str = f"openai_req_{request_id}_unassigned"
-    request_data_log_snippet: str = "No request data processed"
-    final_response_status_code: int = 500  # Default to error
+    session_id_for_logs: str = f"zeph_req_{request_id}_unassigned"
+    final_response_status_code: int = 500
 
     try:
-        # --- 1. Get and Parse Request Data (This part is fast and async-native) ---
-        try:
-            raw_request_data_dict = request.get_json()
-            if not raw_request_data_dict:
-                raise ValueError("Empty JSON payload received.")
-            try:
-                request_data_log_snippet = json.dumps(raw_request_data_dict)[:1000]
-            except:
-                request_data_log_snippet = str(raw_request_data_dict)[:1000]
-        except Exception as json_err:
-            logger.warning(f"{request_id}: Failed to get/parse JSON body: {json_err}")
-            try:
-                request_data_log_snippet = request.get_data(as_text=True)
-                request_data_log_snippet = request_data_log_snippet[:1000]
-            except:
-                request_data_log_snippet = "Could not read request body"
+        raw_request_data_dict = request.get_json()
+        if not raw_request_data_dict: raise ValueError("Empty JSON payload.")
 
-            resp_data_err, status_code_val = _create_openai_error_response(
-                f"Request body is missing or invalid JSON: {json_err}",
-                err_type="invalid_request_error", status_code=400)
-            resp_obj = Response(json.dumps(resp_data_err), status=status_code_val, mimetype='application/json')
-            final_response_status_code = status_code_val
-            return resp_obj
-
-        # --- 2. Extract Parameters and Message Content ---
         messages_from_req = raw_request_data_dict.get("messages", [])
-        stream_requested_by_client = raw_request_data_dict.get("stream", False)
-        model_requested_by_client = raw_request_data_dict.get("model")
-        session_id_for_logs = raw_request_data_dict.get("session_id", f"openai_req_{request_id}")
+        stream_requested = raw_request_data_dict.get("stream", False)
+        session_id_for_logs = raw_request_data_dict.get("session_id", f"zeph_req_{request_id}")
 
-        if cortex_text_interaction:
-            cortex_text_interaction.current_session_id = session_id_for_logs
-        else:
-            raise RuntimeError("Critical: cortex_text_interaction instance is not available.")
+        # CRITICAL: Reject streaming requests to this specific endpoint
+        if stream_requested:
+            logger.warning(
+                f"{request_id}: Request rejected. The /v1/chat/responsezeph/ endpoint does not support streaming.")
+            resp_data_err, status_code_val = _create_openai_error_response(
+                "Streaming is not supported on this endpoint. Use /v1/chat/completions for streaming.",
+                err_type="invalid_request_error", status_code=400)
+            return Response(json.dumps(resp_data_err), status=status_code_val, mimetype='application/json')
 
-        logger.debug(
-            f"{request_id}: Request parsed - SessionID={session_id_for_logs}, Stream: {stream_requested_by_client}, ModelReq: {model_requested_by_client}")
+        if not cortex_text_interaction: raise RuntimeError("cortex_text_interaction instance not available.")
+        cortex_text_interaction.current_session_id = session_id_for_logs
 
-        if not messages_from_req or not isinstance(messages_from_req, list):
-            raise ValueError("'messages' is required and must be a list.")
-
-        user_input_from_req = ""
-        image_b64_from_req = None
-        last_user_msg_obj = next(
-            (msg for msg in reversed(messages_from_req) if isinstance(msg, dict) and msg.get("role") == "user"), None)
-
+        user_input_from_req, image_b64_from_req = "", None
+        last_user_msg_obj = next((msg for msg in reversed(messages_from_req) if msg.get("role") == "user"), None)
         if not last_user_msg_obj: raise ValueError("No message with role 'user' found.")
-
         content_from_user_msg = last_user_msg_obj.get("content")
         if isinstance(content_from_user_msg, str):
             user_input_from_req = content_from_user_msg
         elif isinstance(content_from_user_msg, list):
-            for item_part in content_from_user_msg:
-                if isinstance(item_part, dict):
-                    item_type = item_part.get("type")
-                    if item_type == "text":
-                        user_input_from_req += item_part.get("text", "")
-                    elif item_type == "image_url":
-                        img_url = item_part.get("image_url", {}).get("url", "")
-                        if img_url.startswith("data:image"):
-                            try:
-                                _, potential_b64 = img_url.split(",", 1)
-                                base64.b64decode(potential_b64, validate=True)
-                                image_b64_from_req = potential_b64
-                            except Exception as img_err:
-                                logger.warning(f"Could not decode base64 image data: {img_err}")
-                        else:
-                            logger.warning(f"Unsupported image_url format received: {img_url}")
-        else:
-            raise ValueError("Invalid user message 'content' type.")
+            for part in content_from_user_msg:
+                if part.get("type") == "text":
+                    user_input_from_req += part.get("text", "")
+                elif part.get("type") == "image_url":
+                    image_b64_from_req = part.get("image_url", {}).get("url", "").split(",", 1)[1]
+        if not user_input_from_req and not image_b64_from_req: raise ValueError("No text or image content provided.")
 
-        if not user_input_from_req and not image_b64_from_req:
-            raise ValueError("No text or image content provided in user message.")
-
-        # --- 3. LAUNCH BACKGROUND (ELP0) TASK IMMEDIATELY ---
-        logger.info(f"{request_id}: Launching background_generate task immediately in a new thread.")
-
-        def run_background_task_with_new_loop(user_input_bg, session_id_bg, image_b64_bg):
-            bg_log_prefix_thread = f"[BG Task {request_id} Thr:{threading.get_ident()}]"
-            loop = None
-            bg_db_session: Optional[Session] = None
+        # Launch ELP0 background task in a thread (non-blocking)
+        def run_bg_task(user_in, sess_id, img_b64):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            db_session = SessionLocal()
             try:
-                loop = asyncio.new_event_loop()
-                asyncio.set_event_loop(loop)
-
-                bg_db_session = SessionLocal()
-                if not bg_db_session:
-                    logger.error(f"{bg_log_prefix_thread}: Failed to create DB session for background task. Aborting.")
-                    return
-
                 loop.run_until_complete(
-                    cortex_text_interaction.background_generate(
-                        db=bg_db_session,
-                        user_input=user_input_bg,
-                        session_id=session_id_bg,
-                        classification="chat_complex",
-                        image_b64=image_b64_bg
-                    )
-                )
-            except Exception as task_err:
-                logger.error(f"{bg_log_prefix_thread} Error during background task execution: {task_err}",
-                             exc_info=True)
-                if bg_db_session:
-                    try:
-                        add_interaction(bg_db_session, session_id=session_id_bg, mode="chat", input_type="log_error",
-                                        user_input=f"Background Task Error ({request_id})",
-                                        llm_response=f"Error: {str(task_err)[:1500]}")
-                        bg_db_session.commit()
-                    except Exception as db_log_err_bg:
-                        logger.error(f"{bg_log_prefix_thread}: Failed to log BG error to DB: {db_log_err_bg}")
-                        bg_db_session.rollback()
+                    cortex_text_interaction.background_generate(db=db_session, user_input=user_in, session_id=sess_id,
+                                                                classification="chat_complex", image_b64=img_b64))
             finally:
-                if bg_db_session: bg_db_session.close()
-                if loop: loop.close()
-                logger.info(f"{bg_log_prefix_thread} Background thread function finished.")
+                if db_session: db_session.close()
+                loop.close()
 
-        background_thread_obj = threading.Thread(
-            target=run_background_task_with_new_loop,
-            args=(user_input_from_req, session_id_for_logs, image_b64_from_req),
-            daemon=True
-        )
-        background_thread_obj.start()
-        logger.info(f"{request_id}: Launched background_generate in thread {background_thread_obj.ident}.")
+        threading.Thread(target=run_bg_task, args=(user_input_from_req, session_id_for_logs, image_b64_from_req),
+                         daemon=True).start()
 
-        # --- 4. RETURN IMMEDIATE (ELP1) RESPONSE (NON-STREAMING ONLY) ---
-        # This part now happens instantly after parsing the request and launching the background thread.
-        # We now treat stream=true and stream=false identically for stability.
+        # Await the fast ELP1 response directly
+        direct_response_text = await cortex_text_interaction.direct_generate(db, user_input_from_req,
+                                                                             session_id_for_logs,
+                                                                             image_b64=image_b64_from_req)
 
-        model_id_for_response = META_MODEL_NAME_NONSTREAM  # Always use the non-stream model name
+        # Format and return the non-streaming JSON response
+        resp_data_ok = _format_openai_chat_response(direct_response_text, model_name=META_MODEL_NAME_NONSTREAM)
+        resp_obj = jsonify(resp_data_ok)
+        final_response_status_code = 200
 
-        if stream_requested_by_client:
-            logger.warning(
-                f"{request_id}: Client requested stream=true, but this has been disabled for stability. "
-                "Processing as a standard non-streaming request and returning a single JSON payload."
-            )
-
-        # This is the logic from the original "stream=false" path. It will now run for ALL requests.
-        logger.info(f"{request_id}: Generating non-streaming direct response (awaiting ELP1 path).")
-
-        # Await the fast response. This runs in the correct async context.
-        direct_response_text_val = await cortex_text_interaction.direct_generate(
-            db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
-        )
-
-        # Check for errors from the generation process
-        if "interrupted" in direct_response_text_val.lower() or "Error:" in direct_response_text_val:
-            final_response_status_code = 503 if "interrupted" in direct_response_text_val.lower() else 500
-            resp_data_err, _ = _create_openai_error_response(direct_response_text_val,
-                                                             status_code=final_response_status_code)
-            resp_obj = Response(json.dumps(resp_data_err), status=final_response_status_code,
-                                mimetype='application/json')
-        else:
-            # If successful, format the complete, non-streaming OpenAI response
-            resp_data_ok = _format_openai_chat_response(direct_response_text_val, model_name=model_id_for_response)
-            resp_obj = jsonify(resp_data_ok)
-            final_response_status_code = 200
-
-    except (ValueError, json.JSONDecodeError) as ve:
-        logger.warning(f"{request_id}: Invalid request: {ve}")
-        resp_data, status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
-                                                               status_code=400)
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in Zeph async handler:")
+        err_msg = f"Internal server error: {type(e).__name__}"
+        resp_data, status_code = _create_openai_error_response(err_msg, status_code=500)
         resp_obj = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_response_status_code = status_code
-    except TaskInterruptedException as tie_main:
-        logger.error(f"🚦 {request_id}: Main handler caught TaskInterruptedException (ELP1 path): {tie_main}")
-        resp_data, status_code = _create_openai_error_response(
-            f"Processing interrupted by a higher priority task: {tie_main}",
-            err_type="server_error", code="task_interrupted", status_code=503)
-        resp_obj = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_response_status_code = status_code
-    except Exception as main_err:
-        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in main async handler:")
-        err_msg_main = f"Internal server error: {type(main_err).__name__}"
-        resp_data, status_code = _create_openai_error_response(err_msg_main, status_code=500)
-        resp_obj = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_response_status_code = status_code
-        try:
-            if db:
-                add_interaction(db, session_id=session_id_for_logs, mode="chat", input_type='error',
-                                user_input=f"Main Handler Error. Req: {request_data_log_snippet}",
-                                llm_response=err_msg_main[:2000])
-                db.commit()
-        except Exception as db_err_log:
-            logger.error(f"{request_id}: ❌ Failed to log main handler error: {db_err_log}")
 
     finally:
-        duration_req_main = (time.monotonic() - start_req_time_main_handler) * 1000
+        duration_req = (time.monotonic() - start_req_time_main_handler) * 1000
         logger.info(
-            f"🏁 Async OpenAI Chat Request {request_id} handled in {duration_req_main:.2f} ms. Final HTTP Status: {final_response_status_code}")
+            f"🏁 Zeph Custom Async Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
 
-    if resp_obj is None:
-        logger.error(f"{request_id}: Handler finished, but 'resp_obj' is None! Fallback error.")
-        resp_data, status_code = _create_openai_error_response(
-            "Internal error: Handler did not produce a response.", status_code=500)
+    return resp_obj
+
+
+@app.route("/v1/chat/completions", methods=["POST"])
+def handle_openai_chat_completion():
+    """
+    Handles requests mimicking OpenAI/Ollama's chat completion endpoint.
+    This version uses a synchronous `def` route to ensure Flask context stability,
+    while still launching the ELP0 background task immediately and using
+    `asyncio.run()` to execute the async ELP1 generation logic.
+    """
+    start_req_time_main_handler = time.monotonic()
+    request_id = f"req-chat-{uuid.uuid4()}"
+    logger.info(f"🚀 Sync OpenAI Chat Request ID: {request_id} (Stable Streaming Logic)")
+
+    db: Session = g.db
+    resp_obj: Optional[Response] = None
+    session_id_for_logs: str = f"openai_req_{request_id}_unassigned"
+    final_response_status_code: int = 500
+
+    try:
+        raw_request_data_dict = request.get_json()
+        if not raw_request_data_dict: raise ValueError("Empty JSON payload.")
+
+        messages_from_req = raw_request_data_dict.get("messages", [])
+        stream_requested_by_client = raw_request_data_dict.get("stream", False)
+        session_id_for_logs = raw_request_data_dict.get("session_id", f"openai_req_{request_id}")
+
+        if not cortex_text_interaction: raise RuntimeError("Critical: cortex_text_interaction instance not available.")
+        cortex_text_interaction.current_session_id = session_id_for_logs
+
+        user_input_from_req, image_b64_from_req = "", None
+        last_user_msg_obj = next((msg for msg in reversed(messages_from_req) if msg.get("role") == "user"), None)
+        if not last_user_msg_obj: raise ValueError("No message with role 'user' found.")
+        content_from_user_msg = last_user_msg_obj.get("content")
+        if isinstance(content_from_user_msg, str):
+            user_input_from_req = content_from_user_msg
+        elif isinstance(content_from_user_msg, list):
+            for part in content_from_user_msg:
+                if part.get("type") == "text":
+                    user_input_from_req += part.get("text", "")
+                elif part.get("type") == "image_url":
+                    image_b64_from_req = part.get("image_url", {}).get("url", "").split(",", 1)[1]
+        if not user_input_from_req and not image_b64_from_req: raise ValueError("No text or image content provided.")
+
+        # Launch ELP0 background task in a thread (non-blocking)
+        def run_bg_task(user_in, sess_id, img_b64):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            db_session = SessionLocal()
+            try:
+                loop.run_until_complete(
+                    cortex_text_interaction.background_generate(db=db_session, user_input=user_in, session_id=sess_id,
+                                                                classification="chat_complex", image_b64=img_b64))
+            finally:
+                if db_session: db_session.close()
+                loop.close()
+
+        threading.Thread(target=run_bg_task, args=(user_input_from_req, session_id_for_logs, image_b64_from_req),
+                         daemon=True).start()
+        logger.info(f"{request_id}: Launched background_generate in thread.")
+
+        # Run the async ELP1 generation using asyncio.run(). This is a blocking call
+        # inside this synchronous function, which is what causes the minor delay you noted.
+        logger.info(f"{request_id}: Generating ELP1 response using asyncio.run()...")
+        full_response_text = asyncio.run(
+            cortex_text_interaction.direct_generate(
+                db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+            )
+        )
+
+        if stream_requested_by_client:
+            logger.info(f"{request_id}: ELP1 generation complete. Starting pseudo-stream.")
+            sync_generator = _pseudo_stream_sync_generator(
+                full_response_text=full_response_text,
+                model_name=META_MODEL_NAME_STREAM
+            )
+            resp_obj = Response(stream_with_context(sync_generator), mimetype='text/event-stream')
+            final_response_status_code = 200
+        else:
+            logger.info(f"{request_id}: ELP1 generation complete. Formatting non-streaming response.")
+            if "interrupted" in full_response_text.lower() or "Error:" in full_response_text:
+                final_response_status_code = 503 if "interrupted" in full_response_text.lower() else 500
+                resp_data_err, _ = _create_openai_error_response(full_response_text,
+                                                                 status_code=final_response_status_code)
+                resp_obj = Response(json.dumps(resp_data_err), status=final_response_status_code,
+                                    mimetype='application/json')
+            else:
+                resp_data_ok = _format_openai_chat_response(full_response_text, model_name=META_MODEL_NAME_NONSTREAM)
+                resp_obj = jsonify(resp_data_ok)
+                final_response_status_code = 200
+
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in Sync completions handler:")
+        err_msg = f"Internal server error: {type(e).__name__}"
+        resp_data, status_code = _create_openai_error_response(err_msg, status_code=500)
         resp_obj = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+
+    finally:
+        duration_req = (time.monotonic() - start_req_time_main_handler) * 1000
+        logger.info(
+            f"🏁 Sync OpenAI Chat Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
 
     return resp_obj
 
@@ -8258,8 +8297,116 @@ def handle_openai_models():
 
 
 
-
 #==============================[Ollama Behaviour]==============================
+@app.route("/api/chat", methods=["POST"])
+def handle_ollama_chat():
+    """
+    Handles requests mimicking Ollama's /api/chat endpoint.
+    This uses a synchronous `def` route for Flask context stability. It launches
+    the ELP0 background task immediately, then generates the ELP1 response and
+    formats it specifically for Ollama clients, including streaming.
+    """
+    start_req_time_main_handler = time.monotonic()
+    request_id = f"req-ollama-{uuid.uuid4()}"
+    logger.info(f"🚀 Ollama-Style Sync Chat Request ID: {request_id}")
+
+    db: Session = g.db
+    resp_obj: Optional[Response] = None
+    session_id_for_logs: str = f"ollama_req_{request_id}_unassigned"
+    final_response_status_code: int = 500
+
+    try:
+        raw_request_data_dict = request.get_json()
+        if not raw_request_data_dict: raise ValueError("Empty JSON payload.")
+
+        messages_from_req = raw_request_data_dict.get("messages", [])
+        stream_requested_by_client = raw_request_data_dict.get("stream", False)
+        session_id_for_logs = raw_request_data_dict.get("session_id", f"ollama_req_{request_id}")
+
+        if not cortex_text_interaction: raise RuntimeError("Critical: cortex_text_interaction instance not available.")
+        cortex_text_interaction.current_session_id = session_id_for_logs
+
+        user_input_from_req, image_b64_from_req = "", None
+        last_user_msg_obj = next((msg for msg in reversed(messages_from_req) if msg.get("role") == "user"), None)
+        if not last_user_msg_obj: raise ValueError("No message with role 'user' found.")
+        content_from_user_msg = last_user_msg_obj.get("content")
+        if isinstance(content_from_user_msg, str):
+            user_input_from_req = content_from_user_msg
+        elif isinstance(content_from_user_msg, list):
+            for part in content_from_user_msg:
+                if part.get("type") == "text":
+                    user_input_from_req += part.get("text", "")
+                elif part.get("type") == "image_url":
+                    image_b64_from_req = part.get("image_url", {}).get("url", "").split(",", 1)[1]
+        if not user_input_from_req and not image_b64_from_req: raise ValueError("No text or image content provided.")
+
+        # Launch ELP0 background task in a thread (non-blocking)
+        def run_bg_task(user_in, sess_id, img_b64):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            db_session = SessionLocal()
+            try:
+                loop.run_until_complete(
+                    cortex_text_interaction.background_generate(db=db_session, user_input=user_in, session_id=sess_id,
+                                                                classification="chat_complex", image_b64=img_b64))
+            finally:
+                if db_session: db_session.close()
+                loop.close()
+
+        threading.Thread(target=run_bg_task, args=(user_input_from_req, session_id_for_logs, image_b64_from_req),
+                         daemon=True).start()
+        logger.info(f"{request_id}: Launched background_generate in thread.")
+
+        # Generate the ELP1 response using asyncio.run(). This is a blocking call here.
+        logger.info(f"{request_id}: Generating ELP1 response using asyncio.run()...")
+        elp1_start_time = time.monotonic()
+        full_response_text = asyncio.run(
+            cortex_text_interaction.direct_generate(
+                db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+            )
+        )
+        elp1_end_time = time.monotonic()
+
+        # Calculate durations for Ollama format (in nanoseconds)
+        eval_duration_ns = int((elp1_end_time - elp1_start_time) * 1_000_000_000)
+        total_duration_ns = int((elp1_end_time - start_req_time_main_handler) * 1_000_000_000)
+
+        model_name_for_response = META_MODEL_NAME_NONSTREAM  # Use a consistent model name
+
+        if stream_requested_by_client:
+            logger.info(f"{request_id}: ELP1 generation complete. Starting Ollama-style pseudo-stream.")
+            ollama_generator = _ollama_pseudo_stream_sync_generator(
+                full_response_text=full_response_text,
+                model_name=model_name_for_response,
+                total_duration_ns=total_duration_ns,
+                eval_duration_ns=eval_duration_ns
+            )
+            resp_obj = Response(stream_with_context(ollama_generator), mimetype='application/x-ndjson')
+            final_response_status_code = 200
+        else:
+            logger.info(f"{request_id}: ELP1 generation complete. Formatting Ollama non-streaming response.")
+            ollama_response_body = _format_ollama_chat_response_nonstream(
+                response_text=full_response_text,
+                model_name=model_name_for_response,
+                total_duration_ns=total_duration_ns,
+                eval_duration_ns=eval_duration_ns
+            )
+            resp_obj = jsonify(ollama_response_body)
+            final_response_status_code = 200
+
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in Ollama chat handler:")
+        # Ollama returns 500 with a simple error JSON
+        resp_obj = jsonify({"error": f"Internal server error: {type(e).__name__}"})
+        final_response_status_code = 500
+
+    finally:
+        duration_req = (time.monotonic() - start_req_time_main_handler) * 1000
+        logger.info(
+            f"🏁 Ollama-Style Chat Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+
+    return resp_obj
+
 @app.route("/api/tags", methods=["GET", "HEAD"])
 def handle_ollama_tags():
     """Handles requests mimicking Ollama's /api/tags endpoint, using global constants."""
