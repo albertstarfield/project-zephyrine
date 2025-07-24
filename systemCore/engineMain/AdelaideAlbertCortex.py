@@ -62,6 +62,7 @@ from PIL import Image # Used for image handling (optional validation/info)
 import threading
 import datetime
 import queue
+
 import atexit # To signal shutdown
 import datetime
 import hashlib
@@ -121,7 +122,7 @@ from sqlalchemy import update, inspect as sql_inspect, desc
 from sqlalchemy.sql import func
 
 # --- Flask Imports ---
-from flask import Flask, request, Response, g, jsonify # Use Flask imports
+from flask import Flask, request, Response, g, jsonify, redirect # Use Flask imports
 from flask import stream_with_context
 from flask_cors import CORS
 
@@ -7289,147 +7290,79 @@ def _create_assistants_api_stub_response(
                                                                                                                                                                                                                                     `-'                                    `--'                                               `---'    `-'   
 """
 # ====== Server Root =======
-@app.route("/", methods=["POST"])
-async def handle_interaction():
-    """Main endpoint to handle user interactions asynchronously (Quart)."""
+@app.route("/", methods=["GET", "POST", "HEAD"])
+def handle_interaction():
+    """
+    Main endpoint that intelligently handles three types of requests:
+    - GET/HEAD from an Ollama client: A successful health check.
+    - GET/HEAD from a browser: A redirect to a special URL.
+    - POST from any client: The universal fast-path AI response.
+    """
+    # --- Handler for GET/HEAD (Health Checks and Browsers) ---
+    if request.method in ["GET", "HEAD"]:
+        user_agent = request.headers.get('User-Agent', '')
+
+        # Define the fingerprint for a typical browser User-Agent from your logs.
+        browser_fingerprint = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
+
+        # Check if fuzz logic is available.
+        if FUZZY_AVAILABLE and fuzz and user_agent:
+            # --- Check 1: Is it an Ollama client? ---
+            # We use a high threshold to be very specific and avoid false positives.
+            # A simple `in` check is also a good option here.
+            ollama_score = fuzz.partial_ratio('ollama', user_agent.lower())
+            if ollama_score >= 85:  # Increased threshold for accuracy
+                logger.info(
+                    f"Ollama Compatibility: Responding 200 OK to {request.method} from User-Agent '{user_agent}' (Score: {ollama_score})")
+                return Response("Adelaide/Zephy is running (Ollama compatibility mode).", status=200,
+                                mimetype="text/plain")
+
+            # --- Check 2: Is it a Browser? ---
+            # Use `token_set_ratio` which is better for comparing strings with different versions/details.
+            # This checks how similar the set of words is, which is robust.
+            browser_score = fuzz.token_set_ratio(browser_fingerprint, user_agent)
+            if browser_score >= 60:  # Using the 60% threshold you requested
+                logger.info(
+                    f"Browser Detected: Redirecting {request.method} from User-Agent '{user_agent}' (Score: {browser_score})")
+                return redirect("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+        # --- Fallback: If it's not a recognized Ollama client, treat it like a browser/other and redirect.
+        logger.info(f"Default Redirect: Redirecting unknown GET/HEAD request from User-Agent: '{user_agent}'")
+        return redirect("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
+
+    # --- MAIN LOGIC FOR ALL POST REQUESTS ---
     start_req = time.monotonic()
-    # --- Get DB Session within route ---
-    db: Session = SessionLocal()
-    # --- End DB Session Get ---
-    response_text = "An unexpected server error occurred."
-    status_code = 500
-    request_data = None
-    mode_param = "chat" # Default mode if not specified
+    db: Session = g.db
 
     try:
-        # Use Quart's await request.get_json()
         request_data = request.get_json()
         if not request_data:
-            logger.warning("⚠️ Empty JSON payload.")
-            # Use Quart's jsonify or Response
-            # Returning plain text as per original design of this endpoint
-            response_text = "Empty request payload."
-            status_code = 400
-            resp = Response(response_text, status=status_code, mimetype="text/plain; charset=utf-8")
-            # Need to close DB session in this early return path
-            if db: db.close()
-            return resp
+            return Response("Empty request payload.", status=400, mimetype="text/plain")
 
-        prompt = request_data.get("prompt", "")
-        image_b64 = request_data.get("image", "")
-        url = request_data.get("url", "")
-        reset = request_data.get("reset", False)
-        session_id = request_data.get("session_id", f"session_{int(time.time())}")
-        mode_param = request_data.get("mode", "chat").lower()
-        if mode_param not in ["chat", "agent"]:
-            logger.warning(f"Invalid mode '{mode_param}' received, defaulting to 'chat'.")
-            mode_param = "chat"
+        prompt = request_data.get("prompt")
+        if not prompt:
+            logger.warning("POST request missing 'prompt'.")
+            return Response("Request must include a 'prompt'.", status=400, mimetype="text/plain")
 
-        logger.info(f"🚀 Quart Custom Request: Session={session_id}, ReqMode={mode_param}, Reset={reset}, URL='{url}', Img={'Y' if image_b64 else 'N'}, Prompt='{prompt[:30]}...'")
+        session_id = request_data.get("session_id", f"direct_session_{int(time.time())}")
 
-        # --- Workflow Logic ---
-        if reset:
-            # Pass the created db session to reset methods
-            cortex_text_interaction.reset(db, session_id)
-            ai_agent.reset(db, session_id) # Agent reset might also need db session
-            response_text = "Chat and Agent session contexts reset."
-            status_code = 200
-        elif url:
-            # process_url is synchronous, run in thread
-            response_text = await asyncio.to_thread(cortex_text_interaction.process_url, db, url, session_id)
-            status_code = 200 if "Error" not in response_text else 500
-        elif image_b64:
-             if len(image_b64) % 4 != 0 or not all(c in 'ABCDEFGHIJKLMNOPQRSTUVWXYZabcdefghijklmnopqrstuvwxyz0123456789+/=' for c in image_b64):
-                 response_text = "Invalid image data format."
-                 status_code = 400
-                 logger.error(f"Invalid base64 image received for session {session_id}")
-             else:
-                 # process_image is synchronous, run in thread
-                 # It now returns description, image_content_part tuple
-                 # For this simple endpoint, we just return the description/error text
-                 description_or_error, _ = await asyncio.to_thread(
-                     cortex_text_interaction.process_image, db, image_b64, session_id
-                 )
-                 response_text = description_or_error
-                 status_code = 200 if "Error" not in response_text else 500
-        elif prompt:
-            # --- Use CortexThoughts.generate which contains all complex logic ---
-            # 1. Classify complexity first (sync in thread)
-            classification_data = {"session_id": session_id, "mode": "chat", "input_type": "classification", "user_input": prompt[:100]}
-            input_classification = await asyncio.to_thread(
-                cortex_text_interaction._classify_input_complexity, db, prompt, classification_data
-            )
-            classification_reason = classification_data.get('classification_reason', 'N/A')
-            interaction_data = classification_data # Use this dict for logging later
+        logger.info(f"🚀 POST Request: Routing to direct_generate. Session: {session_id}, Prompt: '{prompt[:50]}...'")
 
-            # 2. Decide based on classification (and mode_param if forced)
-            if input_classification == "agent_task" or mode_param == "agent":
-                 logger.info(f"🎯 Agent Task triggered (Reason: {classification_reason}). Starting background workflow.")
-                 # Agent manages its own DB session in background task
-                 initial_agent_interaction = add_interaction(
-                     db, session_id=session_id, mode="agent", input_type="text",
-                     user_input=prompt, classification=input_classification,
-                     classification_reason=classification_reason
-                 )
-                 response_text = f"Okay, I'll work on that task ({initial_agent_interaction.id}) in the background."
-                 status_code = 200
-                 await _start_agent_task(ai_agent, initial_agent_interaction.id, prompt, session_id)
-            else:
-                 # Use the main generate function for chat_simple/chat_complex
-                 logger.info(f"🗣️ Running Chat workflow via generate (Classification: {input_classification})...")
-                 response_text = await cortex_text_interaction.generate(
-                     db, prompt, session_id, classification=input_classification
-                 )
-                 status_code = 500 if "internal error" in response_text.lower() or "Error:" in response_text else 200
-        else:
-            logger.warning("⚠️ No action specified (no prompt, image, url, or reset).")
-            response_text = "No action specified in request."
-            status_code = 400
+        # --- UNIVERSAL DIRECT GENERATE PATH ---
+        response_text = asyncio.run(
+            cortex_text_interaction.direct_generate(db, prompt, session_id)
+        )
 
-        # Create the final plain text response object
-        resp = Response(response_text, status=status_code, mimetype="text/plain; charset=utf-8")
+        resp = Response(response_text, status=200, mimetype="text/plain; charset=utf-8")
 
     except Exception as e:
-        logger.exception("🔥🔥 Unhandled exception in custom request handler:")
+        logger.exception("🔥🔥 Unhandled exception in main POST request handler:")
         response_text = f"Internal Server Error: {e}"
-        status_code = 500
-        resp = Response(response_text, status=status_code, mimetype="text/plain; charset=utf-8")
-        # Error logging to DB (uses a new session)
-        try:
-            sid_for_error = "unknown"
-            input_for_error = "Unknown"
-            captured_mode = mode_param # Use mode from request if available
-            if request_data and isinstance(request_data, dict):
-                sid_for_error = request_data.get("session_id", f"error_{int(time.time())}")
-                input_summary = [f"{k}: {str(v)[:50]}..." for k, v in request_data.items()]
-                input_for_error = "; ".join(input_summary) if input_summary else str(request_data)[:1000]
-            elif hasattr(request, 'data') and request.data:
-                 input_for_error = f"Raw Data: {(await request.get_data(as_text=True))[:1000]}" # Use await for Quart
-
-            error_db = SessionLocal()
-            try:
-                err_interaction_data = {
-                    "session_id": sid_for_error, "mode": captured_mode, "input_type": 'error',
-                    "user_input": input_for_error[:2000], "llm_response": f"Handler Error: {e}"[:2000]
-                }
-                valid_keys = {c.name for c in Interaction.__table__.columns}
-                db_kwargs = {k: v for k, v in err_interaction_data.items() if k in valid_keys}
-                add_interaction(error_db, **db_kwargs)
-            except Exception as db_log_err_inner:
-                logger.error(f"❌ Failed to log handler error to DB within error block: {db_log_err_inner}")
-            finally:
-                 error_db.close()
-        except Exception as db_err:
-            logger.error(f"❌ Failed to create session or log handler error to DB: {db_err}")
+        resp = Response(response_text, status=500, mimetype="text/plain; charset=utf-8")
 
     finally:
-        # --- Close DB Session for this route ---
-        if db:
-            db.close()
-            logger.debug("Custom route DB session closed.")
-        # --- End DB Session Close ---
         duration_req = (time.monotonic() - start_req) * 1000
-        logger.info(f"🏁 Quart Custom Request handled in {duration_req:.2f} ms. Status: {status_code}")
+        logger.info(f"🏁 POST Request handled in {duration_req:.2f} ms.")
 
     return resp
 
@@ -8424,46 +8357,49 @@ def handle_ollama_chat():
 
 @app.route("/api/tags", methods=["GET", "HEAD"])
 def handle_ollama_tags():
-    """Handles requests mimicking Ollama's /api/tags endpoint, using global constants."""
+    """Handles requests mimicking Ollama's /api/tags endpoint, using realistic placeholder values."""
     logger.info("Received request for /api/tags (Ollama Compatibility)")
     start_req = time.monotonic()
     status_code = 200
 
-    # --- Use global constants ---
+    # --- Use global constants and provide a realistic placeholder size ---
+    # A 14B parameter model is typically between 7GB and 28GB depending on quantization.
+    # We will use a plausible number in bytes (approx. 14.2 billion).
+    placeholder_size_bytes = 14200000000
+
     ollama_models = [
         {
-            "name": f"{META_MODEL_NAME_STREAM}:latest", # Use Constant
-            "model": f"{META_MODEL_NAME_STREAM}:latest", # Use Constant
+            "name": f"{META_MODEL_NAME_STREAM}:latest",
+            "model": f"{META_MODEL_NAME_STREAM}:latest",
             "modified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "size": 0, # Placeholder size
-            "digest": hashlib.sha256(META_MODEL_NAME_STREAM.encode()).hexdigest(), # Fake digest
+            "size": placeholder_size_bytes, # <<< FIX: Provide a realistic, non-zero size
+            "digest": hashlib.sha256(META_MODEL_NAME_STREAM.encode()).hexdigest(),
             "details": {
                 "parent_model": "",
-                "format": META_MODEL_FORMAT,             # Use Constant
-                "family": META_MODEL_FAMILY,             # Use Constant
-                "families": [META_MODEL_FAMILY],         # Use Constant
-                "parameter_size": META_MODEL_PARAM_SIZE, # Use Constant
-                "quantization_level": META_MODEL_QUANT_LEVEL # Use Constant
+                "format": META_MODEL_FORMAT,
+                "family": META_MODEL_FAMILY,
+                "families": [META_MODEL_FAMILY],
+                "parameter_size": META_MODEL_PARAM_SIZE,
+                "quantization_level": META_MODEL_QUANT_LEVEL
             }
         },
         {
-            "name": f"{META_MODEL_NAME_NONSTREAM}:latest", # Use Constant
-            "model": f"{META_MODEL_NAME_NONSTREAM}:latest", # Use Constant
+            "name": f"{META_MODEL_NAME_NONSTREAM}:latest",
+            "model": f"{META_MODEL_NAME_NONSTREAM}:latest",
             "modified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "size": 0,
+            "size": placeholder_size_bytes, # <<< FIX: Provide a realistic, non-zero size
             "digest": hashlib.sha256(META_MODEL_NAME_NONSTREAM.encode()).hexdigest(),
             "details": {
                 "parent_model": "",
-                "format": META_MODEL_FORMAT,             # Use Constant
-                "family": META_MODEL_FAMILY,             # Use Constant
-                "families": [META_MODEL_FAMILY],         # Use Constant
-                "parameter_size": META_MODEL_PARAM_SIZE, # Use Constant
-                "quantization_level": META_MODEL_QUANT_LEVEL # Use Constant
+                "format": META_MODEL_FORMAT,
+                "family": META_MODEL_FAMILY,
+                "families": [META_MODEL_FAMILY],
+                "parameter_size": META_MODEL_PARAM_SIZE,
+                "quantization_level": META_MODEL_QUANT_LEVEL
             }
         },
-        # Add more meta-models here if needed
+        # You can add other models here following the same pattern
     ]
-    # --- End use global constants ---
 
     response_body = {
         "models": ollama_models
