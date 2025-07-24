@@ -143,6 +143,19 @@ LLAMA_CPP_N_CTX = int(os.getenv("LLAMA_CPP_N_CTX", 32768)) # Context window size
 LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "False").lower() == "true"
 LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 
+
+META_MODEL_NAME_STREAM = "ZephE0.5-14.2B-StreamCompat"
+META_MODEL_NAME_NONSTREAM = "ZephE0.5-14.2B-Main"
+META_MODEL_OWNER = "zephyrine-foundation"
+TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha" # Client-facing TTS model name
+ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal" # New constant for ASR
+IMAGE_GEN_MODEL_NAME_CLIENT_FACING = "Zephyrine-InternalFlux-Imagination-Engine"
+META_MODEL_FAMILY = "zephyrine"
+META_MODEL_PARAM_SIZE = "14.2B" # As requested
+META_MODEL_QUANT_LEVEL = "fp16" # As requested
+META_MODEL_FORMAT = "gguf" # Common format assumption for Ollama compatibility
+
+
 # --- Mapping logical roles to GGUF filenames within LLAMA_CPP_GGUF_DIR ---
 LLAMA_CPP_MODEL_MAP = {
     "router": os.getenv("LLAMA_CPP_MODEL_ROUTER_FILE", "deepscaler.gguf"), # Adelaide Zephyrine Charlotte Persona

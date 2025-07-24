@@ -276,16 +276,6 @@ except ImportError:
     TIKTOKEN_AVAILABLE_APP = False
     cl100k_base_encoder_app = None
 
-META_MODEL_NAME_STREAM = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream"
-META_MODEL_NAME_NONSTREAM = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia"
-META_MODEL_OWNER = "zephyrine-foundation"
-TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha" # Client-facing TTS model name
-ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal" # New constant for ASR
-IMAGE_GEN_MODEL_NAME_CLIENT_FACING = "Zephyrine-InternalFlux-Imagination-Engine"
-META_MODEL_FAMILY = "zephyrine"
-META_MODEL_PARAM_SIZE = "14.2B" # As requested
-META_MODEL_QUANT_LEVEL = "fp16" # As requested
-META_MODEL_FORMAT = "gguf" # Common format assumption for Ollama compatibility
 
 # --- Constants for Streaming ---
 LOG_QUEUE_TIMEOUT = 0.05 # How long generator waits for a log message (seconds)
