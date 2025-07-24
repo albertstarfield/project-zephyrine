@@ -7767,7 +7767,7 @@ async def handle_openai_chat_completion():
     """
     start_req_time_main_handler = time.monotonic()
     request_id = f"req-chat-{uuid.uuid4()}"
-    logger.info(f"🚀 Async OpenAI/Ollama Chat Request ID: {request_id} (Corrected Non-Blocking Logic)")
+    logger.info(f"🚀 Async OpenAI/Ollama Chat Request ID: {request_id} (Unified Non-Streaming Logic)")
 
     db: Session = g.db  # Use request-bound session from Flask's g
     resp_obj: Optional[Response] = None
@@ -7851,8 +7851,6 @@ async def handle_openai_chat_completion():
             raise ValueError("No text or image content provided in user message.")
 
         # --- 3. LAUNCH BACKGROUND (ELP0) TASK IMMEDIATELY ---
-        # We NO LONGER wait for classification here. We launch the background
-        # task and let IT handle classification and all deep analysis internally.
         logger.info(f"{request_id}: Launching background_generate task immediately in a new thread.")
 
         def run_background_task_with_new_loop(user_input_bg, session_id_bg, image_b64_bg):
@@ -7860,7 +7858,6 @@ async def handle_openai_chat_completion():
             loop = None
             bg_db_session: Optional[Session] = None
             try:
-                # This function runs in a dedicated thread and needs its own event loop and DB session.
                 loop = asyncio.new_event_loop()
                 asyncio.set_event_loop(loop)
 
@@ -7869,8 +7866,6 @@ async def handle_openai_chat_completion():
                     logger.error(f"{bg_log_prefix_thread}: Failed to create DB session for background task. Aborting.")
                     return
 
-                # The background_generate function will now perform its own classification.
-                # We call it with a general "chat_complex" to ensure it runs the full analysis pipeline.
                 loop.run_until_complete(
                     cortex_text_interaction.background_generate(
                         db=bg_db_session,
@@ -7883,7 +7878,6 @@ async def handle_openai_chat_completion():
             except Exception as task_err:
                 logger.error(f"{bg_log_prefix_thread} Error during background task execution: {task_err}",
                              exc_info=True)
-                # Log the error to the database if possible
                 if bg_db_session:
                     try:
                         add_interaction(bg_db_session, session_id=session_id_bg, mode="chat", input_type="log_error",
@@ -7906,48 +7900,38 @@ async def handle_openai_chat_completion():
         background_thread_obj.start()
         logger.info(f"{request_id}: Launched background_generate in thread {background_thread_obj.ident}.")
 
-        # --- 4. RETURN IMMEDIATE (ELP1) RESPONSE ---
-        # This part now happens instantly after parsing the request and launching the thread.
-        model_id_for_response = META_MODEL_NAME_STREAM if stream_requested_by_client else META_MODEL_NAME_NONSTREAM
+        # --- 4. RETURN IMMEDIATE (ELP1) RESPONSE (NON-STREAMING ONLY) ---
+        # This part now happens instantly after parsing the request and launching the background thread.
+        # We now treat stream=true and stream=false identically for stability.
+
+        model_id_for_response = META_MODEL_NAME_NONSTREAM  # Always use the non-stream model name
 
         if stream_requested_by_client:
-            logger.info(f"{request_id}: Generating full response before starting synchronous stream...")
-
-            # --- THIS IS THE KEY FIX ---
-            # 1. Await the async generation function FIRST. This runs it in the correct
-            #    asyncio context managed by Hypercorn, where Flask's context is valid.
-            full_response_text = await cortex_text_interaction.direct_generate(
-                db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+            logger.warning(
+                f"{request_id}: Client requested stream=true, but this has been disabled for stability. "
+                "Processing as a standard non-streaming request and returning a single JSON payload."
             )
 
-            # 2. Now, call the NEW SYNCHRONOUS generator with the completed text.
-            #    This generator does no async work and has no context conflicts.
-            sync_generator = _pseudo_stream_sync_generator(
-                full_response_text=full_response_text,
-                model_name=model_id_for_response
-            )
+        # This is the logic from the original "stream=false" path. It will now run for ALL requests.
+        logger.info(f"{request_id}: Generating non-streaming direct response (awaiting ELP1 path).")
 
-            # 3. Wrap the synchronous generator in the Response object.
-            resp_obj = Response(stream_with_context(sync_generator), mimetype='text/event-stream')
-            final_response_status_code = 200
+        # Await the fast response. This runs in the correct async context.
+        direct_response_text_val = await cortex_text_interaction.direct_generate(
+            db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+        )
 
+        # Check for errors from the generation process
+        if "interrupted" in direct_response_text_val.lower() or "Error:" in direct_response_text_val:
+            final_response_status_code = 503 if "interrupted" in direct_response_text_val.lower() else 500
+            resp_data_err, _ = _create_openai_error_response(direct_response_text_val,
+                                                             status_code=final_response_status_code)
+            resp_obj = Response(json.dumps(resp_data_err), status=final_response_status_code,
+                                mimetype='application/json')
         else:
-            logger.info(f"{request_id}: Generating non-streaming direct response (awaiting ELP1 path).")
-            # For non-streaming, we must await the fast response. Since this handler is async, we use `await`.
-            direct_response_text_val = await cortex_text_interaction.direct_generate(
-                db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
-            )
-
-            if "interrupted" in direct_response_text_val.lower() or "Error:" in direct_response_text_val:
-                final_response_status_code = 503 if "interrupted" in direct_response_text_val.lower() else 500
-                resp_data_err, _ = _create_openai_error_response(direct_response_text_val,
-                                                                 status_code=final_response_status_code)
-                resp_obj = Response(json.dumps(resp_data_err), status=final_response_status_code,
-                                    mimetype='application/json')
-            else:
-                resp_data_ok = _format_openai_chat_response(direct_response_text_val, model_name=model_id_for_response)
-                resp_obj = jsonify(resp_data_ok)
-                final_response_status_code = 200
+            # If successful, format the complete, non-streaming OpenAI response
+            resp_data_ok = _format_openai_chat_response(direct_response_text_val, model_name=model_id_for_response)
+            resp_obj = jsonify(resp_data_ok)
+            final_response_status_code = 200
 
     except (ValueError, json.JSONDecodeError) as ve:
         logger.warning(f"{request_id}: Invalid request: {ve}")
@@ -7981,7 +7965,6 @@ async def handle_openai_chat_completion():
         duration_req_main = (time.monotonic() - start_req_time_main_handler) * 1000
         logger.info(
             f"🏁 Async OpenAI Chat Request {request_id} handled in {duration_req_main:.2f} ms. Final HTTP Status: {final_response_status_code}")
-        # The DB session `g.db` is closed automatically by the @app.teardown_request handler.
 
     if resp_obj is None:
         logger.error(f"{request_id}: Handler finished, but 'resp_obj' is None! Fallback error.")

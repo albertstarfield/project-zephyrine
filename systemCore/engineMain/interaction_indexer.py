@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy import update
 from langchain_chroma import Chroma
 from langchain.text_splitter import RecursiveCharacterTextSplitter
-
+import shutil
 from database import Interaction, SessionLocal
 from cortex_backbone_provider import CortexEngine
 from CortexConfiguration import *
@@ -31,66 +31,90 @@ INTERACTION_COLLECTION_NAME = "global_interaction_history"
 def initialize_global_interaction_vectorstore(provider: CortexEngine):
     global global_interaction_vectorstore
     logger.info(">>> InteractionIndexer: Initializing global interaction vector store...")
-    with _interaction_vs_init_lock:
-        if _interaction_vs_initialized_event.is_set():
-            return
 
+    # Define consistent client settings to prevent the error in the first place.
+    chroma_settings = Settings(anonymized_telemetry=False)
+
+    # Allow one retry attempt if we need to clear the old DB
+    for attempt in range(2):
         try:
-            os.makedirs(INTERACTION_VS_PERSIST_DIR, exist_ok=True)
+            with _interaction_vs_init_lock:
+                if _interaction_vs_initialized_event.is_set():
+                    return
 
-            if os.path.exists(os.path.join(INTERACTION_VS_PERSIST_DIR, "chroma.sqlite3")):
-                logger.info(f"Loading existing persisted Interaction Chroma DB from: {INTERACTION_VS_PERSIST_DIR}")
-                global_interaction_vectorstore = Chroma(
-                    collection_name=INTERACTION_COLLECTION_NAME,
-                    persist_directory=INTERACTION_VS_PERSIST_DIR,
-                    embedding_function=provider.embeddings,
-                    client_settings=Settings(anonymized_telemetry=False)
-                )
-            else:
-                logger.info(f"No persisted Interaction Chroma DB found. Rebuilding from main database...")
-                db_session = SessionLocal()
-                try:
-                    # First, create the empty, persistent Chroma store
+                os.makedirs(INTERACTION_VS_PERSIST_DIR, exist_ok=True)
+
+                if os.path.exists(os.path.join(INTERACTION_VS_PERSIST_DIR, "chroma.sqlite3")):
+                    logger.info(f"Loading existing persisted Interaction Chroma DB from: {INTERACTION_VS_PERSIST_DIR}")
                     global_interaction_vectorstore = Chroma(
                         collection_name=INTERACTION_COLLECTION_NAME,
                         persist_directory=INTERACTION_VS_PERSIST_DIR,
-                        embedding_function=provider.embeddings
+                        embedding_function=provider.embeddings,
+                        client_settings=chroma_settings  # Consistent settings
                     )
-                    
-                    interactions_with_backup = db_session.query(Interaction).filter(
-                        Interaction.embedding_json.isnot(None)).all()
-                        
-                    if interactions_with_backup:
-                        logger.info(
-                            f"Found {len(interactions_with_backup)} interactions with embedding backups to rebuild.")
-                        texts = [f"User: {i.user_input or ''}\nAI: {i.llm_response or ''}" for i in
-                                 interactions_with_backup]
-                        embeddings = [json.loads(i.embedding_json) for i in interactions_with_backup]
-                        metadatas = [{"interaction_id": i.id, "session_id": i.session_id, "timestamp": str(i.timestamp)}
-                                     for i in interactions_with_backup]
-                        ids = [f"int_{i.id}_chunk_0" for i in
-                               interactions_with_backup]
-
-                        # CORRECTED LOGIC
-                        global_interaction_vectorstore._collection.add(
-                            embeddings=embeddings,
-                            documents=texts,
-                            metadatas=metadatas,
-                            ids=ids
+                else:
+                    logger.info(f"No persisted Interaction Chroma DB found. Rebuilding from main database...")
+                    db_session = SessionLocal()
+                    try:
+                        # First, create the empty, persistent Chroma store
+                        global_interaction_vectorstore = Chroma(
+                            collection_name=INTERACTION_COLLECTION_NAME,
+                            persist_directory=INTERACTION_VS_PERSIST_DIR,
+                            embedding_function=provider.embeddings,
+                            client_settings=chroma_settings # Consistent settings
                         )
-                        logger.success(
-                            f"Rebuilt and persisted Interaction Vector Store with {len(interactions_with_backup)} records.")
-                    else:
-                        logger.info("No interactions with backups found. Created new empty vector store.")
 
-                finally:
-                    db_session.close()
+                        interactions_with_backup = db_session.query(Interaction).filter(
+                            Interaction.embedding_json.isnot(None)).all()
 
-            logger.success("✅ InteractionIndexer: Global interaction vector store initialized.")
-            _interaction_vs_initialized_event.set()
+                        if interactions_with_backup:
+                            logger.info(
+                                f"Found {len(interactions_with_backup)} interactions with embedding backups to rebuild.")
+                            texts = [f"User: {i.user_input or ''}\nAI: {i.llm_response or ''}" for i in
+                                     interactions_with_backup]
+                            embeddings = [json.loads(i.embedding_json) for i in interactions_with_backup]
+                            metadatas = [{"interaction_id": i.id, "session_id": i.session_id, "timestamp": str(i.timestamp)}
+                                         for i in interactions_with_backup]
+                            ids = [f"int_{i.id}_chunk_0" for i in
+                                   interactions_with_backup]
+
+                            global_interaction_vectorstore._collection.add(
+                                embeddings=embeddings,
+                                documents=texts,
+                                metadatas=metadatas,
+                                ids=ids
+                            )
+                            logger.success(
+                                f"Rebuilt and persisted Interaction Vector Store with {len(interactions_with_backup)} records.")
+                        else:
+                            logger.info("No interactions with backups found. Created new empty vector store.")
+
+                    finally:
+                        db_session.close()
+
+                logger.success("✅ InteractionIndexer: Global interaction vector store initialized.")
+                _interaction_vs_initialized_event.set()
+                break  # Exit the loop on success
+
+        except ValueError as e:
+            if "An instance of Chroma already exists" in str(e) and attempt == 0:
+                logger.warning(f"Chroma conflict detected: {e}. Deleting directory and retrying...")
+                with _interaction_vs_init_lock: # Ensure exclusive access for deletion
+                    if os.path.isdir(INTERACTION_VS_PERSIST_DIR):
+                        try:
+                            shutil.rmtree(INTERACTION_VS_PERSIST_DIR)
+                            logger.info(f"Successfully deleted directory: {INTERACTION_VS_PERSIST_DIR}")
+                        except Exception as rm_e:
+                            logger.error(f"❌ Failed to delete Chroma directory {INTERACTION_VS_PERSIST_DIR}: {rm_e}")
+                            raise rm_e # Re-raise if deletion fails
+            else:
+                logger.error(f"❌ InteractionIndexer: Failed to initialize vector store: {e}")
+                global_interaction_vectorstore = None
+                raise e # Re-raise the exception if it's not the specific conflict or on the final attempt
         except Exception as e:
             logger.error(f"❌ InteractionIndexer: Failed to initialize vector store: {e}")
             global_interaction_vectorstore = None
+            raise  # Re-raise other critical errors
 
 
 def get_global_interaction_vectorstore() -> Optional[Chroma]:
