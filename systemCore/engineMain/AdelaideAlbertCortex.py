@@ -133,7 +133,7 @@ except ImportError:
     server_is_busy_event = threading.Event()
 
 # --- Langchain Core Imports ---
-from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
+from langchain_core.messages import HumanMessage, SystemMessage
 from langchain_core.output_parsers import StrOutputParser, JsonOutputParser
 from langchain_core.runnables import RunnableLambda, RunnablePassthrough, RunnableParallel
 from langchain_core.prompts import ChatPromptTemplate, MessagesPlaceholder
@@ -5901,7 +5901,10 @@ def format_sse_notification(data: dict, event: str = None) -> str:
     return f"{msg}\n"
 
 
+
+
 # --- OpenAI Response Formatting Helpers ---
+# ---- Helper function ----
 
 def _create_openai_error_response(message: str, err_type="internal_error", code=None, status_code=500):
     """Creates an OpenAI-like error JSON response."""
@@ -7657,6 +7660,73 @@ def handle_legacy_completions():
 
     return resp
 
+
+def _pseudo_stream_sync_generator(
+        full_response_text: str,
+        model_name: str = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream"
+):
+    """
+    Takes a completed text string and yields it word-by-word in the
+    OpenAI-compatible SSE format. This function is fully synchronous and
+    avoids any asyncio context conflicts with Flask.
+    """
+    resp_id = f"chatcmpl-syncstream-{uuid.uuid4()}"
+    timestamp = int(time.time())
+    logger.info(f"SYNC_STREAM {resp_id}: Streaming pre-generated text ({len(full_response_text)} chars).")
+
+    def yield_chunk(delta_content: Optional[str] = None, role: Optional[str] = None,
+                    finish_reason: Optional[str] = None):
+        """Helper to format data into the OpenAI SSE chunk structure."""
+        delta = {}
+        if role:
+            delta["role"] = role
+        if delta_content is not None:
+            delta["content"] = delta_content
+
+        chunk_payload = {
+            "id": resp_id, "object": "chat.completion.chunk", "created": timestamp,
+            "model": model_name,
+            "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}]
+        }
+        return f"data: {json.dumps(chunk_payload)}\n\n"
+
+    try:
+        # 1. Yield the initial role chunk.
+        yield yield_chunk(role="assistant", delta_content="")
+
+        # 2. Check for errors from the generation step.
+        if "Error:" in full_response_text or "interrupted" in full_response_text.lower():
+            logger.error(f"SYNC_STREAM {resp_id}: Streaming an error message provided by the generator.")
+            yield yield_chunk(delta_content=full_response_text)
+            yield yield_chunk(finish_reason="error")
+            return
+
+        # 3. Stream the text word by word.
+        words = full_response_text.split(' ')
+        for i, word in enumerate(words):
+            chunk_content = word + (' ' if i < len(words) - 1 else '')
+            yield yield_chunk(delta_content=chunk_content)
+            # This small delay is optional but makes the stream feel more natural to the user.
+            time.sleep(0.02)
+
+            # 4. Send the final stop signal.
+        yield yield_chunk(finish_reason="stop")
+
+    except GeneratorExit:
+        # This is normal, happens when the client disconnects.
+        logger.warning(f"SYNC_STREAM {resp_id}: Client disconnected from stream.")
+    except Exception as e:
+        logger.exception(f"SYNC_STREAM {resp_id}: Unhandled exception during synchronous chunk yielding:")
+        # Attempt to send a final error to the client if possible.
+        try:
+            yield yield_chunk(delta_content=f"[Server Error in Streamer: {type(e).__name__}]", finish_reason="error")
+        except:
+            pass
+    finally:
+        # 5. Signal the end of the stream.
+        yield "data: [DONE]\n\n"
+        logger.info(f"SYNC_STREAM {resp_id}: Finished sending all chunks and [DONE] signal.")
+
 # --- NEW: SSE Notification Endpoint ---
 @app.route("/v1/chat/notification")
 def sse_notification_stream():
@@ -7841,16 +7911,26 @@ async def handle_openai_chat_completion():
         model_id_for_response = META_MODEL_NAME_STREAM if stream_requested_by_client else META_MODEL_NAME_NONSTREAM
 
         if stream_requested_by_client:
-            logger.info(f"{request_id}: Returning SSE generator to client immediately.")
-            sse_generator = _stream_openai_chat_response_generator_flask(
-                session_id=session_id_for_logs,
-                user_input=user_input_from_req,
-                classification="direct_stream_elp1",  # This is just a label for the streamer
-                image_b64=image_b64_from_req,
+            logger.info(f"{request_id}: Generating full response before starting synchronous stream...")
+
+            # --- THIS IS THE KEY FIX ---
+            # 1. Await the async generation function FIRST. This runs it in the correct
+            #    asyncio context managed by Hypercorn, where Flask's context is valid.
+            full_response_text = await cortex_text_interaction.direct_generate(
+                db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+            )
+
+            # 2. Now, call the NEW SYNCHRONOUS generator with the completed text.
+            #    This generator does no async work and has no context conflicts.
+            sync_generator = _pseudo_stream_sync_generator(
+                full_response_text=full_response_text,
                 model_name=model_id_for_response
             )
-            resp_obj = Response(sse_generator, mimetype='text/event-stream')
+
+            # 3. Wrap the synchronous generator in the Response object.
+            resp_obj = Response(stream_with_context(sync_generator), mimetype='text/event-stream')
             final_response_status_code = 200
+
         else:
             logger.info(f"{request_id}: Generating non-streaming direct response (awaiting ELP1 path).")
             # For non-streaming, we must await the fast response. Since this handler is async, we use `await`.
