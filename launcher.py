@@ -3835,7 +3835,7 @@ if __name__ == "__main__":
             else:
                 print_system("License previously accepted.")
 
-            _start_port_shield_daemon(port=11434, target_process_name="ollama")
+            #_start_port_shield_daemon(port=11434, target_process_name="ollama")
 
             # --- Start ZephyMesh Node in a Background Thread ---
             print_system("--- Preparing to launch ZephyMesh Node in the background ---")
@@ -4186,7 +4186,7 @@ if __name__ == "__main__":
                     # Start Engine Main
                     service_threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
                     time.sleep(3) # Give engine a moment to start
-                    engine_ready = any(proc.poll() is None and name_s == "ENGINE" for proc, name_s in running_processes)
+                    engine_ready = any(proc.poll() is None and name_s == "ENGINE" for proc, name_s, _, _ in running_processes)
                     if not engine_ready:
                         print_error("Engine Main failed to start. Exiting."); setup_failures.append(f"Engine Main failed to start, check if there's conflicting installations or other issues from previous runs")
 
@@ -4210,7 +4210,7 @@ if __name__ == "__main__":
                                 if not current_procs_snapshot and service_threads: # If threads were started but no procs remain
                                     all_ok = False # Consider it not OK if expected services are gone
 
-                                for proc, name_s in current_procs_snapshot:
+                                for proc, name_s, _, _ in current_procs_snapshot:
                                     if proc.poll() is None: # Process is still running
                                         active_procs_found = True
                                     else:

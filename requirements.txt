@@ -65,6 +65,7 @@ beautifulsoup4
 
 # --- Data Handling, Utilities & Logging ---
 python-dotenv
+dotenv
 loguru
 Pillow
 pillow-avif-plugin

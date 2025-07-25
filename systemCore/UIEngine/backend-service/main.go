@@ -7,6 +7,7 @@ import (
 	"errors"
 	"fmt"
 	"io"
+	"bytes"
 	"bufio"
 	"log"
 	"math"
@@ -55,6 +56,16 @@ type BufferedMessage struct {
 	Sender    string
 	Content   string
 	CreatedAt time.Time
+}
+
+type ChatCompletionRequest struct {
+	Model    string                        `json:"model"`
+	Messages []openai.ChatCompletionMessage `json:"messages"`
+	Stream   bool                          `json:"stream"`
+	// Include other parameters if your backend needs them, e.g., temperature
+	Temperature float32 `json:"temperature,omitempty"`
+	TopP        float32 `json:"top_p,omitempty"`
+	MaxTokens   int     `json:"max_tokens,omitempty"`
 }
 
 // loadConfig loads configuration from .env file and environment variables.
@@ -428,6 +439,60 @@ func processSSEStream(ctx context.Context, resp *http.Response, app *App) {
 	}
 }
 
+func (app *App) handleChatCompletionsProxy(w http.ResponseWriter, r *http.Request) {
+	// The actual, fast endpoint on your LLM service.
+	targetURL := app.Config.LLMAPIRoot + "/v1/chat/responsezeph"
+
+	// 1. Read the entire incoming request body into a byte slice. This is the crucial fix.
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("ERROR in proxy: failed to read incoming request body: %v", err)
+		http.Error(w, "cannot read request body", http.StatusInternalServerError)
+		return
+	}
+	// It's good practice to close the original body.
+	r.Body.Close()
+
+	// For debugging, let's log the exact JSON body we are about to proxy.
+	// This should look identical to the -d content in your curl command.
+	log.Printf("HIJACK: Intercepting request to proxy to %s. Body: %s", targetURL, string(body))
+
+	// 2. Create a new request to the target LLM service, using a buffer from our captured body.
+	proxyReq, err := http.NewRequestWithContext(
+		r.Context(),
+		r.Method,
+		targetURL,
+		bytes.NewBuffer(body), // Use a new reader from the captured 'body' slice.
+	)
+	if err != nil {
+		log.Printf("ERROR in proxy: failed to create upstream request: %v", err)
+		http.Error(w, "failed to create upstream request", http.StatusInternalServerError)
+		return
+	}
+
+	// 3. Copy all headers from the original request (which includes Authorization, Content-Type, etc.)
+	proxyReq.Header = r.Header.Clone()
+
+	// 4. Execute the request and send the response back.
+	client := &http.Client{}
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		log.Printf("ERROR during responsezeph proxy request: %v", err)
+		http.Error(w, "Backend proxy error", http.StatusServiceUnavailable)
+		return
+	}
+	defer resp.Body.Close()
+
+	// 5. Pass the response from the LLM service back to our go-openai client.
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
 // --- Main Application ---
 
 func main() {
@@ -446,7 +511,8 @@ func main() {
 
 	// 3. Initialize OpenAI Client
 	openaiConfig := openai.DefaultConfig(cfg.LLMAPIKey)
-	openaiConfig.BaseURL = cfg.OpenAIAPIBaseURL
+	//openaiConfig.BaseURL = cfg.OpenAIAPIBaseURL
+	openaiConfig.BaseURL = "http://localhost:" + cfg.Port + "/api/v1"
 	openaiClient := openai.NewClientWithConfig(openaiConfig)
 	
 
@@ -514,6 +580,7 @@ func main() {
 		r.Get("/files", app.handleFileHistory)
 		// --- NEW: Endpoint for proactive notifications ---
 		r.Post("/chat/notification", app.handleProactiveNotification)
+		r.Post("/chat/completions", app.handleChatCompletionsProxy)
 	})
 
 	
