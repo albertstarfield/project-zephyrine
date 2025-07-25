@@ -23,17 +23,11 @@
 
 **Project Zephyrine** is just by the Zephyrine Foundation product. it's just **Qwen 2.5 & Mixed Bread AI (For global context embedding vectorization)**, **Nothing to see here.**
 
-bringing together expertise from random AI corporation, researchers from RisTIE Brawijaya University's Electrical Engineering, Internal People of Zephyrine Foundation, Freelancers, and independent developer Albert.
-
-**Vision:** Our vision is to empower users with a personal AI assistant that utilizes the processing power of their local machines. We aim to offer an alternative to cloud-based assistants and reduce reliance on external infrastructure. or Let's just say adaptive Edge-AI
-
 **Open-Source and Freely Available:** Project Zephyrine is a fully open-source project, encouraging community contribution and development.
 
 **Key Features:**
 
-*   **Decentralized Processing:** Zephyrine uses your local machine for AI processing, which helps keep your data private and reduces the need for external servers.
-
-*   **Broad API Compatibility:** The system aims to be compatible with common AI service APIs, making it easier to integrate with existing tools and workflows.
+*   **Broad API Compatibility:** The system aims to be compatible with common AI service APIs, making it easier to integrate with existing tools and workflows. Running default on http://localhost:11434/
     *   **OpenAI API Compatibility:** The application includes implementations for several OpenAI v1 API endpoints.
         *   `/v1/chat/completions`: Handles chat requests and provides responses as expected from the API. For more involved queries, the system can perform additional analysis in the background to enhance its understanding and future answers.
         *   `/v1/completions`: A functional endpoint for legacy completion requests.
@@ -49,10 +43,7 @@ bringing together expertise from random AI corporation, researchers from RisTIE 
         *   **Core & Discovery Endpoints:** Endpoints like `/api/chat`, `/api/tags`, and `/api/version` are implemented to function as expected.
         *   **Model Management Endpoints:** Calls to `/api/pull`, `/api/create`, etc., are handled with basic responses, indicating that model management is handled internally by the system.
 
-*   **Multimodal Interaction:** Zephyrine can process various user inputs, including text, images, and audio, to provide a richer user experience.
-
 *   **AI Architectures:** We use a combination of Large Language Models (LLMs) and Multimodal models, including those compatible with `llama.cpp`. This architecture is mature and reliable.
-
 *   **Non-Centralized Downloads:** This feature can help you download model files and other components faster by checking for them from other users' Zephyrine instances on your local network or the internet. This aims to provide a more efficient download experience compared to relying solely on central servers.
 
 ## 📃 Main features
@@ -61,7 +52,6 @@ bringing together expertise from random AI corporation, researchers from RisTIE 
 -   [x] Can function exclusively on CPU architectures, such as amd64 and arm64/aarch64.
 -   [x] Provides compatibility with Windows* (untested), MacOS (untested on x86_64), and Linux operating systems.
 -   [x] Features partial GPU/MPS/FPGA (Manual Configuration required) (opencl)/Tensor acceleration using cuBLAS, openBLAS, Vulkan, and Metal.
--   [x] Web access.
 
 Just a heads up, some details aren't listed here or in the `readme.md` file. Instead, they've been moved to the `TodoFeatureFullList.md` document or you can check them out [here](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/TodoFeatureFullList.md).
 
@@ -129,6 +119,7 @@ Furthermore, recognition is due to the following individuals for their significa
 Meta and Stanford for their invaluable creation of the LLaMA and Alpaca models, respectively, which have laid the groundwork for the project's AI capabilities.
 Additionally, special appreciation goes to [@keldenl](https://github.com/keldenl) for providing arm64 builds for MacOS and [@W48B1T](https://github.com/W48B1T) for providing Linux builds, which have greatly enhanced the project's accessibility and usability across different platforms and finally for Amaryllis Cortex Base code based on [SiriLLaMa](https://github.com/0ssamaak0/SiriLLama) by 0ssamaak0.
 
+I would say thank you to RisTIE Teknik Elektro Universitas Brawijaya(2022-2023) as the Internal Launchpad of Zephyrine, even if they already split ways with us and they chose corporate ready-to-use LLM solution now or the more popular one, it is still appreciated it. FTMD Aerospace ITB Lab for Guiding their incredible internal system and their fantastic personnel cognitive abilities. and Zephyrine Foundation Teams and Freelancers. 
 
 Lastly, although the project may not garner widespread attention as [@Willy030125](https://github.com/Willy030125/alpaca-electron-GGML-v2-v3), we acknowledge and cherish the efforts put forth by all contributors. Let this work be a testament to the dedication and collective collaboration that underpin academic and technological advancements.
 
