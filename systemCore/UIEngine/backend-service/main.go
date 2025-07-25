@@ -448,6 +448,7 @@ func main() {
 	openaiConfig := openai.DefaultConfig(cfg.LLMAPIKey)
 	openaiConfig.BaseURL = cfg.OpenAIAPIBaseURL
 	openaiClient := openai.NewClientWithConfig(openaiConfig)
+	
 
 	// 4. Initialize App State
 	app := &App{
