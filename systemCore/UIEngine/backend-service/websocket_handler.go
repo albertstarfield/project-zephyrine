@@ -127,6 +127,8 @@ func (app *App) handleWebSocketMessage(conn *websocket.Conn, rawMessage []byte) 
 		app.wsGetChatHistoryList(ctx, conn, msg.Payload)
 	case "chat":
 		app.wsChat(ctx, conn, msg.Payload)
+	case "chat_non_streaming":
+		app.wsChatNonStreaming(ctx, conn, msg.Payload)
 	case "rename_chat":
 		app.wsRenameChat(ctx, conn, msg.Payload)
 	case "delete_chat":
@@ -146,6 +148,96 @@ func (app *App) handleWebSocketMessage(conn *websocket.Conn, rawMessage []byte) 
 }
 
 
+func (app *App) wsChatNonStreaming(ctx context.Context, conn *websocket.Conn, payload json.RawMessage) {
+	var p ChatPayload
+	if err := json.Unmarshal(payload, &p); err != nil || p.ChatID == "" || p.UserID == "" || len(p.Messages) == 0 {
+		sendWsError(conn, "Invalid payload for non-streaming chat message.")
+		return
+	}
+
+	// --- No cancellation logic is needed as this is a single, quick request ---
+
+	// 1. Ensure chat exists and save the user's message (same as streaming)
+	_, isNewChat, err := app.ensureChatExistsAndGetTitle(ctx, &p)
+	if err != nil {
+		log.Printf("CRITICAL ERROR: Failed to ensure chat exists for chat %s: %v", p.ChatID, err)
+		sendWsError(conn, "Failed to initialize chat session.")
+		return
+	}
+	if isNewChat {
+		// This logic can be adapted or removed for non-streaming if not needed
+	}
+
+	userMessage := p.Messages[len(p.Messages)-1]
+	// Using the buffered save for efficiency
+	err = app.saveMessage(ctx, "msg_"+uuid.New().String(), p.ChatID, p.UserID, userMessage.Role, userMessage.Content, time.Now())
+
+	if err != nil {
+		log.Printf("CRITICAL ERROR: Failed to save user message for chat %s: %v", p.ChatID, err)
+		sendWsError(conn, "Failed to save your message to the database.")
+		return
+	}
+	// Notify client that the message is saved
+	sendWsMessage(conn, "message_status_update", map[string]string{"id": p.OptimisticMessageID, "status": "delivered"})
+
+
+	// 2. Make the non-streaming API call
+	log.Printf("Calling non-streaming endpoint for chat %s", p.ChatID)
+	
+	// Temporarily modify the config for this specific call to use the custom endpoint
+	// Note: This assumes you have access to the config object here.
+	// We'll create a temporary client for this.
+	config := openai.DefaultConfig(app.Config.LLMAPIKey)
+	config.BaseURL = "http://localhost:" + app.Config.Port + "/api/v1" // Point to our own proxy
+	tempClient := openai.NewClientWithConfig(config)
+	
+	resp, err := tempClient.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model:       p.Model,
+			Messages:    p.Messages,
+			Stream:      false, // This is the key change!
+			Temperature: app.Config.LLMTemperature,
+			MaxTokens:   app.Config.LLMTopCapTokens,
+			TopP:        app.Config.LLMTopP,
+			// The actual endpoint path is part of the BaseURL we set
+		},
+	)
+
+	if err != nil {
+		log.Printf("Error creating non-streaming chat completion for chat %s: %v", p.ChatID, err)
+		sendWsError(conn, "Failed to get response from the language model.")
+		return
+	}
+
+	// 3. Process and send the single, complete response
+	if len(resp.Choices) == 0 {
+		log.Printf("Non-streaming API returned no choices for chat %s", p.ChatID)
+		sendWsError(conn, "The language model returned an empty response.")
+		return
+	}
+
+	fullResponse := resp.Choices[0].Message.Content
+	assistantResponse := strings.TrimSpace(fullResponse)
+
+	// 4. Save the assistant's response to the database
+	if assistantResponse != "" {
+		err = app.saveMessage(ctx, "msg_"+uuid.New().String(), p.ChatID, p.UserID, openai.ChatMessageRoleAssistant, assistantResponse, time.Now())
+		if err != nil {
+			log.Printf("CRITICAL ERROR: Failed to save assistant message for chat %s: %v", p.ChatID, err)
+			// Don't send a DB error to the client, they already have the response.
+		}
+	}
+
+	// 5. Send the final, complete message back to the client
+	sendWsMessage(conn, "non_streaming_response", map[string]interface{}{
+		"content":             assistantResponse,
+		"optimisticMessageId": p.OptimisticMessageID, // Allows the client to match the response to the sent message
+		"chatId":              p.ChatID,
+	})
+	log.Printf("Successfully sent non-streaming response for chat %s", p.ChatID)
+}
+
 // wsChat now orchestrates the entire transactional process for a single user turn.
 func (app *App) wsChat(ctx context.Context, conn *websocket.Conn, payload json.RawMessage) {
 	var p ChatPayload
@@ -154,24 +246,10 @@ func (app *App) wsChat(ctx context.Context, conn *websocket.Conn, payload json.R
 		return
 	}
 
-	// --- Cancellation Logic ---
-	app.ongoingStreamsMux.Lock()
-	if cancel, exists := app.ongoingStreams[p.ChatID]; exists {
-		log.Printf("New message received for chat %s. Cancelling previous generation.", p.ChatID)
-		cancel()
-	}
-	streamCtx, cancelFunc := context.WithCancel(context.Background())
-	app.ongoingStreams[p.ChatID] = cancelFunc
-	app.ongoingStreamsMux.Unlock()
+	// NOTE: The stream cancellation logic has been removed as it's not
+	// relevant for a fast, non-streaming request.
 
-	defer func() {
-		app.ongoingStreamsMux.Lock()
-		delete(app.ongoingStreams, p.ChatID)
-		app.ongoingStreamsMux.Unlock()
-		log.Printf("Cleaned up stream for chat %s.", p.ChatID)
-	}()
-	// --- End Cancellation Logic ---
-
+	// 1. Ensure chat exists and get its title.
 	chatTitle, isNewChat, err := app.ensureChatExistsAndGetTitle(ctx, &p)
 	if err != nil {
 		log.Printf("CRITICAL ERROR: Failed to ensure chat exists for chat %s: %v", p.ChatID, err)
@@ -182,6 +260,7 @@ func (app *App) wsChat(ctx context.Context, conn *websocket.Conn, payload json.R
 		sendWsMessage(conn, "title_updated", map[string]string{"chatId": p.ChatID, "title": chatTitle})
 	}
 
+	// 2. Save the user's message to the database immediately.
 	userMessage := p.Messages[len(p.Messages)-1]
 	err = app.saveMessage(ctx, "msg_"+uuid.New().String(), p.ChatID, p.UserID, userMessage.Role, userMessage.Content, time.Now())
 	if err != nil {
@@ -189,74 +268,60 @@ func (app *App) wsChat(ctx context.Context, conn *websocket.Conn, payload json.R
 		sendWsError(conn, "Failed to save your message to the database.")
 		return
 	}
+	
+	// 3. Confirm to the client that their message is saved.
 	sendWsMessage(conn, "message_status_update", map[string]string{"id": p.OptimisticMessageID, "status": "delivered"})
 
-	stream, err := app.OpenAIClient.CreateChatCompletionStream(streamCtx, openai.ChatCompletionRequest{
-		Model:       p.Model,
-		Messages:    p.Messages,
-		Stream:      true,
-		Temperature: app.Config.LLMTemperature,
-		MaxTokens:   app.Config.LLMTopCapTokens,
-		TopP:        app.Config.LLMTopP,
-	})
+	// 4. Make the NON-STREAMING API call. This call is now hijacked by our proxy.
+	log.Printf("Requesting non-streaming completion for chat %s...", p.ChatID)
+	resp, err := app.OpenAIClient.CreateChatCompletion(
+		ctx,
+		openai.ChatCompletionRequest{
+			Model:       p.Model,
+			Messages:    p.Messages,
+			Stream:      false, // This is the key change!
+			Temperature: app.Config.LLMTemperature,
+			MaxTokens:   app.Config.LLMTopCapTokens,
+			TopP:        app.Config.LLMTopP,
+		},
+	)
 
 	if err != nil {
-		if errors.Is(err, context.Canceled) {
-			log.Printf("Stream for chat %s was canceled successfully before starting.", p.ChatID)
-			return
-		}
-		log.Printf("Error creating LLM stream for chat %s: %v", p.ChatID, err)
-		sendWsError(conn, "Failed to start chat with the language model.")
+		log.Printf("Error from non-streaming chat completion for chat %s: %v", p.ChatID, err)
+		sendWsError(conn, "The language model failed to generate a response.")
 		return
 	}
-	defer stream.Close()
 
-	var fullResponse strings.Builder
-	for {
-		response, err := stream.Recv()
-		if errors.Is(err, io.EOF) {
-			// Add the ID to the "end" message
-			sendWsMessage(conn, "end", map[string]string{
-				"optimisticMessageId": p.OptimisticMessageID,
-			})
-			break
-		}
-		if err != nil {
-			if errors.Is(err, context.Canceled) {
-				log.Printf("Stream for chat %s was canceled mid-generation.", p.ChatID)
-			} else {
-				log.Printf("LLM stream error for chat %s: %v", p.ChatID, err)
-				sendWsError(conn, "An error occurred during streaming.")
-			}
-			break
-		}
-		content := response.Choices[0].Delta.Content
-		if content != "" {
-			fullResponse.WriteString(content)
-			// Add the ID to every "chunk" message
-			sendWsMessage(conn, "chunk", map[string]string{
-				"content":             content,
-				"optimisticMessageId": p.OptimisticMessageID,
-			})
-		}
-	}
-
-	// --- START: Added Save Guard ---
-	// If the stream context was canceled, do not save the (potentially partial) response.
-	if streamCtx.Err() == context.Canceled {
-		log.Printf("Not saving partial response for canceled stream in chat %s", p.ChatID)
+	if len(resp.Choices) == 0 {
+		log.Printf("API returned no choices for chat %s", p.ChatID)
+		sendWsError(conn, "The language model returned an empty response.")
 		return
 	}
-	// --- END: Added Save Guard ---
 
-	assistantResponse := strings.TrimSpace(fullResponse.String())
+	// 5. Extract the complete response content.
+	assistantResponse := strings.TrimSpace(resp.Choices[0].Message.Content)
+
+	// 6. Save the assistant's complete response to the database.
 	if assistantResponse != "" {
 		err = app.saveMessage(ctx, "msg_"+uuid.New().String(), p.ChatID, p.UserID, openai.ChatMessageRoleAssistant, assistantResponse, time.Now())
 		if err != nil {
+			// The client will still get the response, but we log this critical failure.
 			log.Printf("CRITICAL ERROR: Failed to save assistant message for chat %s: %v", p.ChatID, err)
 		}
 	}
+	
+	// 7. Send the single, complete response back to the client.
+	// The client-side should be updated to handle a "full_response" message type.
+	sendWsMessage(conn, "full_response", map[string]string{
+		"content":             assistantResponse,
+		"optimisticMessageId": p.OptimisticMessageID, // Allows the UI to replace the correct message.
+	})
+
+	log.Printf("Successfully sent non-streaming response for chat %s.", p.ChatID)
 }
+
+
+
 
 // ensureChatExistsAndGetTitle creates a chat if it doesn't exist and returns its title.
 func (app *App) ensureChatExistsAndGetTitle(ctx context.Context, p *ChatPayload) (string, bool, error) {
