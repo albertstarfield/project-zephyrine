@@ -8418,6 +8418,8 @@ async def handle_openai_asr_transcriptions():
     request_id = f"req-asr-{uuid.uuid4()}"
     logger.info(f"🚀 OpenAI-Style ASR Request ID: {request_id} (Multi-Stage ELP1 + Background ELP0)")
 
+
+
     db: Session = g.db
     final_status_code: int = 500
     resp: Optional[Response] = None
@@ -8452,7 +8454,7 @@ async def handle_openai_asr_transcriptions():
 
         session_id_for_log = request.form.get("session_id", session_id_for_log)
         # Ensure cortex_text_interaction instance is available if needed for direct_generate
-        if 'ai_chat' not in globals() or cortex_text_interaction is None:
+        if 'cortex_backbone_provider' not in globals() or cortex_text_interaction is None:
             logger.error(f"{request_id}: cortex_text_interaction instance not available. Cannot proceed with LLM steps.")
             raise RuntimeError("CortexThoughts instance not configured for ASR post-processing.")
         cortex_text_interaction.current_session_id = session_id_for_log  # type: ignore
@@ -9182,7 +9184,7 @@ async def handle_openai_image_generations():  # Route is async
             cortex_text_interaction.current_session_id = session_id_for_log  # Set for helpers in cortex_text_interaction
         else:
             logger.error(
-                f"{request_id}: Global 'ai_chat' instance not available. Cannot proceed with image generation context.")
+                f"{request_id}: Global 'cortex_backbone_provider' instance not available. Cannot proceed with image generation context.")
             resp_data, status_code_val = _create_openai_error_response("Server AI component (CortexThoughts) not ready.",
                                                                        err_type="server_error", status_code=503)
             resp = Response(json.dumps(resp_data), status=status_code_val, mimetype='application/json')
@@ -9488,11 +9490,12 @@ def handle_openai_retrieve_model(model: str):
     logger.info(f"🏁 /v1/models/{model} request handled in {duration_req:.2f} ms. Status: {status_code}")
     return Response(response_payload, status=status_code, mimetype='application/json')
 
+#------- Initialization of the provider --------
 
 try:
     cortex_backbone_provider = CortexEngine(PROVIDER)
     global_cortex_backbone_provider_ref = cortex_backbone_provider
-    cortex_text_interaction = CortexThoughts(cortex_backbone_provider)
+    cortex_text_interaction = CortexThoughts(cortex_backbone_provider) #compatibility
     AGENT_CWD = os.path.dirname(os.path.abspath(__file__))
     SUPPORTS_COMPUTER_USE = True
     ai_agent = AmaryllisAgent(cortex_backbone_provider, AGENT_CWD, SUPPORTS_COMPUTER_USE)
