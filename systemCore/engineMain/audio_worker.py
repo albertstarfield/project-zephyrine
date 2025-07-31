@@ -105,14 +105,14 @@ def _handle_mecab_failure_and_retry_download():
     download_command = [sys.executable, "-m", "unidic", "download"]
 
     while True: # Infinite loop to ensure it eventually succeeds, as requested.
-        log_worker("INFO", f"[MeCab Repair] Attempting to execute: `{' '.join(download_command)}`")
+        log_worker("INFO", f"[MeCab Repair] Attempting to execute: `{' '.join(download_command)}` Download may take 10 minutes")
         process = None
         try:
             # We use Popen to monitor the process for hangs.
             # A 15-second timeout is a reasonable compromise to detect a truly hung process
             # without killing a slow but legitimate download on a poor connection.
             process = subprocess.Popen(download_command, stdout=subprocess.PIPE, stderr=subprocess.PIPE, text=True, encoding='utf-8')
-            stdout, stderr = process.communicate(timeout=15)
+            stdout, stderr = process.communicate(timeout=3600)
 
             if process.returncode == 0:
                 log_worker("INFO", "[MeCab Repair] Download process completed successfully.")
