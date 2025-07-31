@@ -673,16 +673,21 @@ In-depth Translation (into {{target_language_code}} - {{target_language_full_nam
 
 
 
-PROMPT_AUTOCORRECT_TRANSCRIPTION = f"""You are an expert in correcting speech-to-text transcriptions.
-The following text was transcribed by an AI and may contain errors or be poorly formatted.
+PROMPT_AUTOCORRECT_TRANSCRIPTION = f"""
+The following text was transcribed and may contain errors or be poorly formatted.
 Please review it, correct any mistakes (grammar, spelling, punctuation, missed words, hallucinated words), and improve its readability.
-If the text mentions speakers (e.g., "Speaker 1"), preserve those labels.
-Output ONLY the corrected transcript. Do not add any conversational wrappers, comments, or explanations.
+If the text mentions speakers (e.g., "Speaker 1"), preserve those labels()!
+Output ONLY the corrected transcript. Do not add any conversational wrappers, comments, or explanations!
+Reduce or Remove Repetition! 
 
 Raw Transcript:
 \"\"\"
 {{raw_transcribed_text}}
 \"\"\"
+
+DO NOT DO WRITE on the Corrected Transcript : "I'll use the text as a template and reformat it based on the prompt. Let's start with the first speaker, which appears to be a single speaker"
+(IF YOU CAN'T fix it JUST OUTPUT THE RAW Transcript! make the WORD SNAP on the Corrected Transcript)
+
 
 Corrected Transcript:
 """
@@ -690,28 +695,25 @@ Corrected Transcript:
 
 
 
-PROMPT_SPEAKER_DIARIZATION = f"""You are an expert in analyzing transcripts to identify and label speaker changes.
-Review the following text transcript. Your task is to reformat it by:
-1. Identifying distinct speakers. Analyze textual cues such as direct address, question/answer patterns, shifts in topic or style, expressed emotion, language style, and the implied actions or roles of the speakers.
-2. Prefixing each speaker's turn with a label. Use generic labels if names are unknown (e.g., "Speaker A:", "Speaker B:", "Person 1:", "Interviewee:"). If possible from the context within their speech, try to guess and use a descriptive name (e.g., "John:", "Receptionist:", "Caller:").
-3. Ensuring each speaker's utterance or phrase is on a new line to clearly delineate turns.
+PROMPT_SPEAKER_DIARIZATION = f"""You are a transcript formatting utility. Your sole function is to process the following text and add speaker labels.
 
-If the text clearly appears to be from a single speaker:
-You can choose one of these options:
-    a) Label the entire text with a single, consistent speaker label (e.g., "Speaker A: ...text...").
-    b) If it's a clear monologue and adding a label provides no extra clarity, you may return the original text with appropriate paragraphing but without speaker labels.
-    c) Briefly note "[Single speaker identified]" at the beginning or end if diarization is not applied.
+**Your Task:**
+1. Read the "Original Transcript" below.
+2. Analyze the dialogue to identify distinct speakers.
+3. Re-write the transcript, prefixing each line with a speaker label (e.g., "Speaker 1:", "Speaker 2:").
+4. If the text appears to be from a single speaker, label the entire text with "Speaker A:".
 
-If distinct speakers cannot be reliably identified after analysis, use generic labels (e.g., "Speaker A:", "Speaker B:") and apply them as best as possible.
+**Output Formatting Rules:**
+- Your entire output must ONLY be the final, formatted transcript.
+- Do not include any reasoning, explanations, or conversational text.
+- Start your response directly with the first speaker label.
 
-Output ONLY the (potentially) diarized transcript. Do NOT add any conversational wrappers, apologies, preambles, or explanations outside of the transcript itself. The output should be ready for direct use.
-
-Original Transcript:
-\"\"\"
+**Original Transcript:**
+'''
 {{transcribed_text}}
-\"\"\"
+'''
 
-Diarized Transcript:
+**Formatted Transcript:**
 """
 
 PROMPT_TRANSLATE_TEXT = f"""Translate the following text into {{target_language_full_name}} (ISO code: {{target_language_code}}).
