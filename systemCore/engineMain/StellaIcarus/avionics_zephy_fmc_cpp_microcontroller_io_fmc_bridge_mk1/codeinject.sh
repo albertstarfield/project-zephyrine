@@ -1,0 +1,1 @@
+sed -i '' 's/for Main use ("avionics_zephy_fmc_cpp_microcontroller_io_fmc_bridge_mk1.adb");/for Main use ("avionics_zephy_fmc_cpp_microcontroller_io_fmc_bridge_mk1.adb");\n   for Source_Files use ("*.adb", "*.ads", "src/*.adb", "src/*.ads");/' avionics_zephy_fmc_cpp_microcontroller_io_fmc_bridge_mk1.gpr
