@@ -22,7 +22,8 @@ procedure Avionics_Zephy_FMC_CPP_Microcontroller_IO_FMC_Bridge_MK1 is
    Socket : Socket_IO.Socket_FD := Socket_IO.Null_Socket;
 
    -- Buffer for reading messages
-   Read_Buffer : Ada.Streams.Stream_Element_Array (0 .. Socket_IO.Max_Message_Size - 1);
+   Read_Buffer : Ada.Streams.Stream_Element_Array 
+  (0 .. Ada.Streams.Stream_Element_Offset(Socket_IO.Max_Message_Size - 1));
    Bytes_Read  : Integer;
 
    -- Current control values
@@ -148,7 +149,7 @@ begin
       end if;
 
       -- Small delay to prevent CPU hogging
-      delay Ada.Real_Time.To_Time_Span (0.01);
+      delay 0.01;
    end loop Main_Loop;
 
 exception
