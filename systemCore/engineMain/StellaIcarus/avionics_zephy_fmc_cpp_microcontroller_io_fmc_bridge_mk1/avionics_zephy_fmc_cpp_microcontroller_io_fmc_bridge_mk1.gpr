@@ -11,7 +11,7 @@ project Avionics_Zephy_Fmc_Cpp_Microcontroller_Io_Fmc_Bridge_Mk1 is
       -- Use Ada 2022 standard
       -- Disable specific style checks that are causing warnings
       for Default_Switches ("Ada") use Avionics_Zephy_Fmc_Cpp_Microcontroller_Io_Fmc_Bridge_Mk1_Config.Ada_Compiler_Switches &
-                                     ("-gnat2022");
+                                     ("-gnat2022", "-gnatws", "-gnatW8", "-gnatyb");
    end Compiler;
 
    package Binder is
