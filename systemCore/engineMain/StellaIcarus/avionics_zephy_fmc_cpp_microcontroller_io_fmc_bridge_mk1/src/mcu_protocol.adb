@@ -1,7 +1,7 @@
 with Ada.Streams;
 with Interfaces;
-with Interfaces.C;
 with Ada.Unchecked_Conversion;
+use all type Ada.Streams.Stream_Element;
 
 package body MCU_Protocol is
    -- Convert Message_Type to byte representation
@@ -26,23 +26,23 @@ package body MCU_Protocol is
    -- Calculate checksum for a data buffer
    -- Checksum is the sum of all bytes modulo 256
    function Calculate_Checksum (Data : Ada.Streams.Stream_Element_Array) 
-                              return Interfaces.C.unsigned_char is
-      Sum : Interfaces.C.unsigned := 0;
+                              return Ada.Streams.Stream_Element is
+      Sum : Ada.Streams.Stream_Element := 0;
    begin
       for I in Data'Range loop
-         Sum := Sum + Interfaces.C.unsigned (Data (I));
+         Sum := Sum + Data(I);
       end loop;
-      return Interfaces.C.unsigned_char (Sum mod 256);
+      return Sum;
    end Calculate_Checksum;
    
    -- Calculate parity for a data buffer
    -- Parity is the XOR of all bits in the data
    function Calculate_Parity (Data : Ada.Streams.Stream_Element_Array) 
-                            return Interfaces.C.unsigned_char is
-      Parity : Interfaces.C.unsigned_char := 0;
+                            return Ada.Streams.Stream_Element is
+      Parity : Ada.Streams.Stream_Element := 0;
    begin
       for I in Data'Range loop
-         Parity := Interfaces."xor" (Parity, Data (I));
+         Parity := Parity xor Data(I);
       end loop;
       return Parity;
    end Calculate_Parity;
@@ -53,22 +53,17 @@ package body MCU_Protocol is
    function Encode_Control (Values : Control_Values) 
                           return Ada.Streams.Stream_Element_Array is
       Buffer : Ada.Streams.Stream_Element_Array (0 .. 6);
-      -- Why 6 bytes?
-      -- 1 byte for message type
-      -- 4 bytes for control values (1 byte each, 0-100 fits in 8 bits)
-      -- 1 byte for checksum
-      -- (Parity is included in checksum calculation)
    begin
       -- Message type
       Buffer (0) := To_Byte (Control_Message);
       
-      -- Control values (each scaled to 0-100, which fits in a byte)
+      -- Control values
       Buffer (1) := Ada.Streams.Stream_Element (Values.Servo_1);
       Buffer (2) := Ada.Streams.Stream_Element (Values.Servo_2);
       Buffer (3) := Ada.Streams.Stream_Element (Values.Servo_3);
       Buffer (4) := Ada.Streams.Stream_Element (Values.Propeller);
       
-      -- Calculate error detection fields
+      -- Calculate checksum
       Buffer (5) := Calculate_Checksum (Buffer (0 .. 4));
       
       return Buffer (0 .. 5);
@@ -81,8 +76,7 @@ package body MCU_Protocol is
                            Error  : out Error_Code) 
                           return Sensor_Values is
       Result : Sensor_Values;
-      Calculated_Checksum : Interfaces.C.unsigned_char;
-      Calculated_Parity   : Interfaces.C.unsigned_char;
+      Calculated_Checksum : Ada.Streams.Stream_Element;
    begin
       Error := No_Error;
       
@@ -153,7 +147,7 @@ package body MCU_Protocol is
    function Validate_Message (Buffer : Ada.Streams.Stream_Element_Array) 
                             return Validation_Result is
       Msg_Type : Message_Type;
-      Calculated_Checksum : Interfaces.C.unsigned_char;
+      Calculated_Checksum : Ada.Streams.Stream_Element;
       Length : Natural;
       Result : Validation_Result;
    begin
