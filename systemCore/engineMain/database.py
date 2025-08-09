@@ -58,7 +58,7 @@ DB_SNAPSHOT_INTERVAL_MINUTES = int(os.getenv("DB_SNAPSHOT_INTERVAL_MINUTES", 10)
 DB_SNAPSHOT_DIR_NAME = "db_snapshots"
 DB_SNAPSHOT_DIR = os.path.join(APP_DIR, DB_SNAPSHOT_DIR_NAME)
 DB_SNAPSHOT_RETENTION_COUNT = int(
-    os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 30))  # Keep last 60 snapshots (e.g., 1 hour worth if 1-min interval)
+    os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 5))  # Keep last 60 snapshots (e.g., 1 hour worth if 1-min interval)
 DB_SNAPSHOT_FILENAME_PREFIX = "snapshot_"
 DB_SNAPSHOT_FILENAME_SUFFIX = ".db.zst"
 # --- END NEW: Snapshot Configuration ---

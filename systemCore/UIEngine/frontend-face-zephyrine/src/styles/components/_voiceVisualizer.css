@@ -1,0 +1,83 @@
+/* src/styles/components/_voiceVisualizer.css */
+
+.visualizer-container {
+  display: flex;
+  flex-direction: column;
+  justify-content: center;
+  align-items: center;
+  height: 100%;
+  width: 100%;
+  gap: 3rem;
+  color: var(--primary-text-alt);
+}
+
+.dots-container {
+  height: 80px;
+  display: flex;
+  align-items: center;
+}
+
+.dots-wrapper {
+  display: flex;
+  gap: 20px;
+}
+
+.dot {
+  width: 20px;
+  height: 20px;
+  border-radius: 50%;
+  background-color: var(--secondary-text); /* Default color for idle */
+  /* THIS IS THE KEY for smooth amplitude changes */
+  transition: transform 0.1s ease-out, background-color 0.3s ease;
+}
+
+.status-text {
+  font-size: 1.2rem;
+  color: var(--secondary-text);
+  height: 20px;
+  text-align: center;
+}
+
+/*
+ *  ANIMATION LOGIC BASED ON STATUS
+ */
+
+@keyframes pulse {
+  0%, 100% { transform: scale(1); opacity: 0.8; }
+  50% { transform: scale(1.1); opacity: 1; }
+}
+
+@keyframes breathe {
+  0%, 100% { transform: scale(0.8); }
+  50% { transform: scale(1); }
+}
+
+/* IDLE STATE */
+.dots-wrapper.idle .dot {
+  animation: pulse 2.5s infinite ease-in-out;
+}
+.dots-wrapper.idle .dot:nth-child(2) { animation-delay: 0.2s; }
+.dots-wrapper.idle .dot:nth-child(3) { animation-delay: 0.4s; }
+.dots-wrapper.idle .dot:nth-child(4) { animation-delay: 0.6s; }
+
+/* LISTENING STATE */
+/* The animation is now driven by inline styles, we just change the color */
+.dots-wrapper.listening .dot {
+  background-color: var(--accent);
+}
+
+/* PROCESSING STATE */
+.dots-wrapper.processing .dot {
+  animation: breathe 1.5s infinite ease-in-out;
+  background-color: color-mix(in srgb, var(--accent) 70%, var(--primary-text));
+}
+.dots-wrapper.processing .dot:nth-child(2) { animation-delay: 0.25s; }
+.dots-wrapper.processing .dot:nth-child(3) { animation-delay: 0.5s; }
+.dots-wrapper.processing .dot:nth-child(4) { animation-delay: 0.75s; }
+
+/* SPEAKING STATE (NEW) */
+/* The animation is also driven by inline styles, we use a different color */
+.dots-wrapper.speaking .dot {
+  /* Use a nice blue or other "info" color for the assistant's voice */
+  background-color: var(--info-color, #3b82f6);
+}
