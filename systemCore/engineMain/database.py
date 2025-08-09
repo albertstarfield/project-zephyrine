@@ -703,20 +703,33 @@ def _get_snapshot_files() -> List[str]:
 
 def _prune_old_snapshots():
     """
-    Deletes the oldest snapshots if the total count exceeds the retention policy.
-    This is now the enforced retention mechanism.
+    Deletes the oldest snapshots if the total count is at or exceeds the
+    retention policy. This is called before creating a new snapshot to make room.
     """
     if not ENABLE_DB_SNAPSHOTS or DB_SNAPSHOT_RETENTION_COUNT <= 0:
         return
     try:
         # _get_snapshot_files() returns snapshots sorted oldest to newest
         snapshots = _get_snapshot_files()
-        
-        if len(snapshots) > DB_SNAPSHOT_RETENTION_COUNT:
-            num_to_delete = len(snapshots) - DB_SNAPSHOT_RETENTION_COUNT
-            logger.info(f"Pruning {num_to_delete} old snapshot(s) to meet retention count of {DB_SNAPSHOT_RETENTION_COUNT}...")
-            
-            # Delete the oldest snapshots from the beginning of the list
+
+        # Prune if the current count is AT or OVER the retention count.
+        if len(snapshots) >= DB_SNAPSHOT_RETENTION_COUNT:
+            # List out the available snapshots before deleting, as requested.
+            logger.info(
+                f"Found {len(snapshots)} snapshots (limit: {DB_SNAPSHOT_RETENTION_COUNT}). Listing before pruning:")
+            for s_path in snapshots:
+                try:
+                    size_kb = os.path.getsize(s_path) / 1024
+                    logger.info(f"  - {os.path.basename(s_path)} (Size: {size_kb:.2f} KB)")
+                except OSError:
+                    logger.info(f"  - {os.path.basename(s_path)} (Size: N/A)")
+
+            # Calculate how many to delete. If limit is 30 and we have 30, delete 1.
+            # If limit is 30 and we have 31, delete 2 to make space for the new one.
+            num_to_delete = (len(snapshots) - DB_SNAPSHOT_RETENTION_COUNT) + 1
+            logger.info(f"Pruning {num_to_delete} oldest snapshot(s) to stay within retention limit...")
+
+            # Delete the oldest snapshots from the beginning of the sorted list
             for i in range(num_to_delete):
                 snapshot_to_delete = snapshots[i]
                 try:
@@ -725,7 +738,10 @@ def _prune_old_snapshots():
                 except Exception as e:
                     logger.warning(f"  Failed to delete old snapshot {os.path.basename(snapshot_to_delete)}: {e}")
             logger.success(f"Snapshot pruning complete.")
-            
+        else:
+            logger.debug(
+                f"Snapshot count ({len(snapshots)}) is within the retention limit ({DB_SNAPSHOT_RETENTION_COUNT}). No pruning needed.")
+
     except Exception as e:
         logger.error(f"Error during snapshot pruning: {e}")
 
@@ -804,22 +820,25 @@ class DatabaseSnapshotter(threading.Thread):
 
     def _take_snapshot(self):
         if not self.sqlite3_cmd: return
+
+        # --- MODIFIED PART: Prune old snapshots BEFORE creating a new one ---
+        _prune_old_snapshots()
+        # --- END MODIFIED PART ---
+
         if not os.path.exists(RUNTIME_DB_PATH) or os.path.getsize(RUNTIME_DB_PATH) == 0:
             logger.debug("Snapshot skipped: Runtime DB does not exist or is empty.")
             return
 
         snapshot_start_time = time.monotonic()
         timestamp_str = datetime.datetime.now().strftime("%Y%m%d_%H%M%S")
-        # Ensure DB_SNAPSHOT_DIR exists for the temp backup as well
         os.makedirs(DB_SNAPSHOT_DIR, exist_ok=True)
         temp_backup_db_path = os.path.join(DB_SNAPSHOT_DIR,
-                                           f"temp_uncompressed_backup_{timestamp_str}.db")  # More descriptive temp name
+                                           f"temp_uncompressed_backup_{timestamp_str}.db")
         final_snapshot_path = os.path.join(DB_SNAPSHOT_DIR,
                                            f"{DB_SNAPSHOT_FILENAME_PREFIX}{timestamp_str}{DB_SNAPSHOT_FILENAME_SUFFIX}")
 
-        # os.makedirs(DB_SNAPSHOT_DIR, exist_ok=True) # Already done above
         logger.info(f"📸 Creating database snapshot for {timestamp_str}...")
-        compression_successful_flag = False  # Flag to track success
+        compression_successful_flag = False
 
         try:
             # 1. Use SQLite's online backup to a temporary file
@@ -849,25 +868,19 @@ class DatabaseSnapshotter(threading.Thread):
             # 2. Compress the temporary backup file
             logger.debug(f"Compressing temporary backup '{temp_backup_db_path}' to '{final_snapshot_path}'...")
 
-            # --- CORRECTED COMPRESSION LOGIC ---
             cctx = zstd.ZstdCompressor(level=ZSTD_COMPRESSION_LEVEL, threads=-1)
             with open(temp_backup_db_path, 'rb') as ifh, open(final_snapshot_path, 'wb') as ofh:
                 cctx.copy_stream(ifh, ofh)
             logger.success(f"Snapshot compressed to '{os.path.basename(final_snapshot_path)}'.")
             compression_successful_flag = True
-            # --- END CORRECTED COMPRESSION LOGIC ---
 
-            if compression_successful_flag:
-                # 3. Prune old snapshots
-                _prune_old_snapshots()
-            # else: # No need for an else here, if compression fails, it will be caught by the outer try-except
+            # The original call to _prune_old_snapshots() that was here has been removed.
 
         except subprocess.TimeoutExpired:
             logger.error("SQLite .backup command timed out during snapshot.")
         except Exception as e:
             logger.error(f"Error during snapshot creation: {e}")
             logger.exception("Snapshot Creation Traceback:")
-            # If compression failed, ensure final_snapshot_path (if partially created) is removed
             if not compression_successful_flag and os.path.exists(final_snapshot_path):
                 try:
                     os.remove(final_snapshot_path)
