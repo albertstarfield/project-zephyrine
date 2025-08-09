@@ -152,6 +152,14 @@
   cursor: not-allowed;
 }
 
+.status-text-main {
+  font-size: 1.2rem;
+  color: var(--secondary-text);
+  height: 20px;
+  text-align: center;
+  margin-top: 1rem;
+}
+
 /* Responsive adjustments */
 @media (max-width: 768px) {
   .voice-assistant-container {
