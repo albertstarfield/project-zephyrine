@@ -233,6 +233,90 @@ func (app *App) registerConnection(userID string, conn *websocket.Conn) {
 	log.Printf("Connection registered for user: %s", userID)
 }
 
+
+func (app *App) handleAudioTranscriptions(w http.ResponseWriter, r *http.Request) {
+	// The actual endpoint on your LLM service.
+	targetURL := app.Config.LLMAPIRoot + "/v1/audio/transcriptions"
+	log.Printf("Proxying audio transcription request to: %s", targetURL)
+
+	// We don't read the body here because it's multipart/form-data.
+	// We pass the original request body directly to the new request.
+	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, r.Body)
+	if err != nil {
+		log.Printf("ERROR: Failed to create upstream transcription request: %v", err)
+		http.Error(w, "failed to create upstream request", http.StatusInternalServerError)
+		return
+	}
+
+	// Copy the necessary headers. Content-Type is crucial for multipart forms.
+	proxyReq.Header = r.Header.Clone()
+
+	// Execute the request.
+	client := &http.Client{}
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		log.Printf("ERROR during transcription proxy request: %v", err)
+		http.Error(w, "Backend proxy error", http.StatusServiceUnavailable)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Pass the response from the LLM service back to our client.
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+// handleAudioSpeech proxies requests to the OpenAI-compatible text-to-speech (TTS) endpoint.
+func (app *App) handleAudioSpeech(w http.ResponseWriter, r *http.Request) {
+	// The actual endpoint on your LLM service.
+	targetURL := app.Config.LLMAPIRoot + "/v1/audio/speech"
+	log.Printf("Proxying audio speech request to: %s", targetURL)
+
+	body, err := io.ReadAll(r.Body)
+	if err != nil {
+		log.Printf("ERROR: Failed to read request body for speech proxy: %v", err)
+		http.Error(w, "cannot read request body", http.StatusInternalServerError)
+		return
+	}
+	r.Body.Close()
+
+	proxyReq, err := http.NewRequestWithContext(r.Context(), r.Method, targetURL, bytes.NewBuffer(body))
+	if err != nil {
+		log.Printf("ERROR: Failed to create upstream speech request: %v", err)
+		http.Error(w, "failed to create upstream request", http.StatusInternalServerError)
+		return
+	}
+
+	// Copy headers.
+	proxyReq.Header = r.Header.Clone()
+
+	// Execute the request.
+	client := &http.Client{}
+	resp, err := client.Do(proxyReq)
+	if err != nil {
+		log.Printf("ERROR during speech proxy request: %v", err)
+		http.Error(w, "Backend proxy error", http.StatusServiceUnavailable)
+		return
+	}
+	defer resp.Body.Close()
+
+	// Pass the audio stream from the LLM service back to our client.
+	for key, values := range resp.Header {
+		for _, value := range values {
+			w.Header().Add(key, value)
+		}
+	}
+	w.WriteHeader(resp.StatusCode)
+	io.Copy(w, resp.Body)
+}
+
+
+
 // deregisterConnection removes a user's connection.
 func (app *App) deregisterConnection(userID string) {
 	app.connectionsMux.Lock()
@@ -578,9 +662,10 @@ func main() {
 		r.Get("/images/history", app.handleImageHistory)
 		r.Post("/files", app.handleFileUpload)
 		r.Get("/files", app.handleFileHistory)
-		// --- NEW: Endpoint for proactive notifications ---
-		r.Post("/chat/notification", app.handleProactiveNotification)
+		r.Post("/chat/notification", app.handleProactiveNotification)		// --- NEW: Endpoint for proactive notifications ---
 		r.Post("/chat/completions", app.handleChatCompletionsProxy)
+		r.Post("/audio/transcriptions", app.handleAudioTranscriptions)
+		r.Post("/audio/speech", app.handleAudioSpeech)
 	})
 
 	
