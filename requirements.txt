@@ -19,6 +19,7 @@ zeroconf
 textual
 psutil
 md_to_pdf
+reportlab
 
 
 
@@ -143,6 +144,7 @@ PyYAML
 timm
 albumentations
 pyreadline3 # Note: Primarily for Windows compatibility
+
 
 ################################################################################
 #                            Notes & Considerations                            #
