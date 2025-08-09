@@ -12,7 +12,7 @@ import Auth from "./components/Auth";
 import SystemOverlay from "./components/SystemOverlay";
 import ImageGenerationPage from "./components/ImageGenerationPage";
 import KnowledgeTuningPage from "./components/KnowledgeTuningPage";
-import VoiceAssistantOverlay from "./components/VoiceAssistantOverlay";
+import VoiceAssistantPage from "./components/VoiceAssistantPage";
 import RedirectToNewChat from "./components/RedirectToNewChat";
 import SystemInfo from "./components/SystemInfo";
 import SplashScreen from "./components/SplashScreen";
@@ -176,7 +176,7 @@ const AppContent = () => {
   } = useChatHistory(getWsInstance);
 
   const [isSidebarOpen, setIsSidebarOpen] = useState(true);
-  const [isVoiceAssistantVisible, setIsVoiceAssistantVisible] = useState(false); 
+  //const [isVoiceAssistantVisible, setIsVoiceAssistantVisible] = useState(false); 
   const [isConnected, setIsConnected] = useState(false);
 
   useEffect(() => {
@@ -278,14 +278,10 @@ const AppContent = () => {
     navigate(`/`);
   }, [navigate]);
 
-  const toggleVoiceAssistant = useCallback(() => {
-    setIsVoiceAssistantVisible(prev => !prev);
-  }, []);
+  //const toggleVoiceAssistant = useCallback(() => {
+  //  setIsVoiceAssistantVisible(prev => !prev);
+  //}, []);
 
-  const handleSendMessageFromVoiceAssistant = useCallback((messageContent) => {
-    console.log("App.jsx: Message from Voice Assistant:", messageContent);
-    setIsVoiceAssistantVisible(false);
-  }, []); 
 
   if (authLoading) {
     return (
@@ -319,15 +315,9 @@ const AppContent = () => {
       <ThemedBackground />
 
       <div className={`sidebar-overlay ${!isSidebarOpen ? 'active' : ''}`} onClick={toggleSidebar}></div>
-      
-      <VoiceAssistantOverlay
-        isVisible={isVoiceAssistantVisible}
-        toggleVoiceAssistant={toggleVoiceAssistant}
-        onSendMessage={handleSendMessageFromVoiceAssistant}
-      />
+    
 
       <div id="main-app-content" style={{ 
-          filter: isVoiceAssistantVisible ? 'blur(4px)' : 'none',
           opacity: appReady ? 1 : 0,
           transition: 'opacity 0.5s ease-out',
           pointerEvents: appReady ? 'auto' : 'none',
@@ -337,22 +327,21 @@ const AppContent = () => {
 
           
           <div className={`main-content-area ${!isSidebarOpen ? "main-content-area--sidebar-collapsed" : ""}`}>
-            <SideBar
-              isCollapsed={!isSidebarOpen}
-              toggleSidebar={toggleSidebar}
-              user={user}
-              onNewChat={handleNewChat}
-              chats={chatHistory}
-              isLoadingHistory={isLoadingHistory}
-              onRenameChat={handleRenameChat}
-              onDeleteChat={handleDeleteChat}
-              availableModels={availableModels}
-              selectedModel={selectedModel}
-              onModelChange={setSelectedModel}
-              onActivateVoiceMode={toggleVoiceAssistant}
-              isConnected={isConnected}
-              onSettingsClick={handleSettingsClick}
-            />
+          <SideBar
+            isCollapsed={!isSidebarOpen}
+            toggleSidebar={toggleSidebar}
+            user={user}
+            onNewChat={handleNewChat}
+            chats={chatHistory}
+            isLoadingHistory={isLoadingHistory}
+            onRenameChat={handleRenameChat}
+            onDeleteChat={handleDeleteChat}
+            availableModels={availableModels}
+            selectedModel={selectedModel}
+            onModelChange={setSelectedModel}
+            isConnected={isConnected}
+            onSettingsClick={handleSettingsClick}
+          />
             
             <SettingsModal
             isVisible={isSettingsModalVisible}
@@ -378,12 +367,12 @@ const AppContent = () => {
                         isConnected={isConnected}
                         updateSidebarHistory={setChatHistory}
                         triggerSidebarRefresh={() => fetchChatHistory(user.id)}
-                        onVoiceMessageSend={handleSendMessageFromVoiceAssistant}
                       />
                     }
                   />
                   <Route path="/knowledge-tuning" element={<KnowledgeTuningPage />} />
                   <Route path="/images" element={<ImageGenerationPage />} />
+                  <Route path="/voice-assistant" element={<VoiceAssistantPage />} />
                   <Route path="*" element={<Navigate to="/" replace />} />
                 </Routes>
               </Suspense>
