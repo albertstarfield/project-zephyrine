@@ -3620,6 +3620,13 @@ if __name__ == "__main__":
 
             _ensure_playwright_browsers()
 
+            print_system("--- Ensuring critical environment utilities (patchelf, ncurses) ---")
+            if platform.system() == "Linux":
+                if not _ensure_conda_package("patchelf", is_critical=True):
+                    setup_failures.append("Failed to install patchelf, which is critical for fixing library paths.")
+            if not _ensure_conda_package("ncurses", is_critical=True):
+                setup_failures.append("Failed to install ncurses, which is critical for terminal UI operations.")
+
             # --- START: Robust Node.js & npm setup (MOVED HERE) ---
             print_system("--- Ensuring Node.js & npm Dependencies ---")
 
@@ -3819,18 +3826,53 @@ if __name__ == "__main__":
                 print_error("curses import failed. License agreement cannot be displayed. Exiting."); setup_failures.append(f"Failed to ensure License acceptance. Jurisdiction comprimised")
 
             # License Acceptance
+                    # License Acceptance
             if not os.path.exists(LICENSE_FLAG_FILE):
                 print_system("License agreement required.")
                 _, combined_license_text = load_licenses()
                 estimated_reading_seconds = calculate_reading_time(combined_license_text)
-                accepted, time_taken = curses.wrapper(display_license_prompt, combined_license_text.splitlines(),
-                                                    estimated_reading_seconds) # type: ignore
-                if not accepted: print_error("License not accepted. Exiting."); sys.exit(1)
+
+                accepted = False
+                time_taken = 0.0
+
+                try:
+                    # Attempt to display the interactive license prompt
+                    accepted, time_taken = curses.wrapper(display_license_prompt, combined_license_text.splitlines(),
+                                                        estimated_reading_seconds) # type: ignore
+                except curses.error as e:
+                    # Handle the specific error for unknown terminals
+                    if "setupterm" in str(e) and "terminfo" in str(e):
+                        print_error("Your terminal type is unknown or unsupported (e.g., TERM=unknown).")
+                        print_warning("The interactive license prompt cannot be displayed.")
+                        print_system("The program will proceed in 30 seconds, implicitly accepting the software licenses.")
+                        print_system("To review licenses manually, check the 'licenses' directory.")
+                        print_system("Press Ctrl+C now to cancel.")
+                        try:
+                            # Wait for 30 seconds, allowing the user to cancel
+                            time.sleep(30)
+                            accepted = True
+                            time_taken = 30.0 # Record the time for logging
+                            print_system("Continuing with implicit license acceptance...")
+                        except KeyboardInterrupt:
+                            print_error("\nOperation cancelled by user during implicit wait. Exiting.")
+                            sys.exit(1)
+                    else:
+                        # For any other terminal-related error, fail gracefully
+                        print_error(f"A fatal terminal error occurred: {e}")
+                        print_error("Please run this script in a standard interactive terminal. Exiting.")
+                        sys.exit(1)
+
+                # Check if the license was accepted (either interactively or implicitly)
+                if not accepted:
+                    print_error("License not accepted. Exiting.")
+                    sys.exit(1)
+
+                # If accepted, create the flag file
                 with open(LICENSE_FLAG_FILE, 'w', encoding='utf-8') as f_license:
                     f_license.write(f"Accepted: {datetime.now().isoformat()}\nTime: {time_taken:.2f}s\n")
-                print_system(f"Licenses accepted by user in {time_taken:.2f}s.")
+                print_system(f"Licenses accepted in {time_taken:.2f}s.")
                 if estimated_reading_seconds > 30 and time_taken < (estimated_reading_seconds * 0.1):
-                    print_warning("Warning: Licenses accepted quickly. Ensure you understood terms.")
+                    print_warning("Warning: Licenses accepted very quickly. Please ensure you have reviewed the terms.")
                     time.sleep(3)
             else:
                 print_system("License previously accepted.")
