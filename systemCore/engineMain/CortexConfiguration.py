@@ -222,6 +222,7 @@ STELLA_ICARUS_CACHE_DIR = os.getenv("STELLA_ICARUS_CACHE_DIR", os.path.join(os.p
 logger.info(f"StellaIcarusHooks Enabled: {ENABLE_STELLA_ICARUS_HOOKS}")
 logger.info(f"  Hook Directory: {STELLA_ICARUS_HOOK_DIR}")
 logger.info(f"  Cache Directory: {STELLA_ICARUS_CACHE_DIR}") # Primarily for Numba's cache if configured
+ADA_DAEMON_RETRY_DELAY_SECONDS = 30 # NEW: Fallback value
 # --- NEW: StellaIcarus Ada Daemon & Instrument Viewport Settings ---
 ENABLE_STELLA_ICARUS_DAEMON = os.getenv("ENABLE_STELLA_ICARUS_DAEMON", "true").lower() in ('true', '1', 't', 'yes', 'y')
 # This is the parent directory where multiple Ada project folders are located.
@@ -675,21 +676,14 @@ In-depth Translation (into {{target_language_code}} - {{target_language_full_nam
 
 PROMPT_AUTOCORRECT_TRANSCRIPTION = f"""
 The following text was transcribed and may contain errors or be poorly formatted.
-Please review it, correct any mistakes (grammar, spelling, punctuation, missed words, hallucinated words), and improve its readability.
-If the text mentions speakers (e.g., "Speaker 1"), preserve those labels()!
-Output ONLY the corrected transcript. Do not add any conversational wrappers, comments, or explanations!
-Reduce or Remove Repetition! 
-
+Do not add any conversational wrappers, comments, or explanations!
+DO NOT DO WRITE on the Corrected Transcript 
+(IF YOU CAN'T fix it JUST OUTPUT THE RAW Transcript! make the WORD SNAP on the Corrected Transcript)
 Raw Transcript:
 \"\"\"
 {{raw_transcribed_text}}
 \"\"\"
-
-DO NOT DO WRITE on the Corrected Transcript : "I'll use the text as a template and reformat it based on the prompt. Let's start with the first speaker, which appears to be a single speaker"
-(IF YOU CAN'T fix it JUST OUTPUT THE RAW Transcript! make the WORD SNAP on the Corrected Transcript)
-
-
-Corrected Transcript:
+Output ONLY the corrected transcript. Corrected Transcript (If it's blank then say so):
 """
 
 

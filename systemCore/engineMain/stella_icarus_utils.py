@@ -18,29 +18,39 @@ from loguru import logger
 try:
     from CortexConfiguration import (
         ENABLE_STELLA_ICARUS_HOOKS, STELLA_ICARUS_HOOK_DIR, STELLA_ICARUS_CACHE_DIR,
-        ENABLE_STELLA_ICARUS_DAEMON, STELLA_ICARUS_ADA_DIR, ALR_DEFAULT_EXECUTABLE_NAME
+        ENABLE_STELLA_ICARUS_DAEMON, STELLA_ICARUS_ADA_DIR, ALR_DEFAULT_EXECUTABLE_NAME,
+        ADA_DAEMON_RETRY_DELAY_SECONDS # NEW: Import retry delay
     )
 except ImportError:
     logger.critical("StellaIcarusUtils: Failed to import configuration. All features will be disabled.")
     ENABLE_STELLA_ICARUS_HOOKS = False
-    STELLA_ICARUS_HOOK_DIR = "./StellaIcarus_default_hooks"
-    STELLA_ICARUS_CACHE_DIR = "./StellaIcarus_Cache_default"
+    STELLA_ICARUS_HOOK_DIR = "./StellaIcarus"
+    STELLA_ICARUS_CACHE_DIR = "./StellaIcarus_Cache"
     ENABLE_STELLA_ICARUS_DAEMON = False
-    STELLA_ICARUS_ADA_DIR = "./StellaIcarus"
+    STELLA_ICARUS_ADA_DIR = "./StellaIcarus_Ada"
     ALR_DEFAULT_EXECUTABLE_NAME = "stella_greeting"
-
+    ADA_DAEMON_RETRY_DELAY_SECONDS = 30 # NEW: Fallback value
 
 class StellaIcarusHookManager:
     # ... (The existing StellaIcarusHookManager class remains here, completely unchanged) ...
     def __init__(self):
+        """
+        Initializes the Hook Manager.
+        This method discovers, validates, and dynamically loads all Python-based hooks
+        from the configured directory at application startup. It enforces the plugin
+        contract and checks for JIT compilation to ensure reliability.
+        """
+        # 1. Initialize instance variables
         self.hooks: List[Tuple[re.Pattern, Callable[[re.Match, str, str], Optional[str]], str]] = []
         self.hook_load_errors: List[str] = []
         self.is_enabled = ENABLE_STELLA_ICARUS_HOOKS
 
+        # 2. Early exit if the feature is disabled in the configuration
         if not self.is_enabled:
             logger.info("StellaIcarusHookManager: Hooks are disabled by configuration.")
             return
 
+        # 3. Check for the existence of the hook directory
         if not os.path.isdir(STELLA_ICARUS_HOOK_DIR):
             logger.error(
                 f"StellaIcarusHookManager: Hook directory '{STELLA_ICARUS_HOOK_DIR}' not found. No hooks loaded.")
@@ -48,11 +58,16 @@ class StellaIcarusHookManager:
             return
 
         logger.info(f"StellaIcarusHookManager: Loading hooks from '{STELLA_ICARUS_HOOK_DIR}'...")
+
+        # 4. Iterate through files in the directory to find potential hooks
         for filename in os.listdir(STELLA_ICARUS_HOOK_DIR):
             if filename.endswith(".py") and not filename.startswith("_"):
                 module_name = f"stella_hook_{filename[:-3]}"
                 file_path = os.path.join(STELLA_ICARUS_HOOK_DIR, filename)
+
+                # 5. Wrap loading of each hook in a try/except to isolate failures
                 try:
+                    # Dynamically load the python file as a module
                     spec = importlib.util.spec_from_file_location(module_name, file_path)
                     if spec is None or spec.loader is None:
                         raise ImportError(f"Could not create spec for module {module_name} at {file_path}")
@@ -60,6 +75,10 @@ class StellaIcarusHookManager:
                     module = importlib.util.module_from_spec(spec)
                     spec.loader.exec_module(module)
 
+                    # 6. [MANDATORY] Check for the JIT reliability flag
+                    is_jit_reliable = getattr(module, "IS_JIT_COMPILED", False)
+
+                    # 7. Check for the required plugin contract components (PATTERN and handler)
                     pattern_attr = getattr(module, "PATTERN", None)
                     handler_func = getattr(module, "handler", None)
 
@@ -68,6 +87,7 @@ class StellaIcarusHookManager:
                         self.hook_load_errors.append(f"Missing PATTERN/handler in {filename}")
                         continue
 
+                    # 8. Validate and compile the PATTERN
                     compiled_pattern: re.Pattern
                     if isinstance(pattern_attr, str):
                         compiled_pattern = re.compile(pattern_attr)
@@ -78,23 +98,36 @@ class StellaIcarusHookManager:
                         self.hook_load_errors.append(f"Invalid PATTERN type in {filename}")
                         continue
 
+                    # 9. Validate that the handler is a callable function
                     if not callable(handler_func):
                         logger.warning(f"  Skipping '{filename}': 'handler' is not callable.")
                         self.hook_load_errors.append(f"Non-callable handler in {filename}")
                         continue
 
+                    # 10. If all checks pass, add the hook to the active list
                     self.hooks.append((compiled_pattern, handler_func, module_name))
                     logger.info(
                         f"  Loaded StellaIcarusHook: '{module_name}' with pattern: '{compiled_pattern.pattern}'")
 
+                    # 11. [MANDATORY] Log a critical warning if the hook is not reliable
+                    if not is_jit_reliable:
+                        logger.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+                        logger.critical(f"!! [Reliability Warning!] Hook '{module_name}' is NOT JIT-COMPILED.    !!")
+                        logger.critical("!! This hook will run in slow, interpreted mode and does not meet    !!")
+                        logger.critical("!! the system's standards for deterministic, real-time performance.  !!")
+                        logger.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
                 except Exception as e:
+                    # Catch any other error during the loading process for this file
                     logger.error(f"  Error loading StellaIcarusHook from '{filename}': {e}")
                     self.hook_load_errors.append(f"Error loading {filename}: {e}")
 
+        # 12. Provide a final summary of the loading process
         if not self.hooks and not self.hook_load_errors:
             logger.info("StellaIcarusHookManager: No hook files found in the directory.")
         elif self.hooks:
             logger.success(f"StellaIcarusHookManager: Successfully loaded {len(self.hooks)} hook(s).")
+
         if self.hook_load_errors:
             logger.error(
                 f"StellaIcarusHookManager: Encountered {len(self.hook_load_errors)} error(s) during hook loading.")
@@ -189,63 +222,89 @@ class StellaIcarusAdaDaemonManager:
     def _run_daemon_thread(self, project: Dict[str, Any]):
         """
         Target function for each daemon's management thread.
-        Tries to run the real Ada binary and pipes its output to the central queue.
+        MODIFIED: Now includes a high-availability retry loop on process failure.
         """
         thread_name = f"AdaDaemon-{project['name']}"
         executable_path = os.path.join(project["path"], "bin", project["executable_name"])
         stop_event = project["stop_event"]
 
         if not os.path.exists(executable_path):
-            logger.error(f"[{thread_name}] Executable not found, thread will exit: {executable_path}")
-            return  # Exit thread if binary doesn't exist
+            logger.error(f"[{thread_name}] Executable not found, thread will exit permanently: {executable_path}")
+            return
 
-        logger.info(f"[{thread_name}] Starting daemon process: {executable_path}")
-        try:
-            process = subprocess.Popen(
-                [executable_path],
-                cwd=project["path"],
-                stdout=subprocess.PIPE,
-                stderr=subprocess.PIPE,
-                text=True, encoding='utf-8', errors='replace'
-            )
-            project["process"] = process
+        # --- MODIFICATION START: High-Availability Loop ---
+        while not stop_event.is_set():
+            logger.info(f"[{thread_name}] Attempting to start daemon process: {executable_path}")
+            process = None
+            try:
+                process = subprocess.Popen(
+                    [executable_path],
+                    cwd=project["path"],
+                    stdout=subprocess.PIPE,
+                    stderr=subprocess.PIPE,
+                    text=True, encoding='utf-8', errors='replace'
+                )
+                with self._lock:
+                    project["process"] = process
 
-            # Monitor stderr for errors in a separate thread
-            def log_stderr():
-                if process.stderr:
-                    for line in iter(process.stderr.readline, ''):
-                        logger.warning(f"[{thread_name} STDERR] {line.strip()}")
+                # --- (The existing stdout/stderr monitoring logic goes here) ---
+                def log_stderr():
+                    if process and process.stderr:
+                        for line in iter(process.stderr.readline, ''):
+                            logger.warning(f"[{thread_name} STDERR] {line.strip()}")
 
-            stderr_thread = threading.Thread(target=log_stderr, daemon=True)
-            stderr_thread.start()
+                stderr_thread = threading.Thread(target=log_stderr, daemon=True)
+                stderr_thread.start()
 
-            # Main loop to read stdout and push to the queue
-            if process.stdout:
-                for line in iter(process.stdout.readline, ''):
-                    if stop_event.is_set():
-                        break
-                    line = line.strip()
-                    if line:
-                        try:
-                            data = json.loads(line)
-                            payload = {
-                                "source_daemon": project["name"],
-                                "timestamp_py": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                                "data": data
-                            }
-                            self.data_queue.put(payload)
-                        except json.JSONDecodeError:
-                            logger.warning(f"[{thread_name}] Received non-JSON output: {line}")
-                        except queue.Full:
-                            logger.warning(f"[{thread_name}] Data queue is full. Discarding message.")
+                if process.stdout:
+                    for line in iter(process.stdout.readline, ''):
+                        if stop_event.is_set(): break
+                        line = line.strip()
+                        if line:
+                            try:
+                                data = json.loads(line)
+                                payload = {
+                                    "source_daemon": project["name"],
+                                    "timestamp_py": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                                    "data": data
+                                }
+                                self.data_queue.put(payload, timeout=1.0)
+                            except json.JSONDecodeError:
+                                logger.warning(f"[{thread_name}] Received non-JSON output: {line}")
+                            except queue.Full:
+                                logger.warning(f"[{thread_name}] Data queue is full. Discarding message.")
 
-        except Exception as e:
-            logger.error(f"[{thread_name}] Error running daemon process: {e}")
-        finally:
-            if project.get("process") and project["process"].poll() is None:
-                logger.info(f"[{thread_name}] Daemon process ended or is being cleaned up.")
-                project["process"].terminate()
-            logger.info(f"[{thread_name}] Thread finished.")
+                # Wait for the process to finish to get its return code
+                process.wait()
+
+            except Exception as e:
+                logger.error(f"[{thread_name}] Unhandled exception in daemon runner: {e}")
+            finally:
+                # This block runs after the process has terminated, either cleanly or by crashing.
+                if process:
+                    logger.warning(
+                        f"[{thread_name}] Daemon process terminated unexpectedly (RC: {process.returncode}).")
+
+                with self._lock:
+                    project["process"] = None
+
+            # If the stop event was set, break the loop cleanly. Otherwise, it was a failure.
+            if stop_event.is_set():
+                logger.info(f"[{thread_name}] Stop event received. Exiting management thread.")
+                break
+
+            # --- MODIFICATION: Log INOP Error and Wait Before Retrying ---
+            logger.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+            logger.critical(f"!! [INOP ERROR] Ada Daemon '{project['name']}' has failed!                 !!")
+            logger.critical(
+                f"!! The system will attempt to restart it in {ADA_DAEMON_RETRY_DELAY_SECONDS} seconds.            !!")
+            logger.critical("!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!!")
+
+            # Wait for the specified delay, but allow the stop_event to interrupt the wait
+            stop_event.wait(timeout=ADA_DAEMON_RETRY_DELAY_SECONDS)
+        # --- MODIFICATION END ---
+
+        logger.info(f"[{thread_name}] Thread finished.")
 
     def start_all(self):
         """Discovers and starts all Ada daemons, each in its own thread."""
