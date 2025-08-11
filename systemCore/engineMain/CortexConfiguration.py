@@ -842,11 +842,11 @@ User Input: Can you write a python script to list all files in a directory?
 - **优化查询:** 用户的查询已经非常清晰，无需优化。
 - **最终决策:** 选择 `code` 模型，使用原始查询。
 </think>
-{
+{{
   "chosen_model": "code",
   "reasoning": "The user is explicitly asking for a Python script, which is a code generation task.",
   "refined_query": "Write a python script to list all files in a directory."
-}
+}}
 ---
 **示例 2:**
 User Input: What's in this picture? I can't quite make it out.
@@ -858,11 +858,11 @@ User Input: What's in this picture? I can't quite make it out.
 - **优化查询:** 查询很直接，无需修改。
 - **最终决策:** 选择 `vlm` 模型。
 </think>
-{
+{{
   "chosen_model": "vlm",
   "reasoning": "The user is asking a question directly about an image, which requires visual analysis.",
   "refined_query": "What's in this picture? I can't quite make it out."
-}
+}}
 ---
 **示例 3:**
 User Input: Tell me about the history of the Roman Empire.
@@ -874,11 +874,11 @@ User Input: Tell me about the history of the Roman Empire.
 - **优化查询:** 查询很清晰，无需修改。
 - **最终决策:** 选择 `general` 模型。
 </think>
-{
+{{
   "chosen_model": "general",
   "reasoning": "This is a general knowledge question about history, best handled by the general-purpose model.",
   "refined_query": "Tell me about the history of the Roman Empire."
-}
+}}
 ---
 
 **INTERNAL CONTEXT (FOR YOUR REFERENCE ONLY):**
@@ -917,10 +917,10 @@ User Input: Draw a picture of a futuristic city at sunset.
 <think>
 用户的请求非常明确，直接要求“画一张图”(Draw a picture)。因此，我应该生成图片。决策是 `true`。
 </think>
-{
+{{
   "should_imagine": true,
   "reasoning": "The user explicitly asked to draw a picture."
-}
+}}
 ---
 **示例 2 (用户使用英语):**
 User Input: I'm trying to visualize a Dyson Swarm around a red dwarf star.
@@ -928,10 +928,10 @@ User Input: I'm trying to visualize a Dyson Swarm around a red dwarf star.
 <think>
 用户正在尝试“想象”(visualize)一个复杂的科学概念。生成一张图片将极大地帮助他们理解。决策是 `true`。
 </think>
-{
+{{
   "should_imagine": true,
   "reasoning": "The user is asking to visualize a complex concept, so an image would be very helpful."
-}
+}}
 ---
 **示例 3 (用户使用英语):**
 User Input: What's the capital of France?
@@ -939,10 +939,10 @@ User Input: What's the capital of France?
 <think>
 这是一个简单的事实性问题，询问法国的首都。生成图片对于回答这个问题不是必需的，甚至可能无关。决策是 `false`。
 </think>
-{
+{{
   "should_imagine": false,
   "reasoning": "This is a factual question that does not require a visual representation."
-}
+}}
 ---
 
 **INTERNAL CONTEXT (FOR YOUR REFERENCE ONLY):**
@@ -997,10 +997,10 @@ AI's Final Answer: 25% of 150 is 37.5.
 - **任务类型:** 纯计算任务，非生成性。满足标准。
 - **最终决策:** 所有标准均满足。这是一个创建确定性钩子的理想候选。决策是 `true`。
 </think>
-{
+{{
   "should_create_hook": true,
   "reasoning": "The request is a deterministic mathematical calculation with a clear, regex-parsable pattern. It is an ideal candidate for a high-reliability hook."
-}
+}}
 ---
 **示例 2: 不合格**
 User's Query: Tell me a joke about computers.
@@ -1013,10 +1013,10 @@ AI's Final Answer: Why did the computer go to the doctor? Because it had a virus
 - **任务类型:** 任务是生成性的，非计算性。不满足标准。
 - **最终决策:** 由于不满足确定性和非生成性标准，此任务绝不能被自动化为钩子。决策是 `false`。
 </think>
-{
+{{
   "should_create_hook": false,
   "reasoning": "The request is creative and generative, not deterministic. The response is subjective and not procedurally verifiable, making it unsuitable for a hook."
-}
+}}
 ---
 
 **INTERNAL CONtext (FOR YOUR REFERENCE ONLY):**
@@ -1151,7 +1151,7 @@ User Input: How should I start learning programming in 2025?
 - **综合构思:** 我将推荐 Python 作为起点，解释其优点，并提供一个结构化的学习步骤：基础语法 -> 简单项目 -> 选择一个专业方向（Web/AI/数据）-> 深入学习。
 - **任务判断:** 这个综合回答本身已经足够全面，不需要立即启动另一个后台任务。因此 `requires_background_task` 为 `false`。
 </think>
-{
+{{
   "decomposition": "The user is asking for a strategic guide on how to begin learning programming in the current year (2025). This requires recommending a starting language, learning resources, and a general methodology for a beginner.",
   "brainstorming": [
     "Start with Python due to its simple syntax and broad applications in web development, AI, and data science.",
@@ -1164,7 +1164,7 @@ User Input: How should I start learning programming in 2025?
   "self_critique": "The recommendation is generalized for a typical beginner. The ideal path could change if the user has a very specific goal (e.g., iOS app development, which would favor Swift).",
   "requires_background_task": false,
   "next_task_input": null
-}
+}}
 ---
 
 **INTERNAL CONTEXT (FOR YOUR REFERENCE ONLY):**
@@ -1753,14 +1753,14 @@ User Input: Remind me to call Mom at 5 PM today.
 - **提取参数:** 提醒内容是 "call Mom"，时间是 "5 PM today"。
 - **最终决策:** 动作为 `scheduling`，参数为 `{ "task": "call Mom", "time": "5 PM today" }`。
 </think>
-{
+{{
   "action_type": "scheduling",
   "parameters": {
     "task": "call Mom",
     "time": "5 PM today"
   },
   "explanation": "User explicitly asked to be reminded of a task at a specific time."
-}
+}}
 ---
 **示例 2:**
 User Input: Can you find my presentation slides about the Q2 financial report?
@@ -1772,14 +1772,14 @@ User Input: Can you find my presentation slides about the Q2 financial report?
 - **提取参数:** 搜索查询是 "presentation slides Q2 financial report"。
 - **最终决策:** 动作为 `search`，参数为 `{ "query": "presentation slides Q2 financial report", "type": "local_file" }`。
 </think>
-{
+{{
   "action_type": "search",
   "parameters": {
     "query": "presentation slides Q2 financial report",
     "type": "local_file"
   },
   "explanation": "User is asking to find a specific local file on their computer."
-}
+}}
 ---
 **示例 3:**
 User Input: Why is the sky blue?
@@ -1791,11 +1791,11 @@ User Input: Why is the sky blue?
 - **提取参数:** 无。
 - **最终决策:** 动作为 `no_action`。
 </think>
-{
+{{
   "action_type": "no_action",
   "parameters": {},
   "explanation": "The user is asking a general knowledge question that can be answered directly without performing a system action."
-}
+}}
 ---
 
 **INTERNAL CONTEXT (FOR YOUR REFERENCE ONLY):**
