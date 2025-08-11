@@ -1755,10 +1755,10 @@ User Input: Remind me to call Mom at 5 PM today.
 </think>
 {{
   "action_type": "scheduling",
-  "parameters": {
+  "parameters": {{  // <<< --- THIS IS THE FIX --- >>>
     "task": "call Mom",
     "time": "5 PM today"
-  },
+  }}, // <<< --- AND HERE --- >>>
   "explanation": "User explicitly asked to be reminded of a task at a specific time."
 }}
 ---
@@ -1774,10 +1774,10 @@ User Input: Can you find my presentation slides about the Q2 financial report?
 </think>
 {{
   "action_type": "search",
-  "parameters": {
+  "parameters": {{ // <<< --- THIS IS THE FIX --- >>>
     "query": "presentation slides Q2 financial report",
     "type": "local_file"
-  },
+  }}, // <<< --- AND HERE --- >>>
   "explanation": "User is asking to find a specific local file on their computer."
 }}
 ---
@@ -1793,7 +1793,7 @@ User Input: Why is the sky blue?
 </think>
 {{
   "action_type": "no_action",
-  "parameters": {},
+  "parameters": {{}}, // <<< --- THIS IS THE FIX (already done, but good to confirm) --- >>>
   "explanation": "The user is asking a general knowledge question that can be answered directly without performing a system action."
 }}
 ---
