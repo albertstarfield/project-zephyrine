@@ -344,13 +344,15 @@ const AppContent = () => {
           />
             
             <SettingsModal
-            isVisible={isSettingsModalVisible}
-            onClose={handleCloseSettings}
-            onApply={handleApplySettings}
-            //isCriticalMission={isGenerating} // Example: a critical mission is when the AI is generating a response
-            onForceThemeChange={handleForceThemeChange}
-            currentTheme={forcedTheme}
-          />
+                isVisible={isSettingsModalVisible}
+                onClose={handleCloseSettings}
+                onApply={handleApplySettings}
+                // A "critical mission" (like AI generation) state isn't available in App.jsx.
+                // Passing `false` satisfies the requirement and is the correct default behavior.
+                isCriticalMission={false} 
+                onForceThemeChange={handleForceThemeChange}
+                currentTheme={forcedTheme}
+            />
 
             <div className="chat-area-wrapper">
               <Suspense fallback={<div className="loading-screen">Loading Page...</div>}>
