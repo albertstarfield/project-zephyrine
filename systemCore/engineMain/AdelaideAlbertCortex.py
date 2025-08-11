@@ -7291,50 +7291,45 @@ def _create_assistants_api_stub_response(
 """
 # ====== Server Root =======
 @app.route("/", methods=["GET", "POST", "HEAD"])
-def handle_interaction():
+async def handle_interaction():
     """
-    Main endpoint that intelligently handles three types of requests:
+    Async version of the main endpoint. It intelligently handles three types of requests:
     - GET/HEAD from an Ollama client: A successful health check.
     - GET/HEAD from a browser: A redirect to a special URL.
-    - POST from any client: The universal fast-path AI response.
+    - POST from any client: The universal fast-path AI response, now handled asynchronously.
     """
     # --- Handler for GET/HEAD (Health Checks and Browsers) ---
+    # This part of the logic is synchronous and does not require any changes.
+    # It will execute correctly within an async function.
     if request.method in ["GET", "HEAD"]:
         user_agent = request.headers.get('User-Agent', '')
 
-        # Define the fingerprint for a typical browser User-Agent from your logs.
         browser_fingerprint = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/138.0.0.0 Safari/537.36"
 
-        # Check if fuzz logic is available.
         if FUZZY_AVAILABLE and fuzz and user_agent:
-            # --- Check 1: Is it an Ollama client? ---
-            # We use a high threshold to be very specific and avoid false positives.
-            # A simple `in` check is also a good option here.
             ollama_score = fuzz.partial_ratio('ollama', user_agent.lower())
-            if ollama_score >= 85:  # Increased threshold for accuracy
+            if ollama_score >= 85:
                 logger.info(
                     f"Ollama Compatibility: Responding 200 OK to {request.method} from User-Agent '{user_agent}' (Score: {ollama_score})")
                 return Response("Adelaide/Zephy is running (Ollama compatibility mode).", status=200,
                                 mimetype="text/plain")
 
-            # --- Check 2: Is it a Browser? ---
-            # Use `token_set_ratio` which is better for comparing strings with different versions/details.
-            # This checks how similar the set of words is, which is robust.
             browser_score = fuzz.token_set_ratio(browser_fingerprint, user_agent)
-            if browser_score >= 60:  # Using the 60% threshold you requested
+            if browser_score >= 60:
                 logger.info(
                     f"Browser Detected: Redirecting {request.method} from User-Agent '{user_agent}' (Score: {browser_score})")
                 return redirect("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
 
-        # --- Fallback: If it's not a recognized Ollama client, treat it like a browser/other and redirect.
         logger.info(f"Default Redirect: Redirecting unknown GET/HEAD request from User-Agent: '{user_agent}'")
         return redirect("https://www.youtube.com/watch?v=dQw4w9WgXcQ")
 
-    # --- MAIN LOGIC FOR ALL POST REQUESTS ---
+    # --- ASYNCHRONOUS LOGIC FOR ALL POST REQUESTS ---
     start_req = time.monotonic()
     db: Session = g.db
+    resp: Response  # Define the variable to ensure it's available in all paths
 
     try:
+        # Request parsing is synchronous
         request_data = request.get_json()
         if not request_data:
             return Response("Empty request payload.", status=400, mimetype="text/plain")
@@ -7346,23 +7341,22 @@ def handle_interaction():
 
         session_id = request_data.get("session_id", f"direct_session_{int(time.time())}")
 
-        logger.info(f"🚀 POST Request: Routing to direct_generate. Session: {session_id}, Prompt: '{prompt[:50]}...'")
+        logger.info(f"🚀 Async POST Request: Routing to direct_generate. Session: {session_id}, Prompt: '{prompt[:50]}...'")
 
-        # --- UNIVERSAL DIRECT GENERATE PATH ---
-        response_text = asyncio.run(
-            cortex_text_interaction.direct_generate(db, prompt, session_id)
-        )
+        # --- CORE CHANGE: Use `await` instead of `asyncio.run()` ---
+        # This is the key to making the endpoint non-blocking.
+        response_text = await cortex_text_interaction.direct_generate(db, prompt, session_id)
 
         resp = Response(response_text, status=200, mimetype="text/plain; charset=utf-8")
 
     except Exception as e:
-        logger.exception("🔥🔥 Unhandled exception in main POST request handler:")
+        logger.exception("🔥🔥 Unhandled exception in async main POST request handler:")
         response_text = f"Internal Server Error: {e}"
         resp = Response(response_text, status=500, mimetype="text/plain; charset=utf-8")
 
     finally:
         duration_req = (time.monotonic() - start_req) * 1000
-        logger.info(f"🏁 POST Request handled in {duration_req:.2f} ms.")
+        logger.info(f"🏁 Async POST Request handled in {duration_req:.2f} ms.")
 
     return resp
 
@@ -7630,115 +7624,99 @@ async def handle_openai_embeddings():
 
 @app.route("/v1/completions", methods=["POST"])
 @app.route("/api/generate", methods=["POST"])
-def handle_legacy_completions():
-    """Handles requests mimicking the legacy OpenAI /v1/completions endpoint."""
+async def handle_legacy_completions():
+    """
+    Asynchronous version of the handler for the legacy OpenAI /v1/completions endpoint.
+    Runs non-blockingly on an ASGI server like Hypercorn.
+    """
     endpoint_hit = request.path
     start_req = time.monotonic()
-    request_id = f"req-legacy-{uuid.uuid4()}"
-    logger.info(f"🚀 Flask Legacy Completion Request ID: {request_id} on Endpoint: {endpoint_hit}")
+    request_id = f"req-legacy-async-{uuid.uuid4()}"
+    logger.info(f"🚀 Async Legacy Completion Request ID: {request_id} on Endpoint: {endpoint_hit}")
 
     db: Session = g.db
-    response_payload = ""
-    status_code = 500
-    resp: Optional[Response] = None
+    resp: Response
     session_id: str = f"legacy_req_{request_id}_unassigned"
-    request_data_for_log: str = "No request data processed"
     final_response_status_code = 500
-    raw_request_data: Optional[Dict] = None
 
     try:
-        # --- Get Request Data ---
-        try:
-            raw_request_data = request.get_json()
-            if not raw_request_data: raise ValueError("Empty JSON payload.")
-            try: request_data_for_log = json.dumps(raw_request_data)[:1000]
-            except: request_data_for_log = str(raw_request_data)[:1000]
-        except Exception as e:
-            logger.warning(f"{request_id}: Failed to get/parse JSON body: {e}")
-            try: request_data_for_log = request.get_data(as_text=True)[:1000]
-            except Exception: request_data_for_log = "Could not read request body"
-            resp_data, status_code = _create_openai_error_response(f"Request body is missing or invalid JSON: {e}", err_type="invalid_request_error", status_code=400)
-            response_payload = json.dumps(resp_data); resp = Response(response_payload, status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
+        # Request parsing is synchronous and remains the same.
+        raw_request_data = request.get_json()
+        if not raw_request_data: raise ValueError("Empty JSON payload.")
 
-        # --- Extract Legacy Parameters ---
         prompt = raw_request_data.get("prompt")
         stream = raw_request_data.get("stream", False)
-        model_requested = raw_request_data.get("model") # Log, but likely ignored
-        session_id = raw_request_data.get("session_id", f"legacy_req_{request_id}") # Allow session override
+        model_requested = raw_request_data.get("model")
+        session_id = raw_request_data.get("session_id", f"legacy_req_{request_id}")
 
-        logger.debug(f"{request_id}: Legacy Request parsed - SessionID={session_id}, Stream: {stream}, Model Requested: {model_requested}, Prompt Snippet: '{str(prompt)[:50]}...'")
+        logger.debug(
+            f"{request_id}: Async Legacy Request parsed - SessionID={session_id}, Stream: {stream}, Model: {model_requested}, Prompt: '{str(prompt)[:50]}...'")
 
-        # --- Input Validation ---
         if prompt is None or not isinstance(prompt, str):
-            logger.warning(f"{request_id}: 'prompt' field missing or not a string.")
-            resp_data, status_code = _create_openai_error_response("The 'prompt' parameter is required and must be a string.", err_type="invalid_request_error", status_code=400)
-            response_payload = json.dumps(resp_data); resp = Response(response_payload, status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
+            raise ValueError("The 'prompt' parameter is required and must be a string.")
 
-        # --- Handle Stream Request (Not Implemented Here) ---
+        # This endpoint does not support streaming, so we log a warning but proceed.
         if stream:
-            logger.warning(f"{request_id}: Streaming is not currently implemented for the legacy /v1/completions endpoint. Ignoring stream=True.")
-            # Optionally return an error:
-            # resp_data, status_code = _create_openai_error_response("Streaming is not supported for this legacy endpoint.", err_type="invalid_request_error", status_code=400)
-            # response_payload = json.dumps(resp_data); resp = Response(response_payload, status=status_code, mimetype='application/json'); final_response_status_code = status_code; return resp
-            # Or just proceed with non-streaming... we'll proceed for now.
+            logger.warning(
+                f"{request_id}: Streaming is not implemented for the legacy /v1/completions endpoint. Ignoring stream=True.")
 
-        # --- Call Core Generation Logic (Non-Streaming) ---
+        # --- CORE CHANGE: Await the AI generation logic directly ---
         response_text = ""
         status_code = 200
-        logger.info(f"{request_id}: Proceeding with non-streaming CortexThoughts.generate for legacy prompt...")
-        try:
-            # Use asyncio.run to call the async generate function
-            # Pass the legacy prompt directly as user_input
-            # Classification will be handled inside `generate`
-            response_text = asyncio.run(
-                cortex_text_interaction.generate(db, prompt, session_id)
-            )
+        logger.info(f"{request_id}: Awaiting non-blocking CortexThoughts.generate for legacy prompt...")
 
-            if "internal error" in response_text.lower() or "Error:" in response_text or "Traceback" in response_text:
-                status_code = 500; logger.warning(f"{request_id}: CortexThoughts.generate potential error: {response_text[:200]}...")
-            else: status_code = 200
-            logger.debug(f"{request_id}: CortexThoughts.generate completed. Status: {status_code}")
+        # This `await` call is non-blocking and will yield control to the server's event loop.
+        response_text = await cortex_text_interaction.generate(db, prompt, session_id)
 
-        except Exception as gen_err:
-            logger.error(f"{request_id}: Error during asyncio.run(ai_chat.generate): {gen_err}")
-            logger.exception("Traceback for legacy generate error:")
-            response_text = f"Error during generation: {gen_err}"
+        if "internal error" in response_text.lower() or "Error:" in response_text:
             status_code = 500
-
-        # --- Format and Return NON-STREAMING Legacy Response ---
-        if status_code != 200:
-            resp_data, status_code = _create_openai_error_response(response_text, status_code=status_code)
+            logger.warning(
+                f"{request_id}: CortexThoughts.generate returned a potential error: {response_text[:200]}...")
         else:
-            # Use the helper to format the response correctly
+            status_code = 200
+            logger.debug(f"{request_id}: CortexThoughts.generate completed successfully.")
+
+        # Format the final response
+        if status_code != 200:
+            resp_data, _ = _create_openai_error_response(response_text, status_code=status_code)
+        else:
             resp_data = _format_legacy_completion_response(response_text, model_name=META_MODEL_NAME_NONSTREAM)
 
-        response_payload = json.dumps(resp_data)
-        logger.debug(f"{request_id}: Returning non-streaming legacy JSON. Status: {status_code}")
-        resp = Response(response_payload, status=status_code, mimetype='application/json')
+        resp = jsonify(resp_data)
+        resp.status_code = status_code
+        final_response_status_code = status_code
+
+    except ValueError as ve:
+        logger.warning(f"{request_id}: Invalid legacy completions request: {ve}")
+        resp_data, status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
+                                                               status_code=400)
+        resp = jsonify(resp_data)
+        resp.status_code = status_code
         final_response_status_code = status_code
 
     except Exception as e:
-        # --- Main Exception Handler ---
-        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Flask Legacy Completion endpoint:")
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in async legacy completions handler:")
         resp_data, status_code = _create_openai_error_response(f"Internal server error: {e}", status_code=500)
-        response_payload = json.dumps(resp_data)
-        resp = Response(response_payload, status=status_code, mimetype='application/json')
+        resp = jsonify(resp_data)
+        resp.status_code = status_code
         final_response_status_code = status_code
-        try: # Log error to DB
-            if 'db' in g: add_interaction(g.db, session_id=session_id, mode="completion", input_type='error', user_input=f"Legacy Endpoint Error. Request: {request_data_for_log}", llm_response=f"Handler Error ({type(e).__name__}): {e}"[:2000])
-            else: logger.error(f"{request_id}: Cannot log error: DB session 'g.db' unavailable.")
-        except Exception as db_err: logger.error(f"{request_id}: ❌ Failed log error to DB: {db_err}")
+        # Logging to DB can be done asynchronously as well if needed, but for simplicity we keep it here.
+        try:
+            if 'db' in g:
+                # Note: DB operations are synchronous, for a fully async app this would use an async DB driver
+                # but in this mixed context, it's acceptable.
+                add_interaction(g.db, session_id=session_id, mode="completion", input_type='error',
+                                user_input=f"Legacy Endpoint Error",
+                                llm_response=f"Handler Error ({type(e).__name__}): {e}"[:2000])
+            else:
+                logger.error(f"{request_id}: Cannot log error: DB session 'g.db' unavailable.")
+        except Exception as db_err:
+            logger.error(f"{request_id}: ❌ Failed to log error to DB: {db_err}")
 
     finally:
-        # DB session is closed by teardown_request
         duration_req = (time.monotonic() - start_req) * 1000
-        logger.info(f"🏁 Flask Legacy Completion Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
-
-    # --- Return Response ---
-    if resp is None: # Safety check
-        logger.error(f"{request_id}: Handler finished unexpectedly without response object.")
-        resp_data, _ = _create_openai_error_response("Internal error: Handler finished without response.", status_code=500)
-        resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
+        logger.info(
+            f"🏁 Async Legacy Completion Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
 
     return resp
 
@@ -7859,23 +7837,23 @@ async def handle_zephyrine_chat_response():
 
 
 @app.route("/v1/chat/completions", methods=["POST"])
-def handle_openai_chat_completion():
+async def handle_openai_chat_completion():
     """
-    Handles requests mimicking OpenAI/Ollama's chat completion endpoint.
-    This version uses a synchronous `def` route to ensure Flask context stability,
-    while still launching the ELP0 background task immediately and using
-    `asyncio.run()` to execute the async ELP1 generation logic.
+    Asynchronous version of the handler for OpenAI's chat completion endpoint,
+    designed to run non-blockingly on an ASGI server like Hypercorn.
+    It launches the ELP0 background task and awaits the ELP1 response.
     """
     start_req_time_main_handler = time.monotonic()
-    request_id = f"req-chat-{uuid.uuid4()}"
-    logger.info(f"🚀 Sync OpenAI Chat Request ID: {request_id} (Stable Streaming Logic)")
+    request_id = f"req-chat-async-{uuid.uuid4()}"
+    logger.info(f"🚀 Async OpenAI Chat Request ID: {request_id}")
 
     db: Session = g.db
-    resp_obj: Optional[Response] = None
+    resp_obj: Response  # Ensure resp_obj is defined
     session_id_for_logs: str = f"openai_req_{request_id}_unassigned"
     final_response_status_code: int = 500
 
     try:
+        # Request parsing logic is synchronous and remains unchanged.
         raw_request_data_dict = request.get_json()
         if not raw_request_data_dict: raise ValueError("Empty JSON payload.")
 
@@ -7886,6 +7864,7 @@ def handle_openai_chat_completion():
         if not cortex_text_interaction: raise RuntimeError("Critical: cortex_text_interaction instance not available.")
         cortex_text_interaction.current_session_id = session_id_for_logs
 
+        # Extract user input and image data (this logic is synchronous).
         user_input_from_req, image_b64_from_req = "", None
         last_user_msg_obj = next((msg for msg in reversed(messages_from_req) if msg.get("role") == "user"), None)
         if not last_user_msg_obj: raise ValueError("No message with role 'user' found.")
@@ -7897,37 +7876,35 @@ def handle_openai_chat_completion():
                 if part.get("type") == "text":
                     user_input_from_req += part.get("text", "")
                 elif part.get("type") == "image_url":
-                    image_b64_from_req = part.get("image_url", {}).get("url", "").split(",", 1)[1]
+                    image_b64_from_req = part.get("image_url", {}).get("url", "").split(",", 1)[-1]
         if not user_input_from_req and not image_b64_from_req: raise ValueError("No text or image content provided.")
 
-        # Launch ELP0 background task in a thread (non-blocking)
-        def run_bg_task(user_in, sess_id, img_b64):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            db_session = SessionLocal()
-            try:
-                loop.run_until_complete(
-                    cortex_text_interaction.background_generate(db=db_session, user_input=user_in, session_id=sess_id,
-                                                                classification="chat_complex", image_b64=img_b64))
-            finally:
-                if db_session: db_session.close()
-                loop.close()
-
-        threading.Thread(target=run_bg_task, args=(user_input_from_req, session_id_for_logs, image_b64_from_req),
-                         daemon=True).start()
-        logger.info(f"{request_id}: Launched background_generate in thread.")
-
-        # Run the async ELP1 generation using asyncio.run(). This is a blocking call
-        # inside this synchronous function, which is what causes the minor delay you noted.
-        logger.info(f"{request_id}: Generating ELP1 response using asyncio.run()...")
-        full_response_text = asyncio.run(
-            cortex_text_interaction.direct_generate(
-                db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+        # --- CORE CHANGE: Efficiently spawn the ELP0 background task ---
+        # Instead of creating a new thread, we schedule the async function
+        # on the server's main event loop. This is much lighter.
+        asyncio.create_task(
+            cortex_text_interaction.background_generate(
+                db=None,  # The task will create its own DB session
+                user_input=user_input_from_req,
+                session_id=session_id_for_logs,
+                classification="chat_complex",
+                image_b64=image_b64_from_req
             )
         )
+        logger.info(f"{request_id}: Scheduled non-blocking background_generate (ELP0) task.")
 
+        # --- CORE CHANGE: Await the fast ELP1 response without blocking ---
+        logger.info(f"{request_id}: Awaiting non-blocking direct_generate (ELP1) response...")
+        # The `await` keyword yields control to Hypercorn's event loop,
+        # allowing it to handle other requests while the AI is processing.
+        full_response_text = await cortex_text_interaction.direct_generate(
+            db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+        )
+
+        # The rest of the logic for formatting the response is the same.
         if stream_requested_by_client:
-            logger.info(f"{request_id}: ELP1 generation complete. Starting pseudo-stream.")
+            logger.info(f"{request_id}: ELP1 generation complete. Starting pseudo-stream for client.")
+            # The synchronous generator is compatible with `stream_with_context` in an async route.
             sync_generator = _pseudo_stream_sync_generator(
                 full_response_text=full_response_text,
                 model_name=META_MODEL_NAME_STREAM
@@ -7935,7 +7912,7 @@ def handle_openai_chat_completion():
             resp_obj = Response(stream_with_context(sync_generator), mimetype='text/event-stream')
             final_response_status_code = 200
         else:
-            logger.info(f"{request_id}: ELP1 generation complete. Formatting non-streaming response.")
+            logger.info(f"{request_id}: ELP1 generation complete. Formatting non-streaming OpenAI response.")
             if "interrupted" in full_response_text.lower() or "Error:" in full_response_text:
                 final_response_status_code = 503 if "interrupted" in full_response_text.lower() else 500
                 resp_data_err, _ = _create_openai_error_response(full_response_text,
@@ -7948,7 +7925,7 @@ def handle_openai_chat_completion():
                 final_response_status_code = 200
 
     except Exception as e:
-        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in Sync completions handler:")
+        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in async completions handler:")
         err_msg = f"Internal server error: {type(e).__name__}"
         resp_data, status_code = _create_openai_error_response(err_msg, status_code=500)
         resp_obj = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
@@ -7957,7 +7934,7 @@ def handle_openai_chat_completion():
     finally:
         duration_req = (time.monotonic() - start_req_time_main_handler) * 1000
         logger.info(
-            f"🏁 Sync OpenAI Chat Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+            f"🏁 Async OpenAI Chat Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
 
     return resp_obj
 
@@ -8155,21 +8132,23 @@ async def handle_openai_moderations():
         resp = Response(json.dumps(resp_data), status=500, mimetype='application/json')
     return resp
 
+
 @app.route("/v1/models", methods=["GET"])
-def handle_openai_models():
+async def handle_openai_models():
     """
-    Handles requests mimicking OpenAI's models endpoint.
-    Lists available models, including chat and TTS.
+    Asynchronous version of the handler for OpenAI's /v1/models endpoint.
+    Lists all available meta-models for chat, moderation, TTS, ASR, and image generation.
     """
-    logger.info("Received request for /v1/models")
+    logger.info("Received async request for /v1/models")
     start_req = time.monotonic()
     status_code = 200
 
+    # This logic is fast and CPU-bound, so it runs directly within the async function.
     model_list = [
         {
             "id": META_MODEL_NAME_STREAM,
             "object": "model",
-            "created": int(time.time()), # Placeholder timestamp
+            "created": int(time.time()),
             "owned_by": META_MODEL_OWNER,
             "permission": [], "root": META_MODEL_NAME_STREAM, "parent": None,
         },
@@ -8181,99 +8160,90 @@ def handle_openai_models():
             "permission": [], "root": META_MODEL_NAME_NONSTREAM, "parent": None,
         },
         {
-            "id": MODERATION_MODEL_CLIENT_FACING, # e.g., "text-moderation-zephy"
+            "id": MODERATION_MODEL_CLIENT_FACING,
             "object": "model",
             "created": int(time.time()),
-            "owned_by": META_MODEL_OWNER, # As defined in your config.py
-            "permission": [],
-            "root": MODERATION_MODEL_CLIENT_FACING,
-            "parent": None,
-            # "description": "Moderation service based on internal LLM capabilities." # Optional
-        },
-        # --- NEW: Add TTS Model Entry ---
-        {
-            "id": TTS_MODEL_NAME_CLIENT_FACING, # Use the constant
-            "object": "model", # Standard object type
-            "created": int(time.time()), # Placeholder timestamp
-            "owned_by": META_MODEL_OWNER, # Your foundation name
-            "permission": [], # Standard permissions array
-            "root": TTS_MODEL_NAME_CLIENT_FACING, # Root is itself
-            "parent": None, # No parent model
-            # Optionally, add a 'capabilities' or 'description' field if useful,
-            # though OpenAI's TTS model listing is very basic.
-            # "description": "Text-to-Speech model with Zephyrine Persona."
+            "owned_by": META_MODEL_OWNER,
+            "permission": [], "root": MODERATION_MODEL_CLIENT_FACING, "parent": None,
         },
         {
-            "id": ASR_MODEL_NAME_CLIENT_FACING,  # Use the constant
+            "id": TTS_MODEL_NAME_CLIENT_FACING,
             "object": "model",
             "created": int(time.time()),
-            "owned_by": META_MODEL_OWNER,  # Your foundation name
-            "permission": [],
-            "root": ASR_MODEL_NAME_CLIENT_FACING,
-            "parent": None,
-            # "description": "Speech-to-Text model based on Whisper." # Optional
+            "owned_by": META_MODEL_OWNER,
+            "permission": [], "root": TTS_MODEL_NAME_CLIENT_FACING, "parent": None,
         },
         {
-            "id": AUDIO_TRANSLATION_MODEL_CLIENT_FACING,  # from CortexConfiguration.py
+            "id": ASR_MODEL_NAME_CLIENT_FACING,
             "object": "model",
             "created": int(time.time()),
-            "owned_by": META_MODEL_OWNER,  # from CortexConfiguration.py
+            "owned_by": META_MODEL_OWNER,
+            "permission": [], "root": ASR_MODEL_NAME_CLIENT_FACING, "parent": None,
+        },
+        {
+            "id": AUDIO_TRANSLATION_MODEL_CLIENT_FACING,
+            "object": "model",
+            "created": int(time.time()),
+            "owned_by": META_MODEL_OWNER,
             "permission": [], "root": AUDIO_TRANSLATION_MODEL_CLIENT_FACING, "parent": None,
-            # "description": "Audio-to-Audio Translation Service" # Optional
         },
         {
-            "id": IMAGE_GEN_MODEL_NAME_CLIENT_FACING,  # Use the constant
+            "id": IMAGE_GEN_MODEL_NAME_CLIENT_FACING,
             "object": "model",
             "created": int(time.time()),
-            "owned_by": META_MODEL_OWNER,  # Your foundation name
-            "permission": [],
-            "root": IMAGE_GEN_MODEL_NAME_CLIENT_FACING,
-            "parent": None,
-            # "description": "Image Generation Model (Internal Use Only)." # Optional
+            "owned_by": META_MODEL_OWNER,
+            "permission": [], "root": IMAGE_GEN_MODEL_NAME_CLIENT_FACING, "parent": None,
         }
-
     ]
 
     response_body = {
         "object": "list",
         "data": model_list,
     }
-    response_payload = json.dumps(response_body, indent=2)
+
+    # Use jsonify for a slightly cleaner return. It correctly sets the mimetype and status.
+    response = jsonify(response_body)
+    response.status_code = status_code
+
     duration_req = (time.monotonic() - start_req) * 1000
-    logger.info(f"🏁 /v1/models request handled in {duration_req:.2f} ms. Status: {status_code}")
-    return Response(response_payload, status=status_code, mimetype='application/json')
+    logger.info(f"🏁 /v1/models async request handled in {duration_req:.2f} ms. Status: {status_code}")
+    return response
 
 
 
 #==============================[Ollama Behaviour]==============================
 @app.route("/api/chat", methods=["POST"])
-def handle_ollama_chat():
+async def handle_ollama_chat():
     """
-    Handles requests mimicking Ollama's /api/chat endpoint.
-    This uses a synchronous `def` route for Flask context stability. It launches
-    the ELP0 background task immediately, then generates the ELP1 response and
-    formats it specifically for Ollama clients, including streaming.
+    Asynchronous version of the handler for Ollama's /api/chat endpoint,
+    designed to run non-blockingly on an ASGI server like Hypercorn.
     """
     start_req_time_main_handler = time.monotonic()
-    request_id = f"req-ollama-{uuid.uuid4()}"
-    logger.info(f"🚀 Ollama-Style Sync Chat Request ID: {request_id}")
+    request_id = f"req-ollama-async-{uuid.uuid4()}"
+    logger.info(f"🚀 Ollama-Style Async Chat Request ID: {request_id}")
 
     db: Session = g.db
-    resp_obj: Optional[Response] = None
+    resp_obj: Response  # Ensure resp_obj is defined
     session_id_for_logs: str = f"ollama_req_{request_id}_unassigned"
     final_response_status_code: int = 500
 
     try:
+        # Request parsing is synchronous, so it runs directly.
+        # Use `await` for Quart-like frameworks, but `request.get_json()` is sync in Flask.
+        # Hypercorn's compatibility layer handles this seamlessly.
         raw_request_data_dict = request.get_json()
-        if not raw_request_data_dict: raise ValueError("Empty JSON payload.")
+        if not raw_request_data_dict:
+            raise ValueError("Empty JSON payload.")
 
         messages_from_req = raw_request_data_dict.get("messages", [])
         stream_requested_by_client = raw_request_data_dict.get("stream", False)
         session_id_for_logs = raw_request_data_dict.get("session_id", f"ollama_req_{request_id}")
 
-        if not cortex_text_interaction: raise RuntimeError("Critical: cortex_text_interaction instance not available.")
+        if not cortex_text_interaction:
+            raise RuntimeError("Critical: cortex_text_interaction instance not available.")
         cortex_text_interaction.current_session_id = session_id_for_logs
 
+        # This logic for extracting user input is synchronous and remains the same.
         user_input_from_req, image_b64_from_req = "", None
         last_user_msg_obj = next((msg for msg in reversed(messages_from_req) if msg.get("role") == "user"), None)
         if not last_user_msg_obj: raise ValueError("No message with role 'user' found.")
@@ -8285,44 +8255,48 @@ def handle_ollama_chat():
                 if part.get("type") == "text":
                     user_input_from_req += part.get("text", "")
                 elif part.get("type") == "image_url":
-                    image_b64_from_req = part.get("image_url", {}).get("url", "").split(",", 1)[1]
+                    # Extracts base64 data from a data URI
+                    image_b64_from_req = part.get("image_url", {}).get("url", "").split(",", 1)[-1]
         if not user_input_from_req and not image_b64_from_req: raise ValueError("No text or image content provided.")
 
-        # Launch ELP0 background task in a thread (non-blocking)
-        def run_bg_task(user_in, sess_id, img_b64):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            db_session = SessionLocal()
-            try:
-                loop.run_until_complete(
-                    cortex_text_interaction.background_generate(db=db_session, user_input=user_in, session_id=sess_id,
-                                                                classification="chat_complex", image_b64=img_b64))
-            finally:
-                if db_session: db_session.close()
-                loop.close()
-
-        threading.Thread(target=run_bg_task, args=(user_input_from_req, session_id_for_logs, image_b64_from_req),
-                         daemon=True).start()
-        logger.info(f"{request_id}: Launched background_generate in thread.")
-
-        # Generate the ELP1 response using asyncio.run(). This is a blocking call here.
-        logger.info(f"{request_id}: Generating ELP1 response using asyncio.run()...")
-        elp1_start_time = time.monotonic()
-        full_response_text = asyncio.run(
-            cortex_text_interaction.direct_generate(
-                db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+        # --- CORE CHANGE: Non-blocking ELP0 Task Spawning ---
+        # We can now use `asyncio.create_task` to schedule the background work
+        # on the same event loop that the request is running on. This is more
+        # efficient than creating a whole new thread and event loop.
+        asyncio.create_task(
+            cortex_text_interaction.background_generate(
+                db=None,  # The task will create its own session
+                user_input=user_input_from_req,
+                session_id=session_id_for_logs,
+                classification="chat_complex",
+                image_b64=image_b64_from_req
             )
         )
+        logger.info(f"{request_id}: Scheduled background_generate on the main event loop.")
+
+        # --- CORE CHANGE: Await the ELP1 response directly ---
+        logger.info(f"{request_id}: Awaiting non-blocking ELP1 response...")
+        elp1_start_time = time.monotonic()
+
+        # This `await` will yield control to the Hypercorn event loop,
+        # allowing it to serve other requests while the AI is processing.
+        full_response_text = await cortex_text_interaction.direct_generate(
+            db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+        )
+
         elp1_end_time = time.monotonic()
 
-        # Calculate durations for Ollama format (in nanoseconds)
+        # Durations for Ollama response format (in nanoseconds)
         eval_duration_ns = int((elp1_end_time - elp1_start_time) * 1_000_000_000)
         total_duration_ns = int((elp1_end_time - start_req_time_main_handler) * 1_000_000_000)
 
-        model_name_for_response = META_MODEL_NAME_NONSTREAM  # Use a consistent model name
+        model_name_for_response = META_MODEL_NAME_NONSTREAM
 
         if stream_requested_by_client:
-            logger.info(f"{request_id}: ELP1 generation complete. Starting Ollama-style pseudo-stream.")
+            logger.info(f"{request_id}: ELP1 complete. Starting Ollama-style pseudo-stream.")
+
+            # The synchronous generator for streaming still works fine. Flask's `stream_with_context`
+            # will handle iterating through it.
             ollama_generator = _ollama_pseudo_stream_sync_generator(
                 full_response_text=full_response_text,
                 model_name=model_name_for_response,
@@ -8332,7 +8306,7 @@ def handle_ollama_chat():
             resp_obj = Response(stream_with_context(ollama_generator), mimetype='application/x-ndjson')
             final_response_status_code = 200
         else:
-            logger.info(f"{request_id}: ELP1 generation complete. Formatting Ollama non-streaming response.")
+            logger.info(f"{request_id}: ELP1 complete. Formatting Ollama non-streaming response.")
             ollama_response_body = _format_ollama_chat_response_nonstream(
                 response_text=full_response_text,
                 model_name=model_name_for_response,
@@ -8343,36 +8317,38 @@ def handle_ollama_chat():
             final_response_status_code = 200
 
     except Exception as e:
-        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in Ollama chat handler:")
-        # Ollama returns 500 with a simple error JSON
+        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in async Ollama chat handler:")
         resp_obj = jsonify({"error": f"Internal server error: {type(e).__name__}"})
         final_response_status_code = 500
 
     finally:
         duration_req = (time.monotonic() - start_req_time_main_handler) * 1000
         logger.info(
-            f"🏁 Ollama-Style Chat Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+            f"🏁 Ollama-Style Async Chat Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
 
     return resp_obj
 
+
 @app.route("/api/tags", methods=["GET", "HEAD"])
-def handle_ollama_tags():
-    """Handles requests mimicking Ollama's /api/tags endpoint, using realistic placeholder values."""
-    logger.info("Received request for /api/tags (Ollama Compatibility)")
+async def handle_ollama_tags():
+    """
+    Asynchronous version of the handler for Ollama's /api/tags endpoint.
+    It provides a static list of the system's meta-models with realistic placeholder values.
+    """
+    logger.info("Received async request for /api/tags (Ollama Compatibility)")
     start_req = time.monotonic()
     status_code = 200
 
-    # --- Use global constants and provide a realistic placeholder size ---
-    # A 14B parameter model is typically between 7GB and 28GB depending on quantization.
-    # We will use a plausible number in bytes (approx. 14.2 billion).
-    placeholder_size_bytes = 14200000000
+    # This logic is CPU-bound and very fast, so it does not need to be awaited.
+    # It can run directly within the async function body.
+    placeholder_size_bytes = 14200000000  # Approx. 14.2 billion bytes
 
     ollama_models = [
         {
             "name": f"{META_MODEL_NAME_STREAM}:latest",
             "model": f"{META_MODEL_NAME_STREAM}:latest",
             "modified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "size": placeholder_size_bytes, # <<< FIX: Provide a realistic, non-zero size
+            "size": placeholder_size_bytes,
             "digest": hashlib.sha256(META_MODEL_NAME_STREAM.encode()).hexdigest(),
             "details": {
                 "parent_model": "",
@@ -8387,7 +8363,7 @@ def handle_ollama_tags():
             "name": f"{META_MODEL_NAME_NONSTREAM}:latest",
             "model": f"{META_MODEL_NAME_NONSTREAM}:latest",
             "modified_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "size": placeholder_size_bytes, # <<< FIX: Provide a realistic, non-zero size
+            "size": placeholder_size_bytes,
             "digest": hashlib.sha256(META_MODEL_NAME_NONSTREAM.encode()).hexdigest(),
             "details": {
                 "parent_model": "",
@@ -8398,17 +8374,18 @@ def handle_ollama_tags():
                 "quantization_level": META_MODEL_QUANT_LEVEL
             }
         },
-        # You can add other models here following the same pattern
     ]
 
     response_body = {
         "models": ollama_models
     }
+
+    # Flask's jsonify works correctly within an async route handler.
     response = jsonify(response_body)
     response.status_code = status_code
 
     duration_req = (time.monotonic() - start_req) * 1000
-    logger.info(f"🏁 /api/tags request handled in {duration_req:.2f} ms. Status: {status_code}")
+    logger.info(f"🏁 /api/tags async request handled in {duration_req:.2f} ms. Status: {status_code}")
     return response
 
 
@@ -9346,94 +9323,120 @@ async def handle_openai_image_generations():  # Route is async
 # --- NEW: Dummy Handlers for Pretending this is Ollama Model Management ---
 
 @app.route("/api/pull", methods=["POST"])
-def handle_api_pull_dummy():
-    logger.warning("⚠️ Received request for dummy endpoint: /api/pull (Not Implemented)")
-    # Simulate Ollama's streaming progress (optional, but makes it look real)
+async def handle_api_pull_dummy():
+    """Async dummy endpoint for /api/pull."""
+    logger.warning("⚠️ Received async request for dummy endpoint: /api/pull Ollama impostor activated!")
+    # This generator function is compatible with an async route.
     def generate_dummy_pull():
         yield json.dumps({"status": "pulling manifest"}) + "\n"
         time.sleep(0.5)
         yield json.dumps({"status": "verifying sha256:...", "total": 100, "completed": 50}) + "\n"
         time.sleep(0.5)
         yield json.dumps({"status": "success"}) + "\n"
-    # Or just return an error directly:
-    # return jsonify({"error": "Model pulling not implemented in this server"}), 501
-    return Response(generate_dummy_pull(), mimetype='application/x-ndjson') # Mimic streaming
+    return Response(generate_dummy_pull(), mimetype='application/x-ndjson')
 
 @app.route("/api/push", methods=["POST"])
-def handle_api_push_dummy():
-    logger.warning("⚠️ Received request for dummy endpoint: /api/push (Not Implemented)")
+async def handle_api_push_dummy():
+    """Async dummy endpoint for /api/push."""
+    logger.warning("⚠️ Received async request for dummy endpoint: /api/push Ollama impostor activated!")
     return jsonify({"error": "Model pushing not implemented in this server"}), 501
 
 @app.route("/api/show", methods=["POST"])
-def handle_api_show_dummy():
-    logger.warning("⚠️ Received request for dummy endpoint: /api/show (Not Implemented)")
-    # You could try and fake a response based on your known meta-models if needed
-    # For now, just return not implemented
+async def handle_api_show_dummy():
+    """Async dummy endpoint for /api/show."""
+    logger.warning("⚠️ Received async request for dummy endpoint: /api/show Ollama impostor activated!")
     return jsonify({"error": "Showing model details not implemented in this server"}), 501
 
 @app.route("/api/delete", methods=["DELETE"])
-def handle_api_delete_dummy():
-    logger.warning("⚠️ Received request for dummy endpoint: /api/delete (Not Implemented)")
-    return jsonify({"status": "Model deletion not implemented"}), 501 # Ollama might return 200 OK even if no-op? Return 501 for clarity.
+async def handle_api_delete_dummy():
+    """Async dummy endpoint for /api/delete."""
+    logger.warning("⚠️ Received async request for dummy endpoint: /api/delete Ollama impostor activated!")
+    return jsonify({"status": "Model deletion not implemented"}), 501
 
 @app.route("/api/create", methods=["POST"])
-def handle_api_create_dummy():
-    logger.warning("⚠️ Received request for dummy endpoint: /api/create (Not Implemented)")
+async def handle_api_create_dummy():
+    """Async dummy endpoint for /api/create."""
+    logger.warning("⚠️ Received async request for dummy endpoint: /api/create Ollama impostor activated!")
     return jsonify({"error": "Model creation from Modelfile not implemented"}), 501
 
 @app.route("/api/copy", methods=["POST"])
-def handle_api_copy_dummy():
-    logger.warning("⚠️ Received request for dummy endpoint: /api/copy (Not Implemented)")
+async def handle_api_copy_dummy():
+    """Async dummy endpoint for /api/copy."""
+    logger.warning("⚠️ Received async request for dummy endpoint: /api/copy Ollama impostor activated!")
     return jsonify({"error": "Model copying not implemented"}), 501
 
 @app.route("/api/blobs/<digest>", methods=["POST", "HEAD"])
-def handle_api_blobs_dummy(digest: str):
-    logger.warning(f"⚠️ Received request for dummy endpoint: /api/blobs/{digest} (Not Implemented)")
+async def handle_api_blobs_dummy(digest: str):
+    """Async dummy endpoint for /api/blobs."""
+    logger.warning(f"⚠️ Received async request for dummy endpoint: /api/blobs/{digest} Ollama impostor activated!")
     if request.method == 'HEAD':
-        # HEAD usually just checks existence, return 404
         return Response(status=404)
     else: # POST
         return jsonify({"error": "Blob creation/checking not implemented"}), 501
 
-
 @app.route("/api/version", methods=["GET", "HEAD"])
-def handle_api_version():
-    logger.info("Received request for /api/version")
-    version_string = "Adelaide-Zephyrine-Charlotte-MetacognitionArtificialQuellia-0.0.1" # As requested
+async def handle_api_version():
+    """Async endpoint for /api/version."""
+    logger.info("Received async request for /api/version")
+    version_string = "Adelaide-Zephyrine-Charlotte-MetacognitionArtificialQuellia-0.0.1"
     response_data = {"version": version_string}
-    # For HEAD, Flask might implicitly handle sending only headers if body is small
-    # or you could explicitly check request.method == 'HEAD' and return empty Response
     return jsonify(response_data), 200
 
 @app.route("/api/ps", methods=["GET"])
-def handle_api_ps_dummy():
-    logger.warning("⚠️ Received request for dummy endpoint: /api/ps (Not Implemented)")
-    # Return an empty list of running models, mimicking Ollama
+async def handle_api_ps_dummy():
+    """Async dummy endpoint for /api/ps."""
+    logger.warning("⚠️ Received async request for dummy endpoint: /api/ps (Not Implemented)")
     return jsonify({"models": []}), 200
 
+
+#-=-=-=-=-=-
+
 @app.route("/v1/models/<path:model>", methods=["GET"])
-def handle_openai_retrieve_model(model: str):
-    """Handles requests mimicking OpenAI's retrieve model endpoint."""
-    logger.info(f"Received request for /v1/models/{model}")
+async def handle_openai_retrieve_model(model: str):
+    """
+    Asynchronous version of the handler for retrieving a single model's details,
+    mimicking OpenAI's endpoint.
+    """
+    logger.info(f"Received async request for /v1/models/{model}")
     start_req = time.monotonic()
     status_code = 404
-    response_body = {"error": f"Model '{model}' not found."}
 
-    # Check if the requested model matches one of our meta-models
-    known_models = [META_MODEL_NAME_STREAM, META_MODEL_NAME_NONSTREAM]
+    # This logic is fast and CPU-bound, so no `await` is needed.
+    known_models = [
+        META_MODEL_NAME_STREAM,
+        META_MODEL_NAME_NONSTREAM,
+        MODERATION_MODEL_CLIENT_FACING,
+        TTS_MODEL_NAME_CLIENT_FACING,
+        ASR_MODEL_NAME_CLIENT_FACING,
+        AUDIO_TRANSLATION_MODEL_CLIENT_FACING,
+        IMAGE_GEN_MODEL_NAME_CLIENT_FACING
+    ]
+
     if model in known_models:
         status_code = 200
         response_body = {
-                "id": model,
-                "object": "model",
-                "created": int(time.time()), # Placeholder timestamp
-                "owned_by": META_MODEL_OWNER,
+            "id": model,
+            "object": "model",
+            "created": int(time.time()),  # Placeholder timestamp
+            "owned_by": META_MODEL_OWNER,
+        }
+    else:
+        # For consistency with OpenAI, create a standard error object for 404
+        response_body = {
+            "error": {
+                "message": f"The model '{model}' does not exist",
+                "type": "invalid_request_error",
+                "param": None,
+                "code": "model_not_found"
+            }
         }
 
-    response_payload = json.dumps(response_body)
+    response = jsonify(response_body)
+    response.status_code = status_code
+
     duration_req = (time.monotonic() - start_req) * 1000
-    logger.info(f"🏁 /v1/models/{model} request handled in {duration_req:.2f} ms. Status: {status_code}")
-    return Response(response_payload, status=status_code, mimetype='application/json')
+    logger.info(f"🏁 /v1/models/{model} async request handled in {duration_req:.2f} ms. Status: {status_code}")
+    return response
 
 #------- Initialization of the provider --------
 
@@ -9946,58 +9949,43 @@ async def handle_retrieve_file_content_ingestion_stub(file_id: str):
 
 
 @app.route("/v1/files/<string:file_id>", methods=["GET"])
-def handle_retrieve_file_metadata_stub(file_id: str):
+async def handle_retrieve_file_metadata_stub(file_id: str):
+    """
+    Async endpoint to retrieve metadata for a locally indexed file from the database.
+    The synchronous database query is run in a separate thread.
+    """
     request_id = f"req-file-retrieve-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received GET /v1/files/{file_id} (Placeholder/DB Lookup)")
+    logger.info(f"🚀 {request_id}: Received async GET /v1/files/{file_id} (DB Lookup)")
     db: Session = g.db
 
-    found_file_record: Optional[FileIndex] = None
-    search_method = "unknown"
+    def db_lookup():
+        # This synchronous function contains the blocking DB query logic.
+        try:
+            numeric_file_id = int(file_id)
+            return db.query(FileIndex).filter(FileIndex.id == numeric_file_id).first()
+        except ValueError:
+            # If not an integer, try searching by full path or just the filename as a fallback.
+            record = db.query(FileIndex).filter(FileIndex.file_path == file_id).first()
+            if not record:
+                record = db.query(FileIndex).filter(FileIndex.file_name == file_id).first()
+            return record
 
-    # Try to interpret file_id as either a database integer ID or a file_path
-    try:
-        numeric_file_id = int(file_id)
-        found_file_record = db.query(FileIndex).filter(FileIndex.id == numeric_file_id).first()
-        search_method = f"database ID ({numeric_file_id})"
-    except ValueError:
-        # Not an integer, try as a file path (or part of it)
-        # For a direct path match, it would need to be the full path.
-        # For simplicity, let's assume if it's not an int, it might be a filename client has.
-        # A more robust search might use `file_id` in a LIKE query for file_name or file_path.
-        # For this stub, we'll primarily rely on ID or exact path match if we were to implement fully.
-        # Let's try to see if it's a path we have indexed.
-        # This requires `file_id` to be the actual path string.
-        found_file_record = db.query(FileIndex).filter(FileIndex.file_path == file_id).first()
-        search_method = f"exact file path ('{file_id}')"
-        if not found_file_record:  # Fallback: search by filename if it's not a full path
-            found_file_record = db.query(FileIndex).filter(FileIndex.file_name == file_id).first()
-            if found_file_record: search_method = f"file name ('{file_id}')"
+    # Run the blocking db_lookup function in a background thread and await the result.
+    found_file_record = await asyncio.to_thread(db_lookup)
 
     if found_file_record:
         response_body = {
-            "id": str(found_file_record.id),  # Use DB ID as the file_id
+            "id": str(found_file_record.id),
             "object": "file",
             "bytes": found_file_record.size_bytes or 0,
-            "created_at": int(found_file_record.last_indexed_db.timestamp()),  # Or file creation time if stored
+            "created_at": int(found_file_record.last_indexed_db.timestamp()),
             "filename": found_file_record.file_name,
-            "purpose": "locally_indexed_for_rag",  # Custom purpose
+            "purpose": "locally_indexed_for_rag",
             "status": found_file_record.index_status,
-            "status_details": f"Locally indexed file. Path: {found_file_record.file_path}. Last OS Mod: {found_file_record.last_modified_os}"
         }
-        logger.info(
-            f"{request_id}: Found and returning metadata for indexed file (ID: {found_file_record.id}) based on query for '{file_id}' using {search_method}.")
         return jsonify(response_body), 200
     else:
-        response_message = (
-            f"File ID or path '{file_id}' does not correspond to a known locally indexed file in the system's database. "
-            "Zephy/Adelaide works with files indexed from the local filesystem."
-        )
-        resp_data, _ = _create_openai_error_response(
-            message=response_message,
-            err_type="invalid_request_error",
-            code="file_not_found"
-        )
-        logger.info(f"{request_id}: File '{file_id}' not found in local index using {search_method}.")
+        resp_data, _ = _create_openai_error_response(f"File '{file_id}' not found in local index.", code="file_not_found")
         return jsonify(resp_data), 404
 
 
@@ -10076,269 +10064,431 @@ def handle_retrieve_file_content_stub(file_id: str):
 
 # --- Assistants API Stubs ---
 @app.route("/v1/assistants", methods=["POST"])
-def create_assistant_stub():
+async def create_assistant_stub():
+    """Async stub for creating an Assistant."""
     request_id = f"req-assistant-create-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received POST /v1/assistants (Placeholder)")
-    # You could log request.json if you want to see what clients are trying to create
-    return _create_personal_assistant_stub_response("/v1/assistants", "POST",
-        custom_status="creation_not_applicable")
+    logger.info(f"🚀 {request_id}: Received async POST /v1/assistants (Placeholder)")
+    # Even though the helper is fast, running it in a thread is the most robust
+    # way to prevent blocking the event loop for even a microsecond.
+    return await asyncio.to_thread(
+        _create_personal_assistant_stub_response, "/v1/assistants", "POST",
+        custom_status="creation_not_applicable"
+    )
 
 @app.route("/v1/assistants", methods=["GET"])
-def list_assistants_stub():
+async def list_assistants_stub():
+    """Async stub for listing Assistants."""
     request_id = f"req-assistant-list-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received GET /v1/assistants (Placeholder)")
-    # OpenAI list endpoints return an object with a "data" array.
+    logger.info(f"🚀 {request_id}: Received async GET /v1/assistants (Placeholder)")
     response_message = (
         "This system operates as a single, integrated personal assistant. "
-        "There are no multiple, separately manageable 'assistant' objects to list. "
-        "Its capabilities are defined by its core configuration and ongoing learning processes like self-reflection."
+        "There are no multiple, separately manageable 'assistant' objects to list."
     )
-    response_body = {
-        "object": "list",
-        "data": [], # Empty list as there are no discrete assistants in this model
-        "message": response_message
-    }
+    response_body = {"object": "list", "data": [], "message": response_message}
     return jsonify(response_body), 200
 
 @app.route("/v1/assistants/<string:assistant_id>", methods=["GET"])
-def retrieve_assistant_stub(assistant_id: str):
+async def retrieve_assistant_stub(assistant_id: str):
+    """Async stub for retrieving an Assistant."""
     request_id = f"req-assistant-retrieve-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received GET /v1/assistants/{assistant_id} (Placeholder)")
-    return _create_personal_assistant_stub_response(f"/v1/assistants/{assistant_id}", "GET", resource_id=assistant_id)
+    logger.info(f"🚀 {request_id}: Received async GET /v1/assistants/{assistant_id} (Placeholder)")
+    return await asyncio.to_thread(
+        _create_personal_assistant_stub_response, f"/v1/assistants/{assistant_id}", "GET", resource_id=assistant_id
+    )
 
 @app.route("/v1/assistants/<string:assistant_id>", methods=["POST"])
-def modify_assistant_stub(assistant_id: str):
+async def modify_assistant_stub(assistant_id: str):
+    """Async stub for modifying an Assistant."""
     request_id = f"req-assistant-modify-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received POST /v1/assistants/{assistant_id} (Placeholder)")
-    return _create_personal_assistant_stub_response(f"/v1/assistants/{assistant_id}", "POST", resource_id=assistant_id,
-        custom_status="modification_not_applicable")
+    logger.info(f"🚀 {request_id}: Received async POST /v1/assistants/{assistant_id} (Placeholder)")
+    return await asyncio.to_thread(
+        _create_personal_assistant_stub_response, f"/v1/assistants/{assistant_id}", "POST", resource_id=assistant_id,
+        custom_status="modification_not_applicable"
+    )
 
 @app.route("/v1/assistants/<string:assistant_id>", methods=["DELETE"])
-def delete_assistant_stub(assistant_id: str):
+async def delete_assistant_stub(assistant_id: str):
+    """Async stub for deleting an Assistant."""
     request_id = f"req-assistant-delete-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received DELETE /v1/assistants/{assistant_id} (Placeholder)")
-    return _create_personal_assistant_stub_response(f"/v1/assistants/{assistant_id}", "DELETE", resource_id=assistant_id,
-        custom_status="deletion_not_applicable")
+    logger.info(f"🚀 {request_id}: Received async DELETE /v1/assistants/{assistant_id} (Placeholder)")
+    return await asyncio.to_thread(
+        _create_personal_assistant_stub_response, f"/v1/assistants/{assistant_id}", "DELETE", resource_id=assistant_id,
+        custom_status="deletion_not_applicable"
+    )
+
 
 # --- Threads API Stubs ---
 @app.route("/v1/threads", methods=["POST"])
-def create_thread_stub():
+async def create_thread_stub():
+    """Async stub for creating a Thread."""
     request_id = f"req-thread-create-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received POST /v1/threads (Placeholder)")
-    return _create_personal_assistant_stub_response("/v1/threads", "POST",
-        custom_status="thread_creation_not_applicable_managed_internally")
+    logger.info(f"🚀 {request_id}: Received async POST /v1/threads (Placeholder)")
+    return await asyncio.to_thread(
+        _create_personal_assistant_stub_response, "/v1/threads", "POST",
+        custom_status="thread_creation_not_applicable_managed_internally"
+    )
 
 @app.route("/v1/threads/<string:thread_id>", methods=["GET"])
-def retrieve_thread_stub(thread_id: str):
+async def retrieve_thread_stub(thread_id: str):
+    """Async stub for retrieving a Thread."""
     request_id = f"req-thread-retrieve-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received GET /v1/threads/{thread_id} (Placeholder)")
-    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}", "GET", resource_id=thread_id)
+    logger.info(f"🚀 {request_id}: Received async GET /v1/threads/{thread_id} (Placeholder)")
+    return await asyncio.to_thread(
+        _create_personal_assistant_stub_response, f"/v1/threads/{thread_id}", "GET", resource_id=thread_id
+    )
 
 @app.route("/v1/threads/<string:thread_id>", methods=["POST"])
-def modify_thread_stub(thread_id: str):
+async def modify_thread_stub(thread_id: str):
+    """Async stub for modifying a Thread."""
     request_id = f"req-thread-modify-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received POST /v1/threads/{thread_id} (Placeholder)")
-    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}", "POST", resource_id=thread_id,
-        custom_status="modification_not_applicable")
+    logger.info(f"🚀 {request_id}: Received async POST /v1/threads/{thread_id} (Placeholder)")
+    return await asyncio.to_thread(
+        _create_personal_assistant_stub_response, f"/v1/threads/{thread_id}", "POST", resource_id=thread_id,
+        custom_status="modification_not_applicable"
+    )
 
 @app.route("/v1/threads/<string:thread_id>", methods=["DELETE"])
-def delete_thread_stub(thread_id: str):
+async def delete_thread_stub(thread_id: str):
+    """Async stub for deleting a Thread."""
     request_id = f"req-thread-delete-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received DELETE /v1/threads/{thread_id} (Placeholder)")
-    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}", "DELETE", resource_id=thread_id,
-        custom_status="deletion_not_applicable")
+    logger.info(f"🚀 {request_id}: Received async DELETE /v1/threads/{thread_id} (Placeholder)")
+    return await asyncio.to_thread(
+        _create_personal_assistant_stub_response, f"/v1/threads/{thread_id}", "DELETE", resource_id=thread_id,
+        custom_status="deletion_not_applicable"
+    )
 
 # --- Messages API Stubs (within Threads) ---
-@app.route("/v1/threads/<string:thread_id>/messages", methods=["POST"])
-def create_message_stub(thread_id: str):
-    request_id = f"req-message-create-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received POST /v1/threads/{thread_id}/messages (Placeholder)")
-    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}/messages", "POST", resource_id=thread_id,
-        custom_status="message_creation_handled_via_direct_chat")
+# --- Asynchronous Messages API Stubs (within Threads) ---
 
-@app.route("/v1/threads/<string:thread_id>/messages", methods=["GET"])
-def list_messages_stub(thread_id: str):
-    request_id = f"req-message-list-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received GET /v1/threads/{thread_id}/messages (Placeholder)")
-    response_message = (
-        f"Listing messages for thread '{thread_id}' via this API is not applicable. "
-        "Conversation history is managed internally per session. "
-        "Internal database logs store interaction history."
-    )
+@app.route("/v1/threads/<string:thread_id>/messages", methods=["POST"])
+async def create_message_stub(thread_id: str):
+    """
+    Async stub that simulates creating a message. It acknowledges the received message
+    and returns a valid, simulated 'thread.message' object.
+    """
+    request_id = f"req-message-create-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received async POST /v1/threads/{thread_id}/messages (High-Fidelity Stub)")
+
+    # Although we don't use the content, a real client would send it.
+    # We can log it for debugging if needed.
+    # request_data = await request.get_json()
+    # user_content = request_data.get("content")
+
+    # Create a realistic 'thread.message' object as the response.
     response_body = {
-        "object": "list",
-        "data": [],
-        "message": response_message
+        "id": f"msg_{uuid.uuid4()}",
+        "object": "thread.message",
+        "created_at": int(time.time()),
+        "thread_id": thread_id,
+        "role": "assistant",  # We reply as the assistant
+        "content": [
+            {
+                "type": "text",
+                "text": {
+                    "value": "This is a simulated response. Your message has been received and processed by the integrated chat flow, not a separate thread object.",
+                    "annotations": []
+                }
+            }
+        ],
+        "assistant_id": "integrated_personal_assistant",
+        "run_id": f"run_{uuid.uuid4()}",
+        "file_ids": [],
+        "metadata": {
+            "note": "This system uses a direct chat model. Standard thread messages are simulated for API compatibility."
+        }
     }
     return jsonify(response_body), 200
 
-# --- Runs API Stubs (within Threads) ---
+
+@app.route("/v1/threads/<string:thread_id>/messages", methods=["GET"])
+async def list_messages_stub(thread_id: str):
+    """
+    Async stub that simulates listing messages in a thread. It returns a list
+    object containing a few example messages.
+    """
+    request_id = f"req-message-list-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received async GET /v1/threads/{thread_id}/messages (High-Fidelity Stub)")
+
+    # Create a realistic list object with sample messages.
+    response_body = {
+        "object": "list",
+        "data": [
+            {
+                "id": f"msg_{uuid.uuid4()}",
+                "object": "thread.message",
+                "created_at": int(time.time()) - 60,
+                "thread_id": thread_id,
+                "role": "assistant",
+                "content": [{"type": "text", "text": {
+                    "value": "This is a simulated history. Conversation history is managed internally by the assistant's session.",
+                    "annotations": []}}],
+                "assistant_id": "integrated_personal_assistant",
+                "run_id": f"run_{uuid.uuid4()}",
+                "file_ids": [],
+                "metadata": {}
+            },
+            {
+                "id": f"msg_{uuid.uuid4()}",
+                "object": "thread.message",
+                "created_at": int(time.time()) - 120,
+                "thread_id": thread_id,
+                "role": "user",
+                "content": [{"type": "text", "text": {"value": "A simulated user message.", "annotations": []}}],
+                "assistant_id": None,
+                "run_id": None,
+                "file_ids": [],
+                "metadata": {}
+            }
+        ],
+        "first_id": "msg_abc",
+        "last_id": "msg_xyz",
+        "has_more": False
+    }
+    return jsonify(response_body), 200
+
+
+# --- Asynchronous Runs API Stubs (within Threads) ---
+
 @app.route("/v1/threads/<string:thread_id>/runs", methods=["POST"])
-def create_run_stub(thread_id: str):
+async def create_run_stub(thread_id: str):
+    """
+    Async stub that simulates creating and completing a run instantly,
+    mimicking the direct-response nature of the system.
+    """
     request_id = f"req-run-create-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received POST /v1/threads/{thread_id}/runs (Placeholder)")
-    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}/runs", "POST", resource_id=thread_id,
-        custom_status="run_creation_implicit_in_direct_interaction")
+    logger.info(f"🚀 {request_id}: Received async POST /v1/threads/{thread_id}/runs (High-Fidelity Stub)")
 
-@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>", methods=["GET"])
-def retrieve_run_stub(thread_id: str, run_id: str):
-    request_id = f"req-run-retrieve-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id}: Received GET /v1/threads/{thread_id}/runs/{run_id} (Placeholder)")
-    return _create_personal_assistant_stub_response(f"/v1/threads/{thread_id}/runs/{run_id}", "GET", resource_id=run_id)
-
-
-@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/cancel", methods=["POST"])
-def cancel_run_stub(thread_id: str, run_id: str):
-    request_id_log = f"req-run-cancel-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id_log}: Received POST /v1/threads/{thread_id}/runs/{run_id}/cancel (Placeholder)")
-
-    specific_message = (
-        "Run cancellation via this API is not directly applicable. This system's agentic tasks, "
-        "if initiated (e.g., by 'background_generate' or an internal agent loop), operate asynchronously. "
-        "While explicit cancellation of a specific internal 'run' by ID is not exposed here, tasks are "
-        "managed by an internal priority system and may be superseded or will naturally complete."
-    )
-    # Mimic OpenAI's Run object structure loosely for the response
+    # Create a realistic 'thread.run' object that is already completed.
+    run_id = f"run_{uuid.uuid4()}"
+    current_time = int(time.time())
     response_body = {
         "id": run_id,
         "object": "thread.run",
+        "created_at": current_time,
         "thread_id": thread_id,
         "assistant_id": "integrated_personal_assistant",
-        "status": "cancellation_not_applicable",  # Custom status
-        "started_at": int(time.time()),  # Dummy timestamp
+        "status": "completed",  # Simulate instant completion
+        "started_at": current_time,
         "expires_at": None,
         "cancelled_at": None,
         "failed_at": None,
-        "completed_at": None,
+        "completed_at": current_time,
         "last_error": None,
-        "model": "N/A (Integrated System)",
+        "model": META_MODEL_NAME_NONSTREAM,
         "instructions": "N/A (Integrated System)",
-        "tools": [{"type": "internal_agentic_mode"}],
+        "tools": [],
         "file_ids": [],
         "metadata": {
-            "message": specific_message,
-            "note": "This is a placeholder response indicating a conceptual difference in system design."
+            "note": "Run is marked 'completed' instantly to simulate this system's direct chat response model."
+        }
+    }
+    return jsonify(response_body), 200
+
+
+@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>", methods=["GET"])
+async def retrieve_run_stub(thread_id: str, run_id: str):
+    """
+    Async stub that simulates retrieving a run, always showing it as completed.
+    """
+    request_id = f"req-run-retrieve-stub-{uuid.uuid4()}"
+    logger.info(f"🚀 {request_id}: Received async GET /v1/threads/{thread_id}/runs/{run_id} (High-Fidelity Stub)")
+
+    # Return a 'completed' run object, regardless of the run_id.
+    current_time = int(time.time())
+    response_body = {
+        "id": run_id,
+        "object": "thread.run",
+        "created_at": current_time - 30,
+        "thread_id": thread_id,
+        "assistant_id": "integrated_personal_assistant",
+        "status": "completed",
+        "started_at": current_time - 30,
+        "expires_at": None,
+        "cancelled_at": None,
+        "failed_at": None,
+        "completed_at": current_time - 25,
+        "last_error": None,
+        "model": META_MODEL_NAME_NONSTREAM,
+        "instructions": "N/A (Integrated System)",
+        "tools": [],
+        "file_ids": [],
+        "metadata": {
+            "note": "This system does not have persistent, stateful runs. This is a simulated 'completed' response."
+        }
+    }
+    return jsonify(response_body), 200
+
+
+@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/cancel", methods=["POST"])
+async def cancel_run_stub(thread_id: str, run_id: str):
+    """
+    Async stub that simulates canceling a run.
+    """
+    request_id_log = f"req-run-cancel-stub-{uuid.uuid4()}"
+    logger.info(
+        f"🚀 {request_id_log}: Received async POST /v1/threads/{thread_id}/runs/{run_id}/cancel (High-Fidelity Stub)")
+
+    current_time = int(time.time())
+    response_body = {
+        "id": run_id,
+        "object": "thread.run",
+        "created_at": current_time - 30,
+        "thread_id": thread_id,
+        "assistant_id": "integrated_personal_assistant",
+        "status": "cancelled",  # Show the final 'cancelled' state
+        "started_at": current_time - 30,
+        "expires_at": None,
+        "cancelled_at": current_time,
+        "failed_at": None,
+        "completed_at": None,
+        "last_error": None,
+        "model": META_MODEL_NAME_NONSTREAM,
+        "instructions": "N/A (Integrated System)",
+        "tools": [],
+        "file_ids": [],
+        "metadata": {
+            "note": "Run cancellation is simulated. Internal tasks are managed by a priority system and cannot be cancelled via this API."
         }
     }
     return jsonify(response_body), 200
 
 
 @app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/steps", methods=["GET"])
-def list_run_steps_stub(thread_id: str, run_id: str):
+async def list_run_steps_stub(thread_id: str, run_id: str):
+    """
+    Async stub that simulates listing run steps, returning a single simulated step.
+    """
     request_id_log = f"req-run-steps-stub-{uuid.uuid4()}"
-    logger.info(f"🚀 {request_id_log}: Received GET /v1/threads/{thread_id}/runs/{run_id}/steps (Placeholder)")
+    logger.info(
+        f"🚀 {request_id_log}: Received async GET /v1/threads/{thread_id}/runs/{run_id}/steps (High-Fidelity Stub)")
 
-    specific_message = (
-        "This system does not expose discrete 'run steps' in the OpenAI Assistants API format. "
-        "Agentic operations and tool use occur as part of an integrated, asynchronous background process "
-        "(e.g., within CortexThoughts.background_generate or AmaryllisAgent._run_task_in_background). "
-        "Progress or outcomes are reflected in the ongoing conversation, database logs, or direct results "
-        "from initiated tasks, rather than through a list of formal 'steps' for a given 'run ID'."
-    )
-
-    # OpenAI list endpoints return an object with a "data" array.
     response_body = {
         "object": "list",
-        "data": [],  # No discrete steps to list in this manner
-        "first_id": None,
-        "last_id": None,
-        "has_more": False,
-        "message": specific_message,  # Custom message field
-        "note": "This is a placeholder response indicating a conceptual difference in system design."
+        "data": [
+            {
+                "id": f"step_{uuid.uuid4()}",
+                "object": "thread.run.step",
+                "created_at": int(time.time()) - 20,
+                "assistant_id": "integrated_personal_assistant",
+                "thread_id": thread_id,
+                "run_id": run_id,
+                "type": "message_creation",
+                "status": "completed",
+                "step_details": {
+                    "type": "message_creation",
+                    "message_creation": {"message_id": f"msg_{uuid.uuid4()}"}
+                },
+                "last_error": None,
+                "expired_at": None,
+                "cancelled_at": None,
+                "failed_at": None,
+                "completed_at": int(time.time()) - 15,
+                "metadata": {
+                    "note": "A single 'message_creation' step is simulated to represent the system's direct response."
+                }
+            }
+        ],
+        "first_id": "step_abc",
+        "last_id": "step_xyz",
+        "has_more": False
     }
     return jsonify(response_body), 200
 
 
 @app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/submit_tool_outputs", methods=["POST"])
-def submit_tool_outputs_stub(thread_id: str, run_id: str):
+async def submit_tool_outputs_stub(thread_id: str, run_id: str):
+    """
+    Async stub that simulates submitting tool outputs.
+    """
     request_id_log = f"req-run-submittools-stub-{uuid.uuid4()}"
     logger.info(
-        f"🚀 {request_id_log}: Received POST /v1/threads/{thread_id}/runs/{run_id}/submit_tool_outputs (Placeholder)")
-    # request_data = request.json # Could log if needed
+        f"🚀 {request_id_log}: Received async POST /v1/threads/{thread_id}/runs/{run_id}/submit_tool_outputs (High-Fidelity Stub)")
 
-    specific_message = (
-        "Tool output submission via this API is not applicable. This system's agentic mode "
-        "(e.g., AmaryllisAgent) operates autonomously using its integrated tools and internal logic. "
-        "It does not require or use an explicit external step for tool output submission in this manner, "
-        "as tool execution and result processing are part of its internal asynchronous flow."
-    )
-
-    # Mimic OpenAI's Run object structure loosely
+    # This endpoint returns a 'thread.run' object
+    current_time = int(time.time())
     response_body = {
         "id": run_id,
         "object": "thread.run",
+        "created_at": current_time - 40,
         "thread_id": thread_id,
         "assistant_id": "integrated_personal_assistant",
-        "status": "tool_submission_not_applicable",  # Custom status
-        "started_at": int(time.time()),
+        "status": "completed",  # Assume it completes after "submission"
+        "started_at": current_time - 40,
         "expires_at": None,
         "cancelled_at": None,
         "failed_at": None,
-        "completed_at": None,
+        "completed_at": current_time,
         "last_error": None,
-        "model": "N/A (Integrated System)",
+        "model": META_MODEL_NAME_NONSTREAM,
         "instructions": "N/A (Integrated System)",
-        "tools": [{"type": "internal_agentic_mode"}],
+        "tools": [],
         "file_ids": [],
         "metadata": {
-            "message": specific_message,
-            "note": "This is a placeholder response indicating a conceptual difference in system design."
+            "note": "Tool output submission is simulated. The system's internal agent operates autonomously and does not use this external feedback loop."
         }
     }
     return jsonify(response_body), 200
-
-
-
 
 #============== Dove Section ===============
 
 
 @app.route("/instrumentviewportdatastreamlowpriopreview", methods=["GET"])
-def handle_instrument_viewport_stream():
+async def handle_instrument_viewport_stream():
     """
-    Streams data aggregated from all running StellaIcarus Ada daemons.
-    If the data queue is empty, it falls back to generating and streaming
-    simulated data to ensure the GUI always has a data source.
+    Asynchronous SSE stream for avionics data. It streams data from running
+    StellaIcarus Ada daemons or falls back to simulated data. Uses `asyncio.sleep`
+    to be non-blocking.
     """
-    req_id = f"req-instr-stream-{uuid.uuid4()}"
-    logger.info(f"🚀 {req_id}: SSE connection opened for instrument data stream.")
+    req_id = f"req-instr-stream-async-{uuid.uuid4()}"
+    logger.info(f"🚀 {req_id}: Async SSE connection opened for instrument data stream.")
 
-    def generate_data_stream():
+    # An async generator is used to produce the stream content.
+    async def generate_data_stream():
         try:
             while True:
-                # Attempt to get real data from the Ada daemons' queue
-                data_packet = stella_icarus_daemon_manager.get_data_from_queue()
+                # --- Step 1: Get Data (Non-Blocking) ---
+                # The queue.get() and simulation generation are synchronous, so we run them
+                # in a separate thread to avoid blocking the main server event loop.
+                def get_data_sync():
+                    data_packet = stella_icarus_daemon_manager.get_data_from_queue()
+                    if data_packet is None:
+                        # FALLBACK: Queue is empty. Generate simulated data.
+                        sim_data = _generate_simulated_avionics_data()
+                        data_packet = {
+                            "source_daemon": "System_Simulation_Fallback",
+                            "timestamp_py": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                            "data": sim_data
+                        }
+                    return data_packet
 
-                if data_packet is None:
-                    # FALLBACK: Queue is empty. Generate simulated data.
-                    # This happens if the Ada daemons failed to build, start, or are not sending data.
-                    sim_data = _generate_simulated_avionics_data()
-                    data_packet = {
-                        "source_daemon": "System_Simulation_Fallback",
-                        "timestamp_py": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                        "data": sim_data
-                    }
+                # Await the result from the background thread.
+                data_packet = await asyncio.to_thread(get_data_sync)
 
-                # Format as Server-Sent Event and yield to the client
+                # --- Step 2: Yield Data to Client ---
+                # Format as a Server-Sent Event and yield the data.
+                # The 'yield' keyword in an async generator works like 'return' for one piece of data.
                 yield f"data: {json.dumps(data_packet)}\n\n"
 
-                # Control the streaming rate from the single configuration value
-                time.sleep(1.0 / INSTRUMENT_STREAM_RATE_HZ)
+                # --- Step 3: Wait Asynchronously ---
+                # Use `asyncio.sleep` instead of `time.sleep`. This is the key change.
+                # It yields control back to the server's event loop, allowing it
+                # to handle other requests while this stream is waiting.
+                await asyncio.sleep(1.0 / INSTRUMENT_STREAM_RATE_HZ)
 
-        except GeneratorExit:
-            # This is raised when the client disconnects, which is normal.
-            logger.info(f"{req_id}: Client disconnected, closing instrument data stream.")
+        except asyncio.CancelledError:
+            # This is raised when the client disconnects in an async context.
+            logger.info(f"{req_id}: Client disconnected, closing async instrument data stream.")
         except Exception as e:
-            logger.error(f"{req_id}: Error in instrument data stream generator: {e}")
+            logger.error(f"{req_id}: Error in async instrument data stream generator: {e}")
             try:
-                # Try to send a final error message to the client
+                # Try to send a final error message to the client.
                 error_data = json.dumps({"error": "An internal error occurred in the data stream.", "detail": str(e)})
                 yield f"event: error\ndata: {error_data}\n\n"
-            except:
-                # If yielding fails, just log it.
-                logger.error(f"{req_id}: Could not send final error message to client.")
+            except Exception as final_err:
+                logger.error(f"{req_id}: Could not send final error message to client: {final_err}")
 
-    # Return a streaming response to the client
+    # Return a streaming response. The framework will correctly handle iterating
+    # through the async generator.
     return Response(generate_data_stream(), mimetype='text/event-stream')
 
 
