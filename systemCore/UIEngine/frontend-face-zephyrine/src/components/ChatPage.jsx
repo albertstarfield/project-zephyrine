@@ -148,62 +148,65 @@ function ChatPage({
             setShowPlaceholder(true);
             setIsLoadingHistory(false);
             break;
-            case "chat":
-              setIsGenerating(false);
-              const { content, optimisticMessageId, id: assistantMessageId } = message.payload; // Destructure new 'id' for assistant message
-    
-              if (optimisticMessageId !== latestRequestRef.current) {
-                // This message is from an old, cancelled request. Ignore it completely.
-                console.warn("ChatPage: Incoming 'chat' message ignored due to old optimistic ID.");
-                return;
+        case "full_response":
+        case "chat":
+          setIsGenerating(false);
+          const { content, optimisticMessageId, id: assistantMessageId } = message.payload; // Destructure new 'id' for assistant message
+
+          if (optimisticMessageId !== latestRequestRef.current) {
+            // This message is from an old, cancelled request. Ignore it completely.
+            console.warn("ChatPage: Incoming 'chat' message ignored due to old optimistic ID.");
+            return;
+          }
+
+          // Clear any streaming state, as this is a full response
+          setStreamingAssistantMessage(null);
+          accumulatedContentRef.current = "";
+          currentAssistantMessageId.current = null;
+          streamingStartTimeRef.current = 0;
+
+          // Find the optimistic user message and append the assistant response
+          setMessages((prev) => {
+            const updatedMessages = [];
+            let foundOptimisticUserMessage = false;
+            for (const msg of prev) {
+              updatedMessages.push(msg);
+              if (msg.id === optimisticMessageId && msg.sender === 'user') {
+                foundOptimisticUserMessage = true;
+                // Add the new assistant message after the user's optimistic message
+                updatedMessages.push({
+                  id: assistantMessageId || uuidv4(), // Use ID from backend payload, or generate
+                  sender: "assistant",
+                  content: content,
+                  chat_id: chatId,
+                  created_at: new Date().toISOString(),
+                  isLoading: false, // Mark as fully loaded
+                });
               }
-    
-              // Clear any streaming state, as this is a full response
-              setStreamingAssistantMessage(null);
-              accumulatedContentRef.current = "";
-              currentAssistantMessageId.current = null;
-              streamingStartTimeRef.current = 0;
-    
-              // Find the optimistic user message and append the assistant response
-              setMessages((prev) => {
-                const updatedMessages = [];
-                let foundOptimisticUserMessage = false;
-                for (const msg of prev) {
-                  updatedMessages.push(msg);
-                  if (msg.id === optimisticMessageId && msg.sender === 'user') {
-                    foundOptimisticUserMessage = true;
-                    // Add the new assistant message after the user's optimistic message
-                    updatedMessages.push({
-                      id: assistantMessageId || uuidv4(), // Use ID from backend payload, or generate
-                      sender: "assistant",
-                      content: content,
-                      chat_id: chatId,
-                      created_at: new Date().toISOString(),
-                      isLoading: false, // Mark as fully loaded
-                    });
-                  }
-                }
-                if (!foundOptimisticUserMessage) {
-                    console.warn("ChatPage: Optimistic user message not found for incoming 'chat' type. Appending assistant message.");
-                    updatedMessages.push({
-                        id: assistantMessageId || uuidv4(),
-                        sender: "assistant",
-                        content: content,
-                        chat_id: chatId,
-                        created_at: new Date().toISOString(),
-                        isLoading: false,
-                    });
-                }
-                return updatedMessages;
-              });
-    
-              // Trigger sidebar refresh if this was the first assistant response
-              const userMessagesInHistoryForChat = messages.filter(m => m.sender === 'user' && !m.id?.startsWith('temp-')).length;
-              if (userMessagesInHistoryForChat === 1 && messages.filter(m => m.sender === 'assistant' && !m.isLoading).length === 0) {
-                   console.log("ChatPage: First assistant response (incoming 'chat' type) complete, calling triggerSidebarRefresh.");
-                   triggerSidebarRefresh();
-              }
-              break;
+            }
+            if (!foundOptimisticUserMessage) {
+                console.warn("ChatPage: Optimistic user message not found for incoming 'chat' type. Appending assistant message.");
+                updatedMessages.push({
+                    id: assistantMessageId || uuidv4(),
+                    sender: "assistant",
+                    content: content,
+                    chat_id: chatId,
+                    created_at: new Date().toISOString(),
+                    isLoading: false,
+                });
+            }
+            return updatedMessages;
+          });
+
+          // Trigger sidebar refresh if this was the first assistant response
+          const userMessagesInHistoryForChat = messages.filter(m => m.sender === 'user' && !m.id?.startsWith('temp-')).length;
+          if (userMessagesInHistoryForChat === 1 && messages.filter(m => m.sender === 'assistant' && !m.isLoading).length === 0) {
+                console.log("ChatPage: First assistant response (incoming 'chat' type) complete, calling triggerSidebarRefresh.");
+                triggerSidebarRefresh();
+          }
+          break;
+
+        
         // --- START: Added Case to Handle Backend Errors ---
         case "error":
             console.error("ChatPage: Received error from backend:", message.payload?.message);
@@ -558,6 +561,7 @@ function ChatPage({
           onFileSelect={setFileData}
           selectedFile={fileData}
           selectedModel={selectedModel}
+          isGenerating={isGenerating}
           disabled={isLoadingHistory || !isConnected.current} 
         />
       </div>
