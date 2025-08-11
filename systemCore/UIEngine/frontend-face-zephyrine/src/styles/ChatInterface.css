@@ -1,6 +1,16 @@
 /* styles/ChatInterface.css */
 
 /* Style for the model name display above the chat feed */
+
+
+.message.user {
+  background-color: transparent !important;
+}
+
+.message.assistant {
+  background-color: transparent !important;
+}
+
 .chat-model-selector {
   text-align: center;
   padding: 0.5rem 1rem;
@@ -165,6 +175,7 @@
   padding: 0.7rem 1rem; /* Padding moved here */
   border-radius: var(--rounded-border, 8px);
   max-width: 85%;
+
   word-wrap: break-word;
   line-height: 1.5;
   position: relative; /* Needed for action button positioning */
@@ -178,7 +189,7 @@
 
 .assistant-bubble .message-content-wrapper {
   background-color: #2162275c; /* Pastel Blue */
-  color: var(--primary-text); Assuming this is dark enough */
+  color: var(--primary-text); /* Assuming this is dark enough */
   border-bottom-left-radius: 2px; /* Bubble tail */
 }
 

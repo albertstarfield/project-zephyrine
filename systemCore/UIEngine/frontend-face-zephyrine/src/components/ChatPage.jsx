@@ -456,7 +456,9 @@ function ChatPage({
       ? messages.slice(0, messages.findLastIndex(m => m.sender === 'assistant'))
       : messages;
 
-    const newUiState = [...baseMessages, optimisticUserMessage];
+    const newUiState = isRegeneration 
+      ? baseMessages // For regeneration, the UI state is just the history without the last AI message.
+      : [...baseMessages, optimisticUserMessage]; // For a new message, append the optimistic user message.
 
     const historyForBackend = newUiState
       .map(m => ({ role: m.sender, content: m.content }));
