@@ -1803,10 +1803,11 @@ class CortexThoughts:
     async def _get_direct_rag_context_elp1(self, db: Session, user_input: str, session_id: str) -> str:
         """
         A lightweight, fast RAG retriever specifically for the ELP1 direct_generate path.
-        CORRECTED: Now includes a metadata filter to retrieve only actual user/assistant conversational turns.
+        CORRECTED: Now explicitly embeds the query with ELP1 priority before searching
+        to ensure the entire RAG process is high-priority.
         """
-        log_prefix = f"⚡️ DirectRAG|ELP1|{session_id}"
-        logger.info(f"{log_prefix} Performing lightweight, PURIFIED RAG for direct response.")
+        log_prefix = f"⚡️ DirectRAG-Prioritized|ELP1|{session_id}"
+        logger.info(f"{log_prefix} Performing lightweight, ELP1-prioritized RAG for direct response.")
 
         interaction_vs = get_global_interaction_vectorstore()
         if not interaction_vs:
@@ -1814,23 +1815,36 @@ class CortexThoughts:
             return "No historical context is available."
 
         try:
-            # --- THIS IS THE KEY CHANGE ---
-            # We add a metadata filter to the search.
-            # This tells Chroma to only return documents where the 'input_type' metadata field
-            # is either 'text' (for user inputs) or 'llm_response' (for AI outputs).
-            # This filters out all 'log_error', 'log_info', 'tot_result', etc., entries.
+            # --- STEP 1: Explicitly embed the query with ELP1 priority ---
+            logger.debug(f"{log_prefix} Embedding query with ELP1 priority...")
+
+            # We must run the synchronous `embed_query` in a thread to be non-blocking.
+            # Your `embed_query` method in the provider should accept a `priority` kwarg.
+            query_vector = await asyncio.to_thread(
+                self.provider.embeddings.embed_query,
+                user_input,
+                priority=ELP1  # Pass the priority directly
+            )
+
+            if not query_vector:
+                logger.error(f"{log_prefix} Query embedding with ELP1 failed. Aborting RAG.")
+                return "[An error occurred while preparing historical context.]"
+
+            # --- STEP 2: Search the vector store using the pre-computed vector ---
+            logger.debug(f"{log_prefix} Searching vector store using the ELP1-generated vector...")
             search_kwargs = {
-                "k": 3,  # Retrieve only a few, highly relevant documents
+                "k": 3,
                 "filter": {
                     "input_type": {"$in": ["text", "llm_response"]}
                 }
             }
-            # --- END OF KEY CHANGE ---
 
+            # Use `similarity_search_by_vector`, which does NOT call the embedder again.
+            # This is also a synchronous call and needs to be run in a thread.
             search_results_docs = await asyncio.to_thread(
-                interaction_vs.similarity_search,
-                query=user_input,
-                **search_kwargs  # Pass the arguments dictionary
+                interaction_vs.similarity_search_by_vector,
+                embedding=query_vector,
+                **search_kwargs
             )
 
             if not search_results_docs:
@@ -1841,10 +1855,10 @@ class CortexThoughts:
             return self._format_docs(search_results_docs, "History RAG")
 
         except TaskInterruptedException as tie:
-            logger.warning(f"🚦 {log_prefix} Direct RAG was interrupted: {tie}")
+            logger.warning(f"🚦 {log_prefix} Prioritized direct RAG was interrupted: {tie}")
             return "[Context retrieval interrupted by a higher priority task]"
         except Exception as e:
-            logger.error(f"❌ {log_prefix} Error during direct RAG retrieval: {e}")
+            logger.error(f"❌ {log_prefix} Error during prioritized direct RAG retrieval: {e}", exc_info=True)
             return "[An error occurred while retrieving historical context]"
 
     #for ELP1 rag retriever since it's uses small amount of resources for calculation vector and retrieve it's better to put it on ELP1 by default
@@ -6001,7 +6015,57 @@ def _ollama_pseudo_stream_sync_generator(
 
 
 # ---- Helper function method----
+def _async_compatible_openai_streamer(
+        full_response_text: str,
+        model_name: str = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream"
+):
+    """
+    A synchronous generator for streaming OpenAI-compatible SSE chunks.
+    This version is designed to be returned directly from an async Flask route
+    without using `stream_with_context`, making it safe for ASGI servers.
+    """
+    resp_id = f"chatcmpl-asyncstream-{uuid.uuid4()}"
+    timestamp = int(time.time())
+    logger.info(f"ASYNC_STREAMER {resp_id}: Streaming pre-generated text ({len(full_response_text)} chars).")
 
+    def yield_chunk(delta_content: Optional[str] = None, role: Optional[str] = None,
+                    finish_reason: Optional[str] = None):
+        """Helper to format data into the OpenAI SSE chunk structure."""
+        delta = {}
+        if role: delta["role"] = role
+        if delta_content is not None: delta["content"] = delta_content
+        chunk_payload = {
+            "id": resp_id, "object": "chat.completion.chunk", "created": timestamp,
+            "model": model_name, "choices": [{"index": 0, "delta": delta, "finish_reason": finish_reason}]
+        }
+        return f"data: {json.dumps(chunk_payload)}\n\n"
+
+    try:
+        # Yield the initial role chunk
+        yield yield_chunk(role="assistant")
+
+        # Handle error messages gracefully
+        if "Error:" in full_response_text or "interrupted" in full_response_text.lower():
+            yield yield_chunk(delta_content=full_response_text)
+            yield yield_chunk(finish_reason="error")
+            return
+
+        # Stream the content word by word
+        words = full_response_text.split(' ')
+        for i, word in enumerate(words):
+            chunk_content = word + (' ' if i < len(words) - 1 else '')
+            yield yield_chunk(delta_content=chunk_content)
+            time.sleep(0.01) # Small delay for typing effect
+
+        # Yield the final stop chunk
+        yield yield_chunk(finish_reason="stop")
+
+    except GeneratorExit:
+        logger.warning(f"ASYNC_STREAMER {resp_id}: Client disconnected from stream.")
+    finally:
+        # Always send the [DONE] signal
+        yield "data: [DONE]\n\n"
+        logger.info(f"ASYNC_STREAMER {resp_id}: Finished sending all chunks and [DONE] signal.")
 
 def _pseudo_stream_sync_generator(
         full_response_text: str,
@@ -7626,23 +7690,30 @@ async def handle_openai_embeddings():
 @app.route("/api/generate", methods=["POST"])
 async def handle_legacy_completions():
     """
-    Asynchronous version of the handler for the legacy OpenAI /v1/completions endpoint.
-    Runs non-blockingly on an ASGI server like Hypercorn.
+    Asynchronous and CONTEXT-SAFE version of the handler for the legacy OpenAI /v1/completions endpoint.
+    This is the definitive implementation for a non-blocking ASGI server like Hypercorn.
+    It manually manages its own database session to avoid Flask context issues.
     """
     endpoint_hit = request.path
     start_req = time.monotonic()
-    request_id = f"req-legacy-async-{uuid.uuid4()}"
-    logger.info(f"🚀 Async Legacy Completion Request ID: {request_id} on Endpoint: {endpoint_hit}")
+    request_id = f"req-legacy-async-safe-{uuid.uuid4()}"
+    logger.info(f"🚀 Async-Safe Legacy Completion Request ID: {request_id} on Endpoint: {endpoint_hit}")
 
-    db: Session = g.db
+    db: Optional[Session] = None  # Initialize db session to None
     resp: Response
     session_id: str = f"legacy_req_{request_id}_unassigned"
     final_response_status_code = 500
 
     try:
-        # Request parsing is synchronous and remains the same.
+        # --- Step 1: Manually Create DB Session for this Async Context ---
+        db = SessionLocal()
+        if not db:
+            raise RuntimeError("Failed to create a database session for this request.")
+
+        # --- Step 2: Parse and Validate Incoming Request ---
         raw_request_data = request.get_json()
-        if not raw_request_data: raise ValueError("Empty JSON payload.")
+        if not raw_request_data:
+            raise ValueError("Empty JSON payload.")
 
         prompt = raw_request_data.get("prompt")
         stream = raw_request_data.get("stream", False)
@@ -7655,31 +7726,28 @@ async def handle_legacy_completions():
         if prompt is None or not isinstance(prompt, str):
             raise ValueError("The 'prompt' parameter is required and must be a string.")
 
-        # This endpoint does not support streaming, so we log a warning but proceed.
+        # This endpoint does not support streaming. We log a warning and proceed with a non-streaming response.
         if stream:
             logger.warning(
                 f"{request_id}: Streaming is not implemented for the legacy /v1/completions endpoint. Ignoring stream=True.")
 
-        # --- CORE CHANGE: Await the AI generation logic directly ---
-        response_text = ""
-        status_code = 200
+        # --- Step 3: Await the AI generation logic directly ---
+        # Note: The `generate` method is a dispatcher. For a simple prompt, it will
+        # effectively call the fast ELP1 `direct_generate` logic.
         logger.info(f"{request_id}: Awaiting non-blocking CortexThoughts.generate for legacy prompt...")
 
         # This `await` call is non-blocking and will yield control to the server's event loop.
         response_text = await cortex_text_interaction.generate(db, prompt, session_id)
 
+        # --- Step 4: Format and Return the Response ---
         if "internal error" in response_text.lower() or "Error:" in response_text:
             status_code = 500
             logger.warning(
                 f"{request_id}: CortexThoughts.generate returned a potential error: {response_text[:200]}...")
+            resp_data, _ = _create_openai_error_response(response_text, status_code=status_code)
         else:
             status_code = 200
             logger.debug(f"{request_id}: CortexThoughts.generate completed successfully.")
-
-        # Format the final response
-        if status_code != 200:
-            resp_data, _ = _create_openai_error_response(response_text, status_code=status_code)
-        else:
             resp_data = _format_legacy_completion_response(response_text, model_name=META_MODEL_NAME_NONSTREAM)
 
         resp = jsonify(resp_data)
@@ -7700,23 +7768,28 @@ async def handle_legacy_completions():
         resp = jsonify(resp_data)
         resp.status_code = status_code
         final_response_status_code = status_code
-        # Logging to DB can be done asynchronously as well if needed, but for simplicity we keep it here.
         try:
-            if 'db' in g:
-                # Note: DB operations are synchronous, for a fully async app this would use an async DB driver
-                # but in this mixed context, it's acceptable.
-                add_interaction(g.db, session_id=session_id, mode="completion", input_type='error',
+            # We need a db session to log the error. If the error happened before `db` was created, we can't log.
+            if db:
+                add_interaction(db, session_id=session_id, mode="completion", input_type='error',
                                 user_input=f"Legacy Endpoint Error",
                                 llm_response=f"Handler Error ({type(e).__name__}): {e}"[:2000])
+                db.commit()  # Commit the error log
             else:
-                logger.error(f"{request_id}: Cannot log error: DB session 'g.db' unavailable.")
+                logger.error(
+                    f"{request_id}: Cannot log error: DB session was not created before the exception occurred.")
         except Exception as db_err:
             logger.error(f"{request_id}: ❌ Failed to log error to DB: {db_err}")
 
     finally:
+        # --- Step 5: Ensure the Database Session is Always Closed ---
+        if db:
+            db.close()
+            logger.trace(f"Manually closed DB session for async request {request_id}")
+
         duration_req = (time.monotonic() - start_req) * 1000
         logger.info(
-            f"🏁 Async Legacy Completion Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+            f"🏁 Async-Safe Legacy Completion Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
 
     return resp
 
@@ -7839,35 +7912,47 @@ async def handle_zephyrine_chat_response():
 @app.route("/v1/chat/completions", methods=["POST"])
 async def handle_openai_chat_completion():
     """
-    Asynchronous version of the handler for OpenAI's chat completion endpoint,
-    designed to run non-blockingly on an ASGI server like Hypercorn.
-    It launches the ELP0 background task and awaits the ELP1 response.
+    Asynchronous and CONTEXT-SAFE version of the OpenAI chat completion handler.
+    This is the definitive implementation for a non-blocking ASGI server like Hypercorn.
+    It manually manages its own database session to avoid Flask context issues and
+    uses a context-free generator for streaming to prevent crashes.
     """
     start_req_time_main_handler = time.monotonic()
-    request_id = f"req-chat-async-{uuid.uuid4()}"
-    logger.info(f"🚀 Async OpenAI Chat Request ID: {request_id}")
+    request_id = f"req-chat-async-safe-{uuid.uuid4()}"
+    logger.info(f"🚀 Async-Safe OpenAI Chat Request ID: {request_id}")
 
-    db: Session = g.db
-    resp_obj: Response  # Ensure resp_obj is defined
+    db: Optional[Session] = None  # Initialize db session to None
+    resp_obj: Response
     session_id_for_logs: str = f"openai_req_{request_id}_unassigned"
     final_response_status_code: int = 500
 
     try:
-        # Request parsing logic is synchronous and remains unchanged.
+        # --- Step 1: Manually Create DB Session for this Async Context ---
+        db = SessionLocal()
+        if not db:
+            raise RuntimeError("Failed to create a database session for this request.")
+
+        # --- Step 2: Parse and Validate Incoming Request ---
         raw_request_data_dict = request.get_json()
-        if not raw_request_data_dict: raise ValueError("Empty JSON payload.")
+        if not raw_request_data_dict:
+            raise ValueError("Empty JSON payload.")
 
         messages_from_req = raw_request_data_dict.get("messages", [])
         stream_requested_by_client = raw_request_data_dict.get("stream", False)
         session_id_for_logs = raw_request_data_dict.get("session_id", f"openai_req_{request_id}")
 
-        if not cortex_text_interaction: raise RuntimeError("Critical: cortex_text_interaction instance not available.")
+        if not cortex_text_interaction:
+            raise RuntimeError("Critical: cortex_text_interaction instance not available.")
+        # Set the session ID on the global instance for this request's lifecycle
         cortex_text_interaction.current_session_id = session_id_for_logs
 
-        # Extract user input and image data (this logic is synchronous).
+        # Extract user input and any potential image data from the message list
         user_input_from_req, image_b64_from_req = "", None
         last_user_msg_obj = next((msg for msg in reversed(messages_from_req) if msg.get("role") == "user"), None)
-        if not last_user_msg_obj: raise ValueError("No message with role 'user' found.")
+
+        if not last_user_msg_obj:
+            raise ValueError("No message with role 'user' found in the request.")
+
         content_from_user_msg = last_user_msg_obj.get("content")
         if isinstance(content_from_user_msg, str):
             user_input_from_req = content_from_user_msg
@@ -7877,14 +7962,16 @@ async def handle_openai_chat_completion():
                     user_input_from_req += part.get("text", "")
                 elif part.get("type") == "image_url":
                     image_b64_from_req = part.get("image_url", {}).get("url", "").split(",", 1)[-1]
-        if not user_input_from_req and not image_b64_from_req: raise ValueError("No text or image content provided.")
 
-        # --- CORE CHANGE: Efficiently spawn the ELP0 background task ---
-        # Instead of creating a new thread, we schedule the async function
-        # on the server's main event loop. This is much lighter.
+        if not user_input_from_req and not image_b64_from_req:
+            raise ValueError("No text or image content was provided in the user message.")
+
+        # --- Step 3: Spawn the Slow, Deep-Thought (ELP0) Task ---
+        # This is a fire-and-forget task. It runs in the background on the main
+        # event loop without blocking the response to the user.
         asyncio.create_task(
             cortex_text_interaction.background_generate(
-                db=None,  # The task will create its own DB session
+                db=None,  # The task is responsible for creating its own DB session
                 user_input=user_input_from_req,
                 session_id=session_id_for_logs,
                 classification="chat_complex",
@@ -7893,26 +7980,29 @@ async def handle_openai_chat_completion():
         )
         logger.info(f"{request_id}: Scheduled non-blocking background_generate (ELP0) task.")
 
-        # --- CORE CHANGE: Await the fast ELP1 response without blocking ---
+        # --- Step 4: Await the Fast, Immediate (ELP1) Response ---
         logger.info(f"{request_id}: Awaiting non-blocking direct_generate (ELP1) response...")
-        # The `await` keyword yields control to Hypercorn's event loop,
-        # allowing it to handle other requests while the AI is processing.
+        # `await` yields control to the ASGI server, allowing it to handle other
+        # requests while the AI model is processing this one.
         full_response_text = await cortex_text_interaction.direct_generate(
             db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
         )
 
-        # The rest of the logic for formatting the response is the same.
+        # --- Step 5: Format and Return the Response to the Client ---
         if stream_requested_by_client:
-            logger.info(f"{request_id}: ELP1 generation complete. Starting pseudo-stream for client.")
-            # The synchronous generator is compatible with `stream_with_context` in an async route.
-            sync_generator = _pseudo_stream_sync_generator(
+            logger.info(f"{request_id}: ELP1 generation complete. Starting CONTEXT-FREE pseudo-stream.")
+
+            # Use the context-free streamer which is safe for async routes
+            async_safe_generator = _async_compatible_openai_streamer(
                 full_response_text=full_response_text,
                 model_name=META_MODEL_NAME_STREAM
             )
-            resp_obj = Response(stream_with_context(sync_generator), mimetype='text/event-stream')
+            # Return the generator directly in the Response object
+            resp_obj = Response(async_safe_generator, mimetype='text/event-stream')
             final_response_status_code = 200
         else:
-            logger.info(f"{request_id}: ELP1 generation complete. Formatting non-streaming OpenAI response.")
+            # Handle the non-streaming case
+            logger.info(f"{request_id}: ELP1 generation complete. Formatting non-streaming response.")
             if "interrupted" in full_response_text.lower() or "Error:" in full_response_text:
                 final_response_status_code = 503 if "interrupted" in full_response_text.lower() else 500
                 resp_data_err, _ = _create_openai_error_response(full_response_text,
@@ -7932,9 +8022,14 @@ async def handle_openai_chat_completion():
         final_response_status_code = status_code
 
     finally:
+        # --- Step 6: Ensure the Database Session is Always Closed ---
+        if db:
+            db.close()
+            logger.trace(f"Manually closed DB session for async request {request_id}")
+
         duration_req = (time.monotonic() - start_req_time_main_handler) * 1000
         logger.info(
-            f"🏁 Async OpenAI Chat Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+            f"🏁 Async-Safe OpenAI Chat Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
 
     return resp_obj
 
@@ -8215,22 +8310,26 @@ async def handle_openai_models():
 @app.route("/api/chat", methods=["POST"])
 async def handle_ollama_chat():
     """
-    Asynchronous version of the handler for Ollama's /api/chat endpoint,
-    designed to run non-blockingly on an ASGI server like Hypercorn.
+    Asynchronous and CONTEXT-SAFE version of the handler for Ollama's /api/chat endpoint.
+    This is the definitive implementation for a non-blocking ASGI server like Hypercorn.
+    It manually manages its database session and uses a context-free streamer.
     """
     start_req_time_main_handler = time.monotonic()
-    request_id = f"req-ollama-async-{uuid.uuid4()}"
-    logger.info(f"🚀 Ollama-Style Async Chat Request ID: {request_id}")
+    request_id = f"req-ollama-async-safe-{uuid.uuid4()}"
+    logger.info(f"🚀 Async-Safe Ollama Chat Request ID: {request_id}")
 
-    db: Session = g.db
-    resp_obj: Response  # Ensure resp_obj is defined
+    db: Optional[Session] = None  # Initialize db session to None
+    resp_obj: Response
     session_id_for_logs: str = f"ollama_req_{request_id}_unassigned"
     final_response_status_code: int = 500
 
     try:
-        # Request parsing is synchronous, so it runs directly.
-        # Use `await` for Quart-like frameworks, but `request.get_json()` is sync in Flask.
-        # Hypercorn's compatibility layer handles this seamlessly.
+        # --- Step 1: Manually Create DB Session for this Async Context ---
+        db = SessionLocal()
+        if not db:
+            raise RuntimeError("Failed to create a database session for this request.")
+
+        # --- Step 2: Parse and Validate Incoming Request ---
         raw_request_data_dict = request.get_json()
         if not raw_request_data_dict:
             raise ValueError("Empty JSON payload.")
@@ -8243,10 +8342,12 @@ async def handle_ollama_chat():
             raise RuntimeError("Critical: cortex_text_interaction instance not available.")
         cortex_text_interaction.current_session_id = session_id_for_logs
 
-        # This logic for extracting user input is synchronous and remains the same.
+        # Extract user input and any potential image data from the message list
         user_input_from_req, image_b64_from_req = "", None
         last_user_msg_obj = next((msg for msg in reversed(messages_from_req) if msg.get("role") == "user"), None)
-        if not last_user_msg_obj: raise ValueError("No message with role 'user' found.")
+        if not last_user_msg_obj:
+            raise ValueError("No message with role 'user' found in the request.")
+
         content_from_user_msg = last_user_msg_obj.get("content")
         if isinstance(content_from_user_msg, str):
             user_input_from_req = content_from_user_msg
@@ -8255,55 +8356,51 @@ async def handle_ollama_chat():
                 if part.get("type") == "text":
                     user_input_from_req += part.get("text", "")
                 elif part.get("type") == "image_url":
-                    # Extracts base64 data from a data URI
                     image_b64_from_req = part.get("image_url", {}).get("url", "").split(",", 1)[-1]
-        if not user_input_from_req and not image_b64_from_req: raise ValueError("No text or image content provided.")
 
-        # --- CORE CHANGE: Non-blocking ELP0 Task Spawning ---
-        # We can now use `asyncio.create_task` to schedule the background work
-        # on the same event loop that the request is running on. This is more
-        # efficient than creating a whole new thread and event loop.
+        if not user_input_from_req and not image_b64_from_req:
+            raise ValueError("No text or image content was provided in the user message.")
+
+        # --- Step 3: Spawn the Slow, Deep-Thought (ELP0) Task ---
         asyncio.create_task(
             cortex_text_interaction.background_generate(
-                db=None,  # The task will create its own session
+                db=None,  # The background task will create its own DB session
                 user_input=user_input_from_req,
                 session_id=session_id_for_logs,
                 classification="chat_complex",
                 image_b64=image_b64_from_req
             )
         )
-        logger.info(f"{request_id}: Scheduled background_generate on the main event loop.")
+        logger.info(f"{request_id}: Scheduled non-blocking background_generate (ELP0) task.")
 
-        # --- CORE CHANGE: Await the ELP1 response directly ---
-        logger.info(f"{request_id}: Awaiting non-blocking ELP1 response...")
+        # --- Step 4: Await the Fast, Immediate (ELP1) Response ---
+        logger.info(f"{request_id}: Awaiting non-blocking direct_generate (ELP1) response...")
         elp1_start_time = time.monotonic()
 
-        # This `await` will yield control to the Hypercorn event loop,
-        # allowing it to serve other requests while the AI is processing.
         full_response_text = await cortex_text_interaction.direct_generate(
             db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
         )
 
         elp1_end_time = time.monotonic()
 
-        # Durations for Ollama response format (in nanoseconds)
+        # Calculate durations in nanoseconds for the Ollama response format
         eval_duration_ns = int((elp1_end_time - elp1_start_time) * 1_000_000_000)
         total_duration_ns = int((elp1_end_time - start_req_time_main_handler) * 1_000_000_000)
 
         model_name_for_response = META_MODEL_NAME_NONSTREAM
 
+        # --- Step 5: Format and Return the Response to the Client ---
         if stream_requested_by_client:
-            logger.info(f"{request_id}: ELP1 complete. Starting Ollama-style pseudo-stream.")
+            logger.info(f"{request_id}: ELP1 complete. Starting Ollama-style CONTEXT-FREE pseudo-stream.")
 
-            # The synchronous generator for streaming still works fine. Flask's `stream_with_context`
-            # will handle iterating through it.
             ollama_generator = _ollama_pseudo_stream_sync_generator(
                 full_response_text=full_response_text,
                 model_name=model_name_for_response,
                 total_duration_ns=total_duration_ns,
                 eval_duration_ns=eval_duration_ns
             )
-            resp_obj = Response(stream_with_context(ollama_generator), mimetype='application/x-ndjson')
+            # CRITICAL: Do NOT use stream_with_context here.
+            resp_obj = Response(ollama_generator, mimetype='application/x-ndjson')
             final_response_status_code = 200
         else:
             logger.info(f"{request_id}: ELP1 complete. Formatting Ollama non-streaming response.")
@@ -8318,13 +8415,19 @@ async def handle_ollama_chat():
 
     except Exception as e:
         logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in async Ollama chat handler:")
+        # Ollama API returns a simple JSON error object on failure
         resp_obj = jsonify({"error": f"Internal server error: {type(e).__name__}"})
         final_response_status_code = 500
 
     finally:
-        duration_req = (time.monotonic() - start_req_time_main_handler) * 1000
+        # --- Step 6: Ensure the Database Session is Always Closed ---
+        if db:
+            db.close()
+            logger.trace(f"Manually closed DB session for async request {request_id}")
+
+        duration_req = (time.monotonic() - start_req_time_main_handler) * 1_000
         logger.info(
-            f"🏁 Ollama-Style Async Chat Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+            f"🏁 Async-Safe Ollama Chat Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
 
     return resp_obj
 
