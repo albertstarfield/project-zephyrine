@@ -38,7 +38,7 @@ RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 7))
 FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 512)) #Extreme or vanquish (Max at 512)
 FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
-FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 3600)) #default at 3600 putting it to 5 is just for debug and rentlessly scanning
+FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 600)) #default at 3600 putting it to 5 is just for debug and rentlessly scanning
 
 
 BENCHMARK_ELP1_TIME_MS = 600000.0 #before hard defined error timeout (30 seconds max)
@@ -176,6 +176,11 @@ MODEL_DEFAULT_CHAT_LLAMA_CPP = "general" # Use the logical name
 
 # --- Add this new section for ASR (Whisper) Settings ---
 # You can place this section logically, e.g., after TTS or near other model-related settings.
+
+WHISPER_GARBAGE_OUTPUTS = {
+    "you", "thank you.", "thanks for watching.", "...", "(music)", "subtitles by",
+    "the national weather service", "a production of", "in association with"
+}
 
 ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal" # This should already exist in your config
 # --- ASR (Whisper) Settings ---
