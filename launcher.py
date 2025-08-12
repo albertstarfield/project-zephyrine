@@ -62,7 +62,8 @@ RELAUNCH_STDERR_LOG = os.path.join(RELAUNCH_LOG_DIR, "relaunched_launcher_stderr
 # --- MeloTTS Configuration ---
 MELO_TTS_SUBMODULE_DIR_NAME = "MeloAudioTTS_SubEngine"
 MELO_TTS_PATH = os.path.join(ENGINE_MAIN_DIR, MELO_TTS_SUBMODULE_DIR_NAME)
-MELO_TTS_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".melo_tts_installed_v1")
+MELO_TTS_LIB_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".melo_tts_lib_installed_v1") # NEW: For the library itself
+MELO_TTS_DATA_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".melo_tts_data_installed_v1") # RENAMED: For data deps
 
 # --- ChatterboxTTS Configuration (NEW) ---
 CHATTERBOX_TTS_SUBMODULE_DIR_NAME = "ChatterboxTTS_subengine"
@@ -251,7 +252,8 @@ ARIA2P_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".aria2p_installed_v1")
 
 FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
     LICENSE_FLAG_FILE,
-    MELO_TTS_INSTALLED_FLAG_FILE,
+    MELO_TTS_LIB_INSTALLED_FLAG_FILE,  # UPDATED
+    MELO_TTS_DATA_INSTALLED_FLAG_FILE,  # UPDATED
     CUSTOM_LLAMA_CPP_INSTALLED_FLAG_FILE,
     CUSTOM_SD_CPP_PYTHON_INSTALLED_FLAG_FILE,
     CONDA_PATH_CACHE_FILE,
@@ -4001,7 +4003,9 @@ if __name__ == "__main__":
 
             print_system("--- Checking TTS Systems (Chatterbox & MeloTTS) ---")
 
-            # Step 1: Install ChatterboxTTS library if needed.
+            print_system("--- Checking TTS Systems (Chatterbox & MeloTTS) ---")
+
+            # --- Stage 1: ChatterboxTTS Library Installation ---
             if not os.path.exists(CHATTERBOX_TTS_INSTALLED_FLAG_FILE):
                 print_system(f"--- ChatterboxTTS First-Time Library Install ---")
                 if not os.path.isdir(CHATTERBOX_TTS_PATH):
@@ -4014,33 +4018,37 @@ if __name__ == "__main__":
                         setup_failures.append("ChatterboxTTS pip install failed.")
                     else:
                         print_system("ChatterboxTTS library installed successfully.")
-                        # Create the library-specific flag file.
                         with open(CHATTERBOX_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
                             f.write(f"Installed on: {datetime.now().isoformat()}\n")
             else:
                 print_system("ChatterboxTTS library previously installed (flag file found).")
 
-            # Step 2: Install MeloTTS library (this is fast on subsequent runs).
-            # We don't need a separate flag here because `pip install -e .` is idempotent and quick.
-            print_system("--- Verifying MeloTTS Library Install ---")
-            if not os.path.isdir(MELO_TTS_PATH):
-                print_error(f"MeloTTS directory not found at: {MELO_TTS_PATH}. Skipping.")
-                setup_failures.append("MeloTTS directory not found.")
-            else:
-                if not run_command([PIP_EXECUTABLE, "install", "-e", "."], MELO_TTS_PATH, "PIP-MELO-EDITABLE"):
-                    print_error("MeloTTS library installation failed.")
-                    setup_failures.append("MeloTTS pip install failed.")
+            # --- Stage 2: MeloTTS Library Installation ---
+            if not os.path.exists(MELO_TTS_LIB_INSTALLED_FLAG_FILE):
+                print_system("--- MeloTTS First-Time Library Install ---")
+                if not os.path.isdir(MELO_TTS_PATH):
+                    print_error(f"MeloTTS directory not found at: {MELO_TTS_PATH}. Skipping.")
+                    setup_failures.append("MeloTTS directory not found.")
                 else:
-                    print_system("MeloTTS library is installed/verified.")
+                    if not run_command([PIP_EXECUTABLE, "install", "-e", "."], MELO_TTS_PATH, "PIP-MELO-EDITABLE"):
+                        print_error("MeloTTS library installation failed.")
+                        setup_failures.append("MeloTTS pip install failed.")
+                    else:
+                        print_system("MeloTTS library installed successfully.")
+                        with open(MELO_TTS_LIB_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
+                            f.write(f"Installed on: {datetime.now().isoformat()}\n")
+            else:
+                print_system("MeloTTS library previously installed (flag file found).")
 
-            # Step 3: AFTER both libraries are installed, run the dependency download worker.
-            # This step is guarded by the final MeloTTS flag, which now signifies that
-            # data dependencies (unidic, models) are also downloaded.
-            if not os.path.exists(MELO_TTS_INSTALLED_FLAG_FILE):
-                print_system("--- Downloading TTS Data Dependencies (Unidic & Models) ---")
+            # --- Stage 3: Shared TTS Data Dependency Download ---
+            # This step runs AFTER both libraries are confirmed to be installed.
+            # It is guarded by its own flag for the data download.
+            if not os.path.exists(MELO_TTS_DATA_INSTALLED_FLAG_FILE):
+                print_system("--- Downloading Shared TTS Data Dependencies (Unidic & Models) ---")
 
-                # This command triggers downloads for both unidic and the required HF models.
-                melo_test_command = [
+                # This command triggers downloads for both Unidic (for Melo) and the required HF models.
+                # We use the audio_worker in test mode as it initializes the necessary components.
+                tts_data_download_command = [
                     PYTHON_EXECUTABLE, "audio_worker.py",
                     "--task-type", "tts",
                     "--test-mode",
@@ -4049,18 +4057,18 @@ if __name__ == "__main__":
                     "--output-file", "tts_result.wav"  # Relative to ENGINE_MAIN_DIR
                 ]
 
-                if not run_command(melo_test_command, ENGINE_MAIN_DIR, "TTS-DEPS-DOWNLOAD"):
+                if not run_command(tts_data_download_command, ENGINE_MAIN_DIR, "TTS-DEPS-DOWNLOAD"):
                     print_error(
                         "TTS dependency download worker failed. This means model/dictionary download likely failed.")
                     setup_failures.append("TTS dependency download via test worker failed.")
                 else:
-                    print_system("TTS data dependencies downloaded successfully.")
-                    # Create the final flag ONLY after the data is successfully downloaded.
-                    with open(MELO_TTS_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
+                    print_system("Shared TTS data dependencies downloaded successfully.")
+                    # Create the data-specific flag ONLY after the data is successfully downloaded.
+                    with open(MELO_TTS_DATA_INSTALLED_FLAG_FILE, 'w', encoding='utf-8') as f:
                         f.write(f"Data dependencies downloaded on: {datetime.now().isoformat()}")
                     print_system("TTS data dependency flag created.")
             else:
-                print_system("TTS data dependencies previously downloaded (flag file found).")
+                print_system("Shared TTS data dependencies previously downloaded (flag file found).")
 
             # --- PyWhisperCpp Installation (with auto-detection fallback) ---
             if not os.path.exists(PYWHISPERCPP_INSTALLED_FLAG_FILE):
