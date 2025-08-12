@@ -3130,6 +3130,96 @@ def launch_and_manage_zephymesh_node():
         zephymesh_process = None
         zephymesh_api_url = None
 
+
+def _check_playwright_linux_deps():
+    """
+    Checks for Playwright's browser dependencies on Linux BEFORE the main relaunch.
+    If dependencies are missing, it prints a user-friendly message with the
+    required `sudo` command and exits the script.
+    """
+    # This check is only necessary and relevant for Linux.
+    if platform.system() != "Linux":
+        return True
+
+    print_system("--- Performing pre-flight check for Playwright's Linux dependencies ---")
+
+    # We need a temporary, minimal Conda environment to run the check command.
+    # This avoids polluting the base system or requiring Playwright to be installed globally.
+    check_env_path = os.path.join(ROOT_DIR, "playwright_dep_check_env")
+
+    # Clean up any previous check environment to ensure a fresh state.
+    if os.path.exists(check_env_path):
+        try:
+            shutil.rmtree(check_env_path)
+        except OSError as e:
+            print_warning(f"Could not remove old Playwright check env: {e}")
+
+    try:
+        # Create a small, temporary environment with just playwright in it.
+        # This is much faster than checking inside our main, large environment.
+        print_system("Creating temporary environment to check dependencies...")
+        create_cmd = [
+            CONDA_EXECUTABLE, "create", "--yes", "--prefix", check_env_path, "playwright", "-c", "conda-forge"
+        ]
+        subprocess.run(create_cmd, check=True, capture_output=True, text=True, timeout=300)
+
+        # The command to check dependencies. It will return a non-zero exit code
+        # and print the necessary `apt-get install ...` command if deps are missing.
+        check_deps_cmd = [
+            os.path.join(check_env_path, "bin", "python"),
+            "-m", "playwright", "install-deps"
+        ]
+
+        print_system("Running Playwright's dependency check...")
+        # We expect this might fail, so we don't use check=True.
+        result = subprocess.run(check_deps_cmd, capture_output=True, text=True, timeout=120)
+
+        # If the command succeeded (exit code 0), all dependencies are present.
+        if result.returncode == 0:
+            print_system("✅ Playwright Linux dependencies are satisfied.")
+            return True
+
+        # If it failed, it means dependencies are missing. We must extract the command.
+        print_colored("ERROR", "--- ACTION REQUIRED: Missing System Libraries for Playwright ---", "ERROR")
+        print_error("The web browser automation engine (Playwright) needs system libraries that are not installed.")
+        print_system("To fix this, please run the following command with sudo privileges:")
+
+        # Search the command's output for the line starting with "sudo"
+        sudo_command_to_run = ""
+        output_lines = (result.stdout + result.stderr).splitlines()
+        for line in output_lines:
+            if line.strip().startswith("sudo"):
+                sudo_command_to_run = line.strip()
+                break
+
+        if sudo_command_to_run:
+            # Print the extracted command in a very visible way.
+            print_colored("COMMAND", f"\n    {sudo_command_to_run}\n", "SUCCESS")
+        else:
+            # Fallback message if we couldn't parse the command.
+            print_error("Could not automatically determine the exact command. Please check the logs below.")
+            print_warning("You may need to run 'npx playwright install-deps' manually to see the required command.")
+            print_warning(f"--- Full output from dependency check ---\n{result.stdout}\n{result.stderr}\n---")
+
+        print_system("After running the command, please restart this launcher script.")
+        print_colored("ERROR", "----------------------------------------------------------------", "ERROR")
+
+        # This is a fatal error for this run. We exit so the user can take action.
+        return False
+
+    except (subprocess.CalledProcessError, subprocess.TimeoutExpired) as e:
+        print_error(f"Failed to run the Playwright dependency check: {e}")
+        if hasattr(e, 'stdout'):
+            print_error(f"STDOUT: {e.stdout}")
+        if hasattr(e, 'stderr'):
+            print_error(f"STDERR: {e.stderr}")
+        return False
+    finally:
+        # Crucially, clean up the temporary environment afterwards.
+        if os.path.exists(check_env_path):
+            print_system("Cleaning up temporary dependency-check environment...")
+            shutil.rmtree(check_env_path)
+
 def _ensure_playwright_browsers():
     """Checks if Playwright browsers are installed and installs them if not, using a flag file."""
     # First, check if the flag file exists. If so, we can skip the whole process.
@@ -4302,6 +4392,10 @@ if __name__ == "__main__":
                 print_error("CRITICAL: Conda executable is not set after search and install attempts.")
                 setup_failures.append("Failed to find or install a Conda executable.")
                 continue  # Skip to the next attempt
+
+            if not _check_playwright_linux_deps():
+                print_error("Halting due to missing system dependencies. Please resolve the issue and restart.")
+                sys.exit(1)  # Exit cleanly after printing the user action message.
 
             print_system(f"Using Conda executable: {CONDA_EXECUTABLE}")
 
