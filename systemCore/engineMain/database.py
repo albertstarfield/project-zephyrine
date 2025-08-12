@@ -43,7 +43,6 @@ from alembic import command
 from alembic.util import CommandError
 from collections import deque
 from loguru import logger
-from CortexConfiguration import *
 
 # --- Configuration & Paths ---
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -62,6 +61,7 @@ DB_SNAPSHOT_RETENTION_COUNT = int(
 DB_SNAPSHOT_FILENAME_PREFIX = "snapshot_"
 DB_SNAPSHOT_FILENAME_SUFFIX = ".db.zst"
 # --- END NEW: Snapshot Configuration ---
+from CortexConfiguration import *
 
 ZSTD_COMPRESSION_LEVEL = int(os.getenv("ZSTD_COMPRESSION_LEVEL", 9))
 
