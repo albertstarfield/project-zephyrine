@@ -126,6 +126,8 @@ zephyimagination_test_image.png
 temp_melo_audio_test_files
 .custom_llama_cpp_installed_v1_conda
 .custom_sd_cpp_python_installed_v1_conda
+.melo_tts_data_installed_v1
+.melo_tts_lib_installed_v1
 .CUDA_Toolkit_Installed
 **logs**
 **StellaIcarus_Cache**
