@@ -13,7 +13,6 @@ from typing import Optional, Match, Tuple
 _PYSERIAL_AVAILABLE = False
 try:
     # A robust way to check if a module is installed without importing it
-    importlib.util.find_spec('serial')
     import serial  # Now we can safely import it
 
     _PYSERIAL_AVAILABLE = True
