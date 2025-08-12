@@ -8494,11 +8494,17 @@ async def handle_ollama_tags():
 
 @app.route("/v1/audio/transcriptions", methods=["POST"])
 async def handle_openai_asr_transcriptions():
+    """
+    Asynchronous and CONTEXT-SAFE handler for OpenAI-style audio transcriptions.
+    Implements a high-performance ELP1 pipeline with an intelligent failover mechanism.
+    If the initial low-latency ASR model produces no valid speech, it automatically
+    retries with the high-quality ASR model at ELP1 priority before responding to the user.
+    """
     start_req_time = time.monotonic()
     request_id = f"req-asr-{uuid.uuid4()}"
-    logger.info(f"🚀 OpenAI-Style ASR Request ID: {request_id} (Simplified ELP1 Pipeline: ASR + Correction ONLY)")
+    logger.info(f"🚀 OpenAI-Style ASR Request ID: {request_id} (ELP1 Pipeline with ELP0-Quality Failover)")
 
-    db: Session = g.db
+    db: Optional[Session] = None
     final_status_code: int = 500
     resp: Optional[Response] = None
     session_id_for_log: str = f"asr_req_default_{request_id}"
@@ -8506,13 +8512,22 @@ async def handle_openai_asr_transcriptions():
     temp_input_audio_path: Optional[str] = None
     language_for_asr_steps: str = "auto"
 
+    # This flag tracks if a separate background task for high-quality comparison is still needed.
+    # It will be set to False if the high-quality failover is used.
+    background_task_needed = True
+
     try:
+        # --- Step 1: Manually Create DB Session for this Async Context ---
+        db = SessionLocal()
+        if not db:
+            raise RuntimeError("Failed to create a database session for this request.")
+
+        # --- Step 2: Request Validation and File Handling ---
         if not ENABLE_ASR:
             logger.warning(f"{request_id}: ASR endpoint called but ASR is disabled in config.")
             resp_data, status_code = _create_openai_error_response(
-                "ASR functionality is currently disabled on this server.",
-                err_type="server_error", code="asr_disabled", status_code=503
-            )
+                "ASR functionality is currently disabled on this server.", err_type="server_error", code="asr_disabled",
+                status_code=503)
             return Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
 
         if not request.content_type or not request.content_type.startswith('multipart/form-data'):
@@ -8524,8 +8539,7 @@ async def handle_openai_asr_transcriptions():
         response_format_req = request.form.get('response_format', 'json').lower()
         session_id_for_log = request.form.get("session_id", session_id_for_log)
 
-        if 'cortex_text_interaction' not in globals() or cortex_text_interaction is None:
-            logger.error(f"{request_id}: cortex_text_interaction instance not available. Cannot proceed.")
+        if not cortex_text_interaction:
             raise RuntimeError("CortexThoughts instance not configured for ASR post-processing.")
         cortex_text_interaction.current_session_id = session_id_for_log
 
@@ -8536,16 +8550,8 @@ async def handle_openai_asr_transcriptions():
         if not model_requested or model_requested != ASR_MODEL_NAME_CLIENT_FACING:
             raise ValueError(f"Invalid 'model'. This endpoint supports '{ASR_MODEL_NAME_CLIENT_FACING}'.")
 
-        language_for_asr_steps = language_param_for_log or WHISPER_DEFAULT_LANGUAGE
-        if not language_for_asr_steps or language_for_asr_steps.strip().lower() == "auto":
-            language_for_asr_steps = "auto"
-        else:
-            language_for_asr_steps = language_for_asr_steps.strip().lower()
-
-        logger.debug(
-            f"{request_id}: ASR Request Parsed - File: {uploaded_filename or 'Missing'}, "
-            f"Lang: {language_for_asr_steps}, RespFormat: {response_format_req}"
-        )
+        language_for_asr_steps = (language_param_for_log or WHISPER_DEFAULT_LANGUAGE).strip().lower()
+        if not language_for_asr_steps: language_for_asr_steps = "auto"
 
         temp_audio_dir = os.path.join(SCRIPT_DIR, "temp_audio_worker_files")
         await asyncio.to_thread(os.makedirs, temp_audio_dir, exist_ok=True)
@@ -8555,164 +8561,148 @@ async def handle_openai_asr_transcriptions():
         await asyncio.to_thread(audio_file_storage.save, temp_input_audio_path)
         logger.info(f"{request_id}: Input audio saved temporarily to: {temp_input_audio_path}")
 
-        # --- ELP1 PIPELINE (ASR + Correction) ---
-        # Step 1.1: Low-Latency ASR
-        logger.info(f"{request_id}: ELP1 Step 1.1: Low-Latency ASR (Model: {WHISPER_LOW_LATENCY_MODEL_FILENAME})...")
+        # --- Step 3: Initial Transcription Attempt with Low-Latency Model (ELP1) ---
+        logger.info(
+            f"{request_id}: ELP1 Step 3: Attempting Low-Latency ASR (Model: {WHISPER_LOW_LATENCY_MODEL_FILENAME})...")
         asr_worker_script = os.path.join(SCRIPT_DIR, "audio_worker.py")
-        ll_asr_cmd = [APP_PYTHON_EXECUTABLE, asr_worker_script, "--task-type", "asr",
-                      "--model-dir", WHISPER_MODEL_DIR, "--temp-dir", temp_audio_dir]
-        ll_asr_req_data = {
-            "input_audio_path": temp_input_audio_path,
-            "whisper_model_name": WHISPER_LOW_LATENCY_MODEL_FILENAME,
-            "language": language_for_asr_steps,
-            "request_id": f"{request_id}-elp1-llasr"
-        }
-        elp1_asr_call_start_time = time.monotonic()
-        elp1_asr_response, elp1_asr_err = await asyncio.to_thread(
-            _execute_audio_worker_with_priority, ll_asr_cmd, ll_asr_req_data,
-            ELP1, SCRIPT_DIR, ASR_WORKER_TIMEOUT
-        )
-        elp1_asr_duration_ms = (time.monotonic() - elp1_asr_call_start_time) * 1000
+        ll_asr_cmd = [APP_PYTHON_EXECUTABLE, asr_worker_script, "--task-type", "asr", "--model-dir", WHISPER_MODEL_DIR,
+                      "--temp-dir", temp_audio_dir]
+        ll_asr_req_data = {"input_audio_path": temp_input_audio_path,
+                           "whisper_model_name": WHISPER_LOW_LATENCY_MODEL_FILENAME, "language": language_for_asr_steps,
+                           "request_id": f"{request_id}-elp1-llasr"}
 
-        if elp1_asr_err or not (
-                elp1_asr_response and isinstance(elp1_asr_response.get("result"), dict) and "text" in elp1_asr_response[
-            "result"]):
-            raise RuntimeError(f"Low-Latency ASR step failed: {elp1_asr_err or 'Invalid ASR worker response'}")
+        elp1_asr_response, elp1_asr_err = await asyncio.to_thread(_execute_audio_worker_with_priority, ll_asr_cmd,
+                                                                  ll_asr_req_data, ELP1, SCRIPT_DIR, ASR_WORKER_TIMEOUT)
 
-        raw_low_latency_transcription = elp1_asr_response["result"]["text"]
+        if elp1_asr_err:
+            raise RuntimeError(f"Low-Latency ASR step failed critically: {elp1_asr_err}")
 
-        if not raw_low_latency_transcription or not raw_low_latency_transcription.strip():
-            logger.warning(f"{request_id}: Low-latency ASR produced no speech. Returning empty response.")
-            response_body = {"text": ""}
-            resp = Response(json.dumps(response_body), status=200, mimetype='application/json')
-            final_status_code = 200
-            if temp_input_audio_path and os.path.exists(temp_input_audio_path):
-                try:
-                    await asyncio.to_thread(os.remove, temp_input_audio_path)
-                except Exception as e_del:
-                    logger.warning(
-                        f"{request_id}: Failed to clean up temp audio file after no-speech detection: {e_del}")
-            return resp
+        raw_transcription = (elp1_asr_response.get("result", {}).get("text") or "").strip()
 
-        logger.info(f"{request_id}: ELP1 Step 1.1: Low-Latency ASR successful.")
+        # --- Step 4: Sanity Check and Conditional Failover ---
+        is_transcription_valid = True
+        if not raw_transcription or len(raw_transcription) < 3 or raw_transcription.lower() in WHISPER_GARBAGE_OUTPUTS:
+            logger.warning(
+                f"{request_id}: Low-latency ASR produced invalid speech: '{raw_transcription}'. Triggering high-quality failover.")
+            is_transcription_valid = False
 
-        # Step 1.2: Auto-Correction with LLM
-        # This is now the FINAL step for the user-facing text.
-        corrected_transcription = raw_low_latency_transcription
-        if raw_low_latency_transcription.strip():
-            logger.info(f"{request_id}: ELP1 Step 1.2: Auto-correcting transcript...")
-            correction_prompt_filled = PROMPT_AUTOCORRECT_TRANSCRIPTION.format(
-                raw_transcribed_text=raw_low_latency_transcription)
+        if not is_transcription_valid:
+            background_task_needed = False
+            logger.info(
+                f"{request_id}: ELP1 FAILOVER: Retrying with High-Quality ASR (Model: {WHISPER_DEFAULT_MODEL_FILENAME}) at ELP1 priority.")
+
+            hq_asr_cmd = [APP_PYTHON_EXECUTABLE, asr_worker_script, "--task-type", "asr", "--model-dir",
+                          WHISPER_MODEL_DIR, "--temp-dir", temp_audio_dir]
+            hq_asr_req_data = {"input_audio_path": temp_input_audio_path,
+                               "whisper_model_name": WHISPER_DEFAULT_MODEL_FILENAME, "language": language_for_asr_steps,
+                               "request_id": f"{request_id}-elp1-failover-hqasr"}
+
+            hq_asr_response, hq_asr_err = await asyncio.to_thread(_execute_audio_worker_with_priority, hq_asr_cmd,
+                                                                  hq_asr_req_data, ELP1, SCRIPT_DIR,
+                                                                  ASR_WORKER_TIMEOUT + 120)
+
+            if hq_asr_err:
+                raise RuntimeError(f"High-Quality ASR failover step failed critically: {hq_asr_err}")
+
+            raw_transcription = (hq_asr_response.get("result", {}).get("text") or "").strip()
+
+            if not raw_transcription or len(
+                    raw_transcription) < 3 or raw_transcription.lower() in WHISPER_GARBAGE_OUTPUTS:
+                logger.warning(f"{request_id}: High-quality ASR also produced no valid speech. Result will be empty.")
+                raw_transcription = ""
+
+        # --- Step 5: LLM Auto-Correction (ELP1) ---
+        final_text_for_client = raw_transcription
+        if raw_transcription:
+            logger.info(f"{request_id}: ELP1 Step 5: Auto-correcting final transcript...")
+            correction_prompt_filled = PROMPT_AUTOCORRECT_TRANSCRIPTION.format(raw_transcribed_text=raw_transcription)
             correction_session_id = f"correct_asr_{request_id}"
             cortex_text_interaction.current_session_id = correction_session_id
+
             llm_correction_output = await cortex_text_interaction.direct_generate(db, correction_prompt_filled,
                                                                                   correction_session_id)
 
-            if llm_correction_output and not (
-                    isinstance(llm_correction_output, str) and "ERROR" in llm_correction_output.upper()):
-                corrected_transcription = llm_correction_output.strip()
+            if llm_correction_output and not ("ERROR" in str(llm_correction_output).upper()):
+                final_text_for_client = llm_correction_output.strip()
                 logger.info(f"{request_id}: Auto-correction successful.")
             else:
-                logger.warning(f"{request_id}: Auto-correction failed. Using raw (un-corrected) transcript.")
-                await asyncio.to_thread(add_interaction, db, session_id=session_id_for_log, mode="asr_service",
-                                        input_type="log_warning",
-                                        user_input=f"[ASR Correction Failed for Req ID {request_id}]",
-                                        llm_response=f"LLM output for correction: {str(llm_correction_output)[:1000]}",
-                                        classification="correction_failed_llm")
-                await asyncio.to_thread(db.commit)
+                logger.warning(
+                    f"{request_id}: Auto-correction failed. Using pre-correction transcript. LLM output: {llm_correction_output}")
 
-        # The corrected transcript is now the final result we will send to the client.
-        final_text_for_client = corrected_transcription
-
-        # --- ELP1 Pipeline Complete: Format and Return Response to Client ---
+        # --- Step 6: Format and Return Response ---
         if response_format_req == "json":
             response_body = {"text": final_text_for_client}
             resp = Response(json.dumps(response_body), status=200, mimetype='application/json')
-        elif response_format_req == "text":
-            resp = Response(final_text_for_client, status=200, mimetype='text/plain; charset=utf-8')
         else:
-            resp_data, status_code = _create_openai_error_response(
-                f"Internal error: unhandled response format '{response_format_req}'.", status_code=500)
-            resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+            resp = Response(final_text_for_client, status=200, mimetype='text/plain; charset=utf-8')
         final_status_code = resp.status_code
 
-        # Log the result that was sent to the client
-        elp1_log_input = (f"[ASR Request ELP1 - File: {uploaded_filename or 'UnknownFile'}, "
-                          f"Lang: {language_for_asr_steps}, API Format: {response_format_req}, "
-                          f"LL-ASR Model: {WHISPER_LOW_LATENCY_MODEL_FILENAME}]")
-        await asyncio.to_thread(add_interaction, db, session_id=session_id_for_log, mode="asr_service",
-                                input_type="asr_transcribed_elp1",
-                                user_input=elp1_log_input,
-                                llm_response=final_text_for_client,
-                                classification="transcription_elp1_simplified_pipeline_successful",
-                                execution_time_ms=elp1_asr_duration_ms)
-        await asyncio.to_thread(db.commit)
+        # --- Step 7: Spawn Background Task (if needed) ---
+        if background_task_needed:
+            logger.info(
+                f"{request_id}: Spawning background task for high-quality comparison (failover was not needed).")
+            asyncio.create_task(_run_background_asr_and_translation_analysis(
+                original_audio_path=temp_input_audio_path,
+                elp1_transcription_final_for_client=final_text_for_client,
+                elp1_translation_final_for_client=None,
+                session_id_for_log=session_id_for_log,
+                request_id=request_id,
+                language_asr=language_for_asr_steps,
+                target_language_translation=None
+            ))
+            temp_input_audio_path = None  # Background task now owns the file for cleanup
+        else:
+            logger.info(f"{request_id}: Skipping background task because high-quality failover was performed.")
+            # The main handler is now responsible for cleanup, which will happen in the `finally` block.
 
-        # --- Fire-and-Forget ELP0 Background Task ---
-        logger.info(f"{request_id}: Spawning TRUE ASYNC background task for high-quality ASR (ELP0)...")
-        asyncio.create_task(_run_background_asr_and_translation_analysis(
-            original_audio_path=temp_input_audio_path,
-            elp1_transcription_final_for_client=final_text_for_client,  # Pass the corrected text for comparison
-            elp1_translation_final_for_client=None,
-            session_id_for_log=session_id_for_log,
-            request_id=request_id,
-            language_asr=language_for_asr_steps,
-            target_language_translation=None
-        ))
-        temp_input_audio_path = None
+    except (ValueError, RuntimeError, TaskInterruptedException) as e:
+        # Handle specific, expected errors
+        logger.warning(f"{request_id}: A handled error occurred in ASR endpoint: {type(e).__name__} - {e}")
+        error_type = "invalid_request_error"
+        status_code = 400
+        if isinstance(e, RuntimeError):
+            error_type = "server_error"
+            status_code = 500
+        elif isinstance(e, TaskInterruptedException):
+            error_type = "server_error"
+            status_code = 503
 
-    except ValueError as ve:
-        logger.warning(f"{request_id}: Invalid ASR request: {ve}")
-        resp_data, status_code = _create_openai_error_response(str(ve), err_type="invalid_request_error",
-                                                               status_code=400)
+        resp_data, _ = _create_openai_error_response(str(e), err_type=error_type, status_code=status_code)
         resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
         final_status_code = status_code
-    except FileNotFoundError as fnf_err:
-        logger.error(f"{request_id}: Server configuration error for ASR: {fnf_err}")
-        resp_data, status_code = _create_openai_error_response(f"Server configuration error for ASR: {fnf_err}",
-                                                               err_type="server_error", status_code=500)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_status_code = status_code
-    except RuntimeError as rt_err:
-        logger.error(f"{request_id}: ASR pipeline error: {rt_err}")
-        resp_data, status_code = _create_openai_error_response(f"ASR failed: {rt_err}", err_type="server_error",
-                                                               status_code=500)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_status_code = status_code
-    except TaskInterruptedException as tie:
-        logger.warning(f"🚦 {request_id}: ASR/Correction task INTERRUPTED: {tie}")
-        resp_data, status_code = _create_openai_error_response(f"ASR task interrupted: {tie}", err_type="server_error",
-                                                               code="task_interrupted", status_code=503)
-        resp = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_status_code = status_code
+
     except Exception as e:
+        # Handle all other unexpected errors
         logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in ASR endpoint (transcription):")
         error_message = f"Internal server error in ASR endpoint: {type(e).__name__}"
         resp_data_err, status_code_err = _create_openai_error_response(error_message, status_code=500)
         resp = Response(json.dumps(resp_data_err), status=status_code_err, mimetype='application/json')
         final_status_code = status_code_err
-        try:
-            if db:
-                await asyncio.to_thread(add_interaction, db, session_id=session_id_for_log, mode="asr",
-                                        input_type='error',
-                                        user_input=f"ASR Handler Error. File: {uploaded_filename or 'N/A'}",
-                                        llm_response=error_message[:2000])
-                await asyncio.to_thread(db.commit)
-        except Exception as db_log_err_final:
-            logger.error(f"{request_id}: ❌ Failed to log ASR handler main error: {db_log_err_final}")
 
     finally:
+        # --- Step 8: Final Cleanup ---
+        # This block handles cleanup if the background task was skipped OR if an error occurred
+        # before the background task could be spawned.
         if temp_input_audio_path and os.path.exists(temp_input_audio_path):
-            logger.warning(
-                f"{request_id}: Cleaning up temp audio file in main handler's finally block because an error occurred before the background task took ownership.")
+            if background_task_needed:
+                logger.warning(
+                    f"{request_id}: Cleaning up temp file in 'finally' due to an error before background task took ownership.")
+            else:
+                logger.info(f"{request_id}: Cleaning up temp file in 'finally' after successful ELP1 failover process.")
             try:
+                # Use a thread for the blocking file I/O
                 await asyncio.to_thread(os.remove, temp_input_audio_path)
             except Exception as e_del_final:
                 logger.warning(f"{request_id}: Failed to delete temp file in main handler finally: {e_del_final}")
 
+        # Close the manually created database session
+        if db:
+            db.close()
+            logger.trace(f"Manually closed DB session for async request {request_id}")
+
         duration_req_total = (time.monotonic() - start_req_time) * 1000
         logger.info(
-            f"🏁 OpenAI-Style ASR Request {request_id} (Simplified Pipeline) handled in {duration_req_total:.2f} ms. Status: {final_status_code}")
+            f"🏁 OpenAI-Style ASR Request {request_id} (with Failover Logic) handled in {duration_req_total:.2f} ms. Status: {final_status_code}")
 
     if resp is None:
         logger.error(f"{request_id}: ASR Handler logic flaw - response object 'resp' was not assigned!")
