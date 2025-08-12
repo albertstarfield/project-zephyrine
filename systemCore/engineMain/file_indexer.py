@@ -719,13 +719,6 @@ class FileIndexer:
             # Common Cache & Temporary Directory Names (Relative Names)
             "cache", "caches", "tmp", "temp", "logs", "log",  # "logs" is also your project log dir
 
-            # Common User Data Folders (Relative Names - use with caution if scanning broad roots)
-            "Downloads", "Pictures", "Movies", "Music", "Videos", "Documents", "Desktop",
-
-            # Cloud Sync & Backup Folders (Relative Names)
-            "Dropbox", "Google Drive", "OneDrive", "iCloudDrive",
-            "Backup", "Backups", "Archive", "Archives",
-
             # Project Specific (ensure ROOT_DIR is correctly resolved for these)
             "staticmodelpool", "llama-cpp-python_build", "stable-diffusion-cpp-python_build",
             "pywhispercpp_build", "systemCore", "engineMain", "backend-service",
