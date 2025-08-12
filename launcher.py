@@ -3479,41 +3479,41 @@ if TUI_AVAILABLE:
 
         def start_all_services_in_background(self):
             """
-            Starts all services. The `start_service_process` function now handles
-            redirecting their output to log files. After they are started, we
-            begin tailing those log files to the appropriate widgets.
+            Starts the main application services and tails the log files for ALL
+            running processes (including those started before the TUI).
             """
-            logger.info("TUI: Starting all services and log file tailing...")
+            logger.info("TUI: Starting main application services and initiating log tailing...")
 
-            # --- Start the main services ---
+            # The watchdogs and mesh node are already running.
+            # We only need to start the remaining services here.
             start_engine_main()
             start_backend_service()
             start_frontend()
-            _compile_and_run_watchdogs() # This function will also use start_service_process
 
-            # --- Wait a moment for log files to be created ---
+            # --- Wait a moment for the new log files to be created ---
             time.sleep(1.0)
-            
-            # --- THIS IS THE FIX: Tail the log files ---
+
+            # This logic remains the same, but it will now also pick up
+            # the log files from the pre-started watchdogs.
             log_dir = os.path.join(ROOT_DIR, "logs")
-            # Define which services write to which widget
             widget_service_map = {
                 "engine": ["ENGINE", "BACKEND", "FRONTEND"],
                 "watchdog1": ["GO-WATCHDOG"],
                 "watchdog2": ["ADA-WATCHDOG"],
             }
 
-            tailed_files = set() # Keep track of files we are already tailing
+            tailed_files = set()
 
             for widget_id, service_names in widget_service_map.items():
                 widget = self.query_one(f"#{widget_id}", Log)
                 for service_name in service_names:
-                    log_file = os.path.join(log_dir, f"{service_name}.log")
+                    # NOTE: This part needs a small fix. The mesh node also creates a log.
+                    # We should decide if we want to display it. Let's add it to the 'engine' log.
+                    log_file = os.path.join(log_dir, f"{service_name.replace(' ', '_')}.log")
 
-                    # Only start a tailing thread if we haven't already for this file
                     if log_file not in tailed_files:
                         logger.info(f"TUI: Starting tail for '{log_file}' -> '#{widget_id}'")
-                        
+
                         tail_thread = threading.Thread(
                             target=tail_log_to_widget,
                             args=(log_file, widget),
@@ -3522,7 +3522,7 @@ if TUI_AVAILABLE:
                         )
                         tail_thread.start()
 
-                        self.log_tail_threads.append(tail_thread) #add and append into the array we initialized for PID tracking!
+                        self.log_tail_threads.append(tail_thread)
                         tailed_files.add(log_file)
 
         from textual.binding import Binding
@@ -4288,76 +4288,113 @@ if __name__ == "__main__":
             except ImportError:
                 TUI_AVAILABLE = False
 
-            if TUI_AVAILABLE:
-                # --- TUI LAUNCH ---
-                print_system("TUI libraries found. Launching Zephyrine Terminal UI...")
-                time.sleep(1) # Give user a moment to see the message
+            TUI_LIBRARIES_AVAILABLE = False
+            try:
+                # Check if the required libraries can be imported
+                import textual
+                import psutil
+
+                TUI_LIBRARIES_AVAILABLE = True
+            except ImportError:
+                TUI_LIBRARIES_AVAILABLE = False
+
+
+            # This function will contain the fallback launch logic to avoid code duplication
+            def launch_in_fallback_mode():
+                print_warning("Falling back to simple terminal output for monitoring.")
+                print_system("--- Starting Main Application Services (Fallback Mode) ---")
+
+                # The watchdogs and mesh node are already running. We just start the rest.
+                # First, check if there were any setup failures before proceeding.
+                if setup_failures:
+                    print_error("Halting service launch due to previous setup failures.")
+                    return
+
+                service_threads = []
+                # Start Engine Main
+                service_threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
+                time.sleep(3)
+                engine_ready = any(
+                    proc.poll() is None and name_s == "ENGINE" for proc, name_s, _, _ in running_processes)
+                if not engine_ready:
+                    print_error("Engine Main failed to start. Exiting.")
+                    setup_failures.append("Engine Main failed to start.")
+                    return
+
+                # Start Backend Service and Frontend
+                service_threads.append(start_service_thread(start_backend_service, "BackendServiceThread"))
+                time.sleep(2)
+                service_threads.append(start_service_thread(start_frontend, "FrontendThread"))
+
+                print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.", "SUCCESS")
                 try:
-                    # The TUI class will now be responsible for starting and monitoring
-                    # all the project's services (Engine, Backend, Frontend, etc.).
+                    while True:
+                        all_ok = True
+                        active_procs_found = False
+                        with process_lock:
+                            current_procs_snapshot = list(running_processes)
+
+                        if not current_procs_snapshot and service_threads:
+                            all_ok = False
+
+                        for proc, name_s, _, _ in current_procs_snapshot:
+                            if proc.poll() is None:
+                                active_procs_found = True
+                            else:
+                                print_error(f"Service '{name_s}' exited unexpectedly (RC: {proc.poll()}).")
+                                all_ok = False
+
+                        if not all_ok:
+                            print_error("One or more services terminated. Shutting down launcher.")
+                            break
+                        if not active_procs_found and service_threads:
+                            print_system("All services seem to have finished. Exiting launcher.")
+                            break
+
+                        time.sleep(5)
+                except KeyboardInterrupt:
+                    print_system("\nKeyboardInterrupt received by main thread. Shutting down...")
+                finally:
+                    print_system("Launcher main loop finished. Ensuring cleanup via atexit...")
+
+
+            # --- Main Launch Decision ---
+            print_system("--- Compiling and Launching Core Infrastructure (Watchdogs & Mesh Node) ---")
+
+            # Step 1: Compile and run the watchdogs. This is a critical step.
+            # The _compile_and_run_watchdogs function now uses start_service_process,
+            # so they will be tracked for cleanup and will create log files.
+            _compile_and_run_watchdogs()
+
+            # Step 2: Start ZephyMesh Node in its background thread.
+            print_system("--- Preparing to launch ZephyMesh Node in the background ---")
+            zephymesh_thread = threading.Thread(
+                target=launch_and_manage_zephymesh_node,
+                name="ZephyMeshManagerThread",
+                daemon=True
+            )
+            zephymesh_thread.start()
+            # Allow a moment for the mesh node to initialize and create its log file
+            time.sleep(2)
+
+            # --- [UI/MONITORING LAUNCH] ---
+            # Now, decide which monitoring interface to launch.
+
+            if TUI_LIBRARIES_AVAILABLE:
+                print_system("TUI libraries found. Attempting to launch Zephyrine Terminal UI...")
+                time.sleep(1)
+                try:
                     app = ZephyrineTUI()
                     app.run()
                     print_system("TUI has exited. Launcher finished.")
                 except Exception as e_tui:
-                    print_error(f"The Terminal UI encountered a fatal error: {e_tui}")
-                    traceback.print_exc()
-                    print_error("TUI failed. The application will now exit.")
-                    setup_failures.append("Zephyrine TUI failed to run.")
+                    print_error(f"The Terminal UI failed to launch: {e_tui}")
+                    print_warning("This can happen in non-standard terminals (e.g., TERM=unknown) or inside some IDEs.")
+                    launch_in_fallback_mode()
             else:
-                # --- FALLBACK TO SIMPLE LOGGING ---
-                print_warning("Textual or psutil not found. Falling back to simple terminal output.")
-                print_system("--- Starting All Services (Fallback Mode) ---")
+                print_warning("Textual or psutil not found.")
+                launch_in_fallback_mode()
 
-                # Compile Watchtowers before starting services that might rely on them or their functionality
-                if not _compile_watchtowers():
-                    print_error("One or more watchdog components failed to compile. Halting startup.")
-                    setup_failures.append(f"Watchdog components failed to compile, check if the tools are installed in the conda environment(git, cmake, node, npm, go, alr)")
-
-                if not setup_failures:
-                    service_threads = []
-                    # Start Engine Main
-                    service_threads.append(start_service_thread(start_engine_main, "EngineMainThread"))
-                    time.sleep(3) # Give engine a moment to start
-                    engine_ready = any(proc.poll() is None and name_s == "ENGINE" for proc, name_s, _, _ in running_processes)
-                    if not engine_ready:
-                        print_error("Engine Main failed to start. Exiting."); setup_failures.append(f"Engine Main failed to start, check if there's conflicting installations or other issues from previous runs")
-
-                    if not setup_failures:
-                        # Start Backend Service
-                        service_threads.append(start_service_thread(start_backend_service, "BackendServiceThread"))
-                        time.sleep(2) # Give backend a moment to start
-
-                        # Start Frontend Service
-                        service_threads.append(start_service_thread(start_frontend, "FrontendThread"))
-
-                        print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.", "SUCCESS")
-                        try:
-                            while True:
-                                all_ok = True
-                                active_procs_found = False
-                                with process_lock:
-                                    current_procs_snapshot = list(running_processes) # Make a copy to iterate
-
-                                # If there are no services managed by this script, break or indicate completion
-                                if not current_procs_snapshot and service_threads: # If threads were started but no procs remain
-                                    all_ok = False # Consider it not OK if expected services are gone
-
-                                for proc, name_s, _, _ in current_procs_snapshot:
-                                    if proc.poll() is None: # Process is still running
-                                        active_procs_found = True
-                                    else:
-                                        print_error(f"Service '{name_s}' exited unexpectedly (RC: {proc.poll()})."); all_ok = False
-
-                                if not all_ok:
-                                    print_error("One or more services terminated. Shutting down launcher."); break
-                                if not active_procs_found and service_threads: # If all services have exited (and there were services to begin with)
-                                    print_system("All services seem to have finished. Exiting launcher."); break
-
-                                time.sleep(5) # Check every 5 seconds
-                        except KeyboardInterrupt:
-                            print_system("\nKeyboardInterrupt received by main thread. Shutting down...")
-                        finally:
-                            print_system("Launcher main loop finished. Ensuring cleanup via atexit...")
             # --- End of [NEW] TUI vs. Fallback Logic ---
 
         else:  # Initial launcher instance (is_already_in_correct_env is False)
