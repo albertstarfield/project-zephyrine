@@ -314,10 +314,19 @@ func (n *Libp2pNode) generateManifest() error {
 	assets := make(map[string]AssetInfo)
 
 	dirsToScan := map[string]string{
-		"staticmodelpool":                   filepath.Join(n.projectRoot, "systemCore", "engineMain", "staticmodelpool"),
+		// All GGUF models and the HF cache are in the static model pool
+		"staticmodelpool":                   staticModelPoolPath,
+
+		// NEW: Explicitly add the Hugging Face cache directory to the scan.
+		// Its contents are critical for non-GGUF models and configs.
+		"huggingface_cache":                 filepath.Join(staticModelPoolPath, "huggingface_cache"),
+
+		// The compiled libraries are also valuable assets to share
 		"llama-cpp-python_build":            filepath.Join(n.projectRoot, "llama-cpp-python_build"),
 		"stable-diffusion-cpp-python_build": filepath.Join(n.projectRoot, "stable-diffusion-cpp-python_build"),
 		"pywhispercpp_build":                filepath.Join(n.projectRoot, "pywhispercpp_build"),
+
+		// The relay directory is for DTN and may contain in-transit files
 		"meshCommunicationRelay":            n.relayDir,
 	}
 
