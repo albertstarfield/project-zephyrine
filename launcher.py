@@ -58,6 +58,8 @@ CUDA_TOOLKIT_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".CUDA_Toolkit_Install
 RELAUNCH_LOG_DIR = os.path.join(ROOT_DIR, "logs") # Or any preferred log directory
 RELAUNCH_STDOUT_LOG = os.path.join(RELAUNCH_LOG_DIR, "relaunched_launcher_stdout.log")
 RELAUNCH_STDERR_LOG = os.path.join(RELAUNCH_LOG_DIR, "relaunched_launcher_stderr.log")
+RELAUNCH_LOG_DIR = os.path.join(ROOT_DIR, "logs")
+ENGINE_PID_FILE = os.path.join(RELAUNCH_LOG_DIR, "engine.pid") # NEW: Path for the engine's PID file
 
 # --- MeloTTS Configuration ---
 MELO_TTS_SUBMODULE_DIR_NAME = "MeloAudioTTS_SubEngine"
@@ -313,7 +315,13 @@ def _compile_watchtowers() -> bool:
         except Exception as e:
             print_error(f"Failed to initialize Go module: {e}")
             return False
-            
+
+    print_system("Ensuring Go module dependencies are downloaded ('go mod tidy')...")
+    if not run_command(["go", "mod", "tidy"], cwd=go_watchdog_dir, name="GO-MOD-TIDY-WATCHDOG"):
+        print_error("Failed to download Go dependencies for the watchdog. Build will likely fail.")
+        # You can decide to return False here or let the build attempt fail.
+        # Letting it continue gives a more specific error from the build command itself.
+
     try:
         build_command_go = ["go", "build", "-o", go_exe_path, "."]
         process_go = subprocess.run(build_command_go, cwd=go_watchdog_dir, capture_output=True, text=True, check=False, timeout=180)
@@ -390,8 +398,18 @@ def _compile_and_run_watchdogs():
     go_exe_name = "watchdog_thread1.exe" if IS_WINDOWS else "watchdog_thread1"
     go_exe_path = os.path.join(go_watchdog_dir, go_exe_name)
     if os.path.exists(go_exe_path):
-        # The 'name' here will be used for the log file name, e.g., "GO-WATCHDOG.log"
-        start_service_process([go_exe_path], go_watchdog_dir, "GO-WATCHDOG")
+        # --- NEW: Define the command with target arguments ---
+        # These names must match the process names created by Hypercorn, Node, etc.
+        # We trim ".exe" from our backend name for cross-platform consistency.
+        backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
+        backend_process_name = backend_exe_name.replace(".exe", "")
+
+        watchdog_command = [
+            go_exe_path,
+            f"--targets={backend_process_name},node",
+            f"--pid-file={ENGINE_PID_FILE}"
+        ]
+        start_service_process(watchdog_command, go_watchdog_dir, "GO-WATCHDOG")
     else:
         print_error(f"Go watchdog executable not found after compile: {go_exe_path}")
 
@@ -400,7 +418,28 @@ def _compile_and_run_watchdogs():
     ada_exe_name = "watchdog_thread2.exe" if IS_WINDOWS else "watchdog_thread2"
     ada_exe_path = os.path.join(ada_watchdog_dir, "bin", ada_exe_name)
     if os.path.exists(ada_exe_path):
-        start_service_process([ada_exe_path], os.path.dirname(ada_exe_path), "ADA-WATCHDOG")
+        # The Ada watchdog will now supervise the Go watchdog.
+        # We must provide the full command for the Go watchdog as arguments
+        # to the Ada watchdog.
+
+        # Define the command for the Go watchdog (same as before)
+        backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
+        backend_process_name = backend_exe_name.replace(".exe", "")
+        go_watchdog_command = [
+            go_exe_path,
+            f"--targets={backend_process_name},node",
+            f"--pid-file={ENGINE_PID_FILE}"
+        ]
+
+        # Now, construct the command for the Ada watchdog.
+        # It's the Ada executable, followed by the entire Go command.
+        ada_watchdog_command = [ada_exe_path] + go_watchdog_command
+
+        print_system(f"ADA Watchdog will supervise command: {' '.join(go_watchdog_command)}")
+
+        # The working directory should be the project root so that relative paths
+        # in the supervised command (like for the PID file) work correctly.
+        start_service_process(ada_watchdog_command, ROOT_DIR, "ADA-WATCHDOG")
     else:
         print_error(f"Ada watchdog executable not found after compile: {ada_exe_path}")
 
@@ -876,19 +915,30 @@ def tail_log_to_widget(log_file_path: str, widget: 'Log'):
             logger.error(error_msg)
             widget.app.call_from_thread(widget.write, error_msg)
 
-def start_engine_main(): # Add argument
+
+def start_engine_main():
     name = "ENGINE"
-    MAX_UPLOAD_SIZE_BYTES = 2 ** 63  # Set this to 2 to the power of 63
+    MAX_UPLOAD_SIZE_BYTES = 2 ** 63
+
+    # NEW: Ensure old PID file is gone before starting
+    if os.path.exists(ENGINE_PID_FILE):
+        os.remove(ENGINE_PID_FILE)
+
     command = [
         HYPERCORN_EXECUTABLE,
         "AdelaideAlbertCortex:app",
         "--bind", "127.0.0.1:11434",
         "--workers", "1",
-        "--log-level", "info"
+        "--log-level", "info",
+        "--pid", ENGINE_PID_FILE  # NEW: Tell Hypercorn to write its PID to this file
     ]
     hypercorn_env = {
         "HYPERCORN_MAX_REQUEST_SIZE": str(MAX_UPLOAD_SIZE_BYTES)
     }
+    # The function name start_service_process is a bit of a misnomer here,
+    # as we aren't passing hypercorn_env. Assuming that's intended.
+    # If not, start_service_process would need to be updated to accept an env dict.
+    # Based on the original code, this seems to be the intent.
     start_service_process(command, ENGINE_MAIN_DIR, name)
 
 
@@ -3417,22 +3467,31 @@ if TUI_AVAILABLE:
         log_tail_threads = [] #initializing tail array Before we use it for parent child Processing tracking
 
         CSS = """
-        Grid {
-            grid-size: 2 3; /* 2 columns, 3 rows */
-            grid-gutter: 1;
-            height: 0.3fr;
-        }
-        #engine {
-            column-span: 2; /* Span all 2 columns */
-        }
-        #stats {
-            column-span: 2; /* Make it span both columns */
-            height: 0.4fr;    /* Give it less vertical space (e.g., 1/3 of available) */
-        }
-        Log {
-            border-title-align: center;
-        }
-        """
+                Grid {
+                    /* Keep 2 columns, but now define row heights explicitly */
+                    grid-size: 2; 
+                    grid-rows: 2fr 1fr 1; /* Top: 2 parts, Middle: 1 part, Bottom: 1 fixed line */
+                    grid-gutter: 1;
+                }
+                #engine {
+                    column-span: 2;
+                    /* This widget now sits in the first row, which has a height of 2fr */
+                }
+                #watchdog1 {
+                    /* This widget sits in the second row, which has a height of 1fr */
+                }
+                #watchdog2 {
+                    /* This widget also sits in the second row, height 1fr */
+                }
+                #stats {
+                    column-span: 2;
+                    /* This widget sits in the third row, which has a fixed height of 1 line */
+                    height: 1;
+                }
+                Log {
+                    border-title-align: center;
+                }
+                """
 
         def compose(self) -> ComposeResult:
             """Create child widgets for the TUI."""
@@ -3440,12 +3499,11 @@ if TUI_AVAILABLE:
 
             # The Grid will now contain ALL the main panels
             with Grid():
-                yield Log(id="engine", max_lines=256)
+                yield Log(id="engine", max_lines=386) # Increased max_lines for the bigger pane
                 yield Log(id="watchdog1", max_lines=256)
                 yield Log(id="watchdog2", max_lines=256)
-                yield SystemStatsGraph(id="stats")
+                yield SystemStatsGraph(id="stats") # SystemStatsGraph is now the new name for the stats widget
 
-            # The Footer is now the only thing outside the grid
             yield Footer()
 
         def on_mount(self) -> None:

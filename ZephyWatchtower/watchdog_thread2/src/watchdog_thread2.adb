@@ -8,6 +8,7 @@ with System;
 with System.Storage_Elements;
 with Ada.Containers.Vectors;
 with Ada.Unchecked_Conversion;
+with Ada.Command_Line; 
 
 -- The main procedure is the single top-level compilation unit.
 procedure Watchdog_Thread2 is
@@ -117,6 +118,10 @@ procedure Watchdog_Thread2 is
    end C_Bridge;
 
    procedure Perform_Memory_Check (Success : out Boolean) is
+      -- This procedure performs an aggressive memory allocation and integrity
+      -- check to verify system stability before launching critical processes.
+
+      -- Inner procedure to handle the logic for a single memory chunk.
       procedure Write_And_Verify_Chunk
         (Memory_Block : System.Address; Size : size_t; Pattern : Byte; Chunk_Success : out Boolean)
       is
@@ -125,7 +130,7 @@ procedure Watchdog_Thread2 is
          Current_Ptr : Byte_Ptr;
       begin
          Chunk_Success := True;
-         Put ("  -> Verifying chunk at " & System.Address'Image(Memory_Block) & "... ");
+         Put ("  -> Verifying integrity of chunk at " & System.Address'Image(Memory_Block) & "... ");
          for I in 0 .. Storage_Offset(Size) - 1 loop
             Current_Ptr := To_Byte_Ptr (Memory_Block + I);
             Current_Ptr.all := Pattern;
@@ -134,34 +139,94 @@ procedure Watchdog_Thread2 is
             Current_Ptr := To_Byte_Ptr (Memory_Block + I);
             if Current_Ptr.all /= Pattern then
                Put_Line ("FAILURE!");
-               Put_Line ("     Mismatch at offset " & Storage_Offset'Image(I));
+               Put_Line ("     >> Mismatch at offset " & Storage_Offset'Image(I) & ". Expected " & Byte'Image(Pattern) & ", found " & Byte'Image(Current_Ptr.all));
                Chunk_Success := False;
                return;
             end if;
          end loop;
          Put_Line ("OK.");
       end Write_And_Verify_Chunk;
+
+      Flag_File_Name   : constant String := "_potential_incapable_machine";
+      Flag_File_Exists : Boolean := False;
+
+      -- Check if the incapability flag file exists from a previous run.
+      procedure Check_For_Flag is
+         Flag_File : File_Type;
+      begin
+         -- Try to open the file for reading. If it succeeds, the file exists.
+         Open (File => Flag_File, Mode => In_File, Name => Flag_File_Name);
+         Flag_File_Exists := True;
+         Close (Flag_File);
+         Put_Line ("INFO: Diagnostic flag '" & Flag_File_Name & "' found from a previous run.");
+      exception
+         when Name_Error => -- This is the expected exception if the file doesn't exist.
+            Flag_File_Exists := False;
+      end Check_For_Flag;
       
-      MB               : constant := 1_048_576;
-      Chunk_Size_Bytes : constant size_t := 128 * MB;
-      Total_GB_Target  : constant := 1;
-      Total_MB_Target  : constant := Total_GB_Target * 1024;
-      Number_Of_Chunks : constant := Total_MB_Target / 128;
+      -- Determine memory test parameters based on whether the flag was found.
+      MB_In_Bytes      : constant := 1_048_576;
+      Chunk_Size_Bytes : constant size_t := 128 * MB_In_Bytes;
       
+      -- NEW: Dynamically set the target size
+      Total_MB_Target  : size_t;
+      Number_Of_Chunks : Natural;
+
       package Address_Vectors is new Ada.Containers.Vectors (Positive, System.Address);
       Allocated_Chunks : Address_Vectors.Vector;
       
       New_Chunk_Addr   : System.Address;
       Chunk_Is_OK      : Boolean;
+      
+      procedure Create_Incapability_Flag is
+         Flag_File      : File_Type;
+      begin
+         -- Only create the flag if it doesn't already exist.
+         if not Flag_File_Exists then
+             Create (File => Flag_File, Mode => Out_File, Name => Flag_File_Name);
+             Put_Line (Flag_File, "The Ada watchdog's initial memory stress test failed.");
+             Put_Line (Flag_File, "This suggests the machine may not have enough free RAM to run the full application stack reliably.");
+             Close (Flag_File);
+             Put_Line ("     >> Created diagnostic flag file: " & Flag_File_Name);
+         end if;
+      exception
+         when others =>
+            Put_Line ("     >> WARNING: Could not create diagnostic flag file.");
+      end Create_Incapability_Flag;
+
    begin
-      Put_Line ("--- PRE-FLIGHT: Starting Memory Integrity Stress Test ---");
+      Check_For_Flag; -- First, see if the flag file is present.
+
+      -- Set the test parameters based on the result of the flag check.
+      if Flag_File_Exists then
+         Total_MB_Target := 512;
+      else
+         Total_MB_Target := 6 * 1024; -- 6 GB
+      end if;
+      
+      Number_Of_Chunks := Natural(Total_MB_Target / 128);
+
+      Put_Line ("--- PRE-FLIGHT: Starting " & size_t'Image(Total_MB_Target) & " MB Memory Integrity Test ---");
+      if Flag_File_Exists then
+         Put_Line ("(Running reduced 'sanity check' as a full test failed previously.)");
+      else
+         Put_Line ("(Performing full-system stress test.)");
+      end if;
+      Put_Line ("This test verifies system stability. If it fails, the machine may not have");
+      Put_Line ("enough free RAM to run Project Zephyrine reliably.");
+      New_Line;
+      
       Success := True;
+      
       for I in 1 .. Number_Of_Chunks loop
-         Put ("  Pass " & Integer'Image(I) & "/" & Integer'Image(Number_Of_Chunks) & ": Allocating 128 MB chunk... ");
+         Put ("  Pass " & Integer'Image(I) & "/" & Integer'Image(Number_Of_Chunks) & ": Allocating " & size_t'Image(Chunk_Size_Bytes / MB_In_Bytes) & " MB chunk... ");
+         
          New_Chunk_Addr := C_Bridge.Malloc (Chunk_Size_Bytes);
+         
          if New_Chunk_Addr = System.Null_Address then
             Put_Line ("FAILED.");
-            Put_Line ("  -> CRITICAL: OS could not provide memory. Halting.");
+            Put_Line ("  -> CRITICAL: The operating system could not provide the requested memory.");
+            Create_Incapability_Flag;
             Success := False;
             exit;
          else
@@ -169,18 +234,22 @@ procedure Watchdog_Thread2 is
             Allocated_Chunks.Append (New_Chunk_Addr);
             Write_And_Verify_Chunk (New_Chunk_Addr, Chunk_Size_Bytes, Byte(I mod 256), Chunk_Is_OK);
             if not Chunk_Is_OK then
-               Put_Line ("  -> CRITICAL: Memory integrity check failed. Halting.");
+               Put_Line ("  -> CRITICAL: Memory integrity check failed. Data written to RAM was not read back correctly.");
+               Create_Incapability_Flag;
                Success := False;
                exit;
             end if;
          end if;
       end loop;
+      
+      New_Line;
       Put_Line ("--- PRE-FLIGHT: Deallocating all test chunks... ---");
       for Ptr of Allocated_Chunks loop
          C_Bridge.Free (Ptr);
       end loop;
+      
       if Success then
-         Put_Line ("--- PRE-FLIGHT: Memory Check Passed. ---");
+         Put_Line ("--- PRE-FLIGHT: Memory Check Passed. System appears stable. ---");
       end if;
       New_Line;
    end Perform_Memory_Check;
@@ -189,15 +258,14 @@ procedure Watchdog_Thread2 is
    --  PART 4: MAIN PROGRAM VARIABLES
    -- ===================================================================
    use type C_Bridge.Process_Id;
+   use Ada.Command_Line; -- Use the standard library for command line access
 
    Memory_Check_OK : Boolean;
-   Program_To_Run  : constant String := "./Watchdog_Thread1";
-   Process_Args    : constant String_Access_Array :=
-     (new String'("--integrity-check-file=./launcher.py"),
-      new String'("--"),
-      new String'("python"),
-      new String'("AdelaideAlbertCortex.py"));
    Child_PID       : C_Bridge.Process_Id := C_Bridge.No_Process_Id;
+
+   -- These will now be populated from command-line arguments
+   Program_To_Run  : String(1 .. Argument(1)'Length);
+   Process_Args    : String_Access_Array(1 .. Argument_Count - 1);
 
 -- ===================================================================
 --  PART 5: THE MAIN PROGRAM LOGIC (the BEGIN block)
@@ -207,26 +275,71 @@ begin
    Put_Line (" ADA WATCHDOG (LEVEL 2) INITIALIZING...");
    Put_Line ("=====================================================");
    
+   -- First, check if we were given a command to supervise.
+   if Argument_Count < 1 then
+      Put_Line ("FATAL: Ada Watchdog requires a command to supervise.");
+      Put_Line ("Usage: ./watchdog_thread2 <program_path> [args...]");
+      return; -- Exit immediately
+   end if;
+
+   -- Populate the program and arguments from the command line.
+   -- Argument(0) is the watchdog's own name.
+   -- Argument(1) is the program it should run.
+   -- Argument(2)... are the arguments for that program.
+   Program_To_Run := Argument(1);
+   for I in Process_Args'Range loop
+      Process_Args(I) := new String'(Argument(I + 1));
+   end loop;
+
+   Put_Line ("Supervision Target: " & Program_To_Run);
+   if Process_Args'Length > 0 then
+      Put_Line ("Target Arguments:");
+      for Arg of Process_Args loop
+         Put_Line ("  " & Arg.all);
+      end loop;
+   end if;
+   New_Line;
+
    Perform_Memory_Check (Success => Memory_Check_OK);
    
    if Memory_Check_OK then
       Put_Line ("--- Watchdog entering active monitoring mode. ---");
       New_Line;
-      
-      loop
-         if not C_Bridge.Is_Alive (Child_PID) then
-            Put_Line ("ADA_WATCHDOG: Monitored process (Go Watchdog) is not running. Spawning...");
-            Child_PID := C_Bridge.Spawn (Program => Program_To_Run, Args => Process_Args);
-            if Child_PID /= C_Bridge.No_Process_Id then
-               Put_Line ("ADA_WATCHDOG: Successfully spawned Go Watchdog with PID: " & C_Bridge.Process_Id'Image (Child_PID));
+
+      declare
+         -- We will print a health check message every 6 cycles (30 seconds).
+         Health_Check_Interval : constant Natural := 6;
+         Cycle_Counter         : Natural := 0;
+      begin
+         loop
+            if not C_Bridge.Is_Alive (Child_PID) then
+               -- If the process is dead, reset the counter and restart it.
+               Cycle_Counter := 0; 
+               Put_Line ("ADA_WATCHDOG: [FAIL] Monitored process is not running. Spawning...");
+               Child_PID := C_Bridge.Spawn (Program => Program_To_Run, Args => Process_Args);
+               
+               if Child_PID /= C_Bridge.No_Process_Id then
+                  Put_Line ("ADA_WATCHDOG: [OK] Successfully spawned target with PID: " & C_Bridge.Process_Id'Image (Child_PID));
+               else
+                  Put_Line ("ADA_WATCHDOG: [CRITICAL] *** FAILED to spawn target. ***");
+                  Put_Line ("ADA_WATCHDOG: Retrying in 5 seconds...");
+                  delay 5.0; -- Add an extra delay on spawn failure
+               end if;
             else
-               Put_Line ("ADA_WATCHDOG: *** FAILED to spawn Go Watchdog. ***");
-               Put_Line ("ADA_WATCHDOG: Retrying in 5 seconds...");
-               delay 5.0;
+               -- The process is alive. Increment the counter.
+               Cycle_Counter := Cycle_Counter + 1;
+               
+               -- If the counter reaches our interval, print a health check and reset it.
+               if Cycle_Counter >= Health_Check_Interval then
+                  Put_Line ("ADA_WATCHDOG: [OK] Health check passed. Monitored process (PID " & C_Bridge.Process_Id'Image (Child_PID) & ") is alive.");
+                  Cycle_Counter := 0;
+               end if;
             end if;
-         end if;
-         delay 5.0;
-      end loop;
+            
+            -- Wait 5 seconds before the next check.
+            delay 5.0;
+         end loop;
+      end;
    else
       Put_Line ("CRITICAL FAILURE: Pre-flight memory check failed. The system is unstable. Halting.");
    end if;
