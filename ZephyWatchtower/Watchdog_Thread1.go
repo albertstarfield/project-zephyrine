@@ -1,227 +1,160 @@
 // Filename: watchdog_thread1.go
 //
-// This program is the first-stage watchdog, written in Go. It is designed to be launched
-// by launcher.py and is responsible for monitoring the main Python AI application.
+// This program is the first-stage watchdog, rewritten to act as a system-wide
+// process monitor. It is launched by launcher.py and is responsible for
+// periodically checking if the main application processes are running.
 //
-// New Features:
-// - Takes the command to run as arguments.
-// - Performs a SHA256 integrity check on a specified critical file before launch.
-// - Monitors the application's exit code to detect crashes from signals (e.g., segfault).
-// - Continues to use a challenge-response handshake to detect logical freezes.
+// It does NOT launch or restart processes itself. It only monitors and logs.
 //
 // Build: go build -o watchdog_thread1
 //
-// To Run (handled by launcher.py):
-// ./watchdog_thread1 --integrity-check-file=./launcher.py -- python AdelaideAlbertCortex.py
+// To Run (as handled by launcher.py):
+// ./watchdog_thread1 --targets="hypercorn,zephyrine-backend,node"
+//
+// You can also add --pid-file="path/to/some.pid" to monitor a specific PID.
 
 package main
 
 import (
-	"crypto/rand"
-	"crypto/sha256"
-	"encoding/hex"
 	"flag"
-	"io"
+	"fmt"
 	"io/ioutil"
 	"log"
-	"math/big"
-	"os"
-	"os/exec"
 	"strconv"
 	"strings"
-	"syscall"
 	"time"
-)
 
-const (
-	challengeFile = "watchdog_challenge.txt"
-	responseFile  = "watchdog_response.txt"
-	watchdogTimeout = 15 * time.Second // Increased timeout for potentially slower AI startup
-	heartbeatSleep  = 3 * time.Second
-	magicPrime = 48611
+	// We need a third-party library to find processes, similar to Python's psutil.
+	// The launcher will need to fetch this dependency.
+	"github.com/shirou/gopsutil/v3/process"
 )
-
-var initialHash = ""
 
 func main() {
-	// The application command and its arguments will be passed directly after the watchdog's own flags.
-	integrityCheckFile := flag.String("integrity-check-file", "", "Path to a critical file to perform SHA256 integrity check on at startup.")
+	// Define command-line flags to specify what to monitor.
+	// --targets: A comma-separated list of process names to look for.
+	// --pid-file: The path to a file containing a single Process ID to monitor.
+	// --interval: How often to check, in seconds.
+	targetNames := flag.String("targets", "", "Comma-separated list of process names to monitor (e.g., 'hypercorn,node').")
+	pidFile := flag.String("pid-file", "", "Path to a file containing a PID to monitor.")
+	intervalSec := flag.Int("interval", 15, "Monitoring interval in seconds.")
 	flag.Parse()
 
-	appArgs := flag.Args()
-	if len(appArgs) == 0 {
-		// This program is now designed to be called with another program's command as arguments.
-		// For standalone testing of the --app mode, you can run: go run . --app
-		// This block allows `go run . --app` to work for testing the app logic.
-		if len(os.Args) > 1 && os.Args[1] == "--app" {
-			runApplication()
-			return
-		}
-		log.Fatal("WATCHDOG: No application command provided. Usage: ./watchdog_thread1 --integrity-check-file=<file> <command> [args...]")
+	// Validate that we have something to monitor.
+	if *targetNames == "" && *pidFile == "" {
+		log.Fatal("WATCHDOG: Error - No targets specified. Use --targets=\"name1,name2\" or --pid-file=\"/path/to.pid\".")
 	}
-	
-	runWatchdog(*integrityCheckFile, appArgs)
+
+	// Split the comma-separated target names into a slice.
+	var targets []string
+	if *targetNames != "" {
+		targets = strings.Split(*targetNames, ",")
+		for i, t := range targets {
+			targets[i] = strings.TrimSpace(t) // Clean up whitespace
+		}
+	}
+
+	log.Printf("--- Go Watchdog (Thread 1) Activated ---")
+	log.Printf("Monitoring Interval: %d seconds", *intervalSec)
+	if len(targets) > 0 {
+		log.Printf("Monitoring Process Names: %v", targets)
+	}
+	if *pidFile != "" {
+		log.Printf("Monitoring PID File: %s", *pidFile)
+	}
+	log.Println("----------------------------------------")
+
+	// Create a ticker that fires at the specified interval. This is more
+	// efficient than a `for { time.Sleep() }` loop.
+	ticker := time.NewTicker(time.Duration(*intervalSec) * time.Second)
+	defer ticker.Stop()
+
+	// Run the check immediately on startup, then wait for the ticker.
+	runCheck(targets, *pidFile)
+
+	// Main monitoring loop.
+	for range ticker.C {
+		runCheck(targets, *pidFile)
+	}
 }
 
-// calculateSHA256 computes the SHA256 hash of a file.
-func calculateSHA256(filePath string) (string, error) {
-	file, err := os.Open(filePath)
+// runCheck performs a single monitoring scan.
+func runCheck(targetNames []string, pidFilePath string) {
+	log.Println("WATCHDOG: Performing health check scan...")
+
+	// --- 1. Get all running processes from the system ---
+	pids, err := process.Pids()
 	if err != nil {
-		return "", err
+		log.Printf("WATCHDOG: CRITICAL - Failed to list system processes: %v", err)
+		return
 	}
-	defer file.Close()
 
-	hash := sha256.New()
-	if _, err := io.Copy(hash, file); err != nil {
-		return "", err
-	}
-	return hex.EncodeToString(hash.Sum(nil)), nil
-}
-
-// runWatchdog starts and monitors the application process.
-func runWatchdog(integrityFile string, appCommandAndArgs []string) {
-	log.Println("WATCHDOG: Starting in monitor mode.")
-	var appCmd *exec.Cmd
-	
-	// Perform initial integrity check
-	if integrityFile != "" {
-		var err error
-		initialHash, err = calculateSHA256(integrityFile)
+	// Create a map to easily look up running process names.
+	// The key is the process name (e.g., "hypercorn"), the value is a boolean.
+	runningProcesses := make(map[string]bool)
+	for _, pid := range pids {
+		proc, err := process.NewProcess(pid)
 		if err != nil {
-			log.Fatalf("WATCHDOG: CRITICAL - Could not calculate initial hash for '%s': %v. Halting.", integrityFile, err)
-		}
-		log.Printf("WATCHDOG: Initial integrity hash for '%s' is %s", integrityFile, initialHash)
-	}
-
-	startApp := func() {
-		// Before every start, verify file integrity if enabled
-		if integrityFile != "" {
-			currentHash, err := calculateSHA256(integrityFile)
-			if err != nil {
-				log.Printf("WATCHDOG: CRITICAL - Could not calculate hash for '%s' on restart: %v. Halting.", integrityFile, err)
-				// In a real mission, you might try restoring a backup of the file. Here we halt.
-				os.Exit(1)
-			}
-			if currentHash != initialHash {
-				log.Printf("WATCHDOG: CRITICAL - Integrity check failed! File '%s' has been modified or corrupted. Halting.", integrityFile)
-				log.Printf("WATCHDOG: Expected hash: %s, Got: %s", initialHash, currentHash)
-				os.Exit(1)
-			}
-			log.Println("WATCHDOG: Integrity check passed.")
-		}
-
-		log.Println("WATCHDOG: Attempting to start the application...")
-		appCmd = exec.Command(appCommandAndArgs[0], appCommandAndArgs[1:]...)
-		appCmd.Stdout = os.Stdout
-		appCmd.Stderr = os.Stderr
-		
-		// Set Pdeathsig on Linux to have child killed if watchdog dies. Not portable.
-		// #if defined(__linux__)
-		// appCmd.SysProcAttr = &syscall.SysProcAttr{
-		// 	Pdeathsig: syscall.SIGKILL,
-		// }
-		// #endif
-
-		err := appCmd.Start()
-		if err != nil {
-			log.Fatalf("WATCHDOG: Failed to start application: %v", err)
-		}
-		log.Printf("WATCHDOG: Application started with PID: %d", appCmd.Process.Pid)
-
-		// Goroutine to wait for the process to exit and detect crashes
-		go func() {
-			waitErr := appCmd.Wait()
-			log.Printf("WATCHDOG: Monitored application (PID: %d) has exited.", appCmd.Process.Pid)
-			if waitErr != nil {
-				if exitErr, ok := waitErr.(*exec.ExitError); ok {
-					if status, ok := exitErr.Sys().(syscall.WaitStatus); ok {
-						// On Unix-like systems, exit codes > 128 often mean termination by a signal.
-						// Signal = ExitCode - 128. SIGSEGV=11 -> 139, SIGABRT=6 -> 134.
-						exitCode := status.ExitStatus()
-						if exitCode > 128 {
-							signal := exitCode - 128
-							log.Printf("WATCHDOG: CRASH DETECTED! Application terminated by signal %d.", signal)
-						} else {
-							log.Printf("WATCHDOG: Application exited with code: %d.", exitCode)
-						}
-					}
-				} else {
-					log.Printf("WATCHDOG: Error waiting for application exit: %v", waitErr)
-				}
-			}
-		}()
-	}
-
-	// Initial start
-	startApp()
-
-	for {
-		// ... (The challenge-response logic remains the same) ...
-		challenge, err := rand.Int(rand.Reader, big.NewInt(100000))
-		if err != nil { log.Fatalf("WATCHDOG: Could not generate challenge: %v", err) }
-		challengeInt := int(challenge.Int64())
-		err = ioutil.WriteFile(challengeFile, []byte(strconv.Itoa(challengeInt)), 0644)
-		if err != nil { log.Printf("WATCHDOG: Error writing challenge file: %v", err); continue }
-		log.Printf("WATCHDOG: Wrote new challenge: %d", challengeInt)
-
-		time.Sleep(watchdogTimeout)
-		
-		// Before checking the response, check if the process is still running.
-		if appCmd.ProcessState != nil && appCmd.ProcessState.Exited() {
-			log.Printf("WATCHDOG: Failure! Application process exited unexpectedly. Resetting application.")
-			resetApplication(&appCmd, startApp)
+			// This can happen for transient or system-protected processes, it's usually safe to ignore.
 			continue
 		}
+		name, err := proc.Name()
+		if err != nil {
+			continue
+		}
+		// On Windows, names often end with .exe, so we trim it for consistent matching.
+		name = strings.TrimSuffix(name, ".exe")
+		runningProcesses[name] = true
+	}
 
-		content, err := ioutil.ReadFile(responseFile)
-		if err != nil { log.Printf("WATCHDOG: Failure! Could not read response file: %v. Resetting application.", err); resetApplication(&appCmd, startApp); continue }
-		responseInt, err := strconv.Atoi(strings.TrimSpace(string(content)))
-		if err != nil { log.Printf("WATCHDOG: Failure! Could not parse response '%s': %v. Resetting application.", content, err); resetApplication(&appCmd, startApp); continue }
-		expectedResponse := challengeInt + magicPrime
-		if responseInt == expectedResponse {
-			log.Printf("WATCHDOG: Success! Received correct response: %d", responseInt)
+	// --- 2. Check for each target process by name ---
+	allOk := true
+	for _, target := range targetNames {
+		if _, found := runningProcesses[target]; found {
+			log.Printf("WATCHDOG: [OK] Target process '%s' is RUNNING.", target)
 		} else {
-			log.Printf("WATCHDOG: Failure! Expected response %d, but got %d. Resetting application.", expectedResponse, responseInt)
-			resetApplication(&appCmd, startApp)
+			log.Printf("WATCHDOG: [FAIL] Target process '%s' was NOT FOUND.", target)
+			allOk = false
 		}
 	}
-}
 
-// resetApplication forcefully terminates and restarts the monitored process.
-func resetApplication(cmd **exec.Cmd, startFunc func()) {
-	// ... (This function remains exactly the same as before) ...
-	log.Println("WATCHDOG: --- RESET SEQUENCE INITIATED ---")
-	if *cmd != nil && (*cmd).Process != nil {
-		log.Printf("WATCHDOG: Killing process with PID: %d", (*cmd).Process.Pid)
-		// Use Kill for forceful termination (equivalent to SIGKILL)
-		if err := (*cmd).Process.Kill(); err != nil {
-			log.Printf("WATCHDOG: Failed to kill process %d: %v", (*cmd).Process.Pid, err)
+	// --- 3. Check for the process specified in the PID file ---
+	if pidFilePath != "" {
+		pidFrom_file, err := readPidFromFile(pidFilePath)
+		if err != nil {
+			log.Printf("WATCHDOG: [WARN] Could not read PID from file '%s': %v", pidFilePath, err)
+			allOk = false
 		} else {
-			log.Println("WATCHDOG: Process killed.")
+			exists, err := process.PidExists(pidFrom_file)
+			if err != nil {
+				log.Printf("WATCHDOG: [WARN] Error checking existence of PID %d: %v", pidFrom_file, err)
+				allOk = false
+			} else if exists {
+				log.Printf("WATCHDOG: [OK] Target PID %d from file is RUNNING.", pidFrom_file)
+			} else {
+				log.Printf("WATCHDOG: [FAIL] Target PID %d from file was NOT FOUND.", pidFrom_file)
+				allOk = false
+			}
 		}
-		(*cmd).Wait() // Clean up zombie process
+	}
+
+	if allOk {
+		log.Println("WATCHDOG: Health check passed. All targets are running.")
 	} else {
-		log.Println("WATCHDOG: No process found to kill.")
+		log.Println("WATCHDOG: Health check FAILED. One or more targets are down.")
 	}
-	startFunc()
-	log.Println("WATCHDOG: --- RESET SEQUENCE COMPLETE ---")
+	log.Println("---") // Separator for the next check
 }
 
-// runApplication simulates the main Zephy AI application.
-func runApplication() {
-	// This function remains the same, but the interactive crash part is removed
-	// as crashes are now detected by the watchdog's Wait() call.
-	log.Println("APPLICATION: Starting in application mode.")
-	for {
-		content, err := ioutil.ReadFile(challengeFile)
-		if err != nil { log.Printf("APPLICATION: Error reading challenge file: %v", err); time.Sleep(heartbeatSleep); continue }
-		challengeInt, err := strconv.Atoi(strings.TrimSpace(string(content)))
-		if err != nil { log.Printf("APPLICATION: Error parsing challenge '%s': %v", content, err); time.Sleep(heartbeatSleep); continue }
-		log.Printf("APPLICATION: Read challenge: %d", challengeInt)
-		responseInt := challengeInt + magicPrime
-		err = ioutil.WriteFile(responseFile, []byte(strconv.Itoa(responseInt)), 0644)
-		if err != nil { log.Printf("APPLICATION: Error writing response file: %v", err)
-		} else { log.Printf("APPLICATION: Wrote response: %d", responseInt) }
-		time.Sleep(heartbeatSleep)
+// readPidFromFile reads a PID from a file.
+func readPidFromFile(path string) (int32, error) {
+	content, err := ioutil.ReadFile(path)
+	if err != nil {
+		return 0, err
 	}
+	pid, err := strconv.Atoi(strings.TrimSpace(string(content)))
+	if err != nil {
+		return 0, fmt.Errorf("could not parse PID: %w", err)
+	}
+
+	return int32(pid), nil
 }
