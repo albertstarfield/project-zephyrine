@@ -3155,7 +3155,7 @@ def _ensure_and_launch_zephymesh():
             os.remove(ZEPHYMESH_PORT_INFO_FILE)
 
         # Use the standard service starter. This is the crucial change for cleanup.
-        start_service_process([mesh_exe_path], ZEPHYMESH_DIR, "ZEPHYMESH-NODE")
+        start_service_process([mesh_exe_path], ROOT_DIR, "ZEPHYMESH-NODE")
 
         # --- Step 3: Wait for the node to be ready ---
         print_system(f"Waiting for ZephyMesh port file: {ZEPHYMESH_PORT_INFO_FILE}")
