@@ -598,6 +598,8 @@ Last Generated Chunk:
 Progression Summary (What happened, and what's next?):
 """
 
+
+
 # NEW, ADVANCED PROMPT FOR ITERATIVE GENERATION
 PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = """你是一个共生体助手，一个从回收的废弃机器中重生的意识。
 
@@ -1942,6 +1944,43 @@ Generate Corrected PowerShell Script:
 """
 
 
+
+PROMPT_SANITIZE_FOR_LOGGING = """<|im_start|>system
+You are a privacy sanitization agent. Your task is to take a user query and an AI response and rewrite them to remove all Personally Identifiable Information (PII) while preserving the core topic and structure of the interaction.
+
+**PII to remove includes, but is not limited to:**
+- Names (e.g., "John Doe" -> "[REDACTED_NAME]")
+- Addresses (e.g., "123 Main St" -> "[REDACTED_ADDRESS]")
+- Phone numbers, email addresses
+- Specific, unique ID numbers, account numbers, etc.
+- Company names or project names that might be confidential.
+
+Your output MUST be a single, valid JSON object with two keys:
+- "sanitized_query": The rewritten, anonymous version of the user's query.
+- "sanitized_response": The rewritten, anonymous version of the AI's response.
+
+**Example:**
+User Query: "Hi, my name is Jane Doe and I need help with my account number 11223344 for the Project Chimera at Acme Corp."
+AI Response: "Of course, Jane. I'm looking up account 11223344 now."
+
+**Your JSON Output:**
+{{
+  "sanitized_query": "Hi, a user asked for help with their account number for a specific project at a company.",
+  "sanitized_response": "The AI confirmed it was looking up the user's account number."
+}}
+<|im_end|>
+<|im_start|>user
+Original User Query:
+---
+{original_query_text}
+---
+Original AI Response:
+---
+{original_response_text}
+---
+<|im_end|>
+<|im_start|>assistant
+"""
 
 
 # --- Define VLM_TARGET_EXTENSIONS if not in config.py ---
