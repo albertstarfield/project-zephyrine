@@ -6014,6 +6014,712 @@ def _ollama_pseudo_stream_sync_generator(
 # --- OpenAI Response Formatting Helpers ---
 
 
+# ----- Mesh Logic Helper functions ---- (Duplicates but it serves or have different logic than the ordinary pipeline it's more low priority)
+
+
+async def _log_sanitized_interaction(
+        original_query: Any,
+        final_response: Any,
+        session_id: str,
+        mode: str
+):
+    """
+    FIRE-AND-FORGET PRIVACY HELPER.
+    This function runs in the background and does not block or return to the user.
+    It takes the raw query/response from an interaction, uses an LLM to sanitize it,
+    and saves the anonymized record to the database for safe, long-term learning.
+    """
+    request_id = session_id.replace("mesh_task_", "")  # Get a base ID for logging
+    log_prefix = f"SANITIZE_LOG|{request_id}"
+    db: Optional[Session] = None
+
+    try:
+        # Step 1: Create a new, independent database session for this background task.
+        db = SessionLocal()
+        if not db:
+            raise RuntimeError("DB session failed for sanitizer background task.")
+
+        logger.info(f"{log_prefix}: Starting sanitization for session {session_id}, mode '{mode}'.")
+
+        # Step 2: Convert the raw query/response into simple text for the LLM.
+        # This handles the different data types from different services.
+        query_text = ""
+        response_text = ""
+
+        if mode in ["chat_mesh", "vlm_chat_mesh"]:
+            # For chat, the query is the last user message content.
+            if isinstance(original_query, dict) and "content" in original_query:
+                # Handle complex content (text + image parts)
+                if isinstance(original_query["content"], list):
+                    query_text = " ".join(
+                        [part.get("text", "") for part in original_query["content"] if part.get("type") == "text"])
+                    query_text += " [User also provided an image]"
+                else:
+                    query_text = str(original_query.get("content", ""))
+            else:
+                query_text = str(original_query)
+            response_text = str(final_response)
+
+        elif mode == "asr_mesh":
+            query_text = f"[Audio Transcription Request for file: {original_query.get('filename', 'unknown')}]"
+            response_text = str(final_response)
+
+        elif mode == "tts_mesh":
+            query_text = str(original_query)
+            response_text = str(final_response)  # e.g., "[Audio generated successfully]"
+
+        elif mode == "image_gen_mesh":
+            query_text = str(original_query)
+            response_text = str(final_response)  # e.g., "[1 image(s) generated successfully]"
+
+        # Step 3: Call the LLM to perform the sanitization.
+        # This is an ELP0 task. We use `direct_generate` as a convenient way to get a response.
+        logger.debug(f"{log_prefix}: Calling LLM with sanitization prompt.")
+        sanitizer_prompt = PROMPT_SANITIZE_FOR_LOGGING.format(
+            original_query_text=query_text,
+            original_response_text=response_text
+        )
+
+        sanitization_session_id = f"sanitize_{session_id}"
+
+        # This `direct_generate` call will create its own temporary log in the DB, which is fine.
+        # The important record is the one we save *after* this step.
+        sanitized_json_str = await cortex_text_interaction.direct_generate(
+            db, sanitizer_prompt, sanitization_session_id
+        )
+
+        # Step 4: Parse the sanitized result and prepare for saving.
+        sanitized_query_to_save = query_text  # Fallback to original if parsing fails
+        sanitized_response_to_save = response_text  # Fallback
+
+        try:
+            # The robust JSON extractors are in the CortexThoughts class
+            json_candidate = cortex_text_interaction._extract_json_candidate_string(sanitized_json_str, log_prefix)
+            if json_candidate:
+                sanitized_data = cortex_text_interaction._programmatic_json_parse_and_fix(json_candidate,
+                                                                                          log_prefix=log_prefix)
+                if sanitized_data:
+                    sanitized_query_to_save = sanitized_data.get("sanitized_query", sanitized_query_to_save)
+                    sanitized_response_to_save = sanitized_data.get("sanitized_response", sanitized_response_to_save)
+                    logger.info(f"{log_prefix}: Sanitization successful.")
+        except Exception as e_parse:
+            logger.warning(
+                f"{log_prefix}: Failed to parse sanitizer JSON response. Logging will use less-sanitized data. Error: {e_parse}")
+
+        # Step 5: Save the final, sanitized record to the database for learning.
+        add_interaction(
+            db,
+            session_id=session_id,
+            mode=mode,  # e.g., "chat_mesh", "asr_mesh"
+            input_type="sanitized_learning_record",
+            user_input=sanitized_query_to_save,
+            llm_response=sanitized_response_to_save,
+            classification="community_mesh_interaction"
+        )
+        db.commit()
+        logger.success(f"{log_prefix}: Successfully logged sanitized interaction for session {session_id}.")
+
+    except Exception as e:
+        logger.error(f"{log_prefix}: A critical error occurred during the sanitization and logging task: {e}")
+        logger.exception(f"{log_prefix} Traceback:")
+        if db:
+            db.rollback()
+    finally:
+        if db:
+            db.close()
+
+
+async def _process_mesh_chat_request_and_get_result(
+        request_data: dict,
+        db_session: Session,
+        session_id: str,
+        request_id: str
+) -> str:
+    """
+    Handles the full ELP0 Chat/VLM pipeline for a mesh request and returns the final text result.
+    This function simulates the core logic of `background_generate` but is designed to
+    be awaited and return a final value. All sub-tasks are run at ELP0 priority.
+    """
+    log_prefix = f"MESH_CHAT_PROCESSOR|{request_id}"
+    logger.info(f"{log_prefix}: Starting ELP0 Chat/VLM processing for session {session_id}.")
+
+    # --- Step 1: Parse and Validate Input ---
+    messages = request_data.get("messages", [])
+    if not messages:
+        raise ValueError("'messages' key is required for a chat request.")
+
+    if not cortex_text_interaction:
+        raise RuntimeError("Critical: cortex_text_interaction instance not available.")
+    cortex_text_interaction.current_session_id = session_id
+
+    user_input_text = ""
+    image_b64 = None
+    last_user_msg = next((msg for msg in reversed(messages) if msg.get("role") == "user"), None)
+
+    if not last_user_msg:
+        raise ValueError("No message with role 'user' found in the request.")
+
+    content = last_user_msg.get("content")
+    if isinstance(content, str):
+        user_input_text = content
+    elif isinstance(content, list):
+        for part in content:
+            if part.get("type") == "text":
+                user_input_text += part.get("text", "")
+            elif part.get("type") == "image_url":
+                image_b64 = part.get("image_url", {}).get("url", "").split(",", 1)[-1]
+
+    if not user_input_text and not image_b64:
+        raise ValueError("No text or image content was provided in the user message.")
+
+    # If an image is present, get its VLM description to augment the text input
+    current_input_for_analysis = user_input_text
+    if image_b64:
+        logger.info(f"{log_prefix}: Image detected. Getting VLM description at ELP0 priority.")
+        vlm_desc, vlm_err = await cortex_text_interaction._describe_image_async(
+            db_session, session_id, image_b64, "mesh_request_vlm_analysis", ELP0
+        )
+        if vlm_err:
+            logger.warning(f"{log_prefix}: VLM description failed: {vlm_err}. Proceeding with text only.")
+        elif vlm_desc:
+            current_input_for_analysis = f"[Image Context: {vlm_desc}]\n\nUser Query: {user_input_text or '(No text query)'}"
+
+    # --- Step 2: Execute the ELP0 Deep Reasoning Pipeline ---
+    logger.info(f"{log_prefix}: Executing the full, sequential ELP0 pipeline to get a result.")
+
+    # 2.1: Gather Comprehensive Context (at ELP0)
+    logger.debug(f"{log_prefix}: Gathering comprehensive RAG context at ELP0...")
+    wrapped_rag_res = await asyncio.to_thread(
+        cortex_text_interaction._get_rag_retriever_thread_wrapper,
+        db_session,
+        current_input_for_analysis,
+        ELP0  # <--- CRITICAL: Run RAG at low priority
+    )
+    if wrapped_rag_res.get("status") != "success":
+        raise RuntimeError(f"RAG retrieval failed: {wrapped_rag_res.get('error_message')}")
+
+    url_ret, sess_hist_ret, refl_chunk_ret, _ = wrapped_rag_res.get("data", (None, None, None, None))
+
+    url_docs, session_docs, reflection_docs = [], [], []
+    if url_ret: url_docs = await asyncio.to_thread(url_ret.invoke, current_input_for_analysis)
+    if sess_hist_ret: session_docs = await asyncio.to_thread(sess_hist_ret.invoke, current_input_for_analysis)
+    if refl_chunk_ret: reflection_docs = await asyncio.to_thread(refl_chunk_ret.invoke, current_input_for_analysis)
+
+    url_context_str = cortex_text_interaction._format_docs(url_docs, "URL Context")
+    history_rag_str = cortex_text_interaction._format_docs(session_docs + reflection_docs, "History/Reflection RAG")
+    # ... (Other context gathering like direct history, logs, etc.)
+    direct_hist_interactions = await asyncio.to_thread(get_global_recent_interactions, db_session, limit=5)
+    recent_direct_history_str = cortex_text_interaction._format_direct_history(direct_hist_interactions)
+
+    # 2.2: Perform Routing to find the best specialist model (at ELP0)
+    logger.debug(f"{log_prefix}: Routing to specialist model at ELP0...")
+    # Build the full payload the router expects
+    router_payload = {
+        "input": current_input_for_analysis,
+        "recent_direct_history": recent_direct_history_str,
+        "context": url_context_str,
+        "history_rag": history_rag_str,
+        "file_index_context": "N/A for this endpoint",  # Or implement if needed
+        "log_context": "N/A for this endpoint",
+        "emotion_analysis": "N/A for this endpoint",
+        "pending_tot_result": "N/A for this endpoint",
+        "imagined_image_vlm_description": "N/A for this endpoint"
+    }
+
+    role, query, reason = await cortex_text_interaction._route_to_specialist(
+        db_session, session_id, current_input_for_analysis, router_payload
+    )
+
+    # 2.3: Call the chosen Specialist Model and the Corrector (at ELP0)
+    logger.debug(f"{log_prefix}: Generating draft response with '{role}' model at ELP0...")
+    specialist_model = cortex_text_interaction.provider.get_model(role)
+    if not specialist_model:
+        raise ValueError(f"Specialist model '{role}' not found after routing.")
+
+    specialist_payload = router_payload.copy()
+    specialist_payload["input"] = query  # Use the (potentially refined) query from the router
+    specialist_chain = (cortex_text_interaction.text_prompt_template | specialist_model | StrOutputParser())
+    timing_data_specialist = {"session_id": session_id, "mode": f"mesh_chat_specialist_{role}"}
+
+    draft_response = await asyncio.to_thread(
+        cortex_text_interaction._call_llm_with_timing,
+        specialist_chain,
+        specialist_payload,
+        timing_data_specialist,
+        priority=ELP0  # <--- CRITICAL: Run specialist at low priority
+    )
+
+    logger.debug(f"{log_prefix}: Correcting draft response at ELP0...")
+    final_analyzed_text = await cortex_text_interaction._correct_response(
+        db_session, session_id, current_input_for_analysis, specialist_payload, draft_response
+    )
+
+    # Note: We are intentionally omitting the multi-chunk elaboration loop and ToT spawning
+    # for this "wait for result" path to ensure it completes in a reasonable timeframe.
+
+    logger.success(f"{log_prefix}: ELP0 Chat/VLM processing complete.")
+
+    # --- Step 3: Return the Final, Unsanitized Text ---
+    return final_analyzed_text
+
+
+async def _process_mesh_tts_request_and_get_result(
+        request_data: dict,
+        request_id: str
+) -> Tuple[bytes, str]:
+    """
+    Handles the full ELP0 Text-to-Speech pipeline for a mesh request and returns the
+    final audio bytes and its MIME type.
+
+    This function is designed to be called and awaited by the main mesh processor route.
+    All worker calls within this function are executed with ELP0 priority.
+    """
+    log_prefix = f"MESH_TTS_PROCESSOR|{request_id}"
+    logger.info(f"{log_prefix}: Starting ELP0 TTS processing.")
+
+    # --- Step 1: Parse and Validate Input ---
+    # This logic is copied and adapted from the main `handle_openai_tts` handler.
+    input_text = request_data.get("input")
+    model_requested = request_data.get("model")  # Logged for consistency, but not used.
+    voice_requested = request_data.get("voice")
+    response_format_requested = request_data.get("response_format", "mp3").lower()
+
+    logger.debug(
+        f"{log_prefix}: TTS Request Parsed - Input: '{str(input_text)[:50]}...', "
+        f"Voice: {voice_requested}, Format: {response_format_requested}"
+    )
+
+    if not input_text or not isinstance(input_text, str):
+        raise ValueError("'input' field is required and must be a non-empty string for TTS.")
+    if not voice_requested or not isinstance(voice_requested, str):
+        raise ValueError("'voice' field (MeloTTS speaker ID, e.g., EN-US) is required for TTS.")
+
+    # --- Step 2: Prepare the Audio Worker Command ---
+    # Determine the language for the MeloTTS model from the voice ID.
+    melo_language = "EN"  # Default to English
+    try:
+        lang_part = voice_requested.split('-')[0].upper()
+        supported_melo_langs = ["EN", "ZH", "JP", "ES", "FR", "KR", "DE"]
+        if lang_part in supported_melo_langs:
+            melo_language = lang_part
+    except Exception:
+        logger.warning(f"{log_prefix}: Could not infer language from voice '{voice_requested}'. Defaulting to EN.")
+
+    # Construct the command to execute the worker script.
+    audio_worker_script_path = os.path.join(SCRIPT_DIR, "audio_worker.py")
+    if not os.path.exists(audio_worker_script_path):
+        raise RuntimeError(f"Audio worker script is missing at {audio_worker_script_path}")
+
+    temp_audio_dir = os.path.join(SCRIPT_DIR, "temp_audio_worker_files")
+    # No need to `await` this makedirs call as the main handler already did it,
+    # but it's safe to include for robustness.
+    os.makedirs(temp_audio_dir, exist_ok=True)
+
+    worker_command = [
+        APP_PYTHON_EXECUTABLE, audio_worker_script_path,
+        "--task-type", "tts",
+        "--model-lang", melo_language,
+        "--device", "auto",
+        "--model-dir", WHISPER_MODEL_DIR,
+        "--temp-dir", temp_audio_dir
+    ]
+    worker_request_data = {
+        "input": input_text,
+        "voice": voice_requested,
+        "response_format": response_format_requested,
+        "request_id": request_id
+    }
+
+    # --- Step 3: Execute the Worker with ELP0 Priority and Wait for the Result ---
+    logger.info(f"{log_prefix}: Executing audio worker with ELP0 priority and waiting for completion...")
+
+    # This `await` call will hold the connection open while the audio is generated.
+    # The task itself runs at low priority and can be interrupted by ELP1 tasks.
+    parsed_response_from_worker, error_string_from_worker = await asyncio.to_thread(
+        _execute_audio_worker_with_priority,
+        worker_command=worker_command,
+        request_data=worker_request_data,
+        priority=ELP0,  # <--- CRITICAL: Run TTS at low priority
+        worker_cwd=SCRIPT_DIR,
+        timeout=TTS_WORKER_TIMEOUT
+    )
+
+    # --- Step 4: Process the Worker's Response ---
+    if error_string_from_worker:
+        # If the execution helper returned an error string, raise it.
+        raise RuntimeError(f"Audio generation failed: {error_string_from_worker}")
+
+    elif parsed_response_from_worker and "result" in parsed_response_from_worker and "audio_base64" in \
+            parsed_response_from_worker["result"]:
+        # If the execution was successful, extract the audio data.
+        audio_info = parsed_response_from_worker["result"]
+        audio_b64_data = audio_info["audio_base64"]
+        actual_audio_format = audio_info.get("format", "mp3")
+        response_mime_type = audio_info.get("mime_type", f"audio/{actual_audio_format}")
+
+        logger.success(
+            f"{log_prefix}: Audio successfully generated. Format: {actual_audio_format}, Length (b64): {len(audio_b64_data)}"
+        )
+
+        # Decode the base64 string into raw bytes.
+        audio_bytes = base64.b64decode(audio_b64_data)
+
+        # --- Step 5: Return the Final Audio Data ---
+        return (audio_bytes, response_mime_type)
+    else:
+        # Handle cases where the worker exited cleanly but returned an invalid JSON structure.
+        raise RuntimeError(f"Audio worker returned an invalid or incomplete response: {parsed_response_from_worker}")
+
+
+async def _process_mesh_image_gen_request_and_get_result(
+        request_data: dict,
+        db_session: Session,
+        session_id: str,
+        request_id: str
+) -> List[Dict[str, str]]:
+    """
+    Handles the full ELP0 Image Generation pipeline for a mesh request and returns
+    the final image data list.
+
+    This function is designed to be called and awaited by the main mesh processor route.
+    All AI/worker calls within this function are executed with ELP0 priority.
+    """
+    log_prefix = f"MESH_IMAGE_PROCESSOR|{request_id}"
+    logger.info(f"{log_prefix}: Starting ELP0 Image Generation processing for session {session_id}.")
+
+    # --- Step 1: Parse and Validate Input ---
+    # This logic is copied and adapted from the main `handle_openai_image_generations` handler.
+    prompt_from_user = request_data.get("prompt")
+    n_images = int(request_data.get("n", 1))  # Default to 1 image for mesh requests
+
+    if not prompt_from_user or not isinstance(prompt_from_user, str):
+        raise ValueError("'prompt' field is required and must be a non-empty string for image generation.")
+
+    if not cortex_text_interaction:
+        raise RuntimeError("Critical: cortex_text_interaction instance not available.")
+    cortex_text_interaction.current_session_id = session_id
+
+    # --- Step 2: Refine User Prompt using RAG Context at ELP0 ---
+    logger.info(f"{log_prefix}: Refining user prompt with RAG context at ELP0 priority...")
+
+    # Get RAG context at low priority
+    wrapped_rag_result = await asyncio.to_thread(
+        cortex_text_interaction._get_rag_retriever_thread_wrapper,
+        db_session,
+        prompt_from_user,
+        ELP0  # <--- CRITICAL: Run RAG at low priority
+    )
+    if wrapped_rag_result.get("status") != "success":
+        raise RuntimeError(f"RAG for image prompt refinement failed: {wrapped_rag_result.get('error_message')}")
+
+    _, session_hist_retriever, _, _ = wrapped_rag_result.get("data", (None, None, None, None))
+
+    retrieved_history_docs = []
+    if session_hist_retriever:
+        retrieved_history_docs = await asyncio.to_thread(session_hist_retriever.invoke, prompt_from_user)
+
+    history_rag_str = cortex_text_interaction._format_docs(retrieved_history_docs, source_type="History RAG")
+
+    # Get direct history for additional context
+    direct_hist_interactions_list = await asyncio.to_thread(get_global_recent_interactions, db_session, limit=3)
+    recent_direct_history_str = cortex_text_interaction._format_direct_history(direct_hist_interactions_list)
+
+    # Call the prompt refiner LLM at low priority
+    refined_prompt = await cortex_text_interaction._refine_direct_image_prompt_async(
+        db=db_session,
+        session_id=session_id,
+        user_image_request=prompt_from_user,
+        history_rag_str=history_rag_str,
+        recent_direct_history_str=recent_direct_history_str,
+        priority=ELP0  # <--- CRITICAL: Run prompt refinement at low priority
+    )
+
+    if not refined_prompt:
+        logger.warning(f"{log_prefix}: Prompt refinement failed. Using original user prompt.")
+        refined_prompt = prompt_from_user
+    else:
+        logger.info(f"{log_prefix}: Using refined prompt for generation: '{refined_prompt[:100]}...'")
+
+    # --- Step 3: Generate Image(s) with ELP0 Priority and Wait for the Result ---
+    logger.info(f"{log_prefix}: Requesting {n_images} image(s) from CortexEngine at ELP0 priority...")
+
+    all_generated_image_data = []
+    for i in range(n_images):
+        logger.debug(f"{log_prefix}: Generating image {i + 1}/{n_images}...")
+
+        # This `await` call will hold the connection open while the image is generated.
+        # The task itself runs at low priority.
+        list_of_one_image_dict, image_gen_err = await cortex_backbone_provider.generate_image_async(
+            prompt=refined_prompt,
+            priority=ELP0  # <--- CRITICAL: Run image generation at low priority
+        )
+
+        if image_gen_err:
+            raise RuntimeError(f"Image generation failed for attempt {i + 1}: {image_gen_err}")
+        elif list_of_one_image_dict and list_of_one_image_dict[0]:
+            all_generated_image_data.append(list_of_one_image_dict[0])
+        else:
+            raise RuntimeError(f"Image generation attempt {i + 1} returned no data and no error.")
+
+    if not all_generated_image_data:
+        raise RuntimeError("Image generation pipeline failed to produce any valid image data.")
+
+    logger.success(f"{log_prefix}: Successfully generated {len(all_generated_image_data)} image(s).")
+
+    # --- Step 4: Format and Return the Final Image Data ---
+    # The expected format is a list of dictionaries, e.g., [{"b64_json": "..."}]
+    # We will filter to ensure only the required format is returned.
+    response_data_list = []
+    for img_data in all_generated_image_data:
+        if "b64_json" in img_data:
+            response_data_list.append({"b64_json": img_data["b64_json"]})
+
+    return response_data_list
+
+#ASR help all run in ELP0 for mesh network
+
+async def _log_sanitized_asr_interaction(
+        raw_transcription: str,
+        analyzed_response: str,
+        session_id: str,
+        request_id: str
+):
+    """
+    FIRE-AND-FORGET HELPER for privacy.
+    Takes the raw/final data, sanitizes it, and saves it to the DB.
+    Does not block or return anything to the user-facing request.
+    """
+    log_prefix = f"SANITIZE_LOG|{request_id}"
+    db: Optional[Session] = None
+    try:
+        db = SessionLocal()
+        if not db:
+            raise RuntimeError("DB session failed for sanitizer.")
+
+        logger.info(f"{log_prefix}: Sanitizing ASR interaction for session {session_id}.")
+        sanitizer_prompt = PROMPT_SANITIZE_FOR_LOGGING.format(
+            original_query_text="(Audio Transcription)",
+            original_response_text=f"RAW_TRANSCRIPT: {raw_transcription}\n\nFINAL_ANALYSIS: {analyzed_response}"
+        )
+        sanitization_session_id = f"sanitize_{session_id}"
+
+        # Use a `direct_generate` call that DOES NOT SAVE to get the sanitized text.
+        # This requires a new helper or a modification to direct_generate.
+        # For now, we'll assume a conceptual `generate_text_without_saving` method.
+        # Let's use `direct_generate` and just accept it creates a temporary log record.
+        sanitized_json_str = await cortex_text_interaction.direct_generate(db, sanitizer_prompt,
+                                                                           sanitization_session_id)
+
+        sanitized_query = "(Sanitized Audio Transcription)"
+        sanitized_response = analyzed_response  # Fallback
+        try:
+            sanitized_data = json.loads(sanitized_json_str)
+            sanitized_query = sanitized_data.get("sanitized_query", sanitized_query)
+            sanitized_response = sanitized_data.get("sanitized_response", sanitized_response)
+        except (json.JSONDecodeError, TypeError):
+            logger.warning(f"{log_prefix}: Failed to parse sanitizer JSON. Logging raw-like data.")
+
+        # Now, save the FINAL, SANITIZED record for long-term learning.
+        add_interaction(
+            db,
+            session_id=session_id,
+            mode="asr_mesh",
+            input_type="sanitized_audio_transcription",
+            user_input=sanitized_query,
+            llm_response=sanitized_response,
+            classification="sanitized_learning_record"
+        )
+        db.commit()
+        logger.success(f"{log_prefix}: Successfully logged sanitized ASR interaction for session {session_id}.")
+
+    except Exception as e:
+        logger.error(f"{log_prefix}: Failed to sanitize and log ASR interaction: {e}")
+    finally:
+        if db:
+            db.close()
+
+
+async def _process_mesh_asr_request_and_get_result(
+        audio_file_path: str,
+        language: str,
+        session_id: str,
+        request_id: str
+) -> str:
+    """
+    Handles the complete, sequential, ELP0 ASR pipeline for a user.
+    1. Transcribes audio using raw data.
+    2. Performs deep analysis using raw data.
+    3. Returns the RAW, unsanitized final result to the user.
+    4. Spawns a separate, fire-and-forget task to sanitize and log the interaction for learning.
+    """
+    log_prefix = f"MESH_ASR_FOR_USER|{request_id}"
+    logger.info(f"{log_prefix}: Starting user-facing ELP0 ASR pipeline for file: {audio_file_path}")
+
+    db: Optional[Session] = None
+    raw_transcription: str = ""
+
+    # This will hold the final, UNSANITIZED text to be returned to the user.
+    final_analyzed_text_for_user: str = "[ASR pipeline did not produce a final analysis]"
+
+    try:
+        db = SessionLocal()
+        if not db:
+            raise RuntimeError("Failed to create DB session for ASR pipeline.")
+
+        # --- STEP 1: Attempt Transcription with Low-Latency Model at ELP0 ---
+        logger.info(
+            f"{log_prefix}: Step 1 - Attempting Low-Latency ASR at ELP0 (Model: {WHISPER_LOW_LATENCY_MODEL_FILENAME})...")
+        asr_worker_script = os.path.join(SCRIPT_DIR, "audio_worker.py")
+        temp_audio_dir = os.path.dirname(audio_file_path)
+
+        ll_asr_cmd = [
+            APP_PYTHON_EXECUTABLE, asr_worker_script,
+            "--task-type", "asr",
+            "--model-dir", WHISPER_MODEL_DIR,
+            "--temp-dir", temp_audio_dir
+        ]
+        ll_asr_req_data = {
+            "input_audio_path": audio_file_path,
+            "whisper_model_name": WHISPER_LOW_LATENCY_MODEL_FILENAME,
+            "language": language,
+            "request_id": f"{request_id}-mesh-llasr"
+        }
+
+        # Execute the low-latency worker process
+        ll_asr_response, ll_asr_err = await asyncio.to_thread(
+            _execute_audio_worker_with_priority,
+            ll_asr_cmd,
+            ll_asr_req_data,
+            ELP0,
+            SCRIPT_DIR,
+            ASR_WORKER_TIMEOUT
+        )
+
+        # Handle potential critical errors from the worker call itself
+        if ll_asr_err:
+            logger.warning(
+                f"{log_prefix}: Low-latency ASR worker returned an error: {ll_asr_err}. Proceeding to high-quality model as a fallback.")
+            raw_transcription = ""  # Force failover by setting transcription to empty
+        else:
+            # Safely extract the text from the successful response
+            raw_transcription = (ll_asr_response.get("result", {}).get("text") or "").strip()
+
+        # --- STEP 2: Sanity Check and Conditional High-Quality Retry at ELP0 ---
+        is_transcription_valid = True
+        if not raw_transcription or len(
+                raw_transcription) < 3 or raw_transcription.lower() in WHISPER_GARBAGE_OUTPUTS:
+            is_transcription_valid = False
+
+        if is_transcription_valid:
+            logger.info(f"{log_prefix}: Step 2 - Low-latency ASR produced valid text. Using this result.")
+            asr_model_used = WHISPER_LOW_LATENCY_MODEL_FILENAME
+        else:
+            # This block is triggered if the low-latency model failed or produced garbage
+            logger.warning(
+                f"{log_prefix}: Step 2 - Low-latency ASR produced invalid text ('{raw_transcription}'). Retrying with High-Quality model at ELP0.")
+
+            # Prepare the command for the high-quality model
+            hq_asr_cmd = [
+                APP_PYTHON_EXECUTABLE, asr_worker_script,
+                "--task-type", "asr",
+                "--model-dir", WHISPER_MODEL_DIR,
+                "--temp-dir", temp_audio_dir
+            ]
+            hq_asr_req_data = {
+                "input_audio_path": audio_file_path,
+                "whisper_model_name": WHISPER_DEFAULT_MODEL_FILENAME,  # <-- Use the better model
+                "language": language,
+                "request_id": f"{request_id}-mesh-hqasr"
+            }
+
+            # Execute the high-quality worker process
+            hq_asr_response, hq_asr_err = await asyncio.to_thread(
+                _execute_audio_worker_with_priority,
+                hq_asr_cmd,
+                hq_asr_req_data,
+                ELP0,
+                SCRIPT_DIR,
+                ASR_WORKER_TIMEOUT + 120  # Give the slower model more time
+            )
+
+            if hq_asr_err:
+                logger.error(
+                    f"{log_prefix}: High-quality ASR failover also failed: {hq_asr_err}. Aborting pipeline.")
+                raw_transcription = ""  # Final result is an empty string, indicating total failure
+            else:
+                raw_transcription = (hq_asr_response.get("result", {}).get("text") or "").strip()
+                asr_model_used = WHISPER_DEFAULT_MODEL_FILENAME
+                # Final sanity check on the high-quality output
+                if not raw_transcription or len(
+                        raw_transcription) < 3 or raw_transcription.lower() in WHISPER_GARBAGE_OUTPUTS:
+                    logger.warning(
+                        f"{log_prefix}: High-quality ASR also produced invalid speech ('{raw_transcription}'). Final result will be empty.")
+                    raw_transcription = ""
+
+        # --- STEP 3: Deep Analysis using RAW transcript ---
+        if raw_transcription:
+            logger.info(f"{log_prefix}: Step 3 - Submitting RAW transcript for final analysis for the user.")
+
+            # This is the "direct_generate that do not do save" part.
+            # We are using the main `direct_generate` function. It WILL create a temporary
+            # log record for its own execution, but that's okay. The FINAL learning record
+            # will be the sanitized one.
+            final_analysis_prompt = f"Provide a detailed analysis and summary of the following transcribed text: \"{raw_transcription}\""
+
+            final_analyzed_text_for_user = await cortex_text_interaction.direct_generate(
+                db,
+                final_analysis_prompt,
+                session_id,
+            )
+
+            logger.success(f"{log_prefix}: Deep analysis for user is complete.")
+        else:
+            final_analyzed_text_for_user = "[Transcription failed or audio was silent after processing.]"
+
+    except Exception as e:
+        logger.exception(f"{log_prefix}: A critical error occurred in the user-facing ASR pipeline:")
+        final_analyzed_text_for_user = f"[Error in ASR Pipeline: {type(e).__name__}]"
+
+    finally:
+        # --- STEP 4: Spawn the Fire-and-Forget Privacy Logging Task ---
+        # This happens REGARDLESS of success or failure, to log what happened.
+        logger.info(f"{log_prefix}: Spawning background task to sanitize and log the interaction.")
+        asyncio.create_task(
+            _log_sanitized_asr_interaction(
+                raw_transcription=raw_transcription,
+                analyzed_response=final_analyzed_text_for_user,
+                session_id=session_id,
+                request_id=request_id
+            )
+        )
+
+        # --- STEP 5: Cleanup ---
+        # Cleanup can also be moved into the background logging task
+        if db:
+            db.close()
+        if audio_file_path and os.path.exists(audio_file_path):
+            try:
+                await asyncio.to_thread(os.remove, audio_file_path)
+                logger.info(f"{log_prefix}: Cleaned up temporary audio file.")
+            except Exception as e_del:
+                logger.warning(f"{log_prefix}: Failed to clean up temp audio file: {e_del}")
+
+    # --- STEP 6: Return the RAW, UNSANITIZED result to the user ---
+    return final_analyzed_text_for_user
+
+async def _process_mesh_chat_pipeline_elp0(
+    messages: list,
+    session_id: str,
+    request_id: str
+):
+    """
+    Handles the complete, sequential, two-stage ELP0 Chat/VLM pipeline.
+    1. Runs an initial `background_generate` for a comprehensive first-pass answer.
+    2. Spawns a second `background_generate` for "reinterpretation" or deep reflection on the first pass.
+    """
+    # All the sequential logic will go inside this function.
+    pass
+
 # ---- Helper function method----
 def _async_compatible_openai_streamer(
         full_response_text: str,
@@ -7424,6 +8130,210 @@ async def handle_interaction():
 
     return resp
 
+
+@app.route("/meshCommunityServeProcessor", methods=["POST"])
+async def handle_mesh_community_serve_processor():
+
+    """
+    An ELP0-ONLY asynchronous meta-endpoint for the ZephyMesh community.
+    It accepts various task types (ASR, Chat, VLM, TTS, Image Gen), queues them
+    for low-priority background processing, and immediately returns an "Accepted"
+    response to the client without waiting for the task to complete.
+    """
+    request_id = f"req-mesh-elp0-{uuid.uuid4()}"
+    logger.info(f"🚀 ZephyMesh ELP0 Processor Request ID: {request_id}")
+    db: Optional[Session] = None
+    resp_obj: Optional[Response] = None
+    final_status_code: int = 500
+    start_req_time = time.monotonic()
+    # This session_id is for the new background task we are creating.
+    session_id_for_task: str = f"mesh_task_{request_id}"
+
+    try:
+        # --- Step 1: Manual DB Session (used only for initial validation if needed) ---
+        db = SessionLocal()
+        if not db:
+            raise RuntimeError("Failed to create a database session for this request.")
+
+        task_type_for_response = "unknown"
+
+        # ==============================================================================
+        # === ROUTE 1: AUDIO TRANSCRIPTION (MULTIPART/FORM-DATA) =======================
+        # ==============================================================================
+        if request.content_type and request.content_type.startswith('multipart/form-data'):
+            logger.info(f"{request_id}: Routing to ASR handler (will wait for ELP0 result).")
+
+            # --- Step 1.1: Validate and Extract Request Data ---
+            audio_file_storage = request.files.get('file')
+            if not audio_file_storage or not audio_file_storage.filename:
+                raise ValueError("A 'file' part with a filename is required for audio transcription.")
+
+            # Extract parameters from the form part of the request.
+            language = request.form.get('language', 'auto')
+
+            # --- Step 1.2: Securely Save the Uploaded Audio File ---
+            # Use `secure_filename` to prevent directory traversal attacks.
+            uploaded_filename = secure_filename(audio_file_storage.filename)
+
+            # Create a dedicated, temporary directory if it doesn't exist.
+            temp_audio_dir = os.path.join(SCRIPT_DIR, "temp_audio_worker_files")
+            await asyncio.to_thread(os.makedirs, temp_audio_dir, exist_ok=True)
+
+            _, file_extension = os.path.splitext(uploaded_filename)
+
+            # Create a unique temporary file path to avoid name collisions.
+            temp_fd, temp_input_audio_path = tempfile.mkstemp(
+                prefix=f"mesh_asr_{request_id}_",
+                suffix=file_extension,
+                dir=temp_audio_dir
+            )
+            os.close(temp_fd)  # We only need the path, `save` will handle the writing.
+
+            # Save the file to disk. This is a blocking I/O call, so we run it in a thread.
+            await asyncio.to_thread(audio_file_storage.save, temp_input_audio_path)
+            logger.info(f"{request_id}: Mesh ASR audio saved to temporary path: {temp_input_audio_path}")
+
+            # --- Step 1.3: Delegate to the Main Pipeline and Wait for the Result ---
+            # This `await` will hold the connection open until the entire ASR pipeline is complete.
+            final_result_text = await _process_mesh_asr_request_and_get_result(
+                audio_file_path=temp_input_audio_path,
+                language=language,
+                session_id=session_id_for_task,
+                request_id=request_id
+            )
+
+            # --- Step 1.4: Format and Return the Final Result to the Client ---
+            # We format the text result into the standard OpenAI chat response structure.
+            resp_obj = jsonify(_format_openai_chat_response(final_result_text))
+            final_status_code = 200
+            return resp_obj
+
+        # ==============================================================================
+        # === ROUTE 2: JSON-BASED SERVICES (CHAT, VLM, TTS, IMAGE GEN) =================
+        # ==============================================================================
+        elif request.content_type and request.content_type.startswith('application/json'):
+            # This block handles all non-file-upload requests.
+            request_data = request.get_json()
+            if not request_data:
+                raise ValueError("Empty JSON payload.")
+
+            session_id_for_task = request_data.get("session_id", session_id_for_task)
+
+            # --- Sub-Router for JSON types ---
+
+            # --- ROUTE 2a: CHAT COMPLETIONS & VLM ---
+            if "messages" in request_data and isinstance(request_data.get("messages"), list):
+                has_image = "image_url" in str(request_data)
+                mode_for_log = "vlm_chat_mesh" if has_image else "chat_mesh"
+                logger.info(f"{request_id}: Routing to ELP0 {mode_for_log} handler (waits for result).")
+
+                # Delegate to the specific helper and wait for the raw result
+                final_result_text = await _process_mesh_chat_request_and_get_result(
+                    request_data=request_data,
+                    db_session=db,
+                    session_id=session_id_for_task,
+                    request_id=request_id
+                )
+
+                # Prepare the data for the decoupled privacy logging
+                # The original query is the last user message. The response is the final text.
+                original_query_for_log = request_data.get("messages", [{}])[-1]
+                final_response_for_log = final_result_text
+
+                # Format the final, raw response for the user
+                resp_obj = jsonify(_format_openai_chat_response(final_result_text))
+                final_status_code = 200
+
+            # --- ROUTE 2b: TEXT-TO-SPEECH ---
+            elif "input" in request_data and "voice" in request_data:
+                mode_for_log = "tts_mesh"
+                logger.info(f"{request_id}: Routing to ELP0 Text-to-Speech handler (waits for result).")
+
+                # Delegate to the specific helper and wait for the raw audio bytes
+                audio_bytes, mime_type = await _process_mesh_tts_request_and_get_result(
+                    request_data=request_data,
+                    request_id=request_id
+                )
+
+                # Prepare data for privacy logging
+                original_query_for_log = request_data.get("input")
+                final_response_for_log = f"[Audio generated successfully in {mime_type} format]"
+
+                # Format the final, raw response for the user
+                resp_obj = Response(audio_bytes, mimetype=mime_type)
+                final_status_code = 200
+
+            # --- ROUTE 2c: IMAGE GENERATION ---
+            elif "prompt" in request_data:
+                mode_for_log = "image_gen_mesh"
+                logger.info(f"{request_id}: Routing to ELP0 Image Generation handler (waits for result).")
+
+                # Delegate to the specific helper and wait for the raw image data
+                image_data_list = await _process_mesh_image_gen_request_and_get_result(
+                    request_data=request_data,
+                    db_session=db,
+                    session_id=session_id_for_task,
+                    request_id=request_id
+                )
+
+                # Prepare data for privacy logging
+                original_query_for_log = request_data.get("prompt")
+                final_response_for_log = f"[{len(image_data_list)} image(s) generated successfully]"
+
+                # Format the final, raw response for the user
+                response_body = {"created": int(time.time()), "data": image_data_list}
+                resp_obj = jsonify(response_body)
+                final_status_code = 200
+            else:
+                raise ValueError("JSON payload does not match any supported service format (chat, tts, image_gen).")
+
+            if final_status_code == 200:
+                logger.info(f"{request_id}: Spawning background task for sanitized logging (Mode: {mode_for_log}).")
+                asyncio.create_task(
+                    _log_sanitized_interaction(
+                        original_query=original_query_for_log,
+                        final_response=final_response_for_log,
+                        session_id=session_id_for_task,
+                        mode=mode_for_log
+                    )
+                )
+
+        # --- Step 3: Return the "Task Acknowledged" Response ---
+        # If we reach here, it means one of the routes was matched and its task was spawned.
+        # We now immediately return a success response to the client.
+        response_body = {
+            "status": "processing_queued",
+            "task_type": task_type_for_response,
+            "session_id": session_id_for_task,
+            "message": "Your request has been successfully queued for low-priority (ELP0) background processing."
+        }
+        resp_obj = jsonify(response_body)
+        final_status_code = 202  # HTTP 202 Accepted is the perfect status code for this
+
+        return resp_obj
+
+    except (ValueError, RuntimeError) as e:
+        logger.warning(f"{request_id}: Invalid Mesh request: {e}")
+        final_status_code = 400
+        error_body = {"error": {"code": "bad_request_or_unsupported_format", "message": str(e),
+                                "supported_formats": [
+                                    "OpenAI Chat/VLM: application/json with 'messages' key.",
+                                    "OpenAI TTS: application/json with 'input' and 'voice' keys.",
+                                    "OpenAI Image Gen: application/json with 'prompt' key.",
+                                    "OpenAI ASR: multipart/form-data with a 'file' field."
+                                ]}}
+        return jsonify(error_body), final_status_code
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 Unhandled exception in Mesh processor:")
+        final_status_code = 500
+        resp_data, _ = _create_openai_error_response(f"Internal server error: {type(e).__name__}", status_code=500)
+        return jsonify(resp_data), final_status_code
+    finally:
+        if db:
+            db.close()
+        duration_req = (time.monotonic() - start_req_time) * 1000
+        logger.info(
+            f"🏁 ZephyMesh ELP0 Processor Request {request_id} handled in {duration_req:.2f} ms. Final Status: {final_status_code}")
 
 # === NEW: Zephy Cortex Configuration API ===
 @app.route("/ZephyCortexConfig", methods=["GET", "POST"])
