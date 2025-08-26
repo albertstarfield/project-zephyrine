@@ -125,6 +125,7 @@ procedure Watchdog_Thread2 is
       procedure Write_And_Verify_Chunk
         (Memory_Block : System.Address; Size : size_t; Pattern : Byte; Chunk_Success : out Boolean)
       is
+         -- (This inner procedure is unchanged)
          type Byte_Ptr is access all Byte;
          function To_Byte_Ptr is new Ada.Unchecked_Conversion(System.Address, Byte_Ptr);
          Current_Ptr : Byte_Ptr;
@@ -147,63 +148,90 @@ procedure Watchdog_Thread2 is
          Put_Line ("OK.");
       end Write_And_Verify_Chunk;
 
-      Flag_File_Name   : constant String := "_potential_incapable_machine";
-      Flag_File_Exists : Boolean := False;
+      -- NEW: Define constants for both flag file locations.
+      Flag_File_Name     : constant String := "_potential_incapable_machine.flag";
+      Engine_Subdir_Path : constant String := "systemCore/engineMain/";
+      Root_Flag_Path     : constant String := "./" & Flag_File_Name;
+      Engine_Flag_Path   : constant String := Engine_Subdir_Path & Flag_File_Name;
+      
+      Flag_File_Exists   : Boolean := False;
 
-      -- Check if the incapability flag file exists from a previous run.
-      procedure Check_For_Flag is
-         Flag_File : File_Type;
+      -- Helper function to check for a file's existence.
+      function File_Exists (Path : String) return Boolean is
+         File : File_Type;
       begin
-         -- Try to open the file for reading. If it succeeds, the file exists.
-         Open (File => Flag_File, Mode => In_File, Name => Flag_File_Name);
-         Flag_File_Exists := True;
-         Close (Flag_File);
-         Put_Line ("INFO: Diagnostic flag '" & Flag_File_Name & "' found from a previous run.");
+         Open (File => File, Mode => In_File, Name => Path);
+         Close (File);
+         return True;
       exception
-         when Name_Error => -- This is the expected exception if the file doesn't exist.
+         when Name_Error =>
+            return False;
+      end File_Exists;
+
+      -- Check for the flag in both locations.
+      procedure Check_For_Flag is
+      begin
+         Put_Line ("INFO: Checking for incapability flag in root and engine directories...");
+         if File_Exists(Root_Flag_Path) or else File_Exists(Engine_Flag_Path) then
+            Flag_File_Exists := True;
+            Put_Line ("INFO: Diagnostic flag found from a previous run.");
+         else
             Flag_File_Exists := False;
+         end if;
       end Check_For_Flag;
       
-      -- Determine memory test parameters based on whether the flag was found.
+      -- Helper procedure to write the flag file content.
+      procedure Write_Flag_Content (File_Handle : in out File_Type) is
+      begin
+         Put_Line (File_Handle, "The Ada watchdog's initial memory stress test failed.");
+         Put_Line (File_Handle, "This suggests the machine may not have enough free RAM to run the full application stack reliably.");
+      end Write_Flag_Content;
+
+      -- Create the incapability flag in both locations.
+      procedure Create_Incapability_Flag is
+         Flag_File : File_Type;
+      begin
+         if not Flag_File_Exists then
+            -- Create in root directory
+            begin
+               Create (File => Flag_File, Mode => Out_File, Name => Root_Flag_Path);
+               Write_Flag_Content (Flag_File);
+               Close (Flag_File);
+               Put_Line ("     >> Created diagnostic flag file: " & Root_Flag_Path);
+            exception
+               when others => Put_Line ("     >> WARNING: Could not create root diagnostic flag file.");
+            end;
+            
+            -- Create in engine subdirectory
+            begin
+               Create (File => Flag_File, Mode => Out_File, Name => Engine_Flag_Path);
+               Write_Flag_Content (Flag_File);
+               Close (Flag_File);
+               Put_Line ("     >> Created diagnostic flag file: " & Engine_Flag_Path);
+            exception
+               when others => Put_Line ("     >> WARNING: Could not create engine diagnostic flag file. (Does the directory exist?)");
+            end;
+         end if;
+      end Create_Incapability_Flag;
+      
+      -- (The rest of the procedure is mostly the same, just using the new constants)
       MB_In_Bytes      : constant := 1_048_576;
       Chunk_Size_Bytes : constant size_t := 128 * MB_In_Bytes;
-      
-      -- NEW: Dynamically set the target size
       Total_MB_Target  : size_t;
       Number_Of_Chunks : Natural;
-
       package Address_Vectors is new Ada.Containers.Vectors (Positive, System.Address);
       Allocated_Chunks : Address_Vectors.Vector;
-      
       New_Chunk_Addr   : System.Address;
       Chunk_Is_OK      : Boolean;
-      
-      procedure Create_Incapability_Flag is
-         Flag_File      : File_Type;
-      begin
-         -- Only create the flag if it doesn't already exist.
-         if not Flag_File_Exists then
-             Create (File => Flag_File, Mode => Out_File, Name => Flag_File_Name);
-             Put_Line (Flag_File, "The Ada watchdog's initial memory stress test failed.");
-             Put_Line (Flag_File, "This suggests the machine may not have enough free RAM to run the full application stack reliably.");
-             Close (Flag_File);
-             Put_Line ("     >> Created diagnostic flag file: " & Flag_File_Name);
-         end if;
-      exception
-         when others =>
-            Put_Line ("     >> WARNING: Could not create diagnostic flag file.");
-      end Create_Incapability_Flag;
 
    begin
-      Check_For_Flag; -- First, see if the flag file is present.
+      Check_For_Flag;
 
-      -- Set the test parameters based on the result of the flag check.
       if Flag_File_Exists then
          Total_MB_Target := 512;
       else
          Total_MB_Target := 6 * 1024; -- 6 GB
       end if;
-      
       Number_Of_Chunks := Natural(Total_MB_Target / 128);
 
       Put_Line ("--- PRE-FLIGHT: Starting " & size_t'Image(Total_MB_Target) & " MB Memory Integrity Test ---");
@@ -212,17 +240,11 @@ procedure Watchdog_Thread2 is
       else
          Put_Line ("(Performing full-system stress test.)");
       end if;
-      Put_Line ("This test verifies system stability. If it fails, the machine may not have");
-      Put_Line ("enough free RAM to run Project Zephyrine reliably.");
-      New_Line;
-      
+      -- (The main allocation loop is unchanged)
       Success := True;
-      
       for I in 1 .. Number_Of_Chunks loop
          Put ("  Pass " & Integer'Image(I) & "/" & Integer'Image(Number_Of_Chunks) & ": Allocating " & size_t'Image(Chunk_Size_Bytes / MB_In_Bytes) & " MB chunk... ");
-         
          New_Chunk_Addr := C_Bridge.Malloc (Chunk_Size_Bytes);
-         
          if New_Chunk_Addr = System.Null_Address then
             Put_Line ("FAILED.");
             Put_Line ("  -> CRITICAL: The operating system could not provide the requested memory.");
@@ -241,13 +263,11 @@ procedure Watchdog_Thread2 is
             end if;
          end if;
       end loop;
-      
       New_Line;
       Put_Line ("--- PRE-FLIGHT: Deallocating all test chunks... ---");
       for Ptr of Allocated_Chunks loop
          C_Bridge.Free (Ptr);
       end loop;
-      
       if Success then
          Put_Line ("--- PRE-FLIGHT: Memory Check Passed. System appears stable. ---");
       end if;
