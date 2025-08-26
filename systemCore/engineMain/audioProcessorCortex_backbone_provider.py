@@ -1,4 +1,4 @@
-# audio_thread_worker.py
+# audioProcessorCortex_backbone_provider.py
 import sys
 import os
 import json
@@ -699,7 +699,7 @@ def worker_loop(pipe_conn, worker_config):
 if __name__ == "__main__":
     # This script is intended to be launched by the orchestrator using multiprocessing.Process.
     # Direct execution will not have the necessary pipe_conn and worker_config.
-    log_thread_worker("CRITICAL", "This script (`audio_thread_worker.py`) is designed to be launched "
+    log_thread_worker("CRITICAL", "This script (`audioProcessorCortex_backbone_provider.py`) is designed to be launched "
                                   "as a child process by an orchestrator using Python's `multiprocessing` module. "
                                   "It expects a pipe connection and a configuration dictionary to be passed "
                                   "programmatically when `worker_loop` is called as the target of a new process. "
