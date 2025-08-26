@@ -1,5 +1,6 @@
 ## 📃 Full laundry list of Features & to-do
 
+
 - [x] Operates locally on your computer, requiring an internet connection solely for web access.
 - [x] Can function exclusively on CPU architectures, such as x86_64 and arm64/aarch64.
 - [x] Provides compatibility with MacOS, and Linux operating systems.

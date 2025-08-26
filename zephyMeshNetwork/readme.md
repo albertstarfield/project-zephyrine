@@ -10,6 +10,7 @@ ZephyMesh is the decentralized peer-to-peer (P2P) backbone for Project Zephyrine
 3.  **Resource Aggregation:** The mesh should aggregate the resources of all participating nodes (storage, compute) and make them available to the network as a whole.
 4.  **Security First:** Communication is encrypted, and nodes cannot access arbitrary files on a peer's system. All shareable assets are explicitly declared in a verifiable manifest.
 
+
 ## Architecture Overview
 
 ZephyMesh is built using **[libp2p](https://libp2p.io/)**, the modular networking stack that powers IPFS and other next-generation decentralized systems. Each instance of Project Zephyrine runs an embedded ZephyMesh node, which performs several key functions:

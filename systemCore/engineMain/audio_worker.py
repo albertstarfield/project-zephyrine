@@ -1326,8 +1326,8 @@ def start_persistent_worker(task_type: str, worker_config: Dict[str, Any]) -> Tu
     Optional[multiprocessing.Process], Optional[multiprocessing.connection.Connection]]:
     """Starts a persistent worker process."""
     try:
-        # Ensure audio_thread_worker.py and its worker_loop are importable
-        from audio_thread_worker import worker_loop as persistent_worker_main_loop_func
+        # Ensure audioProcessorCortex_backbone_provider.py and its worker_loop are importable
+        from audioProcessorCortex_backbone_provider import worker_loop as persistent_worker_main_loop_func
     except ImportError as e:
         log_worker("CRITICAL",
                    f"Could not import 'worker_loop' from audio_thread_worker.py: {e}. Ensure it's in the Python path and correctly defined.")
