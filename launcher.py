@@ -163,9 +163,9 @@ MODELS_TO_DOWNLOAD = [
         "description": "LatexMind Model (LaTeX/VLM)"
     },
     {
-        "filename": "mxbai-embed-large-v1.gguf",
-        "url": "https://huggingface.co/ChristianAzinn/mxbai-embed-large-v1-gguf/resolve/main/mxbai-embed-large-v1_fp16.gguf?download=true",
-        "description": "MXBAI Embeddings Model"
+        "filename": "qwen3EmbedCore.gguf",
+        "url": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf?download=true",
+        "description": "Qwen 3 Embedding Model"
     },
     {
         "filename": "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf",
@@ -178,9 +178,9 @@ MODELS_TO_DOWNLOAD = [
         "description": "Qwen2 Math Model"
     },
     {
-        "filename": "Qwen2.5-DirectLowLatency.gguf",
-        "url": "https://huggingface.co/Qwen/Qwen2.5-0.5B-Instruct-GGUF/resolve/main/qwen2.5-0.5b-instruct-q3_k_m.gguf?download=true",
-        "description": "Qwen2.5 Instruct Direct Mode (Fast General)"
+        "filename": "Qwen3LowLatency.gguf",
+        "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-UD-IQ1_M.gguf?download=true",
+        "description": "Qwen 3 1-bit Direct Mode (Fast Augmented General)"
     },
     {
         "filename": "qwen2.5-coder-3b-instruct-q5_K_M.gguf",

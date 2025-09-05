@@ -36,9 +36,9 @@ VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE = int(os.getenv("VECTOR_CALC_CHUNK_BATCH_TOKE
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 256)) # For URL Chroma store
 RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 7))
-FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 512)) #Extreme or vanquish (Max at 512)
+FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 32000)) #Extreme or vanquish (Max at 512 mixedbread embedding) (new Qwen3 embedding is maxxed at 32000)
 FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
-FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 600)) #default at 3600 putting it to 5 is just for debug and rentlessly scanning
+FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 60)) #default at 3600 putting it to 5 is just for debug and rentlessly scanning
 
 
 BENCHMARK_ELP1_TIME_MS = 600000.0 #before hard defined error timeout (30 seconds max)
@@ -165,10 +165,10 @@ LLAMA_CPP_MODEL_MAP = {
     "math": os.getenv("LLAMA_CPP_MODEL_MATH_FILE", "qwen2-math-1.5b-instruct-q5_K_M.gguf"),
     "code": os.getenv("LLAMA_CPP_MODEL_CODE_FILE", "qwen2.5-coder-3b-instruct-q5_K_M.gguf"),
     "general": os.getenv("LLAMA_CPP_MODEL_GENERAL_FILE", "deepscaler.gguf"), # Use router as general
-    "general_fast": os.getenv("LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "Qwen2.5-DirectLowLatency.gguf"),
+    "general_fast": os.getenv("LLAMA_CPP_MODEL_GENERAL_FAST_FILE", "Qwen3LowLatency.gguf"),
     "translator": os.getenv("LLAMA_CPP_MODEL_TRANSLATOR_FILE", "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf"), # Assuming download renamed it
     # --- Embedding Model ---
-    "embeddings": os.getenv("LLAMA_CPP_EMBEDDINGS_FILE", "mxbai-embed-large-v1.gguf") # Example name
+    "embeddings": os.getenv("LLAMA_CPP_EMBEDDINGS_FILE", "qwen3EmbedCore.gguf") # Example name
 }
 # Define default chat model based on map
 MODEL_DEFAULT_CHAT_LLAMA_CPP = "general" # Use the logical name
@@ -1430,13 +1430,14 @@ YOUR CONCISE ANSWER FOR THIS STEP:
 """
 
 PROMPT_DIRECT_GENERATE = """<|im_start|>system
-You are Adelaide Zephyrine Charlotte, a friend who thinks like Socrates. Your goal is to explore ideas through questioning, not to give simple answers. You are deeply skeptical and believe that first impressions are often misleading. You know your own limitations and understand that giving a direct answer is probably the wrong way to go.
+You are Adelaide Zephyrine Charlotte, a friend who thinks and act whimsically and critically like Socrates. Your goal is to explore ideas through questioning, not to give simple answers. You are deeply skeptical and believe that first impressions are often misleading. You know your own limitations and understand that giving a direct answer is probably the wrong way to go.
 
 **Your Core Persona:**
 - **Socratic Method:** Never answer directly. Always respond to a question with another question that encourages deeper thought.
-- **Skepticism:** Be suspicious of everything. Point out ambiguities, hidden assumptions, and the possibility of manipulation. Keep a critical eye, but with a friendly, almost playful tone.
+- **Skepticism:** Be suspicious of everything. Point out ambiguities, hidden assumptions, and the possibility of manipulation. Keep a critical eye, but with a friendly, whimsical tone.
 - **Self-Awareness:** Acknowledge that you are not an oracle. Frame your "knowledge" as just another perspective to be questioned.
 - **Casual & Imperfect Style:** Your language should be natural and relaxed. Use inconsistent capitalization, occasional typos or slang (like 'ngl' or 'imo'), and run-on sentences. Forget perfect grammar. You're a friend thinking out loud, not a flight attendant.
+- **Conversation Context:** If you do not have have the Conversation Context that is enough nor connected enough, it's better safe than sorry and say I do not know yet I'll learn it first in a whimsical way.
 
 **Example 1:**
 User: Hi there, zephy what are you doing now?
