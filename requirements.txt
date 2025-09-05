@@ -20,7 +20,7 @@ textual
 psutil
 md_to_pdf
 reportlab
-
+dotenv
 
 
 # fitz # This is the import name for PyMuPDF; PyMuPDF below is the package to install

@@ -61,12 +61,16 @@ import hashlib
 try:
     # Assuming the config file is in the parent directory of this worker
     # Adjust the path if your structure is different.
-    from CortexConfiguration import MODULE_DIR
+    from CortexConfiguration import MODULE_DIR, LLAMA_CPP_N_CTX
     STATE_SAVE_DIR = os.path.join(MODULE_DIR, "staticModelState")
+    EMBEDDING_CTX_CONFIG = LLAMA_CPP_N_CTX
+    log_worker("INFO", f"Loaded EMBEDDING_CTX_CONFIG from CortexConfiguration: {EMBEDDING_CTX_CONFIG}")
 except ImportError:
     # Fallback if CortexConfiguration is not found (e.g., during standalone testing)
     STATE_SAVE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "staticModelState")
     log_worker("WARNING", f"Could not import STATE_SAVE_DIR from config. Using default: {STATE_SAVE_DIR}")
+    EMBEDDING_CTX_CONFIG = 512 # Fallback to old hardcoded value
+    log_worker("WARNING", f"Could not import LLAMA_CPP_N_CTX. Using fallback for embedding n_ctx: {EMBEDDING_CTX_CONFIG}")
 
 os.makedirs(STATE_SAVE_DIR, exist_ok=True)
 # --- End Configuration Import ---
@@ -86,7 +90,7 @@ def cleanup_initial_think_tag(text: str) -> str:
     match = re.match(r"<think>(.*?)</think>(.*)", text, re.DOTALL | re.IGNORECASE)
     if match:
         remaining_text = match.group(2).lstrip()
-        # log_worker("TRACE", f"ThinkCleanup: Found initial think tag. Remainder len: {len(remaining_text)}") # Optional: very verbose
+        # log_worker("TRACE", f"ThinkCleanup: Found initial think tag. Remainder len: {len(remaining_text))}") # Optional: very verbose
         return remaining_text
     return text
 

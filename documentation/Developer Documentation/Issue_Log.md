@@ -74,3 +74,14 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Verification of Manifest Generation for ZM-BUG-004.
     -   **Status:** `Closed`
     -   **Description:** After applying the fix for `ZM-BUG-004`, relaunch the application and inspect the ZephyMesh node's startup logs. Verify that asset directory scanning is successful, warning messages about missing paths are gone, and the `huggingface_cache` is included in the scan.
+
+---
+
+## **CORE ENGINE (CORE)**
+
+### Features
+
+-   **ID:** `CORE-FEAT-001`
+    -   **Title:** Upgrade core embedding model from mixedbread to Qwen3.
+    -   **Status:** `Resolved`
+    -   **Description:** To improve embedding quality and performance, the core embedding model was upgraded from `mxbai-embed-large-v1` to `Qwen/Qwen3-Embedding-0.6B-GGUF`. This required updating model download links in `launcher.py`, configuration in `CortexConfiguration.py`, and fixing the hardcoded embedding context size in `llama_worker.py` to support the new model's 32k context window. Additional changes were made to `database.py` and `file_indexer.py` to handle the new embedding format, and `requirements.txt` was updated with new dependencies.

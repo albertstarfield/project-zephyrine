@@ -127,7 +127,8 @@ fix(mesh): correct asset path resolution and expand manifest scope
 
 This commit resolves a critical path resolution bug in the ZephyMesh node and expands the asset manifest to include the Hugging Face cache, ensuring full P2P distribution capability.
 
-The Go node was being launched with an incorrect working directory, causing it to construct invalid paths when scanning for local assets. This has been corrected by setting the `cwd` to the project root.
+The Go node was being launched with 
+an incorrect working directory, causing it to construct invalid paths when scanning for local assets. This has been corrected by setting the `cwd` to the project root.
 
 This change was assisted by a GenAI model for boilerplate file scanning logic.
 
