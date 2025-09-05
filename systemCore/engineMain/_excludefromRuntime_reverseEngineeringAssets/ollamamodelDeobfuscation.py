@@ -23,7 +23,7 @@ OLLAMA_TO_LLAMA_CPP_FILENAME: Dict[str, str] = {
     "qwen2.5-coder:3b-instruct-q5_K_M": "qwen2.5-coder--3b-instruct-q5_K_M.gguf",
     "qwen3:0.6b-q4_K_M": "qwen3--0.6b-q4_K_M.gguf",
     "hf.co/mradermacher/NanoTranslator-immersive_translate-0.5B-GGUF:Q4_K_M": "hf.co--mradermacher--NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf",
-    "mxbai-embed-large:latest": "mxbai-embed-large-v1.gguf",
+    "mxbai-embed-large:latest": "qwen3EmbedCore.gguf",
     "gemma3:1b-it-qat": "gemma3--1b-it-qat.gguf",
     "avil/UI-TARS:latest": "avil-ui-tars.gguf",
 }

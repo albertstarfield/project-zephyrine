@@ -259,12 +259,6 @@ class FileIndex(Base):
         Index('ix_file_index_name_status', 'file_name', 'index_status'),
         Index('ix_file_index_status_modified', 'index_status', 'last_modified_os'),
         Index('ix_file_index_path_hash', 'file_path', 'md5_hash'),
-        CheckConstraint(index_status.in_([
-            'pending', 'indexed_text', 'indexed_meta', 'skipped_size',
-            'skipped_type', 'error_read', 'error_permission', 'processing',
-            'error_embedding', 'error_hash', 'error_vlm', 'partial_vlm_error',
-            'error_conversion', 'pending_vlm', 'pending_conversion', 'success'
-        ]), name='ck_file_index_status')
     )
 
     def __repr__(self):

@@ -730,6 +730,10 @@ class FileIndexer:
             os.path.join(current_script_dir_for_project_paths, "build"),
         }
 
+
+        #Override to be null nothing escapes from the eyes and everything must be read for the knowledge (Only for debugging purposes)
+        #common_system_dirs_raw = {}
+
         absolute_skip_dirs_resolved = set()
         relative_skip_dir_names_lower = set()
 
@@ -764,6 +768,7 @@ class FileIndexer:
 
         try:
             for current_dir, dirnames, filenames in os.walk(root_path, topdown=True, onerror=None):
+                logger.debug(f"SCANNER_WALK_DEBUG: Entering directory: {current_dir}")
                 if self.stop_event.is_set():
                     logger.info(f"Phase 1 Scan interrupted by stop signal in {current_dir}")
                     break
@@ -1272,8 +1277,6 @@ class FileIndexer:
 
         except Exception as e_phase1:
             logger.error(f"{log_prefix}: Unhandled error in Phase 1 for {file_path}: {e_phase1}", exc_info=True)
-            if db_session.is_active:
-                db_session.rollback()
 
     def _cleanup_llm_output(self, text: str, replacement_char: str = ' ') -> str:
         """
