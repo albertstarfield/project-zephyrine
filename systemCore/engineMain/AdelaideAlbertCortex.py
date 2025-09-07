@@ -3606,8 +3606,13 @@ class CortexThoughts:
             logger.warning(
                 f"{log_prefix} Initial routing attempts failed. Trying LLM re-request to fix format. Last raw output: '{raw_llm_output_from_initial_loop[:200]}...'")
 
+            if not parsed_routing_json:
+            logger.warning(
+                f"{log_prefix} Initial routing attempts failed. Trying LLM re-request to fix format. Last raw output: '{raw_llm_output_from_initial_loop[:200]}...'")
+
             reformat_prompt_input = {
                 "faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop,
+                'chosen_model': "general",
                 "original_user_input_placeholder": user_input_for_routing  # For the fallback in the reformat prompt
             }
             reformat_chain = ChatPromptTemplate.from_template(
