@@ -18,7 +18,7 @@ try:
 except ImportError:
     LLAMA_CPP_AVAILABLE = False
     # This print will go to stderr, which cortex_backbone_provider.py reads for worker errors
-    print(json.dumps({"error": "llama-cpp-python not found in worker environment."}), flush=True)
+    print(json.dumps({"error": "llama-cpp-python not found in worker environment."}))
     sys.exit(1)
 
 
@@ -78,11 +78,10 @@ os.makedirs(STATE_SAVE_DIR, exist_ok=True)
 # --- Constants for Dynamic Context ---
 N_CTX_BINS = [2048, 4096, 8192, 16384, 32768]
 DEFAULT_N_CTX_FOR_FALLBACK = 4096  # If token counting fails or not applicable
-EMBEDDING_N_CTX = 512  # Fixed context for embedding tasks
 MIN_DYNAMIC_N_CTX = 2048  # Minimum context size for dynamic calculation (can be tuned)
 MAX_DYNAMIC_N_CTX = 32768  # Maximum context size for dynamic calculation
 DEFAULT_N_CTX_FOR_FALLBACK = 4096  # If token counting fails or not applicable
-EMBEDDING_N_CTX = 512  # Fixed context for embedding tasks
+EMBEDDING_N_CTX = 4096  # Fixed context for embedding tasks
 
 # --- Think Tag Cleanup Helper ---
 def cleanup_initial_think_tag(text: str) -> str:
@@ -117,7 +116,7 @@ def count_tokens_cl100k(text_or_messages: Union[str, List[Dict[str, str]]]) -> i
                     elif isinstance(content_item, list): # VLM content
                         for part in content_item:
                              if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str):
-                                 char_count += len(part.get("text",""))
+                                 char_count += len(part.get("text", ""))
             return char_count // 4 # Rough estimate
         return 0 # Default for unknown type with no tiktoken
 
@@ -145,8 +144,8 @@ def count_tokens_cl100k(text_or_messages: Union[str, List[Dict[str, str]]]) -> i
                     elif isinstance(content_item, list): # VLM content
                         for part_idx, part in enumerate(content_item):
                             if isinstance(part, dict) and part.get("type") == "text" and isinstance(part.get("text"), str):
-                                if part.get("text","").strip():
-                                    tokens = cl100k_base_encoder.encode(part.get("text",""))
+                                if part.get("text", "").strip():
+                                    tokens = cl100k_base_encoder.encode(part.get("text", ""))
                                     current_msg_tokens += len(tokens)
                     if current_msg_tokens > 0:
                         total_tokens += current_msg_tokens
@@ -310,13 +309,13 @@ def main():
         log_worker("INFO", f"Initial estimated input tokens (for n_ctx calc): {input_tokens_for_dynamic_ctx}")
     except Exception as e_stdin:
         log_worker("CRITICAL", f"Failed to read/parse stdin: {e_stdin}\n{traceback.format_exc()}")
-        print(json.dumps({"error": f"Worker critical error: Failed to read/parse request: {e_stdin}"}), flush=True)
+        print(json.dumps({"error": f"Worker critical error: Failed to read/parse request: {e_stdin}"}))
         sys.exit(1)
 
     # --- Determine n_ctx for Llama model loading ---
     if args.task_type == "embedding":
-        calculated_n_ctx_for_model_load = args.n_ctx if args.n_ctx is not None else EMBEDDING_N_CTX
-        if args.n_ctx is None: log_worker("INFO", f"Using fixed n_ctx={EMBEDDING_N_CTX} for embeddings task.")
+        calculated_n_ctx_for_model_load = EMBEDDING_CTX_CONFIG
+        log_worker("INFO", f"Forcing n_ctx to EMBEDDING_CTX_CONFIG ({EMBEDDING_CTX_CONFIG}) for embedding task, ignoring CLI args.")
     elif args.n_ctx is not None:
         calculated_n_ctx_for_model_load = args.n_ctx
         log_worker("INFO", f"Using n_ctx={calculated_n_ctx_for_model_load} from cortex_backbone_provider override.")
@@ -415,7 +414,18 @@ def main():
         elif args.task_type == "embedding":
             texts_to_embed = request_data_dict.get("texts")
             if not texts_to_embed or not isinstance(texts_to_embed, list) or not all(isinstance(t, str) for t in texts_to_embed): raise ValueError("Invalid 'texts' for 'embedding' task.")
-            embedding_vectors = llm.embed(texts_to_embed)
+
+            # Filter out empty/whitespace-only strings which can cause llama_decode errors
+            texts_for_embedding = [text for text in texts_to_embed if text and not text.isspace()]
+
+            if not texts_for_embedding:
+                log_worker("WARNING", "No valid non-empty text provided for embedding after filtering.")
+                embedding_vectors = []
+            else:
+                if len(texts_for_embedding) != len(texts_to_embed):
+                    log_worker("DEBUG", f"Filtered {len(texts_to_embed) - len(texts_for_embedding)} empty/whitespace entries from embedding request.")
+                embedding_vectors = llm.embed(texts_for_embedding)
+
             result_payload = {"result": embedding_vectors}
         else:
             raise ValueError(f"Unknown task type in processing block: {args.task_type}")

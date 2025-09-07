@@ -165,7 +165,7 @@ MODELS_TO_DOWNLOAD = [
     {
         "filename": "qwen3EmbedCore.gguf",
         "url": "https://huggingface.co/Qwen/Qwen3-Embedding-0.6B-GGUF/resolve/main/Qwen3-Embedding-0.6B-Q8_0.gguf?download=true",
-        "description": "Qwen 3 Embedding Model"
+        "description": "Qwen3 Embedding Vectorization Model"
     },
     {
         "filename": "NanoTranslator-immersive_translate-0.5B-GGUF-Q4_K_M.gguf",
@@ -179,8 +179,8 @@ MODELS_TO_DOWNLOAD = [
     },
     {
         "filename": "Qwen3LowLatency.gguf",
-        "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-UD-IQ1_M.gguf?download=true",
-        "description": "Qwen 3 1-bit Direct Mode (Fast Augmented General)"
+        "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q4_K_M.gguf?download=true",
+        "description": "Qwen 3 4-bit Hybrid Direct Mode (Fast Augmented General)"
     },
     {
         "filename": "qwen2.5-coder-3b-instruct-q5_K_M.gguf",
