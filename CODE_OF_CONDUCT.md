@@ -40,6 +40,7 @@ The `launcher.py` script is the sole authority for installing dependencies and c
 
 **Committing compiled, architecture-specific binaries is strictly forbidden.** This is a core architectural principle. See Article II of our Code of Conduct.
 
+
 ## Issue and Requirement Tracking
 
 To ensure project resilience in cases where the `.git` history may be unavailable, all substantive changes must be linked to an issue or requirement ID.

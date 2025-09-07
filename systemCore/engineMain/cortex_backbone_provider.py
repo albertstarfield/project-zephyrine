@@ -786,7 +786,7 @@ class CortexEngine:
                     # Embeddings always get a fixed n_ctx (e.g., 512, or LLAMA_CPP_N_CTX if that was intended for override)
                     # Let's assume a small fixed value is best for embeddings unless an override is in LLAMA_CPP_MODEL_MAP for the embedding model specifically.
                     embedding_n_ctx = self._llama_model_map.get(f"{model_role}_n_ctx",
-                                                                512)  # Check for specific override like "embeddings_n_ctx"
+                                                                4096)  # Check for specific override like "embeddings_n_ctx"
                     command.extend(["--n-ctx", str(embedding_n_ctx)])
                     provider_logger.info(
                         f"{worker_log_prefix}: Passing fixed --n-ctx {embedding_n_ctx} for embeddings.")

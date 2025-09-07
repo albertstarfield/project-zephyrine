@@ -86,3 +86,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Upgrade core embedding model from mixedbread to Qwen3.
     -   **Status:** `Resolved`
     -   **Description:** To improve embedding quality and performance, the core embedding model was upgraded from `mxbai-embed-large-v1` to `Qwen/Qwen3-Embedding-0.6B-GGUF`. This required updating model download links in `launcher.py`, configuration in `CortexConfiguration.py`, and fixing the hardcoded embedding context size in `llama_worker.py` to support the new model's 32k context window. Additional changes were made to `database.py` and `file_indexer.py` to handle the new embedding format, and `requirements.txt` was updated with new dependencies.
+
+### Refactors
+
+-   **ID:** `CORE-REFACTOR-001`
+    -   **Title:** Refactor ToT payload and increase embedding context size.
+    -   **Status:** `Resolved`
+    -   **Description:** Refactored the Tree of Thought (ToT) payload in `AdelaideAlbertCortex.py` for clarity and simplicity. Increased the default embedding context size in `cortex_backbone_provider.py` to 4096 to improve embedding quality for longer documents. Simplified the frontend input area in `InputArea.jsx` by removing the stop generation button.
+
