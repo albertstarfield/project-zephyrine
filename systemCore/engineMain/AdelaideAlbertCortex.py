@@ -3606,48 +3606,44 @@ class CortexThoughts:
             logger.warning(
                 f"{log_prefix} Initial routing attempts failed. Trying LLM re-request to fix format. Last raw output: '{raw_llm_output_from_initial_loop[:200]}...'")
 
-            if not parsed_routing_json:
-            logger.warning(
-                f"{log_prefix} Initial routing attempts failed. Trying LLM re-request to fix format. Last raw output: '{raw_llm_output_from_initial_loop[:200]}...'")
+        reformat_prompt_input = {
+            "faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop,
+            'chosen_model': "general",
+            "original_user_input_placeholder": user_input_for_routing  # For the fallback in the reformat prompt
+        }
+        reformat_chain = ChatPromptTemplate.from_template(
+            PROMPT_REFORMAT_TO_ROUTER_JSON) | router_model | StrOutputParser()  # New Prompt
 
-            reformat_prompt_input = {
-                "faulty_llm_output_for_reformat": raw_llm_output_from_initial_loop,
-                'chosen_model': "general",
-                "original_user_input_placeholder": user_input_for_routing  # For the fallback in the reformat prompt
-            }
-            reformat_chain = ChatPromptTemplate.from_template(
-                PROMPT_REFORMAT_TO_ROUTER_JSON) | router_model | StrOutputParser()  # New Prompt
+        reformatted_llm_output_text = await asyncio.to_thread(
+            self._call_llm_with_timing, reformat_chain, reformat_prompt_input,
+            router_timing_data, priority=ELP0
+        )
 
-            reformatted_llm_output_text = await asyncio.to_thread(
-                self._call_llm_with_timing, reformat_chain, reformat_prompt_input,
-                router_timing_data, priority=ELP0
-            )
-
-            if reformatted_llm_output_text and not (
-                    isinstance(reformatted_llm_output_text, str) and "ERROR" in reformatted_llm_output_text.upper()):
-                logger.info(f"{log_prefix} Received reformatted output from LLM for router. Attempting to parse/fix...")
-                json_candidate_from_reformat = self._extract_json_candidate_string(reformatted_llm_output_text,
-                                                                                   log_prefix + "-ReformatExtract")
-                if json_candidate_from_reformat:
-                    # --- Stage 3: Parse/Fix Reformatted Output ---
-                    parsed_routing_json = self._programmatic_json_parse_and_fix(
-                        json_candidate_from_reformat,
-                        JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,  # from CortexConfiguration
-                        log_prefix + "-ReformatFix"
-                    )
-                    if parsed_routing_json and isinstance(parsed_routing_json, dict) and \
-                            all(k in parsed_routing_json for k in ["chosen_model", "refined_query", "reasoning"]):
-                        chosen_model = str(parsed_routing_json["chosen_model"])
-                        refined_query = str(parsed_routing_json["refined_query"])
-                        reasoning = str(parsed_routing_json.get("reasoning", "N/A (reformatted)"))
-                        logger.info(f"✅ {log_prefix} Reformatted Routing analysis successful: Chose '{chosen_model}'.")
-                        return chosen_model, refined_query, reasoning
-                else:
-                    logger.error(
-                        f"{log_prefix} Failed to extract any JSON from LLM's reformat (router) attempt. Output: {reformatted_llm_output_text[:200]}")
+        if reformatted_llm_output_text and not (
+                isinstance(reformatted_llm_output_text, str) and "ERROR" in reformatted_llm_output_text.upper()):
+            logger.info(f"{log_prefix} Received reformatted output from LLM for router. Attempting to parse/fix...")
+            json_candidate_from_reformat = self._extract_json_candidate_string(reformatted_llm_output_text,
+                                                                                log_prefix + "-ReformatExtract")
+            if json_candidate_from_reformat:
+                # --- Stage 3: Parse/Fix Reformatted Output ---
+                parsed_routing_json = self._programmatic_json_parse_and_fix(
+                    json_candidate_from_reformat,
+                    JSON_FIX_RETRY_ATTEMPTS_AFTER_REFORMAT,  # from CortexConfiguration
+                    log_prefix + "-ReformatFix"
+                )
+                if parsed_routing_json and isinstance(parsed_routing_json, dict) and \
+                        all(k in parsed_routing_json for k in ["chosen_model", "refined_query", "reasoning"]):
+                    chosen_model = str(parsed_routing_json["chosen_model"])
+                    refined_query = str(parsed_routing_json["refined_query"])
+                    reasoning = str(parsed_routing_json.get("reasoning", "N/A (reformatted)"))
+                    logger.info(f"✅ {log_prefix} Reformatted Routing analysis successful: Chose '{chosen_model}'.")
+                    return chosen_model, refined_query, reasoning
             else:
                 logger.error(
-                    f"{log_prefix} LLM re-request for router JSON formatting failed or returned error: {reformatted_llm_output_text}")
+                    f"{log_prefix} Failed to extract any JSON from LLM's reformat (router) attempt. Output: {reformatted_llm_output_text[:200]}")
+        else:
+            logger.error(
+                f"{log_prefix} LLM re-request for router JSON formatting failed or returned error: {reformatted_llm_output_text}")
 
         # --- Fallback if all methods failed ---
         logger.error(
@@ -8054,15 +8050,7 @@ def _create_assistants_api_stub_response(
     return jsonify(response_body), 200
 
 # === Flask Routes (Async) ===
-"""
-                                                                                                                                                                                                                                                                                 ,--.                                                        
-,--.,------.  ,-----.     ,---.                                            ,-----.                                           ,--.                ,--.  ,--.                    ,---.                 ,--.  ,--.                     ,-.,--.  ,--.,--------.,--------.,------.   /  /,--.   ,--.                                        ,-.   
-|  ||  .--. ''  .--./    '   .-'  ,---. ,--.--.,--.  ,--.,---. ,--.--.    '  .--./ ,---. ,--,--,--.,--,--,--.,--.,--.,--,--, `--' ,---. ,--,--.,-'  '-.`--' ,---. ,--,--,     '   .-'  ,---.  ,---.,-'  '-.`--' ,---. ,--,--,      / .'|  '--'  |'--.  .--''--.  .--'|  .--. ' /  / |   `.'   | ,---. ,--,--,--. ,---. ,--.--.,--. ,--.'. \  
-|  ||  '--' ||  |        `.  `-. | .-. :|  .--' \  `'  /| .-. :|  .--'    |  |    | .-. ||        ||        ||  ||  ||      \,--.| .--'' ,-.  |'-.  .-',--.| .-. ||      \    `.  `-. | .-. :| .--''-.  .-',--.| .-. ||      \    |  | |  .--.  |   |  |      |  |   |  '--' |/  /  |  |'.'|  || .-. :|        || .-. ||  .--' \  '  /  |  | 
-|  ||  | --' '  '--'\    .-'    |\   --.|  |     \    / \   --.|  |       '  '--'\' '-' '|  |  |  ||  |  |  |'  ''  '|  ||  ||  |\ `--.\ '-'  |  |  |  |  |' '-' '|  ||  |    .-'    |\   --.\ `--.  |  |  |  |' '-' '|  ||  |    |  | |  |  |  |   |  |      |  |   |  | --'/  /   |  |   |  |\   --.|  |  |  |' '-' '|  |     \   '   |  | 
-`--'`--'      `-----'    `-----'  `----'`--'      `--'   `----'`--'        `-----' `---' `--`--`--'`--`--`--' `----' `--''--'`--' `---' `--`--'  `--'  `--' `---' `--''--'    `-----'  `----' `---'  `--'  `--' `---' `--''--'     \ '.`--'  `--'   `--'      `--'   `--'   /  /    `--'   `--' `----'`--`--`--' `---' `--'   .-'  /   .' /  
-                                                                                                                                                                                                                                    `-'                                    `--'                                               `---'    `-'   
-"""
+
 # ====== Server Root =======
 @app.route("/", methods=["GET", "POST", "HEAD"])
 async def handle_interaction():
