@@ -139,7 +139,7 @@ logger.info(f"🔧 LLM ELP0 Interrupt Retry Delay: {LLM_CALL_ELP0_INTERRUPT_RETR
 _engine_main_dir = os.path.dirname(os.path.abspath(__file__)) # Assumes config.py is in engineMain
 LLAMA_CPP_GGUF_DIR = os.path.join(_engine_main_dir, "staticmodelpool")
 LLAMA_CPP_N_GPU_LAYERS = int(os.getenv("LLAMA_CPP_N_GPU_LAYERS", -1)) # Default: Offload all possible layers
-LLAMA_CPP_N_CTX = int(os.getenv("LLAMA_CPP_N_CTX", 32768)) # Context window size
+LLAMA_CPP_N_CTX = int(os.getenv("LLAMA_CPP_N_CTX", 4096)) # Context window size
 LLAMA_CPP_VERBOSE = os.getenv("LLAMA_CPP_VERBOSE", "False").lower() == "true"
 LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 
