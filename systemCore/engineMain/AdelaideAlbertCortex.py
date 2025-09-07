@@ -11437,62 +11437,44 @@ async def submit_tool_outputs_stub(thread_id: str, run_id: str):
 
 @app.route("/instrumentviewportdatastreamlowpriopreview", methods=["GET"])
 async def handle_instrument_viewport_stream():
-    """
-    Asynchronous SSE stream for avionics data. It streams data from running
-    StellaIcarus Ada daemons or falls back to simulated data. Uses `asyncio.sleep`
-    to be non-blocking.
-    """
     req_id = f"req-instr-stream-async-{uuid.uuid4()}"
     logger.info(f"🚀 {req_id}: Async SSE connection opened for instrument data stream.")
 
-    # An async generator is used to produce the stream content.
     async def generate_data_stream():
+        while True:
+            def get_data_sync():
+                data_packet = stella_icarus_daemon_manager.get_data_from_queue()
+                if data_packet is None:
+                    sim_data = _generate_simulated_avionics_data()
+                    data_packet = {
+                        "source_daemon": "System_Simulation_Fallback",
+                        "timestamp_py": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                        "data": sim_data
+                    }
+                return data_packet
+            data_packet = await asyncio.to_thread(get_data_sync)
+            yield f"data: {json.dumps(data_packet)}\n\n"
+            await asyncio.sleep(1.0 / INSTRUMENT_STREAM_RATE_HZ)
+
+    def stream_wrapper():
+        async def inner():
+            async for item in generate_data_stream():
+                yield item
+        # This is a common pattern to bridge async generators with sync frameworks
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        gen = inner()
         try:
             while True:
-                # --- Step 1: Get Data (Non-Blocking) ---
-                # The queue.get() and simulation generation are synchronous, so we run them
-                # in a separate thread to avoid blocking the main server event loop.
-                def get_data_sync():
-                    data_packet = stella_icarus_daemon_manager.get_data_from_queue()
-                    if data_packet is None:
-                        # FALLBACK: Queue is empty. Generate simulated data.
-                        sim_data = _generate_simulated_avionics_data()
-                        data_packet = {
-                            "source_daemon": "System_Simulation_Fallback",
-                            "timestamp_py": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                            "data": sim_data
-                        }
-                    return data_packet
-
-                # Await the result from the background thread.
-                data_packet = await asyncio.to_thread(get_data_sync)
-
-                # --- Step 2: Yield Data to Client ---
-                # Format as a Server-Sent Event and yield the data.
-                # The 'yield' keyword in an async generator works like 'return' for one piece of data.
-                yield f"data: {json.dumps(data_packet)}\n\n"
-
-                # --- Step 3: Wait Asynchronously ---
-                # Use `asyncio.sleep` instead of `time.sleep`. This is the key change.
-                # It yields control back to the server's event loop, allowing it
-                # to handle other requests while this stream is waiting.
-                await asyncio.sleep(1.0 / INSTRUMENT_STREAM_RATE_HZ)
-
-        except asyncio.CancelledError:
-            # This is raised when the client disconnects in an async context.
-            logger.info(f"{req_id}: Client disconnected, closing async instrument data stream.")
+                yield loop.run_until_complete(gen.__anext__())
+        except StopAsyncIteration:
+            pass # Generator finished
         except Exception as e:
-            logger.error(f"{req_id}: Error in async instrument data stream generator: {e}")
-            try:
-                # Try to send a final error message to the client.
-                error_data = json.dumps({"error": "An internal error occurred in the data stream.", "detail": str(e)})
-                yield f"event: error\ndata: {error_data}\n\n"
-            except Exception as final_err:
-                logger.error(f"{req_id}: Could not send final error message to client: {final_err}")
+            logger.error(f"{req_id}: Error in stream wrapper: {e}")
+        finally:
+            loop.close()
 
-    # Return a streaming response. The framework will correctly handle iterating
-    # through the async generator.
-    return Response(generate_data_stream(), mimetype='text/event-stream')
+    return Response(stream_with_context(stream_wrapper()), mimetype='text/event-stream')
 
 
 
