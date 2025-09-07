@@ -1,11 +1,6 @@
-# Contributing to Project Zephyrine
-
-Thank you for your interest in contributing! Adherence to these guidelines is essential for maintaining the quality, integrity, and traceability of the project.
-
-
 # Contributor Covenant Code of Conduct
 
-All contributors are expected to read and abide by our [Code of Conduct](./CODE_OF_CONDUCT.md). All interactions within this project are governed by it.
+All contributors are expected to read and abide by our [Code of Conduct](./CODE_OF_CONDUCT.md) and [Contributing Guidelines](./CONTRIBUTING.md). All interactions within this project are governed by them.
 
 ## Article I: Pledge
 
@@ -22,7 +17,7 @@ All contributors are expected to read and abide by our [Code of Conduct](./CODE_
    - Offering constructive feedback gracefully and receiving it with humility.
    - Taking accountability for our actions, extending apologies to those adversely affected by our errors, and learning from such experiences.
    - Prioritizing the collective welfare of the community over individual interests.
-   - **Adhering to the project's architectural principles and development workflow. This includes, but is not limited to, refraining from committing compiled, architecture-specific binaries. The `launcher.py` script is the sole authority for local compilation to ensure portability and reproducibility for all contributors.**
+   
 
 2.2. Behaviors that fall below the accepted standards include:
 
@@ -32,13 +27,9 @@ All contributors are expected to read and abide by our [Code of Conduct](./CODE_
    - Disseminating others' private information, such as physical addresses or email addresses, without explicit consent.
    - Conduct that could reasonably be viewed as inappropriate within a professional setting.
 
-## Development Principles
 
-### The Launcher is the main startup sequence
 
-The `launcher.py` script is the sole authority for installing dependencies and compiling all project components. This ensures that every contributor can build a functional, portable, and reproducible version of the application on their own machine from a clean source checkout.
 
-**Committing compiled, architecture-specific binaries is strictly forbidden.** This is a core architectural principle. See Article II of our Code of Conduct.
 
 
 ## Issue and Requirement Tracking
