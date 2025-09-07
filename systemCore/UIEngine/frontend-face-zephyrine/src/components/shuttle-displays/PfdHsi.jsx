@@ -42,7 +42,8 @@ const PfdHsi = ({ heading, course }) => {
 
   return (
     <div className="pfd-hsi-container">
-      <svg viewBox={`0 0 ${size} ${size}`} width="100%" height="100%">
+      <svg viewBox={`0 0 ${size}
+       ${size}`} width="100%" height="100%">
         {/* Rotating group for the compass card */}
         <g transform={`rotate(${-heading} ${center} ${center})`}>
           {/* Compass Rose Background */}

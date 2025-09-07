@@ -5612,18 +5612,17 @@ class CortexThoughts:
                         if trigger_id_for_tot:
                             logger.info(f"{log_prefix} Spawning ToT for Interaction ID: {trigger_id_for_tot}.")
                             tot_payload = {
-                                "db_session_factory": SessionLocal, "input_for_tot": current_input_for_analysis,
+                                "db_session_factory": SessionLocal,
+                                "original_input_for_tot": current_input_for_analysis,
                                 "rag_context_docs": url_docs,
                                 "history_rag_interactions": session_docs + reflection_docs,
                                 "log_context_str": log_ctx_prompt_final,
                                 "recent_direct_history_str": direct_hist_prompt_final,
                                 "file_index_context_str": vec_file_ctx_result_str,
-                                "imagined_image_context_str": interaction_data.get('imagined_image_vlm_description',
-                                                                                   'None.'),
-                                "interaction_data_for_tot_llm_call": {}, "original_user_input_for_log": user_input,
-                                "triggering_interaction_id_for_log": trigger_id_for_tot
+                                "triggering_interaction_id": trigger_id_for_tot,
+                                "imagined_image_context_str": interaction_data.get('imagined_image_vlm_description', 'None.')
                             }
-                            asyncio.create_task(self._run_tree_of_thought_v2(**tot_payload))
+                            asyncio.create_task(self._run_tot_in_background_wrapper_v2(**tot_payload))
                             interaction_data['tot_analysis_spawned'] = True
                         else:
                             logger.warning(f"{log_prefix} Could not spawn ToT, no trigger ID.")
@@ -11551,7 +11550,7 @@ async def startup_tasks():
 
 if __name__ == "__main__":
     # This block executes if AdelaideAlbertCortex is run directly (e.g., python AdelaideAlbertCortex)
-    logger.error("This script (AdelaideAlbertCortex) is designed to be run with an ASGI/WSGI server like Hypercorn.")
+    logger.error("This program (AdelaideAlbertCortex) is designed to be run with an ASGI/WSGI server like Hypercorn. Running it like this is not supported.")
     logger.error("Example: hypercorn app:app --bind 127.0.0.1:11434")
     sys.exit(1)  # Exit because this isn't the intended way to run
 else:
