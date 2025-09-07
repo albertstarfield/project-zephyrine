@@ -49,6 +49,14 @@ const PfdHsi = ({ heading, course }) => {
           <circle cx={center} cy={center} r={radius} fill="#333" stroke="white" strokeWidth="1" />
           {/* The ticks and labels */}
           {compassTicks}
+
+          {/* Selected Course Pointer (Magenta) */}
+          <g transform={`rotate(${course} ${center} ${center})`}>
+            <path
+              d={`M ${center},${10} L ${center-8},${25} L ${center},${20} L ${center+8},${25} Z`}
+              fill="#FF00FF"
+            />
+          </g>
         </g>
         
         {/* Fixed Aircraft Symbol and Heading Pointer */}
@@ -57,14 +65,6 @@ const PfdHsi = ({ heading, course }) => {
           <polygon points={`${center},10 ${center-6},20 ${center+6},20`} fill="white" />
           {/* Little aircraft symbol */}
           <path d={`M ${center-5},${center+5} L ${center},${center-10} L ${center+5},${center+5} Z`} fill="#555" stroke="white"/>
-        </g>
-
-        {/* Selected Course Pointer (Magenta) */}
-        <g transform={`rotate(${course - heading} ${center} ${center})`}>
-           <path 
-             d={`M ${center},${10} L ${center-8},${25} L ${center},${20} L ${center+8},${25} Z`} 
-             fill="#FF00FF"
-           />
         </g>
 
         {/* Deviation dots would go here, static relative to the fixed aircraft */}
