@@ -41,7 +41,6 @@ The `launcher.py` script is the sole authority for installing dependencies and c
 **Committing compiled, architecture-specific binaries is strictly forbidden.** This is a core architectural principle. See Article II of our Code of Conduct.
 
 ## Issue and Requirement Tracking
-## Issue and Requirement Tracking
 
 To ensure project resilience in cases where the `.git` history may be unavailable, all substantive changes must be linked to an issue or requirement ID.
 
@@ -59,7 +58,10 @@ All commit messages must follow the **Formal Traceability Standard**. This is no
 ### Commit Message Template
 
 ```
+
 <type>(<scope>): <subject>
+
+
 
 <blank line>
 
@@ -128,7 +130,9 @@ fix(mesh): correct asset path resolution and expand manifest scope
 This commit resolves a critical path resolution bug in the ZephyMesh node and expands the asset manifest to include the Hugging Face cache, ensuring full P2P distribution capability.
 
 The Go node was being launched with 
-an incorrect working directory, causing it to construct invalid paths when scanning for local assets. This has been corrected by setting the `cwd` to the project root.
+an incorrect 
+
+working directory, causing it to construct invalid paths when scanning for local assets. This has been corrected by setting the `cwd` to the project root.
 
 This change was assisted by a GenAI model for boilerplate file scanning logic.
 
