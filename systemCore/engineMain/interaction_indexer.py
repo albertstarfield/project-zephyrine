@@ -171,7 +171,27 @@ class InteractionIndexer(threading.Thread):
 
         for interaction in unindexed_interactions:
             try:
-                content = f"User: {interaction.user_input or ''}\n\nAssistant: {interaction.llm_response or ''}"
+                content_parts = []
+                interaction_type = interaction.input_type or "unknown"
+
+                # Handle standard conversational turns
+                if interaction_type in ['text', 'llm_response', 'image+text']:
+                    if interaction.user_input:
+                        content_parts.append(f"User: {interaction.user_input}")
+                    if interaction.llm_response:
+                        content_parts.append(f"Assistant: {interaction.llm_response}")
+                    if interaction.emotion_context_analysis:
+                        content_parts.append(f"Emotion Analysis: {interaction.emotion_context_analysis}")
+                    if interaction.assistant_action_type:
+                        action_params = interaction.assistant_action_params or "{}"
+                        action_result = interaction.assistant_action_result or "No result."
+                        content_parts.append(f"Action Taken: {interaction.assistant_action_type} with params {action_params} -> Result: {action_result}")
+                # Handle log_info* and other log types
+                elif interaction_type.startswith('log_'):
+                    log_message = interaction.user_input or interaction.llm_response or "[Empty Log]"
+                    content_parts.append(f"System Log ({interaction_type}): {log_message}")
+
+                content = "\n\n".join(content_parts)
                 if not content.strip():
                     interaction.is_indexed_for_rag = True
                     continue
@@ -186,8 +206,11 @@ class InteractionIndexer(threading.Thread):
 
                 chunk_embeddings = self.embedding_model.embed_documents(chunks)
 
-                metadatas = [{"interaction_id": interaction.id, "session_id": interaction.session_id,
-                              "timestamp": str(interaction.timestamp)} for _ in chunks]
+                metadatas = [{
+                    "interaction_id": interaction.id, "session_id": interaction.session_id,
+                    "timestamp": str(interaction.timestamp),
+                    "input_type": interaction.input_type or "unknown"
+                } for _ in chunks]
                 ids = [f"int_{interaction.id}_chunk_{i}" for i in range(len(chunks))]
 
                 with _interaction_vs_write_lock:

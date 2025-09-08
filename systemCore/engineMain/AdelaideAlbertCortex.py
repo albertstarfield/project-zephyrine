@@ -1938,29 +1938,31 @@ class CortexThoughts:
                 all_history_docs.extend(persistent_docs or [])
 
             # --- NEW FUZZY LOGIC ---
-            # Augment with fuzzy search if vector results are sparse
-            if FUZZY_AVAILABLE and len(all_history_docs) < RAG_HISTORY_COUNT:
-                logger.info(f"[RAG VERBOSITY] Augmenting with Fuzzy Search (Threshold: {FUZZY_SEARCH_THRESHOLD})...")
+            # Always append fuzzy search results to vector search results for a richer context pool.
+            if FUZZY_AVAILABLE:
+                logger.info(f"[RAG VERBOSITY] Appending Fuzzy Search results (Threshold: {FUZZY_SEARCH_THRESHOLD})...")
                 
                 # Fetch a pool of recent interactions to perform fuzzy search on
                 fuzzy_candidate_pool = get_recent_interactions(db, limit=RAG_HISTORY_COUNT * 5, session_id=self.current_session_id, mode="chat", include_logs=False)
-                vector_found_interaction_ids = {doc.metadata.get("interaction_id") for doc in all_history_docs if doc.metadata and "interaction_id" in doc.metadata}
+                # Get IDs from vector search to avoid adding the exact same interactions, though content-based deduplication later is the main guard.
+                vector_found_interaction_ids = {doc.metadata.get("interaction_id") for doc in all_history_docs if doc.metadata and doc.metadata.get("interaction_id")}
                 
                 fuzzy_matches: List[Tuple[Interaction, int]] = []
                 for interaction in fuzzy_candidate_pool:
                     if interaction.id in vector_found_interaction_ids:
                         continue
                     
-                    text_to_match = f"{interaction.user_input or ''} {interaction.llm_response or ''}"
+                    text_to_match = f"{interaction.user_input or ''} {interaction.llm_response or ''}".strip()
                     if text_to_match.strip():
                         score = fuzz.partial_ratio(user_input_for_rag_query.lower(), text_to_match.lower())
                         if score >= FUZZY_SEARCH_THRESHOLD:
                             fuzzy_matches.append((interaction, score))
                 
                 if fuzzy_matches:
+                    # Sort by score to get the most relevant fuzzy matches
                     fuzzy_matches.sort(key=lambda x: x[1], reverse=True)
-                    needed_count = RAG_HISTORY_COUNT - len(all_history_docs)
-                    top_fuzzy_matches = fuzzy_matches[:needed_count]
+                    # Take the top N fuzzy matches to append, preventing an overly large context pool before final retrieval.
+                    top_fuzzy_matches = fuzzy_matches[:RAG_HISTORY_COUNT]
                     logger.info(f"[RAG VERBOSITY] Fuzzy search found {len(top_fuzzy_matches)} new documents above threshold.")
                     for interaction, score in top_fuzzy_matches:
                         content = f"User: {interaction.user_input or ''}\nAI: {interaction.llm_response or ''}"
@@ -5469,6 +5471,13 @@ class CortexThoughts:
                                 interaction_data['imagined_image_vlm_description'] = gen_vlm_desc
                                 await asyncio.to_thread(
                                     add_interaction, db, session_id=session_id, mode="chat",
+                                    input_type="log_info_imagination_complete",
+                                    user_input=f"Imagination pipeline completed for prompt: {img_prompt[:200]}",
+                                    llm_response=f"Generated image and described it: {gen_vlm_desc[:500]}"
+                                )
+                                await asyncio.to_thread(db.commit)
+                                await asyncio.to_thread(
+                                    add_interaction, db, session_id=session_id, mode="chat",
                                     input_type="image_generated_by_ai",
                                     user_input=f"[AI Generated Image from prompt: {img_prompt[:500]}]",
                                     imagined_image_avif_b64=img_avif_b64_gen,
@@ -5485,6 +5494,14 @@ class CortexThoughts:
                     # ==========================================================
                     # 3.2 CORE ANALYSIS: GATHER COMPREHENSIVE CONTEXT
                     # ==========================================================
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=session_id, mode="chat",
+                        input_type="log_info_rag_start",
+                        user_input=f"Starting comprehensive RAG context gathering for: {current_input_for_analysis[:200]}",
+                        llm_response="Combining vector search, fuzzy search, direct history, and file context."
+                    )
+                    await asyncio.to_thread(db.commit)
+
                     logger.info(f"{log_prefix} Gathering final comprehensive context for response...")
                     wrapped_rag_res = await asyncio.to_thread(self._get_rag_retriever_thread_wrapper, db,
                                                               current_input_for_analysis, ELP0)
@@ -5513,6 +5530,20 @@ class CortexThoughts:
                     url_context_str = self._format_docs(url_docs, "URL Context")
                     history_rag_str = self._format_docs(session_docs + reflection_docs, "History/Reflection RAG")
 
+                    rag_summary = (
+                        f"URL Context: {len(url_docs)} docs. "
+                        f"History/Reflection Context: {len(session_docs) + len(reflection_docs)} docs. "
+                        f"File Context: {'Yes' if vec_file_ctx_result_str != 'No relevant file content found via vector or fuzzy search for the query.' else 'No'}. "
+                        f"Log Context: {'Yes' if log_ctx_prompt_final != 'No recent relevant logs found.' else 'No'}."
+                    )
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=session_id, mode="chat",
+                        input_type="log_info_rag_complete",
+                        user_input="RAG context gathering complete.",
+                        llm_response=rag_summary
+                    )
+                    await asyncio.to_thread(db.commit)
+
                     # ==========================================================
                     # 3.3 CORE ANALYSIS: AGENTIC ACTION OR TEXT SYNTHESIS
                     # ==========================================================
@@ -5527,17 +5558,24 @@ class CortexThoughts:
                                                                           action_payload_ctx)
                     detected_action_type = action_details.get("action_type",
                                                               "no_action") if action_details and isinstance(
-                        action_details, dict) else "no_action"
+                        action_details, dict) else "no_action" # type: ignore
                     if action_details:
                         interaction_data.update({'assistant_action_analysis_json': json.dumps(action_details),
                                                  'assistant_action_type': detected_action_type,
                                                  'assistant_action_params': json.dumps(
                                                      action_details.get("parameters", {}))})
+                        await asyncio.to_thread(
+                            add_interaction, db, session_id=session_id, mode="chat",
+                            input_type="log_info_action_analysis",
+                            user_input="Agentic action analysis complete.",
+                            llm_response=json.dumps(action_details) if action_details else '{"action_type": "no_action"}'
+                        )
+                        await asyncio.to_thread(db.commit)
 
                     if detected_action_type != "no_action" and action_details:
                         logger.info(f"{log_prefix} Action '{detected_action_type}' detected. Executing tool...")
-                        if not existing_interaction_to_update: raise RuntimeError(
-                            "Missing interaction context for action execution.")
+                        if not existing_interaction_to_update:
+                            raise RuntimeError("Missing interaction context for action execution.")
                         initial_synthesis_or_action_result = await self._execute_assistant_action(db, session_id,
                                                                                                   action_details,
                                                                                                   existing_interaction_to_update)
@@ -5557,6 +5595,13 @@ class CortexThoughts:
                                                                               current_input_for_analysis,
                                                                               router_payload)
                         interaction_data['classification_reason'] = f"Routed to {role}: {reason}"
+                        await asyncio.to_thread(
+                            add_interaction, db, session_id=session_id, mode="chat",
+                            input_type="log_info_routing_decision",
+                            user_input="Routing decision complete.",
+                            llm_response=f"Chose model '{role}' for query '{query[:100]}...'. Reason: {reason}"
+                        )
+                        await asyncio.to_thread(db.commit)
                         specialist_model = self.provider.get_model(role)
                         if not specialist_model: raise ValueError(f"Specialist model '{role}' not found.")
 
@@ -5577,6 +5622,14 @@ class CortexThoughts:
                     # ==========================================================
                     logger.info(
                         f"{log_prefix} Starting iterative elaboration based on initial synthesis (len: {len(initial_synthesis_or_action_result)}).")
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=session_id, mode="chat",
+                        input_type="log_info_elaboration_start",
+                        user_input="Starting iterative elaboration.",
+                        llm_response=f"Initial synthesis/action result (len {len(initial_synthesis_or_action_result)}): {initial_synthesis_or_action_result[:500]}..."
+                    )
+                    await asyncio.to_thread(db.commit)
+
                     elaborated_chunks_array = [initial_synthesis_or_action_result]
                     is_elaboration_finished = False
                     elaboration_model = self.provider.get_model("router")
@@ -5623,6 +5676,14 @@ class CortexThoughts:
                             elaborated_chunks_array.append(" " + clean_chunk_to_add)
                         else:
                             is_elaboration_finished = True
+
+                    await asyncio.to_thread(
+                        add_interaction, db, session_id=session_id, mode="chat",
+                        input_type="log_info_elaboration_complete",
+                        user_input="Iterative elaboration complete.",
+                        llm_response=f"Final response length: {len(final_response_text_for_this_turn)}. Chunks: {len(elaborated_chunks_array)}."
+                    )
+                    await asyncio.to_thread(db.commit)
 
                     final_response_text_for_this_turn = "".join(elaborated_chunks_array).strip()
 
@@ -5691,6 +5752,13 @@ class CortexThoughts:
                     if not is_reflection_task and interaction_data.get("requires_deep_thought"):
                         trigger_id_for_tot = existing_interaction_to_update.id if existing_interaction_to_update else None
                         if trigger_id_for_tot:
+                            await asyncio.to_thread(
+                                add_interaction, db, session_id=session_id, mode="chat",
+                                input_type="log_info_spawn_tot",
+                                user_input=f"Spawning background Tree of Thoughts task for Interaction ID {trigger_id_for_tot}.",
+                                llm_response=f"ToT Input: {current_input_for_analysis[:500]}..."
+                            )
+                            await asyncio.to_thread(db.commit)
                             logger.info(f"{log_prefix} Spawning ToT for Interaction ID: {trigger_id_for_tot}.")
                             tot_payload = {
                                 "db_session_factory": SessionLocal,
@@ -5720,6 +5788,13 @@ class CortexThoughts:
                                                                                              final_rag_context_for_hook,
                                                                                              final_response_text_for_this_turn)
                             if should_create:
+                                await asyncio.to_thread(
+                                    add_interaction, db, session_id=session_id, mode="chat",
+                                    input_type="log_info_spawn_hook",
+                                    user_input="Spawning background task to generate a StellaIcarus hook.",
+                                    llm_response=f"Reason: {reason}"
+                                )
+                                await asyncio.to_thread(db.commit)
                                 logger.info(
                                     f"{log_prefix} Spawning background task to generate automation hook. Reason: {reason}")
                                 asyncio.create_task(self._generate_stella_icarus_hook_async(db, session_id, user_input,

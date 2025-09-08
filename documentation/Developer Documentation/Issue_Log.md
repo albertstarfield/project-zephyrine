@@ -115,3 +115,8 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Refactor ToT payload and increase embedding context size.
     -   **Status:** `Resolved`
     -   **Description:** Refactored the Tree of Thought (ToT) payload in `AdelaideAlbertCortex.py` for clarity and simplicity. Increased the default embedding context size in `cortex_backbone_provider.py` to 4096 to improve embedding quality for longer documents. Simplified the frontend input area in `InputArea.jsx` by removing the stop generation button.
+
+-   **ID:** `CORE-FEAT-005`
+    -   **Title:** Enhance search, debugging, and system stability.
+    -   **Status:** `In-Progress`
+    -   **Description:** This update introduces several enhancements across the system. It adds fuzzy and vector search results as an always-on augmented result. More detailed debug logs are inserted into the interaction history, making them accessible to `direct_generate` for learning from mistakes. The `CortexConfiguration` has been adjusted to include a 25% safety context for token counting mismatches, with the context size set to 4096. The file indexer's idle cycle is now 3600 seconds to allow ELP0 and self-reflection to execute. Finally, the interaction indexer now includes non-text data in the augmentation mix.
