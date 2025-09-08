@@ -1253,6 +1253,7 @@ class FileIndexer:
                         values_to_update['latex_representation'] = None
                         values_to_update['latex_explanation'] = None
                     
+                    values_to_update['indexed_content'] = content # ADDED THIS LINE
                     db_session.execute(update(FileIndex).where(FileIndex.id == existing_record.id).values(**values_to_update))
                     db_session.commit()
                     record_to_embed = existing_record
@@ -1260,6 +1261,7 @@ class FileIndexer:
                     new_record_data = {
                         "file_path": file_path, 
                         "file_name": os.path.basename(file_path), 
+                        "indexed_content": content, # ADDED THIS LINE
                         **values_to_update
                     }
                     record_to_embed = FileIndex(**new_record_data)

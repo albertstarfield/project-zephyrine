@@ -38,7 +38,7 @@ RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 7))
 FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 32000)) #Extreme or vanquish (Max at 512 mixedbread embedding) (new Qwen3 embedding is maxxed at 32000)
 FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
-FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 60)) #default at 3600 putting it to 5 is just for debug and rentlessly scanning
+FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 600)) #default at 3600 putting it to 5 is just for debug and rentlessly scanning
 
 
 BENCHMARK_ELP1_TIME_MS = 600000.0 #before hard defined error timeout (30 seconds max)
@@ -130,7 +130,7 @@ EFFECTIVE_DATABASE_URL_FOR_ALEMBIC = DATABASE_URL
 logger.info(f"Database URL set to: {DATABASE_URL}")
 
 # --- LLM Call Retry Settings for ELP0 Interruption ---
-LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES = int(os.getenv("LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES", 99999)) # e.g., 99999 retries
+LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES = int(os.getenv("LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES", 3)) # e.g., 99999 retries
 LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY = int(os.getenv("LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY", 1)) # e.g., 1 seconds
 logger.info(f"🔧 LLM ELP0 Interrupt Max Retries: {LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES}")
 logger.info(f"🔧 LLM ELP0 Interrupt Retry Delay: {LLM_CALL_ELP0_INTERRUPT_RETRY_DELAY}s")
@@ -389,6 +389,24 @@ engines_to_use = [
 ]
 
 # --- New Prompt ---
+
+PROMPT_MULTI_LANGUAGE_SUMMARY = """
+You are a summarization and translation expert. Your task is to summarize the provided text and then translate this summary into English and Simplified Chinese. Also, provide the summary in the original language of the text.
+
+Output your response as a JSON object with the following structure:
+{
+  "summary_original_lang": "Summary in the original language.",
+  "summary_en": "Summary in English.",
+  "summary_zh": "Summary in Simplified Chinese."
+}
+
+Ensure the summaries are concise and capture the main points of the text.
+
+Text to Summarize and Translate:
+---
+{text_to_summarize}
+---
+"""
 
 # --- Prompts ---
 
