@@ -14,6 +14,17 @@ import re
 import signal
 from loguru import logger # Logging library
 from langchain_core.runnables import RunnableConfig
+try:
+    import tiktoken
+    TIKTOKEN_AVAILABLE = True
+    # The encoder itself will be loaded lazily inside the LlamaCppEmbeddingsWrapper
+except ImportError:
+    logger.warning("⚠️ tiktoken not installed. Embedding chunking will use less accurate character-based counting. Run 'pip install tiktoken'.")
+    TIKTOKEN_AVAILABLE = False
+    tiktoken = None # Placeholder
+
+
+
 
 # --- NEW: Import the custom lock ---
 
@@ -452,10 +463,48 @@ class LlamaCppChatWrapper(SimpleChatModel):
 class LlamaCppEmbeddingsWrapper(Embeddings):
     ai_provider: 'CortexEngine'
     model_role: str = "embeddings"
+    _encoder = None  # Class attribute for lazy-loading the tokenizer
 
     def __init__(self, ai_provider: 'CortexEngine'):
         super().__init__()
         self.ai_provider = ai_provider
+
+    def _get_encoder(self):
+        """Lazily loads and returns the tiktoken encoder to avoid startup overhead."""
+        if self._encoder is None and TIKTOKEN_AVAILABLE and tiktoken is not None:
+            try:
+                # cl100k_base is the standard encoder for modern OpenAI models
+                self._encoder = tiktoken.get_encoding("cl100k_base")
+            except Exception as e:
+                logger.error(f"Failed to get tiktoken encoder 'cl100k_base', falling back. Error: {e}")
+                try:
+                    # Fallback for older environments or different tiktoken versions
+                    self._encoder = tiktoken.encoding_for_model("gpt-4")
+                except Exception as e2:
+                    logger.critical(f"Could not initialize any tiktoken encoder: {e2}")
+        return self._encoder
+
+    def _count_tokens(self, texts: List[str]) -> int:
+        """
+        Counts the total number of tokens in a list of texts using tiktoken.
+        Falls back to a character-based estimation if tiktoken is unavailable.
+        """
+        if not texts:
+            return 0
+
+        encoder = self._get_encoder()
+        if encoder:
+            total_tokens = 0
+            for text in texts:
+                # Ensure text is a string to prevent errors
+                if not isinstance(text, str):
+                    text = str(text)
+                total_tokens += len(encoder.encode(text))
+            return total_tokens
+        else:
+            # Fallback to character-based estimation if tiktoken failed
+            total_chars = sum(len(str(text)) for text in texts)
+            return total_chars // 4 # Rough but consistent fallback
 
     def embed_documents(self, texts: List[str], priority: int = ELP0) -> List[List[float]]:
         provider_logger = getattr(self.ai_provider, 'logger', logger)
@@ -466,65 +515,179 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
     # Standard Langchain interface method - uses default priority ELP0
     def embed_query(self, text: str, priority: int = ELP0) -> List[float]:
         provider_logger = getattr(self.ai_provider, 'logger', logger)
-        provider_logger.debug(f"EmbedWrapper.embed_query: Standard call for query '{text[:30]}...', delegating to _embed_texts with priority ELP{priority}.")
-        results = self._embed_texts([text], priority=priority) # Default priority ELP1 will be used by _embed_texts
-        if results and isinstance(results, list) and len(results) > 0 and isinstance(results[0], list) :
+        log_prefix = f"EmbedWrapper.embed_query|ELP{priority}"
+        
+        if not isinstance(text, str):
+            text = str(text) # Ensure input is a string
+
+        # --- SAFEGUARD LOGIC ---
+        # Check if this single query text exceeds the token limit.
+        token_count = self._count_tokens([text])
+        
+        text_to_embed = text
+        if token_count > MAX_EMBEDDING_TOKENS_PER_BATCH:
+            provider_logger.warning(
+                f"⚠️ {log_prefix}: Input query text ({token_count} tokens) exceeds the single-batch limit "
+                f"of {MAX_EMBEDDING_TOKENS_PER_BATCH}. The query will be truncated to prevent a worker crash."
+            )
+            
+            # Truncate the text. We use a simple character-based truncation as a fallback.
+            # A more precise method could use tiktoken to encode, slice, and decode.
+            if TIKTOKEN_AVAILABLE and self._get_encoder():
+                encoder = self._get_encoder()
+                tokens = encoder.encode(text)
+                truncated_tokens = tokens[:MAX_EMBEDDING_TOKENS_PER_BATCH]
+                text_to_embed = encoder.decode(truncated_tokens, errors='ignore')
+            else:
+                # Fallback to character-based truncation if tiktoken isn't available
+                safe_chars = int(MAX_EMBEDDING_TOKENS_PER_BATCH * 3.5) # Estimate
+                text_to_embed = text[:safe_chars]
+            
+            provider_logger.warning(f"{log_prefix}: Truncated query text length: {len(text_to_embed)} characters.")
+
+        # --- END SAFEGUARD ---
+
+        provider_logger.debug(f"{log_prefix}: Delegating single query embedding to _embed_texts.")
+        # Delegate the (potentially truncated) text to the core _embed_texts method.
+        results = self._embed_texts([text_to_embed], priority=priority)
+        
+        if results and isinstance(results, list) and len(results) > 0 and isinstance(results[0], list):
             return results[0]
-        provider_logger.error(f"EmbedWrapper.embed_query: _embed_texts did not return a valid vector for query. Result: {results}")
+            
+        provider_logger.error(f"{log_prefix}: _embed_texts did not return a valid vector for the query. Result: {results}")
         raise RuntimeError("Embedding query failed to produce a valid vector via _embed_texts.")
+
+    def _embed_large_texts_in_batches(self, texts: List[str], priority: int = ELP0) -> List[List[float]]:
+        """
+        Handles embedding for a list of texts that exceeds the token limit by
+        splitting it into multiple smaller batches and processing them sequentially.
+        """
+        provider_logger = getattr(self.ai_provider, 'logger', logger)
+        log_prefix = f"EmbedBatcher|ELP{priority}"
+
+        all_embeddings: List[List[float]] = []
+        current_batch: List[str] = []
+        current_batch_tokens = 0
+        total_batches = 0
+
+        for i, text in enumerate(texts):
+            # Ensure text is a string before counting tokens
+            text_str = str(text) if not isinstance(text, str) else text
+            
+            # Count tokens for the single text we are considering adding
+            text_tokens = self._count_tokens([text_str])
+            
+            # This is a safeguard. If a single text item is larger than the entire
+            # batch limit, we must truncate it to prevent an infinite loop.
+            if text_tokens > MAX_EMBEDDING_TOKENS_PER_BATCH:
+                provider_logger.warning(
+                    f"⚠️ {log_prefix}: A single text item (index {i}) has {text_tokens} tokens, "
+                    f"which exceeds the batch limit of {MAX_EMBEDDING_TOKENS_PER_BATCH}. "
+                    f"It will be truncated."
+                )
+                # We need a truncation helper. For now, we'll do a simple character-based one.
+                # A more advanced version could use tiktoken to decode/re-encode.
+                safe_chars = int(MAX_EMBEDDING_TOKENS_PER_BATCH * 3.5) # Estimate
+                text_str = text_str[:safe_chars]
+                text_tokens = self._count_tokens([text_str]) # Recalculate after truncation
+
+            # Check if adding the new text would push the current batch over the limit.
+            if current_batch_tokens + text_tokens > MAX_EMBEDDING_TOKENS_PER_BATCH and current_batch:
+                # The current batch is full. Process it.
+                total_batches += 1
+                provider_logger.info(
+                    f"{log_prefix}: Processing batch #{total_batches} with {len(current_batch)} texts "
+                    f"({current_batch_tokens} tokens)."
+                )
+                
+                # Use the original _embed_texts method to process this now-safe batch.
+                # This reuses the existing worker communication and error handling logic.
+                batch_embeddings = self._embed_texts(current_batch, priority=priority)
+                all_embeddings.extend(batch_embeddings)
+                
+                # Reset the batch to start a new one
+                current_batch = []
+                current_batch_tokens = 0
+
+            # Add the current text to the (now empty or still filling) batch.
+            current_batch.append(text_str)
+            current_batch_tokens += text_tokens
+
+        # After the loop, there might be a final, unprocessed batch left over.
+        if current_batch:
+            total_batches += 1
+            provider_logger.info(
+                f"{log_prefix}: Processing final batch #{total_batches} with {len(current_batch)} texts "
+                f"({current_batch_tokens} tokens)."
+            )
+            batch_embeddings = self._embed_texts(current_batch, priority=priority)
+            all_embeddings.extend(batch_embeddings)
+
+        provider_logger.success(f"✅ {log_prefix}: Finished processing all {total_batches} batches. "
+                          f"Returning a total of {len(all_embeddings)} vectors.")
+        
+        return all_embeddings
 
     def _embed_texts(self, texts: List[str], priority: int = ELP0) -> List[List[float]]:
         provider_logger = getattr(self.ai_provider, 'logger', logger)
-        log_prefix = f"EmbedWrapper._embed_texts|ELP{priority} {texts}"  # Uses passed priority
+        log_prefix = f"EmbedWrapper._embed_texts|ELP{priority}"
 
         if not texts:
             provider_logger.debug(f"{log_prefix}: Received empty list of texts. Returning empty list.")
             return []
 
-        provider_logger.debug(f"{log_prefix}: Delegating embedding for {len(texts)} texts to worker.")
-        request_payload = {"texts": texts}
+        # --- GATEKEEPER LOGIC ---
+        # Count the tokens of the incoming list of texts.
+        total_tokens = self._count_tokens(texts)
+        provider_logger.debug(f"{log_prefix}: Received {len(texts)} texts with a total of {total_tokens} tokens.")
 
-        # Call the CortexEngine's worker execution method with the specified priority
-        worker_result = self.ai_provider._execute_in_worker(  # type: ignore
-            model_role=self.model_role,  # This is "embeddings"
-            task_type="embedding",
-            request_data=request_payload,
-            priority=priority
-        )
+        # Compare against the safe limit.
+        if total_tokens <= MAX_EMBEDDING_TOKENS_PER_BATCH:
+            # If within the limit, proceed with the original single-batch logic.
+            provider_logger.debug(f"{log_prefix}: Token count is within the batch limit ({MAX_EMBEDDING_TOKENS_PER_BATCH}). Processing as a single batch.")
 
-        if worker_result and isinstance(worker_result, dict):
-            if "error" in worker_result:
-                error_msg_content = worker_result['error']
-                if interruption_error_marker in error_msg_content:  # type: ignore
-                    provider_logger.warning(f"🚦 {log_prefix}: Embedding task INTERRUPTED: {error_msg_content}")
-                    raise TaskInterruptedException(error_msg_content)  # type: ignore
+            request_payload = {"texts": texts}
+            worker_result = self.ai_provider._execute_in_worker(
+                model_role=self.model_role,
+                task_type="embedding",
+                request_data=request_payload,
+                priority=priority
+            )
+            
+            # (The existing error handling and result parsing logic remains the same for the single batch)
+            if worker_result and isinstance(worker_result, dict):
+                if "error" in worker_result:
+                    error_msg_content = worker_result['error']
+                    if interruption_error_marker in error_msg_content:
+                        provider_logger.warning(f"🚦 {log_prefix}: Embedding task INTERRUPTED: {error_msg_content}")
+                        raise TaskInterruptedException(error_msg_content)
+                    else:
+                        full_error_msg = f"LLAMA_CPP_EMBED_WORKER_ERROR ({self.model_role}|ELP{priority}): {error_msg_content}"
+                        provider_logger.error(full_error_msg)
+                        raise RuntimeError(full_error_msg)
+                elif "result" in worker_result and isinstance(worker_result["result"], list):
+                    batch_embeddings = worker_result["result"]
+                    if all(isinstance(emb, list) for emb in batch_embeddings):
+                        provider_logger.debug(f"{log_prefix}: Single-batch embedding successful. Returning {len(batch_embeddings)} vectors.")
+                        return [[float(num) for num in emb] for emb in batch_embeddings]
+                    else:
+                        provider_logger.error(f"{log_prefix}: Worker returned invalid embedding structure.")
+                        raise RuntimeError("LLAMA_CPP_EMBED_WORKER_RESPONSE_ERROR: Invalid embedding structure.")
                 else:
-                    full_error_msg = f"LLAMA_CPP_EMBED_WORKER_ERROR ({self.model_role}|ELP{priority}): {error_msg_content}"
-                    provider_logger.error(full_error_msg)
-                    raise RuntimeError(full_error_msg)
-            elif "result" in worker_result and isinstance(worker_result["result"], list):
-                batch_embeddings = worker_result["result"]
-                # Validate structure of returned embeddings
-                if all(isinstance(emb, list) and all(isinstance(num, (float, int)) for num in emb) for emb in
-                       batch_embeddings):
-                    provider_logger.debug(
-                        f"{log_prefix}: Embedding successful. Returning {len(batch_embeddings)} vectors.")
-                    return [[float(num) for num in emb] for emb in batch_embeddings]
-                else:
-                    provider_logger.error(
-                        f"{log_prefix}: Worker returned invalid embedding structure. Example Element Type: {type(batch_embeddings[0]) if batch_embeddings else 'N/A'}")
-                    raise RuntimeError(
-                        "LLAMA_CPP_EMBED_WORKER_RESPONSE_ERROR: Invalid embedding structure from worker.")
+                    provider_logger.error(f"{log_prefix}: Worker returned unknown dictionary structure: {str(worker_result)[:200]}...")
+                    raise RuntimeError("LLAMA_CPP_EMBED_WORKER_RESPONSE_ERROR: Unknown dictionary structure.")
             else:
-                provider_logger.error(
-                    f"{log_prefix}: Worker returned unknown dictionary structure for embeddings: {str(worker_result)[:200]}...")
-                raise RuntimeError(
-                    "LLAMA_CPP_EMBED_WORKER_RESPONSE_ERROR: Unknown dictionary structure for embeddings.")
+                provider_logger.error(f"{log_prefix}: Worker execution failed or returned invalid data type: {type(worker_result)}")
+                raise RuntimeError("LLAMA_CPP_EMBED_PROVIDER_ERROR: Worker execution failed.")
+
         else:
-            provider_logger.error(
-                f"{log_prefix}: CortexEngine._execute_in_worker for embeddings failed or returned invalid data type: {type(worker_result)}")
-            raise RuntimeError(
-                "LLAMA_CPP_EMBED_PROVIDER_ERROR: Worker execution for embeddings failed or returned invalid type.")
+            # If the limit is exceeded, delegate to the new batching method.
+            provider_logger.warning(
+                f"⚠️ {log_prefix}: Token count ({total_tokens}) exceeds batch limit ({MAX_EMBEDDING_TOKENS_PER_BATCH}). "
+                f"Delegating to batch processing."
+            )
+            # This method will be created in the next step. Python allows us to reference it here.
+            return self._embed_large_texts_in_batches(texts, priority=priority)
 
 # === AI Provider Class ===
 class CortexEngine:
