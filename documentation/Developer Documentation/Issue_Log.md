@@ -87,12 +87,31 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
     -   **Description:** To improve embedding quality and performance, the core embedding model was upgraded from `mxbai-embed-large-v1` to `Qwen/Qwen3-Embedding-0.6B-GGUF`. This required updating model download links in `launcher.py`, configuration in `CortexConfiguration.py`, and fixing the hardcoded embedding context size in `llama_worker.py` to support the new model's 32k context window. Additional changes were made to `database.py` and `file_indexer.py` to handle the new embedding format, and `requirements.txt` was updated with new dependencies.
 
+-   **ID:** `CORE-FEAT-002`
+    -   **Title:** Added content pass into the database for local document fetching.
+    -   **Status:** `Open`
+    -   **Description:** Implemented functionality to store the full content of indexed documents directly into the database. This enables efficient local document fetching for RAG (Retrieval Augmented Generation) and other content-aware operations, reducing reliance on external file system access during runtime.
+
+-   **ID:** `CORE-FEAT-003`
+    -   **Title:** Added MultiLanguage ZH and EN and native lang depends on query summarization for accommodating fallback of fuzzy matching on direct_generate and background_generate connection on the database.
+    -   **Status:** `Open`
+    -   **Description:** Introduced multi-language summarization capabilities, supporting English (EN), Simplified Chinese (ZH), and the original query language. This enhancement improves the robustness of fuzzy matching for `direct_generate` and `background_generate` database connections by providing summarized content in multiple linguistic contexts, facilitating better retrieval and understanding across diverse user inputs.
+
+-   **ID:** `CORE-FEAT-004`
+    -   **Title:** Reduce the ELP0 restart chance for each pass.
+    -   **Status:** `Open`
+    -   **Description:** Modified the ELP0 (Emergency Low Priority 0) interruption retry mechanism to significantly reduce the chance of full system restarts for each pass. This improves system stability and responsiveness by allowing for more graceful handling of transient interruptions during critical operations.
+
+### Defects (Bugs)
+
+-   **ID:** `CORE-BUG-001`
+    -   **Title:** Fix unlimited undefined entry of Assistant and User on the database at background_generate result raw ChatML generation.
+    -   **Status:** `Open`
+    -   **Description:** Addressed an issue where `background_generate` was creating an unlimited number of undefined Assistant and User entries in the database due to improper handling of raw ChatML generation results. This fix ensures that only valid and properly attributed entries are stored, preventing database bloat and maintaining data integrity.
+
 ### Refactors
 
 -   **ID:** `CORE-REFACTOR-001`
     -   **Title:** Refactor ToT payload and increase embedding context size.
     -   **Status:** `Resolved`
     -   **Description:** Refactored the Tree of Thought (ToT) payload in `AdelaideAlbertCortex.py` for clarity and simplicity. Increased the default embedding context size in `cortex_backbone_provider.py` to 4096 to improve embedding quality for longer documents. Simplified the frontend input area in `InputArea.jsx` by removing the stop generation button.
-
-
-
