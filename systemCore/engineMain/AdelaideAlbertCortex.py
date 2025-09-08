@@ -686,10 +686,14 @@ def _extract_json_candidate_string(raw_llm_text: str, log_prefix: str = "JSONExt
 
     logger.trace(f"{log_prefix}: Starting JSON candidate extraction from raw text (len {len(raw_llm_text)}).")
 
-    # 1. Remove <think> tags first
-    text_after_think_removal = re.sub(r'<think>.*?</think>', '', raw_llm_text, flags=re.DOTALL | re.IGNORECASE).strip()
+    # 1. Remove <think> tags and ChatML tokens first
+    # Remove <think> tags
+    text_cleaned = re.sub(r'<think>.*?</think>', '', raw_llm_text, flags=re.DOTALL | re.IGNORECASE)
+    # Remove ChatML tokens
+    text_cleaned = re.sub(r'<\|im_start\|>.*?<\|im_end\|>', '', text_cleaned, flags=re.DOTALL | re.IGNORECASE)
+    text_after_think_removal = text_cleaned.strip()
     if not text_after_think_removal:
-        logger.trace(f"{log_prefix}: Text empty after <think> removal.")
+        logger.trace(f"{log_prefix}: Text empty after <think> and ChatML token removal.")
         return None
 
     # 2. Remove common LLM preambles/postambles around the JSON content
@@ -2179,8 +2183,12 @@ class CortexThoughts:
         # --- END ADDED ---
 
 
-        # Remove think tags just in case
+        # Remove think tags and ChatML tokens just in case
         cleaned_text = re.sub(r'<think>.*?</think>', '', cleaned_text, flags=re.DOTALL | re.IGNORECASE)
+        # Remove any remaining ChatML tokens like <|im_start|>assistant or <|im_end|>
+        cleaned_text = re.sub(r'<\|im_start\|>.*?<\|im_end\|>', '', cleaned_text, flags=re.DOTALL | re.IGNORECASE)
+        cleaned_text = re.sub(r'<\|im_start\|>assistant', '', cleaned_text, flags=re.DOTALL | re.IGNORECASE)
+        cleaned_text = re.sub(r'<\|im_end\|>', '', cleaned_text, flags=re.DOTALL | re.IGNORECASE)
 
         # Remove leading/trailing whitespace that might be left
         cleaned_text = cleaned_text.strip()
@@ -2436,6 +2444,17 @@ class CortexThoughts:
                     logger.error(f"{req_id} Error during web search trigger: {search_err}")
                     exec_db.rollback()
                     return search_exec_fallback
+            elif action_type == "keyword_based_response_fallback":
+                logger.info(f"{req_id} Handling 'keyword_based_response_fallback' action type. Returning explanation directly.")
+                # This action type is a fallback and should not attempt script execution.
+                # It simply returns the explanation provided in its parameters.
+                fallback_message = parameters.get("explanation", "An internal fallback action was triggered.")
+                if triggering_interaction:
+                    triggering_interaction.assistant_action_executed = True
+                    triggering_interaction.assistant_action_result = fallback_message
+                    exec_db.merge(triggering_interaction)
+                    exec_db.commit()
+                return fallback_message
 
             # --- Platform-Aware Script Generation and Execution Loop ---
             params_json = json.dumps(parameters, sort_keys=True)
@@ -2819,6 +2838,10 @@ class CortexThoughts:
         if CHATML_END_TOKEN and cleaned_text.endswith(CHATML_END_TOKEN):
             cleaned_text = cleaned_text[:-len(CHATML_END_TOKEN)].strip()
 
+        # Remove common LLM specific tokens that might interfere with JSON parsing
+        cleaned_text = re.sub(r"<\|im_start\|>.*?<\|im_end\|>", "", cleaned_text, flags=re.DOTALL)
+        cleaned_text = re.sub(r"<\|im_start\|>", "", cleaned_text)
+        cleaned_text = re.sub(r"<\|im_end\|>", "", cleaned_text)
         json_markdown_match = re.search(r"```json\s*(\{[\s\S]*?\})\s*```", cleaned_text, re.DOTALL)
         if json_markdown_match:
             extracted_str = json_markdown_match.group(1).strip()
@@ -2977,7 +3000,6 @@ class CortexThoughts:
 
             logger.warning(
                 f"⚠️ {log_prefix} Classification attempt {current_attempt_num} failed. Error: {last_error_for_log}")
-            if current_attempt_num < DEEP_THOUGHT_RETRY_ATTEMPTS: await asyncio.sleep(0.5 + attempt * 0.5)
 
         # --- If all initial attempts failed, try LLM Re-request to fix format ---
         if not parsed_json_output:  # Check if we still don't have valid JSON
@@ -3362,7 +3384,6 @@ class CortexThoughts:
                 raise tie
             except Exception as e:
                 logger.warning(f"⚠️ {log_prefix} Initial Action analysis attempt {current_attempt_num} failed: {e}")
-            if current_attempt_num < DEEP_THOUGHT_RETRY_ATTEMPTS: await asyncio.sleep(0.5 + attempt * 0.5)
 
         if not parsed_action_json:
             logger.warning(
@@ -5604,6 +5625,65 @@ class CortexThoughts:
                             is_elaboration_finished = True
 
                     final_response_text_for_this_turn = "".join(elaborated_chunks_array).strip()
+
+                    # --- NEW: Multi-language Summarization and Translation ---
+                    logger.info(f"{log_prefix} Starting multi-language summarization and translation.")
+
+                    # 1. Determine original language of the user input
+                    # In a real scenario, you'd use a library like `langdetect` or `fasttext` here.
+                    # For the purpose of this task, we'll assume English for the original query language.
+                    # If a language detection library were available, it would be used like:
+                    # try:
+                    #     from langdetect import detect
+                    #     original_query_lang_code = detect(user_input)
+                    # except ImportError:
+                    #     logger.warning("langdetect not installed. Defaulting original query language to 'en'.")
+                    # except Exception as e:
+                    #     logger.warning(f"Language detection failed: {e}. Defaulting to 'en'.")
+                    original_query_lang_code = "en" # Default to English for now.
+
+                    # 2. Prepare prompt for summarization and translation
+                    summary_prompt_input = {
+                        "text_to_summarize": final_response_text_for_this_turn
+                    }
+
+                    # 3. Call the translator model
+                    translator_model = self.provider.get_model("translator")
+                    if not translator_model:
+                        logger.error(f"{log_prefix} Translator model not available for summarization. Skipping multi-language summary.")
+                    else:
+                        summary_chain = ChatPromptTemplate.from_template(PROMPT_MULTI_LANGUAGE_SUMMARY) | translator_model | StrOutputParser()
+                        summary_timing_data = {"session_id": session_id, "mode": "multi_lang_summary"}
+
+                        try:
+                            raw_summary_output = await asyncio.to_thread(
+                                self._call_llm_with_timing, summary_chain, summary_prompt_input, summary_timing_data, priority=ELP0
+                            )
+
+                            # Parse the JSON output
+                            json_candidate = self._extract_json_candidate_string(raw_summary_output, log_prefix + "-SummaryExtract")
+                            if json_candidate:
+                                parsed_summaries = self._programmatic_json_parse_and_fix(json_candidate, log_prefix=log_prefix + "-SummaryFix")
+                                if parsed_summaries and isinstance(parsed_summaries, dict):
+                                    # Store the summaries in the interaction_data
+                                    # Assuming new fields are added to the Interaction model in database.py
+                                    # e.g., summary_original_lang, summary_en, summary_zh
+                                    interaction_data["summary_original_lang"] = parsed_summaries.get("summary_original_lang", "")
+                                    interaction_data["summary_en"] = parsed_summaries.get("summary_en", "")
+                                    interaction_data["summary_zh"] = parsed_summaries.get("summary_zh", "")
+
+                                    logger.info(f"{log_prefix} Multi-language summaries generated and stored.")
+                                else:
+                                    logger.warning(f"{log_prefix} Failed to parse multi-language summary JSON. Raw: {raw_summary_output[:200]}")
+                            else:
+                                logger.warning(f"{log_prefix} No JSON candidate found for multi-language summary. Raw: {raw_summary_output[:200]}")
+
+                        except TaskInterruptedException as tie:
+                            logger.warning(f"🚦 {log_prefix} Multi-language summarization INTERRUPTED: {tie}")
+                            # Do not re-raise, just log and continue
+                        except Exception as e:
+                            logger.error(f"❌ {log_prefix} Error during multi-language summarization: {e}", exc_info=True)
+                    # --- END NEW: Multi-language Summarization and Translation ---
 
                     # ==========================================================
                     # 3.5 SPAWN TREE OF THOUGHTS (IF NEEDED)
