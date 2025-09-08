@@ -31,14 +31,22 @@ STREAM_ANIMATION_DELAY_SECONDS = 0.1 # How fast the animation plays
 FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS = int(os.getenv("FILE_SEARCH_QUERY_GEN_MAX_OUTPUT_TOKENS", 32768)) #Max at 32768
 FUZZY_DUPLICATION_THRESHOLD = 80 # Threshold for detecting rephrased/similar content
 #DEFAULT_LLM_TEMPERATURE = 0.8
+# --- Constants for Embedding Chunking ---
+# This is the n_ctx the embedding model worker is configured with.
+# The log shows this was forced to 4096.
+EMBEDDING_MODEL_N_CTX = 4096
+# Safety margin (15%) to account for tokenization differences and special tokens.
+EMBEDDING_TOKEN_SAFETY_MARGIN = 0.15
+# The final calculated token limit for any single batch sent to the embedding worker.
+MAX_EMBEDDING_TOKENS_PER_BATCH = int(EMBEDDING_MODEL_N_CTX * (1 - EMBEDDING_TOKEN_SAFETY_MARGIN))
 DEFAULT_LLM_TEMPERATURE = float(os.getenv("DEFAULT_LLM_TEMPERATURE", 0.8)) #Max at 1.0 (beyond that it's too risky and unstable)
-VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE = int(os.getenv("VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE", 512)) # For URL Chroma store
+VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE = int(os.getenv("VECTOR_CALC_CHUNK_BATCH_TOKEN_SIZE", 4096)) # For URL Chroma store
 CHUNK_OVERLAP = int(os.getenv("CHUNK_OVERLAP", 256)) # For URL Chroma store
 RAG_HISTORY_COUNT = MEMORY_SIZE
 RAG_FILE_INDEX_COUNT = int(os.getenv("RAG_FILE_INDEX_COUNT", 7))
 FILE_INDEX_MAX_SIZE_MB = int(os.getenv("FILE_INDEX_MAX_SIZE_MB", 32000)) #Extreme or vanquish (Max at 512 mixedbread embedding) (new Qwen3 embedding is maxxed at 32000)
 FILE_INDEX_MIN_SIZE_KB = int(os.getenv("FILE_INDEX_MIN_SIZE_KB", 1))
-FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 600)) #default at 3600 putting it to 5 is just for debug and rentlessly scanning
+FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS", 3600)) #default at 3600 putting it to 5 is just for debug and rentlessly scanning
 
 
 BENCHMARK_ELP1_TIME_MS = 600000.0 #before hard defined error timeout (30 seconds max)
