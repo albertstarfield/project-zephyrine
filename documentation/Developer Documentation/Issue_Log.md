@@ -100,7 +100,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `CORE-FEAT-004`
     -   **Title:** Reduce the ELP0 restart chance for each pass.
     -   **Status:** `Open`
-    -   **Description:** Modified the ELP0 (Emergency Low Priority 0) interruption retry mechanism to significantly reduce the chance of full system restarts for each pass. This improves system stability and responsiveness by allowing for more graceful handling of transient interruptions during critical operations.
+    -   **Description:** Modified the ELP0 (Elevated Level Privilege 0) interruption retry mechanism to significantly reduce the chance of full system restarts for each pass. This improves system stability and responsiveness by allowing for more graceful handling of transient interruptions during critical operations.
 
 ### Defects (Bugs)
 
