@@ -66,20 +66,25 @@ The title line is mandatory and consists of three parts:
 
 **Example Title:** `fix(mesh): correct asset path resolution in manifest generation`
 
+
+
 #### **2. Body (Mandatory for Features, Fixes, and Refactors)**
 
 The body provides the context and "why" of the change. Explain the problem, the reasoning behind the solution, and any trade-offs made.
 
-**For contributions involving Generative AI**, the body **must** also include the addendum as specified in **Article II, Section 2.3.2**, containing the **Logical Flow Concept** and **Cited Programming Manuals**.
+**For contributions involving Generative AI**, the body **must** also include the addendum as specified in **Article II, Section 2.3.2**, containing the **Logical Flow Concept** and **Cited Progr
+amming Manuals**.
 
 #### **3. Footer (Mandatory)**
 
 The footer is used for explicit traceability and verification. It **MUST** contain the following components in this order:
 
--   **Issue/Requirement ID(s):** Reference the ID(s) from the `Issue_Log.md` document. Use keywords like `Resolves:`, `Fixes:`, or `Implements:` .
+-   **Issue
+- /Requirement ID(s):** Reference the ID(s) from the `Issue_Log.md` document. Use keywords like `Resolves:`, `Fixes:`, or `Implements:` .
 
 -   **Code of Conduct Acknowledgment:** A mandatory checklist item.
     -   `Have I read the Code of Conduct?: Yes`
+
 
 -   **Verification Canary:** A unique, date-based string to verify that these specific instructions have been read and followed.
     -   The base string is: `IdonotCondoneanyCorruptionorMisuseLyingddmmyyyy`
