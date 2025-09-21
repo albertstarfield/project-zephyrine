@@ -117,6 +117,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
     -   **Description:** The `AgenticRelaxationThread` in `priority_lock.py` now supports a dynamic, resource-aware mode (`reservativesharedresources`). In this mode, the thread monitors system CPU load and ELP1 task contention to aggressively throttle ELP0 background tasks when the system is busy, and allows them to run freely when resources are available. This improves overall system responsiveness.
 
+-   **ID:** `CORE-FEAT-008`
+    -   **Title:** Unify Mesa GPU Driver Build and Add CPU Fallback for Android.
+    -   **Status:** `In-Progress`
+    -   **Description:** The Mesa build process for Android containers has been unified to use a single configuration for both Adreno and Mali GPUs. A verification step using `vulkaninfo` has been added to check if the custom driver is loaded correctly. If verification fails, a `.gpu_acceleration_failed` flag is created, forcing the application into a CPU-only fallback mode to ensure functionality on devices where the custom driver fails.
+
 ### Defects (Bugs)
 
 -   **ID:** `CORE-BUG-001`
@@ -128,6 +133,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Prevent crashes from oversized embedding batches.
     -   **Status:** `Resolved`
     -   **Description:** Added a safeguard in `cortex_backbone_provider.py` to handle cases where a single text item exceeds the maximum token limit for embedding. The code now truncates oversized items before adding them to a batch, preventing the embedding process from crashing and ensuring that large documents can be processed reliably.
+
+-   **ID:** `CORE-BUG-003`
+    -   **Title:** GPU Driver Verification Fails on Some Android Devices.
+    -   **Status:** `Open`
+    -   **Description:** The `vulkaninfo` check during the Mesa build process fails on some Android devices, causing the system to unnecessarily fall back to CPU mode even if the GPU is functional. This appears to be a false negative from the verification step.
 
 ### Refactors
 
