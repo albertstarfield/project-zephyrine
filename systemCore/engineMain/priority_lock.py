@@ -7,6 +7,7 @@ from typing import Optional, Tuple
 from loguru import logger
 import platform
 import os
+import psutil
 
 # --- Configuration Import ---
 try:
@@ -27,52 +28,70 @@ class AgenticRelaxationThread(threading.Thread):
     """
     A thread that implements PWM-style lock acquisition on ELP0 to throttle
     background tasks and manage thermals/power.
+    Can operate in a fixed duty cycle mode or a dynamic, resource-aware mode.
     """
 
     def __init__(self, lock: 'PriorityQuotaLock', duty_cycle_off: float, period_sec: float,
-                 stop_event: threading.Event):
+                 stop_event: threading.Event, is_dynamic_mode: bool = False):
         super().__init__(name="AgenticRelaxationThread", daemon=True)
         self.lock = lock
-        self.duty_cycle_off = duty_cycle_off  # e.g., 0.3 for 30% off time
+        self.initial_duty_cycle_off = duty_cycle_off
         self.period_sec = period_sec
         self.stop_event = stop_event
-        self.off_time = self.period_sec * self.duty_cycle_off
-        self.on_time = self.period_sec * (1.0 - self.duty_cycle_off)
-        logger.info(
-            f"AgenticRelaxationThread initialized. Off-Time: {self.off_time:.2f}s, On-Time: {self.on_time:.2f}s per cycle.")
+        self.is_dynamic_mode = is_dynamic_mode
+        self.duty_cycle_off = self.initial_duty_cycle_off
+        logger.info(f"AgenticRelaxationThread initialized. Dynamic Mode: {self.is_dynamic_mode}")
+
+    def _calculate_dynamic_duty_cycle(self) -> float:
+        """Calculates duty cycle based on system load and ELP1 contention."""
+        try:
+            # Check for high-priority task contention
+            _, _, _, elp1_waiting_count = self.lock.get_status_extended()
+
+            # Check for overall system CPU load
+            cpu_percent = psutil.cpu_percent(interval=0.1)
+
+            # Logic: If any ELP1 is waiting OR system CPU is high, be aggressive with power saving.
+            if elp1_waiting_count > 0 or cpu_percent > 80.0:
+                logger.warning(f"Dynamic Relaxation: High load detected (ELP1 Waiters: {elp1_waiting_count}, CPU: {cpu_percent:.1f}%). Throttling ELP0 tasks.")
+                return 0.98  # 98% off-time (ExtremePowerSaving)
+            else:
+                # When there's no pressure, don't relax at all.
+                logger.trace(f"Dynamic Relaxation: Low load (ELP1 Waiters: {elp1_waiting_count}, CPU: {cpu_percent:.1f}%). Allowing ELP0 tasks.")
+                return 0.0  # 0% off-time
+
+        except Exception as e:
+            logger.error(f"Error in _calculate_dynamic_duty_cycle: {e}. Defaulting to initial duty cycle.")
+            return self.initial_duty_cycle_off
 
     def run(self):
-        logger.info("✅ AgenticRelaxationThread started.")
+        logger.info(f"✅ AgenticRelaxationThread started (Dynamic: {self.is_dynamic_mode}).")
         while not self.stop_event.is_set():
             try:
-                # --- OFF Cycle: Hold the lock as ELP0 ---
-                if self.off_time > 0:
-                    # Acquire the lock as a low-priority (ELP0) task.
-                    # This can be interrupted by an ELP1 task.
-                    # We don't register a process, as this thread doesn't have one to kill.
-                    was_acquired = self.lock.acquire(priority=ELP0,
-                                                     timeout=self.on_time)  # Wait for lock during on-time
+                if self.is_dynamic_mode:
+                    self.duty_cycle_off = self._calculate_dynamic_duty_cycle()
+                
+                off_time = self.period_sec * self.duty_cycle_off
+                on_time = self.period_sec * (1.0 - self.duty_cycle_off)
 
+                if off_time > 0:
+                    was_acquired = self.lock.acquire(priority=ELP0, timeout=on_time)
                     if was_acquired:
                         try:
-                            # Hold the lock for the "off" duration
-                            logger.trace(f"Relaxation thread acquired ELP0 lock. Holding for {self.off_time:.2f}s...")
-                            self.stop_event.wait(self.off_time)
+                            logger.trace(f"Relaxation thread acquired ELP0 lock. Holding for {off_time:.2f}s...")
+                            self.stop_event.wait(off_time)
                         finally:
                             logger.trace("Relaxation thread releasing ELP0 lock.")
                             self.lock.release()
                     else:
-                        # Could not acquire lock during on_time, means an ELP0 task is running.
-                        # This is fine, we just wait and try again next cycle.
-                        logger.trace(
-                            f"Relaxation thread could not acquire lock, another ELP0 task is active. Waiting for next cycle.")
+                        logger.trace("Relaxation thread could not acquire lock, another ELP0 task is active. Waiting for next cycle.")
                         self.stop_event.wait(self.period_sec)
-                else:  # on_time is 100%
+                else:
+                    # If off_time is 0, just wait for the full period before re-evaluating.
                     self.stop_event.wait(self.period_sec)
 
             except Exception as e:
                 logger.error(f"Error in AgenticRelaxationThread loop: {e}")
-                # Avoid busy-looping on error
                 self.stop_event.wait(5)
 
         logger.info("🛑 AgenticRelaxationThread has been shut down.")
@@ -105,26 +124,36 @@ class PriorityQuotaLock:
     def _initialize_relaxation(self):
         mode = str(AGENTIC_RELAXATION_MODE).lower().replace(" ", "")
         presets = {k.lower(): v for k, v in AGENTIC_RELAXATION_PRESETS.items()}
-
+        is_dynamic = False
+        
         duty_cycle_off_percent = 0
         if mode in presets:
-            duty_cycle_off_percent = presets[mode]
+            preset_value = presets[mode]
+            if preset_value == -1: # Our special value for dynamic mode
+                is_dynamic = True
+                duty_cycle_off_percent = 0 # Start with 0, thread will adjust it
+                logger.info("Activating AgenticRelaxation in dynamic 'reservativesharedresources' mode.")
+            else:
+                duty_cycle_off_percent = preset_value
         else:
             try:
                 duty_cycle_off_percent = float(mode)
             except ValueError:
                 logger.warning(f"Invalid AGENTIC_RELAXATION_MODE '{AGENTIC_RELAXATION_MODE}'. Defaulting to 0%.")
 
-        duty_cycle_off_percent = max(0, min(100, duty_cycle_off_percent))  # Clamp between 0 and 100
+        duty_cycle_off_percent = max(0, min(100, duty_cycle_off_percent))
 
-        if duty_cycle_off_percent > 0:
+        if duty_cycle_off_percent > 0 or is_dynamic:
             duty_cycle_float = duty_cycle_off_percent / 100.0
-            logger.info(f"Activating AgenticRelaxation with {duty_cycle_off_percent}% off-cycle.")
+            if not is_dynamic:
+                 logger.info(f"Activating AgenticRelaxation with fixed {duty_cycle_off_percent}% off-cycle.")
+
             self._relaxation_thread = AgenticRelaxationThread(
                 lock=self,
                 duty_cycle_off=duty_cycle_float,
                 period_sec=AGENTIC_RELAXATION_PERIOD_SECONDS,
-                stop_event=self._relaxation_stop_event
+                stop_event=self._relaxation_stop_event,
+                is_dynamic_mode=is_dynamic
             )
             self._relaxation_thread.start()
         else:
@@ -184,7 +213,7 @@ class PriorityQuotaLock:
                     self._lock_holder_thread_ident = requesting_thread_ident
                     if priority == ELP0:
                         self._elp1_interrupt_quota = self.QUOTA_MAX
-                        logger.info("{}:: Acquired lock (was Free). Reset ELP1 quota to {}.", log_prefix,
+                        logger.info("{}:: Acquired lock (was Free). Reset ELP1 quota to {}", log_prefix,
                                     self.QUOTA_MAX)
                     else:  # ELP1 acquired a free lock
                         logger.info("{}:: Acquired lock (was Free). Quota remaining: {}", log_prefix,
@@ -210,7 +239,7 @@ class PriorityQuotaLock:
                                 kill_cmd = ["taskkill", "/PID", str(pid_to_kill), "/F", "/T"]  # Add /T for process tree
                                 kill_proc_run = subprocess.run(kill_cmd, capture_output=True, text=True, check=False)
                                 if kill_proc_run.returncode != 0:
-                                    logger.error("{}:: taskkill failed for PID {}: {}", log_prefix, pid_to_kill,
+                                    logger.error("{}:: taskkill failed for PID {}: {}", log_prefix, pid_to_kill, 
                                                  kill_proc_run.stderr.strip())
                                 else:
                                     logger.info("{}:: taskkill successful for PID {}", log_prefix, pid_to_kill)
@@ -231,7 +260,7 @@ class PriorityQuotaLock:
                             logger.warning("{}:: ELP0 process PID {} not found during kill (already exited?).",
                                            log_prefix, pid_to_kill)
                         except Exception as kill_err:
-                            logger.error("{}:: Error killing ELP0 process PID {}: {}", log_prefix, pid_to_kill,
+                            logger.error("{}:: Error killing ELP0 process PID {}: {}", log_prefix, pid_to_kill, 
                                          kill_err)
                     else:
                         logger.warning(

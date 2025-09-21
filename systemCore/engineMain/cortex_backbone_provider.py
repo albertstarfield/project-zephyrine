@@ -561,6 +561,7 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
         """
         Handles embedding for a list of texts that exceeds the token limit by
         splitting it into multiple smaller batches and processing them sequentially.
+        Includes a safeguard to truncate individual texts that are too long.
         """
         provider_logger = getattr(self.ai_provider, 'logger', logger)
         log_prefix = f"EmbedBatcher|ELP{priority}"
@@ -571,25 +572,34 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
         total_batches = 0
 
         for i, text in enumerate(texts):
-            # Ensure text is a string before counting tokens
             text_str = str(text) if not isinstance(text, str) else text
-            
-            # Count tokens for the single text we are considering adding
             text_tokens = self._count_tokens([text_str])
             
-            # This is a safeguard. If a single text item is larger than the entire
-            # batch limit, we must truncate it to prevent an infinite loop.
+            # =================== THIS IS THE FIX ===================
+            # Safeguard: If a single text item (chunk) is larger than the entire
+            # batch limit, we must truncate it to prevent an error.
             if text_tokens > MAX_EMBEDDING_TOKENS_PER_BATCH:
                 provider_logger.warning(
                     f"⚠️ {log_prefix}: A single text item (index {i}) has {text_tokens} tokens, "
                     f"which exceeds the batch limit of {MAX_EMBEDDING_TOKENS_PER_BATCH}. "
                     f"It will be truncated."
                 )
-                # We need a truncation helper. For now, we'll do a simple character-based one.
-                # A more advanced version could use tiktoken to decode/re-encode.
-                safe_chars = int(MAX_EMBEDDING_TOKENS_PER_BATCH * 3.5) # Estimate
-                text_str = text_str[:safe_chars]
-                text_tokens = self._count_tokens([text_str]) # Recalculate after truncation
+                
+                # Use tiktoken for precise truncation if available
+                encoder = self._get_encoder()
+                if TIKTOKEN_AVAILABLE and encoder:
+                    tokens = encoder.encode(text_str)
+                    truncated_tokens = tokens[:MAX_EMBEDDING_TOKENS_PER_BATCH]
+                    text_str = encoder.decode(truncated_tokens, errors='ignore')
+                else:
+                    # Fallback to character-based truncation
+                    safe_chars = int(MAX_EMBEDDING_TOKENS_PER_BATCH * 3.5) # Estimate
+                    text_str = text_str[:safe_chars]
+                
+                # Recalculate the token count after truncation
+                text_tokens = self._count_tokens([text_str])
+                provider_logger.warning(f"{log_prefix}: Truncated item now has {text_tokens} tokens.")
+            # ================= END OF THE FIX ===================
 
             # Check if adding the new text would push the current batch over the limit.
             if current_batch_tokens + text_tokens > MAX_EMBEDDING_TOKENS_PER_BATCH and current_batch:
@@ -599,21 +609,18 @@ class LlamaCppEmbeddingsWrapper(Embeddings):
                     f"{log_prefix}: Processing batch #{total_batches} with {len(current_batch)} texts "
                     f"({current_batch_tokens} tokens)."
                 )
-                
-                # Use the original _embed_texts method to process this now-safe batch.
-                # This reuses the existing worker communication and error handling logic.
                 batch_embeddings = self._embed_texts(current_batch, priority=priority)
                 all_embeddings.extend(batch_embeddings)
                 
-                # Reset the batch to start a new one
+                # Reset for the new batch
                 current_batch = []
                 current_batch_tokens = 0
 
-            # Add the current text to the (now empty or still filling) batch.
+            # Add the current text to the batch.
             current_batch.append(text_str)
             current_batch_tokens += text_tokens
 
-        # After the loop, there might be a final, unprocessed batch left over.
+        # Process the final batch if any texts are left over.
         if current_batch:
             total_batches += 1
             provider_logger.info(

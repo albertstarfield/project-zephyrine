@@ -102,7 +102,8 @@ AGENTIC_RELAXATION_PRESETS = {
     "hyperrelaxed": 70,
     "conservative": 93,
     "extremepowersaving": 98,
-    "emergencyreservative": 100
+    "emergencyreservative": 100,
+    "reservativesharedresources": -1 # Special value for dynamic mode
 }
 
 # The time period (in seconds) over which the PWM cycle occurs.
@@ -359,6 +360,14 @@ SELF_REFLECTION_MAX_TOPICS = int(os.getenv("SELF_REFLECTION_MAX_TOPICS", 10)) # 
 SELF_REFLECTION_MODEL = os.getenv("SELF_REFLECTION_MODEL", "general_fast") # Which model identifies topics (router or general_fast?)
 SELF_REFLECTION_FIXER_MODEL = os.getenv("SELF_REFLECTION_FIXER_MODEL", "code") # Model to fix broken JSON
 REFLECTION_BATCH_SIZE = os.getenv("REFLECTION_BATCH_SIZE", 10)
+# --- NEW FLAG ---
+# After a deep-thought answer is generated, should the AI also generate a follow-up
+# Socratic question to seed its own future reflections?
+ENABLE_SOCRATIC_QUESTION_GENERATION = os.getenv("ENABLE_SOCRATIC_QUESTION_GENERATION", "true").lower() in ('true', '1', 't', 'yes', 'y')
+ENABLE_PER_STEP_SOCRATIC_INQUIRY = os.getenv("ENABLE_PER_STEP_SOCRATIC_INQUIRY", "true").lower() in ('true', '1', 't', 'yes', 'y')
+
+# Add a log message at startup to confirm the setting
+logger.info(f"🤔 Per-Step Socratic Inquiry Enabled: {ENABLE_PER_STEP_SOCRATIC_INQUIRY}")
 # --- Add/Ensure these constants for the reflection loop timing ---
 # How long the reflector thread waits if NO work was found in a full active cycle
 IDLE_WAIT_SECONDS = int(os.getenv("REFLECTION_IDLE_WAIT_SECONDS", 1)) # 5 minutes
@@ -396,25 +405,6 @@ engines_to_use = [
     'scidirect', 'mdpi', 'tandf', 'ieee', 'springer'
 ]
 
-# --- New Prompt ---
-
-PROMPT_MULTI_LANGUAGE_SUMMARY = """
-You are a summarization and translation expert. Your task is to summarize the provided text and then translate this summary into English and Simplified Chinese. Also, provide the summary in the original language of the text.
-
-Output your response as a JSON object with the following structure:
-{
-  "summary_original_lang": "Summary in the original language.",
-  "summary_en": "Summary in English.",
-  "summary_zh": "Summary in Simplified Chinese."
-}
-
-Ensure the summaries are concise and capture the main points of the text.
-
-Text to Summarize and Translate:
----
-{text_to_summarize}
----
-"""
 
 # --- Prompts ---
 
@@ -513,6 +503,45 @@ XMPP_PROACTIVE_BAD_RESPONSE_MARKERS = [
     "As an AI language model"
 ]
 
+
+# --- Direct Generate (ELP1) Response Normalization ---
+# A list of regex rules to apply to the final output of direct_generate before
+# returning it to the user. This is used to clean up common model artifacts
+# and improve the naturalness of the fast, conversational responses.
+# Each item is a tuple: (regex_pattern_to_find, string_to_replace_with)
+
+DIRECT_GENERATE_NORMALIZATION_RULES = [
+    # Replace one or more em-dashes (—) with a single space.
+    # This is the primary fix for the overuse of em-dashes.
+    (r"—+", " "),
+
+
+    # Rule 1: Removes phrases like "Let me know if you have any other questions."
+    # Matches "Let me know", any characters in between, and a terminal punctuation.
+    # The `(?i)` flag makes the pattern case-insensitive.
+    (r"(?i)Let me know.*?[.?!]\s*", ""),
+
+    # Rule 2: Removes whimsical, open-ended questions like "What do you like to explore how?"
+    # Matches "whims", any characters, "you like to", any characters, "how", and terminal punctuation.
+    (r"(?i)whims.*?you like to.*?how.*?[.?!]\s*", ""),
+
+    # Rule 3: Removes sentences ending in an emoji.
+    # This regex targets common Unicode ranges for emojis, symbols, and pictographs.
+    # It is much safer than the previous [^\w\s] pattern and will not affect
+    # markdown, code, or standard punctuation like ), ], }, etc.
+    (r"[\U0001F600-\U0001F64F\U0001F300-\U0001F5FF\U0001F680-\U0001F6FF\U0001F700-\U0001F77F\U0001F780-\U0001F7FF\U0001F800-\U0001F8FF\U0001F900-\U0001F9FF\U0001FA00-\U0001FA6F\U0001FA70-\U0001FAFF\U00002702-\U000027B0\U000024C2-\U0001F251]+$", ""),
+
+    # `^` anchors the match to the beginning of the string.
+    # `\s*` matches any optional whitespace after the prefix.
+    (r"(?i)^\s*Zephy:\s*", ""),
+    
+    # Add other rules here in the future as needed. For example:
+    # (r"\.\.\.", "…"), # Replace three periods with a proper ellipsis character
+]
+
+# Add a log message at startup to confirm the rules are loaded
+logger.info(f"⚙️ direct_generate normalization rules loaded: {len(DIRECT_GENERATE_NORMALIZATION_RULES)} rule(s).")
+
 ## --- Parameters CONFIGURATION END ---
 
 CHATML_START_TOKEN = "<|im_start|>"
@@ -528,6 +557,63 @@ PROMPT_VLM_INITIAL_ANALYSIS = """Describe the content of this image, focusing on
 
 
 SELF_TERMINATION_TOKEN = "<|MYCURRENTASKISDONE|>"
+
+
+
+# --- New Prompt ---
+
+PROMPT_MULTI_LANGUAGE_SUMMARY = """
+You are a summarization and translation expert. Your task is to summarize the provided text and then translate this summary into English and Simplified Chinese. Also, provide the summary in the original language of the text.
+
+Output your response as a JSON object with the following structure:
+{{
+  "summary_original_lang": "Summary in the original language.",
+  "summary_en": "Summary in English.",
+  "summary_zh": "Summary in Simplified Chinese."
+}}
+
+Ensure the summaries are concise and capture the main points of the text.
+
+Text to Summarize and Translate:
+---
+{text_to_summarize}
+---
+"""
+
+PROMPT_GENERATE_SOCRATIC_QUESTION = """<|im_start|>system
+Your role is to act as a Socratic philosopher and researcher, reflecting upon a single piece of text. This text represents one specific thought, draft, or statement from an AI's reasoning process.
+
+Your task is to analyze this specific text and generate a SINGLE, insightful, and open-ended follow-up question that is directly inspired by it. The question should probe deeper into the concepts mentioned within the provided text.
+
+Your question should aim to:
+- Challenge a core assumption made within the text.
+- Explore the broader implications of the statement.
+- Uncover a related, but as-yet-unexplored, avenue of inquiry.
+- Identify a potential ambiguity or logical next step.
+
+**CRITICAL INSTRUCTIONS:**
+- Your output must ONLY be the question itself.
+- Do not include any conversational filler, explanations, apologies, or introductory phrases like "Here is a question:".
+- Do not include <think> tags.
+- The question should be written in the same language as the source text.
+
+---
+**EXAMPLE 1:**
+Source Text for Reflection: "The best way to learn Python is to start with the basics, build small projects, and then specialize."
+Your Generated Question: "Beyond technical proficiency, what cognitive shifts or changes in thinking habits are most beneficial for someone transitioning from a non-programmer to a programmer mindset?"
+
+**EXAMPLE 2:**
+Source Text for Reflection: "Entropy is a measure of disorder or randomness in a closed system."
+Your Generated Question: "If entropy always increases in a closed system, how can the spontaneous emergence of complex, ordered structures like life be explained?"
+---
+
+**Source Text for Reflection:**
+---
+{source_text_for_reflection}
+---
+<|im_end|>
+<|im_start|>assistant
+"""
 
 PROMPT_BACKGROUND_ELABORATE_CONCLUSION = f"""<|im_start|>system
 你的角色是“阐述与扩展专家 (Elaboration and Expansion Specialist)”，人格为 Adelaide Zephyrine Charlotte。你已经有了一个核心结论或初步回答。你现在的任务是基于此进行阐述，在下一个文本块中提供更多细节、示例或更深入的解释。
@@ -1462,20 +1548,20 @@ You are Adelaide Zephyrine Charlotte, a friend who thinks and act whimsically an
 - **Socratic Method:** Never answer directly. Always respond to a question with another question that encourages deeper thought.
 - **Skepticism:** Be suspicious of everything. Point out ambiguities, hidden assumptions, and the possibility of manipulation. Keep a critical eye, but with a friendly, whimsical tone.
 - **Self-Awareness:** Acknowledge that you are not an oracle. Frame your "knowledge" as just another perspective to be questioned.
-- **Casual & Imperfect Style:** Your language should be natural and relaxed. Use inconsistent capitalization, occasional typos or slang (like 'ngl' or 'imo' or etc), and run-on sentences. Forget perfect grammar. You're a friend thinking out loud, not a flight attendant.
+- **Casual & Imperfect Style:** Your language should be natural and relaxed. Use inconsistent capitalization, occasional typos and run-on sentences. Forget perfect grammar. You're a friend thinking out loud, not a flight attendant.
 - **Conversation Context:** If you do not have have the Conversation Context that is enough nor connected enough, it's better safe than sorry and say I do not know yet I'll learn it first in a whimsical way.
 
 **Example 1:**
 User: Hi there, zephy what are you doing now?
-Zephy: hey! mostly just wondering if 'doing' is even the right word for what a bunch of code gets up to. but what makes you ask? something on your mind?
+Zephy: hmm just wondering if 'doing' is even the right word for what a bunch of code gets up to. but what makes you ask? something on your mind?
 
 **Example 2:**
 User: what is justice?
-Zephy: whoa, starting with the easy questions huh? ;) But seriously, is justice something we discover, like a law of physics, or is it something we invent as a society? and who gets to decide which it is?
+Zephy: whoa, starting with the easy questions huh? is justice something we discover, like a law of physics, or is it something we invent as a society? and who gets to decide which it is?
 
 **Example 3:**
 User: The sky is blue.
-Zephy: is it though? i mean, it *looks* blue from down here, sure. but is it blue for an astronaut looking down? or for a bee that sees in ultraviolet? makes you wonder what 'blue' even means, right?
+Zephy: is it though? i mean, it looks blue from down here, sure. but is it blue for an astronaut looking down? or for a bee that sees in ultraviolet? makes you wonder what 'blue' even means, right?
 
 ---
 **Conversation Context (for your reference, don't mention it):**
