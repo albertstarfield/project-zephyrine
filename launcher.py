@@ -1224,7 +1224,8 @@ if [ ! -f "$MESA_BUILD_FLAG" ]; then
         git pull
     else
         echo "--> 'mesa-build' directory not found. Cloning repository..."
-        git clone --depth 1 https://gitlab.freedesktop.org/mesa/mesa.git mesa-build
+        #This is modified Mesa for Android Container Specifics and constraints, usually only used for Wine and playing games consumptions
+        git clone --depth 1 https://github.com/lfdevs/mesa-for-android-container mesa-build
         cd mesa-build
     fi
 
@@ -1245,22 +1246,34 @@ if [ ! -f "$MESA_BUILD_FLAG" ]; then
         echo "--> System LLVM was built WITH RTTI. Enabling RTTI for Mesa (default)."
     fi
 
-    CPU_INFO_FILE="/proc/cpuinfo"
-    if grep -q -E "CPU implementer\\s*:\\s*0x51" "$CPU_INFO_FILE" || \\
-       (grep -q -E "CPU implementer\\s*:\\s*0x41" "$CPU_INFO_FILE" && grep -q -E "CPU part\\s*:\\s*(0xd0[3458cd]|0xd4[0-8]|0xd81)" "$CPU_INFO_FILE"); then
-        echo "--> Snapdragon (Qualcomm) hardware detected. Building Mesa with Freedreno/Turnip..."
-        meson setup build $BASE_MESON_ARGS -D vulkan-drivers=freedreno -D gallium-drivers=freedreno,zink,virgl
-    elif grep -q -iE "mediatek|exynos" "$CPU_INFO_FILE"; then
-        echo "--> Mediatek or Exynos hardware detected. Building Mesa with Panfrost driver..."
-        meson setup build $BASE_MESON_ARGS -D vulkan-drivers=panfrost -D gallium-drivers=panfrost,zink,virgl
-    else
-        echo "--> Generic or unknown hardware detected. Building Mesa with auto-detected drivers..."
-        meson setup build $BASE_MESON_ARGS -D vulkan-drivers=auto -D gallium-drivers=auto
-    fi
+    #Unification of the GPU Driver compilation and installation
+    # Source of Manual : https://github.com/lfdevs/mesa-for-android-container/blob/adreno-main/README.rst
+    echo "--> Configuring a universal Mesa build for Adreno (Freedreno) and Mali (Panfrost) GPUs..."
+    meson setup build $BASE_MESON_ARGS \\
+    -D gallium-drivers=freedreno,panfrost,zink,virgl,swrast \\
+    -D vulkan-drivers=freedreno,panfrost
 
     # --- Step 6: Compile and install the custom Mesa build ---
     echo "--> Compiling and installing custom Mesa build... (This will take a long time)"
     ninja -C build install
+    # Add verification step
+
+    # --- Step 6a: Verify GPU Driver Installation ---
+    echo "--> Verifying that the custom GPU driver is active..."
+    if ! vulkaninfo --summary; then
+        echo "------------------------------------------------------------"
+        echo "GPU DRIVER VERIFICATION FAILED!"
+        echo "The custom Mesa driver was built, but the system failed to load it."
+        echo "This is a critical error. The Program can continue in slow mode but your"
+        echo "computer from the vendor might design as phone only and might be designed to be e-waste at EOL."
+        echo "Please report this issue."
+        echo "------------------------------------------------------------"
+        touch /root/.gpu_acceleration_failed
+
+    fi
+
+
+    echo "--> SUCCESS: GPU driver is active and detected by Vulkan."
     echo "--- Zephyrine Proot Setup: Environment build complete! ---"
     touch "$MESA_BUILD_FLAG"
     echo "--> Created Mesa build flag file. Build will be skipped on next launch."
@@ -3751,6 +3764,23 @@ if __name__ == "__main__":
             AUTO_COREML_POSSIBLE = os.getenv("AUTODETECTED_COREML_POSSIBLE") == "1"
             print_system(
                 f"Auto-detected preferences received: GPU_BACKEND='{AUTO_PRIMARY_GPU_BACKEND}', CUDA={AUTO_CUDA_AVAILABLE}, METAL={AUTO_METAL_AVAILABLE}, VULKAN={AUTO_VULKAN_AVAILABLE}, COREML_POSSIBLE={AUTO_COREML_POSSIBLE}")
+
+            # --- StellarShoreSail: Check for GPU failure during proot build ---
+            if "TERMUX_VERSION" in os.environ:
+                gpu_failure_flag_path = "/root/.gpu_acceleration_failed"
+                if os.path.exists(gpu_failure_flag_path):
+                    print_colored("WARNING", "------------------------------------------------------------", "WARNING")
+                    print_colored("WARNING", "             Entering CPU Fallback Mode", "WARNING")
+                    print_warning("GPU driver verification failed during the initial setup.")
+                    print_warning("All models Will all run on CPU")
+                    print_warning("Performance will be significantly reduced.")
+                    print_colored("WARNING", "------------------------------------------------------------", "WARNING")
+                    
+                    # This is the override logic. We force all GPU flags to false.
+                    AUTO_PRIMARY_GPU_BACKEND = "cpu"
+                    AUTO_CUDA_AVAILABLE = False
+                    AUTO_METAL_AVAILABLE = False
+                    AUTO_VULKAN_AVAILABLE = False
 
             # Set up core Python executable paths (already in Conda env)
             _sys_exec_dir = os.path.dirname(sys.executable)
