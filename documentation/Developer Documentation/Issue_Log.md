@@ -89,25 +89,45 @@ This document serves as the master list for all tracked requirements, features, 
 
 -   **ID:** `CORE-FEAT-002`
     -   **Title:** Added content pass into the database for local document fetching.
-    -   **Status:** `Open`
+    -   **Status:** `Resolved`
     -   **Description:** Implemented functionality to store the full content of indexed documents directly into the database. This enables efficient local document fetching for RAG (Retrieval Augmented Generation) and other content-aware operations, reducing reliance on external file system access during runtime.
 
 -   **ID:** `CORE-FEAT-003`
     -   **Title:** Added MultiLanguage ZH and EN and native lang depends on query summarization for accommodating fallback of fuzzy matching on direct_generate and background_generate connection on the database.
-    -   **Status:** `Open`
+    -   **Status:** `Resolved`
     -   **Description:** Introduced multi-language summarization capabilities, supporting English (EN), Simplified Chinese (ZH), and the original query language. This enhancement improves the robustness of fuzzy matching for `direct_generate` and `background_generate` database connections by providing summarized content in multiple linguistic contexts, facilitating better retrieval and understanding across diverse user inputs.
 
 -   **ID:** `CORE-FEAT-004`
     -   **Title:** Reduce the ELP0 restart chance for each pass.
-    -   **Status:** `Open`
+    -   **Status:** `Resolved`
     -   **Description:** Modified the ELP0 (Elevated Level Privilege 0) interruption retry mechanism to significantly reduce the chance of full system restarts for each pass. This improves system stability and responsiveness by allowing for more graceful handling of transient interruptions during critical operations.
+
+-   **ID:** `CORE-FEAT-005`
+    -   **Title:** Enhance search, debugging, and system stability.
+    -   **Status:** `Resolved`
+    -   **Description:** This update introduces several enhancements across the system. It adds fuzzy and vector search results as an always-on augmented result. More detailed debug logs are inserted into the interaction history, making them accessible to `direct_generate` for learning from mistakes. The `CortexConfiguration` has been adjusted to include a 25% safety context for token counting mismatches, with the context size set to 4096. The file indexer's idle cycle is now 3600 seconds to allow ELP0 and self-reflection to execute. Finally, the interaction indexer now includes non-text data in the augmentation mix.
+
+-   **ID:** `CORE-FEAT-006`
+    -   **Title:** Implement Recursive Socratic Inquiry for Self-Correction and Learning.
+    -   **Status:** `Resolved`
+    -   **Description:** Introduced the A.R.I.S.E. (Adaptive Recursive Inquiry & Synthesis Engine) architecture. This system enables a recursive learning loop where the AI generates Socratic questions based on its own outputs (drafts, summaries, final answers). These questions are saved as new tasks, which the AI then attempts to answer, creating a continuous cycle of self-improvement and knowledge expansion. This includes per-step inquiry generation and a dedicated `socratic_thought` classification.
+
+-   **ID:** `CORE-FEAT-007`
+    -   **Title:** Implement Dynamic Agentic Relaxation for Resource Management.
+    -   **Status:** `Resolved`
+    -   **Description:** The `AgenticRelaxationThread` in `priority_lock.py` now supports a dynamic, resource-aware mode (`reservativesharedresources`). In this mode, the thread monitors system CPU load and ELP1 task contention to aggressively throttle ELP0 background tasks when the system is busy, and allows them to run freely when resources are available. This improves overall system responsiveness.
 
 ### Defects (Bugs)
 
 -   **ID:** `CORE-BUG-001`
     -   **Title:** Fix unlimited undefined entry of Assistant and User on the database at background_generate result raw ChatML generation.
-    -   **Status:** `Open`
+    -   **Status:** `Resolved`
     -   **Description:** Addressed an issue where `background_generate` was creating an unlimited number of undefined Assistant and User entries in the database due to improper handling of raw ChatML generation results. This fix ensures that only valid and properly attributed entries are stored, preventing database bloat and maintaining data integrity.
+
+-   **ID:** `CORE-BUG-002`
+    -   **Title:** Prevent crashes from oversized embedding batches.
+    -   **Status:** `Resolved`
+    -   **Description:** Added a safeguard in `cortex_backbone_provider.py` to handle cases where a single text item exceeds the maximum token limit for embedding. The code now truncates oversized items before adding them to a batch, preventing the embedding process from crashing and ensuring that large documents can be processed reliably.
 
 ### Refactors
 
@@ -116,7 +136,7 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
     -   **Description:** Refactored the Tree of Thought (ToT) payload in `AdelaideAlbertCortex.py` for clarity and simplicity. Increased the default embedding context size in `cortex_backbone_provider.py` to 4096 to improve embedding quality for longer documents. Simplified the frontend input area in `InputArea.jsx` by removing the stop generation button.
 
--   **ID:** `CORE-FEAT-005`
-    -   **Title:** Enhance search, debugging, and system stability.
-    -   **Status:** `In-Progress`
-    -   **Description:** This update introduces several enhancements across the system. It adds fuzzy and vector search results as an always-on augmented result. More detailed debug logs are inserted into the interaction history, making them accessible to `direct_generate` for learning from mistakes. The `CortexConfiguration` has been adjusted to include a 25% safety context for token counting mismatches, with the context size set to 4096. The file indexer's idle cycle is now 3600 seconds to allow ELP0 and self-reflection to execute. Finally, the interaction indexer now includes non-text data in the augmentation mix.
+-   **ID:** `CORE-REFACTOR-002`
+    -   **Title:** Overhaul RAG and background processing for robustness and traceability.
+    -   **Status:** `Resolved`
+    -   **Description:** Major refactor of the `background_generate` function in `AdelaideAlbertCortex.py`. The RAG pipeline was rebuilt to use a safe, robust helper (`_build_on_the_fly_retriever`) that combines vector and fuzzy search for recent history. The entire background task now logs every intermediate thought, draft, and correction as a distinct, traceable interaction in the database, providing a complete audit trail of the AI's reasoning process. The reflection process was also redesigned to be a "pure" operation that creates new records instead of updating old ones, ensuring data immutability.
