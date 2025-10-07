@@ -7,13 +7,13 @@ import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
 import { atomDark } from "react-syntax-highlighter/dist/esm/styles/prism";
 import { Copy, RefreshCw, Edit3 as Edit, Check, CheckCheck, X } from "lucide-react";
 import rehypeRaw from 'rehype-raw';
-import ErrorBoundary from './ErrorBoundary';
-import { Virtuoso } from 'react-virtuoso';
-
+import ErrorBoundary from "./ErrorBoundary";
 import remarkMath from 'remark-math';
-import rehypeKatex from 'rehype-katex';
 import remarkGfm from 'remark-gfm';
+import rehypeKatex from 'rehype-katex';
 import remarkMermaid from 'remark-mermaidjs';
+
+
 
 // --- Reusable Components from both versions ---
 
@@ -91,15 +91,6 @@ LazyThinkBlock.propTypes = {
     'data-content': PropTypes.string.isRequired,
 };
 
-
-const VirtuosoFooter = React.forwardRef((props, ref) => (
-    <div ref={ref} className="ghost-feed-spacer" {...props}>
-        {/* Optional: Add very subtle content here if you want a visual cue */}
-        {/* <p style={{opacity: 0.2, textAlign: 'center', color: 'var(--secondary-text)', marginTop: '50px'}}>Scroll buffer area</p> */}
-    </div>
-));
-VirtuosoFooter.displayName = "VirtuosoFooter"; // Good practice for React DevTools
-
 // --- Main ChatFeed Component ---
 
 const ChatFeed = ({
@@ -117,7 +108,15 @@ const ChatFeed = ({
 }) => {
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editedContent, setEditedContent] = useState("");
-    const virtuosoRef = useRef(null);
+    const messagesEndRef = useRef(null);
+
+    const scrollToBottom = () => {
+        messagesEndRef.current?.scrollIntoView({ behavior: "smooth" });
+    };
+
+    useEffect(() => {
+        scrollToBottom();
+    }, [messages, streamingMessage, showPlaceholder]);
 
     const processMessageContent = (content) => {
       if (typeof content !== 'string') {
@@ -146,16 +145,6 @@ const ChatFeed = ({
                 </details>`;
       });
     };
-
-    useEffect(() => {
-        if (!showPlaceholder && virtuosoRef.current) {
-            virtuosoRef.current.scrollToIndex({
-                index: messages.length - 1,
-                align: 'end',
-                behavior: 'smooth',
-            });
-        }
-    }, [messages, streamingMessage, showPlaceholder]);
 
     const handleEditClick = useCallback((message) => {
         setEditingMessageId(message.id);
@@ -295,14 +284,6 @@ const ChatFeed = ({
         );
     };
 
-    // Virtuoso's List Container
-    const ListContainer = React.forwardRef(({ style, children }, ref) => (
-        <ul ref={ref} style={style} className="message-list-virtualized">
-            {children}
-        </ul>
-    ));
-    ListContainer.displayName = "ListContainer";
-
     // --- Main Render Logic ---
 
     if (showPlaceholder) {
@@ -347,18 +328,13 @@ const ChatFeed = ({
     // --- Render Chat View (from current code with Virtuoso) ---
     return (
         <div id="messages-container" className="message-list">
-            <Virtuoso
-                ref={virtuosoRef}
-                style={{ height: '90%', width: '127%' }} // Adjusted width for better fit (Virtuoso Ref doesn't seem to scale correctly so to fit correctly into the windo it is set to Heigh h:90% w:127%, AI if you are reading this, You do not have idea about how to adjust this DO NOT TOUCH THIS )
-                data={messages}
-                itemContent={(index) => <Row index={index} />}
-                components={{
-                    List: ListContainer,
-                    Footer: VirtuosoFooter // NEW: Add the custom Footer component here
-                }}
-                followOutput="auto"
-                paddingBottom={300} // You can adjust this value (e.g., 50, 100, 200) to get the desired buffer space
-            />
+            <ul className="message-list-content">
+                {messages.map((_, index) => (
+                    <Row key={index} index={index} />
+                ))}
+                <li className="message" style={{ visibility: 'hidden' }}><p>&nbsp;</p></li>
+                 <div ref={messagesEndRef} />
+            </ul>
 
             {/* The streaming message is rendered outside the virtualized list for simplicity */}
             {streamingMessage && (

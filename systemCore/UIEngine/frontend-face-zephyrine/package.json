@@ -24,7 +24,6 @@
     "react-markdown": "^8.0.7",
     "react-router-dom": "^6.25.1",
     "react-syntax-highlighter": "^15.6.1",
-    "react-virtuoso": "*",
     "react-window": "^1.8.10",
     "rehype-katex": "^6.0.3",
     "rehype-raw": "^6.1.1",

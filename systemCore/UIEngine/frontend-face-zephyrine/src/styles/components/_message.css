@@ -2,7 +2,7 @@
 
 .message-list {
   list-style-type: none;
-  padding: 0 1rem 20px 1rem;
+  padding: 0 1rem 20px 0;
   margin: 0;
   display: flex;
   flex-direction: column;
@@ -12,14 +12,13 @@
 
 #messages-container {
   flex-grow: 1;
-  overflow: hidden; /* Important for react-window */
-  height: 100%;
+  overflow-y: auto; /* Important for scrolling */
 }
 
 .message {
   display: flex;
   align-items: flex-end; /* Align avatar to the bottom of the last message in a group */
-  max-width: 75%;
+  max-width: 100%;
   gap: 12px;
   margin-top: 2px; /* Small gap between messages in the same group */
 }
@@ -318,4 +317,9 @@
   .message {
     max-width: 90%;
   }
+}
+
+.message-list-content {
+  width: 100%;
+  height: 90%;
 }
