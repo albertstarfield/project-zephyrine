@@ -139,6 +139,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Open`
     -   **Description:** The `vulkaninfo` check during the Mesa build process fails on some Android devices, causing the system to unnecessarily fall back to CPU mode even if the GPU is functional. This appears to be a false negative from the verification step.
 
+-   **ID:** `CORE-BUG-004`
+    -   **Title:** Launcher fails to correctly configure environment in proot/Termux.
+    -   **Status:** `In-Progress`
+    -   **Description:** The launcher script has several issues when running in a proot-ed environment on Termux. It fails to correctly identify the environment, leading to incorrect paths for conda, contaminated miniforge installations, and failure to set up the environment for custom GPU drivers. This commit introduces fixes to make the launcher more robust in these environments.
+
 ### Refactors
 
 -   **ID:** `CORE-REFACTOR-001`

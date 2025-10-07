@@ -89,7 +89,14 @@ CONDA_EXECUTABLE = None
 # TARGET_CONDA_ENV_PATH will now be ROOT_DIR + CONDA_ENV_FOLDER_NAME
 TARGET_CONDA_ENV_PATH = os.path.join(ROOT_DIR, CONDA_ENV_FOLDER_NAME) # DIRECTLY DEFINE THE TARGET PATH
 ACTIVE_ENV_PATH = None
-CONDA_PATH_CACHE_FILE = os.path.join(ROOT_DIR, ".conda_executable_path_cache.txt")
+
+if os.path.exists("/etc/debian_version") and "TERMUX_VERSION" not in os.environ:
+    # We are likely in the proot (glibc) environment
+    _cache_suffix = "_proot_glibc.txt"
+else:
+    # We are likely in the base Termux or a standard desktop Linux/macOS/Windows env
+    _cache_suffix = "_main_env.txt"
+CONDA_PATH_CACHE_FILE = os.path.join(ROOT_DIR, f".conda_executable_path_cache{_cache_suffix}")
 
 # --- Node.js Configuration (NEW) ---
 REQUIRED_NODE_MAJOR = 20 # Or 18, if your project has a strict preference, but 20 is current LTS.
@@ -1250,7 +1257,7 @@ if [ ! -f "$MESA_BUILD_FLAG" ]; then
     # Source of Manual : https://github.com/lfdevs/mesa-for-android-container/blob/adreno-main/README.rst
     echo "--> Configuring a universal Mesa build for Adreno (Freedreno) and Mali (Panfrost) GPUs..."
     meson setup build $BASE_MESON_ARGS \\
-    -D gallium-drivers=freedreno,panfrost,zink,virgl,swrast \\
+    -D gallium-drivers=freedreno,panfrost,zink,virgl \\
     -D vulkan-drivers=freedreno,panfrost
 
     # --- Step 6: Compile and install the custom Mesa build ---
@@ -1260,6 +1267,41 @@ if [ ! -f "$MESA_BUILD_FLAG" ]; then
 
     # --- Step 6a: Verify GPU Driver Installation ---
     echo "--> Verifying that the custom GPU driver is active..."
+
+    # <<< NEW SECTION START >>>
+    # --- Step 7: Configure Runtime Environment for Custom Drivers ---
+    echo "--> Configuring runtime environment to use custom Adreno/Mali drivers..."
+    
+    # This is the path where Mesa's ICD files are installed
+    ICD_PATH="/usr/share/vulkan/icd.d"
+    
+    # For Adreno GPUs (Turnip driver)
+    if [ -f "$ICD_PATH/freedreno_icd.aarch64.json" ]; then
+        echo "--> Found Adreno (Turnip) Vulkan driver. Setting environment variables."
+        # Force the Turnip driver for Vulkan
+        echo 'export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/freedreno_icd.aarch64.json' >> /etc/profile.d/mesa-drivers.sh
+        # Force the Freedreno driver for OpenGL
+        echo 'export GALLIUM_DRIVER=freedreno' >> /etc/profile.d/mesa-drivers.sh
+        echo "--> Adreno environment configured."
+    
+    # For Mali GPUs (Panfrost driver)
+    elif [ -f "$ICD_PATH/panfrost_icd.aarch64.json" ]; then
+        echo "--> Found Mali (Panfrost) Vulkan driver. Setting environment variables."
+        # Force the Panfrost driver for Vulkan
+        echo 'export VK_ICD_FILENAMES=/usr/share/vulkan/icd.d/panfrost_icd.aarch64.json' >> /etc/profile.d/mesa-drivers.sh
+        # Force the Panfrost driver for OpenGL
+        echo 'export GALLIUM_DRIVER=panfrost' >> /etc/profile.d/mesa-drivers.sh
+        echo "--> Mali environment configured."
+    
+    else
+        echo "--> WARNING: Could not find hardware-specific Vulkan ICD files. GPU acceleration may not work."
+    fi
+    
+    # Make the script executable so it's loaded on login
+    chmod +x /etc/profile.d/mesa-drivers.sh
+    
+    echo "--> Runtime environment configuration complete. Changes will apply on next login."
+
     if ! vulkaninfo --summary; then
         echo "------------------------------------------------------------"
         echo "GPU DRIVER VERIFICATION FAILED!"
@@ -1271,7 +1313,7 @@ if [ ! -f "$MESA_BUILD_FLAG" ]; then
         touch /root/.gpu_acceleration_failed
 
     fi
-
+    
 
     echo "--> SUCCESS: GPU driver is active and detected by Vulkan."
     echo "--- Zephyrine Proot Setup: Environment build complete! ---"
@@ -1347,7 +1389,21 @@ def _install_miniforge_and_check_overall_environment() -> Optional[str]:
     os_name = platform.system()
     machine_arch = platform.machine()
     installer_filename = ""
-    install_path = os.path.join(ROOT_DIR, "miniforge3_local")
+    IS_IN_PROOT_ENV = os.path.exists("/etc/debian_version") and "TERMUX_VERSION" not in os.environ
+    if IS_IN_PROOT_ENV:
+        # Before we do anything else, find and destroy any contaminated Miniforge
+        # installation that might exist in the shared project directory.
+        contaminated_path = os.path.join(ROOT_DIR, "miniforge3_local")
+        if os.path.exists(contaminated_path):
+            print_warning(f"CRITICAL: Found contaminated Miniforge install at '{contaminated_path}'.")
+            print_warning("This is from a previous run and will be AGGRESSIVELY REMOVED to ensure a clean proot environment.")
+            try:
+                shutil.rmtree(contaminated_path)
+                print_system("Successfully removed contaminated Miniforge installation.")
+            except Exception as e_clean:
+                print_error(f"Failed to remove contaminated Miniforge: {e_clean}")
+                print_error("Please remove this directory manually and restart.")
+                return None
 
     if os_name == "Linux":
         py_arch = "x86_64" if "x86_64" in machine_arch else "aarch64"
@@ -1425,6 +1481,24 @@ def _install_miniforge_and_check_overall_environment() -> Optional[str]:
             os.chmod(installer_local_path, 0o755)
             install_cmd = [shell_executable, installer_local_path, "-b", "-p", install_path]
             subprocess.run(install_cmd, check=True, capture_output=True, text=True)
+            is_in_proot_env = (os.path.exists("/etc/debian_version") and
+                               "TERMUX_VERSION" not in os.environ and
+                               os_name == "Linux")
+            if is_in_proot_env:
+                print_system("Proot environment detected. Adding Miniforge to shell PATH...")
+                # The install_path is where we just installed miniforge, e.g., /root/miniforge3_local
+                conda_bin_path = os.path.join(install_path, "bin")
+                bashrc_path = os.path.expanduser("~/.bashrc")
+                export_line = f'\n# Added by Zephyrine Launcher\nexport PATH="{conda_bin_path}:$PATH"\n'
+                
+                try:
+                    with open(bashrc_path, "a", encoding="utf-8") as f:
+                        f.write(export_line)
+                    print_system(f"Successfully added '{conda_bin_path}' to '{bashrc_path}'.")
+                    print_warning("Please log out and log back into the proot shell for PATH changes to take full effect in manual sessions.")
+                except Exception as e_bashrc:
+                    print_error(f"Failed to automatically add Conda to PATH: {e_bashrc}")
+                    print_warning("You may need to add it manually to your ~/.bashrc file.")
         elif os_name == "Windows":
             install_cmd = [installer_local_path, "/S", "/InstallationType=JustMe", "/RegisterPython=0",
                            f"/D={install_path}"]
@@ -1493,6 +1567,16 @@ def find_conda_executable():
         except IOError as e_cache_write:
             print_warning(f"Could not write to Conda path cache file: {e_cache_write}")
         return CONDA_EXECUTABLE
+
+    # <<< MODIFICATION: CONTEXT-AWARE RECURSIVE SEARCH >>>
+    # Only perform the slow, intensive recursive search if we are NOT in the base Termux environment.
+    # The search fails due to permissions in Termux anyway, so it's pointless and generates errors.
+    IS_IN_BASE_TERMUX = "TERMUX_VERSION" in os.environ and not os.path.exists("/etc/debian_version")
+
+    if IS_IN_BASE_TERMUX:
+        print_system("Termux environment detected. Skipping slow recursive file search due to permissions.")
+        CONDA_EXECUTABLE = None
+        return None
 
     # 3. If not found via PATH, perform recursive search
     print_warning(
@@ -3244,8 +3328,26 @@ def _check_playwright_linux_deps():
 
         # The command to check dependencies. It will return a non-zero exit code
         # and print the necessary `apt-get install ...` command if deps are missing.
+        # Dynamically find the python executable in the temporary environment
+        temp_env_python_exe = None
+        bin_dir = os.path.join(check_env_path, "bin")
+        
+        # Prioritize python3, as it's more explicit
+        if os.path.exists(os.path.join(bin_dir, "python3")):
+            temp_env_python_exe = os.path.join(bin_dir, "python3")
+        # Fallback to python if python3 doesn't exist
+        elif os.path.exists(os.path.join(bin_dir, "python")):
+            temp_env_python_exe = os.path.join(bin_dir, "python")
+        else:
+            # If neither is found, we can't proceed.
+            print_error(f"CRITICAL: Could not find 'python' or 'python3' executable in the temporary check environment at '{bin_dir}'.")
+            # The finally block will still handle cleanup.
+            return False
+
+        print_system(f"Found temporary python executable: {temp_env_python_exe}")
+
         check_deps_cmd = [
-            os.path.join(check_env_path, "bin", "python"),
+            temp_env_python_exe,
             "-m", "playwright", "install-deps"
         ]
 
@@ -3704,6 +3806,10 @@ if __name__ == "__main__":
                     ACTIVE_ENV_PATH = current_conda_env_path_check
             except Exception as e_path_check:
                 print_warning(f"Error comparing Conda paths during initial check: {e_path_check}")
+
+        IS_IN_PROOT_ENV = os.path.exists("/etc/debian_version") and "TERMUX_VERSION" not in os.environ
+        if IS_IN_PROOT_ENV:
+            print_system("✅ Detected execution within proot-distro (glibc) environment.")
 
         if is_already_in_correct_env:
             # --- This is the RELAUNCHED script, running inside the correct Conda environment ---
@@ -4492,6 +4598,15 @@ if __name__ == "__main__":
             print_system(f"--- Initial Launcher: Conda Setup & Hardware Detection ---")
 
             autodetected_build_env_vars = _detect_and_prepare_acceleration_env_vars()
+
+            if IS_IN_PROOT_ENV:
+                # We are inside proot, but not yet inside our target conda env.
+                # We MUST use a Conda installed INSIDE proot.
+                # First, reset any cached path from an external environment.
+                if os.path.exists(CONDA_PATH_CACHE_FILE):
+                    print_warning("Inside proot: Clearing potentially incorrect external Conda cache.")
+                    os.remove(CONDA_PATH_CACHE_FILE)
+                CONDA_EXECUTABLE = None # Ensure it's reset
 
             if not find_conda_executable():
                 newly_installed_conda_path = _install_miniforge_and_check_overall_environment()
