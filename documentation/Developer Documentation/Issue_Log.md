@@ -155,3 +155,14 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Overhaul RAG and background processing for robustness and traceability.
     -   **Status:** `Resolved`
     -   **Description:** Major refactor of the `background_generate` function in `AdelaideAlbertCortex.py`. The RAG pipeline was rebuilt to use a safe, robust helper (`_build_on_the_fly_retriever`) that combines vector and fuzzy search for recent history. The entire background task now logs every intermediate thought, draft, and correction as a distinct, traceable interaction in the database, providing a complete audit trail of the AI's reasoning process. The reflection process was also redesigned to be a "pure" operation that creates new records instead of updating old ones, ensuring data immutability.
+
+---
+
+## **UI ENGINE (UI)**
+
+### Defects (Bugs)
+
+-   **ID:** `UI-BUG-001`
+    -   **Title:** Page bouncing back on ordinary chat mode.
+    -   **Status:** `Open`
+    -   **Description:** The chat page bounces back to the top on ordinary chat mode, which is a very annoying user experience.
