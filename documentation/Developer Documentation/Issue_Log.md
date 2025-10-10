@@ -156,13 +156,60 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
     -   **Description:** Major refactor of the `background_generate` function in `AdelaideAlbertCortex.py`. The RAG pipeline was rebuilt to use a safe, robust helper (`_build_on_the_fly_retriever`) that combines vector and fuzzy search for recent history. The entire background task now logs every intermediate thought, draft, and correction as a distinct, traceable interaction in the database, providing a complete audit trail of the AI's reasoning process. The reflection process was also redesigned to be a "pure" operation that creates new records instead of updating old ones, ensuring data immutability.
 
----
+-- -
+
+
+
+## **LAUNCHER**
+
+
+
+### Features
+
+
+
+-   **ID:** `LAUNCHER-FEAT-001`
+
+    -   **Title:** Implement a fast-path startup sequence ("Death Stranding II Inspired Loading").
+
+    -   **Status:** `Resolved`
+
+    -   **Description:** To significantly reduce application startup time after the initial setup, a "fast path" has been implemented in `launcher.py`. On the first successful run, the launcher now compiles all project Python source code into optimized bytecode (`.pyc` files) and creates a `.setup_complete_v2` flag file. On subsequent launches, if this flag is present, the launcher bypasses all dependency checks and environment verification, launching all services in parallel for a near-instantaneous startup.
+
+
+
+-- -
+
+
 
 ## **UI ENGINE (UI)**
 
+
+
+### Performance
+
+
+
+-   **ID:** `UI-PERF-001`
+
+    -   **Title:** Implement virtualized scrolling for chat history to fix performance issues.
+
+    -   **Status:** `Resolved`
+
+    -   **Description:** To improve frontend performance and handle long chat histories efficiently, the chat interface now uses virtualized scrolling (windowing). Instead of rendering all messages at once, it now only renders a small, visible subset. As the user scrolls to the top of the history, older messages are dynamically loaded and rendered on demand. This resolves severe performance degradation and the "bouncy" UI behavior in chats with many messages.
+
+
+
 ### Defects (Bugs)
 
+
+
 -   **ID:** `UI-BUG-001`
+
     -   **Title:** Page bouncing back on ordinary chat mode.
-    -   **Status:** `Open`
-    -   **Description:** The chat page bounces back to the top on ordinary chat mode, which is a very annoying user experience.
+
+    -   **Status:** `Resolved`
+
+    -   **Description:** The chat page bounces back to the top on ordinary chat mode, which is a very annoying user experience. This was caused by rendering the entire chat history at once, leading to performance issues.
+
+

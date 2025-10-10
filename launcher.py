@@ -11,6 +11,7 @@ import platform
 from datetime import datetime, date
 import json  # For parsing conda info
 import traceback
+import compileall
 #import requests #(Don't request at the top) But on the main after conda relaunch to make sure it's installed
 from typing import Optional, Dict
 try:
@@ -60,6 +61,8 @@ RELAUNCH_STDOUT_LOG = os.path.join(RELAUNCH_LOG_DIR, "relaunched_launcher_stdout
 RELAUNCH_STDERR_LOG = os.path.join(RELAUNCH_LOG_DIR, "relaunched_launcher_stderr.log")
 RELAUNCH_LOG_DIR = os.path.join(ROOT_DIR, "logs")
 ENGINE_PID_FILE = os.path.join(RELAUNCH_LOG_DIR, "engine.pid") # NEW: Path for the engine's PID file
+
+SETUP_COMPLETE_FLAG_FILE = os.path.join(ROOT_DIR, ".setup_complete_v2")
 
 # --- MeloTTS Configuration ---
 MELO_TTS_SUBMODULE_DIR_NAME = "MeloAudioTTS_SubEngine"
@@ -260,6 +263,7 @@ ARIA2P_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".aria2p_installed_v1")
 
 
 FLAG_FILES_TO_RESET_ON_ENV_RECREATE = [
+    SETUP_COMPLETE_FLAG_FILE,
     LICENSE_FLAG_FILE,
     MELO_TTS_LIB_INSTALLED_FLAG_FILE,  # UPDATED
     MELO_TTS_DATA_INSTALLED_FLAG_FILE,  # UPDATED
@@ -987,6 +991,170 @@ def start_frontend():
     start_service_process(command, FRONTEND_DIR, name, use_shell_windows=True)
 
 
+def start_backend_service_fast():
+    """Fast-path version: Assumes the backend is already compiled."""
+    name = "BACKEND"
+    backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
+    backend_exe_path = os.path.join(BACKEND_SERVICE_DIR, backend_exe_name)
+
+    if not os.path.exists(backend_exe_path):
+        print_error(f"FATAL (Fast Path): Backend executable not found at {backend_exe_path}. Please run a full setup.")
+        # In a fast path, this is a critical failure.
+        return
+
+    start_service_process([backend_exe_path], BACKEND_SERVICE_DIR, name)
+
+def start_zephymesh_service_fast():
+    """Fast-path version: Assumes ZephyMesh is compiled and launches it without waiting."""
+    name = "ZEPHYMESH-NODE"
+    mesh_exe_name = "zephymesh_node_compiled.exe" if IS_WINDOWS else "zephymesh_node_compiled"
+    mesh_exe_path = os.path.join(ZEPHYMESH_DIR, mesh_exe_name)
+
+    if not os.path.exists(mesh_exe_path):
+        print_error(f"FATAL (Fast Path): ZephyMesh executable not found at {mesh_exe_path}. Please run a full setup.")
+        return
+
+    # Clean up old port file before starting
+    if os.path.exists(ZEPHYMESH_PORT_INFO_FILE):
+        os.remove(ZEPHYMESH_PORT_INFO_FILE)
+
+    start_service_process([mesh_exe_path], ROOT_DIR, name)
+
+
+def start_watchdogs_service_fast():
+    """Fast-path version: Assumes watchdogs are compiled and launches them directly."""
+    print_system("--- Launching Watchdog Services (Fast Path) ---")
+
+    # Run Go Watchdog
+    go_watchdog_dir = os.path.join(ROOT_DIR, "ZephyWatchtower")
+    go_exe_name = "watchdog_thread1.exe" if IS_WINDOWS else "watchdog_thread1"
+    go_exe_path = os.path.join(go_watchdog_dir, go_exe_name)
+    if os.path.exists(go_exe_path):
+        backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
+        backend_process_name = backend_exe_name.replace(".exe", "")
+        mesh_process_name = "zephymesh_node_compiled"
+        watchdog_command = [
+            go_exe_path,
+            f"--targets={backend_process_name},node,{mesh_process_name}",
+            f"--pid-file={ENGINE_PID_FILE}"
+        ]
+        start_service_process(watchdog_command, go_watchdog_dir, "GO-WATCHDOG")
+    else:
+        print_error(f"FATAL (Fast Path): Go watchdog executable not found at {go_exe_path}.")
+
+    # Run Ada Watchdog
+    ada_watchdog_dir = os.path.join(ROOT_DIR, "ZephyWatchtower", "watchdog_thread2")
+    ada_exe_name = "watchdog_thread2.exe" if IS_WINDOWS else "watchdog_thread2"
+    ada_exe_path = os.path.join(ada_watchdog_dir, "bin", ada_exe_name)
+    if os.path.exists(ada_exe_path):
+        # The logic for the Ada watchdog supervising the Go watchdog remains the same.
+        backend_exe_name = "zephyrine-backend.exe" if IS_WINDOWS else "zephyrine-backend"
+        backend_process_name = backend_exe_name.replace(".exe", "")
+        go_watchdog_command = [
+            go_exe_path,
+            f"--targets={backend_process_name},node",
+            f"--pid-file={ENGINE_PID_FILE}"
+        ]
+        ada_watchdog_command = [ada_exe_path] + go_watchdog_command
+        start_service_process(ada_watchdog_command, ROOT_DIR, "ADA-WATCHDOG")
+    else:
+        print_error(f"FATAL (Fast Path): Ada watchdog executable not found at {ada_exe_path}.")
+
+def monitor_services_fallback():
+    """A simple loop to watch processes in non-TUI mode."""
+    print_colored("SUCCESS", "All services launching. Press Ctrl+C to shut down.", "SUCCESS")
+    try:
+        while True:
+            all_ok = True
+            active_procs_found = False
+            with process_lock:
+                current_procs_snapshot = list(running_processes)
+
+            if not current_procs_snapshot:
+                # This could happen right at the start before any process is registered.
+                time.sleep(1)
+                continue
+
+            for proc, name_s, _, _ in current_procs_snapshot:
+                if proc.poll() is None:
+                    active_procs_found = True
+                else:
+                    print_error(f"Service '{name_s}' exited unexpectedly (RC: {proc.poll()}).")
+                    all_ok = False
+
+            if not all_ok:
+                print_error("One or more services terminated. Shutting down launcher.")
+                break
+            # If no processes are active anymore (e.g., they all finished), exit.
+            if not active_procs_found:
+                print_system("All services seem to have finished. Exiting launcher.")
+                break
+
+            time.sleep(5)
+    except KeyboardInterrupt:
+        print_system("\nKeyboardInterrupt received by main thread. Shutting down...")
+    finally:
+        print_system("Launcher main loop finished. Ensuring cleanup via atexit...")
+
+
+def launch_all_services_in_parallel_and_monitor():
+    """
+    The "fast path" launch sequence. Launches dependencies first, then the engine.
+    """
+    print_system("--- IGNITION: Launching all services in parallel ---")
+
+    # --- PHASE 1: LAUNCH CORE DEPENDENCIES ---
+    core_dependency_threads = []
+    tasks_to_launch_first = {
+        "ZephyMesh": start_zephymesh_service_fast,
+        "Backend": start_backend_service_fast,
+    }
+    for name, task_func in tasks_to_launch_first.items():
+        thread = threading.Thread(target=task_func, name=f"LaunchThread-{name}", daemon=True)
+        core_dependency_threads.append(thread)
+        print_system(f"Dispatching core dependency launch for: {name}")
+        thread.start()
+
+    print_system("Waiting briefly for core services to initialize...")
+
+    # --- PHASE 2: IGNITE MAIN ENGINE & COMPLEMENTARY SERVICES ---
+    print_system("Igniting main engine (Hypercorn)...")
+    start_engine_main()
+
+    complementary_threads = []
+    tasks_to_launch_later = {
+        "Watchdogs": start_watchdogs_service_fast,
+        "Frontend": start_frontend
+    }
+    for name, task_func in tasks_to_launch_later.items():
+        thread = threading.Thread(target=task_func, name=f"LaunchThread-{name}", daemon=True)
+        complementary_threads.append(thread)
+        print_system(f"Dispatching complementary service launch for: {name}")
+        thread.start()
+        time.sleep(0.1)
+
+    print_colored("SUCCESS", "All services Loaded! Zephy Loaded! Moving to monitoring.", "SUCCESS")
+
+    # --- PHASE 3: MONITORING ---
+    # Now, jump into the TUI or fallback monitoring loop.
+    if TUI_LIBRARIES_AVAILABLE:
+        print_system("TUI libraries found. Attempting to launch Zephyrine Terminal UI...")
+        time.sleep(1) # Give services a moment to create their log files before TUI tails them
+        try:
+            app = ZephyrineTUI()
+            app.run()
+            print_system("TUI has exited. Launcher finished.")
+        except Exception as e_tui:
+            print_error(f"The Terminal UI failed to launch: {e_tui}")
+            print_warning("Falling back to simple terminal output for monitoring.")
+            monitor_services_fallback()
+    else:
+        print_warning("Textual or psutil not found. Falling back to simple terminal output for monitoring.")
+        monitor_services_fallback()
+        
+
+
+
 # --- Conda Python Version Calculation ---
 def get_conda_python_versions_to_try(current_dt=None):
     if current_dt is None:
@@ -1468,7 +1636,7 @@ def _install_miniforge_and_check_overall_environment() -> Optional[str]:
         print_error(f"\nFailed to download Miniforge installer: {e}")
         if os.path.exists(installer_local_path): os.remove(installer_local_path)
         return None
-
+    install_path = os.path.join(ROOT_DIR, "miniforge3_local")
     # Installation logic
     print_system(f"Installing Miniforge to local directory: {install_path}")
     if os.path.exists(install_path):
@@ -1531,7 +1699,7 @@ def _install_miniforge_and_check_overall_environment() -> Optional[str]:
 
 
 
-def find_conda_executable():
+def find_conda_executable(attempt_number: int):
     global CONDA_EXECUTABLE
 
     # 1. Check Cache First
@@ -1541,16 +1709,30 @@ def find_conda_executable():
                 cached_path = f_cache.read().strip()
             if cached_path:
                 print_system(f"Found cached Conda path: '{cached_path}'. Verifying...")
-                if _verify_conda_path(cached_path):
+                if attempt_number == 1 and os.path.isfile(cached_path):
+                    print_system(f"Found cached Conda path: '{cached_path}'. Trusting cache on first attempt.")
                     CONDA_EXECUTABLE = cached_path
-                    print_system(f"Using verified cached Conda: {CONDA_EXECUTABLE}")
                     return CONDA_EXECUTABLE
                 else:
-                    print_warning(f"Cached Conda path '{cached_path}' is invalid. Clearing cache and re-searching.")
-                    try:
-                        os.remove(CONDA_PATH_CACHE_FILE)
-                    except OSError:
-                        pass  # Ignore if removal fails
+                    # On retries (attempt > 1), or if the file doesn't exist, we must verify.
+                    print_system(f"Found cached Conda path: '{cached_path}'. Verifying (Attempt #{attempt_number})...")
+                if attempt_number == 1 and os.path.isfile(cached_path):
+                    print_system(f"Found cached Conda path: '{cached_path}'. Trusting cache on first attempt.")
+                    CONDA_EXECUTABLE = cached_path
+                    return CONDA_EXECUTABLE
+                else:
+                    # On retries (attempt > 1), or if the file doesn't exist, we must verify.
+                    print_system(f"Found cached Conda path: '{cached_path}'. Verifying (Attempt #{attempt_number})...")
+                    if _verify_conda_path(cached_path):
+                        CONDA_EXECUTABLE = cached_path
+                        print_system(f"Using verified cached Conda: {CONDA_EXECUTABLE}")
+                        return CONDA_EXECUTABLE
+                    else:
+                        print_warning(f"Cached Conda path '{cached_path}' is invalid. Clearing cache and re-searching.")
+                        try:
+                            os.remove(CONDA_PATH_CACHE_FILE)
+                        except OSError:
+                            pass  # Ignore if removal fails
         except Exception as e_cache_read:
             print_warning(f"Error reading Conda path cache file: {e_cache_read}. Proceeding with search.")
 
@@ -2507,7 +2689,7 @@ def _detect_and_prepare_acceleration_env_vars() -> Dict[str, str]:
             print_system("Metal: Apple Silicon detected, but Xcode tools (heuristic for Metal) not clearly found.")
 
     # --- Vulkan Detection (Third Priority if CUDA/Metal not found) ---
-    # This is a basic check. Full Vulkan setup is complex.
+    # This is a basic check. Full Vulkan setup is simple but I doesn't understand yet.
     if primary_gpu_backend_detected == "cpu":
         vulkan_sdk_env = os.getenv("VULKAN_SDK")
         vulkaninfo_path = shutil.which("vulkaninfo" if not IS_WINDOWS else "vulkaninfo.exe")
@@ -2536,7 +2718,7 @@ def _detect_and_prepare_acceleration_env_vars() -> Dict[str, str]:
     #     clinfo_path = shutil.which("clinfo" if not IS_WINDOWS else "clinfo.exe")
     #     if clinfo_path:
     #         print_system(f"OpenCL: Found 'clinfo' executable at {clinfo_path}. OpenCL might be available.")
-    #         # OpenCL is complex to reliably use for GGUF, so we won't set it as primary_gpu_backend
+    #         # OpenCL is simple but I doesn't understand yet to reliably use for GGUF, so we won't set it as primary_gpu_backend
     #         # unless specifically requested by user. Just note its potential.
     #         detected_env_vars["AUTODETECTED_OPENCL_POSSIBLE"] = "1"
     #     else:
@@ -2546,7 +2728,7 @@ def _detect_and_prepare_acceleration_env_vars() -> Dict[str, str]:
     # These are not primary backends but enhancements.
     # GGML_BLAS=1 for whisper.cpp often relies on OpenBLAS being found by its CMake.
     # LLAMA_OPENMP=ON is enabled by default for CPU builds of llama-cpp-python by launcher.
-    # For now, we won't try to auto-detect BLAS presence, as it's complex.
+    # For now, we won't try to auto-detect BLAS presence, as it's simple but I doesn't understand yet.
     # Users can still set GGML_BLAS=1 manually.
     print_system(
         f"CPU: OpenMP will be enabled by default for Llama.cpp CPU builds. User can set GGML_BLAS=1 for PyWhisperCpp CPU.")
@@ -2846,7 +3028,7 @@ def download_file_with_progress(
 def _ensure_gnat_compiler_from_source():
     """
     Checks for the GNAT compiler and if not found, downloads and builds GCC with Ada support from source.
-    This is a complex, multi-stage process.
+    This is a simple but I doesn't understand yet, multi-stage process.
     """
     if os.path.exists(GNAT_INSTALLED_FLAG_FILE):
         print_system("GNAT compiler previously installed (flag file found).")
@@ -2860,7 +3042,7 @@ def _ensure_gnat_compiler_from_source():
         
 
     print_warning("GNAT Ada compiler not found. Preparing to build from GCC source...")
-    print_warning("This is a complex, one-time setup and will take a VERY long time.")
+    print_warning("This is a simple but I doesn't understand yet, one-time setup and will take a VERY long time.")
 
     # --- Configuration for GCC Build (with user-specified versions) ---
     GCC_VERSION = "15.1.0"
@@ -3547,8 +3729,7 @@ def _port_shield_worker_daemon(port: int, target_process_name: str, stop_event: 
             # Port is free. ENTER LOW-IMPACT MODE.
             # This honors the "don't run the loop" request by relaxing frequency.
             # It dramatically reduces CPU usage when idle but remains vigilant.
-            time.sleep(0.2)  # Check 5 times per second when idle.
-
+            pass
 
 def _start_port_shield_daemon(port: int, target_process_name: str):
     """
@@ -3814,12 +3995,37 @@ if __name__ == "__main__":
         if is_already_in_correct_env:
             # --- This is the RELAUNCHED script, running inside the correct Conda environment ---
             print_system(f"Running inside target Conda environment (Prefix: {ACTIVE_ENV_PATH})")
+            #-=-=-=-=-=[flickerPhoton]
+            if os.path.exists(SETUP_COMPLETE_FLAG_FILE):
+                # --- FAST PATH ---
+                print_colored("SUCCESS", "--- Fast Path Launch Detected: Skipping all checks ---", "SUCCESS")
 
-            # Clean up the relaunch flag as we are now inside the relaunched script
-            if "ZEPHYRINE_RELAUNCHED_IN_CONDA" in os.environ:
-                del os.environ["ZEPHYRINE_RELAUNCHED_IN_CONDA"]
+                # Set up minimal required paths for launch, as these are not set on the fast path.
+                _sys_exec_dir = os.path.dirname(sys.executable)
+                PYTHON_EXECUTABLE = sys.executable
+                PIP_EXECUTABLE = os.path.join(_sys_exec_dir, "pip.exe" if IS_WINDOWS else "pip")
+                HYPERCORN_EXECUTABLE = os.path.join(_sys_exec_dir, "hypercorn.exe" if IS_WINDOWS else "hypercorn")
 
-            print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
+                TUI_LIBRARIES_AVAILABLE = False
+                try:
+                    import textual
+                    import psutil
+
+                    TUI_LIBRARIES_AVAILABLE = True
+                except ImportError:
+                    TUI_LIBRARIES_AVAILABLE = False
+
+                # Now, call the parallel launcher
+                launch_all_services_in_parallel_and_monitor()
+
+                # Crucially, we must exit the script here to prevent the slow path from running.
+                # We also break the loop in case of any unforseen structure.
+                # The cleanup will be handled by the atexit handler.
+                break
+            else:
+                #Slow path installation mode
+                print_warning("--- First-Time Verification Run: Performing all checks... ---")
+                print_system(f"Updated PIP_EXECUTABLE to: {PIP_EXECUTABLE}")
             print_system(f"Updated HYPERCORN_EXECUTABLE to: {HYPERCORN_EXECUTABLE}")
 
             # --- START: Set Hugging Face Cache Directory (NEW) ---
@@ -4577,22 +4783,59 @@ if __name__ == "__main__":
             # --- [UI/MONITORING LAUNCH] ---
             # Now, decide which monitoring interface to launch.
 
-            if TUI_LIBRARIES_AVAILABLE:
-                print_system("TUI libraries found. Attempting to launch Zephyrine Terminal UI...")
-                time.sleep(1)
+            #TUI_LIBRARIES CHECK ARE NOW CHANGED BY SOMETHING
+
+            if not setup_failures:
+                print_system("--- First-Time Verification Complete ---")
+
+                print_system("Compiling project Python source to optimized bytecode (-OO)...")
                 try:
-                    app = ZephyrineTUI()
-                    app.run()
-                    print_system("TUI has exited. Launcher finished.")
-                except Exception as e_tui:
-                    print_error(f"The Terminal UI failed to launch: {e_tui}")
-                    print_warning("This can happen in non-standard terminals (e.g., TERM=unknown) or inside some IDEs.")
-                    launch_in_fallback_mode()
+                    # 1. Specifically compile the main launcher script itself.
+                    launcher_path = os.path.abspath(__file__)
+                    print_system(f"  -> Compiling file: {launcher_path}")
+                    compileall.compile_file(launcher_path, force=True, quiet=1, legacy=True, optimize=2)
+
+                    # 2. Specifically compile your project's source code directories.
+                    #    DO NOT include ROOT_DIR here as it contains the Conda environment.
+                    project_source_dirs = [
+                        ENGINE_MAIN_DIR,
+                        # Add any other of YOUR source code directories here.
+                        # Example: os.path.join(ROOT_DIR, "another_module")
+                    ]
+
+                    for path in set(project_source_dirs):
+                        if os.path.isdir(path):
+                            print_system(f"  -> Compiling directory: {path}")
+                            compileall.compile_dir(path, force=True, quiet=1, legacy=True, optimize=2)
+                        else:
+                            print_warning(f"  -> Skipped non-existent directory for compilation: {path}")
+
+                    print_colored("SUCCESS", "Project bytecode compilation complete.", "SUCCESS")
+                except Exception as e_compile:
+                    print_error(f"Failed during bytecode compilation: {e_compile}")
+                    # Making this a warning instead of a failure. The app can still run without .pyc files.
+                    print_warning(
+                        "Bytecode compilation failed. The application can still run from .py source files, but startup will be slower.")
+                    # We remove it from setup_failures so the master flag can still be created.
+                    # setup_failures.append("Bytecode compilation failed.")
+
+                print_system(f"Creating fast-launch flag at: {SETUP_COMPLETE_FLAG_FILE}")
+                with open(SETUP_COMPLETE_FLAG_FILE, 'w') as f:
+                    f.write(f"Setup completed on {datetime.now().isoformat()}")
+
+                print_system("Setup complete. Proceeding to launch.")
+                # We will call our new parallel launch function here later.
+                # For now, put a placeholder to signify completion.
+                launch_all_services_in_parallel_and_monitor()
+
             else:
-                print_warning("Textual or psutil not found.")
-                launch_in_fallback_mode()
+                print_error("Halting launch due to setup/verification failures.")
+                # The script will then naturally exit the 'if/else' and the loop will handle the failure.
 
             # --- End of [NEW] TUI vs. Fallback Logic ---
+            del os.environ["ZEPHYRINE_RELAUNCHED_IN_CONDA"]
+            #-=-=-=-=-=
+
 
         else:  # Initial launcher instance (is_already_in_correct_env is False)
             print_system(f"--- Initial Launcher: Conda Setup & Hardware Detection ---")
@@ -4608,7 +4851,7 @@ if __name__ == "__main__":
                     os.remove(CONDA_PATH_CACHE_FILE)
                 CONDA_EXECUTABLE = None # Ensure it's reset
 
-            if not find_conda_executable():
+            if not find_conda_executable(attempt_number=attempt):
                 newly_installed_conda_path = _install_miniforge_and_check_overall_environment()
                 if newly_installed_conda_path:
                     print_system("Miniforge auto-installation successful. Using new executable.")
@@ -4644,8 +4887,11 @@ if __name__ == "__main__":
 
             # Run the health check on the existing environment before proceeding.
             # If it returns False, it means the environment was corrupt and has been deleted.
-            if not _check_and_repair_conda_env(TARGET_CONDA_ENV_PATH):
-                print_warning("Environment was repaired by deletion. The launcher will now create a fresh one.")
+            if attempt >= 2:
+                print_system(f"--- This is a retry (Attempt {attempt}). Running Conda health check as a diagnostic. ---")
+                # If it returns False, it means the environment was corrupt and has been deleted.
+                if not _check_and_repair_conda_env(TARGET_CONDA_ENV_PATH):
+                    print_warning("Environment was repaired by deletion. The launcher will now create a fresh one.")
 
             if not (os.path.isdir(TARGET_CONDA_ENV_PATH) and os.path.exists(
                     os.path.join(TARGET_CONDA_ENV_PATH, 'conda-meta'))):
