@@ -19,8 +19,12 @@ function ChatPage({
   triggerSidebarRefresh = () => console.warn("ChatPage: 'triggerSidebarRefresh' prop was called but not passed by App.jsx.")
 }) {
   const { chatId } = useParams();
-  const [messages, setMessages] = useState([]);
+  const [allMessages, setAllMessages] = useState([]);
+  const [visibleMessages, setVisibleMessages] = useState([]);
+  const [visibleRange, setVisibleRange] = useState({ start: 0, end: 0 });
+  const scrollContainerRef = useRef(null);
   const [inputValue, setInputValue] = useState("");
+  const [isLoadingPrevious, setIsLoadingPrevious] = useState(false);
   const [isGenerating, setIsGenerating] = useState(false);
   const [isLoadingHistory, setIsLoadingHistory] = useState(true);
   const [showPlaceholder, setShowPlaceholder] = useState(false);
@@ -39,7 +43,8 @@ function ChatPage({
   useEffect(() => {
     setIsLoadingHistory(true);
     setError(null);
-    setMessages([]);
+    setAllMessages([]);
+    setVisibleMessages([]);
     setShowPlaceholder(false);
 
     const connectWebSocket = () => {
@@ -118,11 +123,52 @@ function ChatPage({
     };
   }, [chatId, user]);
 
+  const handleScroll = () => {
+    if (scrollContainerRef.current) {
+      const { scrollTop } = scrollContainerRef.current;
+      if (scrollTop === 0 && visibleRange.start > 0) {
+        setIsLoadingPrevious(true);
+        const newStart = Math.max(0, visibleRange.start - 5);
+        const newVisibleMessages = allMessages.slice(newStart, visibleRange.end);
+        const oldScrollHeight = scrollContainerRef.current.scrollHeight;
+
+        setVisibleMessages(newVisibleMessages);
+        setVisibleRange({ start: newStart, end: visibleRange.end });
+
+        // Preserve scroll position
+        requestAnimationFrame(() => {
+          const newScrollHeight = scrollContainerRef.current.scrollHeight;
+          scrollContainerRef.current.scrollTop = newScrollHeight - oldScrollHeight;
+          setIsLoadingPrevious(false);
+        });
+      }
+    }
+  };
+
   useEffect(() => {
-    if (bottomRef.current) {
+    const scrollContainer = scrollContainerRef.current;
+    if (scrollContainer) {
+      scrollContainer.addEventListener('scroll', handleScroll);
+      return () => {
+        scrollContainer.removeEventListener('scroll', handleScroll);
+      };
+    }
+  }, [handleScroll]);
+
+  useEffect(() => {
+    if (bottomRef.current && (visibleMessages[visibleMessages.length - 1]?.sender === 'user' || streamingAssistantMessage)) {
       bottomRef.current.scrollIntoView({ behavior: "smooth" });
     }
-  }, [messages, streamingAssistantMessage]);
+  }, [visibleMessages, streamingAssistantMessage]);
+
+  const updateVisibleMessages = (newAllMessages) => {
+    const messageCount = newAllMessages.length;
+    const initialLoadCount = 5;
+    const start = Math.max(0, messageCount - initialLoadCount);
+    const end = messageCount;
+    setVisibleMessages(newAllMessages.slice(start, end));
+    setVisibleRange({ start, end });
+  };
 
   const handleWebSocketMessage = useCallback((data) => {
     try {
@@ -136,15 +182,23 @@ function ChatPage({
       switch (message.type) {
         case "chat_history":
             if (message.payload.chatId === chatId) {
-                setMessages(message.payload.messages || []);
-                setShowPlaceholder(!message.payload.messages || message.payload.messages.length === 0);
+                const messages = message.payload.messages || [];
+                setAllMessages(messages);
+                const messageCount = messages.length;
+                const initialLoadCount = 5;
+                const start = Math.max(0, messageCount - initialLoadCount);
+                const end = messageCount;
+                setVisibleMessages(messages.slice(start, end));
+                setVisibleRange({ start, end });
+                setShowPlaceholder(messageCount === 0);
             }
             setIsLoadingHistory(false);
             break;
         case "chat_history_error":
             console.error("ChatPage: Error loading chat history from backend:", message.message || message.payload?.error);
             setError(`Failed to load chat history: ${message.message || message.payload?.error}`);
-            setMessages([]);
+            setAllMessages([]);
+            setVisibleMessages([]);
             setShowPlaceholder(true);
             setIsLoadingHistory(false);
             break;
@@ -166,7 +220,7 @@ function ChatPage({
           streamingStartTimeRef.current = 0;
 
           // Find the optimistic user message and append the assistant response
-          setMessages((prev) => {
+          setAllMessages((prev) => {
             const updatedMessages = [];
             let foundOptimisticUserMessage = false;
             for (const msg of prev) {
@@ -195,12 +249,13 @@ function ChatPage({
                     isLoading: false,
                 });
             }
+            updateVisibleMessages(updatedMessages);
             return updatedMessages;
           });
 
           // Trigger sidebar refresh if this was the first assistant response
-          const userMessagesInHistoryForChat = messages.filter(m => m.sender === 'user' && !m.id?.startsWith('temp-')).length;
-          if (userMessagesInHistoryForChat === 1 && messages.filter(m => m.sender === 'assistant' && !m.isLoading).length === 0) {
+          const userMessagesInHistoryForChat = allMessages.filter(m => m.sender === 'user' && !m.id?.startsWith('temp-')).length;
+          if (userMessagesInHistoryForChat === 1 && allMessages.filter(m => m.sender === 'assistant' && !m.isLoading).length === 0) {
                 console.log("ChatPage: First assistant response (incoming 'chat' type) complete, calling triggerSidebarRefresh.");
                 triggerSidebarRefresh();
           }
@@ -270,16 +325,19 @@ function ChatPage({
               isLoading: false,
               isThinking: isCurrentlyThinkingFinal,
             };
-            setMessages((prev) => {
+            setAllMessages((prev) => {
                 const existing = prev.find(msg => msg.id === finalMessage.id);
+                let newMessages;
                 if (existing) {
-                    return prev.map(msg => msg.id === finalMessage.id ? finalMessage : msg);
+                    newMessages = prev.map(msg => msg.id === finalMessage.id ? finalMessage : msg);
                 } else {
-                    return [...prev, finalMessage];
+                    newMessages = [...prev, finalMessage];
                 }
+                updateVisibleMessages(newMessages);
+                return newMessages;
             });
-            const userMessagesInHistory = messages.filter(m => m.sender === 'user' && !m.id?.startsWith('temp-')).length;
-            if (userMessagesInHistory === 1 && messages.filter(m => m.sender === 'assistant' && !m.isLoading).length === 0) {
+            const userMessagesInHistory = allMessages.filter(m => m.sender === 'user' && !m.id?.startsWith('temp-')).length;
+            if (userMessagesInHistory === 1 && allMessages.filter(m => m.sender === 'assistant' && !m.isLoading).length === 0) {
                  console.log("ChatPage: First assistant response complete, calling triggerSidebarRefresh.");
                  triggerSidebarRefresh();
             }
@@ -290,7 +348,12 @@ function ChatPage({
           streamingStartTimeRef.current = 0;
           break;
         case "message_status_update":
-            setMessages(prevMessages => 
+            setAllMessages(prevMessages => 
+                prevMessages.map(msg => 
+                    msg.id === message.payload.id ? { ...msg, status: message.payload.status } : msg
+                )
+            );
+            setVisibleMessages(prevMessages => 
                 prevMessages.map(msg => 
                     msg.id === message.payload.id ? { ...msg, status: message.payload.status } : msg
                 )
@@ -333,7 +396,7 @@ function ChatPage({
       currentAssistantMessageId.current = null;
       setIsLoadingHistory(false);
     }
-  }, [chatId, refreshHistory, messages, streamingAssistantMessage, updateSidebarHistory, triggerSidebarRefresh, user]);
+  }, [chatId, refreshHistory, allMessages, streamingAssistantMessage, updateSidebarHistory, triggerSidebarRefresh, user]);
 
   const handleEditSave = async (messageId, newContent) => {
     if (isGenerating) return;
@@ -342,26 +405,28 @@ function ChatPage({
       return;
     }
     setError(null);
-    const originalMessages = [...messages]; 
-    const editedMessageIndex = messages.findIndex((msg) => msg.id === messageId);
+    const originalMessages = [...allMessages]; 
+    const editedMessageIndex = allMessages.findIndex((msg) => msg.id === messageId);
 
-    if (editedMessageIndex === -1 || messages[editedMessageIndex].sender !== "user") {
+    if (editedMessageIndex === -1 || allMessages[editedMessageIndex].sender !== "user") {
       setError("Only existing user messages can be edited.");
       return;
     }
 
-    const historyBeforeEdit = messages.slice(0, editedMessageIndex)
+    const historyBeforeEdit = allMessages.slice(0, editedMessageIndex)
         .filter(m => !m.isLoading && !m.id?.startsWith('temp-'))
         .map(m => ({ sender: m.sender, content: m.content }));
     
     const editedUserMessageForLlm = { sender: "user", content: newContent };
     const messagesForLlmRegen = [...historyBeforeEdit, editedUserMessageForLlm];
 
-    setMessages(prevMessages => {
+    setAllMessages(prevMessages => {
         const updatedMessages = prevMessages.map(msg => 
             msg.id === messageId ? { ...msg, content: newContent, created_at: new Date().toISOString() } : msg
         );
-        return updatedMessages.slice(0, editedMessageIndex + 1); 
+        const newVisible = updatedMessages.slice(0, editedMessageIndex + 1);
+        updateVisibleMessages(newVisible);
+        return newVisible;
     });
     setShowPlaceholder(false);
 
@@ -394,7 +459,7 @@ function ChatPage({
         setError("Failed to send edit request to server.");
         setIsGenerating(false);
         setStreamingAssistantMessage(null);
-        setMessages(originalMessages);
+        setAllMessages(originalMessages);
     }
   };
 
@@ -414,7 +479,7 @@ function ChatPage({
         content: accumulatedContentRef.current,
         isLoading: false,
       };
-      setMessages((prev) => {
+      setAllMessages((prev) => {
           const existing = prev.find(msg => msg.id === finalPartialMessage.id);
           if (existing) {
               return prev.map(msg => msg.id === finalPartialMessage.id ? finalPartialMessage : msg);
@@ -453,8 +518,8 @@ function ChatPage({
     latestRequestRef.current = optimisticUserMessage.id;
 
     const baseMessages = isRegeneration
-      ? messages.slice(0, messages.findLastIndex(m => m.sender === 'assistant'))
-      : messages;
+      ? allMessages.slice(0, allMessages.findLastIndex(m => m.sender === 'assistant'))
+      : allMessages;
 
     const newUiState = isRegeneration 
       ? baseMessages // For regeneration, the UI state is just the history without the last AI message.
@@ -476,7 +541,8 @@ function ChatPage({
     };
 
     // 2. Perform all state updates and side effects sequentially.
-    setMessages(newUiState);
+    setAllMessages(newUiState);
+    updateVisibleMessages(newUiState);
     setInputValue("");
     setFileData(null);
     setShowPlaceholder(false);
@@ -487,7 +553,7 @@ function ChatPage({
 
     ws.current.send(JSON.stringify({ type: "chat", payload: messagePayload }));
 
-  }, [chatId, fileData, isGenerating, selectedModel, user, handleStopGeneration, messages]);
+  }, [chatId, fileData, isGenerating, selectedModel, user, handleStopGeneration, allMessages]);
 
   // --- END: Reordered Functions ---
 
@@ -499,8 +565,8 @@ function ChatPage({
   };
 
   const handleRegenerate = () => {
-    if (isGenerating || !messages.length) return;
-    const relevantMessages = messages.filter(m => !m.isLoading && !m.id?.startsWith('temp-'));
+    if (isGenerating || !allMessages.length) return;
+    const relevantMessages = allMessages.filter(m => !m.isLoading && !m.id?.startsWith('temp-'));
     const lastUserMessage = [...relevantMessages].reverse().find((msg) => msg.sender === "user");
 
     if (lastUserMessage) {
@@ -525,7 +591,7 @@ function ChatPage({
     setInputValue(text);
   };
 
-  const lastValidAssistantMessageIndex = messages
+  const lastValidAssistantMessageIndex = allMessages
       .filter(m => !m.isLoading && !m.id?.startsWith('temp-'))
       .findLastIndex((msg) => msg.sender === "assistant");
 
@@ -540,7 +606,7 @@ function ChatPage({
         )}
         {!isLoadingHistory && (
             <ChatFeed
-              messages={messages}
+              messages={visibleMessages}
               streamingMessage={streamingAssistantMessage}
               showPlaceholder={showPlaceholder}
               isGenerating={isGenerating}
@@ -552,6 +618,8 @@ function ChatPage({
               onEditSave={handleEditSave}
               copySuccessId={localCopySuccessId}
               lastAssistantMessageIndex={lastValidAssistantMessageIndex}
+              scrollContainerRef={scrollContainerRef}
+              isLoadingPrevious={isLoadingPrevious}
             />
         )}
         {error && <div className="error-message chat-error">{error}</div>}
