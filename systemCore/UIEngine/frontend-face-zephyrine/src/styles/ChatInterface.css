@@ -216,7 +216,12 @@
   border: 1px solid rgba(255, 255, 255, 0.1); /* Subtle border */
 }
 
-/* --- Message Actions --- */
+.loading-indicator {
+  text-align: center;
+  padding: 10px;
+  color: var(--text-secondary);
+}
+
 .message-actions {
   position: absolute;
   bottom: 4px; /* Position near the bottom */

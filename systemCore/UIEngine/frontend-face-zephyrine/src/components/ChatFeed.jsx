@@ -105,6 +105,8 @@ const ChatFeed = ({
     lastAssistantMessageIndex,
     showPlaceholder, // Prop from old code
     onExampleClick,  // Prop from old code
+    scrollContainerRef,
+    isLoadingPrevious,
 }) => {
     const [editingMessageId, setEditingMessageId] = useState(null);
     const [editedContent, setEditedContent] = useState("");
@@ -327,7 +329,8 @@ const ChatFeed = ({
 
     // --- Render Chat View (from current code with Virtuoso) ---
     return (
-        <div id="messages-container" className="message-list">
+        <div id="messages-container" className="message-list" ref={scrollContainerRef}>
+            {isLoadingPrevious && <div className="loading-indicator">Loading...</div>}
             <ul className="message-list-content">
                 {messages.map((_, index) => (
                     <Row key={index} index={index} />

@@ -98,6 +98,7 @@ systemCore/engineMain/reverseEngineeringAssets/en-test-zeph-profile.mp3.zip
 .melo_tts_installed_v1
 .custom_llama_cpp_installed_v1
 .latex_ocr_subengine_installed_v1
+.setup_complete_v2
 **.mp3**
 
 
@@ -162,3 +163,5 @@ ZephyWatchtower/Watchdog_Thread1
 *.mjs
 AutomatedAuditNotes.txt
 systemCore/UIEngine/backend-service/zephyrine-backend
+**.pyc**
+
