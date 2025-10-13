@@ -768,7 +768,7 @@ class FileIndexer:
 
         try:
             for current_dir, dirnames, filenames in os.walk(root_path, topdown=True, onerror=None):
-                logger.debug(f"SCANNER_WALK_DEBUG: Entering directory: {current_dir}")
+                #logger.debug(f"SCANNER_WALK_DEBUG: Entering directory: {current_dir}")
                 if self.stop_event.is_set():
                     logger.info(f"Phase 1 Scan interrupted by stop signal in {current_dir}")
                     break
