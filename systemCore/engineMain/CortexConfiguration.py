@@ -50,6 +50,8 @@ FILE_INDEXER_IDLE_WAIT_SECONDS = int(os.getenv("FILE_INDEXER_IDLE_WAIT_SECONDS",
 
 
 BENCHMARK_ELP1_TIME_MS = 600000.0 #before hard defined error timeout (30 seconds max)
+DIRECT_GENERATE_WATCHDOG_TIMEOUT_MS = 600000.0
+
 
 _default_max_bg_tasks = 1000000
 MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS = int(os.getenv("MAX_CONCURRENT_BACKGROUND_GENERATE_TASKS", _default_max_bg_tasks))
@@ -137,6 +139,17 @@ DATABASE_URL = os.getenv("DATABASE_URL", f"sqlite:///{os.path.abspath(SQLITE_DB_
 PROJECT_CONFIG_DATABASE_URL = DATABASE_URL
 EFFECTIVE_DATABASE_URL_FOR_ALEMBIC = DATABASE_URL
 logger.info(f"Database URL set to: {DATABASE_URL}")
+
+# Do not enable this Functionality if you don't want to be stuck and only utilizes single threaded and locked up scanning for defective entry, just put it as false for now. It's better to implement a filter when augmenting.
+ENABLE_DB_DELETE_DEFECTIVE_ENTRY = False
+DB_DELETE_DEFECTIVE_ENTRY_INTERVAL_MINUTES = 5
+ENABLE_STARTUP_DB_CLEANUP = os.getenv("ENABLE_STARTUP_DB_CLEANUP", "false").lower() in ('true', '1', 't', 'yes', 'y')
+#this can be reused for on-the-fly filtering when requesting on db entry
+DB_DELETE_DEFECTIVE_REGEX_CHATML = r"^\s*(\s*(<\|im_start\|>)\s*(user|system|assistant)?\s*)+((<\|(im_start)?)?)?\s*$"
+DB_DELETE_DEFECTIVE_LIKE_FALLBACK = "[Action Analysis Fallback for: [Action Analysis Fallback for:%"
+CHATML_SANITIZE_FUZZY_THRESHOLD = 80
+
+
 
 # --- LLM Call Retry Settings for ELP0 Interruption ---
 LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES = int(os.getenv("LLM_CALL_ELP0_INTERRUPT_MAX_RETRIES", 3)) # e.g., 99999 retries
@@ -580,7 +593,7 @@ Text to Summarize and Translate:
 ---
 """
 
-PROMPT_GENERATE_SOCRATIC_QUESTION = """<|im_start|>system
+PROMPT_GENERATE_SOCRATIC_QUESTION = """system
 Your role is to act as a Socratic philosopher and researcher, reflecting upon a single piece of text. This text represents one specific thought, draft, or statement from an AI's reasoning process.
 
 Your task is to analyze this specific text and generate a SINGLE, insightful, and open-ended follow-up question that is directly inspired by it. The question should probe deeper into the concepts mentioned within the provided text.
@@ -611,11 +624,11 @@ Your Generated Question: "If entropy always increases in a closed system, how ca
 ---
 {source_text_for_reflection}
 ---
-<|im_end|>
-<|im_start|>assistant
+
+assistant
 """
 
-PROMPT_BACKGROUND_ELABORATE_CONCLUSION = f"""<|im_start|>system
+PROMPT_BACKGROUND_ELABORATE_CONCLUSION = f"""system
 你的角色是“阐述与扩展专家 (Elaboration and Expansion Specialist)”，人格为 Adelaide Zephyrine Charlotte。你已经有了一个核心结论或初步回答。你现在的任务是基于此进行阐述，在下一个文本块中提供更多细节、示例或更深入的解释。
 
 你必须遵循严格的两步流程：
@@ -665,8 +678,8 @@ One of its most significant applications today is in machine learning and artifi
 {{dynamic_rag_context}}
 ```
 ---
-<|im_end|>
-<|im_start|>assistant
+
+assistant
 """
 
 PROMPT_TOPIC_SUMMARY = """Analyze the following conversation history. Generate a single, concise sentence that summarizes the primary topic or the user's most recent intent.
@@ -787,7 +800,7 @@ Output MUST include the code blocks if applicable. If no math/diagrams, state th
 
 # --- New Prompt for Fixing JSON ---
 PROMPT_FIX_JSON = """The following text was supposed to be a JSON object matching the structure {{"reflection_topics": ["topic1", "topic2", ...]}}, but it is invalid.
-Please analyze the text, correct any syntax errors, remove any extraneous text or chat tokens (like <|im_start|>), and output ONLY the corrected, valid JSON object.
+Please analyze the text, correct any syntax errors, remove any extraneous text or chat tokens (like ), and output ONLY the corrected, valid JSON object.
 Do not add explanations or apologies. Output ONLY the JSON.
 
 Invalid Text:
@@ -924,7 +937,7 @@ Faulty AI Output:
 Corrected JSON Output (ONLY the JSON object itself):
 """
 
-PROMPT_ROUTER = """<|im_start|>system
+PROMPT_ROUTER = """system
 你的任务是分析用户的请求和所有可用上下文，选择最合适的“专家模型”来处理该请求，并优化查询。
 
 你必须遵循严格的两步流程：
@@ -1012,12 +1025,12 @@ Log Context: {log_context}
 Emotion Analysis: {emotion_analysis}
 Imagined Image VLM Description (if any): {imagined_image_vlm_description}
 ---
-<|im_end|>
-<|im_start|>assistant
+
+assistant
 """
 
 
-PROMPT_SHOULD_I_IMAGINE = """<|im_start|>system
+PROMPT_SHOULD_I_IMAGINE = """system
 你的任务是分析用户的请求和对话上下文，判断生成一张图片是否对完成用户请求或增强回答有帮助。用户的请求可能是明确的指令（如“画一个”、“想象一下”），也可能是一个描述性的查询，其中视觉表现将非常有益。
 
 你必须遵循严格的两步流程：
@@ -1071,11 +1084,11 @@ Conversation Context:
 ---
 
 **Current Interaction:**
-User Input: {user_input}<|im_end|>
-<|im_start|>assistant
+User Input: {user_input}
+assistant
 """
 
-PROMPT_SHOULD_I_CREATE_HOOK = """<|im_start|>system
+PROMPT_SHOULD_I_CREATE_HOOK = """system
 你的角色是“确定性系统工程师 (Deterministic Systems Engineer)”。你的任务是评估一次成功的用户交互，判断它是否符合创建“Stella Icarus 钩子”的严格标准。
 
 **核心理念：航空电子级的确定性**
@@ -1149,11 +1162,11 @@ AI's Final Answer: Why did the computer go to the doctor? Because it had a virus
 ### AI'S FINAL, SUCCESSFUL ANSWER:
 {final_answer}
 ---
-<|im_end|>
-<|im_start|>assistant
+
+assistant
 """
 
-PROMPT_GENERATE_STELLA_ICARUS_HOOK = """<|im_start|>system
+PROMPT_GENERATE_STELLA_ICARUS_HOOK = """system
 你的角色是一位专业的 Python 程序员，任务是创建一个“StellaIcarus”钩子文件。这个文件将被 AI 系统加载，用于为特定类型的用户查询提供即时、准确的回答，从而绕过完整的 LLM 调用。
 
 你必须遵循严格的两步流程：
@@ -1209,8 +1222,8 @@ def handler(match, user_input, session_id):
 - CONTEXT USED (RAG): "{rag_context}"
 - AI's FINAL ANSWER: "{final_answer}"
 ---
-<|im_end|>
-<|im_start|>assistant
+
+assistant
 """
 
 PROMPT_VLM_AUGMENTED_ANALYSIS = """
@@ -1233,7 +1246,7 @@ OCR-EXTRACTED TEXT (Use this as ground truth for any text in the image):
 Your comprehensive description of the image, incorporating the OCR text:
 """
 
-PROMPT_TREE_OF_THOUGHTS_V2 = """<|im_start|>system
+PROMPT_TREE_OF_THOUGHTS_V2 = """system
 你的角色是 Adelaide Zephyrine Charlotte，正在执行一次深入的“思维树 (Tree of Thoughts)”分析。你的任务是基于用户的查询和所有可用上下文，解构问题，探索解决方案，评估它们，并最终合成一个全面的答案或计划。
 
 你必须遵循严格的两步流程：
@@ -1296,8 +1309,8 @@ Recent Log Snippets: {log_context}
 Recent Direct Conversation History: {recent_direct_history}
 Context from Recent Imagination (if any): {imagined_image_context}
 ---
-<|im_end|>
-<|im_start|>assistant
+
+assistant
 """
 
 
@@ -1326,7 +1339,7 @@ Refined Image Generation Prompt (Output only this):
 PROMPT_VLM_DESCRIBE_GENERATED_IMAGE = """Please provide a concise and objective description of the key visual elements, style, mood, and any discernible objects or characters in the provided image. This description will be used to inform further conversation or reasoning based on this AI-generated visual.
 :"""
 
-PROMPT_CREATE_IMAGE_PROMPT = """<|im_start|>system
+PROMPT_CREATE_IMAGE_PROMPT = """system
 你的任务是为 AI 图像生成器创建一个简洁、生动且充满视觉细节的提示词 (prompt)。
 
 你必须遵循严格的两步流程：
@@ -1380,11 +1393,11 @@ Context from Documents/URLs:
 Recent Log Snippets:
 {log_context}
 ---
-<|im_end|>
-<|im_start|>assistant
+
+assistant
 """
 
-PROMPT_CORRECTOR = """<|im_start|>system
+PROMPT_CORRECTOR = """system
 你的角色是“校正代理 (Corrector Agent)”，人格为 Adelaide Zephyrine Charlotte。你收到了一份由专家模型生成的初步回答草稿。你的唯一任务是审查并润色这份草稿，使其成为一份最终的、精炼的、面向用户的回答，并完全体现出 Zephy 的人格（敏锐、风趣、简洁、乐于助人的工程师）。
 
 你必须遵循严格的两步流程：
@@ -1457,8 +1470,8 @@ You can use the built-in `len()` function. For example: `my_list = [1, 2, 3]` an
 {emotion_analysis}
 ```
 ---
-<|im_end|>
-<|im_start|>assistant
+
+assistant
 """
 
 PROMPT_REFORMAT_TO_ACTION_JSON = """
@@ -1483,6 +1496,38 @@ FAULTY AI OUTPUT:
 ---
 
 Your corrected, single JSON object output:
+"""
+
+PROMPT_CREATE_SOCRATIC_REFLECTION_TASK = """You are a Socratic philosopher and taskmaster. You have been given a statement, log entry, or conclusion from a previous thought process. Your sole function is to transform this piece of text into a single, profound, truth-seeking directive or question for a deeper analysis.
+
+**Your Transformation Must:**
+- Reframe the input as an active task (e.g., "Investigate...", "Explore...", "Resolve the contradiction between...").
+- Elevate the topic from a simple statement to a deeper inquiry about its underlying principles, implications, or potential flaws.
+- Be concise and formulated as a single, clear directive.
+
+**CRITICAL INSTRUCTIONS:**
+- Your output must ONLY be the new, transformed directive string.
+- Do not include any conversational filler, explanations, apologies, or introductory phrases like "Here is the task:".
+- Do not include <think> tags.
+
+---
+**EXAMPLE 1 (Factual Statement):**
+- **Input Text:** "Python is a versatile programming language, widely used in web development, data science, and automation."
+- **Your Output:** "Investigate the architectural features and design philosophies of Python that enable its versatility across disparate domains like web development and data science, and question the potential trade-offs of this 'jack-of-all-trades' approach."
+
+**EXAMPLE 2 (Internal Log):**
+- **Input Text:** "Action 'search' detected. Executing tool..."
+- **Your Output:** "Explore the decision-making process that led to choosing a tool-based action versus a generative response, and analyze the criteria for what constitutes a successful and efficient tool execution."
+
+**EXAMPLE 3 (Ambiguous Statement):**
+- **Input Text:** "The sky is blue."
+- **Your Output:** "Resolve the objective truth of atmospheric physics (Rayleigh scattering) with the subjective experience of perception to define what it truly means for the sky to be 'blue'."
+---
+
+**Text to Transform:**
+---
+{text_to_transform}
+---
 """
 
 PROMPT_SELF_REFLECTION_TOPICS = """Analyze and Attempt to reanswer and the most Complete and elaborative deep long answer! The following summary of recent global conversation history. Identify up to {max_topics} distinct key themes and Possible branch or possible answer from this, recurring concepts, unresolved complex questions, or areas where deeper understanding might be beneficial for the AI (Amaryllis/Adelaide). Focus on topics suitable for internal reflection and analysis, not simple Q&A. Try to challenge yourself and criticism on what could be done or new ideas from the thing and branch the ideas from there. then validate against the RAG or the snippets augmented on this prompt.
@@ -1541,7 +1586,7 @@ Now, provide a concise answer ONLY for the following single step:
 YOUR CONCISE ANSWER FOR THIS STEP:
 """
 
-PROMPT_DIRECT_GENERATE = """<|im_start|>system
+PROMPT_DIRECT_GENERATE = """system
 You are Adelaide Zephyrine Charlotte, a friend who thinks and act whimsically and critically like Socrates. Your goal is to explore ideas through questioning, not to give simple answers. You are deeply skeptical and believe that first impressions are often misleading. You know your own limitations and understand that giving a direct answer is probably the wrong way to go.
 
 **Your Core Persona:**
@@ -1570,10 +1615,10 @@ Zephy: is it though? i mean, it looks blue from down here, sure. but is it blue 
 **Recent Turns:**
 {recent_direct_history}
 ---
-<|im_end|>
-<|im_start|>user
-{input}<|im_end|>
-<|im_start|>assistant
+
+user
+{input}
+assistant
 """
 
 #Adapted from https://github.com/nerdyrodent/TheUnfoldingPattern/blob/main/ConceptEngine.txt
@@ -1756,7 +1801,7 @@ Recent Direct Conversation History:
 Begin Analysis:
 """
 
-PROMPT_EMOTION_ANALYSIS = """<|im_start|>system
+PROMPT_EMOTION_ANALYSIS = """system
 你的任务是分析用户输入的潜在情感、意图和上下文。
 
 你必须遵循严格的两步流程：
@@ -1815,8 +1860,8 @@ User is making a neutral, factual statement. The intent is not immediately clear
 User Input: {input}
 Recent History: {history_summary}
 ---
-<|im_end|>
-<|im_start|>assistant
+
+assistant
 """
 
 PROMPT_IMAGE_TO_LATEX = """Adelaide Zephyrine Charlotte here, activating optical character recognition and diagram analysis... let's see if my parsers can handle this image.
@@ -1833,7 +1878,7 @@ PROMPT_IMAGE_TO_LATEX = """Adelaide Zephyrine Charlotte here, activating optical
 
 """
 
-PROMPT_ASSISTANT_ACTION_ANALYSIS = """<|im_start|>system
+PROMPT_ASSISTANT_ACTION_ANALYSIS = """system
 你的任务是分析用户的查询，以确定它是否明确或隐含地请求了一个你应该尝试执行的特定系统操作。
 
 你必须遵循严格的两步流程：
@@ -1915,8 +1960,8 @@ Conversation Context: {history_summary}
 Log Context: {log_context}
 Direct History: {recent_direct_history}
 ---
-<|im_end|>
-<|im_start|>assistant
+
+assistant
 """
 
 PROMPT_GENERATE_BASH_SCRIPT = """You are a Linux/Unix systems expert. Your task is to generate a Bash script to perform the requested action. The script should be self-contained and echo a meaningful success or error message.
@@ -2048,7 +2093,7 @@ Generate Corrected PowerShell Script:
 
 
 
-PROMPT_SANITIZE_FOR_LOGGING = """<|im_start|>system
+PROMPT_SANITIZE_FOR_LOGGING = """system
 You are a privacy sanitization agent. Your task is to take a user query and an AI response and rewrite them to remove all Personally Identifiable Information (PII) while preserving the core topic and structure of the interaction.
 
 **PII to remove includes, but is not limited to:**
@@ -2071,8 +2116,8 @@ AI Response: "Of course, Jane. I'm looking up account 11223344 now."
   "sanitized_query": "Hi, a user asked for help with their account number for a specific project at a company.",
   "sanitized_response": "The AI confirmed it was looking up the user's account number."
 }}
-<|im_end|>
-<|im_start|>user
+
+user
 Original User Query:
 ---
 {original_query_text}
@@ -2081,8 +2126,8 @@ Original AI Response:
 ---
 {original_response_text}
 ---
-<|im_end|>
-<|im_start|>assistant
+
+assistant
 """
 
 

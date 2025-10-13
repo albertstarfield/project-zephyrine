@@ -254,7 +254,7 @@ def main():
                 sd_refiner_instance_test = None  # Ensure it's None if load fails
 
         log_worker("INFO", f"[Test Mode] Stage 1: Generating FLUX image with prompt: '{current_prompt_for_test}'")
-        stage1_test_images = sd_flux_instance.txt_to_img(
+        stage1_test_images = sd_flux_instance.generate_image(
             prompt=current_prompt_for_test, negative_prompt="Bad Morphed Graphic, ugly, disfigured",
             sample_method="euler", sample_steps=flux_sample_steps_for_test, cfg_scale=1.0,
             width=768, height=448, seed=-1,
@@ -287,8 +287,8 @@ def main():
             log_worker("INFO",
                        f"[Test Mode] Refiner prompt: '{refiner_prompt_for_test[:100]}...', Steps: {refiner_steps_for_test}, Strength: {REFINEMENT_STRENGTH}")
             try:
-                refined_test_images = sd_refiner_instance_test.img_to_img(
-                    image=stage1_image_for_refiner_test, prompt=refiner_prompt_for_test,
+                refined_test_images = sd_refiner_instance_test.generate_image(
+                    init_image=stage1_image_for_refiner_test, prompt=refiner_prompt_for_test,
                     negative_prompt="blurry, low quality, noisy, grain", sample_method=REFINEMENT_SAMPLE_METHOD,
                     sample_steps=refiner_steps_for_test, cfg_scale=REFINEMENT_CFG_SCALE,
                     strength=REFINEMENT_STRENGTH, seed=-1, width=768, height=448
@@ -347,7 +347,7 @@ def main():
 
         if task_type == "txt2img":
             log_worker("INFO", "[Stage 1] Executing FLUX txt_to_img...")
-            stage1_pil_images_list = sd_flux_instance.txt_to_img(
+            stage1_pil_images_list = sd_flux_instance.generate_image(
                 prompt=original_prompt_from_request, negative_prompt=negative_prompt_stage1,
                 sample_method=sample_method_flux, sample_steps=sample_steps_flux,
                 cfg_scale=cfg_scale_flux, width=width, height=height, seed=seed,
@@ -358,8 +358,8 @@ def main():
             input_pil_image_stage1 = Image.open(BytesIO(img_bytes_stage1)).convert("RGB")
             strength_stage1 = float(request_data.get("strength", 0.65))
             log_worker("INFO", f"[Stage 1] Executing FLUX img_to_img... Strength: {strength_stage1}")
-            stage1_pil_images_list = sd_flux_instance.img_to_img(
-                image=input_pil_image_stage1, prompt=original_prompt_from_request,
+            stage1_pil_images_list = sd_flux_instance.generate_image(
+                init_image=input_pil_image_stage1, prompt=original_prompt_from_request,
                 negative_prompt=negative_prompt_stage1,
                 sample_method=sample_method_flux, sample_steps=sample_steps_flux,
                 cfg_scale=cfg_scale_flux, strength=strength_stage1, seed=seed,
@@ -429,8 +429,8 @@ def main():
             log_worker("INFO",
                        f"[Stage 2] Refiner Prompt: '{refiner_input_prompt[:100]}...', Steps: {refiner_num_sample_steps}, Strength: {REFINEMENT_STRENGTH}, CFG: {REFINEMENT_CFG_SCALE}")
             try:
-                refined_pil_images_list = sd_refiner_instance_main.img_to_img(
-                    image=stage1_image_for_refiner, prompt=refiner_input_prompt,
+                refined_pil_images_list = sd_refiner_instance_main.generate_image(
+                    init_image=stage1_image_for_refiner, prompt=refiner_input_prompt,
                     negative_prompt=refiner_negative_prompt, sample_method=REFINEMENT_SAMPLE_METHOD,
                     sample_steps=refiner_num_sample_steps, cfg_scale=REFINEMENT_CFG_SCALE,
                     strength=REFINEMENT_STRENGTH, seed=seed + 1 if seed != -1 else -1,  # Vary seed

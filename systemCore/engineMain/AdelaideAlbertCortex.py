@@ -384,6 +384,8 @@ _reflector_stop_event = threading.Event()
 _reflector_lock = threading.Lock() # Lock to prevent concurrent reflection cycles if one runs long
 
 
+
+
 def run_self_reflection_loop():
     """
     Main loop for self-reflection. Periodically processes eligible interactions.
@@ -477,38 +479,66 @@ def run_self_reflection_loop():
                         f"{thread_name}: Server became busy, pausing batch."); break
 
                     original_input_text = ""
-                    # Heuristic: If user_input contains multiple ChatML blocks, it's a full prompt
-                    # and is the most valuable source for reflection.
                     if (isinstance(interaction_obj.user_input, str) and
                             interaction_obj.user_input.count(CHATML_START_TOKEN) >= 2):
-                        
                         original_input_text = interaction_obj.user_input
-                        logger.trace(f"{thread_name}: Using full ChatML prompt from user_input for reflection on ID {interaction_obj.id}.")
                     else:
-                        # Otherwise, fall back to prioritizing the llm_response, as it contains
-                        # the actual content of logs, drafts, and summaries.
                         original_input_text = interaction_obj.llm_response or interaction_obj.user_input or "[Original content missing]"
-                        logger.trace(f"{thread_name}: Using llm_response (or fallback) for reflection on ID {interaction_obj.id}.")
-                    
+
+                    # Proactive Filter: Check if the source text itself is defective garbage.
+                    # We compile the regex here for a single use within this loop iteration.
+                    defective_pattern = re.compile(DB_DELETE_DEFECTIVE_REGEX_CHATML)
+                    if defective_pattern.match(original_input_text):
+                        logger.warning(
+                            f"{thread_name}: Skipping reflection for Interaction ID {interaction_obj.id} because its content matches the defective pattern."
+                        )
+                        # We still need to mark it as 'completed' to prevent it from being
+                        # picked up by the query in every single future loop cycle.
+                        interaction_obj.reflection_completed = True
+                        db.commit()
+                        continue
+
+                    if not original_input_text.strip():
+                        logger.warning(
+                            f"{thread_name}: Skipping reflection for Interaction ID {interaction_obj.id} due to empty content.")
+                        continue  # Skip to the next item in the loop
+
+                    socratic_task_prompt = cortex_text_interaction._transform_text_to_socratic_task(
+                        db, original_input_text
+                    )
+
+
+
                     original_interaction_id = interaction_obj.id
                     original_input_type_text = interaction_obj.input_type
+
+                    add_interaction(
+                        db,
+                        session_id=f"reflection_{interaction_obj.id}",
+                        mode="reflection_internal",
+                        input_type="log_info_socratic_transform",
+                        classification="internal_cognitive_step",
+                        user_input=original_input_text,  # The "before"
+                        llm_response=socratic_task_prompt  # The "after"
+                    )
+                    db.commit()
 
                     logger.info(
                         f"{thread_name}: --> Triggering reflection for Interaction ID {original_interaction_id} (Type: {original_input_type_text}) - Input: '{original_input_text[:60]}...'")
 
-                    reflection_session_id_for_bg = f"reflection_{original_interaction_id}_{str(uuid.uuid4())[:4]}"
+                    reflection_session_id_for_bg = f"reflection_{interaction_obj.id}_{str(uuid.uuid4())[:4]}"
                     task_launched_successfully = False
                     try:
                         # background_generate is async, run it and wait for it to complete
                         # The db session is passed to it.
-                        asyncio.run(  # This blocks the current thread until the async function completes
-                            cortex_text_interaction.background_generate(  # type: ignore
+                        asyncio.run(
+                            cortex_text_interaction.background_generate(
                                 db=db,
-                                user_input=original_input_text,  # This is the content to reflect upon
+                                user_input=socratic_task_prompt,
                                 session_id=reflection_session_id_for_bg,
-                                classification="chat_complex",  # Force complex for reflection
+                                classification="chat_complex",
                                 image_b64=None,
-                                update_interaction_id=original_interaction_id  # Key for reflection
+                                update_interaction_id=interaction_obj.id
                             )
                         )
                         # If asyncio.run completes without exception, assume the core logic of background_generate
@@ -1293,6 +1323,8 @@ class CortexThoughts:
         Returns:
             bool: True if the LLM decides an image should be generated, False otherwise.
         """
+        user_input = self._sanitize_text_for_prompt(user_input) #self sanitize user_input from defective ChatML Token being leaked everywhere
+
         request_id_suffix = str(uuid.uuid4())[:8]
         log_prefix = f"🤔 ShouldImagine|ELP0|{session_id[:8]}-{request_id_suffix}"
         logger.info(f"{log_prefix} Analyzing input for imagination potential: '{user_input[:50]}...'")
@@ -1778,6 +1810,62 @@ class CortexThoughts:
             if db_session:
                 db_session.close()
             logger.info(f"🏁 {log_prefix}: Socratic inquiry task finished.")
+
+    def _transform_text_to_socratic_task(self, db: Session, text_to_transform: str) -> str:
+        """
+        Takes a piece of text and uses a fast LLM to reframe it as a
+        truth-seeking Socratic directive for a new reflection task.
+        This is a synchronous, blocking function intended to be called from a
+        background thread like the SelfReflectorThread.
+        """
+        log_prefix = f"SocraticTransform|{self.current_session_id or 'Reflector'}"
+
+        # Fallback to the original text if transformation fails for any reason.
+        socratic_task_prompt = text_to_transform
+
+        if not text_to_transform or not text_to_transform.strip():
+            logger.warning(f"{log_prefix}: Input text is empty. Skipping transformation.")
+            return text_to_transform
+
+        logger.info(f"{log_prefix}: Transforming text into Socratic task: '{text_to_transform[:70]}...'")
+
+        try:
+            # 1. Get a fast model suitable for this simple, non-creative task.
+            transformation_model = self.provider.get_model("general_fast")
+            if not transformation_model:
+                raise RuntimeError("Model 'general_fast' for Socratic transformation not found.")
+
+            # 2. Define the prompt structure using the "Pure LangChain" pattern.
+            #    The entire prompt is treated as a single system message.
+            prompt_reformed = [
+                ("system", PROMPT_CREATE_SOCRATIC_REFLECTION_TASK)
+            ]
+
+            # 3. Create the LangChain chain.
+            chain = ChatPromptTemplate.from_messages(prompt_reformed) | transformation_model | StrOutputParser()
+
+            # 4. Invoke the chain with the data. This is a blocking call.
+            #    We do not use _call_llm_with_timing here as this is a simple,
+            #    internal utility function and timing is not the primary concern.
+            socratic_task_prompt = chain.invoke({"text_to_transform": text_to_transform})
+
+            # Basic validation of the output
+            if not socratic_task_prompt or not socratic_task_prompt.strip():
+                logger.warning(
+                    f"{log_prefix}: Socratic transformation resulted in an empty string. Falling back to original text.")
+                return text_to_transform  # Fallback
+
+            logger.success(f"{log_prefix}: Socratic task created successfully: '{socratic_task_prompt[:100]}...'")
+            return socratic_task_prompt.strip()
+
+        except Exception as transform_err:
+            logger.error(f"{log_prefix}: Failed to transform text into Socratic task: {transform_err}")
+            logger.exception(f"{log_prefix} Transformation Traceback:")
+
+            # In case of any error, we log it but safely fall back to returning
+            # the original text. This ensures the reflection loop is resilient and
+            # can still proceed even if this enhancement step fails.
+            return text_to_transform
 
     async def _generate_socratic_question_async(self, db: Session, source_text: str, session_id: str) -> Optional[str]:
         """
@@ -2450,8 +2538,12 @@ class CortexThoughts:
 
         # Define the Langchain chain for correction
         try:
+            prompt_reformed = [
+                ("system", PROMPT_CORRECTOR),  # The PROMPT_ROUTER variable now only contains the system instructions.
+                ("human", f"Please review and correct the following draft response: {draft_response}")  # This is a placeholder for the user's actual query.
+            ]
             chain = (
-                ChatPromptTemplate.from_template(PROMPT_CORRECTOR)
+                ChatPromptTemplate.from_messages(prompt_reformed)
                 | corrector_model
                 | StrOutputParser()
             )
@@ -3747,8 +3839,13 @@ class CortexThoughts:
             await asyncio.to_thread(db.commit)
             return default_model_key, user_input_for_routing, "Router model unavailable, using default."
 
+        prompt_reformed = [
+            ("system", PROMPT_ROUTER),  # The PROMPT_ROUTER variable now only contains the system instructions.
+            ("human", f"{user_input_for_routing}")  # This is a placeholder for the user's actual query.
+        ]
+
         router_chain_raw_output = (
-                ChatPromptTemplate.from_template(PROMPT_ROUTER)  # PROMPT_ROUTER from CortexConfiguration
+                ChatPromptTemplate.from_messages(prompt_reformed)  # PROMPT_ROUTER from CortexConfiguration
                 | router_model
                 | StrOutputParser()
         )
@@ -3883,6 +3980,46 @@ class CortexThoughts:
         sanitized_str = "\n".join(line for line in sanitized_str.splitlines() if line.strip())
 
         return sanitized_str if sanitized_str else "No relevant context found."
+
+    def _sanitize_text_for_prompt(self, text: str) -> str:
+        """
+        A universal, aggressive sanitizer that removes raw system tokens, tags,
+        and their fragments from any string before it is used as context.
+        This prevents context contamination from malformed LLM responses.
+        """
+        if not text or not isinstance(text, str):
+            return ""
+
+        sanitized_text = text
+
+        # --- Aggressive, Fragment-Aware Regex ---
+        # This single, powerful regex is designed to find and remove a wide
+        # variety of complete and partial system tags.
+        # It looks for:
+        #   - Optional '<' or '</'
+        #   - Optional '|'
+        #   - The core keywords: 'im_start', 'im_end', 'think', 'system', 'user', 'assistant'
+        #   - Optional closing '>' or '|>'
+        # The use of non-capturing groups (?:...) and making parts optional (?)
+        # makes it highly flexible.
+        fragment_pattern = re.compile(
+            r"<\/?\|?(?:im_start|im_end|think|system|user|assistant)\|?>?",
+            re.IGNORECASE # Make it case-insensitive to catch variations
+        )
+
+        # Execute the single, powerful replacement.
+        sanitized_text = fragment_pattern.sub("", sanitized_text)
+        
+        # A final strip to clean up any leading/trailing whitespace and newlines.
+        final_text = sanitized_text.strip()
+        
+        if final_text != text.strip():
+            logger.warning(
+                f"Sanitizer removed system tokens/fragments. "
+                f"Original len: {len(text)}, Final len: {len(final_text)}"
+            )
+            
+        return final_text
 
     async def _extract_narrative_anchors(self, db: Session, user_input: str, priority: int = ELP0) -> str:
         """Uses an LLM to identify the core questions/anchors of the user's prompt."""
@@ -4809,7 +4946,12 @@ class CortexThoughts:
             "imagined_image_context": imagined_image_context_str
         }
 
-        chain = ChatPromptTemplate.from_template(PROMPT_TREE_OF_THOUGHTS_V2) | tot_model | StrOutputParser()
+        prompt_reformed = [
+            ("system", PROMPT_TREE_OF_THOUGHTS_V2),  # The PROMPT_ROUTER variable now only contains the system instructions.
+            ("human", f"Create Tree of Thoughts in ascii for this query: {input_for_tot}")  # This is a placeholder for the user's actual query.
+        ]
+
+        chain = ChatPromptTemplate.from_messages(prompt_reformed) | tot_model | StrOutputParser()
 
         raw_llm_output_from_initial_loop: str = "Initial ToT LLM call did not yield parsable JSON."
         parsed_tot_json: Optional[Dict[str, Any]] = None
@@ -5613,13 +5755,28 @@ class CortexThoughts:
                 await asyncio.to_thread(db.commit)
                 logger.info(f"{log_prefix} Marked source Interaction ID {update_interaction_id} as reflection_completed=True.")
 
-                # 3. Extract the content to be used as the input for this new thought process.
-                user_input = source_interaction_for_reflection.user_input or source_interaction_for_reflection.llm_response or ""
-                interaction_data["user_input"] = user_input # The "user_input" for this task is the content of the old one.
-                interaction_data["classification_reason"] = f"Reflection on source Interaction ID {update_interaction_id}."
-                
-                input_log_snippet_reflection = f"'{user_input[:50]}...'" if user_input else "'[Input Content is None/Empty]'"
-                logger.info(f"{log_prefix} Loaded content from source ID {update_interaction_id} for new reflection entry. Content: {input_log_snippet_reflection}")
+                # 3. Create a new "stub" record for this reflection task itself.
+                #    This is CRITICAL to ensure we have an ID before any agentic actions are taken.
+                logger.info(f"{log_prefix} Creating initial stub record for this reflection task.")
+                stub_interaction = Interaction(
+                    session_id=session_id,
+                    mode="chat", # Reflections are part of the chat mode
+                    input_type="reflection_task_in_progress",
+                    user_input=user_input, # This now holds the Socratic prompt
+                    llm_response="[Reflection task initiated... awaiting synthesis.]",
+                    classification="internal_cognitive_step"
+                    # All other fields will use their default values
+                )
+                db.add(stub_interaction)
+                db.commit()
+                db.refresh(stub_interaction)
+
+                # 4. CRITICAL: Populate the variable that was previously None.
+                existing_interaction_to_update = stub_interaction
+                logger.success(
+                    f"{log_prefix} Reflection stub record created with ID: {existing_interaction_to_update.id}. "
+                    f"Variable is now populated."
+                )
 
             except Exception as e_load_and_mark:
                 logger.error(f"{log_prefix} Error loading or marking source Interaction ID {update_interaction_id}: {e_load_and_mark}. Aborting.")
@@ -5627,6 +5784,15 @@ class CortexThoughts:
                 self.current_session_id = original_chat_session_id
                 if created_local_db_session and db: db.close()
                 return
+        else:
+            # Create the initial interaction record for this new query.
+            initial_interaction = Interaction(**interaction_data)
+            db.add(initial_interaction)
+            db.commit()
+            db.refresh(initial_interaction)
+            
+            # Populate the variable for this path as well.
+            existing_interaction_to_update = initial_interaction
 
         # ======================================================================
         # 3. MAIN PROCESSING BLOCK (WITH SEMAPHORE & RETRIES)
@@ -5691,12 +5857,12 @@ class CortexThoughts:
                         )
                         interaction_data['imagined_image_prompt'] = img_prompt
                         await asyncio.to_thread(add_interaction, db, session_id=session_id,
-                                                input_type='log_info_imagine_prompt', llm_response=img_prompt,
+                                                input_type='log_info_imagine_prompt', llm_response=self._sanitize_text_for_prompt(img_prompt),
                                                 classification='internal_cognitive_step')
                         await asyncio.to_thread(db.commit)
 
                         if img_prompt:
-                            img_data_list, img_err = await self.provider.generate_image_async(prompt=img_prompt,
+                            img_data_list, img_err = await self.provider.generate_image_async(prompt=self._sanitize_text_for_prompt(img_prompt),
                                                                                               priority=ELP0)
                             if img_err:
                                 logger.error(f"{log_prefix} Image generation worker failed: {img_err}")
@@ -5842,7 +6008,7 @@ class CortexThoughts:
                             f"{log_prefix} No agentic action detected. Proceeding with standard text generation.")
                         router_payload = {
                             "input": current_input_for_analysis, "recent_direct_history": direct_hist_prompt_final,
-                            "context": url_context_str, "history_rag": history_rag_str,
+                            "context": self._sanitize_text_for_prompt(url_context_str), "history_rag": self._sanitize_text_for_prompt(history_rag_str),
                             "file_index_context": vec_file_ctx_result_str, "log_context": log_ctx_prompt_final,
                             "emotion_analysis": emotion_analysis_str_final, "pending_tot_result": "None.",
                             "imagined_image_vlm_description": interaction_data.get('imagined_image_vlm_description',
