@@ -9,6 +9,7 @@ import shutil
 import hashlib
 import subprocess
 import tempfile
+import re
 import enum
 import threading  # For the snapshotter thread
 
@@ -26,7 +27,7 @@ except ImportError:
 from sqlalchemy import (
     create_engine, Column, Integer, String, Text, DateTime, Float, Boolean,
     ForeignKey, Index, MetaData, update, desc, select, inspect as sql_inspect,
-    UniqueConstraint, text, CheckConstraint, Enum, JSON
+    UniqueConstraint, text, CheckConstraint, Enum, JSON, or_
 )
 from sqlalchemy.orm import sessionmaker, relationship, declarative_base, Session
 from sqlalchemy.exc import OperationalError, ProgrammingError, SQLAlchemyError
@@ -43,6 +44,7 @@ from alembic import command
 from alembic.util import CommandError
 from collections import deque
 from loguru import logger
+
 
 # --- Configuration & Paths ---
 APP_DIR = os.path.dirname(os.path.abspath(__file__))
@@ -179,6 +181,11 @@ class Interaction(Base):
         Index('ix_interactions_reflection_pending', 'reflection_completed', 'mode', 'input_type', 'timestamp'),
         Index('ix_interactions_reflection_indexed_vs', 'reflection_indexed_in_vs', 'input_type', 'timestamp'),
         Index('ix_interactions_is_indexed_for_rag', 'is_indexed_for_rag', 'timestamp'),
+        # New indexes to accelerate the Garbage Collector's LIKE and REGEXP queries.
+        # While a standard index doesn't fully accelerate REGEXP, it can significantly
+        # help the LIKE query and may provide some benefit to the REGEXP depending on the pattern.
+        Index('ix_interactions_llm_response_search', 'llm_response'),
+        Index('ix_interactions_user_input_search', 'user_input'),
     # Index for new field
     )
 
@@ -946,7 +953,6 @@ def stop_db_snapshotter():
 
 # --- END Database Snapshotter Thread ---
 
-
 # --- Engine Creation Wrapper (get_engine) - Modified for Snapshot Restore ---
 def get_engine():
     global _engine, SessionLocal
@@ -1573,9 +1579,23 @@ datefmt = %H:%M:%S
                     raise RuntimeError(f"Schema verification failed: {missing_interaction_cols_str}")
                 logger.info("✅ Table 'interactions' contains key expected columns.")
             logger.success("✅ Database schema verification passed (basic checks).")
+            if ENABLE_STARTUP_DB_CLEANUP:
+                logger.info("Performing one-time database cleanup for defective entries at startup...")
+                try:
+                    # Call the standalone cleanup function directly.
+                    # This function is synchronous and will complete before startup continues.
+                    # It handles its own database session and transaction management.
+                    _delete_malformed_entries()
+                except Exception as startup_cleanup_err:
+                    # If the cleanup fails for any reason, log it as a warning but DO NOT
+                    # stop the application from starting. The periodic cleanup will try again later.
+                    logger.warning(f"Initial startup cleanup of defective entries failed: {startup_cleanup_err}")
+                    logger.exception("Startup cleanup traceback:")
         except Exception as verify_err:
             logger.error(f"❌ Schema verification FAILED: {verify_err}")
             raise RuntimeError(f"Schema verification failed after migration: {verify_err}") from verify_err
+
+
 
         logger.success("✅ Database initialization (fresh Alembic baseline strategy) completed successfully.")
 
@@ -1583,11 +1603,13 @@ datefmt = %H:%M:%S
         # These are started only if all previous steps were successful.
         start_db_snapshotter()
         start_log_batch_writer()
+        #start_db_garbage_collector() #Do not use this or enable this Fatal error detected and irrecoverable database but snapshot are recoverable due thread batch writing misalignment
 
         # Register shutdown hooks (order can be important for graceful shutdown)
         atexit.register(stop_log_batch_writer)  # Flush logs first
         atexit.register(stop_db_snapshotter)  # Stop snapshotting
         atexit.register(_shutdown_hook)  # Then compress DB
+        #atexit.register(stop_db_garbage_collector) #Do not use this or enable this Fatal error detected and irrecoverable database but snapshot are recoverable due thread batch writing misalignment
 
     except Exception as init_err_outer:  # Catches RuntimeErrors raised from within or other exceptions
         logger.critical(f"🔥🔥 OVERALL DATABASE INITIALIZATION FAILURE: {init_err_outer}")
@@ -1659,18 +1681,57 @@ def add_interaction(db_session_param: Optional[Session] = None, **kwargs) -> Opt
 
 def get_recent_interactions(db: Session, limit=5, session_id=None, mode="chat", include_logs=False) -> List[
     Interaction]:
+    """
+    Gets recent interactions and then filters out malformed/defective entries
+    in Python after the database query.
+    """
     try:
+        # Step 1: Retrieve data from the database, including potential garbage.
+        # This is the original, simple query.
         base_query = db.query(Interaction).filter(Interaction.mode == mode)
-        if session_id: base_query = base_query.filter(Interaction.session_id == session_id)
+        if session_id:
+            base_query = base_query.filter(Interaction.session_id == session_id)
+
         if not include_logs:
-            log_types_to_exclude = ['log_warning', 'log_error', 'log_debug', 'log_info', 'url',
-                                    'image', 'latex_analysis_result'] #controls on direct_generate can see
+            log_types_to_exclude = ['log_warning', 'log_error', 'log_debug', 'log_info', 'url', 'image',
+                                    'latex_analysis_result']
             base_query = base_query.filter(Interaction.input_type.notin_(log_types_to_exclude))
-        results = base_query.order_by(desc(Interaction.timestamp)).limit(limit).all()
-        results.reverse()
-        return results
+
+        # We fetch a bit more than the limit to have a better chance of ending up with `limit` items after filtering.
+        # This is an optional optimization. A factor of 2 is a reasonable guess.
+        fetch_limit = limit * 2
+        results = base_query.order_by(desc(Interaction.timestamp)).limit(fetch_limit).all()
+
+        # --- NEW: Post-retrieval filtering in Python ---
+
+        # Step 2: Compile the regex pattern for efficiency.
+        defective_pattern = re.compile(DB_DELETE_DEFECTIVE_REGEX_CHATML)
+
+        # Step 3: Iterate and build a new, clean list.
+        clean_results = []
+        for interaction in results:
+            is_defective = False
+            # Check user_input
+            if interaction.user_input and defective_pattern.match(interaction.user_input):
+                is_defective = True
+            # Check llm_response if not already flagged
+            if not is_defective and interaction.llm_response and defective_pattern.match(interaction.llm_response):
+                is_defective = True
+
+            # Step 4: Add the interaction to our new list only if it's not defective.
+            if not is_defective:
+                clean_results.append(interaction)
+
+        # We need to sort the final list again by timestamp ascending, as the original query was descending.
+        clean_results.sort(key=lambda x: x.timestamp)
+
+        # Finally, return only the number of items the user originally requested.
+        return clean_results[-limit:]
+
     except Exception as e:
-        logger.error(f"Error fetching recent interactions: {e}"); return []
+        logger.error(f"Error fetching and filtering recent interactions: {e}")
+        logger.exception("get_recent_interactions Traceback:")
+        return []
 
 _log_batch_queue = deque()
 _log_batch_queue_lock = threading.Lock()
@@ -1770,15 +1831,49 @@ def get_past_tot_interactions(db: Session, limit=50) -> List[Interaction]:
 
 
 def get_global_recent_interactions(db: Session, limit: int = 10) -> List[Interaction]:
+    """
+    Gets globally recent interactions and then filters out malformed/defective
+    entries in Python after the database query.
+    """
     try:
+        # Step 1: Retrieve data unfiltered from the database.
+        # We fetch a bit more than the limit to ensure we have enough clean items.
+        fetch_limit = limit * 2
         results = db.query(Interaction).filter(
-            Interaction.mode == 'chat', Interaction.input_type.in_(['text', 'llm_response', 'image+text'])
-            #Interaction.mode == 'chat', Interaction.input_type.in_(['text', 'llm_response'])
-        ).order_by(desc(Interaction.timestamp)).limit(limit).all()
-        results.reverse()
-        return results
+            Interaction.mode == 'chat',
+            Interaction.input_type.in_(['text', 'llm_response', 'image+text'])
+        ).order_by(desc(Interaction.timestamp)).limit(fetch_limit).all()
+
+        # --- NEW: Post-retrieval filtering in Python ---
+
+        # Step 2: Compile the regex pattern for efficiency.
+        defective_pattern = re.compile(DB_DELETE_DEFECTIVE_REGEX_CHATML)
+
+        # Step 3: Iterate and build a new, clean list.
+        clean_results = []
+        for interaction in results:
+            is_defective = False
+            # Check user_input
+            if interaction.user_input and defective_pattern.match(interaction.user_input):
+                is_defective = True
+            # Check llm_response if not already flagged
+            if not is_defective and interaction.llm_response and defective_pattern.match(interaction.llm_response):
+                is_defective = True
+
+            # Step 4: Add the interaction to our new list only if it's not defective.
+            if not is_defective:
+                clean_results.append(interaction)
+
+        # Step 5: Sort the final list into chronological order (oldest first).
+        clean_results.sort(key=lambda x: x.timestamp)
+
+        # Step 6: Return the 'limit' most recent clean items from the filtered list.
+        return clean_results[-limit:]
+
     except Exception as e:
-        logger.error(f"Error fetching global recent interactions: {e}"); return []
+        logger.error(f"Error fetching and filtering global recent interactions: {e}")
+        logger.exception("get_global_recent_interactions Traceback:")
+        return []
 
 
 def get_past_applescript_attempts(db: Session, action_type: str, parameters_json: str, limit: int = 5) -> List[
@@ -1811,12 +1906,87 @@ def search_file_index(db: Session, query: str, limit: int = 10) -> List[FileInde
     except Exception as e:
         logger.error(f"Error searching file index: {e}"); return []
 
+def _delete_malformed_entries():
+    """
+    Connects to the database and executes deletion logic for two types of
+    defective entries in the 'interactions' table:
+    1. Malformed, repetitive ChatML token strings.
+    2. Pathologically repetitive "Action Analysis Fallback" log messages.
+    """
+    logger.info("Garbage Collector: Starting merged cleanup cycle for defective entries...")
+    total_deleted = 0
+    db_session: Optional[Session] = None
 
-class DatabaseLogBatchWriter(threading.Thread):  # <<<< DEFINITION
+    try:
+        db_session = SessionLocal()
+        if not db_session:
+            logger.error("Garbage Collector: Failed to create a database session. Aborting cycle.")
+            return
+
+        # --- Task 1: Define patterns for deletion ---
+
+        # Pattern 1: Regex for malformed ChatML entries (from our previous fix)
+        defective_chatml_pattern = re.compile(
+            r"^\s*(\s*(<\|im_start\|>)\s*(user|system|assistant)?\s*)+((<\|(im_start)?)?)?\s*$"
+        )
+
+        # Pattern 2: LIKE pattern for pathologically repetitive fallback logs.
+        # The pattern looks for the phrase repeated at least once within the same field.
+        repetitive_fallback_pattern = "[Action Analysis Fallback for: [Action Analysis Fallback for:%"
+        logger.trace(f"Garbage Collector: Using LIKE pattern: '{repetitive_fallback_pattern}'")
+
+        # --- Task 2: Enable Regex for SQLite (if applicable) ---
+        if db_session.bind and db_session.bind.dialect.name == 'sqlite':
+            connection = db_session.connection().connection
+
+            def robust_regexp(expr, item):
+                if item is None:
+                    return False
+                return re.search(expr, item) is not None
+
+            connection.create_function("regexp", 2, robust_regexp)
+            logger.trace("Garbage Collector: Registered ROBUST REGEXP function for SQLite session.")
+
+        # --- Task 3: Build the Combined Filter ---
+        # We will build a filter that finds rows matching ANY of our cleanup conditions.
+        combined_filter = or_(
+            Interaction.llm_response.op('regexp')(DB_DELETE_DEFECTIVE_REGEX_CHATML),  # <-- USES IMPORTED VAR
+            Interaction.user_input.op('regexp')(DB_DELETE_DEFECTIVE_REGEX_CHATML),  # <-- USES IMPORTED VAR
+            Interaction.llm_response.like(DB_DELETE_DEFECTIVE_LIKE_FALLBACK),  # <-- USES IMPORTED VAR
+            Interaction.user_input.like(DB_DELETE_DEFECTIVE_LIKE_FALLBACK)  # <-- USES IMPORTED VAR
+        )
+
+        # --- Task 4: Execute the Bulk Delete Query ---
+        logger.debug("Garbage Collector: Executing combined delete query for all defective entry types...")
+        delete_query = db_session.query(Interaction).filter(combined_filter)
+
+        num_deleted = delete_query.delete(synchronize_session=False)
+        total_deleted += num_deleted
+
+        # --- Task 5: Commit and Log ---
+        if total_deleted > 0:
+            db_session.commit()
+            logger.success(
+                f"Garbage Collector: Cleanup successful. Deleted {total_deleted} defective entries from the database.")
+        else:
+            logger.info("Garbage Collector: Cleanup cycle finished. No defective entries were found to delete.")
+
+    except Exception as e:
+        logger.error(f"Garbage Collector: An error occurred during the cleanup process: {e}")
+        logger.exception("GarbageCollector _delete_malformed_entries Traceback:")
+        if db_session:
+            db_session.rollback()
+    finally:
+        if db_session:
+            db_session.close()
+            logger.trace("Garbage Collector: Database session for cleanup cycle closed.")
+
+class DatabaseLogBatchWriter(threading.Thread):
     def __init__(self, stop_event: threading.Event):  # stop_event is the global _log_writer_stop_event
         super().__init__(name="DatabaseLogBatchWriterThread", daemon=True)
         self.stop_event = stop_event
         self.is_shutting_down = False
+        self.last_cleanup_time = time.monotonic()
         logger.info(
             f"DatabaseLogBatchWriter initialized. BatchSize: {LOG_BATCH_SIZE}, FlushInterval: {LOG_FLUSH_INTERVAL_SECONDS}s")
 
@@ -1873,6 +2043,27 @@ class DatabaseLogBatchWriter(threading.Thread):  # <<<< DEFINITION
 
             if items_this_run:
                 self._write_batch(items_this_run)
+
+            try:
+                if ENABLE_DB_DELETE_DEFECTIVE_ENTRY:
+                    # Define the interval in seconds for this check.
+                    cleanup_interval_seconds = DB_DELETE_DEFECTIVE_ENTRY_INTERVAL_MINUTES * 60
+
+                    # Check if enough time has elapsed since the last cleanup.
+                    if time.monotonic() - self.last_cleanup_time > cleanup_interval_seconds:
+                        logger.info("Log Batch Writer: Cleanup interval reached. Triggering defective entry cleanup...")
+
+                        # IMPORTANT: Reset the timer immediately *before* starting the task.
+                        self.last_cleanup_time = time.monotonic()
+
+                        # Call the standalone cleanup function.
+                        # This function will handle its own DB session and error logging.
+                        _delete_malformed_entries()
+
+            except Exception as e:
+                # This is a safety catch in case the time calculation or something else fails.
+                logger.error(f"Log Batch Writer: Error in cleanup trigger logic: {e}")
+                self.last_cleanup_time = time.monotonic()
 
             if is_final_flush_attempt and not _log_batch_queue:  # Final flush done and queue is empty
                 logger.info("DatabaseLogBatchWriter: Final flush complete. Queue empty. Exiting run loop.")
