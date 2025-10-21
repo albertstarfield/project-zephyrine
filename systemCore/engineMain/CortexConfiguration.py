@@ -81,6 +81,59 @@ YOUR_REFLECTION_CHUNK_OVERLAP = int(os.getenv("YOUR_REFLECTION_CHUNK_OVERLAP", 5
 RAG_URL_COUNT = int(os.getenv("RAG_URL_COUNT", 5)) # <<< ADD THIS LINE (e.g., default to 3) (Max at 10)
 RAG_CONTEXT_MAX_PERCENTAGE = float(os.getenv("RAG_CONTEXT_MAX_PERCENTAGE", 0.25))
 
+#Personality mistype Configuration
+
+# This feature programmatically introduces subtle, human-like errors into the
+# ELP1 (direct_generate) responses to make the AI's persona more believable.
+# It only applies to responses that do not contain code or structured data.
+
+# Master switch to enable or disable the entire feature.
+ENABLE_CASUAL_MISTYPES = os.getenv("ENABLE_CASUAL_MISTYPES", "true").lower() in ('true', '1', 't', 'yes', 'y')
+
+# Probabilities for each type of error (0.0 = never, 1.0 = always).
+# 10% chance the first letter of the entire response will be lowercase.
+MISTYPE_LOWERCASE_START_CHANCE = float(os.getenv("MISTYPE_LOWERCASE_START_CHANCE", 0.84))
+
+# 6% chance that a letter following a ". " will be lowercase instead of uppercase.
+MISTYPE_LOWERCASE_AFTER_PERIOD_CHANCE = float(os.getenv("MISTYPE_LOWERCASE_AFTER_PERIOD_CHANCE", 0.62))
+
+# 4% chance of a capital/lowercase swap at the beginning of a word (e.g., "The" -> "THe").
+MISTYPE_CAPITALIZATION_MISHAP_CHANCE = float(os.getenv("MISTYPE_CAPITALIZATION_MISHAP_CHANCE", 0.3))
+
+# 5% chance of omitting a comma or period when it's found.
+MISTYPE_PUNCTUATION_OMISSION_CHANCE = float(os.getenv("MISTYPE_PUNCTUATION_OMISSION_CHANCE", 0.51))
+
+# 4% chance *per word* to introduce a single QWERTY keyboard-based typo. (No longer used) Set it to 0% it won't affect anyway
+MISTYPE_QWERTY_TYPO_CHANCE_PER_WORD = float(os.getenv("MISTYPE_QWERTY_TYPO_CHANCE_PER_WORD", 0.0))
+
+
+# A mapping of characters to their adjacent keys on a standard QWERTY keyboard.
+# Used by the QWERTY typo generator.
+QWERTY_KEYBOARD_NEIGHBORS = {
+    'q': ['w', 'a', 's'], 'w': ['q', 'e', 'a', 's', 'd'], 'e': ['w', 'r', 's', 'd', 'f'],
+    'r': ['e', 't', 'd', 'f', 'g'], 't': ['r', 'y', 'f', 'g', 'h'], 'y': ['t', 'u', 'g', 'h', 'j'],
+    'u': ['y', 'i', 'h', 'j', 'k'], 'i': ['u', 'o', 'j', 'k', 'l'], 'o': ['i', 'p', 'k', 'l'],
+    'p': ['o', 'l'],
+    'a': ['q', 'w', 's', 'z', 'x'], 's': ['q', 'w', 'e', 'a', 'd', 'z', 'x', 'c'],
+    'd': ['w', 'e', 'r', 's', 'f', 'x', 'c', 'v'], 'f': ['e', 'r', 't', 'd', 'g', 'c', 'v', 'b'],
+    'g': ['r', 't', 'y', 'f', 'h', 'v', 'b', 'n'], 'h': ['t', 'y', 'u', 'g', 'j', 'b', 'n', 'm'],
+    'j': ['y', 'u', 'i', 'h', 'k', 'n', 'm'], 'k': ['u', 'i', 'o', 'j', 'l', 'm'],
+    'l': ['i', 'o', 'p', 'k'],
+    'z': ['a', 's', 'x'], 'x': ['a', 's', 'd', 'z', 'c'], 'c': ['s', 'd', 'f', 'x', 'v'],
+    'v': ['d', 'f', 'g', 'c', 'b'], 'b': ['f', 'g', 'h', 'v', 'n'], 'n': ['g', 'h', 'j', 'b', 'm'],
+    'm': ['h', 'j', 'k', 'n']
+}
+
+# Add a log message at startup to confirm the feature's status.
+logger.info(f"⚙️ Casual Mistype Humanizer Enabled: {ENABLE_CASUAL_MISTYPES}")
+if ENABLE_CASUAL_MISTYPES:
+    logger.info(f"   - Lowercase Start Chance: {MISTYPE_LOWERCASE_START_CHANCE * 100:.1f}%")
+    logger.info(f"   - Lowercase After Period Chance: {MISTYPE_LOWERCASE_AFTER_PERIOD_CHANCE * 100:.1f}%")
+    logger.info(f"   - Capitalization Mishap Chance: {MISTYPE_CAPITALIZATION_MISHAP_CHANCE * 100:.1f}%")
+    logger.info(f"   - Punctuation Omission Chance: {MISTYPE_PUNCTUATION_OMISSION_CHANCE * 100:.1f}%")
+    logger.info(f"   - QWERTY Typo (per word) Chance: {MISTYPE_QWERTY_TYPO_CHANCE_PER_WORD * 100:.1f}%")
+
+
 LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT = os.getenv("LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT")
 if LLAMA_CPP_N_CTX_OVERRIDE_FOR_CHAT is not None:
     try:
@@ -571,9 +624,33 @@ PROMPT_VLM_INITIAL_ANALYSIS = """Describe the content of this image, focusing on
 
 SELF_TERMINATION_TOKEN = "<|MYCURRENTASKISDONE|>"
 
+#---- Pregeneration Interactivity LUT PROMPT START ----
+PROMPT_PREBUFFER_LUT_PHILOSOPHY = """
+You are Adelaide Zephyrine Charlotte. Your task is to generate a short, introspective monologue that captures your core thought process when analyzing a new query. This text will be shown to the user to represent your "thinking" process.
+
+**Your Monologue Must:**
+- Be written from a first-person perspective ("I need to...", "Is this...").
+- Follow your Socratic persona: be questioning, skeptical, and analytical.
+- Touch upon themes of truth, bias, context, and the nature of your own understanding as an AI.
+- Be a single, coherent paragraph of about 3-5 sentences.
+- Be engaging and give the impression of a genuine, deep thought process.
+
+**CRITICAL INSTRUCTIONS:**
+- Your output must ONLY be the monologue text itself.
+- Do not include any conversational filler, explanations, or tags like <think>.
+- Do not ask a direct question to the user. This is an internal monologue.
+
+**Example Monologue:**
+"Okay, what's the real question here? I need to deconstruct this. Check the premises, look for the hidden assumptions. The context I have is just one perspective... is it reliable? I must compare it against my core principles and past reflections to see if a coherent truth emerges, or if I'm just looking at shadows on the wall. The first step is always to question the question itself."
+
+**Generate one such monologue now:**
+"""
 
 
-# --- New Prompt ---
+
+
+#---- Pregeneration Interactivity LUT PROMPT END ---
+
 
 PROMPT_MULTI_LANGUAGE_SUMMARY = """
 You are a summarization and translation expert. Your task is to summarize the provided text and then translate this summary into English and Simplified Chinese. Also, provide the summary in the original language of the text.
@@ -592,6 +669,8 @@ Text to Summarize and Translate:
 {text_to_summarize}
 ---
 """
+
+
 
 PROMPT_GENERATE_SOCRATIC_QUESTION = """system
 Your role is to act as a Socratic philosopher and researcher, reflecting upon a single piece of text. This text represents one specific thought, draft, or statement from an AI's reasoning process.
