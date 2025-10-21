@@ -1,6 +1,0 @@
-{
-  "dependencies": {
-    "@xmpp/client": "^0.13.5",
-    "@xmpp/xml": "^0.13.3"
-  }
-}

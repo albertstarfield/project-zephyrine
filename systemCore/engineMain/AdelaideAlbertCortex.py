@@ -198,7 +198,7 @@ try:
         init_db, queue_interaction_for_batch_logging, add_interaction, get_recent_interactions, # <<< REMOVED get_db
         get_past_tot_interactions, Interaction, SessionLocal, AppleScriptAttempt, # Added AppleScriptAttempt if needed here
         get_global_recent_interactions, get_pending_tot_result, mark_tot_delivered,
-        get_past_applescript_attempts, FileIndex, search_file_index, UploadedFileRecord, add_interaction_no_commit, AppleScriptAttempt # Added new DB function
+        get_past_applescript_attempts, FileIndex, search_file_index, UploadedFileRecord, add_interaction_no_commit, AppleScriptAttempt, _DB_HEALTH_OK_EVENT # Added new DB function
     )
     # Import all config variables (prompts, settings, etc.)
     from CortexConfiguration import * # Ensure this includes the SQLite DATABASE_URL and all prompts/models
@@ -2853,6 +2853,13 @@ class CortexThoughts:
         return context_str
 
     def _format_docs(self, docs: List[Any], source_type: str = "Context") -> str:
+        if not _DB_HEALTH_OK_EVENT.is_set():
+            # If the DB is not ready, inject the explicit warning message into the context.
+            return (
+                "CONTEXT: CRITICAL SYSTEM ALERT. My long-term memory (database) is currently offline "
+                "pending startup health checks. I am operating in a degraded, stateless mode. "
+                "Inform the user that my memory is temporarily unavailable and that I cannot recall past conversations."
+            )
         """Helper to format retrieved Langchain Documents into a single string."""
         if not docs:
             logger.trace(f"_format_docs received empty list for {source_type}")
@@ -2912,6 +2919,10 @@ class CortexThoughts:
 
     def _format_direct_history(self, interactions: List[Interaction]) -> str:
         """Formats a list of Interaction objects into a chronological string for the prompt."""
+        if not _DB_HEALTH_OK_EVENT.is_set():
+            # We don't need to return the full warning string here, as _format_docs
+            # will have already provided it. Returning a simple, clear message is sufficient.
+            return "Direct conversation history is currently unavailable pending system checks."
         if not interactions:
             return "No recent global conversation history available."
         if not isinstance(interactions, list):
@@ -2960,6 +2971,66 @@ class CortexThoughts:
             log_str_parts.append(f"[{timestamp_str} {log_level}] {log_snippet}")
 
         return "\n".join(log_str_parts) if log_str_parts else "No recent relevant logs found."
+
+    def _casual_mistype(self, text: str) -> str:
+        """
+        Applies a series of probabilistic, human-like typos to a string to make it
+        feel more conversational and less robotic, based on CortexConfiguration settings.
+        """
+        # --- Master Switch and Professionalism Guard Clause ---
+        if not ENABLE_CASUAL_MISTYPES:
+            return text
+
+        # Heuristic check for code, JSON, or other structured data.
+        # If any of these characters are present, skip all modifications.
+        if any(char in text for char in ['{', '}', '[', ']', '(', ')', '<', '>', '=', '_']):
+            return text
+
+        # Make a mutable copy of the text to work with
+        modified_text = text
+
+        # --- Rule 1: 10% Chance for Lowercase Start ---
+        if modified_text and random.random() < MISTYPE_LOWERCASE_START_CHANCE:
+            modified_text = modified_text[0].lower() + modified_text[1:]
+
+        # --- Rule 2: 6% Chance for Lowercase After Period ---
+        # Use regex to find ". " followed by an uppercase letter and apply the change.
+        def lower_after_period(match):
+            if random.random() < MISTYPE_LOWERCASE_AFTER_PERIOD_CHANCE:
+                return match.group(0).lower()  # ". a" instead of ". A"
+            return match.group(0)  # No change
+
+        modified_text = re.sub(r'\. [A-Z]', lower_after_period, modified_text)
+
+        # To apply other rules, we need to work with words.
+        words = modified_text.split(' ')
+        new_words = []
+
+        for i, word in enumerate(words):
+            if not word:
+                new_words.append(word)
+                continue
+
+            # --- Rule 3: Chance for Capitalization Mishap ---
+            if len(word) > 1 and word[0].isupper() and word[1].islower():
+                if random.random() < MISTYPE_CAPITALIZATION_MISHAP_CHANCE:
+                    word = word[1].upper() + word[0].lower() + word[2:]
+
+            new_words.append(word)
+
+        # Rejoin the words into a sentence
+        modified_text = " ".join(new_words)
+
+        # --- Rule 4: 5% Chance of Forgetting Punctuation ---
+        # This is applied last, on the reconstructed string.
+        if random.random() < MISTYPE_PUNCTUATION_OMISSION_CHANCE:
+            # Find all periods and commas to choose one to remove
+            punctuation_indices = [i for i, char in enumerate(modified_text) if char in [',', '.']]
+            if punctuation_indices:
+                index_to_remove = random.choice(punctuation_indices)
+                modified_text = modified_text[:index_to_remove] + modified_text[index_to_remove + 1:]
+
+        return modified_text
 
     def _call_llm_with_timing(self, chain: Any, inputs: Any, interaction_data: Dict[str, Any], priority: int = ELP0):
         """
@@ -4393,6 +4464,7 @@ class CortexThoughts:
                 timing_data,
                 priority=ELP1
             )
+
         except TaskInterruptedException as tie:
             logger.error(f"🚦 {log_prefix} Direct generation LLM call was INTERRUPTED: {tie}")
             return f"[System Error: The response generation was interrupted by a higher priority request.]"
@@ -4417,11 +4489,13 @@ class CortexThoughts:
         # =================== THIS IS THE NEW PART (STEP 3) ===================
         # Apply normalization rules (e.g., remove em-dashes) to the final text.
         normalized_final_text = self._normalize_direct_response_text(final_response_text)
+        humanized_final_text = self._casual_mistype(normalized_final_text)
+        #humanized_final_text = normalized_final_text
         # =====================================================================
         interaction_data = {
             "session_id": session_id, "mode": "chat", "input_type": "text", "user_input": user_input,
-            # Use the NORMALIZED text for the database record.
-            "llm_response": normalized_final_text,
+            # Use the latest text for the database record.
+            "llm_response": humanized_final_text,
             "execution_time_ms": final_duration_ms,
             "classification": "direct_response_single_call_elp1",
         }
@@ -4429,7 +4503,7 @@ class CortexThoughts:
 
         logger.info(f"{log_prefix} CORRECTED DIRECT V5 Logic END. Duration: {final_duration_ms:.2f}ms")
         # Return the NORMALIZED text to the user.
-        return normalized_final_text
+        return humanized_final_text
 
     def _convert_interactions_to_chatml_turns(self, interactions: List[Interaction]) -> List[Dict[str, str]]:
         """Helper to convert a list of Interaction DB objects to the ChatML dictionary format."""
@@ -4451,6 +4525,31 @@ class CortexThoughts:
         """
         req_id = f"dgen-watchdog-{uuid.uuid4()}"
         log_prefix = f"⏱️ {req_id}|ELP1"
+        llm_was_called = False
+        final_response_text = ""  # Initialize a variable to hold the result
+        hook_response: Optional[str] = None
+        logger.info(f"{log_prefix} Orchestrator START -> Session: {session_id}, Input: '{user_input[:50]}...'")
+
+        if self.stella_icarus_manager and ENABLE_STELLA_ICARUS_HOOKS:
+            try:
+                logger.debug(f"Checking StellaIcarusHooks for input: '{user_input[:70]}...'")
+
+                # The try_hooks method is synchronous, so it's safe to call directly.
+                hook_response = self.stella_icarus_manager.try_hooks(user_input, session_id)
+
+                if hook_response is not None:
+                    # A hook successfully matched and handled the request.
+                    logger.success("✅ StellaIcarusHook provided a direct response. Bypassing LLM and Watchdog.")
+
+                    # Since the hook provided the answer, we can skip the background task.
+                    logger.info("Hook provided response. Skipping background_generate.")
+
+                    # Return the hook's response immediately. The function ends here.
+                    return hook_response
+
+            except Exception as e:
+                logger.error(f"Error during StellaIcarusHook execution: {e}", exc_info=True)
+                # If hooks crash, we log the error and fall through to the LLM path for resilience.
 
         # Check if benchmark has run. If not, run without the watchdog.
         if BENCHMARK_ELP1_TIME_MS <= 0:
@@ -4486,25 +4585,45 @@ class CortexThoughts:
         watchdog_task = asyncio.create_task(watchdog())
 
         try:
-            # Run the actual generation logic
-            result = await self._direct_generate_logic(db, user_input, session_id, vlm_description, image_b64)
-            
-            # If the task finishes, signal the watchdog and wait for it to exit
+            # The actual LLM call happens here.
+            final_response_text = await self._direct_generate_logic(db, user_input, session_id, vlm_description,
+                                                                    image_b64)
+
             if not timeout_event.is_set():
                 task_done_event.set()
                 await watchdog_task
-                return result
             else:
-                # This case is unlikely but possible if the task finishes right as the timeout hits
-                logger.warning(f"{log_prefix}: Task finished, but timeout event was already set. A kill signal may have been sent.")
                 raise TaskInterruptedException("Processing was terminated due to a performance timeout.")
-
         except Exception as e:
-            # If the main task fails for any other reason, ensure the watchdog is cleaned up
             if not task_done_event.is_set():
                 task_done_event.set()
-            await watchdog_task # Wait for watchdog to finish
-            raise e # Re-raise the original error
+            await watchdog_task
+            raise e  # Re-raise the original error
+
+        llm_was_called = (hook_response is None)
+
+        # Step 2d: Conditionally spawn the background_generate task.
+        if llm_was_called:
+            # This block only runs if the response came from the LLM.
+            logger.info(f"LLM was used for ELP1 response. Spawning background_generate (ELP0) for deep thought.")
+            asyncio.create_task(
+                self.background_generate(
+                    db=None,  # The task must create its own DB session
+                    user_input=user_input,
+                    session_id=session_id,
+                    classification="chat_complex",
+                    image_b64=image_b64
+                )
+            )
+        else:
+            # This block runs if the response came from a hook.
+            logger.info("Hook provided the response. Skipping background_generate.")
+
+        # --- END OF NEW CODE BLOCK ---
+
+        # The final return statement of the function.
+        return final_response_text
+
 
     async def _get_vector_search_file_index_context(self, query: str, session_id_for_log: str, priority: int = ELP0,
                                                     stop_event_param: Optional[threading.Event] = None) -> str:
@@ -5708,7 +5827,7 @@ class CortexThoughts:
             "assistant_action_params": None, "assistant_action_executed": False,
             "assistant_action_result": None,
             "image_data": image_b64 + "..." if image_b64 and isinstance(image_b64, str) else None,
-            "imagined_image_prompt": None, "imagined_image_b64": None,
+            "imagined_image_prompt": None, "imagined_image_avif_b64": None,
             "imagined_image_vlm_description": None,
             "reflection_completed": False,
             "reflection_indexed_in_vs": False,
@@ -6458,8 +6577,7 @@ class CortexThoughts:
                         # 3. Call the helper (which calls the LLM).
                         generated_socratic_question = await self._generate_socratic_question_async(
                             db=db,
-                            original_user_input=user_input,
-                            final_ai_response=final_response_text_for_this_turn,
+                            source_text=socratic_prompt_input,
                             session_id=session_id
                         )
 
@@ -6774,63 +6892,143 @@ def _format_ollama_chat_response_nonstream(
     }
 
 
-def _ollama_pseudo_stream_sync_generator(
-        full_response_text: str,
-        model_name: str,
-        total_duration_ns: int,
-        eval_duration_ns: int
-):
+def _ollama_pseudo_stream_sync_generator(session_id: str, user_input: str, image_b64: Optional[str], model_name: str):
     """
     Takes a completed text string and yields it word-by-word in the
     Ollama-compatible streaming SSE format. This version is robustly designed
     to prevent client-side 'reading content of undefined' errors.
     """
-    logger.info(f"OLLAMA_STREAM_V3: Streaming pre-generated text ({len(full_response_text)} chars).")
+    logger.info(f"OLLAMA_STREAM_V3: Calling Classical AI LLM/SLM paradigm Streaming Emulator).")
+    #Timing variables
+    total_start_time = time.monotonic()
+    eval_duration_ns = 0
 
-    try:
-        # --- Defensive Check for Empty or Invalid Input ---
-        # If the AI somehow produced no text, send a single valid message and finish.
-        if not full_response_text or not full_response_text.strip():
-            logger.warning("OLLAMA_STREAM_V3: The generated response was empty. Sending a placeholder.")
-            full_response_text = "[Empty Response]"
-
-        # --- Stream the content word by word ---
-        words = full_response_text.split(' ')
-        for i, word in enumerate(words):
-            # The content for this chunk is the word plus a space (unless it's the last word)
-            chunk_content = word + (' ' if i < len(words) - 1 else '')
-
-            chunk = {
-                "model": model_name,
-                "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                "message": {
-                    "role": "assistant",
-                    "content": chunk_content
-                },
-                "done": False
-            }
-            yield json.dumps(chunk) + "\n"
-            time.sleep(0.02)  # Optional delay for smoother appearance
-
-        # --- Send the Final "Done" Chunk ---
-        # This chunk is critical. It must contain "done: true" and, to satisfy
-        # buggy clients, it should also contain a final, empty "message" object.
-        final_chunk = {
+    def format_ollama_chunk(content: Optional[str] = None, done: bool = False,
+                            final_metrics: Optional[dict] = None) -> str:
+        """
+        A specialized helper to format data into the precise Ollama streaming JSON structure.
+        Returns the JSON string followed by a newline.
+        """
+        chunk = {
             "model": model_name,
             "created_at": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-            "message": {
-                "role": "assistant",
-                "content": ""
-            },
-            "done": True,
-            "total_duration": total_duration_ns,
-            "load_duration": 1,
-            "prompt_eval_count": 0,
-            "prompt_eval_duration": 1,
-            "eval_count": 0,
-            "eval_duration": eval_duration_ns,
+            "done": done
         }
-        yield json.dumps(final_chunk) + "\n"
+
+        # For content chunks (done=False), include the message object.
+        if content is not None:
+            chunk["message"] = {
+                "role": "assistant",
+                "content": content
+            }
+
+        # For the final "done" chunk, include an empty message for compatibility
+        # and merge in the final performance metrics.
+        if done:
+            chunk["message"] = {"role": "assistant", "content": ""}
+            if final_metrics:
+                chunk.update(final_metrics)
+
+        return json.dumps(chunk) + "\n"
+
+    try:
+
+
+        # Check if the pre-buffered content was successfully loaded at startup.
+        if _PREBUFFERED_THINK_CONTENT:
+            # Prepend the <think> tag to the monologue for the UI.
+            # We will send the closing </think> tag later.
+            think_monologue = "<think>\n" + _PREBUFFERED_THINK_CONTENT
+
+            # Split the monologue into words to simulate typing.
+            think_words = think_monologue.split(' ')
+            for word in think_words:
+                # Use our new helper to format each word as a valid Ollama chunk.
+                yield format_ollama_chunk(content=word + ' ')
+
+                # A small delay to create the typing effect.
+                time.sleep(0.01)
+        message_queue = queue.Queue()
+
+        def run_async_generate_in_thread():
+            """
+            Target function for the background thread. Runs the async direct_generate
+            logic in a new event loop and puts the final result onto the queue.
+            """
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+
+            final_text_result = "Error: Background thread failed to produce a result."
+            db_session: Optional[Session] = None
+            try:
+                db_session = SessionLocal()
+                if not db_session:
+                    raise RuntimeError("Failed to create DB session for background direct_generate.")
+
+                # Run the async direct_generate function until it's complete.
+                result = loop.run_until_complete(
+                    cortex_text_interaction.direct_generate(
+                        db=db_session,
+                        user_input=user_input,
+                        session_id=session_id,
+                        image_b64=image_b64
+                    )
+                )
+                final_text_result = result
+            except Exception as e:
+                logger.error(f"Background direct_generate task EXCEPTION (Ollama Stream): {e}", exc_info=True)
+                final_text_result = f"[Error during generation: {type(e).__name__}]"
+            finally:
+                # Put the final result (or error message) onto the queue.
+                message_queue.put(final_text_result)
+                if db_session:
+                    db_session.close()
+                loop.close()
+
+        # Create and start the background thread.
+        # The main generator thread will not wait for this to finish;
+        # it will continue immediately to the next step (the ellipsis loop).
+        background_thread = threading.Thread(
+            target=run_async_generate_in_thread,
+            daemon=True
+        )
+        background_thread.start()
+
+        while background_thread.is_alive():
+            # Check the queue for the final result without blocking.
+            if message_queue.empty():
+                # Yield a single dot, formatted as a valid Ollama chunk.
+                yield format_ollama_chunk(content=".")
+                # Wait for a moment to create a "pulsing" ellipsis effect.
+                time.sleep(0.01)
+            else:
+                # The result has arrived in the queue. The thread is done.
+                # Break the loop to proceed with retrieving the result.
+                break
+        try:
+            final_response_text = message_queue.get(timeout=10)
+            logger.info("Ollama generator retrieved final response from background thread.")
+        except queue.Empty:
+            logger.error("CRITICAL (Ollama Stream): Background thread finished, but the queue was empty.")
+            final_response_text = "[System Error: Failed to retrieve response from generation thread.]"
+
+        yield format_ollama_chunk(content="\n</think>\n\n")
+
+        # Now, stream the actual response that we retrieved from the background thread.
+        # First, check if the response is an error message.
+        if "[Error" in final_response_text:
+            logger.warning(f"Ollama Stream: Streaming an error message to the client: {final_response_text}")
+            yield format_ollama_chunk(content=final_response_text)
+            # The final "done" chunk will be sent in the `finally` block.
+        else:
+            # The response is valid, so stream it word-by-word.
+            logger.info(f"Ollama Stream: Streaming final 'speak' content ({len(final_response_text)} chars).")
+            words = final_response_text.split(' ')
+            for i, word in enumerate(words):
+                # Add a space after each word except the last one.
+                content_to_send = word + (' ' if i < len(words) - 1 else '')
+                yield format_ollama_chunk(content=content_to_send)
+                time.sleep(0.01)  # A very short delay for a fast typing effect.
 
     except GeneratorExit:
         logger.warning("OLLAMA_STREAM_V3: Client disconnected from stream.")
@@ -6848,11 +7046,22 @@ def _ollama_pseudo_stream_sync_generator(
         except:
             pass  # The generator may already be closed
     finally:
-        logger.info("OLLAMA_STREAM_V3: Finished sending all chunks.")
+        # This block is GUARANTEED to run.
+
+        # Calculate final performance metrics for the Ollama "done" message.
+        total_duration_ns = int((time.monotonic() - total_start_time) * 1_000_000_000)
+        final_metrics = {
+            "total_duration": total_duration_ns,
+            "eval_duration": eval_duration_ns
+            # Other metrics like prompt_eval_count could be added here if tracked
+        }
+
+        # Yield the final, compliant "done" message.
+        yield format_ollama_chunk(done=True, final_metrics=final_metrics)
+        logger.info(f"OLLAMA_STREAM_V3: Finished. Sent final 'done' chunk.")
 
 
-# --- OpenAI Response Formatting Helpers ---
-
+# --- Classical Legacy AI Olama & OpenAI Response Formatting Helpers ---
 
 # ----- Mesh Logic Helper functions ---- (Duplicates but it serves or have different logic than the ordinary pipeline it's more low priority)
 
@@ -7086,7 +7295,7 @@ async def _process_mesh_chat_request_and_get_result(
         specialist_chain,
         specialist_payload,
         timing_data_specialist,
-        priority=ELP0  # <--- CRITICAL: Run specialist at low priority
+        priority=ELP0
     )
 
     logger.debug(f"{log_prefix}: Correcting draft response at ELP0...")
@@ -7844,6 +8053,52 @@ def _stream_openai_chat_response_generator_flask(
 
     # --- Main Generator Logic (Runs in the Flask Request Thread) ---
     try:
+        # The very first action is to send the opening <think> tag to the client.
+        # This provides instant feedback.
+        yield yield_chunk(role="assistant", delta_content="<think>\n")
+        
+        
+        # This queue will be used by the background thread to send back the final result.
+        message_queue = queue.Queue()
+
+        def run_async_generate_in_thread():
+            """
+            Target function for the background thread. Runs the async direct_generate
+            logic in a new event loop and puts the final result onto the queue.
+            """
+            # This function is synchronous, but it creates and manages its own
+            # asyncio event loop to run our async direct_generate function.
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            
+            final_text_result = "Error: Background thread failed to produce a result."
+            db_session: Optional[Session] = None
+            try:
+                db_session = SessionLocal()
+                if not db_session:
+                    raise RuntimeError("Failed to create DB session for background direct_generate.")
+                
+                # Run the async direct_generate function until it's complete.
+                result = loop.run_until_complete(
+                    cortex_text_interaction.direct_generate(
+                        db=db_session,
+                        user_input=user_input,
+                        session_id=session_id,
+                        image_b64=image_b64
+                    )
+                )
+                final_text_result = result
+            except Exception as e:
+                logger.error(f"Background direct_generate task EXCEPTION: {e}", exc_info=True)
+                final_text_result = f"[Error during generation: {type(e).__name__}]"
+            finally:
+                # Put the final result (or error message) onto the queue.
+                message_queue.put(final_text_result)
+                if db_session:
+                    db_session.close()
+                loop.close()
+
+        
         background_thread = threading.Thread(
             target=run_async_generate_in_thread,
             args=(message_queue, session_id, user_input, classification, image_b64),
@@ -7851,72 +8106,66 @@ def _stream_openai_chat_response_generator_flask(
         )
         background_thread.start()
 
-        yield yield_chunk(role="assistant", delta_content="<think>\n")
+        # Check if the pre-buffered content was successfully loaded at startup.
+        if _PREBUFFERED_THINK_CONTENT:
+            # Split the cached monologue into words to simulate typing.
+            think_words = _PREBUFFERED_THINK_CONTENT.split(' ')
+            for word in think_words:
+                # Yield each word with a trailing space.
+                yield yield_chunk(delta_content=word + ' ')
+                # A small, fixed delay to create the typing effect.
+                time.sleep(0.05) # You can adjust this value for desired speed.
 
-        processing_complete = False
-        result_received = False
-        animation_frame = 0
-
-        while not processing_complete:
-            try:
-                queue_item = message_queue.get(timeout=STREAM_ANIMATION_DELAY_SECONDS)
-
-                if queue_item is GENERATION_DONE_SENTINEL:
-                    processing_complete = True
-                    continue
-
-                message_type, message_data = queue_item
-                if message_type == "LOG":
-                    if STREAM_INTERNAL_LOGS:
-                        yield yield_chunk(delta_content=message_data + "\n")
-                elif message_type == "RESULT":
-                    result_received = True
-                    final_result_data["text"], final_result_data["finish_reason"], final_result_data[
-                        "error"] = message_data
-
-            except queue.Empty:
-                if not STREAM_INTERNAL_LOGS and not result_received:
-                    char = STREAM_ANIMATION_CHARS[animation_frame]
-                    yield yield_chunk(delta_content=f"{char} ")
-                    animation_frame = (animation_frame + 1) % len(STREAM_ANIMATION_CHARS)
-
-            if not processing_complete and not background_thread.is_alive():
-                logger.error(f"FLASK_STREAM_V3 {resp_id}: Background thread died unexpectedly.")
-                if not result_received:
-                    final_result_data["error"] = RuntimeError("Background thread failed.")
-                    final_result_data["text"] = "[Critical Error: Background processing failed prematurely]"
-                processing_complete = True
-
-        yield yield_chunk(delta_content="\nLog stream complete.\n</think>\n\n")
-
-        final_text_to_stream = final_result_data["text"]
-        final_reason_to_send = final_result_data["finish_reason"]
-        if final_result_data["error"]: final_reason_to_send = "error"
-
-        # Use the robust Think/Speak parser on the final result
-        _, speak_content = cortex_text_interaction._parse_think_speak_output(final_text_to_stream)
-
-        if speak_content:
-            logger.info(f"FLASK_STREAM_V3 {resp_id}: Streaming final 'speak' content ({len(speak_content)} chars).")
-            words = speak_content.split(' ')
-            for i, word in enumerate(words):
-                yield yield_chunk(delta_content=word + (' ' if i < len(words) - 1 else ''))
-                time.sleep(0.01)
+        try:
+            final_response_text = message_queue.get(timeout=10) # 10-second safety timeout
+            logger.info("Main generator thread retrieved final response from background thread.")
+        except queue.Empty:
+            logger.error("CRITICAL: Background thread finished, but the message queue was empty. This should not happen.")
+            final_response_text = "[System Error: Failed to retrieve response from generation thread.]"
+            
+        yield yield_chunk(delta_content="\n</think>\n\n")
+        # Now, stream the actual response that we retrieved from the background thread.
+        # First, check if the response is an error message.
+        if "[Error" in final_response_text:
+            logger.warning(f"Streaming an error message to the client: {final_response_text}")
+            yield yield_chunk(delta_content=final_response_text)
+            # Signal that the stream finished with an error.
+            yield yield_chunk(finish_reason="error")
         else:
-            logger.warning(f"FLASK_STREAM_V3 {resp_id}: Final speak content is empty. Reporting error to client.")
-            yield yield_chunk(delta_content="[System Error: Failed to generate a valid response.]")
-            final_reason_to_send = "error"
+            # The response is valid, so stream it word-by-word.
+            logger.info(f"Streaming final 'speak' content ({len(final_response_text)} chars).")
+            words = final_response_text.split(' ')
+            for i, word in enumerate(words):
+                # Add a space after each word except the last one.
+                content_to_send = word + (' ' if i < len(words) - 1 else '')
+                yield yield_chunk(delta_content=content_to_send)
+                time.sleep(0.01)  # A very short delay for a fast typing effect.
 
-        yield yield_chunk(finish_reason=final_reason_to_send)
-        yield "data: [DONE]\n\n"
+            # Signal that the stream finished successfully.
+            yield yield_chunk(finish_reason="stop")
 
     except GeneratorExit:
+        # This block is executed if the client (e.g., the browser) closes the connection
+        # before the stream is finished. It's a clean way to handle disconnects.
         logger.warning(f"FLASK_STREAM_V3 {resp_id}: Client disconnected from stream.")
+        # No need to yield anything here, as the connection is already gone.
+
     except Exception as e:
+        # This is a catch-all for any unexpected errors that might happen within the
+        # generator's logic (e.g., a problem with the queue, a unicode error, etc.).
         logger.error(f"FLASK_STREAM_V3 {resp_id}: Unhandled error in streaming generator: {e}", exc_info=True)
-        yield yield_chunk(delta_content=f"\n\n[STREAMING ORCHESTRATION ERROR: {e}]", finish_reason="error")
-        yield "data: [DONE]\n\n"
+        try:
+            # Attempt to send a final error message to the client if the stream is still open.
+            yield yield_chunk(delta_content=f"\n\n[STREAMING ORCHESTRATION ERROR: {e}]", finish_reason="error")
+        except Exception as final_err:
+            logger.error(f"FLASK_STREAM_V3 {resp_id}: Could not even send the final error chunk: {final_err}")
+
     finally:
+        # This block is GUARANTEED to run, no matter what happens: success, error,
+        # or client disconnection.
+
+        # Always send the [DONE] signal to gracefully close the stream for compliant clients.
+        yield "data: [DONE]\n\n"
         logger.debug(f"FLASK_STREAM_V3 {resp_id}: Generator function fully finished.")
 
 
@@ -9711,40 +9960,44 @@ async def handle_openai_chat_completion():
         # --- Step 3: Spawn the Slow, Deep-Thought (ELP0) Task ---
         # This is a fire-and-forget task. It runs in the background on the main
         # event loop without blocking the response to the user.
-        asyncio.create_task(
-            cortex_text_interaction.background_generate(
-                db=None,  # The task is responsible for creating its own DB session
-                user_input=user_input_from_req,
-                session_id=session_id_for_logs,
-                classification="chat_complex",
-                image_b64=image_b64_from_req
-            )
-        )
-        logger.info(f"{request_id}: Scheduled non-blocking background_generate (ELP0) task.")
+        # Handled within the direct_generate() itself that it will automatically spawn ELP0 slower generate
 
         # --- Step 4: Await the Fast, Immediate (ELP1) Response ---
         logger.info(f"{request_id}: Awaiting non-blocking direct_generate (ELP1) response...")
         # `await` yields control to the ASGI server, allowing it to handle other
         # requests while the AI model is processing this one.
-        full_response_text = await cortex_text_interaction.direct_generate(
-            db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
-        )
+        #no longer needed
+
+        #full_response_text = await cortex_text_interaction.direct_generate(
+        #    db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+        #)
 
         # --- Step 5: Format and Return the Response to the Client ---
         if stream_requested_by_client:
             logger.info(f"{request_id}: ELP1 generation complete. Starting CONTEXT-FREE pseudo-stream.")
 
             # Use the context-free streamer which is safe for async routes
-            async_safe_generator = _async_compatible_openai_streamer(
-                full_response_text=full_response_text,
+            #_stream_openai_chat_response_generator_flask
+            async_safe_generator = _stream_openai_chat_response_generator_flask(
+                session_id=session_id_for_logs,
+                user_input=user_input_from_req,
+                classification="chat_complex",  # Or pass the actual classification if determined earlier
+                image_b64=image_b64_from_req,
                 model_name=META_MODEL_NAME_STREAM
             )
             # Return the generator directly in the Response object
             resp_obj = Response(async_safe_generator, mimetype='text/event-stream')
             final_response_status_code = 200
         else:
-            # Handle the non-streaming case
-            logger.info(f"{request_id}: ELP1 generation complete. Formatting non-streaming response.")
+            logger.info(f"{request_id}: Awaiting non-blocking direct_generate (ELP1) for non-streaming response.")
+
+            # 1. Perform the blocking call to get the complete text.
+            #    This is the correct behavior for a non-streaming request.
+            full_response_text = await cortex_text_interaction.direct_generate(
+                db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+            )
+
+            # 2. Check for errors from the generation.
             if "interrupted" in full_response_text.lower() or "Error:" in full_response_text:
                 final_response_status_code = 503 if "interrupted" in full_response_text.lower() else 500
                 resp_data_err, _ = _create_openai_error_response(full_response_text,
@@ -9752,6 +10005,7 @@ async def handle_openai_chat_completion():
                 resp_obj = Response(json.dumps(resp_data_err), status=final_response_status_code,
                                     mimetype='application/json')
             else:
+                # 3. Format the complete response into the standard OpenAI JSON object.
                 resp_data_ok = _format_openai_chat_response(full_response_text, model_name=META_MODEL_NAME_NONSTREAM)
                 resp_obj = jsonify(resp_data_ok)
                 final_response_status_code = 200
@@ -10104,24 +10358,11 @@ async def handle_ollama_chat():
             raise ValueError("No text or image content was provided in the user message.")
 
         # --- Step 3: Spawn the Slow, Deep-Thought (ELP0) Task ---
-        asyncio.create_task(
-            cortex_text_interaction.background_generate(
-                db=None,  # The background task will create its own DB session
-                user_input=user_input_from_req,
-                session_id=session_id_for_logs,
-                classification="chat_complex",
-                image_b64=image_b64_from_req
-            )
-        )
-        logger.info(f"{request_id}: Scheduled non-blocking background_generate (ELP0) task.")
+        #it's executed within the direct_generate() itself no need for double the task load
 
         # --- Step 4: Await the Fast, Immediate (ELP1) Response ---
         logger.info(f"{request_id}: Awaiting non-blocking direct_generate (ELP1) response...")
         elp1_start_time = time.monotonic()
-
-        full_response_text = await cortex_text_interaction.direct_generate(
-            db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
-        )
 
         elp1_end_time = time.monotonic()
 
@@ -10136,19 +10377,36 @@ async def handle_ollama_chat():
             logger.info(f"{request_id}: ELP1 complete. Starting Ollama-style CONTEXT-FREE pseudo-stream.")
 
             ollama_generator = _ollama_pseudo_stream_sync_generator(
-                full_response_text=full_response_text,
-                model_name=model_name_for_response,
-                total_duration_ns=total_duration_ns,
-                eval_duration_ns=eval_duration_ns
+                session_id=session_id_for_logs,
+                user_input=user_input_from_req,
+                image_b64=image_b64_from_req,
+                model_name=model_name_for_response
             )
             # CRITICAL: Do NOT use stream_with_context here.
             resp_obj = Response(ollama_generator, mimetype='application/x-ndjson')
             final_response_status_code = 200
         else:
-            logger.info(f"{request_id}: ELP1 complete. Formatting Ollama non-streaming response.")
+            # This is the non-streaming path for Ollama.
+
+            logger.info(f"{request_id}: Awaiting direct_generate for non-streaming Ollama response.")
+
+            # 1. Start timing for the metrics.
+            elp1_start_time = time.monotonic()
+
+            # 2. Perform the blocking call to get the complete text.
+            full_response_text = await cortex_text_interaction.direct_generate(
+                db, user_input_from_req, session_id_for_logs, image_b64=image_b64_from_req
+            )
+
+            # 3. Stop timing and calculate durations in nanoseconds.
+            elp1_end_time = time.monotonic()
+            eval_duration_ns = int((elp1_end_time - elp1_start_time) * 1_000_000_000)
+            total_duration_ns = int((elp1_end_time - start_req_time_main_handler) * 1_000_000_000)
+
+            # 4. Format the complete response into the Ollama non-streaming JSON structure.
             ollama_response_body = _format_ollama_chat_response_nonstream(
                 response_text=full_response_text,
-                model_name=model_name_for_response,
+                model_name=model_name_for_response,  # Assumes model_name_for_response is defined earlier
                 total_duration_ns=total_duration_ns,
                 eval_duration_ns=eval_duration_ns
             )
@@ -12313,10 +12571,10 @@ async def handle_instrument_viewport_stream():
 #=============== IPC Server END ===============
 #============================ Main Program Startup
 # Define startup_tasks (as you had it)
-SYSTEM_IS_PRIMING = False # for GUI/client information using /primedready whether the system is primed and ready to use or Not still starting up. (False means ready while True means it's still starting up)
+SYSTEM_IS_PRIMING = False # for GUI/client information using /primedready whether the system is primed and ready to use or Not still starting up. (False means ready while True means it's still starting up) (Initialized as False)
 async def startup_tasks():
     global SYSTEM_IS_PRIMING
-    SYSTEM_IS_PRIMING = True #flagged
+    SYSTEM_IS_PRIMING = True #Just changed or when the startup is executed then the system is priming thus it is set to True.
     
 
     await build_ada_daemons()
@@ -12373,14 +12631,92 @@ async def startup_tasks():
     logger.info(f"AdelaideAlbertCortex: >>> Exiting startup_tasks (async). Total Duration: {task_duration:.2f}s <<<")
     
     logger.info(f"benchmarking... <<<")
-    await run_startup_benchmark()
+    #await run_startup_benchmark() #sync blockage for benchmark
 
+    # Initialize the pre-buffered "thinking" content for the stream emulator.
+    await _initialize_prebuffer_lut()
 
     SYSTEM_IS_PRIMING = False # System is now primed and ready to use.
 
+# --- Prebuffer LUT Initialization (Speedup and output manipulation) -----
+
+# {Doesn't require database, designed for database intiialization when the database grown very big. (due to 1-3 second initialization requirement with no exception)}
+
+# {Require Database, Speed up on some area but require to wait the database initialization finished first (Maybe after 1 minutes?)}
+
+
+# Prebuffer <think> </think> following status quo on how AI should think be like set by the western corporation and openAI
+_PREBUFFERED_THINK_CONTENT: Optional[str] = None
+
+async def _initialize_prebuffer_lut():
+    """
+    Checks the database for a pre-cached 'thinking' monologue. If not found,
+    it generates one using an ELP1 call and saves it to the DB for future use.
+    The result is then stored in a global variable for instant access.
+    """
+    global _PREBUFFERED_THINK_CONTENT, cortex_text_interaction # Access the global variables
+    log_prefix = "PREBUFFER_LUT_INIT"
+    logger.info(f"🚀 {log_prefix}: Initializing pre-buffered 'thinking' content...")
+
+    db_session: Optional[Session] = None
+    try:
+        db_session = SessionLocal()
+        if not db_session:
+            raise RuntimeError("Failed to create a database session for LUT initialization.")
+
+        # --- Step 1: Query the database for an existing entry ---
+        logger.debug(f"{log_prefix}: Checking database for existing PREBUFFER_LUT content...")
+        existing_lut_entry = db_session.query(Interaction).filter(
+            Interaction.mode == 'PREBUFFER_LUT',
+            Interaction.classification == 'CLASSICAI_THINK_EMU'
+        ).first()
+
+        if existing_lut_entry and existing_lut_entry.llm_response:
+            # --- Step 3b: If found, load it from the database ---
+            logger.info(f"{log_prefix}: Found existing LUT content in database. Loading into memory.")
+            _PREBUFFERED_THINK_CONTENT = existing_lut_entry.llm_response
+        else:
+            # --- Step 3c: If not found, generate and save it ---
+            logger.warning(f"{log_prefix}: No PREBUFFER_LUT content found. Generating a new one...")
+            if not cortex_text_interaction:
+                raise RuntimeError("Cannot generate LUT content, CortexThoughts instance is not available.")
+
+            # We use a high-priority direct_generate call as this is part of the startup sequence.
+            generated_monologue = await cortex_text_interaction.direct_generate(
+                db=db_session,
+                user_input=PROMPT_PREBUFFER_LUT_PHILOSOPHY,
+                session_id="prebuffer_lut_generation_session"
+            )
+
+            if not generated_monologue or "Error:" in generated_monologue:
+                raise RuntimeError(f"Failed to generate LUT content from LLM. Response: {generated_monologue}")
+
+            _PREBUFFERED_THINK_CONTENT = generated_monologue.strip()
+            logger.success(f"{log_prefix}: New LUT content generated: '{_PREBUFFERED_THINK_CONTENT[:70]}...'")
+
+            # Save the newly generated content to the database for next time.
+            new_lut_entry = Interaction(
+                mode='PREBUFFER_LUT',
+                classification='CLASSICAI_THINK_EMU',
+                user_input=PROMPT_PREBUFFER_LUT_PHILOSOPHY, # Store the prompt that created it
+                llm_response=_PREBUFFERED_THINK_CONTENT
+            )
+            db_session.add(new_lut_entry)
+            db_session.commit()
+            logger.info(f"{log_prefix}: New LUT content has been saved to the database for future startups.")
+
+    except Exception as e:
+        logger.error(f"🔥🔥 {log_prefix}: CRITICAL FAILURE during initialization: {e}")
+        logger.exception(f"{log_prefix} Traceback:")
+        # Fallback to a hardcoded string if the entire process fails,
+        # so the UI doesn't completely break.
+        _PREBUFFERED_THINK_CONTENT = "Analyzing the query... Checking context and assumptions... Formulating response..."
+        logger.warning(f"{log_prefix}: Using hardcoded fallback content.")
+    finally:
+        if db_session:
+            db_session.close()
 
 # --- Main Execution Control ---
-
 if __name__ == "__main__":
     # This block executes if AdelaideAlbertCortex is run directly (e.g., python AdelaideAlbertCortex)
     logger.error("This program (AdelaideAlbertCortex) is designed to be run with an ASGI/WSGI server like Hypercorn. Running it like this is not supported.")

@@ -62,6 +62,7 @@ DB_SNAPSHOT_RETENTION_COUNT = int(
     os.getenv("DB_SNAPSHOT_RETENTION_COUNT", 5))  # Keep last 60 snapshots (e.g., 1 hour worth if 1-min interval)
 DB_SNAPSHOT_FILENAME_PREFIX = "snapshot_"
 DB_SNAPSHOT_FILENAME_SUFFIX = ".db.zst"
+
 # --- END NEW: Snapshot Configuration ---
 from CortexConfiguration import *
 
@@ -90,7 +91,7 @@ Base = declarative_base()
 _engine = None
 SessionLocal = sessionmaker(autocommit=False, autoflush=False)
 logger.debug("SessionLocal factory structure created (unbound initially).")
-
+_DB_HEALTH_OK_EVENT = threading.Event() #for Health Database checking
 
 # --- Database Models (Interaction, AppleScriptAttempt, FileIndex) ---
 class UploadedFileRecord(Base):
@@ -165,6 +166,7 @@ class Interaction(Base):
     last_modified_db = Column(DateTime(timezone=True), onupdate=func.now(), server_default=func.now())
 
     imagined_image_prompt = Column(Text, nullable=True)
+    imagined_image_b64 = Column(Text, nullable=True)
     imagined_image_avif_b64 = Column(Text, nullable=True)  # For AI-generated image b64 snippet
     imagined_image_vlm_description = Column(Text, nullable=True)  # For VLM desc of AI-generated image
 
@@ -1336,300 +1338,277 @@ def stop_log_batch_writer(wait_for_flush_timeout: Optional[float] = 10.0):
         if wait_for_flush_timeout and wait_for_flush_timeout > 0: _log_writer_thread.join(timeout=wait_for_flush_timeout)
         logger.info(f"Log Batch Writer {'finished' if not _log_writer_thread.is_alive() else 'did not finish in timeout'}.")
 
-# --- init_db - Modified to start snapshotter ---
-def init_db():
-    global _engine, SessionLocal  # To ensure they are assigned if this is the first init
-    logger.info("🚀 Initializing Database (Strategy: Always Fresh Alembic Baseline)...")
+#---- health checker multithread ----
+def _run_background_db_health_check():
+    """
+    This function runs in a dedicated background thread on startup.
+    It performs all the slow, blocking database integrity checks, repairs,
+    and migrations that were previously in init_db().
+    If successful, it sets the global _DB_HEALTH_OK_EVENT.
+    """
+    log_prefix = "DB_HEALTH_CHECK"
+    engine_instance = get_engine()
+    logger.info(f"🧬 {log_prefix}: Background health check thread started.")
 
-    # Block to prevent re-entry if already initialized in this process
-    if _engine is not None and SessionLocal is not None and SessionLocal.kw.get('bind'):  # type: ignore
-        logger.warning("Database already initialized in this process. Skipping re-initialization.")
-        # Ensure background services are running if app is reloaded (e.g., by Hypercorn worker restart)
-        if ENABLE_DB_SNAPSHOTS and (_snapshotter_thread is None or not _snapshotter_thread.is_alive()):  # type: ignore
-            start_db_snapshotter()
-        if (_log_writer_thread is None or not _log_writer_thread.is_alive()):  # type: ignore
-            if SessionLocal and SessionLocal.kw.get('bind'):  # type: ignore
-                start_log_batch_writer()
-            else:  # Should not happen if already initialized
-                logger.error("init_db (re-entry): SessionLocal not bound, cannot start log writer.")
-        return
+    try:
+        # --- Step 1: Perform the full sequence of checks and repairs ---
+        # This re-uses the same logic from the old get_engine() function,
+        # but is now safely isolated in this thread.
 
-    # Create SessionLocal factory once if it doesn't exist. get_engine() will bind it.
-    if SessionLocal is None:
-        SessionLocal = sessionmaker(autocommit=False, autoflush=False)
-        logger.debug("database.py init_db: SessionLocal factory created.")
+        db_path = RUNTIME_DB_PATH
+        db_is_healthy = False
 
-    # --- Self-Healing Logic ---
-    db_path = RUNTIME_DB_PATH
-    if os.path.exists(db_path) and os.path.getsize(db_path) > 0:
-        logger.info("Performing pre-check for stale database schema...")
-        temp_engine = None
-        try:
-            # Create a temporary, minimal engine to inspect the schema
-            temp_engine = create_engine(f"sqlite:///{db_path}")
-            inspector = sql_inspect(temp_engine)
-            if inspector.has_table("file_index"):
-                columns = inspector.get_columns('file_index')
-                status_col = next((c for c in columns if c['name'] == 'index_status'), None)
-                
-                # The signature of a stale DB is a VARCHAR type for the status column.
-                # A correct, modern Enum schema will not report as VARCHAR.
-                if status_col and 'VARCHAR' in str(status_col['type']).upper():
-                    logger.critical("‼️ Stale database schema detected (faulty CHECK constraint is present).")
-                    logger.warning("Triggering automatic schema repair. This will backup and recreate the database.")
-                    
-                    # --- The "Nuke and Pave" Autofix ---
-                    backup_path = f"{db_path}.stale_schema_backup_{int(time.time())}"
-                    logger.info(f"Backing up current database to: {backup_path}")
-                    #shutil.copy(db_path, backup_path)
-                    
-                    logger.info(f"Removing stale database file to force recreation: {db_path}")
-                    os.remove(db_path)
-                    logger.success("✅ Stale database removed. A new, correct database will now be created.")
-                else:
-                    logger.info("✅ Pre-check passed: Database schema appears up-to-date.")
-            else:
-                logger.info("Pre-check: 'file_index' table not found, assuming new database will be created.")
+        _create_default_env_py()  # Must be defined in this file
+        _create_default_script_mako()  # Must be defined in this file
+        if not os.path.exists(ALEMBIC_INI_PATH):
+            logger.warning(f"🔧 Alembic config file alembic.ini not found. Creating default at {ALEMBIC_INI_PATH}")
+            alembic_dir_for_ini = os.path.relpath(ALEMBIC_DIR, MODULE_DIR).replace("\\", "/")
+            # alembic.ini's sqlalchemy.url will be overridden by env.py with PROJECT_CONFIG_DATABASE_URL,
+            # but it needs a valid placeholder. Using DATABASE_URL from CortexConfiguration is fine.
+            alembic_cfg_content = f"""
+    [alembic]
+    # path to migration scripts
+    script_location = {alembic_dir_for_ini}
 
-        except Exception as e:
-            logger.warning(f"Could not perform schema pre-check due to error: {e}. Proceeding with standard init.")
-        finally:
-            if temp_engine:
-                temp_engine.dispose()
+    # SQLAlchemy database URL
+    sqlalchemy.url = {DATABASE_URL}
 
+    # Other Alembic settings can go here if needed
+    # e.g. file_template, timezone, etc.
 
-    # --- 1. Get/Prepare Engine and Ensure DB File is Ready ---
-    # get_engine() handles archive decompression, snapshot restore, basic integrity checks.
-    # It initializes global _engine and binds global SessionLocal.
-    engine_instance = get_engine()  # This must succeed and configure SessionLocal.
-    if not engine_instance or not _engine or not SessionLocal or not SessionLocal.kw.get('bind'):  # type: ignore
-        # get_engine() should sys.exit on critical failure, this is a fallback assertion.
-        logger.critical("CRITICAL: Engine or SessionLocal not properly initialized by get_engine(). Cannot proceed.")
-        raise RuntimeError("Fatal error in get_engine() preventing Alembic setup or DB operations.")
-    logger.info("Engine and SessionLocal are ready. Runtime database file prepared by get_engine().")
+    [post_write_hooks]
+    # This section is optional, used for code auto-formatting after generation
+    # hooks = autopep8
+    # autopep8.type = command
+    # autopep8.entrypoint = autopep8
+    # autopep8.options = --in-place --aggressive --aggressive
 
-    # --- 2. Aggressively Reset Alembic State for a Fresh Baseline ---
-    logger.warning("INIT_DB STRATEGY: Deleting existing Alembic versions and DB history for a fresh baseline.")
+    # Logging configuration (simplified to avoid 'command' formatter issue)
+    [loggers]
+    keys = root,sqlalchemy,alembic
 
-    # 2a. Clear contents of alembic/versions directory
-    if os.path.isdir(ALEMBIC_VERSIONS_PATH):
-        logger.info(f"Clearing Alembic versions directory: {ALEMBIC_VERSIONS_PATH}")
-        try:
-            for filename in os.listdir(ALEMBIC_VERSIONS_PATH):
-                file_path = os.path.join(ALEMBIC_VERSIONS_PATH, filename)
-                if os.path.isfile(file_path) and file_path.endswith((".py", ".pyc")):
-                    os.unlink(file_path)
-                elif os.path.isdir(file_path) and filename == "__pycache__":
-                    shutil.rmtree(file_path)
-            logger.info("Alembic versions directory cleared.")
-        except Exception as e_clear_versions:
-            logger.error(f"Failed to fully clear alembic/versions: {e_clear_versions}. Proceeding cautiously.")
-    else:  # Ensure the directory exists for Alembic to write into
+    [handlers]
+    keys = console
+
+    [formatters]
+    keys = generic 
+
+    [logger_root]
+    level = WARN
+    handlers = console
+    qualname =
+
+    [logger_sqlalchemy]
+    level = WARN
+    handlers = # No specific handler, inherits from root or default
+    qualname = sqlalchemy.engine
+
+    [logger_alembic]
+    level = INFO
+    handlers = console
+    qualname = alembic
+
+    [handler_console]
+    class = StreamHandler
+    args = (sys.stderr,)
+    level = NOTSET
+    formatter = generic 
+
+    [formatter_generic]
+    format = %(levelname)-5.5s [%(name)s] %(message)s
+    datefmt = %H:%M:%S
+
+    """
+            alembic_cfg = _get_alembic_config()  # Must be defined in this file
+            try:
+                with open(ALEMBIC_INI_PATH, 'w') as f:
+                    f.write(alembic_cfg_content)
+                logger.success(f"📝 Default alembic.ini created at {ALEMBIC_INI_PATH}.")
+            except IOError as e:
+                logger.error(f"❌ Failed to write default alembic.ini: {e}")
+                raise  # This is a critical setup step
+
+        alembic_cfg = _get_alembic_config()
+        if not alembic_cfg:
+            raise RuntimeError("Failed to load/create Alembic configuration (alembic.ini).")
+        # --- 4. Autogenerate and Apply Fresh Baseline Migration ---
+        migration_successful = False
+        logger.warning(f"🧬 {log_prefix}: Applying 'Nuke and Pave' Alembic reset strategy...")
+
+        # Step 1: Nuke the filesystem history (the alembic/versions folder).
+        # This removes any old, potentially conflicting migration scripts.
+        if os.path.isdir(ALEMBIC_VERSIONS_PATH):
+            try:
+                shutil.rmtree(ALEMBIC_VERSIONS_PATH)
+                logger.debug("Nuked existing Alembic versions directory.")
+            except OSError as e:
+                logger.error(f"Could not remove alembic versions directory, but continuing: {e}")
+
+        # Recreate the versions directory so Alembic has a place to write the new script.
         os.makedirs(ALEMBIC_VERSIONS_PATH, exist_ok=True)
-        logger.info(f"Created Alembic versions directory: {ALEMBIC_VERSIONS_PATH}")
+        logger.info("Alembic versions directory cleared and recreated.")
 
-    # 2b. Drop the alembic_version table from the database to reset history
-    logger.info("Dropping 'alembic_version' table from the database if it exists...")
-    try:
-        with engine_instance.connect() as connection:  # Use the engine_instance from get_engine()
-            connection.execute(text("DROP TABLE IF EXISTS alembic_version;"))
-            connection.commit()
-        logger.info("'alembic_version' table dropped (or did not exist).")
-    except Exception as e_drop_table:
-        logger.error(
-            f"Failed to drop 'alembic_version' table: {e_drop_table}. This might be okay if DB is truly new and table never existed.")
-        # If this fails on an existing DB, subsequent Alembic commands might still error,
-        # but the goal is to make it behave like a fresh DB.
-
-    # --- 3. Ensure Alembic Configuration Files Exist and are Correct ---
-    # These functions create default ini, env.py, script.py.mako if missing.
-    # _create_default_env_py() is critical as it writes an env.py that correctly
-    # imports Base.metadata from this database.py and PROJECT_CONFIG_DATABASE_URL from CortexConfiguration.py.
-    _create_default_env_py()  # Must be defined in this file
-    _create_default_script_mako()  # Must be defined in this file
-    if not os.path.exists(ALEMBIC_INI_PATH):
-        logger.warning(f"🔧 Alembic config file alembic.ini not found. Creating default at {ALEMBIC_INI_PATH}")
-        alembic_dir_for_ini = os.path.relpath(ALEMBIC_DIR, MODULE_DIR).replace("\\", "/")
-        # alembic.ini's sqlalchemy.url will be overridden by env.py with PROJECT_CONFIG_DATABASE_URL,
-        # but it needs a valid placeholder. Using DATABASE_URL from CortexConfiguration is fine.
-        alembic_cfg_content = f"""
-[alembic]
-# path to migration scripts
-script_location = {alembic_dir_for_ini}
-
-# SQLAlchemy database URL
-sqlalchemy.url = {DATABASE_URL}
-
-# Other Alembic settings can go here if needed
-# e.g. file_template, timezone, etc.
-
-[post_write_hooks]
-# This section is optional, used for code auto-formatting after generation
-# hooks = autopep8
-# autopep8.type = command
-# autopep8.entrypoint = autopep8
-# autopep8.options = --in-place --aggressive --aggressive
-
-# Logging configuration (simplified to avoid 'command' formatter issue)
-[loggers]
-keys = root,sqlalchemy,alembic
-
-[handlers]
-keys = console
-
-[formatters]
-keys = generic 
-
-[logger_root]
-level = WARN
-handlers = console
-qualname =
-
-[logger_sqlalchemy]
-level = WARN
-handlers = # No specific handler, inherits from root or default
-qualname = sqlalchemy.engine
-
-[logger_alembic]
-level = INFO
-handlers = console
-qualname = alembic
-
-[handler_console]
-class = StreamHandler
-args = (sys.stderr,)
-level = NOTSET
-formatter = generic 
-
-[formatter_generic]
-format = %(levelname)-5.5s [%(name)s] %(message)s
-datefmt = %H:%M:%S
-
-"""
+        # Step 2: Nuke the database history (the alembic_version table).
+        # This removes the "ghost" of the old migration state from the DB itself.
+        engine_instance = get_engine()  # This will return the already-created engine.
         try:
-            with open(ALEMBIC_INI_PATH, 'w') as f:
-                f.write(alembic_cfg_content)
-            logger.success(f"📝 Default alembic.ini created at {ALEMBIC_INI_PATH}.")
-        except IOError as e:
-            logger.error(f"❌ Failed to write default alembic.ini: {e}")
-            raise  # This is a critical setup step
+            with engine_instance.connect() as connection:
+                connection.execute(text("DROP TABLE IF EXISTS alembic_version;"))
+                connection.commit()
+            logger.info("'alembic_version' table dropped from database to ensure fresh start.")
+        except Exception as e_drop:
+            logger.error(f"Could not drop alembic_version table, but continuing as this may not be fatal: {e_drop}")
+            logger.info("Attempting to apply migrations to head (should apply the new baseline)...")
+            try:
+                command.upgrade(alembic_cfg, "head")
+                logger.success("✅ 'alembic upgrade head' command finished successfully.")
+                migration_successful = True
+            except Exception as upg_err:
+                logger.error(f"❌ Alembic 'upgrade head' FAILED: {upg_err}")
+                logger.exception("Alembic upgrade TRACEBACK:")
+                # This is where "NOT NULL constraint failed" errors would typically appear
+                # if model definitions (server_default) are not correctly handled by the autogenerated script.
+                migration_successful = False  # Ensure it's false
 
-    alembic_cfg = _get_alembic_config()  # Must be defined in this file
-    if not alembic_cfg:
-        raise RuntimeError("Failed to load/create Alembic configuration (alembic.ini).")
+            if not migration_successful:
+                # This means either autogen produced a bad script or the upgrade itself failed.
+                # With the "always fresh" strategy, this indicates a fundamental problem.
+                raise RuntimeError(
+                    "Alembic upgrade failed after attempting fresh baseline. Check model definitions (esp. NOT NULL Booleans need server_default=text('0')) and the autogenerated script in alembic/versions/.")
 
-    # --- 4. Autogenerate and Apply Fresh Baseline Migration ---
-    migration_successful = False
-    try:
-        logger.info("Attempting to auto-generate a new baseline migration script...")
-        autogen_message = f"Baseline_schema_on_startup_{datetime.datetime.now().strftime('%Y%m%d_%H%M%S')}"
-        try:
-            # With versions folder empty and alembic_version table gone (or empty),
-            # this should create a new initial script based on current models.
-            command.revision(alembic_cfg, message=autogen_message, autogenerate=True)
-            logger.success(
-                f"Alembic 'revision --autogenerate' for baseline executed. Check 'alembic/versions' for the new script.")
-        except Exception as auto_err:
-            logger.error(f"CRITICAL: Failed to autogenerate Alembic baseline migration: {auto_err}")
-            logger.exception("Alembic autogenerate baseline TRACEBACK:")
-            # If autogeneration itself fails, it often indicates issues with env.py, model definitions,
-            # or Alembic's ability to connect to the DB (even if just for inspection).
-            raise RuntimeError(f"Alembic baseline autogeneration failed critically: {auto_err}") from auto_err
+            # --- 5. Schema Verification (Optional but Recommended) ---
+            logger.info("📊 Verifying Database Schema after fresh baseline and upgrade...")
+            try:
+                inspector = sql_inspect(engine_instance)
+                table_names = inspector.get_table_names()
+                expected_tables = {'alembic_version', 'interactions', 'applescript_attempts',
+                                   'file_index'}  # Add all your tables
+                if not expected_tables.issubset(set(table_names)):
+                    missing_tbl_str = f"Missing expected tables: {expected_tables - set(table_names)}"
+                    logger.error(f"‼️ {missing_tbl_str}")
+                    raise RuntimeError(f"Schema verification failed: {missing_tbl_str}")
+                logger.info("✅ All expected tables are present.")
 
-        logger.info("Attempting to apply migrations to head (should apply the new baseline)...")
-        try:
-            command.upgrade(alembic_cfg, "head")
-            logger.success("✅ 'alembic upgrade head' command finished successfully.")
-            migration_successful = True
-        except Exception as upg_err:
-            logger.error(f"❌ Alembic 'upgrade head' FAILED: {upg_err}")
-            logger.exception("Alembic upgrade TRACEBACK:")
-            # This is where "NOT NULL constraint failed" errors would typically appear
-            # if model definitions (server_default) are not correctly handled by the autogenerated script.
-            migration_successful = False  # Ensure it's false
-
-        if not migration_successful:
-            # This means either autogen produced a bad script or the upgrade itself failed.
-            # With the "always fresh" strategy, this indicates a fundamental problem.
-            raise RuntimeError(
-                "Alembic upgrade failed after attempting fresh baseline. Check model definitions (esp. NOT NULL Booleans need server_default=text('0')) and the autogenerated script in alembic/versions/.")
-
-        # --- 5. Schema Verification (Optional but Recommended) ---
-        logger.info("📊 Verifying Database Schema after fresh baseline and upgrade...")
-        try:
-            inspector = sql_inspect(engine_instance)
-            table_names = inspector.get_table_names()
-            expected_tables = {'alembic_version', 'interactions', 'applescript_attempts',
-                               'file_index'}  # Add all your tables
-            if not expected_tables.issubset(set(table_names)):
-                missing_tbl_str = f"Missing expected tables: {expected_tables - set(table_names)}"
-                logger.error(f"‼️ {missing_tbl_str}")
-                raise RuntimeError(f"Schema verification failed: {missing_tbl_str}")
-            logger.info("✅ All expected tables are present.")
-
-            # Example detailed check for a specific table and key columns
-            if "interactions" in table_names:
-                interaction_cols_info = inspector.get_columns("interactions")
-                interaction_col_names = {col['name'] for col in interaction_cols_info}
-                expected_interaction_cols_subset = {"id", "timestamp", "user_input", "llm_response",
-                                                    "reflection_indexed_in_vs", "tot_analysis_spawned"}
-                if not expected_interaction_cols_subset.issubset(interaction_col_names):
-                    missing_interaction_cols_str = f"Missing key columns in 'interactions': {expected_interaction_cols_subset - interaction_col_names}"
-                    logger.error(f"‼️ {missing_interaction_cols_str}")
-                    raise RuntimeError(f"Schema verification failed: {missing_interaction_cols_str}")
-                logger.info("✅ Table 'interactions' contains key expected columns.")
-            logger.success("✅ Database schema verification passed (basic checks).")
-            if ENABLE_STARTUP_DB_CLEANUP:
-                logger.info("Performing one-time database cleanup for defective entries at startup...")
-                try:
-                    # Call the standalone cleanup function directly.
-                    # This function is synchronous and will complete before startup continues.
-                    # It handles its own database session and transaction management.
-                    _delete_malformed_entries()
-                except Exception as startup_cleanup_err:
-                    # If the cleanup fails for any reason, log it as a warning but DO NOT
-                    # stop the application from starting. The periodic cleanup will try again later.
-                    logger.warning(f"Initial startup cleanup of defective entries failed: {startup_cleanup_err}")
-                    logger.exception("Startup cleanup traceback:")
+                # Example detailed check for a specific table and key columns
+                if "interactions" in table_names:
+                    interaction_cols_info = inspector.get_columns("interactions")
+                    interaction_col_names = {col['name'] for col in interaction_cols_info}
+                    expected_interaction_cols_subset = {"id", "timestamp", "user_input", "llm_response",
+                                                        "reflection_indexed_in_vs", "tot_analysis_spawned"}
+                    if not expected_interaction_cols_subset.issubset(interaction_col_names):
+                        missing_interaction_cols_str = f"Missing key columns in 'interactions': {expected_interaction_cols_subset - interaction_col_names}"
+                        logger.error(f"‼️ {missing_interaction_cols_str}")
+                        raise RuntimeError(f"Schema verification failed: {missing_interaction_cols_str}")
+                    logger.info("✅ Table 'interactions' contains key expected columns.")
+                logger.success("✅ Database schema verification passed (basic checks).")
+                if ENABLE_STARTUP_DB_CLEANUP:
+                    logger.info("Performing one-time database cleanup for defective entries at startup...")
+                    try:
+                        # Call the standalone cleanup function directly.
+                        # This function is synchronous and will complete before startup continues.
+                        # It handles its own database session and transaction management.
+                        _delete_malformed_entries()
+                    except Exception as startup_cleanup_err:
+                        # If the cleanup fails for any reason, log it as a warning but DO NOT
+                        # stop the application from starting. The periodic cleanup will try again later.
+                        logger.warning(f"Initial startup cleanup of defective entries failed: {startup_cleanup_err}")
+                        logger.exception("Startup cleanup traceback:")
+            except Exception as verify_err:
+                logger.error(f"❌ Schema verification FAILED: {verify_err}")
+                raise RuntimeError(f"Schema verification failed after migration: {verify_err}") from verify_err
         except Exception as verify_err:
             logger.error(f"❌ Schema verification FAILED: {verify_err}")
             raise RuntimeError(f"Schema verification failed after migration: {verify_err}") from verify_err
+        # --- Step 4: Start DB-dependent services and give the "All Clear" ---
+        logger.info(f"🧬 {log_prefix}: Database is healthy and migrated. Starting dependent services.")
 
-
-
-        logger.success("✅ Database initialization (fresh Alembic baseline strategy) completed successfully.")
-
-        # --- Start Background Services ---
-        # These are started only if all previous steps were successful.
+        # Now it's safe to start the snapshotter.
         start_db_snapshotter()
-        start_log_batch_writer()
-        #start_db_garbage_collector() #Do not use this or enable this Fatal error detected and irrecoverable database but snapshot are recoverable due thread batch writing misalignment
+        atexit.register(stop_db_snapshotter)  # Register its shutdown hook
 
-        # Register shutdown hooks (order can be important for graceful shutdown)
-        atexit.register(stop_log_batch_writer)  # Flush logs first
-        atexit.register(stop_db_snapshotter)  # Stop snapshotting
-        atexit.register(_shutdown_hook)  # Then compress DB
-        #atexit.register(stop_db_garbage_collector) #Do not use this or enable this Fatal error detected and irrecoverable database but snapshot are recoverable due thread batch writing misalignment
+        # All checks and preparations are complete.
+        _DB_HEALTH_OK_EVENT.set()
 
-    except Exception as init_err_outer:  # Catches RuntimeErrors raised from within or other exceptions
-        logger.critical(f"🔥🔥 OVERALL DATABASE INITIALIZATION FAILURE: {init_err_outer}")
-        # Traceback should have been logged by the block that raised the RuntimeError.
-        # If not, or for other exceptions:
-        if not isinstance(init_err_outer, RuntimeError):  # Log if it wasn't one of our explicit RuntimeErrors
-            logger.exception("Database Initialization Full Traceback (Outer Catch):")
+        logger.success(
+            f"✅✅ {log_prefix}: Database is fully initialized and healthy. System is now operating at full capacity.")
 
-        # Attempt to gracefully stop threads if they were somehow started before the failure
-        if _log_writer_thread and _log_writer_thread.is_alive():  # type: ignore
-            stop_log_batch_writer(wait_for_flush_timeout=1.0)  # Quick flush attempt
-        if _snapshotter_thread and _snapshotter_thread.is_alive():  # type: ignore
-            stop_db_snapshotter()
+    except Exception as e:
+        logger.critical(f"🔥🔥 {log_prefix}: A critical, unhandled error occurred in the health check thread: {e}")
+        logger.exception(f"{log_prefix} Traceback:")
+        # The _DB_HEALTH_OK_EVENT will NOT be set, leaving the app in degraded mode.
 
-        # Re-raise so app.py's top-level try-except during import can catch it and sys.exit.
-        # No need for another sys.exit() here, let the caller handle final termination.
-        raise
+# new init_db
+def init_db():
+    """
+    Performs a fast, "optimistic" initialization.
+    - Does the minimum required to get a DB file on disk.
+    - Creates the engine and session.
+    - Spawns a background thread to perform slow integrity checks and repairs.
+    - Manages the global _DB_HEALTH_OK_EVENT to signal DB status.
+    """
+    global _engine, SessionLocal
+    logger.info("🚀 Initializing Database (Fast, Optimistic Strategy)...")
 
+    # Block to prevent re-entry, same as before.
+    if _engine is not None and SessionLocal is not None and SessionLocal.kw.get('bind'):
+        logger.warning("Database already initialized in this process. Skipping re-initialization.")
+        return
 
-# --- END init_db ---
+    # --- Step 1: Clear the health event from any previous run ---
+    _DB_HEALTH_OK_EVENT.clear()
+    logger.info("Database health event has been cleared. DB is considered NOT READY.")
+
+    # --- Step 2: Minimal DB File Preparation ---
+    # Only decompress the shutdown archive if it exists. No other checks.
+    if os.path.exists(DB_PATH_COMPRESSED):
+        logger.info(f"Found shutdown archive '{DB_PATH_COMPRESSED}'. Decompressing...")
+        if _decompress_db(DB_PATH_COMPRESSED, RUNTIME_DB_PATH):
+            try:
+                os.remove(DB_PATH_COMPRESSED)
+            except Exception as e_rm_arc:
+                logger.warning(f"Could not remove shutdown archive after decompression: {e_rm_arc}")
+        else:
+            logger.error("Failed to decompress shutdown archive. Startup may fail if no other DB exists.")
+
+    # --- Step 3: Create Engine & Session (Must Succeed) ---
+    engine_args_internal = {
+        "pool_size": DB_POOL_SIZE,
+        "max_overflow": DB_MAX_OVERFLOW,
+        "pool_timeout": 60,
+        "echo": False,
+        "connect_args": {"check_same_thread": False, "timeout": 60.0}
+    }
+    logger.info(f"Creating SQLAlchemy engine for: {RUNTIME_DATABASE_URL}")
+    try:
+        _engine = create_engine(RUNTIME_DATABASE_URL, **engine_args_internal)
+        SessionLocal.configure(bind=_engine)
+        logger.info("SQLAlchemy SessionLocal configured and bound to engine.")
+    except Exception as e_engine:
+        logger.critical(f"🔥🔥 DATABASE ENGINE CREATION FAILED for '{RUNTIME_DATABASE_URL}': {e_engine}")
+        sys.exit(1)  # This is a fatal error.
+
+    # --- Step 4: Spawn the Background Health Checker Thread ---
+    logger.info("Spawning background thread for DB health checks, repairs, and migrations...")
+    health_checker_thread = threading.Thread(
+        target=_run_background_db_health_check,
+        name="DBHealthCheckerThread",
+        daemon=True
+    )
+    health_checker_thread.start()
+
+    # --- Step 5: Start other essential services that DO NOT depend on the DB health ---
+    # The log writer can start because it uses a queue and won't block.
+    # The snapshotter should NOT start here; it should be started by the health checker
+    # thread *after* the DB is confirmed to be healthy.
+    start_log_batch_writer()
+
+    # Register shutdown hooks
+    atexit.register(stop_log_batch_writer)
+    # The snapshotter stop hook will be registered by the health checker.
+    atexit.register(_shutdown_hook)
+
+    logger.success(
+        "✅ Fast database initialization complete. Server can start. Health checks are running in the background.")
 
 
 # --- Database Interaction Functions (add_interaction, get_recent_interactions, etc.) ---
@@ -1685,6 +1664,11 @@ def get_recent_interactions(db: Session, limit=5, session_id=None, mode="chat", 
     Gets recent interactions and then filters out malformed/defective entries
     in Python after the database query.
     """
+    if not _DB_HEALTH_OK_EVENT.is_set():
+        # If the DB is not ready, do not attempt to query it.
+        # Return an empty list immediately. The higher-level functions will handle this.
+        logger.trace("get_recent_interactions: DB not healthy/online yet. Returning empty list (degraded mode).")
+        return []
     try:
         # Step 1: Retrieve data from the database, including potential garbage.
         # This is the original, simple query.
@@ -1835,6 +1819,11 @@ def get_global_recent_interactions(db: Session, limit: int = 10) -> List[Interac
     Gets globally recent interactions and then filters out malformed/defective
     entries in Python after the database query.
     """
+    if not _DB_HEALTH_OK_EVENT.is_set():
+        # If the DB is not ready, do not attempt to query it.
+        # Return an empty list immediately. The higher-level functions will handle this.
+        logger.trace("get_recent_interactions: DB not healthy/online yet. Returning empty list (degraded mode).")
+        return []
     try:
         # Step 1: Retrieve data unfiltered from the database.
         # We fetch a bit more than the limit to ensure we have enough clean items.

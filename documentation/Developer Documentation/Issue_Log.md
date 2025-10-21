@@ -122,6 +122,16 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `In-Progress`
     -   **Description:** The Mesa build process for Android containers has been unified to use a single configuration for both Adreno and Mali GPUs. A verification step using `vulkaninfo` has been added to check if the custom driver is loaded correctly. If verification fails, a `.gpu_acceleration_failed` flag is created, forcing the application into a CPU-only fallback mode to ensure functionality on devices where the custom driver fails.
 
+-   **ID:** `CORE-FEAT-009`
+    -   **Title:** Implement Casual Mistype Humanizer.
+    -   **Status:** `Resolved`
+    -   **Description:** Adds a feature to programmatically introduce subtle, human-like errors into the AI's responses to make the persona more believable. This includes chances for lowercase starts, lowercase after periods, capitalization mishaps, and punctuation omissions.
+
+-   **ID:** `CORE-FEAT-010`
+    -   **Title:** Pre-buffer 'thinking' monologue on startup.
+    -   **Status:** `Resolved`
+    -   **Description:** To improve UI responsiveness, the introspective monologue shown when the AI is "thinking" is now generated and cached in the database on startup. This avoids a real-time generation call and the associated delay when the user first interacts with the AI.
+
 ### Defects (Bugs)
 
 -   **ID:** `CORE-BUG-001`
@@ -155,6 +165,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Overhaul RAG and background processing for robustness and traceability.
     -   **Status:** `Resolved`
     -   **Description:** Major refactor of the `background_generate` function in `AdelaideAlbertCortex.py`. The RAG pipeline was rebuilt to use a safe, robust helper (`_build_on_the_fly_retriever`) that combines vector and fuzzy search for recent history. The entire background task now logs every intermediate thought, draft, and correction as a distinct, traceable interaction in the database, providing a complete audit trail of the AI's reasoning process. The reflection process was also redesigned to be a "pure" operation that creates new records instead of updating old ones, ensuring data immutability.
+
+-   **ID:** `CORE-REFACTOR-003`
+    -   **Title:** Refactor database initialization for speed and robustness.
+    -   **Status:** `Resolved`
+    -   **Description:** The database initialization process (`init_db`) has been refactored to be significantly faster. It now performs a fast, optimistic initialization and spawns a background thread for slower integrity checks, repairs, and migrations. This allows the application to start much faster. A health check event (`_DB_HEALTH_OK_EVENT`) is used to signal when the database is fully ready.
 
 -- -
 
@@ -211,5 +226,3 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
 
     -   **Description:** The chat page bounces back to the top on ordinary chat mode, which is a very annoying user experience. This was caused by rendering the entire chat history at once, leading to performance issues.
-
-
