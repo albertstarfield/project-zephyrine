@@ -2,11 +2,13 @@
 
 import sys
 import os
+from PIL import ImageDraw, ImageFont
 
 # --- Explicitly add the script's directory to sys.path ---
 # This helps ensure 'from CortexConfiguration import ...' can find config.py
 # if imagination_worker.py and config.py are in the same directory (e.g., engineMain).
 SCRIPT_DIR = os.path.dirname(os.path.abspath(__file__))
+from CortexConfiguration import *
 # Using print directly here as log_worker isn't defined yet.
 print(f"[IMAGINATION_WORKER|DEBUG] Worker SCRIPT_DIR: {SCRIPT_DIR}", file=sys.stderr, flush=True)
 if SCRIPT_DIR not in sys.path:
@@ -133,12 +135,87 @@ def log_worker(level, message):
     print(f"[IMAGINATION_WORKER|{level}] {message}", file=sys.stderr, flush=True)
 
 
+def _apply_watermark(
+        image: Image.Image,
+        text: str,
+        font_path: Optional[str],
+        font_size_ratio: float,
+        opacity: int,
+        angle: int,
+        color: tuple
+) -> Image.Image:
+    """
+    Applies a repeating, diagonal, semi-transparent watermark to a PIL Image.
+    """
+    log_worker("INFO", "Applying ethical watermark...")
+
+    # Make a copy to avoid modifying the original image object
+    watermarked_image = image.copy()
+
+    # Create a transparent overlay layer of the same size
+    overlay = Image.new("RGBA", watermarked_image.size, (255, 255, 255, 0))
+    draw = ImageDraw.Draw(overlay)
+
+    # Determine font size based on the image's shortest side
+    shortest_side = min(watermarked_image.size)
+    font_size = int(shortest_side * font_size_ratio)
+
+    # Load the font
+    try:
+        if font_path and os.path.exists(font_path):
+            font = ImageFont.truetype(font_path, font_size)
+        else:
+            font = ImageFont.load_default()
+            if font_path:
+                log_worker("WARNING", f"Watermark font not found at '{font_path}'. Using basic default font.")
+    except Exception as e:
+        log_worker("ERROR", f"Failed to load watermark font: {e}. Using basic default font.")
+        font = ImageFont.load_default()
+
+    # Calculate the size of a single text box
+    try:
+        # Use getbbox for modern Pillow versions
+        bbox = draw.textbbox((0, 0), text, font=font)
+        text_width = bbox[2] - bbox[0]
+        text_height = bbox[3] - bbox[1]
+    except AttributeError:
+        # Fallback for older Pillow versions
+        text_width, text_height = draw.textsize(text, font=font)
+
+    # Create a small canvas for one rotated piece of text
+    rotated_text_img = Image.new("RGBA", (text_width, text_height), (255, 255, 255, 0))
+    text_draw = ImageDraw.Draw(rotated_text_img)
+
+    # Add opacity to the color tuple
+    watermark_color_with_opacity = color + (opacity,)
+    text_draw.text((0, 0), text, font=font, fill=watermark_color_with_opacity)
+
+    rotated_text_img = rotated_text_img.rotate(angle, expand=1, resample=Image.BICUBIC)
+
+    # Tile the rotated text across the entire overlay
+    img_width, img_height = overlay.size
+    tile_width, tile_height = rotated_text_img.size
+
+    for y in range(0, img_height + tile_height, tile_height * 2):  # Increased spacing
+        for x in range(0, img_width + tile_width, tile_width + int(tile_width * 0.5)):  # Increased spacing
+            overlay.paste(rotated_text_img, (x, y), rotated_text_img)
+            overlay.paste(rotated_text_img, (x - int(tile_width * 0.75), y - tile_height),
+                          rotated_text_img)  # Offset rows
+
+    # Composite the overlay onto the original image
+    watermarked_image.paste(overlay, (0, 0), overlay)
+
+    log_worker("SUCCESS", "Watermark applied successfully.")
+    return watermarked_image
+
 def main():
     parser = argparse.ArgumentParser(
         description="Stable Diffusion Image Generation Worker (FLUX + Optional Refinement)")
     parser.add_argument("--model-dir", required=True, help="Base directory where model files are located.")
     parser.add_argument("--diffusion-model-name", default="flux1-schnell.gguf",
                         help="Filename of the main FLUX diffusion GGUF model.")
+    parser.add_argument("--apply-watermark", action="store_true",
+                        help="Apply the configured ethical watermark to the final image.")
     parser.add_argument("--clip-l-name", default="flux1-clip_l.gguf", help="Filename of the FLUX CLIP L GGUF model.")
     parser.add_argument("--t5xxl-name", default="flux1-t5xxl.gguf", help="Filename of the FLUX T5 XXL GGUF model.")
     parser.add_argument("--vae-name", default="flux1-ae.gguf", help="Filename of the FLUX VAE GGUF model.")
@@ -452,6 +529,25 @@ def main():
                 log_worker("INFO", "Refinement stage skipped (Refiner model failed to load). Using Stage 1 image.")
             elif not current_refinement_enabled_status:
                 log_worker("INFO", "Refinement stage skipped (disabled by config/default). Using Stage 1 image.")
+
+        if args.apply_watermark:
+            try:
+                # If the flag is present, call our helper function to modify the image in-place.
+                final_output_image = _apply_watermark(
+                    image=final_output_image,
+                    text=USER_IMAGE_WATERMARK_TEXT,
+                    font_path=WATERMARK_FONT_PATH,
+                    font_size_ratio=WATERMARK_FONT_SIZE_RATIO,
+                    opacity=WATERMARK_OPACITY,
+                    angle=WATERMARK_ANGLE,
+                    color=WATERMARK_COLOR
+                )
+            except Exception as e_watermark:
+                # If watermarking fails for any reason, log the error but do not
+                # crash the worker. The un-watermarked image will be returned instead.
+                log_worker("ERROR", f"Watermarking process failed: {e_watermark}")
+        else:
+            log_worker("INFO", "Watermark skipped as per --apply-watermark flag.")
 
         output_data_list_final = []
         if response_format == "b64_json":

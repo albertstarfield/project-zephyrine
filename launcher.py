@@ -158,19 +158,9 @@ STATIC_MODEL_POOL_DIR_NAME = "staticmodelpool"
 STATIC_MODEL_POOL_PATH = os.path.join(ENGINE_MAIN_DIR, STATIC_MODEL_POOL_DIR_NAME)
 MODELS_TO_DOWNLOAD = [
     {
-        "filename": "ui-tars.gguf",
-        "url": "https://huggingface.co/mradermacher/UI-TARS-1.5-7B-i1-GGUF/resolve/main/UI-TARS-1.5-7B.i1-IQ3_XXS.gguf?download=true",
-        "description": "UI-TARS Model (Small UI Interaction)"
-    },
-    {
         "filename": "deepscaler.gguf",
         "url": "https://huggingface.co/bartowski/agentica-org_DeepScaleR-1.5B-Preview-GGUF/resolve/main/agentica-org_DeepScaleR-1.5B-Preview-f16.gguf?download=true",
         "description": "DeepScaleR Model (Agent/Router)"
-    },
-    {
-        "filename": "LatexMind-2B-Codec-i1-GGUF-IQ4_XS.gguf",
-        "url": "https://huggingface.co/mradermacher/LatexMind-2B-Codec-i1-GGUF/resolve/main/LatexMind-2B-Codec.i1-IQ4_XS.gguf?download=true",
-        "description": "LatexMind Model (LaTeX/VLM)"
     },
     {
         "filename": "qwen3EmbedCore.gguf",
@@ -183,24 +173,24 @@ MODELS_TO_DOWNLOAD = [
         "description": "NanoTranslator Model"
     },
     {
-        "filename": "qwen2-math-1.5b-instruct-q5_K_M.gguf",
-        "url": "https://huggingface.co/lmstudio-community/Qwen2-Math-1.5B-Instruct-GGUF/resolve/main/Qwen2-Math-1.5B-Instruct-Q5_K_M.gguf?download=true",
-        "description": "Qwen2 Math Model"
-    },
-    {
         "filename": "Qwen3LowLatency.gguf",
         "url": "https://huggingface.co/unsloth/Qwen3-0.6B-GGUF/resolve/main/Qwen3-0.6B-Q5_K_M.gguf?download=true",
         "description": "Qwen 3 5-bit Hybrid Direct Mode (Fast Augmented General)"
     },
     {
-        "filename": "qwen2.5-coder-3b-instruct-q5_K_M.gguf",
-        "url": "https://huggingface.co/bartowski/Qwen2.5-Coder-3B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-3B-Instruct-Q5_K_M.gguf?download=true",
-        "description": "Qwen2.5 Coder Model"
+        "filename": "Qwen3DeepseekDecomposer.gguf",
+        "url": "https://huggingface.co/unsloth/DeepSeek-R1-0528-Qwen3-8B-GGUF/resolve/main/DeepSeek-R1-0528-Qwen3-8B-Q4_K_S.gguf?download=true",
+        "description": "Qwen 3 Deepseek R1 Decomposer 8B model, suboptimal for toolcall but a really good thinker and decompose solve complex things"
     },
     {
-        "filename": "Qwen2.5-VL-7B-Instruct-q4_k_m.gguf",
-        "url": "https://huggingface.co/bartowski/Qwen2-VL-7B-Instruct-GGUF/resolve/main/Qwen2-VL-7B-Instruct-Q4_K_M.gguf?download=true",
-        "description": "Qwen2.5 VL Model"
+        "filename": "Qwen3ToolCall.gguf",
+        "url": "https://huggingface.co/Qwen/Qwen3-8B-GGUF/resolve/main/Qwen3-8B-Q4_K_M.gguf?download=true",
+        "description": "Qwen 3 Tool Calling, Not good thinker but good for controlling and tool calling and coding"
+    },
+    {
+        "filename": "Qwen3-VL-ImageDescripter.gguf",
+        "url": "https://huggingface.co/NexaAI/Qwen3-VL-4B-Instruct-GGUF/resolve/main/Qwen3-VL-4B-Instruct.Q4_K.gguf?download=true",
+        "description": "Qwen3 Image Descriptor VL Model"
     },
     {
         "filename": "whisper-large-v3-q5_0.gguf",
@@ -933,17 +923,16 @@ def start_engine_main():
     name = "ENGINE"
     MAX_UPLOAD_SIZE_BYTES = 2 ** 63
 
-    # NEW: Ensure old PID file is gone before starting
     if os.path.exists(ENGINE_PID_FILE):
         os.remove(ENGINE_PID_FILE)
 
     command = [
         HYPERCORN_EXECUTABLE,
-        "AdelaideAlbertCortex:app",
+        "AdelaideAlbertCortex:system",
         "--bind", "127.0.0.1:11434",
         "--workers", "1",
         "--log-level", "info",
-        "--pid", ENGINE_PID_FILE  # NEW: Tell Hypercorn to write its PID to this file
+        "--pid", ENGINE_PID_FILE
     ]
     hypercorn_env = {
         "HYPERCORN_MAX_REQUEST_SIZE": str(MAX_UPLOAD_SIZE_BYTES)
@@ -1103,7 +1092,11 @@ def launch_all_services_in_parallel_and_monitor():
     """
     print_system("--- IGNITION: Launching all services in parallel ---")
 
-    # --- PHASE 1: LAUNCH CORE DEPENDENCIES ---
+    # --- PHASE 1: IGNITE MAIN ENGINE & COMPLEMENTARY SERVICES ---
+    print_system("Running main engine (Hypercorn)...")
+    start_engine_main()
+
+    # --- PHASE 2: LAUNCH CORE DEPENDENCIES ---
     core_dependency_threads = []
     tasks_to_launch_first = {
         "ZephyMesh": start_zephymesh_service_fast,
@@ -1117,28 +1110,29 @@ def launch_all_services_in_parallel_and_monitor():
 
     print_system("Waiting briefly for core services to initialize...")
 
-    # --- PHASE 2: IGNITE MAIN ENGINE & COMPLEMENTARY SERVICES ---
-    print_system("Igniting main engine (Hypercorn)...")
-    start_engine_main()
+    # Launch the Frontend immediately
+    print_system("Dispatching complementary service launch for: Frontend")
+    threading.Thread(target=start_frontend, name="LaunchThread-Frontend", daemon=True).start()
 
-    complementary_threads = []
-    tasks_to_launch_later = {
-        "Watchdogs": start_watchdogs_service_fast,
-        "Frontend": start_frontend
-    }
-    for name, task_func in tasks_to_launch_later.items():
-        thread = threading.Thread(target=task_func, name=f"LaunchThread-{name}", daemon=True)
-        complementary_threads.append(thread)
-        print_system(f"Dispatching complementary service launch for: {name}")
-        thread.start()
-        time.sleep(0.1)
+    # --- NEW: PHASE 3: SCHEDULE WATCHDOGS WITH A DELAY ---
+    def delayed_watchdog_launch():
+        """A simple wrapper function to be called by the timer."""
+        print_system("--- [Delayed Task] --- Launching Watchdogs now...")
+        start_watchdogs_service_fast()
+
+    print_warning("Scheduling Watchdogs to launch in 5 seconds...")
+    # Create a Timer thread that will call our wrapper function after 5 seconds.
+    # This is non-blocking. The script will continue immediately.
+    watchdog_timer = threading.Timer(1.0, delayed_watchdog_launch)
+    watchdog_timer.daemon = True  # Ensure it doesn't prevent the app from exiting
+    watchdog_timer.start()
 
     print_colored("SUCCESS", "All services Loaded! Zephy Loaded! Moving to monitoring.", "SUCCESS")
 
-    # --- PHASE 3: MONITORING ---
+    # --- PHASE 4: MONITORING ---
     # Now, jump into the TUI or fallback monitoring loop.
     if TUI_LIBRARIES_AVAILABLE:
-        print_system("TUI libraries found. Attempting to launch Zephyrine Terminal UI...")
+        print_system("TUI libraries found. Transitioning Zephyrine Terminal UI...")
         time.sleep(1) # Give services a moment to create their log files before TUI tails them
         try:
             app = ZephyrineTUI()
@@ -3440,7 +3434,7 @@ def _ensure_and_launch_zephymesh():
         print_system(f"Waiting for ZephyMesh port file: {ZEPHYMESH_PORT_INFO_FILE}")
         port_file_wait_start = time.monotonic()
         api_ready = False
-        while time.monotonic() - port_file_wait_start < 30:
+        while time.monotonic() - port_file_wait_start < 600:
             # Check if the process died prematurely
             # We need to find our process in the global list now
             mesh_proc_obj = None
@@ -3856,9 +3850,12 @@ if TUI_AVAILABLE:
 
             # The watchdogs and mesh node are already running.
             # We only need to start the remaining services here.
-            start_engine_main()
-            start_backend_service()
-            start_frontend()
+            
+            if not os.path.exists(SETUP_COMPLETE_FLAG_FILE):
+                start_engine_main()
+                start_backend_service()
+                start_frontend()
+            # This is where the slow mode starts the services because in one go (look at the main slow logic how it rely on this function to launch the services). but on fast mode it done using async service launch itself (check on the main threads of the async io services)
 
             # --- Wait a moment for the new log files to be created ---
             time.sleep(1.0)
@@ -4403,8 +4400,6 @@ if __name__ == "__main__":
                 print_error("Some critical models failed to download. Functionality may be limited. Proceeding with caution.")
                 # Decide if this is a hard exit or just a warning based on criticality of models.
                 setup_failures.append(f"Models failed to download, check static model pool. functionality compromised")
-
-            print_system("--- Checking TTS Systems (Chatterbox & MeloTTS) ---")
 
             print_system("--- Checking TTS Systems (Chatterbox & MeloTTS) ---")
 

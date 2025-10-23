@@ -27,7 +27,6 @@ import (
 
 const (
 	ManifestProtocolID     = "/zephymesh/manifest/1.0.0" // Kept for reference, but handler is removed
-	FileProtocolID         = "/zephymesh/file_transfer/1.0.0"
 	ManifestExchangeProtocolID = "/zephymesh/manifest_exchange/1.0.0" 
 	FileProtocolID             = "/zephymesh/file_transfer/1.0.0"
 	RelayDirCapBytes       = 1 * 1024 * 1024 * 1024 // 1 GB
@@ -37,15 +36,6 @@ const (
 type AssetInfo struct {
 	SHA256 string `json:"sha256"`
 	Size   int64  `json:"size"`
-}
-
-type Libp2pNode struct {
-	host.Host
-	manifest      map[string]AssetInfo
-	manifestLock  sync.RWMutex
-	projectRoot   string
-	relayDir      string
-	relayDirLock  sync.Mutex
 }
 
 type PeerManifests map[peer.ID]map[string]AssetInfo
@@ -62,6 +52,7 @@ type Libp2pNode struct {
 	projectRoot    string
 	relayDir       string
 	relayDirLock   sync.Mutex
+	staticModelPoolPath string
 }
 
 type discoveryNotifee struct {
@@ -235,7 +226,8 @@ func NewNode(ctx context.Context, listenPort int, identityPath string) (*Libp2pN
 		// Initialize the map that will hold manifests from other peers.
 		peerManifests: make(PeerManifests),
 		projectRoot:   pRoot,
-		relayDir:      filepath.Join(pRoot, "systemCore", "engineMain", "meshCommunicationRelay"),
+		relayDir:      filepath.Join(pRoot, "..", "..", "..", "systemCore", "engineMain", "meshCommunicationRelay"),
+		staticModelPoolPath: filepath.Join(pRoot, "..", "..", "..", "systemCore", "engineMain", "staticmodelpool"),
 	}
 
 	// Step 5: Register the handlers for our custom P2P protocols.
@@ -315,11 +307,11 @@ func (n *Libp2pNode) generateManifest() error {
 
 	dirsToScan := map[string]string{
 		// All GGUF models and the HF cache are in the static model pool
-		"staticmodelpool":                   staticModelPoolPath,
+		"staticmodelpool":                   n.staticModelPoolPath,
 
 		// NEW: Explicitly add the Hugging Face cache directory to the scan.
 		// Its contents are critical for non-GGUF models and configs.
-		"huggingface_cache":                 filepath.Join(staticModelPoolPath, "huggingface_cache"),
+		"huggingface_cache":                 filepath.Join(n.staticModelPoolPath, "huggingface_cache"),
 
 		// The compiled libraries are also valuable assets to share
 		"llama-cpp-python_build":            filepath.Join(n.projectRoot, "llama-cpp-python_build"),

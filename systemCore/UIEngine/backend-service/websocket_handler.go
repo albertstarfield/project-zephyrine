@@ -54,7 +54,7 @@ type EditMessagePayload struct {
 }
 
 // --- WebSocket Handler ---
-
+// Upgrade websocket
 func (app *App) serveWs(w http.ResponseWriter, r *http.Request) {
 	conn, err := app.WebsocketUpgrader.Upgrade(w, r, nil)
 	if err != nil {

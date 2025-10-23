@@ -315,101 +315,7 @@ class LlamaCppChatWrapper(SimpleChatModel):
             provider_logger.exception(f"{wrapper_log_prefix} _call Traceback:")
             return f"[{self._llm_type.upper()}_WRAPPER_ERROR: {type(e_call).__name__} - {str(e_call)[:100]}]"
 
-    def _stream(
-            self,
-            messages: List[BaseMessage],
-            stop: Optional[List[str]] = None,
-            run_manager: Optional[CallbackManagerForLLMRun] = None,
-            config: Optional[RunnableConfig] = None,
-            **kwargs: Any,
-    ) -> Iterator[ChatGenerationChunk]:
-        """
-        Streaming version of _call. It delegates to the worker and yields chunks.
-        """
-        provider_logger = getattr(self.ai_provider, 'logger', logger)
-        wrapper_log_prefix = f"LlamaCppChatWrapper(Role:{self.model_role}|Stream)"
-
-        # ================================================================= #
-        # <<< THIS IS THE FIX >>>
-        # ================================================================= #
-        # Streaming is fundamentally incompatible with raw prompt mode.
-        # Instead of trying to yield a complex error object, we raise an exception
-        # which is the standard way to handle this in LangChain.
-        if isinstance(messages, str):
-            error_message = "Streaming is not supported when a raw string (ChatML) prompt is passed directly. Use a List[BaseMessage] instead."
-            provider_logger.error(f"{wrapper_log_prefix}: {error_message}")
-            raise NotImplementedError(error_message)
-        # ================================================================= #
-        # <<< END OF FIX >>>
-        # ================================================================= #
-
-        # Correctly extract priority using the same logic as the corrected _call method
-        priority = ELP0
-        if config and config.get("configurable"):
-            priority = config["configurable"].get("priority", priority)
-        priority = kwargs.pop('priority', priority)
-
-        provider_logger.debug(
-            f"{wrapper_log_prefix}: Received _stream. Priority: ELP{priority}, "
-            f"Incoming kwargs: {kwargs}, Stop sequences: {stop}"
-        )
-
-        final_model_kwargs_for_worker = {**self.model_kwargs, **kwargs}
-        effective_stop_sequences = list(stop) if stop is not None else []
-        if CHATML_END_TOKEN not in effective_stop_sequences:
-            effective_stop_sequences.append(CHATML_END_TOKEN)
-        final_model_kwargs_for_worker["stop"] = effective_stop_sequences
-        final_model_kwargs_for_worker["stream"] = True  # CRITICAL: Tell the worker to stream
-
-        provider_logger.trace(
-            f"{wrapper_log_prefix}: Final model kwargs for worker: {final_model_kwargs_for_worker}")
-
-        formatted_messages_for_worker = self._format_messages_for_llama_cpp(messages)
-        request_payload = {"messages": formatted_messages_for_worker, "kwargs": final_model_kwargs_for_worker}
-        task_type_for_worker = "chat"
-
-        try:
-            provider_logger.debug(
-                f"{wrapper_log_prefix}: Delegating to _execute_in_worker_stream (Task: {task_type_for_worker}, Priority: ELP{priority})...")
-
-            # The stream executor should yield dictionaries from the worker
-            for chunk_dict in self.ai_provider._execute_in_worker_stream(
-                    model_role=self.model_role,
-                    task_type=task_type_for_worker,
-                    request_data=request_payload,
-                    priority=priority
-            ):
-                if not isinstance(chunk_dict, dict):
-                    provider_logger.warning(f"{wrapper_log_prefix}: Received non-dict chunk from stream: {chunk_dict}")
-                    continue
-
-                # Check for an error message within the stream
-                if "error" in chunk_dict:
-                    error_msg = chunk_dict["error"]
-                    provider_logger.error(f"{wrapper_log_prefix}: Received error in stream: {error_msg}")
-                    # Yield one final error chunk and then stop
-                    yield ChatGenerationChunk(message=AIMessageChunk(content=f"\n[STREAM_ERROR: {error_msg}]"))
-                    break  # Stop the generator
-
-                # Standard OpenAI/Langchain streaming chunk format parsing
-                choices = chunk_dict.get("choices", [])
-                if choices and isinstance(choices, list) and isinstance(choices[0], dict):
-                    delta = choices[0].get("delta", {})
-                    content = delta.get("content", "")
-                    if content:
-                        yield ChatGenerationChunk(message=AIMessageChunk(content=content))
-
-        except TaskInterruptedException as tie:
-            provider_logger.warning(f"🚦 {wrapper_log_prefix}: Stream INTERRUPTED: {tie}")
-            # Yield a final chunk indicating interruption and then stop.
-            yield ChatGenerationChunk(message=AIMessageChunk(content=f"\n[STREAM_INTERRUPTED: {tie}]"))
-        except Exception as e_stream:
-            provider_logger.error(f"{wrapper_log_prefix}: Unexpected error in _stream: {e_stream}")
-            provider_logger.exception(f"{wrapper_log_prefix} _stream Traceback:")
-            # Yield a final chunk with the exception details.
-            yield ChatGenerationChunk(
-                message=AIMessageChunk(content=f"\n[STREAM_WRAPPER_ERROR: {type(e_stream).__name__} - {e_stream}]"))
-
+    #def _stream is no longer used! and removed!
 
     # _format_messages_for_llama_cpp might become unused if all calls are raw ChatML strings.
     # Keep it for now for potential compatibility if some parts still use List[BaseMessage].
@@ -1082,7 +988,8 @@ class CortexEngine:
             self,
             prompt: str,
             image_base64: Optional[str] = None,
-            priority: int = ELP0
+            priority: int = ELP0,
+            apply_watermark: bool = False
     ) -> Optional[Dict[str, Any]]:  # Returns the full JSON response from worker or error dict
         """
         Executes imagination_worker.py, sends request, gets response.
@@ -1144,6 +1051,7 @@ class CortexEngine:
                     provider_logger.debug(
                         f"{worker_log_prefix}: Worker command: {' '.join(shlex.quote(c) for c in command)}")
 
+                    if apply_watermark and ENABLE_USER_IMAGE_WATERMARK: command.append("--apply-watermark")
                     # Prepare the JSON request data to be sent to the worker's stdin
                     request_data_for_worker = {
                         "task_type": task_name,
@@ -1683,7 +1591,8 @@ class CortexEngine:
             self,
             prompt: str,
             image_base64: Optional[str] = None,
-            priority: int = ELP0
+            priority: int = ELP0,
+            apply_watermark: bool = False
     ) -> Tuple[Optional[List[Dict[str, Optional[str]]]], Optional[str]]:
         """
         Public method to generate an image using the imagination worker.
@@ -1701,7 +1610,7 @@ class CortexEngine:
         start_time = time.monotonic()  # Start time for the entire async operation
 
         try:
-            worker_response = await self._execute_imagination_worker(prompt, image_base64, priority)
+            worker_response = await self._execute_imagination_worker(prompt, image_base64, priority, apply_watermark)
 
             duration = time.monotonic() - start_time  # Total duration
             provider_logger.debug(

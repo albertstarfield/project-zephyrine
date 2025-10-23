@@ -1080,9 +1080,13 @@ def get_engine():
     logger.info(f"Creating SQLAlchemy engine for: {RUNTIME_DATABASE_URL}")
     try:
         _engine = create_engine(RUNTIME_DATABASE_URL, **engine_args_internal)
-        # Test connection
+        # Test connection and set the journal mode to WAL mode for the get_engine()
         with _engine.connect() as connection:
             logger.debug("Engine connection test successful after all preparations.")
+            current_mode_result = connection.execute(text("PRAGMA journal_mode;")).scalar_one()
+            if current_mode_result.lower() != 'wal':
+                connection.execute(text("PRAGMA journal_mode = WAL;"))
+                logger.debug("Engine connected, setting mode database to WAL for concurrency I/O")
         SessionLocal.configure(bind=_engine)
         logger.info("SQLAlchemy SessionLocal configured and bound to engine.")
     except Exception as e_engine:
