@@ -384,7 +384,7 @@ func (app *App) handleProactiveNotification(w http.ResponseWriter, r *http.Reque
 func (app *App) handleProactiveThoughtEvent(jsonData string) {
 	var payload struct {
 		UserID  string `json:"userId"`
-		ChatID  string `json:"chatId"`
+		//ChatID  string `json:"chatId"` // we no longer need UUID bounded chat
 		Message string `json:"message"`
 	}
 
@@ -398,7 +398,30 @@ func (app *App) handleProactiveThoughtEvent(jsonData string) {
 		return
 	}
 
-	log.Printf("Received proactive thought from LLM for user %s", payload.UserID)
+	log.Printf("Received proactive thought from LLM for user %s. Finding latest chat...", payload.UserID)
+
+	//log.Printf("Received proactive thought from LLM for user %s", payload.UserID)
+
+	var latestChatID string
+
+	app.DBMutex.Lock()
+
+	err := app.DB.QueryRow(
+        "SELECT id FROM chats WHERE user_id = ? ORDER BY updated_at DESC LIMIT 1",
+        payload.UserID,
+    ).Scan(&latestChatID)
+    app.DBMutex.Unlock()
+
+	if err != nil {
+        if err == sql.ErrNoRows {
+            log.Printf("Could not find any chats for user %s to deliver proactive message.", payload.UserID)
+        } else {
+            log.Printf("ERROR querying for latest chat for user %s: %v", payload.UserID, err)
+        }
+        return // Stop processing if we can't find a chat
+    }
+
+	log.Printf("Found latest chat ID '%s' for user %s.", latestChatID, payload.UserID)
 
 	// Find the user's active WebSocket connection
 	conn, found := app.findConnection(payload.UserID)
@@ -409,7 +432,8 @@ func (app *App) handleProactiveThoughtEvent(jsonData string) {
 	
 	// Create the payload to send to the client
 	wsPayload := map[string]string{
-		"chatId":  payload.ChatID,
+		//"chatId":  payload.ChatID,
+		"chatId":  latestChatID,
 		"message": payload.Message,
 	}
 

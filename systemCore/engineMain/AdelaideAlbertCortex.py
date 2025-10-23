@@ -864,22 +864,21 @@ def _programmatic_json_parse_and_fix(
     return None
 
 
-# --- Flask App Setup ---
-APP_START_TIME = time.monotonic()
-app = Flask(__name__) # Use Flask app
+# --- System Setup ---
+SYSTEM_START_TIME = time.monotonic()
+system = Flask(__name__) # Use Flask app
 
 #Allowing recieving big dataset
-#app.config['MAX_CONTENT_LENGTH'] = 2 ** 63
-app.config['MAX_CONTENT_LENGTH'] = None
-#app.config['MAX_CONTENT_LENGTH'] = 3 * 1024 * 1024 * 1024 + 500 * 1024 * 1024
+system.config['MAX_CONTENT_LENGTH'] = None
+
 
 
 #This is important for Zephy GUI to work
 #CORS(app, resources={r"/*": {"origins": "http://localhost:5173"}})
-CORS(app) #Allow all origin
+CORS(system) #Allow all origin
 
 # --- Request Context Functions for DB ---
-@app.before_request
+@system.before_request
 def setup_and_log_request():
     """Opens DB session and logs incoming request details."""
     # 0. Signal Busy Start
@@ -928,7 +927,7 @@ def setup_and_log_request():
         logger.error(f"!!! Error during incoming request logging: {log_err}")
         # Continue processing the request anyway
 
-@app.after_request
+@system.after_request
 def add_cors_headers(response):
     # Only add headers for the specified origin
     # You can add more complex logic here if needed (e.g., checking request.origin)
@@ -938,7 +937,7 @@ def add_cors_headers(response):
     response.headers['Access-Control-Allow-Credentials'] = 'true' # If you send cookies/credentials
     return response
 
-@app.after_request
+@system.after_request
 def log_and_clear_busy(response: Response) -> Response:
     """Logs details of the outgoing response AFTER the route handler."""
     # (Keep the exact same logic as the previous log_outgoing_response function)
@@ -970,7 +969,7 @@ def log_and_clear_busy(response: Response) -> Response:
             server_is_busy_event.clear()
         return response
 
-@app.teardown_request
+@system.teardown_request
 def teardown_request_db(exception=None): # Use your original function name if you prefer
     """Close the DB session after each request."""
     db = g.pop('db', None)
@@ -4473,6 +4472,56 @@ class CortexThoughts:
         _think_content, speak_content = self._parse_think_speak_output(raw_llm_output)
         final_response_text = speak_content
 
+        # Regex to find "Zephy:" (case-insensitive, with optional space/colon variants) and capture what comes after.
+        # The (?i) flag makes it case-insensitive. re.DOTALL allows '.' to match newlines.
+        zephy_prefix_pattern = re.compile(r'(?i)\s*Zephy\s*:\s*(.*)', re.DOTALL)
+
+        # Split the content by the pattern. This will give us a list where every odd-indexed element
+        # is a message that followed "Zephy:".
+        parts = zephy_prefix_pattern.split(speak_content)
+
+        # Filter out empty strings that result from the split.
+        messages = [p.strip() for p in parts if p.strip()]
+
+        final_response_text = ""  # This will be the immediate HTTP response
+
+        if len(messages) > 1:
+            logger.info(
+                f"{log_prefix} Zephy Engine Multi-message response detected! ({len(messages)} parts). Splitting for SSE delivery.")
+
+            # The first message is the primary, immediate response.
+            final_response_text = messages[0]
+
+            # Loop through all SUBSEQUENT messages and queue them for SSE push.
+            for i, subsequent_message in enumerate(messages[1:]):
+                logger.debug(f"Queuing subsequent message #{i + 1} for SSE push.")
+
+                # This payload structure must match what the Go BFF now expects (userId, message)
+                # and what the Python SSE listener needs to format correctly.
+                sse_payload = {
+                    "userId": "user_placeholder_from_zephy_split",
+                    # Placeholder, as Go BFF will handle routing by latest chat
+                    "message": subsequent_message
+                }
+
+                # The final chatId will be determined by the Go BFF, but we could add it here for logging if needed.
+                # sse_payload["chatId"] = session_id
+
+                sse_event_string = format_sse_notification(
+                    data=sse_payload,
+                    event="proactive_thought"  # We reuse the 'proactive_thought' event type for simplicity
+                )
+
+                # Put the formatted string into the global queue
+                sse_notification_queue.put(sse_event_string)
+
+        elif len(messages) == 1:
+            # Only one message was found after a "Zephy:" prefix. Use it.
+            final_response_text = messages[0]
+        else:
+            # No "Zephy:" prefixes found. Use the original speak_content as is.
+            final_response_text = speak_content
+
         if not final_response_text.strip():
             logger.error(f"{log_prefix} Final response is empty after parsing. Model failed to generate speak content.")
             final_response_text = "[System Error: The AI model could not generate a valid response.]"
@@ -4489,8 +4538,8 @@ class CortexThoughts:
         # =================== THIS IS THE NEW PART (STEP 3) ===================
         # Apply normalization rules (e.g., remove em-dashes) to the final text.
         normalized_final_text = self._normalize_direct_response_text(final_response_text)
-        humanized_final_text = self._casual_mistype(normalized_final_text)
-        #humanized_final_text = normalized_final_text
+        #humanized_final_text = self._casual_mistype(normalized_final_text)
+        humanized_final_text = normalized_final_text #bypass _casual_mistype due to it's bugginess on swapping the text
         # =====================================================================
         interaction_data = {
             "session_id": session_id, "mode": "chat", "input_type": "text", "user_input": user_input,
@@ -5741,7 +5790,8 @@ class CortexThoughts:
                                   classification: str = "chat_simple", image_b64: Optional[str] = None,
                                   update_interaction_id: Optional[int] = None,  # For reflection tasks
                                   stop_event_for_bg: Optional[threading.Event] = None,
-                                  parent_ingestion_job_id: Optional[int] = None):  # Link to parent ingestion job
+                                  parent_ingestion_job_id: Optional[int] = None,
+                                  result_callback_queue: Optional[asyncio.Queue] = None):  # Link to parent ingestion job
 
         """
         Executes the main low-priority (ELP0) asynchronous pipeline, which operates
@@ -6641,6 +6691,25 @@ class CortexThoughts:
                     )
                     await asyncio.to_thread(db.commit)
 
+                elif task_completed_successfully and result_callback_queue:
+                    logger.info(f"{log_prefix} Task successful. Putting result into callback queue...")
+                    # We need to send both the message and the routing info
+                    # Get the user and chat ID from the interaction record we created/updated
+                    source_interaction = existing_interaction_to_update
+                    if source_interaction:
+                        # This payload structure is what the Go BFF/SSE will need later
+                        callback_payload = {
+                            "userId": "user_placeholder",
+                            # You will need to fetch the actual user ID associated with the session
+                            "chatId": source_interaction.session_id,
+                            "message": final_response_text_for_this_turn
+                        }
+                        await result_callback_queue.put(callback_payload)
+                        logger.info(f"{log_prefix} Successfully queued result for delivery.")
+                    else:
+                        logger.warning(
+                            f"{log_prefix} Could not send to callback queue: source interaction context was lost.")
+
             except Exception as final_db_error_log_err:
                 logger.critical(f"❌❌ {log_prefix} CRITICAL: Failed even to save the task failure record to DB: {final_db_error_log_err}")
                 if db: await asyncio.to_thread(db.rollback)
@@ -7021,14 +7090,40 @@ def _ollama_pseudo_stream_sync_generator(session_id: str, user_input: str, image
             yield format_ollama_chunk(content=final_response_text)
             # The final "done" chunk will be sent in the `finally` block.
         else:
-            # The response is valid, so stream it word-by-word.
-            logger.info(f"Ollama Stream: Streaming final 'speak' content ({len(final_response_text)} chars).")
-            words = final_response_text.split(' ')
-            for i, word in enumerate(words):
-                # Add a space after each word except the last one.
-                content_to_send = word + (' ' if i < len(words) - 1 else '')
-                yield format_ollama_chunk(content=content_to_send)
-                time.sleep(0.01)  # A very short delay for a fast typing effect.
+            zephy_prefix_pattern = re.compile(r'(?i)\s*Zephy\s*:\s*(.*)', re.DOTALL)
+            parts = zephy_prefix_pattern.split(final_response_text)
+            messages = [p.strip() for p in parts if p.strip()]
+
+            messages_to_stream = messages if messages else [final_response_text]
+
+            if len(messages_to_stream) > 1:
+                logger.warning(
+                    f"Ollama Streamer: Multi-message response detected ({len(messages_to_stream)} parts). Yielding warning.")
+
+                # 1. Yield the warning chunk first
+                warning_message = "[The Engine is responding with more than one message or response, Unfortunately it is incompatible with the standard status quo OpenAI and Ollama standard one query get answer instantly short formatted answer tiktok/short/reels paradigm specification API format]\n\n"
+                yield format_ollama_chunk(content=warning_message)
+                time.sleep(0.1)
+
+                # 2. Loop and stream each message with a prefix
+                for msg_index, message_text in enumerate(messages_to_stream):
+                    prefixed_message = f"Zephy [{msg_index + 1}]: {message_text}\n\n"
+
+                    # Stream this part word-by-word
+                    words = prefixed_message.split(' ')
+                    for i, word in enumerate(words):
+                        content_to_send = word + (' ' if i < len(words) - 1 else '')
+                        yield format_ollama_chunk(content=content_to_send)
+                        time.sleep(0.01)
+            else:
+                # 3. Original behavior: only one message, stream it normally
+                logger.info(
+                    f"Ollama Streamer: Streaming single response normally ({len(messages_to_stream[0])} chars).")
+                words = messages_to_stream[0].split(' ')
+                for i, word in enumerate(words):
+                    content_to_send = word + (' ' if i < len(words) - 1 else '')
+                    yield format_ollama_chunk(content=content_to_send)
+                    time.sleep(0.01)
 
     except GeneratorExit:
         logger.warning("OLLAMA_STREAM_V3: Client disconnected from stream.")
@@ -7500,7 +7595,8 @@ async def _process_mesh_image_gen_request_and_get_result(
         # The task itself runs at low priority.
         list_of_one_image_dict, image_gen_err = await cortex_backbone_provider.generate_image_async(
             prompt=refined_prompt,
-            priority=ELP0  # <--- CRITICAL: Run image generation at low priority
+            priority=ELP0,  # <--- CRITICAL: Run image generation at low priority
+            apply_watermark=False
         )
 
         if image_gen_err:
@@ -8133,13 +8229,43 @@ def _stream_openai_chat_response_generator_flask(
             yield yield_chunk(finish_reason="error")
         else:
             # The response is valid, so stream it word-by-word.
-            logger.info(f"Streaming final 'speak' content ({len(final_response_text)} chars).")
-            words = final_response_text.split(' ')
-            for i, word in enumerate(words):
-                # Add a space after each word except the last one.
-                content_to_send = word + (' ' if i < len(words) - 1 else '')
-                yield yield_chunk(delta_content=content_to_send)
-                time.sleep(0.01)  # A very short delay for a fast typing effect.
+            zephy_prefix_pattern = re.compile(r'(?i)\s*Zephy\s*:\s*(.*)', re.DOTALL)
+            parts = zephy_prefix_pattern.split(final_response_text)
+            messages = [p.strip() for p in parts if p.strip()]
+
+            # Determine the effective message list to stream
+            messages_to_stream = messages if messages else [final_response_text]
+
+            if len(messages_to_stream) > 1:
+                logger.warning(
+                    f"OpenAI Streamer: Multi-message response detected ({len(messages_to_stream)} parts). Yielding warning.")
+
+                # 1. Yield the warning chunk first
+                warning_message = "[The Engine is responding with more than one message or response, Unfortunately it is incompatible with the standard status quo OpenAI and Ollama standard one query get answer instantly short formatted answer tiktok/short/reels paradigm specification API format]\n\n"
+                yield yield_chunk(delta_content=warning_message)
+                time.sleep(0.1)  # Small pause after the warning
+
+                # 2. Loop and stream each message with a prefix
+                for msg_index, message_text in enumerate(messages_to_stream):
+                    # Add the prefix
+                    prefixed_message = f"Zephy [{msg_index + 1}]: {message_text}\n\n"
+
+                    # Stream this part word-by-word for a typing effect
+                    words = prefixed_message.split(' ')
+                    for i, word in enumerate(words):
+                        content_to_send = word + (' ' if i < len(words) - 1 else '')
+                        yield yield_chunk(delta_content=content_to_send)
+                        time.sleep(0.01)
+
+            else:
+                # 3. Original behavior: only one message, stream it normally
+                logger.info(
+                    f"OpenAI Streamer: Streaming single response normally ({len(messages_to_stream[0])} chars).")
+                words = messages_to_stream[0].split(' ')
+                for i, word in enumerate(words):
+                    content_to_send = word + (' ' if i < len(words) - 1 else '')
+                    yield yield_chunk(delta_content=content_to_send)
+                    time.sleep(0.01)
 
             # Signal that the stream finished successfully.
             yield yield_chunk(finish_reason="stop")
@@ -8987,8 +9113,24 @@ async def _get_and_process_proactive_interaction():
             logger.info("💡 No suitable past interaction found to revisit.")
             return None # Return None if nothing was found
 
+        decision_prompt_input = {
+            "past_user_input": past_interaction.user_input,
+            "past_ai_response": past_interaction.llm_response
+        }
+
         # 2. Blocking LLM Call (invoke is synchronous)
-        decision_chain = ChatPromptTemplate.from_template(PROMPT_XMPP_SHOULD_I_RECALL) | cortex_text_interaction.provider.get_model("general_fast") | StrOutputParser()
+        decision_chain = ChatPromptTemplate.from_template(PROMPT_XMPP_SHOULD_I_RECALL) | cortex_text_interaction.provider.get_model("router") | StrOutputParser()
+
+        timing_data = {"session_id": f"proactive_decision_{past_interaction.id}", "mode": "proactive_gate"}
+
+        decision = await asyncio.to_thread(
+            cortex_text_interaction._call_llm_with_timing,
+            chain=decision_chain,
+            inputs=decision_prompt_input,
+            interaction_data=timing_data,
+            priority=ELP0
+        )
+
         decision = decision_chain.invoke({
             "past_user_input": past_interaction.user_input,
             "past_ai_response": past_interaction.llm_response
@@ -8998,18 +9140,40 @@ async def _get_and_process_proactive_interaction():
             logger.info(f"💡 AI decided not to revisit this interaction. verb: {decision.lower()}")
             return None
 
+        result_queue = asyncio.Queue()
+
         # 3. Another Blocking LLM Call
         revisit_prompt = PROMPT_XMPP_PROACTIVE_REVISIT.format(
             past_user_input=past_interaction.user_input,
             past_ai_response=past_interaction.llm_response
         )
-        proactive_message = await cortex_text_interaction.direct_generate(db, revisit_prompt, "proactive_thought_session")
-        
+        #proactive_message = await cortex_text_interaction.direct_generate(db, revisit_prompt, "proactive_thought_session") # old code to generate direct multi message, now it's more of a async MoE 
+        proactive_message = asyncio.create_task(cortex_text_interaction.background_generate(
+            db=db,
+            user_input=revisit_prompt,
+            session_id=f"proactive_thought_{past_interaction.id}",
+            classification="proactive_thought_generation",
+            result_callback_queue=result_queue
+        ))
+
+        logger.info("💡 ...awaiting result from proactive generation task...")
+        result_payload = await result_queue.get()
+
         is_logical = True
         for bad_phrase in XMPP_PROACTIVE_BAD_RESPONSE_MARKERS:
             if fuzz.partial_ratio(bad_phrase.lower(), proactive_message.lower()) > 85:
                 is_logical = False
                 break
+
+        if is_logical:
+            logger.info(f"💡 Proactive message received from background task. Pushing to global SSE queue.")
+            sse_event = format_sse_notification(
+                data=result_payload,  # The payload already has userId, chatId, message
+                event="proactive_thought"
+            )
+            sse_notification_queue.put(sse_event)
+            return result_payload  # Return the payload for logging/testing
+
         
         if proactive_message and is_logical:
             # 4. Blocking Database Write
@@ -9141,7 +9305,8 @@ def _create_assistants_api_stub_response(
 # === Flask Routes (Async) ===
 
 # ====== Server Root =======
-@app.route("/", methods=["GET", "POST", "HEAD"])
+# =-=-=-=-=-=-=--=-= [ Zephy Specific HTTP API START ] =-=-=-=-=-=-=-=-=
+@system.route("/", methods=["GET", "POST", "HEAD"])
 async def handle_interaction():
     """
     Async version of the main endpoint. It intelligently handles three types of requests:
@@ -9212,7 +9377,54 @@ async def handle_interaction():
     return resp
 
 
-@app.route("/meshCommunityServeProcessor", methods=["POST"])
+
+#============== Dove Section ===============
+
+
+@system.route("/instrumentviewportdatastreamlowpriopreview", methods=["GET"])
+async def handle_instrument_viewport_stream():
+    req_id = f"req-instr-stream-async-{uuid.uuid4()}"
+    logger.info(f"🚀 {req_id}: Async SSE connection opened for instrument data stream.")
+
+    async def generate_data_stream():
+        while True:
+            def get_data_sync():
+                data_packet = stella_icarus_daemon_manager.get_data_from_queue()
+                if data_packet is None:
+                    sim_data = _generate_simulated_avionics_data()
+                    data_packet = {
+                        "source_daemon": "System_Simulation_Fallback",
+                        "timestamp_py": datetime.datetime.now(datetime.timezone.utc).isoformat(),
+                        "data": sim_data
+                    }
+                return data_packet
+            data_packet = await asyncio.to_thread(get_data_sync)
+            yield f"data: {json.dumps(data_packet)}\n\n"
+            await asyncio.sleep(1.0 / INSTRUMENT_STREAM_RATE_HZ)
+
+    def stream_wrapper():
+        async def inner():
+            async for item in generate_data_stream():
+                yield item
+        # This is a common pattern to bridge async generators with sync frameworks
+        loop = asyncio.new_event_loop()
+        asyncio.set_event_loop(loop)
+        gen = inner()
+        try:
+            while True:
+                yield loop.run_until_complete(gen.__anext__())
+        except StopAsyncIteration:
+            pass # Generator finished
+        except Exception as e:
+            logger.error(f"{req_id}: Error in stream wrapper: {e}")
+        finally:
+            loop.close()
+
+    return Response(stream_with_context(stream_wrapper()), mimetype='text/event-stream')
+
+
+
+@system.route("/meshCommunityServeProcessor", methods=["POST"])
 async def handle_mesh_community_serve_processor():
 
     """
@@ -9416,8 +9628,8 @@ async def handle_mesh_community_serve_processor():
         logger.info(
             f"🏁 ZephyMesh ELP0 Processor Request {request_id} handled in {duration_req:.2f} ms. Final Status: {final_status_code}")
 
-# === NEW: Zephy Cortex Configuration API ===
-@app.route("/ZephyCortexConfig", methods=["GET", "POST"])
+# === Zephy Cortex Configuration API ===
+@system.route("/ZephyCortexConfig", methods=["GET", "POST"])
 def handle_cortex_config():
     """
     GET: Returns the current adjustable configuration.
@@ -9497,8 +9709,8 @@ def handle_cortex_config():
 # AdelaideAlbertCortex -> Flask Routes Section
 
 #=============[Self Test Status]===============
-@app.route("/v1/primedready", methods=["GET"])
-@app.route("/primedready", methods=["GET"])
+@system.route("/v1/primedready", methods=["GET"])
+@system.route("/primedready", methods=["GET"])
 def handle_primed_ready_status():
     """
     Custom endpoint for the GUI to check if the initial startup benchmark
@@ -9506,7 +9718,7 @@ def handle_primed_ready_status():
     """
     req_id = f"req-primedready-{uuid.uuid4()}"
     logger.info(f"🚀 {req_id}: Received GET /primedready status check.")
-    elapsed_seconds = time.monotonic() - APP_START_TIME
+    elapsed_seconds = time.monotonic() - SYSTEM_START_TIME
     expected_duration_seconds = 60.0
     if SYSTEM_IS_PRIMING and elapsed_seconds < expected_duration_seconds:
         # If we are still within the expected time, show progress.
@@ -9539,10 +9751,125 @@ def handle_primed_ready_status():
     return jsonify(status_payload), 200
 
 
+# --- Zephy specific SSE Notification Endpoint ---
+@system.route("/v1/chat/notification")
+def sse_notification_stream():
+    """
+    This endpoint streams notifications to the client using SSE.
+    """
+    logger.info("SSE Client connected to notification stream.")
+    def generate():
+        try:
+            yield format_sse_notification({"status": "connected"}, event="connection_ack")
+            while True:
+                try:
+                    message = sse_notification_queue.get(timeout=30)
+                    if message is None:
+                        break
+                    yield message
+                except queue.Empty:
+                    yield ": keep-alive\n\n"
+        except GeneratorExit:
+            logger.warning("SSE notification stream generator exited (client likely disconnected).")
+
+    return Response(stream_with_context(generate()), mimetype="text/event-stream")
+
+
+@system.route("/v1/chat/responsezeph", methods=["POST"])
+async def handle_zephyrine_chat_response():
+    """
+    A custom, high-performance chat endpoint that uses `async def` for the fastest
+    possible ELP1 response time. It does NOT support streaming and will return
+    an error if `stream=true` is requested.
+    """
+    start_req_time_main_handler = time.monotonic()
+    request_id = f"req-zeph-{uuid.uuid4()}"
+    logger.info(f"🚀 Zeph Custom Async Chat Request ID: {request_id}")
+
+    db: Session = g.db
+    resp_obj: Optional[Response] = None
+    session_id_for_logs: str = f"zeph_req_{request_id}_unassigned"
+    final_response_status_code: int = 500
+
+    try:
+        raw_request_data_dict = request.get_json()
+        if not raw_request_data_dict: raise ValueError("Empty JSON payload.")
+
+        messages_from_req = raw_request_data_dict.get("messages", [])
+        stream_requested = raw_request_data_dict.get("stream", False)
+        session_id_for_logs = raw_request_data_dict.get("session_id", f"zeph_req_{request_id}")
+
+        # CRITICAL: Reject streaming requests to this specific endpoint
+        if stream_requested:
+            logger.warning(
+                f"{request_id}: Request rejected. The /v1/chat/responsezeph/ endpoint does not support streaming.")
+            resp_data_err, status_code_val = _create_openai_error_response(
+                "Streaming is not supported on this endpoint. Use /v1/chat/completions for streaming.",
+                err_type="invalid_request_error", status_code=400)
+            return Response(json.dumps(resp_data_err), status=status_code_val, mimetype='application/json')
+
+        if not cortex_text_interaction: raise RuntimeError("cortex_text_interaction instance not available.")
+        cortex_text_interaction.current_session_id = session_id_for_logs
+
+        user_input_from_req, image_b64_from_req = "", None
+        last_user_msg_obj = next((msg for msg in reversed(messages_from_req) if msg.get("role") == "user"), None)
+        if not last_user_msg_obj: raise ValueError("No message with role 'user' found.")
+        content_from_user_msg = last_user_msg_obj.get("content")
+        if isinstance(content_from_user_msg, str):
+            user_input_from_req = content_from_user_msg
+        elif isinstance(content_from_user_msg, list):
+            for part in content_from_user_msg:
+                if part.get("type") == "text":
+                    user_input_from_req += part.get("text", "")
+                elif part.get("type") == "image_url":
+                    image_b64_from_req = part.get("image_url", {}).get("url", "").split(",", 1)[1]
+        if not user_input_from_req and not image_b64_from_req: raise ValueError("No text or image content provided.")
+
+        # Launch ELP0 background task in a thread (non-blocking)
+        def run_bg_task(user_in, sess_id, img_b64):
+            loop = asyncio.new_event_loop()
+            asyncio.set_event_loop(loop)
+            db_session = SessionLocal()
+            try:
+                loop.run_until_complete(
+                    cortex_text_interaction.background_generate(db=db_session, user_input=user_in, session_id=sess_id,
+                                                                classification="chat_complex", image_b64=img_b64))
+            finally:
+                if db_session: db_session.close()
+                loop.close()
+
+        threading.Thread(target=run_bg_task, args=(user_input_from_req, session_id_for_logs, image_b64_from_req),
+                         daemon=True).start()
+
+        # Await the fast ELP1 response directly
+        direct_response_text = await cortex_text_interaction.direct_generate(db, user_input_from_req,
+                                                                             session_id_for_logs,
+                                                                             image_b64=image_b64_from_req)
+
+        # Format and return the non-streaming JSON response
+        resp_data_ok = _format_openai_chat_response(direct_response_text, model_name=META_MODEL_NAME_NONSTREAM)
+        resp_obj = jsonify(resp_data_ok)
+        final_response_status_code = 200
+
+    except Exception as e:
+        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in Zeph async handler:")
+        err_msg = f"Internal server error: {type(e).__name__}"
+        resp_data, status_code = _create_openai_error_response(err_msg, status_code=500)
+        resp_obj = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
+        final_response_status_code = status_code
+
+    finally:
+        duration_req = (time.monotonic() - start_req_time_main_handler) * 1000
+        logger.info(
+            f"🏁 Zeph Custom Async Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
+
+    return resp_obj
+
+# =-=-=-=-=-=-=--=-= [ Zephy Specific HTTP API END ] =-=-=-=-=-=-=-=-=
 #==============================[openAI API (Most standard) Behaviour]==============================
-@app.route("/v1/embeddings", methods=["POST"])
-@app.route("/api/embed", methods=["POST"])
-@app.route("/api/embeddings", methods=["POST"])
+@system.route("/v1/embeddings", methods=["POST"])
+@system.route("/api/embed", methods=["POST"])
+@system.route("/api/embeddings", methods=["POST"])
 async def handle_openai_embeddings():
     start_req = time.monotonic()
     request_id = f"req-emb-{uuid.uuid4()}" # Unique ID for this request
@@ -9677,8 +10004,8 @@ async def handle_openai_embeddings():
 
 # AdelaideAlbertCortex -> Flask Routes Section
 
-@app.route("/v1/completions", methods=["POST"])
-@app.route("/api/generate", methods=["POST"])
+@system.route("/v1/completions", methods=["POST"])
+@system.route("/api/generate", methods=["POST"])
 async def handle_legacy_completions():
     """
     Asynchronous and CONTEXT-SAFE version of the handler for the legacy OpenAI /v1/completions endpoint.
@@ -9785,122 +10112,8 @@ async def handle_legacy_completions():
     return resp
 
 
-# --- NEW: SSE Notification Endpoint ---
-@app.route("/v1/chat/notification")
-def sse_notification_stream():
-    """
-    This endpoint streams notifications to the client using SSE.
-    """
-    logger.info("SSE Client connected to notification stream.")
-    def generate():
-        try:
-            yield format_sse_notification({"status": "connected"}, event="connection_ack")
-            while True:
-                try:
-                    message = sse_notification_queue.get(timeout=30)
-                    if message is None:
-                        break
-                    yield message
-                except queue.Empty:
-                    yield ": keep-alive\n\n"
-        except GeneratorExit:
-            logger.warning("SSE notification stream generator exited (client likely disconnected).")
 
-    return Response(stream_with_context(generate()), mimetype="text/event-stream")
-
-
-@app.route("/v1/chat/responsezeph", methods=["POST"])
-async def handle_zephyrine_chat_response():
-    """
-    A custom, high-performance chat endpoint that uses `async def` for the fastest
-    possible ELP1 response time. It does NOT support streaming and will return
-    an error if `stream=true` is requested.
-    """
-    start_req_time_main_handler = time.monotonic()
-    request_id = f"req-zeph-{uuid.uuid4()}"
-    logger.info(f"🚀 Zeph Custom Async Chat Request ID: {request_id}")
-
-    db: Session = g.db
-    resp_obj: Optional[Response] = None
-    session_id_for_logs: str = f"zeph_req_{request_id}_unassigned"
-    final_response_status_code: int = 500
-
-    try:
-        raw_request_data_dict = request.get_json()
-        if not raw_request_data_dict: raise ValueError("Empty JSON payload.")
-
-        messages_from_req = raw_request_data_dict.get("messages", [])
-        stream_requested = raw_request_data_dict.get("stream", False)
-        session_id_for_logs = raw_request_data_dict.get("session_id", f"zeph_req_{request_id}")
-
-        # CRITICAL: Reject streaming requests to this specific endpoint
-        if stream_requested:
-            logger.warning(
-                f"{request_id}: Request rejected. The /v1/chat/responsezeph/ endpoint does not support streaming.")
-            resp_data_err, status_code_val = _create_openai_error_response(
-                "Streaming is not supported on this endpoint. Use /v1/chat/completions for streaming.",
-                err_type="invalid_request_error", status_code=400)
-            return Response(json.dumps(resp_data_err), status=status_code_val, mimetype='application/json')
-
-        if not cortex_text_interaction: raise RuntimeError("cortex_text_interaction instance not available.")
-        cortex_text_interaction.current_session_id = session_id_for_logs
-
-        user_input_from_req, image_b64_from_req = "", None
-        last_user_msg_obj = next((msg for msg in reversed(messages_from_req) if msg.get("role") == "user"), None)
-        if not last_user_msg_obj: raise ValueError("No message with role 'user' found.")
-        content_from_user_msg = last_user_msg_obj.get("content")
-        if isinstance(content_from_user_msg, str):
-            user_input_from_req = content_from_user_msg
-        elif isinstance(content_from_user_msg, list):
-            for part in content_from_user_msg:
-                if part.get("type") == "text":
-                    user_input_from_req += part.get("text", "")
-                elif part.get("type") == "image_url":
-                    image_b64_from_req = part.get("image_url", {}).get("url", "").split(",", 1)[1]
-        if not user_input_from_req and not image_b64_from_req: raise ValueError("No text or image content provided.")
-
-        # Launch ELP0 background task in a thread (non-blocking)
-        def run_bg_task(user_in, sess_id, img_b64):
-            loop = asyncio.new_event_loop()
-            asyncio.set_event_loop(loop)
-            db_session = SessionLocal()
-            try:
-                loop.run_until_complete(
-                    cortex_text_interaction.background_generate(db=db_session, user_input=user_in, session_id=sess_id,
-                                                                classification="chat_complex", image_b64=img_b64))
-            finally:
-                if db_session: db_session.close()
-                loop.close()
-
-        threading.Thread(target=run_bg_task, args=(user_input_from_req, session_id_for_logs, image_b64_from_req),
-                         daemon=True).start()
-
-        # Await the fast ELP1 response directly
-        direct_response_text = await cortex_text_interaction.direct_generate(db, user_input_from_req,
-                                                                             session_id_for_logs,
-                                                                             image_b64=image_b64_from_req)
-
-        # Format and return the non-streaming JSON response
-        resp_data_ok = _format_openai_chat_response(direct_response_text, model_name=META_MODEL_NAME_NONSTREAM)
-        resp_obj = jsonify(resp_data_ok)
-        final_response_status_code = 200
-
-    except Exception as e:
-        logger.exception(f"{request_id}: 🔥🔥 UNHANDLED exception in Zeph async handler:")
-        err_msg = f"Internal server error: {type(e).__name__}"
-        resp_data, status_code = _create_openai_error_response(err_msg, status_code=500)
-        resp_obj = Response(json.dumps(resp_data), status=status_code, mimetype='application/json')
-        final_response_status_code = status_code
-
-    finally:
-        duration_req = (time.monotonic() - start_req_time_main_handler) * 1000
-        logger.info(
-            f"🏁 Zeph Custom Async Request {request_id} handled in {duration_req:.2f} ms. Status: {final_response_status_code}")
-
-    return resp_obj
-
-
-@app.route("/v1/chat/completions", methods=["POST"])
+@system.route("/v1/chat/completions", methods=["POST"])
 async def handle_openai_chat_completion():
     """
     Asynchronous and CONTEXT-SAFE version of the OpenAI chat completion handler.
@@ -10030,7 +10243,7 @@ async def handle_openai_chat_completion():
     return resp_obj
 
 
-@app.route("/v1/moderations", methods=["POST"])
+@system.route("/v1/moderations", methods=["POST"])
 async def handle_openai_moderations():
     """
     Handles requests mimicking OpenAI's Moderations endpoint.
@@ -10224,7 +10437,7 @@ async def handle_openai_moderations():
     return resp
 
 
-@app.route("/v1/models", methods=["GET"])
+@system.route("/v1/models", methods=["GET"])
 async def handle_openai_models():
     """
     Asynchronous version of the handler for OpenAI's /v1/models endpoint.
@@ -10303,7 +10516,7 @@ async def handle_openai_models():
 
 
 #==============================[Ollama Behaviour]==============================
-@app.route("/api/chat", methods=["POST"])
+@system.route("/api/chat", methods=["POST"])
 async def handle_ollama_chat():
     """
     Asynchronous and CONTEXT-SAFE version of the handler for Ollama's /api/chat endpoint.
@@ -10432,7 +10645,7 @@ async def handle_ollama_chat():
     return resp_obj
 
 
-@app.route("/api/tags", methods=["GET", "HEAD"])
+@system.route("/api/tags", methods=["GET", "HEAD"])
 async def handle_ollama_tags():
     """
     Asynchronous version of the handler for Ollama's /api/tags endpoint.
@@ -10492,7 +10705,7 @@ async def handle_ollama_tags():
     return response
 
 
-@app.route("/v1/audio/transcriptions", methods=["POST"])
+@system.route("/v1/audio/transcriptions", methods=["POST"])
 async def handle_openai_asr_transcriptions():
     """
     Asynchronous and CONTEXT-SAFE handler for OpenAI-style audio transcriptions.
@@ -10712,9 +10925,9 @@ async def handle_openai_asr_transcriptions():
 
     return resp
 
-# === NEW: Translation Audio Convo ===
+# === Translation Audio Convo ===
 
-@app.route("/v1/audio/translations", methods=["POST"])
+@system.route("/v1/audio/translations", methods=["POST"])
 async def handle_openai_audio_translations():
     start_req_time = time.monotonic()
     request_id = f"req-translate-{uuid.uuid4()}"
@@ -10916,7 +11129,6 @@ async def handle_openai_audio_translations():
         ))
         temp_input_audio_path = None  # Background task now owns the temp file for its ASR pass
 
-    # ... (existing except ValueError, FileNotFoundError, RuntimeError, TaskInterruptedException, Exception as e blocks from response #67) ...
     # Ensure all db operations and file operations in except/finally are wrapped in asyncio.to_thread
     except ValueError as ve:
         logger.warning(f"{request_id}: Invalid Audio Translation request: {ve}")
@@ -10986,8 +11198,8 @@ async def handle_openai_audio_translations():
     return resp
 
 
-# === NEW: OpenAI Compatible TTS Endpoint ===
-@app.route("/v1/audio/speech", methods=["POST"])
+# === OpenAI Compatible TTS Endpoint ===
+@system.route("/v1/audio/speech", methods=["POST"])
 async def handle_openai_tts():  # <<< CHANGED to async def
     """
     Handles requests mimicking OpenAI's Text-to-Speech endpoint.
@@ -11137,7 +11349,7 @@ async def handle_openai_tts():  # <<< CHANGED to async def
     return resp
 
 # === NEW: OpenAI Compatible Image Generation Endpoint (Stub) ===
-@app.route("/v1/images/generations", methods=["POST"])
+@system.route("/v1/images/generations", methods=["POST"])
 async def handle_openai_image_generations():  # Route is async
     start_req = time.monotonic()
     request_id = f"req-img-gen-{uuid.uuid4()}"
@@ -11307,7 +11519,8 @@ async def handle_openai_image_generations():  # Route is async
             list_of_one_image_dict, image_gen_err_msg = await cortex_backbone_provider.generate_image_async(
                 prompt=refined_prompt_for_generation,
                 image_base64=None,  # This endpoint is for txt2img primarily
-                priority=ELP1
+                priority=ELP1,
+                apply_watermark=True
             )
             if image_gen_err_msg:
                 logger.error(f"{request_id}: Image generation failed for attempt {i + 1}: {image_gen_err_msg}")
@@ -11415,7 +11628,7 @@ async def handle_openai_image_generations():  # Route is async
 
 # --- NEW: Dummy Handlers for Pretending this is Ollama Model Management ---
 
-@app.route("/api/pull", methods=["POST"])
+@system.route("/api/pull", methods=["POST"])
 async def handle_api_pull_dummy():
     """Async dummy endpoint for /api/pull."""
     logger.warning("⚠️ Received async request for dummy endpoint: /api/pull Ollama impostor activated!")
@@ -11428,37 +11641,37 @@ async def handle_api_pull_dummy():
         yield json.dumps({"status": "success"}) + "\n"
     return Response(generate_dummy_pull(), mimetype='application/x-ndjson')
 
-@app.route("/api/push", methods=["POST"])
+@system.route("/api/push", methods=["POST"])
 async def handle_api_push_dummy():
     """Async dummy endpoint for /api/push."""
     logger.warning("⚠️ Received async request for dummy endpoint: /api/push Ollama impostor activated!")
     return jsonify({"error": "Model pushing not implemented in this server"}), 501
 
-@app.route("/api/show", methods=["POST"])
+@system.route("/api/show", methods=["POST"])
 async def handle_api_show_dummy():
     """Async dummy endpoint for /api/show."""
     logger.warning("⚠️ Received async request for dummy endpoint: /api/show Ollama impostor activated!")
     return jsonify({"error": "Showing model details not implemented in this server"}), 501
 
-@app.route("/api/delete", methods=["DELETE"])
+@system.route("/api/delete", methods=["DELETE"])
 async def handle_api_delete_dummy():
     """Async dummy endpoint for /api/delete."""
     logger.warning("⚠️ Received async request for dummy endpoint: /api/delete Ollama impostor activated!")
     return jsonify({"status": "Model deletion not implemented"}), 501
 
-@app.route("/api/create", methods=["POST"])
+@system.route("/api/create", methods=["POST"])
 async def handle_api_create_dummy():
     """Async dummy endpoint for /api/create."""
     logger.warning("⚠️ Received async request for dummy endpoint: /api/create Ollama impostor activated!")
     return jsonify({"error": "Model creation from Modelfile not implemented"}), 501
 
-@app.route("/api/copy", methods=["POST"])
+@system.route("/api/copy", methods=["POST"])
 async def handle_api_copy_dummy():
     """Async dummy endpoint for /api/copy."""
     logger.warning("⚠️ Received async request for dummy endpoint: /api/copy Ollama impostor activated!")
     return jsonify({"error": "Model copying not implemented"}), 501
 
-@app.route("/api/blobs/<digest>", methods=["POST", "HEAD"])
+@system.route("/api/blobs/<digest>", methods=["POST", "HEAD"])
 async def handle_api_blobs_dummy(digest: str):
     """Async dummy endpoint for /api/blobs."""
     logger.warning(f"⚠️ Received async request for dummy endpoint: /api/blobs/{digest} Ollama impostor activated!")
@@ -11467,7 +11680,7 @@ async def handle_api_blobs_dummy(digest: str):
     else: # POST
         return jsonify({"error": "Blob creation/checking not implemented"}), 501
 
-@app.route("/api/version", methods=["GET", "HEAD"])
+@system.route("/api/version", methods=["GET", "HEAD"])
 async def handle_api_version():
     """Async endpoint for /api/version."""
     logger.info("Received async request for /api/version")
@@ -11475,7 +11688,7 @@ async def handle_api_version():
     response_data = {"version": version_string}
     return jsonify(response_data), 200
 
-@app.route("/api/ps", methods=["GET"])
+@system.route("/api/ps", methods=["GET"])
 async def handle_api_ps_dummy():
     """Async dummy endpoint for /api/ps."""
     logger.warning("⚠️ Received async request for dummy endpoint: /api/ps (Not Implemented)")
@@ -11484,7 +11697,7 @@ async def handle_api_ps_dummy():
 
 #-=-=-=-=-=-
 
-@app.route("/v1/models/<path:model>", methods=["GET"])
+@system.route("/v1/models/<path:model>", methods=["GET"])
 async def handle_openai_retrieve_model(model: str):
     """
     Asynchronous version of the handler for retrieving a single model's details,
@@ -11549,7 +11762,7 @@ except Exception as e:
 
 ## Fine tuning API Call handler
 
-@app.route("/v1/fine_tuning/jobs", methods=["POST"])
+@system.route("/v1/fine_tuning/jobs", methods=["POST"])
 async def handle_create_pseudo_fine_tuning_job():
     start_req_time = time.monotonic()
     request_id = f"req-pseudo-ft-job-{uuid.uuid4()}"
@@ -11698,7 +11911,7 @@ async def handle_create_pseudo_fine_tuning_job():
 # (GET /jobs, GET /jobs/{id}, POST /jobs/{id}/cancel, GET /jobs/{id}/events)
 # Example for GET /v1/fine_tuning/jobs:
 
-@app.route("/v1/fine_tuning/jobs", methods=["GET"])
+@system.route("/v1/fine_tuning/jobs", methods=["GET"])
 async def handle_list_pseudo_fine_tuning_jobs():
     request_id = f"req-pseudo-ft-list-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received GET /v1/fine_tuning/jobs (Pseudo Fine-Tune Info)")
@@ -11726,7 +11939,7 @@ async def handle_list_pseudo_fine_tuning_jobs():
     }
     return jsonify(response_body), 200
 
-@app.route("/v1/fine_tuning/jobs/<string:fine_tuning_job_id>", methods=["GET"])
+@system.route("/v1/fine_tuning/jobs/<string:fine_tuning_job_id>", methods=["GET"])
 def handle_retrieve_fine_tuning_job(fine_tuning_job_id: str):
     request_id = f"req-ft-retrieve-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received GET /v1/fine_tuning/jobs/{fine_tuning_job_id} (Placeholder)")
@@ -11765,7 +11978,7 @@ def handle_retrieve_fine_tuning_job(fine_tuning_job_id: str):
         return jsonify(resp_data), 404
 
 
-@app.route("/v1/fine_tuning/jobs/<string:fine_tuning_job_id>/cancel", methods=["POST"])
+@system.route("/v1/fine_tuning/jobs/<string:fine_tuning_job_id>/cancel", methods=["POST"])
 def handle_cancel_fine_tuning_job(fine_tuning_job_id: str):
     request_id = f"req-ft-cancel-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received POST /v1/fine_tuning/jobs/{fine_tuning_job_id}/cancel (Placeholder)")
@@ -11796,7 +12009,7 @@ def handle_cancel_fine_tuning_job(fine_tuning_job_id: str):
         return jsonify(resp_data), 404
 
 
-@app.route("/v1/fine_tuning/jobs/<string:fine_tuning_job_id>/events", methods=["GET"])
+@system.route("/v1/fine_tuning/jobs/<string:fine_tuning_job_id>/events", methods=["GET"])
 def handle_list_fine_tuning_job_events(fine_tuning_job_id: str):
     request_id = f"req-ft-events-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received GET /v1/fine_tuning/jobs/{fine_tuning_job_id}/events (Placeholder)")
@@ -11846,7 +12059,7 @@ def handle_list_fine_tuning_job_events(fine_tuning_job_id: str):
 
 
 ##v1/files openAI expected to be?
-@app.route("/v1/files", methods=["POST"])
+@system.route("/v1/files", methods=["POST"])
 async def handle_upload_and_ingest_file():
     start_req_time = time.monotonic()
     request_id = f"req-file-upload-{uuid.uuid4()}"
@@ -11957,7 +12170,7 @@ async def handle_upload_and_ingest_file():
     return Response(json.dumps(response_body), status=final_status_code, mimetype='application/json')
 
 
-@app.route("/v1/files", methods=["GET"])
+@system.route("/v1/files", methods=["GET"])
 async def handle_list_files_ingestion_stub():
     request_id = f"req-file-list-ingest-stub-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received GET /v1/files (Ingestion Info Placeholder)")
@@ -11988,7 +12201,7 @@ async def handle_list_files_ingestion_stub():
     return jsonify(response_body), 200
 
 
-@app.route("/v1/files/<string:file_id>", methods=["GET"])
+@system.route("/v1/files/<string:file_id>", methods=["GET"])
 async def handle_retrieve_file_ingestion_stub(file_id: str):
     request_id = f"req-file-retrieve-ingest-stub-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received GET /v1/files/{file_id} (Ingestion Info Placeholder)")
@@ -12014,7 +12227,7 @@ async def handle_retrieve_file_ingestion_stub(file_id: str):
         return jsonify(resp_data), 404
 
 
-@app.route("/v1/files/<string:file_id>", methods=["DELETE"])
+@system.route("/v1/files/<string:file_id>", methods=["DELETE"])
 async def handle_delete_file_ingestion_stub(file_id: str):
     request_id = f"req-file-delete-ingest-stub-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received DELETE /v1/files/{file_id} (Ingestion Info Placeholder)")
@@ -12028,7 +12241,7 @@ async def handle_delete_file_ingestion_stub(file_id: str):
     return jsonify(response_body), 200
 
 
-@app.route("/v1/files/<string:file_id>/content", methods=["GET"])
+@system.route("/v1/files/<string:file_id>/content", methods=["GET"])
 async def handle_retrieve_file_content_ingestion_stub(file_id: str):
     request_id = f"req-file-content-ingest-stub-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received GET /v1/files/{file_id}/content (Ingestion Info Placeholder)")
@@ -12041,7 +12254,7 @@ async def handle_retrieve_file_content_ingestion_stub(file_id: str):
     return jsonify(resp_data), 404  # OpenAI returns 404 if content not retrievable for a file
 
 
-@app.route("/v1/files/<string:file_id>", methods=["GET"])
+@system.route("/v1/files/<string:file_id>", methods=["GET"])
 async def handle_retrieve_file_metadata_stub(file_id: str):
     """
     Async endpoint to retrieve metadata for a locally indexed file from the database.
@@ -12082,7 +12295,7 @@ async def handle_retrieve_file_metadata_stub(file_id: str):
         return jsonify(resp_data), 404
 
 
-@app.route("/v1/files/<string:file_id>", methods=["DELETE"])
+@system.route("/v1/files/<string:file_id>", methods=["DELETE"])
 def handle_delete_file_stub(file_id: str):
     request_id = f"req-file-delete-stub-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received DELETE /v1/files/{file_id} (Placeholder)")
@@ -12105,7 +12318,7 @@ def handle_delete_file_stub(file_id: str):
     return jsonify(response_body), 200
 
 
-@app.route("/v1/files/<string:file_id>/content", methods=["GET"])
+@system.route("/v1/files/<string:file_id>/content", methods=["GET"])
 def handle_retrieve_file_content_stub(file_id: str):
     request_id = f"req-file-content-stub-{uuid.uuid4()}"
     logger.info(f"🚀 {request_id}: Received GET /v1/files/{file_id}/content (Placeholder/DB Lookup)")
@@ -12156,7 +12369,7 @@ def handle_retrieve_file_content_stub(file_id: str):
 
 
 # --- Assistants API Stubs ---
-@app.route("/v1/assistants", methods=["POST"])
+@system.route("/v1/assistants", methods=["POST"])
 async def create_assistant_stub():
     """Async stub for creating an Assistant."""
     request_id = f"req-assistant-create-stub-{uuid.uuid4()}"
@@ -12168,7 +12381,7 @@ async def create_assistant_stub():
         custom_status="creation_not_applicable"
     )
 
-@app.route("/v1/assistants", methods=["GET"])
+@system.route("/v1/assistants", methods=["GET"])
 async def list_assistants_stub():
     """Async stub for listing Assistants."""
     request_id = f"req-assistant-list-stub-{uuid.uuid4()}"
@@ -12180,7 +12393,7 @@ async def list_assistants_stub():
     response_body = {"object": "list", "data": [], "message": response_message}
     return jsonify(response_body), 200
 
-@app.route("/v1/assistants/<string:assistant_id>", methods=["GET"])
+@system.route("/v1/assistants/<string:assistant_id>", methods=["GET"])
 async def retrieve_assistant_stub(assistant_id: str):
     """Async stub for retrieving an Assistant."""
     request_id = f"req-assistant-retrieve-stub-{uuid.uuid4()}"
@@ -12189,7 +12402,7 @@ async def retrieve_assistant_stub(assistant_id: str):
         _create_personal_assistant_stub_response, f"/v1/assistants/{assistant_id}", "GET", resource_id=assistant_id
     )
 
-@app.route("/v1/assistants/<string:assistant_id>", methods=["POST"])
+@system.route("/v1/assistants/<string:assistant_id>", methods=["POST"])
 async def modify_assistant_stub(assistant_id: str):
     """Async stub for modifying an Assistant."""
     request_id = f"req-assistant-modify-stub-{uuid.uuid4()}"
@@ -12199,7 +12412,7 @@ async def modify_assistant_stub(assistant_id: str):
         custom_status="modification_not_applicable"
     )
 
-@app.route("/v1/assistants/<string:assistant_id>", methods=["DELETE"])
+@system.route("/v1/assistants/<string:assistant_id>", methods=["DELETE"])
 async def delete_assistant_stub(assistant_id: str):
     """Async stub for deleting an Assistant."""
     request_id = f"req-assistant-delete-stub-{uuid.uuid4()}"
@@ -12211,7 +12424,7 @@ async def delete_assistant_stub(assistant_id: str):
 
 
 # --- Threads API Stubs ---
-@app.route("/v1/threads", methods=["POST"])
+@system.route("/v1/threads", methods=["POST"])
 async def create_thread_stub():
     """Async stub for creating a Thread."""
     request_id = f"req-thread-create-stub-{uuid.uuid4()}"
@@ -12221,7 +12434,7 @@ async def create_thread_stub():
         custom_status="thread_creation_not_applicable_managed_internally"
     )
 
-@app.route("/v1/threads/<string:thread_id>", methods=["GET"])
+@system.route("/v1/threads/<string:thread_id>", methods=["GET"])
 async def retrieve_thread_stub(thread_id: str):
     """Async stub for retrieving a Thread."""
     request_id = f"req-thread-retrieve-stub-{uuid.uuid4()}"
@@ -12230,7 +12443,7 @@ async def retrieve_thread_stub(thread_id: str):
         _create_personal_assistant_stub_response, f"/v1/threads/{thread_id}", "GET", resource_id=thread_id
     )
 
-@app.route("/v1/threads/<string:thread_id>", methods=["POST"])
+@system.route("/v1/threads/<string:thread_id>", methods=["POST"])
 async def modify_thread_stub(thread_id: str):
     """Async stub for modifying a Thread."""
     request_id = f"req-thread-modify-stub-{uuid.uuid4()}"
@@ -12240,7 +12453,7 @@ async def modify_thread_stub(thread_id: str):
         custom_status="modification_not_applicable"
     )
 
-@app.route("/v1/threads/<string:thread_id>", methods=["DELETE"])
+@system.route("/v1/threads/<string:thread_id>", methods=["DELETE"])
 async def delete_thread_stub(thread_id: str):
     """Async stub for deleting a Thread."""
     request_id = f"req-thread-delete-stub-{uuid.uuid4()}"
@@ -12253,7 +12466,7 @@ async def delete_thread_stub(thread_id: str):
 # --- Messages API Stubs (within Threads) ---
 # --- Asynchronous Messages API Stubs (within Threads) ---
 
-@app.route("/v1/threads/<string:thread_id>/messages", methods=["POST"])
+@system.route("/v1/threads/<string:thread_id>/messages", methods=["POST"])
 async def create_message_stub(thread_id: str):
     """
     Async stub that simulates creating a message. It acknowledges the received message
@@ -12293,7 +12506,7 @@ async def create_message_stub(thread_id: str):
     return jsonify(response_body), 200
 
 
-@app.route("/v1/threads/<string:thread_id>/messages", methods=["GET"])
+@system.route("/v1/threads/<string:thread_id>/messages", methods=["GET"])
 async def list_messages_stub(thread_id: str):
     """
     Async stub that simulates listing messages in a thread. It returns a list
@@ -12342,7 +12555,7 @@ async def list_messages_stub(thread_id: str):
 
 # --- Asynchronous Runs API Stubs (within Threads) ---
 
-@app.route("/v1/threads/<string:thread_id>/runs", methods=["POST"])
+@system.route("/v1/threads/<string:thread_id>/runs", methods=["POST"])
 async def create_run_stub(thread_id: str):
     """
     Async stub that simulates creating and completing a run instantly,
@@ -12378,7 +12591,7 @@ async def create_run_stub(thread_id: str):
     return jsonify(response_body), 200
 
 
-@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>", methods=["GET"])
+@system.route("/v1/threads/<string:thread_id>/runs/<string:run_id>", methods=["GET"])
 async def retrieve_run_stub(thread_id: str, run_id: str):
     """
     Async stub that simulates retrieving a run, always showing it as completed.
@@ -12412,7 +12625,7 @@ async def retrieve_run_stub(thread_id: str, run_id: str):
     return jsonify(response_body), 200
 
 
-@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/cancel", methods=["POST"])
+@system.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/cancel", methods=["POST"])
 async def cancel_run_stub(thread_id: str, run_id: str):
     """
     Async stub that simulates canceling a run.
@@ -12446,7 +12659,7 @@ async def cancel_run_stub(thread_id: str, run_id: str):
     return jsonify(response_body), 200
 
 
-@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/steps", methods=["GET"])
+@system.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/steps", methods=["GET"])
 async def list_run_steps_stub(thread_id: str, run_id: str):
     """
     Async stub that simulates listing run steps, returning a single simulated step.
@@ -12488,7 +12701,7 @@ async def list_run_steps_stub(thread_id: str, run_id: str):
     return jsonify(response_body), 200
 
 
-@app.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/submit_tool_outputs", methods=["POST"])
+@system.route("/v1/threads/<string:thread_id>/runs/<string:run_id>/submit_tool_outputs", methods=["POST"])
 async def submit_tool_outputs_stub(thread_id: str, run_id: str):
     """
     Async stub that simulates submitting tool outputs.
@@ -12521,51 +12734,6 @@ async def submit_tool_outputs_stub(thread_id: str, run_id: str):
         }
     }
     return jsonify(response_body), 200
-
-#============== Dove Section ===============
-
-
-@app.route("/instrumentviewportdatastreamlowpriopreview", methods=["GET"])
-async def handle_instrument_viewport_stream():
-    req_id = f"req-instr-stream-async-{uuid.uuid4()}"
-    logger.info(f"🚀 {req_id}: Async SSE connection opened for instrument data stream.")
-
-    async def generate_data_stream():
-        while True:
-            def get_data_sync():
-                data_packet = stella_icarus_daemon_manager.get_data_from_queue()
-                if data_packet is None:
-                    sim_data = _generate_simulated_avionics_data()
-                    data_packet = {
-                        "source_daemon": "System_Simulation_Fallback",
-                        "timestamp_py": datetime.datetime.now(datetime.timezone.utc).isoformat(),
-                        "data": sim_data
-                    }
-                return data_packet
-            data_packet = await asyncio.to_thread(get_data_sync)
-            yield f"data: {json.dumps(data_packet)}\n\n"
-            await asyncio.sleep(1.0 / INSTRUMENT_STREAM_RATE_HZ)
-
-    def stream_wrapper():
-        async def inner():
-            async for item in generate_data_stream():
-                yield item
-        # This is a common pattern to bridge async generators with sync frameworks
-        loop = asyncio.new_event_loop()
-        asyncio.set_event_loop(loop)
-        gen = inner()
-        try:
-            while True:
-                yield loop.run_until_complete(gen.__anext__())
-        except StopAsyncIteration:
-            pass # Generator finished
-        except Exception as e:
-            logger.error(f"{req_id}: Error in stream wrapper: {e}")
-        finally:
-            loop.close()
-
-    return Response(stream_with_context(stream_wrapper()), mimetype='text/event-stream')
-
 
 
 #=============== IPC Server END ===============
