@@ -219,6 +219,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `In-Progress`
     -   **Description:** Fixed an issue where the launcher could attempt to launch a service on a port that was already occupied, causing a crash. The launcher now checks for port availability before launching services.
 
+-   **ID:** `LAUNCHER-BUG-002`
+    -   **Title:** Launcher fails to correctly configure environment in proot/Termux and has unstable Python version handling.
+    -   **Status:** `In-Progress`
+    -   **Description:** The launcher script has several issues. It struggles to correctly identify and configure the environment when running inside a proot-ed Termux environment, leading to incorrect paths and installation failures. The Python version selection logic is too aggressive and not stable, attempting to use the newest versions first instead of prioritizing known-good versions. The script also has hardcoded paths and lacks robustness in handling dependency installation failures. This commit introduces a major overhaul to address these issues by improving environment detection, implementing a "stability-first" Python version selection strategy, and making the dependency installation process more resilient.
+
 ---
 
 

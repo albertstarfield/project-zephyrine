@@ -11,7 +11,6 @@ tqdm
 requests
 aria2p
 pandas
-pyarrow
 frontend
 fastparquet
 libp2p
@@ -21,6 +20,8 @@ psutil
 md_to_pdf
 reportlab
 dotenv
+rich
+textual
 
 
 # fitz # This is the import name for PyMuPDF; PyMuPDF below is the package to install
@@ -32,7 +33,7 @@ flask
 flask[async]
 Flask-Cors
 hypercorn
-# uvicorn>=0.15             # Alternative ASGI server (optional) - Kept commented
+# uvicorn>=0.15             # Alternative ASGI server (optional) - Kept commented No longer needed
 werkzeug
 
 # --- AI & Language Model Libraries ---
@@ -42,7 +43,7 @@ langchain-community
 
 # LLM Provider Integrations
 langchain-ollama
-langchain-fireworks
+langchain-fireworks >= 1.0.0
 llama-cpp-python
                             # Note: Custom build might be handled by launcher.py
 
@@ -70,11 +71,11 @@ dotenv
 loguru
 Pillow
 pillow-avif-plugin
-numpy
+numpy>=2.3.4
 python-Levenshtein
 thefuzz
 zstandard
-datasets
+datasets >= 4.3.0
 easyocr
 
 # --- Document Processing & Text Extraction ---
@@ -93,11 +94,12 @@ pdf2image
 # Note: These seem extensive and might be for a specific TTS/STT pipeline.
 # Verify if all are strictly needed for the current core functionality.
 txtsplit
-torch
+torch >= 2.9.0
 torchaudio
+torchcodec
 cached_path
 transformers
-num2words
+#num2words>=0.5.14 #MAL-2025-6794 Virus detected, Supply Chain attack detected
 unidic-lite
 unidic
 mecab-python3
