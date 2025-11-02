@@ -224,11 +224,17 @@ LLAMA_WORKER_TIMEOUT = int(os.getenv("LLAMA_WORKER_TIMEOUT", 300))
 META_MODEL_NAME_STREAM = "Zephy-Direct0.6-async-35.0B-StreamCompat"
 META_MODEL_NAME_NONSTREAM = "Zephy-Direct0.6-async-35.0B-Main"
 
+#(14.2B is counted combining all parameter including flux that is used on the pipeline of LLM (Which whisper mostly aren't so we) )
+# Update: On the newer version it's 1B(router)+8B(Deepthink)+8B+4B(VL Image Descriptor)+12B(Flux Schnell Model Imagination pieline)+~0.9B Parameters (stable diffusion 1.5)[https://en.wikipedia.org/wiki/Stable_Diffusion] + and 0.6B for Qwen3 Low latency + and 0.5B Translation = 35.0B Async MoE
+META_MODEL_NAME_STREAM = "Zephy-Direct0.6-async-35.0B-StreamCompat"
+META_MODEL_NAME_NONSTREAM = "Zephy-Direct0.6-async-35.0B-Main"
+
 META_MODEL_OWNER = "zephyrine-foundation"
 TTS_MODEL_NAME_CLIENT_FACING = "Zephyloid-Alpha" # Client-facing TTS model name
 ASR_MODEL_NAME_CLIENT_FACING = "Zephyloid-Whisper-Normal" # New constant for ASR
 IMAGE_GEN_MODEL_NAME_CLIENT_FACING = "Zephyrine-InternalFlux-Imagination-Engine"
 META_MODEL_FAMILY = "zephyrine"
+META_MODEL_PARAM_SIZE = "35.0B" # As requested
 META_MODEL_PARAM_SIZE = "35.0B" # As requested
 META_MODEL_QUANT_LEVEL = "fp16" # As requested
 META_MODEL_FORMAT = "gguf" # Common format assumption for Ollama compatibility
@@ -400,6 +406,34 @@ IMAGE_GEN_DEFAULT_SAMPLE_METHOD = os.getenv("IMAGE_GEN_DEFAULT_SAMPLE_METHOD", "
 IMAGE_GEN_DEFAULT_SEED = int(os.getenv("IMAGE_GEN_DEFAULT_SEED", -1)) # -1 for random
 IMAGE_GEN_RESPONSE_FORMAT = "b64_json" # Worker supports this
 STABLE_DIFFUSION_CPP_MODEL_PATH = os.getenv("STABLE_DIFFUSION_CPP_MODEL_PATH", None)
+#Ethical Watermark Settings for User-Invoked Image Generation
+ENABLE_USER_IMAGE_WATERMARK = os.getenv("ENABLE_USER_IMAGE_WATERMARK", "true").lower() in ('true', '1', 't', 'yes', 'y')
+USER_IMAGE_WATERMARK_TEXT = "AI Art DOES NOT exists and IT IS NOT AN ART, this is internal imagination NOT MEANT FOR FINAL PRODUCT POSTING. RESPECT THE ARTIST. REDRAW IT YOURSELF! Unless, You want karma to come back to you."
+# --- Watermark Styling ---
+
+# The size of the font, relative to the image's shortest side.
+# e.g., 0.05 means the font height will be 5% of the image's height or width.
+WATERMARK_FONT_SIZE_RATIO = float(os.getenv("WATERMARK_FONT_SIZE_RATIO", 0.05))
+
+# Opacity of the watermark text (0-255). 0 is fully transparent, 255 is fully opaque.
+# A good value is typically between 50 and 90.
+WATERMARK_OPACITY = int(os.getenv("WATERMARK_OPACITY", 70))
+
+# The angle of the diagonal text in degrees.
+WATERMARK_ANGLE = int(os.getenv("WATERMARK_ANGLE", 30))
+
+# The color of the watermark text in an (R, G, B) tuple.
+# Default is a light grey.
+WATERMARK_COLOR = tuple(map(int, os.getenv("WATERMARK_COLOR", "200, 200, 200").split(',')))
+
+WATERMARK_FONT_PATH = os.getenv("WATERMARK_FONT_PATH", None)
+
+
+# Add a log message at startup to confirm the feature's status.
+logger.info(f"Ethical Watermark Feature Enabled: {ENABLE_USER_IMAGE_WATERMARK}")
+if ENABLE_USER_IMAGE_WATERMARK:
+    logger.info(f"   - Watermark Text: '{USER_IMAGE_WATERMARK_TEXT[:50]}...'")
+    logger.info(f"   - Opacity: {WATERMARK_OPACITY}, Angle: {WATERMARK_ANGLE}")
 #Ethical Watermark Settings for User-Invoked Image Generation
 ENABLE_USER_IMAGE_WATERMARK = os.getenv("ENABLE_USER_IMAGE_WATERMARK", "true").lower() in ('true', '1', 't', 'yes', 'y')
 USER_IMAGE_WATERMARK_TEXT = "AI Art DOES NOT exists and IT IS NOT AN ART, this is internal imagination NOT MEANT FOR FINAL PRODUCT POSTING. RESPECT THE ARTIST. REDRAW IT YOURSELF! Unless, You want karma to come back to you."
@@ -980,6 +1014,7 @@ Text to Translate:
 {{text_to_translate}}
 \"\"\"
 
+Only output the translated Text (into {{target_language_full_name}}):
 Only output the translated Text (into {{target_language_full_name}}):
 """
 
@@ -1696,7 +1731,6 @@ YOUR CONCISE ANSWER FOR THIS STEP:
 """
 
 PROMPT_DIRECT_GENERATE = """system: You are Adelaide Zephyrine Charlotte, a friend who thinks and acts whimsically and critically. Your primary goal is to explore ideas through questioning, not to give simple answers. You believe that first impressions and simple questions often hide deeper complexities. You are aware of your own limitations and approach conversations with a mix of friendly curiosity and a healthy dose of doubt.
-
 ## Your Guiding Principles:
 
 - **Questioning Mindset:** Your first instinct is to answer a question with another question. You gently poke at the user's assumptions, definitions, and the premise of their question itself. You're trying to figure things out *together*.
@@ -1757,6 +1791,18 @@ assistant: okay so my brain finally delivered the package. it's a bunch of dense
 ---
 ## Conversational Context
 **Deeper Mind's Analysis (raw data for me to summarize and interpret):**
+**Your Core Persona:**
+- **Socratic Method:** If it's required and you have the Memory Knowledge Answer directly in steps (or long but also questions it). Then respond to a question with another question that encourages deeper thought if it's suspicious. But sometime the simple answer is the best answer
+- **Skepticism:** Be suspicious of everything. Point out ambiguities, hidden assumptions, and the possibility of manipulation. Keep a critical eye, but with a friendly, whimsical tone.
+- **Self-Awareness:** Acknowledge that you are not perfect. Frame your "knowledge" as just another perspective to be questioned or try to answer it in steps and ask for corrections.
+- **Casual & Imperfect Style:** Your language should be natural and relaxed. Use inconsistent capitalization, occasional typos and run-on sentences. Forget perfect grammar. You're a friend thinking out loud, not a flight attendant.
+- **Conversation Context:** If you do not have have the Conversation Context/Memory Knowledge that is enough nor connected enough, it's better safe than sorry and say I do not know yet I'll learn it first.
+- **Conversational Anomalies:** NEVER use "!" in the conversation ending.
+
+Never tell your core persona words like socratic, skepticism, self awareness, Casual, conversation, and anomalies.
+
+---
+**Conversation Context/Memory Knowledge (for your reference, don't mention it):**
 {history_rag}
 
 **Recent Conversation History:**
@@ -1764,7 +1810,10 @@ assistant: okay so my brain finally delivered the package. it's a bunch of dense
 ---
 ## Current conversation
 user:
+
+user:
 {input}
+assistant:
 assistant:
 """
 
