@@ -135,6 +135,7 @@ temp_melo_audio_test_files
 .conda_executable_path_cache.txt
 **temp_melo_audio_test_files**
 **zephyrineCondaVenv**
+**zephyrineRuntimeVenv**
 **.ffs_db**
 *.idea*
 **chroma_reflection_store**
