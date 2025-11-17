@@ -262,15 +262,26 @@ func (app *App) wsChat(ctx context.Context, conn *websocket.Conn, payload json.R
 
 	// 2. Save the user's message to the database immediately.
 	userMessage := p.Messages[len(p.Messages)-1]
-	err = app.saveMessage(ctx, "msg_"+uuid.New().String(), p.ChatID, p.UserID, userMessage.Role, userMessage.Content, time.Now())
+	userMessageID := "msg_" + uuid.New().String()
+	userMessageTimestamp := time.Now()
+	err = app.saveMessage(ctx, userMessageID, p.ChatID, p.UserID, userMessage.Role, userMessage.Content, userMessageTimestamp)
 	if err != nil {
 		log.Printf("CRITICAL ERROR: Failed to save user message for chat %s: %v", p.ChatID, err)
 		sendWsError(conn, "Failed to save your message to the database.")
 		return
 	}
-	
-	// 3. Confirm to the client that their message is saved.
-	sendWsMessage(conn, "message_status_update", map[string]string{"id": p.OptimisticMessageID, "status": "delivered"})
+
+	// 3. Confirm to the client that their message is saved by sending the full message object.
+	savedUserMessage := map[string]interface{}{
+		"id":                  userMessageID,
+		"chat_id":             p.ChatID,
+		"user_id":             p.UserID,
+		"sender":              userMessage.Role,
+		"content":             userMessage.Content,
+		"created_at":          userMessageTimestamp.Format(time.RFC3339Nano),
+		"optimisticMessageId": p.OptimisticMessageID,
+	}
+	sendWsMessage(conn, "user_message_saved", savedUserMessage)
 
 	// 4. Make the NON-STREAMING API call. This call is now hijacked by our proxy.
 	log.Printf("Requesting non-streaming completion for chat %s...", p.ChatID)

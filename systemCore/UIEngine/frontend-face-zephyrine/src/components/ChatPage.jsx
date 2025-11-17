@@ -347,17 +347,21 @@ function ChatPage({
           currentAssistantMessageId.current = null;
           streamingStartTimeRef.current = 0;
           break;
-        case "message_status_update":
-            setAllMessages(prevMessages => 
-                prevMessages.map(msg => 
-                    msg.id === message.payload.id ? { ...msg, status: message.payload.status } : msg
-                )
-            );
-            setVisibleMessages(prevMessages => 
-                prevMessages.map(msg => 
-                    msg.id === message.payload.id ? { ...msg, status: message.payload.status } : msg
-                )
-            );
+        case "user_message_saved":
+            const savedMessage = {
+                id: message.payload.id,
+                sender: message.payload.sender,
+                content: message.payload.content,
+                chat_id: message.payload.chat_id,
+                created_at: message.payload.created_at,
+                isLoading: false,
+                status: 'delivered',
+            };
+            setAllMessages(prev => {
+                const newAllMessages = [...prev, savedMessage];
+                updateVisibleMessages(newAllMessages);
+                return newAllMessages;
+            });
             break;
         case "title_updated":
           console.log("ChatPage: Received title_updated:", message.payload);
@@ -367,8 +371,6 @@ function ChatPage({
           console.log("ChatPage: Received chat_history_list for sidebar", message.payload.chats);
           updateSidebarHistory(message.payload.chats || []); 
           break;
-        case "message_saved":
-            break;
         case "message_updated":
             console.log(`ChatPage: Message updated confirmation received: ID ${message.payload.id}`);
              if (refreshHistory) refreshHistory();
@@ -506,27 +508,18 @@ function ChatPage({
     }
     setError(null);
 
-    // 1. Prepare all the data and new state *before* calling setMessages.
-    const optimisticUserMessage = {
-      id: uuidv4(),
-      sender: "user",
-      content: contentToSend + (fileData ? `\n[File: ${fileData.name}]` : ''),
-      isLoading: true,
-      status: 'sending',
-    };
-
-    latestRequestRef.current = optimisticUserMessage.id;
-
+    // 1. Prepare history for the backend, including the new message.
     const baseMessages = isRegeneration
       ? allMessages.slice(0, allMessages.findLastIndex(m => m.sender === 'assistant'))
       : allMessages;
 
-    const newUiState = isRegeneration 
-      ? baseMessages // For regeneration, the UI state is just the history without the last AI message.
-      : [...baseMessages, optimisticUserMessage]; // For a new message, append the optimistic user message.
+    const historyForBackend = [
+        ...baseMessages.map(m => ({ role: m.sender, content: m.content })),
+        { role: 'user', content: contentToSend + (fileData ? `\n[File: ${fileData.name}]` : '') }
+    ];
 
-    const historyForBackend = newUiState
-      .map(m => ({ role: m.sender, content: m.content }));
+    const tempOptimisticId = uuidv4();
+    latestRequestRef.current = tempOptimisticId;
 
     const NON_STREAMING_MODEL = "Amaryllis-AdelaidexAlbert-MetacognitionArtificialQuellia-Stream"; // <-- REPLACE WITH YOUR EXACT NON-STREAMING MODEL NAME
     const isNonStreamingRequest = selectedModel === NON_STREAMING_MODEL;
@@ -536,13 +529,11 @@ function ChatPage({
       model: selectedModel,
       chatId: chatId,
       userId: user?.id,
-      optimisticMessageId: optimisticUserMessage.id,
-      stream: !isNonStreamingRequest, // <--- ADD THIS LINE: Set stream to false for non-streaming model, true otherwise
+      optimisticMessageId: tempOptimisticId,
+      stream: !isNonStreamingRequest,
     };
 
-    // 2. Perform all state updates and side effects sequentially.
-    setAllMessages(newUiState);
-    updateVisibleMessages(newUiState);
+    // 2. Perform all state updates and side effects sequentially, but DO NOT add the user message to the UI.
     setInputValue("");
     setFileData(null);
     setShowPlaceholder(false);
