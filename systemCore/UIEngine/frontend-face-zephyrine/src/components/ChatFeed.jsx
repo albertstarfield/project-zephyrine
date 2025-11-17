@@ -252,6 +252,19 @@ const ChatFeed = ({
                                 {renderMessageContent(message.content)}
                                 {message.error && <span className="message-error"> ({message.error})</span>}
                             </div>
+                            {message.created_at && (
+                                <div className="message-timestamp">
+                                    {new Date(message.created_at).toLocaleString('en-US', {
+                                        year: 'numeric',
+                                        month: 'numeric',
+                                        day: 'numeric',
+                                        hour: 'numeric',
+                                        minute: 'numeric',
+                                        second: 'numeric',
+                                        hour12: false // Use 24-hour format
+                                    })}
+                                </div>
+                            )}
                             {message.sender === 'user' && (
                                 <div className="message-status-icons">
                                     {message.status === 'sending' && <Check size={14} className="status-sending" />}
