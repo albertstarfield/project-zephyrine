@@ -29,7 +29,7 @@ import pytesseract
 from chromadb.config import Settings
 
 from langchain_core.messages import HumanMessage
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 from langchain_core.output_parsers import StrOutputParser
 
 # Optional imports - handle gracefully if libraries are missing

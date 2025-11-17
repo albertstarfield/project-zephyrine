@@ -10,7 +10,7 @@ from sqlalchemy.orm import Session
 from sqlalchemy.orm import attributes
 #from langchain_community.vectorstores import Chroma
 from langchain_chroma import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter  # Or your preferred splitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter  # Or your preferred splitter
 import argparse # For __main__
 import asyncio # For running async init in __main__
 import datetime

@@ -21,7 +21,7 @@
 <hr>
 
 
-## Project Zephyrine: An open-source cognitive architecture exploring the fusion of generative AI with deterministic control systems.
+## Project Zephyrine: An open-source cognitive architecture exploring the fusion of generative AI with adaptive deterministic control systems.
 
 ### A Glimpse Into the Aether: Abstract
 
@@ -114,14 +114,18 @@ This is the core of the personal AI assistant, designed to run entirely on your 
 -   **Agentic Capabilities:** Can act on your behalf by performing web searches and generating/executing local scripts to automate tasks on your computer.
 -   **Cross-Platform & Accelerated:** Functions on CPU-only systems (Windows, macOS, Linux) and can leverage hardware acceleration via CUDA, Metal, and Vulkan where available.
 
-### Phase II: The Deterministic Control System (In Progress)
+### Phase II: The Adaptive GNC Deterministic Control System (In Progress)
 
 This is where Project Zephyrine evolves beyond a standard assistant into a high-reliability control platform, guided by the principles of avionics and deterministic systems.
+
+For get a grasp on what we are making, take a look at this paper for reference:
+> Bosworth, J. (2007). F-15 IFCS: Intelligent Flight Control System. Nasa.gov. https://ntrs.nasa.gov/citations/20070035126
+
 
 -   **🚀 Stella Icarus Hooks:** A high-speed, JIT-compiled Python subsystem and Ada daemons for tasks that demand instant, 100% reliable, and procedurally correct execution. This is the foundation for real-time control and automation.
 -   **🛰️ Microcontroller Interfacing (WIP):** The architecture is designed for direct, low-level communication with microcontrollers (like an Arduino) over a serial interface. This enables the AI to act as a Flight Management Computer (FMC) and control real-world hardware.
 -   **📡 Advanced Communication Protocols (WIP):** Future development will focus on implementing robust, safety-critical communication protocols, including parity bits and CRC checks for data integrity between the AI core and external hardware.
--   **✈️ Integrated Flight Control System (WIP):** The ultimate goal is to complete a full Fly-By-Wire (FBW) and Integrated Flight Control System (IFCS). This will involve advanced PID loops, state estimation, and sensor fusion to provide intelligent, real-time dampening and control for robotics or simulation tasks.
+-   **✈️ Intelligent Flight Control System (WIP):** The ultimate goal is to complete a full Fly-By-Wire (FBW) and Intelligent Flight Control System (IFCS). This will involve advanced PID loops, state estimation, and sensor fusion to provide intelligent, real-time dampening and control for robotics or simulation tasks.
 
 Just a heads up, some details aren't listed here or in the `readme.md` file. Instead, they've been moved to the `TodoFeatureFullList.md` document or you can check them out [here](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/TodoFeatureFullList.md).
 
@@ -167,7 +171,7 @@ The installation process is now managed by a single, cross-platform launcher scr
 [Click here to see the general troubleshooting](https://github.com/albertstarfield/alpaca-electron-zephyrine/blob/main/documentation/Developer%20Documentation/Troubleshooting%20Quick%20Guide.md)
 
 ## Warning
-> A Warning to AI Users or potential Investor from Zephyrine Foundation
+> A Warning to AI Users newcomers and/or potential Investor from Zephyrine Foundation
 > 
 > **(Please Read Carefully)**
 > 
@@ -177,10 +181,10 @@ The installation process is now managed by a single, cross-platform launcher scr
 >
 > **This product is not for you.**
 > 
->This project aims to do mutual growth in intellect between the AI (Zephy) and the user (the human), moving beyond one-way passive consumption.
->If your expectation is for an AI that instantly provides all answers without requiring your active involvement and development, 
+>This project aims to do mutual symbiote growth in intellect and action between the AI (Zephy) and the user (the human), That's what makes us human, moving beyond one-way passive consumption.
+>If your expectation is for an AI that instantly provides all answers without requiring your active involvement and development
 > 
->**look somewhere else. You have been warned.**
+>**Look somewhere else. You have been warned.**
 
 
 For more credibility on what we are talking refer to these papers, to get a grasp on what are we fighting against.
@@ -188,8 +192,6 @@ For more credibility on what we are talking refer to these papers, to get a gras
 2. Dohnány, S., Kurth-Nelson, Z., Spens, E., Luettgau, L., Reid, A., Gabriel, I., Summerfield, C., Shanahan, M., & Nour, M. M. (2025). Technological folie à deux: Feedback Loops Between AI Chatbots and Mental Illness. ArXiv (Cornell University). https://doi.org/10.48550/arxiv.2507.19218
 3. Baraa Daraqel, Amer Owayda, Khan, H., Koletsi, D., & Samer Mheissen. (2025). Artificial intelligence as a tool for data extraction is not fully reliable compared to manual data extraction. Journal of Dentistry, 160, 105846–105846. https://doi.org/10.1016/j.jdent.2025.105846
 4. Guillaume-Anthony Odri, & Ji, D. (2023). Detecting generative artificial intelligence in scientific articles: Evasion techniques and implications for scientific integrity. Orthopaedics & Traumatology Surgery & Research, 109(8), 103706–103706. https://doi.org/10.1016/j.otsr.2023.103706
-
-
 
 ‌
 
@@ -210,6 +212,8 @@ I also hold a memory for early days at the **RisTIE Teknik Elektro Universitas B
 And finally to the tireless members of the **Zephyrine Foundation Teams and Freelancers**.
 
 This journey may be a quiet one, perhaps not as visible as the grand voyages of others like **[@Willy030125](https://github.com/Willy030125/alpaca-electron-GGML-v2-v3)**, but every contribution is a cherished star in my constellation. This work is a testament to the quiet, powerful magic of collaborative creation.
+
+I also presenting my appreciation for **[Cognitive Atlas](http://cognitiveatlas.org/)** for making our learning and designing the cognitive architecture of Zephy easier than ever before.
 
 With universe of appreciation presented to you all,
 
