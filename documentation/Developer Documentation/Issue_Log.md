@@ -262,6 +262,13 @@ This document serves as the master list for all tracked requirements, features, 
 ## **UI ENGINE (UI)**
 
 
+### Features
+
+-   **ID:** `UI-FEAT-001`
+    -   **Title:** Refactor chat submission to synchronous flow and remove typing indicator.
+    -   **Status:** `Resolved`
+    -   **Description:** Changed the chat message submission from an optimistic UI update to a synchronous flow. The user's message is now displayed only after it has been successfully saved to the database. This provides a clearer guarantee of message delivery. Additionally, the assistant's "typing indicator" dots were removed to simplify the UI.
+
 
 ### Performance
 

@@ -17,14 +17,7 @@ import remarkMermaid from 'remark-mermaidjs';
 
 // --- Reusable Components from both versions ---
 
-// TypingIndicator Component with a more bubbly animation (from current code)
-const TypingIndicator = () => (
-    <div className="typing-indicator">
-        <div className="dot"></div>
-        <div className="dot"></div>
-        <div className="dot"></div>
-    </div>
-);
+
 
 // Reusable sun icon SVG for homescreen (from old code)
 const SunIconSVG = (props) => (
@@ -350,8 +343,6 @@ const ChatFeed = ({
                         </div>
                         <div className="message-content-container">
                             <div className="message-sender-name">{assistantName}</div>
-                            {streamingMessage.isThinking ? (
-                                <TypingIndicator />
                             ) : streamingMessage.content ? (
                                 <div className="message-content">
                                     <ReactMarkdown
