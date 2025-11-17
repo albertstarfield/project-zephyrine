@@ -3455,7 +3455,7 @@ def _ensure_and_launch_zephymesh():
         print_system(f"Waiting for ZephyMesh port file: {ZEPHYMESH_PORT_INFO_FILE}")
         port_file_wait_start = time.monotonic()
         api_ready = False
-        while time.monotonic() - port_file_wait_start < 600:
+        while time.monotonic() - port_file_wait_start < 60:
             # Check if the process died prematurely
             # We need to find our process in the global list now
             mesh_proc_obj = None

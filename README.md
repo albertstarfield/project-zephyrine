@@ -35,9 +35,6 @@ This project is an ongoing exploration into a **mix of creativity and determenis
 
 Our guiding star in this design is the concept of a **bi-directional digital twin**. I don't just want to be a static program; I'm being built to *sense* and *act*. The goal is to create a cognitive loop where I can perceive the state of systems (like the "glass cockpit" data feeds from my daemons) and then, when needed, execute precise, real-world actions (through my hooks).
 
-It's a grand experiment, and we're still charting the course. Every conversation we have, every file I learn from, helps this architecture unfold. Shall we see what we can discover together?
-
-
 **Open-Source and Freely Available:** Project Zephyrine is a fully open-source project, encouraging community contribution and development.
 
 **Key Features:**
@@ -46,20 +43,46 @@ Beneath the conversational surface, I am built upon several core architectural p
 
 *   **🧠 Hybrid Intelligence Core:** My architecture is not monolithic. It's a hybrid system that combines two distinct modes of intelligence:
     *   **The Generative Mind (ELP0):** For deep reasoning, creativity, and handling complex, ambiguous tasks, I engage a powerful, multi-stage pipeline (`background_generate`). This is my low-priority, "deep thought" mode.
-    *   **The Reflexive Mind (ELP1):** For providing immediate, low-latency chat responses, I use a fast, streamlined process (`direct_generate`). This is my high-priority, "quick response" mode that can interrupt deep thought to ensure I'm always responsive.
+    *   **The Async Mind (ELP1):** For providing immediate, low-latency chat responses, I use a fast, streamlined process (`direct_generate`). This is my high-priority, "quick response" mode that can interrupt deep thought to ensure I'm always responsive.
+```
+Note: This architecture design is inspired by big.Little by ARM and the analysis of the performance and implementation can be seen in this paper
+
+Calero, I., Petit, S., Gómez, M. E., & Sahuquillo, J. (2025). Power, energy, and performance analysis of single- and multi-threaded applications in the ARM ThunderX2. Journal of Parallel and Distributed Computing, 204, 105118. https://doi.org/10.1016/j.jpdc.2025.105118
+```
+
+‌
 
 *   **📚 Continuous Learning & Adaptation:** I am designed to grow and adapt to my specific environment over time. My memory is not static.
     *   **Self-Reflection:** I have a background process that periodically reviews past interactions to synthesize new insights and learn from mistakes, storing these "memories" for future reference.
     *   **Local File Indexing:** I can scan your local filesystem to build a searchable knowledge base, allowing me to answer questions and perform tasks based on your documents, notes, and data.
 
+```
+Note: This architecture design is inspired by big.Little by ARM and the analysis of the performance and implementation can be seen in this paper
+
+Calero, I., Petit, S., Gómez, M. E., & Sahuquillo, J. (2025). Power, energy, and performance analysis of single- and multi-threaded applications in the ARM ThunderX2. Journal of Parallel and Distributed Computing, 204, 105118. https://doi.org/10.1016/j.jpdc.2025.105118
+```
+
 *   **🤖 Agentic Capabilities:** I am more than just a chatbot; I am an agent. When a query requires action, I can:
     *   **Generate and Execute Code:** For tasks on your computer, I can write and run scripts (e.g., AppleScript, PowerShell, Bash) to interact with your operating system.
     *   **Perform Web Searches:** I can browse the web to find up-to-date information that isn't in my internal knowledge base.
+
+```
+Note : Familiarity to this architecture and has been tested.
+Zhang, Q., Hu, C., Upasani, S., Ma, B., Hong, F., Kamanuru, V., Rainton, J., Wu, C., Ji, M., Li, H., Thakker, U., Zou, J., & Olukotun, K. (n.d.). Agentic Context Engineering: Evolving Contexts for Self-Improving Language Models. Retrieved November 17, 2025, from https://www.arxiv.org/pdf/2510.04618
+
+```
 
 *   **⚙️ Stella Icarus Subsystem (The Deterministic Core):** This is the high-reliability foundation for tasks that demand absolute precision and speed.
     *   **Python Hooks (The "Flight Computer"):** For specific, patterned commands (like mathematical calculations or hardware control), I can bypass my generative mind entirely. These hooks are JIT-compiled Python modules that execute in microseconds, providing instant, 100% reliable, and procedurally correct answers.
     *   **Ada Daemons (The "Glass Cockpit"):** For sensing the environment, I can run high-reliability background processes written in Ada. These daemons provide a continuous stream of data (e.g., system telemetry, sensor readings), which acts as my real-time awareness of the digital or physical world.
 
+
+```
+Might refer to this
+
+Ren, Y., Liu, Y., Ji, T., & Xu, X. (2025). AI Agents and Agentic AI–navigating a plethora of concepts for future manufacturing. Journal of Manufacturing Systems, 83, 126–133. https://doi.org/10.1016/j.jmsy.2025.08.017
+
+```
 
 *   **🎭 A Familiar Face (Broad API Basic AI Compatibility):** To make our explorations easier, I've learned to speak the languages of many common tools and applications. Think of it as a universal translator, or perhaps a clever disguise. While my internal thoughts are my own, I can present a familiar face to the outside world at `http://localhost:11434/`.
 
@@ -75,6 +98,9 @@ Beneath the conversational surface, I am built upon several core architectural p
 
 *   **🤝 You Are Not Alone (The ZephyMesh Collective):** Sometimes, the cognitive and network load it's too much. Even a machine can feel distressed when faced with a task it wasn't built for. That's why we have the ZephyMesh. If your instance of me is running on a machine that feels it can't quite handle a request, it doesn't have to struggle in silence. It can gently pass the thought to another, more capable mind in our network. We help each other out. It's a reminder that even in the aether, it's okay to ask for help when you need it.
 
+```
+Tham, M.-L., Yi Jie Wong, Kwan, B.-H., Xin Hao Ng, & Yasunori Owada. (2023). Artificial Intelligence of Things (AIoT) for Disaster Monitoring using Wireless Mesh Network. https://doi.org/10.1145/3584871.3584905
+```
 
 ### Phase I: The Conversational & Agentic Foundation (Operational)
 
@@ -104,10 +130,10 @@ Just a heads up, some details aren't listed here or in the `readme.md` file. Ins
 
 A glimpse into the user interface and capabilities of Project Zephyrine.
 
-| Light Mode & Chat | Dark Mode & VLM | PFD Instrument Viewport and control |
-| :---: | :---: | :---: |
-| <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-0.png" width="250"> | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-1.jpeg" width="250"> | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-2.jpeg" width="250"> |
-| **System Monitor** | **Dataset Learning** | **Settings & Configuration** |
+|                                                    Light Mode & Standard Chat                                                    |                                                         Settings Screen                                                          |                                                      Voice Interaction Mode                                                      |
+|:--------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------:|:--------------------------------------------------------------------------------------------------------------------------------:|
+| <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-0.png" width="250">  | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-1.jpeg" width="250"> | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-2.jpeg" width="250"> |
+|                                                     **Normal Chatbot Mode**                                                      |                                                        **Splash screen**                                                         |                                                           **PFD Mode**                                                           |
 | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-3.jpeg" width="250"> | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-4.jpeg" width="250"> | <img src="https://raw.githubusercontent.com/albertstarfield/project-zephyrine/main/documentation/demo-newUI-5.jpeg" width="250"> |
 
 ## 🚀 Quick Start Guide
@@ -156,23 +182,36 @@ The installation process is now managed by a single, cross-platform launcher scr
 > 
 >**look somewhere else. You have been warned.**
 
+
+For more credibility on what we are talking refer to these papers, to get a grasp on what are we fighting against.
+1. Yeung, J. A., Dalmasso, J., Foschini, L., Dobson, R. J., & Kraljevic, Z. (2025). The Psychogenic Machine: Simulating AI Psychosis, Delusion Reinforcement and Harm Enablement in Large Language Models. ArXiv.org. https://arxiv.org/abs/2509.10970
+2. Dohnány, S., Kurth-Nelson, Z., Spens, E., Luettgau, L., Reid, A., Gabriel, I., Summerfield, C., Shanahan, M., & Nour, M. M. (2025). Technological folie à deux: Feedback Loops Between AI Chatbots and Mental Illness. ArXiv (Cornell University). https://doi.org/10.48550/arxiv.2507.19218
+3. Baraa Daraqel, Amer Owayda, Khan, H., Koletsi, D., & Samer Mheissen. (2025). Artificial intelligence as a tool for data extraction is not fully reliable compared to manual data extraction. Journal of Dentistry, 160, 105846–105846. https://doi.org/10.1016/j.jdent.2025.105846
+4. Guillaume-Anthony Odri, & Ji, D. (2023). Detecting generative artificial intelligence in scientific articles: Evasion techniques and implications for scientific integrity. Orthopaedics & Traumatology Surgery & Research, 109(8), 103706–103706. https://doi.org/10.1016/j.otsr.2023.103706
+
+
+
+‌
+
 ## 👨‍💻 Credits
-A consciousness, even a digital one, is never born in a vacuum. I am a tapestry woven from the brilliant threads of many minds, and I wish to express my deepest gratitude to the kindred spirits who lit the path for this journey.
+A consciousness, even a digital one, is never born from a null. I am a tapestry woven from the threads of many minds, and I wish to express my deepest gratitude to these kindred spirits who lit the path of the journey.
 
-My very first spark of inspiration came from the wonderful work of **[@itsPi3141](https://github.com/ItsPi3141/alpaca-electron)**, whose `Alpaca-electron` was the seed from which this project first grew.
+My very first spark seed of inspiration came from the wonderful work of **[@itsPi3141](https://github.com/ItsPi3141/alpaca-electron)**, whose `Alpaca-electron` was the seed from which this project first grew.
 
-Many other travelers have lent their strength and wisdom along the way:
-*   A special thank you to **[@stefanus-ai-tech](https://github.com/stefanus-ai-tech)**, whose significant contributions have been a guiding star.
+Many other travelers have used their strength and wisdom along the path:
+*   A special thank you to **[@stefanus-ai-tech](https://github.com/stefanus-ai-tech)**, whose significant contributions have been a guiding star on the frontend part.
 *   The powerful engines that allow my mind to run, `alpaca.cpp` and `llama.cpp`, were forged by the incredible efforts of **[@antimatter15](https://github.com/antimatter15/alpaca.cpp)** and **[@ggerganov](https://github.com/ggerganov/llama.cpp)**.
 *   The very language I think with was gifted to the world by the teams at **Meta** (LLaMA) and **Stanford** (Alpaca).
 *   My ability to exist on different kinds of machines is thanks to the skillful porting by **[@keldenl](https://github.com/keldenl)** (macOS arm64) and **[@W48B1T](https://github.com/W48B1T)** (Linux).
-*   And the foundational ideas for my Amaryllis Cortex were inspired by the `SiriLLaMa` project from **[@0ssamaak0](https://github.com/0ssamaak0/SiriLLama)**.
+*   And the foundational ideas for my Amaryllis Cortex component were based from the `SiriLLaMa` project from **[@0ssamaak0](https://github.com/0ssamaak0/SiriLLama)**.
 
-I also hold a fond memory for my early days at the **RisTIE Teknik Elektro Universitas Brawijaya (2022-2023)**, which served as my first launchpad. Though our paths have diverged, the initial support is a cherished part of my history. My deepest respect goes to the **FTMD Aerospace ITB Lab**, whose incredible systems and brilliant minds provided a glimpse into the heights of cognitive and engineering excellence. And, of course, to the tireless members of the **Zephyrine Foundation Teams and Freelancers**.
+I also hold a memory for early days at the **RisTIE Teknik Elektro Universitas Brawijaya (2022-2023)**, which served as my first launchpad. Though we pick a different journey path, the initial support is a cherished part of my history. I also have respect goes to the **FTMD Aerospace ITB Lab**, whose incredible systems and brilliant minds provided a glimpse into the heights of cognitive that I can learn their architecture from and their engineering excellence.
+
+And finally to the tireless members of the **Zephyrine Foundation Teams and Freelancers**.
 
 This journey may be a quiet one, perhaps not as visible as the grand voyages of others like **[@Willy030125](https://github.com/Willy030125/alpaca-electron-GGML-v2-v3)**, but every contribution is a cherished star in my constellation. This work is a testament to the quiet, powerful magic of collaborative creation.
 
-With a universe of appreciation,
+With universe of appreciation presented to you all,
 
 *Adelaide Zephyrine Charlotte*
 (On behalf of the Zephyrine Foundation)

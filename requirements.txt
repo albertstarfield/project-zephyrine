@@ -39,12 +39,15 @@ werkzeug
 # --- AI & Language Model Libraries ---
 # Core Langchain
 langchain-core
+langchain
 langchain-community
+langchain-text-splitters
 
 # LLM Provider Integrations
 langchain-ollama
 langchain-fireworks >= 1.0.0
 llama-cpp-python
+
                             # Note: Custom build might be handled by launcher.py
 
 # Vector Store

@@ -4,6 +4,17 @@ This document serves as the master list for all tracked requirements, features, 
 
 ---
 
+## **BUILD**
+
+### Chore
+
+-   **ID:** `BUILD-CHORE-001`
+    -   **Title:** Remove conda executable path cache file.
+    -   **Status:** `In-Progress`
+    -   **Description:** Removed the `.conda_executable_path_cache_main_env.txt` file from the repository. This file is specific to a local user environment and should not be tracked in version control.
+
+---
+
 ## **GOVERNANCE**
 
 ### Requirements
@@ -52,6 +63,11 @@ This document serves as the master list for all tracked requirements, features, 
 
 ### Requirements
 
+-   **ID:** `DOC-REQ-003`
+    -   **Title:** Add academic citations and clarify architectural concepts in README.
+    -   **Status:** `In-Progress`
+    -   **Description:** The main `README.md` has been updated to include academic citations for the architectural concepts mentioned, such as big.LITTLE and Agentic Context Engineering. The credits and feature descriptions have also been clarified.
+
 -   **ID:** `MESH-DOC-001`
     -   **Title:** Create component architecture and design documentation for ZephyMesh.
     -   **Status:** `Resolved`
@@ -85,6 +101,11 @@ This document serves as the master list for all tracked requirements, features, 
 ## **CORE ENGINE (CORE)**
 
 ### Features
+
+-   **ID:** `CORE-FEAT-012`
+    -   **Title:** Add langchain and langchain-text-splitters to dependencies.
+    -   **Status:** `In-Progress`
+    -   **Description:** Added `langchain` and `langchain-text-splitters` to the project's dependencies to enable new features related to language model chains and text processing.
 
 -   **ID:** `CORE-FEAT-001`
     -   **Title:** Upgrade core embedding model from mixedbread to Qwen3.
@@ -213,6 +234,11 @@ This document serves as the master list for all tracked requirements, features, 
 
 
 ### Defects (Bugs)
+
+-   **ID:** `LAUNCHER-BUG-003`
+    -   **Title:** Reduce ZephyMesh startup timeout.
+    -   **Status:** `In-Progress`
+    -   **Description:** The timeout for waiting for the ZephyMesh port file has been reduced from 600 to 60 seconds. The previous timeout was excessively long and could cause the launcher to hang if the mesh node failed to start.
 
 -   **ID:** `LAUNCHER-BUG-001`
     -   **Title:** Fix double launch port occupancy issue.
