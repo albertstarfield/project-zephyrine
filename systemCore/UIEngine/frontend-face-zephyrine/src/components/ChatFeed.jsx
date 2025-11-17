@@ -1,6 +1,7 @@
 // externalAnalyzer/frontend-face-zephyrine/src/components/ChatFeed.jsx
 
 import React, { useEffect, useState, useRef, memo, useCallback, useMemo } from "react";
+import { FixedSizeList as List } from 'react-window';
 import ReactMarkdown from "react-markdown";
 import PropTypes from 'prop-types';
 import { Prism as SyntaxHighlighter } from "react-syntax-highlighter";
@@ -193,7 +194,7 @@ const ChatFeed = ({
     }, []);
 
     // Virtuoso's Item Renderer
-    const Row = ({ index }) => {
+    const Row = ({ index, style }) => {
         const message = messages[index];
         const prevMessage = messages[index - 1];
         const nextMessage = messages[index + 1];
@@ -216,7 +217,7 @@ const ChatFeed = ({
         }, [editedContent, editingMessageId, message.id]);
 
         return (
-            <li className={`message ${message.sender} ${messageGroupClass}`}>
+            <li style={style} className={`message ${message.sender} ${messageGroupClass}`}>
                 <div className="message-avatar-wrapper">
                     {isLastInGroup && (
                         <div className="message-avatar">
@@ -335,15 +336,17 @@ const ChatFeed = ({
 
     // --- Render Chat View (from current code with Virtuoso) ---
     return (
-        <div id="messages-container" className="message-list" ref={scrollContainerRef}>
+        <div id="messages-container" className="message-list" ref={scrollContainerRef} style={{ height: '100%', width: '100%', flex: 1, overflowX: 'hidden', overflowY: 'auto' }}>
             {isLoadingPrevious && <div className="loading-indicator">Loading...</div>}
-            <ul className="message-list-content">
-                {messages.map((_, index) => (
-                    <Row key={index} index={index} />
-                ))}
-                <li className="message" style={{ visibility: 'hidden' }}><p>&nbsp;</p></li>
-                 <div ref={messagesEndRef} />
-            </ul>
+            <List
+                className="message-list-content"
+                height={scrollContainerRef.current?.clientHeight || 0}
+                itemCount={messages.length}
+                itemSize={150} // Average item size, can be a function for variable sizes
+                width={scrollContainerRef.current?.clientWidth || 0}
+            >
+                {Row}
+            </List>
 
             {/* The streaming message is rendered outside the virtualized list for simplicity */}
             {streamingMessage && (
@@ -385,7 +388,7 @@ const ChatFeed = ({
                                         <span className="tokens-per-second">{streamingMessage.tokensPerSecond} chars/s</span>
                                     )}
                                 </div>
-                            ) : null}
+                            )
                         </div>
                     </li>
                 </ul>
