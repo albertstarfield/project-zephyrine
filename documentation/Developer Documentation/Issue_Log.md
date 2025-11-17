@@ -310,3 +310,30 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
 
     -   **Description:** The chat page bounces back to the top on ordinary chat mode, which is a very annoying user experience. This was caused by rendering the entire chat history at once, leading to performance issues.
+
+-   **ID:** `UI-FEAT-003`
+    -   **Title:** Implement Dark Mode for UI
+    -   **Status:** `Open`
+    -   **Description:** Add a toggle to enable a dark mode theme for the user interface to reduce eye strain in low-light environments.
+
+---
+
+## **STELLA ICARUS**
+
+### Documentation
+
+-   **ID:** `DOC-REQ-006`
+    -   **Title:** Document stella_icarus_utils functions
+    -   **Status:** `Open`
+    -   **Description:** Add docstrings and comments to the functions in `systemCore/engineMain/stella_icarus_utils.py` to explain their purpose, parameters, and return values.
+
+---
+
+## **CORE ENGINE (CORE)**
+
+### Defects (Bugs)
+
+-   **ID:** `CORE-BUG-006`
+    -   **Title:** Potential memory leak in audio_worker.py
+    -   **Status:** `Open`
+    -   **Description:** The audio_worker.py process shows a gradual increase in memory usage over time, suggesting a potential memory leak. This needs to be investigated and patched to ensure long-term stability.

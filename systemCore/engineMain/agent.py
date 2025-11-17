@@ -13,6 +13,9 @@ from loguru import logger
 from sqlalchemy.orm import Session
 from typing import Dict, Any, List, Optional, Tuple, Union
 import uuid
+import ast
+import fnmatch
+from playwright.async_api import async_playwright
 
 from langchain_core.messages import HumanMessage, SystemMessage, AIMessage
 from langchain_core.output_parsers import StrOutputParser
@@ -56,9 +59,10 @@ AGENT_PROMPT_FILE_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__))
 # Implementation for Agent tools using basic os/subprocess
 class AgentTools:
     """Agent tool execution implementation using basic system calls."""
-    def __init__(self, cwd: str, provider_embeddings: Any):
+    def __init__(self, cwd: str, provider_embeddings: Any, page: Any):
         self.cwd = cwd
         self.provider_embeddings = provider_embeddings
+        self.page = page
         logger.info(f"🛠️ Initializing AgentTools with CWD: {self.cwd}")
         # NOTE: These implementations are basic. Real-world tools need more robust error handling,
         # security checks (especially for execute_command), and platform compatibility checks.
@@ -213,26 +217,116 @@ class AgentTools:
              logger.error(f"Error listing files in '{full_path}': {e}")
              return f"Error listing files in '{path}': {e}"
 
-    # --- Placeholder Tools ---
-    async def replace_in_file(self, path: str, diff: str) -> str:
-        logger.warning(f"Replacing in file (placeholder): '{path}'")
-        await asyncio.sleep(0.1)
-        return f"Placeholder: Would replace content in '{path}' based on diff."
+    async def replace_in_file(self, path: str, old_string: str, new_string: str) -> str:
+        """Replaces all occurrences of old_string with new_string in a file."""
+        full_path = os.path.join(self.cwd, path)
+        logger.info(f"Replacing in file: '{full_path}'")
+        try:
+            async with asyncio.Lock():
+                with open(full_path, 'r', encoding='utf-8') as f:
+                    content = f.read()
+                
+                new_content = content.replace(old_string, new_string)
+
+                with open(full_path, 'w', encoding='utf-8') as f:
+                    f.write(new_content)
+            
+            return f"Successfully replaced content in '{path}'."
+        except FileNotFoundError:
+            return f"Error: File not found at '{path}'."
+        except Exception as e:
+            return f"Error replacing in file '{path}': {e}"
 
     async def search_files(self, path: str, regex: str, file_pattern: Optional[str] = None) -> str:
-        logger.warning(f"Searching files (placeholder): '{path}' regex '{regex}' pattern '{file_pattern}'")
-        await asyncio.sleep(0.1)
-        return f"Placeholder: Would search files in '{path}' for regex '{regex}'."
+        """Searches for a regex pattern in files within a directory."""
+        full_path = os.path.join(self.cwd, path)
+        logger.info(f"Searching files in: '{full_path}' for regex: '{regex}'")
+        matches = []
+        try:
+            for root, _, files in os.walk(full_path):
+                for filename in files:
+                    if file_pattern and not fnmatch.fnmatch(filename, file_pattern):
+                        continue
+                    
+                    file_path = os.path.join(root, filename)
+                    try:
+                        with open(file_path, 'r', encoding='utf-8', errors='ignore') as f:
+                            for line_num, line in enumerate(f, 1):
+                                if re.search(regex, line):
+                                    matches.append(f"{file_path}:{line_num}:{line.strip()}")
+                    except Exception as e:
+                        logger.warning(f"Could not read file {file_path} during search: {e}")
+
+            if not matches:
+                return "No matches found."
+            
+            return "Search results:\n" + "\n".join(matches)
+        except Exception as e:
+            return f"Error searching files: {e}"
 
     async def list_code_definition_names(self, path: str) -> str:
-         logger.warning(f"Listing code definitions (placeholder) in '{path}'")
-         await asyncio.sleep(0.1)
-         return f"Placeholder: Would list definitions in '{path}'."
+        """Lists class and function definition names in a Python file."""
+        full_path = os.path.join(self.cwd, path)
+        if not path.endswith(".py"):
+            return "Error: This tool only supports Python files (.py)."
+        
+        logger.info(f"Listing code definitions in: '{full_path}'")
+        try:
+            with open(full_path, 'r', encoding='utf-8') as f:
+                content = f.read()
+            
+            tree = ast.parse(content)
+            definitions = []
+            for node in ast.walk(tree):
+                if isinstance(node, ast.FunctionDef):
+                    definitions.append(f"Function: {node.name}")
+                elif isinstance(node, ast.AsyncFunctionDef):
+                    definitions.append(f"Async Function: {node.name}")
+                elif isinstance(node, ast.ClassDef):
+                    definitions.append(f"Class: {node.name}")
+            
+            if not definitions:
+                return "No class or function definitions found."
 
-    async def browser_action(self, action: str, url: Optional[str] = None, coordinate: Optional[str] = None, text: Optional[str] = None) -> str:
-        logger.warning(f"Browser action (placeholder): {action}")
-        await asyncio.sleep(0.1)
-        return f"Placeholder: Would perform browser action '{action}'."
+            return "Code definitions:\n" + "\n".join(definitions)
+        except FileNotFoundError:
+            return f"Error: File not found at '{path}'."
+        except SyntaxError as e:
+            return f"Error parsing Python file: {e}"
+        except Exception as e:
+            return f"Error listing code definitions: {e}"
+
+    async def browser_action(self, action: str, url: Optional[str] = None, selector: Optional[str] = None, text: Optional[str] = None) -> str:
+        """Performs an action in the browser using Playwright."""
+        if not self.page:
+            return "Error: Browser is not running."
+
+        logger.info(f"Performing browser action: {action}")
+        try:
+            if action == "navigate":
+                if not url:
+                    return "Error: URL is required for navigate action."
+                await self.page.goto(url)
+                return f"Navigated to {url}."
+            elif action == "click":
+                if not selector:
+                    return "Error: Selector is required for click action."
+                await self.page.click(selector)
+                return f"Clicked on element with selector '{selector}'."
+            elif action == "type":
+                if not selector or text is None:
+                    return "Error: Selector and text are required for type action."
+                await self.page.type(selector, text)
+                return f"Typed '{text}' into element with selector '{selector}'."
+            elif action == "screenshot":
+                screenshot_bytes = await self.page.screenshot()
+                # For simplicity, we don't save the file, just report success.
+                # A real implementation might save it and return the path.
+                return "Took a screenshot."
+            else:
+                return f"Error: Unknown browser action '{action}'."
+        except Exception as e:
+            return f"Error performing browser action '{action}': {e}"
 
     async def use_mcp_tool(self, server_name: str, tool_name: str, arguments: Dict[str, Any]) -> str:
          logger.warning(f"MCP tool (placeholder): {server_name}/{tool_name}")
@@ -251,6 +345,9 @@ class AmaryllisAgent:
         self.provider = provider
         self.cwd = cwd
         self.supports_computer_use = supports_computer_use
+        self.playwright = None
+        self.browser = None
+        self.page = None
         class MockMcpHub:
             def getServers(self):
                 return []
@@ -261,10 +358,30 @@ class AmaryllisAgent:
                 height = 768
             viewport = Viewport()
         self.browser_settings = MockBrowserSettings()
-        self.agent_tools = AgentTools(self.cwd, self.provider.embeddings)
+        self.agent_tools = AgentTools(self.cwd, self.provider.embeddings, self.page)
         self.setup_prompts()
         self.conversation_history: List[Dict[str, Any]] = []
         self.current_session_id: Optional[str] = None
+
+    async def start_browser(self):
+        """Starts the Playwright browser instance."""
+        if self.playwright is None:
+            self.playwright = await async_playwright().start()
+            self.browser = await self.playwright.chromium.launch(headless=False)
+            self.page = await self.browser.new_page()
+            self.agent_tools.page = self.page
+            logger.info("Browser started.")
+
+    async def shutdown_browser(self):
+        """Shuts down the Playwright browser instance."""
+        if self.browser:
+            await self.browser.close()
+        if self.playwright:
+            await self.playwright.stop()
+        self.browser = None
+        self.page = None
+        self.playwright = None
+        logger.info("Browser shut down.")
 
     def setup_prompts(self):
         """Reads and formats the agent system prompt."""
@@ -663,6 +780,7 @@ class AmaryllisAgent:
         task_start_time = time.monotonic()
 
         try:
+            await self.start_browser()
             db = SessionLocal() # Get a new DB session for this background task
             if not db:
                  logger.critical(f"❌ Agent BG {initial_interaction_id}: Failed to get DB session.")
@@ -888,6 +1006,7 @@ class AmaryllisAgent:
 
 
         finally:
+            await self.shutdown_browser()
             # --- THIS ENTIRE FINALLY BLOCK IS THE REPLACEMENT ---
             if db and initial_interaction:
                 try:
