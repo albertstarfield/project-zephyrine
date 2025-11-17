@@ -73,6 +73,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
     -   **Description:** A formal `README.md` file must be created for the `zephyMeshNetwork` component. This document must outline the core principles, architecture, feature roadmap, and developer notes to serve as the canonical source of truth for the sub-project.
 
+-   **ID:** `DOC-REQ-004`
+    -   **Title:** Formalize Issue Log Structure and Content
+    -   **Status:** `Resolved`
+    -   **Description:** This entry formalizes the structure and content of the `Issue_Log.md` file itself. It ensures that all future entries adhere to the established format of ID, Title, Status, and Description, as defined in the `CONTRIBUTING.md` guidelines. This meta-entry serves as a reference point for the log's own standards.
+
 ### Test Cases (Verification)
 
 -   **ID:** `DOC-REVIEW-001`
