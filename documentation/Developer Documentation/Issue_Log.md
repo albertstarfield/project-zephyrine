@@ -208,6 +208,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `In-Progress`
     -   **Description:** Refactored all Flask routes in `AdelaideAlbertCortex.py` to use the `@system.route` decorator instead of `@app.route` for better organization and consistency.
 
+-   **ID:** `CORE-REFACTOR-005`
+    -   **Title:** Update dependencies and refactor imports for langchain compatibility.
+    -   **Status:** `Resolved`
+    -   **Description:** Updated project dependencies and code to align with recent changes in the langchain library. This includes adding `langchain-experimental` to `requirements.txt`, changing the import for `RecursiveCharacterTextSplitter` from `langchain.text_splitter` to `langchain_text_splitters` across multiple files, and updating the `aria2` conda package source in `launcher.py`.
+
 ---
 
 
