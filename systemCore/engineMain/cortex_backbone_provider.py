@@ -1705,7 +1705,7 @@ class CortexEngine:
         """Returns an indicator if image generation is configured, not an instance."""
         if STABLE_DIFFUSION_WORKER_CONFIGURED:
             # Could return self or a simple status object/boolean
-            # For now, let's just log and return a truthy value if app.py expects something.
+            # For now, let's just log and return a truthy value if AdelaideAlbertCortex.py expects something.
             logger.debug("Image generator (worker) is configured.")
             return True # Indicate available
         logger.warning("Image generator (worker) is not configured.")
@@ -1742,10 +1742,10 @@ class CortexEngine:
 # Note: atexit runs hooks in reverse order of registration.
 def _ai_provider_shutdown():
     # Need a way to access the global CortexEngine instance created in app.py
-    # This is tricky. A better pattern might be for app.py to explicitly call
+    # This is tricky. A better pattern might be for AdelaideAlbertCortex.py to explicitly call
     # a shutdown method on the provider instance it holds.
     # For now, we'll assume a global `ai_provider_instance` might exist (set by app.py).
-    global ai_provider_instance # Assume app.py sets this global
+    global ai_provider_instance # Assume AdelaideAlbertCortex.py sets this global
     if 'ai_provider_instance' in globals() and ai_provider_instance:
         logger.info("Running AI Provider shutdown hook...")
         ai_provider_instance.unload_llama_model_if_needed()
@@ -1756,5 +1756,5 @@ def _ai_provider_shutdown():
 # --- End Optional Shutdown Hook ---
 
 # --- Global Instance Placeholder ---
-# This global would be set by app.py after initialization
+# This global would be set by AdelaideAlbertCortex.py after initialization
 ai_provider_instance: Optional[CortexEngine] = None

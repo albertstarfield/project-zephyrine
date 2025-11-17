@@ -1,50 +1,39 @@
 # AdelaideAlbertCortex.py
+import asyncio
+import atexit  # To signal shutdown
+import base64  # Used for image handling
+import contextlib  # For ensuring driver quit
+import datetime
+import hashlib
+import io
+import json
+import math
 import mimetypes
 # --- Standard Library Imports ---
 import os
-import sys
-import io
-import time
-import json
-import re
-import signal
-import pandas as pd
-import asyncio
-import threading # Used by asyncio.to_thread internally
-import subprocess # Used in AgentTools (agent.py)
-import base64 # Used for image handling
-from io import BytesIO # Used for image handling
-from typing import Any, Dict, List, Optional, Tuple, Union # Added Union
-from operator import itemgetter # Used in runnables
-import shlex # For safe command splitting in agent tools
-import shutil # For copying directory trees in setup_assistant_proxy
-import tempfile # For creating temporary files in setup_assistant_proxy
-import uuid # For generating request/response IDs
+import queue
 import random
-import traceback
-#from quart import Quart, Response, request, g, jsonify, current_app # Use Quart imports
-# --- Third-Party Library Imports ---
-import requests # Used for URL fetching
-from bs4 import BeautifulSoup # Used for URL parsing
-from loguru import logger # Logging library
-from PIL import Image # Used for image handling (optional validation/info)
+import re
+import subprocess  # Used in AgentTools (agent.py)
+import sys
+import tempfile
 # numpy import moved inside _find_existing_tot_result to make it optional
 import threading
-import datetime
-import queue
+import time
+import uuid  # For generating request/response IDs
+from typing import Any, Dict, List, Optional, Tuple, Union  # Added Union
+from urllib.parse import urlparse
 
-import atexit # To signal shutdown
-import datetime
-import hashlib
-import tempfile
-from werkzeug.utils import secure_filename # For safely handling uploaded filenames
-import difflib
-import contextlib # For ensuring driver quit
-from urllib.parse import urlparse, parse_qs, quote_plus, urljoin
-import langcodes
-import math
-import cmath
 import easyocr
+import langcodes
+import pandas as pd
+# from quart import Quart, Response, request, g, jsonify, current_app # Use Quart imports
+# --- Third-Party Library Imports ---
+import requests  # Used for URL fetching
+from PIL import Image  # Used for image handling (optional validation/info)
+from bs4 import BeautifulSoup  # Used for URL parsing
+from loguru import logger  # Logging library
+from werkzeug.utils import secure_filename  # For safely handling uploaded filenames
 
 try:
     ocr_reader = easyocr.Reader(['en'], gpu=True) # Use GPU if available
@@ -87,8 +76,8 @@ from network_internet_knowledge_fetcher import search_and_scrape_web_async
 
 
 # --- SQLAlchemy Imports ---
-from sqlalchemy.orm import Session, sessionmaker, attributes # Import sessionmaker
-from sqlalchemy import update, inspect as sql_inspect, desc
+from sqlalchemy.orm import Session  # Import sessionmaker
+from sqlalchemy import desc
 from sqlalchemy.sql import func
 
 # --- Flask Imports ---
@@ -115,7 +104,7 @@ from langchain_core.vectorstores import VectorStoreRetriever, VectorStore
 # --- Langchain Community Imports ---
 #from langchain_community.vectorstores import Chroma # Use Chroma for in-memory history/URL RAG
 from langchain_chroma import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 
 # --- END PROVIDER IMPORTS ---
 

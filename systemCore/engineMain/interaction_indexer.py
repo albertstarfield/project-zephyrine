@@ -9,7 +9,7 @@ from loguru import logger
 from sqlalchemy.orm import Session
 from sqlalchemy import update
 from langchain_chroma import Chroma
-from langchain.text_splitter import RecursiveCharacterTextSplitter
+from langchain_text_splitters import RecursiveCharacterTextSplitter
 import shutil
 from database import Interaction, SessionLocal
 from cortex_backbone_provider import CortexEngine

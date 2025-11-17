@@ -42,6 +42,8 @@ langchain-core
 langchain
 langchain-community
 langchain-text-splitters
+#Text splitter langchain-experimental
+langchain-experimental
 
 # LLM Provider Integrations
 langchain-ollama

@@ -4369,7 +4369,7 @@ if __name__ == "__main__":
 
             # Aria2c (command-line tool)
             print_system("--- Ensuring Aria2c (for multi-connection downloads) via Conda ---")
-            if not _ensure_conda_package(package_spec="aria2", executable_to_check="aria2c", is_critical=False):
+            if not _ensure_conda_package(package_spec="conda-forge::aria2", executable_to_check="aria2c", is_critical=False):
                 print_warning(
                     "aria2c (command-line tool) could not be installed via Conda. Multi-connection downloads will be unavailable, falling back to requests.")
             else:
@@ -4516,6 +4516,9 @@ if __name__ == "__main__":
                     print_error(f"MeloTTS directory not found at: {MELO_TTS_PATH}. Skipping.")
                     setup_failures.append("MeloTTS directory not found.")
                 else:
+                    if not run_command([PIP_EXECUTABLE, "install", "torchcodec"], MELO_TTS_PATH, "PIP-MELO-EDITABLE"):
+                        print_error("MeloTTS library torchcodec installation failed.")
+                        setup_failures.append("MeloTTS pip install torchcodec phase failed.")
                     if not run_command([PIP_EXECUTABLE, "install", "-e", "."], MELO_TTS_PATH, "PIP-MELO-EDITABLE"):
                         print_error("MeloTTS library installation failed.")
                         setup_failures.append("MeloTTS pip install failed.")
