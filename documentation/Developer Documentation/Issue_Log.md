@@ -369,3 +369,35 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Document CortexConfiguration.py parameters.
     -   **Status:** `Open`
     -   **Description:** Add detailed comments or docstrings to `systemCore/engineMain/CortexConfiguration.py` explaining the purpose of each configuration parameter, its possible values, and its impact on the system's behavior. This is crucial for new developers to understand how to tune the AI's performance and features.
+---
+
+## **LAUNCHER**
+
+### Defects (Bugs)
+
+-   **ID:** `LAUNCHER-BUG-004`
+    -   **Title:** Launcher does not verify integrity of downloaded models.
+    -   **Status:** `Open`
+    -   **Description:** The launcher downloads models from various sources but does not perform a checksum verification. This could lead to corrupted models being used, causing unpredictable behavior in the core engine. A mechanism to verify file integrity (e.g., SHA256 checksum) should be implemented.
+
+---
+
+## **UI ENGINE (UI)**
+
+### Features
+
+-   **ID:** `UI-FEAT-004`
+    -   **Title:** Add a "Copy to Clipboard" button for code blocks.
+    -   **Status:** `Open`
+    -   **Description:** The UI should render code blocks with a "Copy" button to allow users to easily copy code snippets from the AI's responses. This improves usability for developers and anyone working with code.
+
+---
+
+## **DOCUMENTATION (DOC)**
+
+### Requirements
+
+-   **ID:** `DOC-REQ-008`
+    -   **Title:** Create a user guide for the main features.
+    -   **Status:** `Open`
+    -   **Description:** The project lacks a user-facing guide explaining how to use the main features like the agent, the imagination worker, and the different search functionalities. A new document should be created in the `documentation` folder to serve as a user manual.
