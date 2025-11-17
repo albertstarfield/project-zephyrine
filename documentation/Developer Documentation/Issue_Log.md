@@ -337,3 +337,35 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Potential memory leak in audio_worker.py
     -   **Status:** `Open`
     -   **Description:** The audio_worker.py process shows a gradual increase in memory usage over time, suggesting a potential memory leak. This needs to be investigated and patched to ensure long-term stability.
+---
+
+## **ZEPHY WATCHTOWER (WATCHDOG)**
+
+### Features
+
+-   **ID:** `WATCHDOG-FEAT-001`
+    -   **Title:** Implement system health notifications.
+    -   **Status:** `Open`
+    -   **Description:** The ZephyWatchtower should have the capability to send notifications (e.g., via system tray alerts or a dedicated UI panel) when it detects critical issues, such as a service crash or a memory leak (`CORE-BUG-006`).
+
+---
+
+## **UI ENGINE (UI)**
+
+### Defects (Bugs)
+
+-   **ID:** `UI-BUG-002`
+    -   **Title:** Dark Mode theme does not persist across sessions.
+    -   **Status:** `Open`
+    -   **Description:** When the user enables Dark Mode (`UI-FEAT-003`) and restarts the application, the setting reverts to the default light mode. The selected theme should be saved in local storage and reapplied on startup.
+
+---
+
+## **DOCUMENTATION (DOC)**
+
+### Requirements
+
+-   **ID:** `DOC-REQ-007`
+    -   **Title:** Document CortexConfiguration.py parameters.
+    -   **Status:** `Open`
+    -   **Description:** Add detailed comments or docstrings to `systemCore/engineMain/CortexConfiguration.py` explaining the purpose of each configuration parameter, its possible values, and its impact on the system's behavior. This is crucial for new developers to understand how to tune the AI's performance and features.

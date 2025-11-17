@@ -39,6 +39,7 @@ systemCore/storage/presistentInteractionMem.json
 **nodeLocalRuntime**
 **enginemain/build**
 **.gguf**
+**.gemini**
 **build**
 systemCore/nodeLocalRuntime
 **/*Mem.json
