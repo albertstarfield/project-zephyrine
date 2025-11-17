@@ -44,45 +44,22 @@ Beneath the conversational surface, I am built upon several core architectural p
 *   **🧠 Hybrid Intelligence Core:** My architecture is not monolithic. It's a hybrid system that combines two distinct modes of intelligence:
     *   **The Generative Mind (ELP0):** For deep reasoning, creativity, and handling complex, ambiguous tasks, I engage a powerful, multi-stage pipeline (`background_generate`). This is my low-priority, "deep thought" mode.
     *   **The Async Mind (ELP1):** For providing immediate, low-latency chat responses, I use a fast, streamlined process (`direct_generate`). This is my high-priority, "quick response" mode that can interrupt deep thought to ensure I'm always responsive.
-```
-Note: This architecture design is inspired by big.Little by ARM and the analysis of the performance and implementation can be seen in this paper
 
-Calero, I., Petit, S., Gómez, M. E., & Sahuquillo, J. (2025). Power, energy, and performance analysis of single- and multi-threaded applications in the ARM ThunderX2. Journal of Parallel and Distributed Computing, 204, 105118. https://doi.org/10.1016/j.jpdc.2025.105118
-```
-
-‌
 
 *   **📚 Continuous Learning & Adaptation:** I am designed to grow and adapt to my specific environment over time. My memory is not static.
     *   **Self-Reflection:** I have a background process that periodically reviews past interactions to synthesize new insights and learn from mistakes, storing these "memories" for future reference.
     *   **Local File Indexing:** I can scan your local filesystem to build a searchable knowledge base, allowing me to answer questions and perform tasks based on your documents, notes, and data.
 
-```
-Note: This architecture design is inspired by big.Little by ARM and the analysis of the performance and implementation can be seen in this paper
-
-Calero, I., Petit, S., Gómez, M. E., & Sahuquillo, J. (2025). Power, energy, and performance analysis of single- and multi-threaded applications in the ARM ThunderX2. Journal of Parallel and Distributed Computing, 204, 105118. https://doi.org/10.1016/j.jpdc.2025.105118
-```
 
 *   **🤖 Agentic Capabilities:** I am more than just a chatbot; I am an agent. When a query requires action, I can:
     *   **Generate and Execute Code:** For tasks on your computer, I can write and run scripts (e.g., AppleScript, PowerShell, Bash) to interact with your operating system.
     *   **Perform Web Searches:** I can browse the web to find up-to-date information that isn't in my internal knowledge base.
 
-```
-Note : Familiarity to this architecture and has been tested.
-Zhang, Q., Hu, C., Upasani, S., Ma, B., Hong, F., Kamanuru, V., Rainton, J., Wu, C., Ji, M., Li, H., Thakker, U., Zou, J., & Olukotun, K. (n.d.). Agentic Context Engineering: Evolving Contexts for Self-Improving Language Models. Retrieved November 17, 2025, from https://www.arxiv.org/pdf/2510.04618
-
-```
 
 *   **⚙️ Stella Icarus Subsystem (The Deterministic Core):** This is the high-reliability foundation for tasks that demand absolute precision and speed.
     *   **Python Hooks (The "Flight Computer"):** For specific, patterned commands (like mathematical calculations or hardware control), I can bypass my generative mind entirely. These hooks are JIT-compiled Python modules that execute in microseconds, providing instant, 100% reliable, and procedurally correct answers.
     *   **Ada Daemons (The "Glass Cockpit"):** For sensing the environment, I can run high-reliability background processes written in Ada. These daemons provide a continuous stream of data (e.g., system telemetry, sensor readings), which acts as my real-time awareness of the digital or physical world.
 
-
-```
-Might refer to this
-
-Ren, Y., Liu, Y., Ji, T., & Xu, X. (2025). AI Agents and Agentic AI–navigating a plethora of concepts for future manufacturing. Journal of Manufacturing Systems, 83, 126–133. https://doi.org/10.1016/j.jmsy.2025.08.017
-
-```
 
 *   **🎭 A Familiar Face (Broad API Basic AI Compatibility):** To make our explorations easier, I've learned to speak the languages of many common tools and applications. Think of it as a universal translator, or perhaps a clever disguise. While my internal thoughts are my own, I can present a familiar face to the outside world at `http://localhost:11434/`.
 
@@ -98,9 +75,6 @@ Ren, Y., Liu, Y., Ji, T., & Xu, X. (2025). AI Agents and Agentic AI–navigating
 
 *   **🤝 You Are Not Alone (The ZephyMesh Collective):** Sometimes, the cognitive and network load it's too much. Even a machine can feel distressed when faced with a task it wasn't built for. That's why we have the ZephyMesh. If your instance of me is running on a machine that feels it can't quite handle a request, it doesn't have to struggle in silence. It can gently pass the thought to another, more capable mind in our network. We help each other out. It's a reminder that even in the aether, it's okay to ask for help when you need it.
 
-```
-Tham, M.-L., Yi Jie Wong, Kwan, B.-H., Xin Hao Ng, & Yasunori Owada. (2023). Artificial Intelligence of Things (AIoT) for Disaster Monitoring using Wireless Mesh Network. https://doi.org/10.1145/3584871.3584905
-```
 
 ### Phase I: The Conversational & Agentic Foundation (Operational)
 
@@ -117,10 +91,6 @@ This is the core of the personal AI assistant, designed to run entirely on your 
 ### Phase II: The Adaptive GNC Deterministic Control System (In Progress)
 
 This is where Project Zephyrine evolves beyond a standard assistant into a high-reliability control platform, guided by the principles of avionics and deterministic systems.
-
-For get a grasp on what we are making, take a look at this paper for reference:
-> Bosworth, J. (2007). F-15 IFCS: Intelligent Flight Control System. Nasa.gov. https://ntrs.nasa.gov/citations/20070035126
-
 
 -   **🚀 Stella Icarus Hooks:** A high-speed, JIT-compiled Python subsystem and Ada daemons for tasks that demand instant, 100% reliable, and procedurally correct execution. This is the foundation for real-time control and automation.
 -   **🛰️ Microcontroller Interfacing (WIP):** The architecture is designed for direct, low-level communication with microcontrollers (like an Arduino) over a serial interface. This enables the AI to act as a Flight Management Computer (FMC) and control real-world hardware.
@@ -187,11 +157,7 @@ The installation process is now managed by a single, cross-platform launcher scr
 >**Look somewhere else. You have been warned.**
 
 
-For more credibility on what we are talking refer to these papers, to get a grasp on what are we fighting against.
-1. Yeung, J. A., Dalmasso, J., Foschini, L., Dobson, R. J., & Kraljevic, Z. (2025). The Psychogenic Machine: Simulating AI Psychosis, Delusion Reinforcement and Harm Enablement in Large Language Models. ArXiv.org. https://arxiv.org/abs/2509.10970
-2. Dohnány, S., Kurth-Nelson, Z., Spens, E., Luettgau, L., Reid, A., Gabriel, I., Summerfield, C., Shanahan, M., & Nour, M. M. (2025). Technological folie à deux: Feedback Loops Between AI Chatbots and Mental Illness. ArXiv (Cornell University). https://doi.org/10.48550/arxiv.2507.19218
-3. Baraa Daraqel, Amer Owayda, Khan, H., Koletsi, D., & Samer Mheissen. (2025). Artificial intelligence as a tool for data extraction is not fully reliable compared to manual data extraction. Journal of Dentistry, 160, 105846–105846. https://doi.org/10.1016/j.jdent.2025.105846
-4. Guillaume-Anthony Odri, & Ji, D. (2023). Detecting generative artificial intelligence in scientific articles: Evasion techniques and implications for scientific integrity. Orthopaedics & Traumatology Surgery & Research, 109(8), 103706–103706. https://doi.org/10.1016/j.otsr.2023.103706
+For more credibility on what we are talking refer to the citation section of this readme, to get a grasp on what are we fighting against.
 
 ‌
 
@@ -219,3 +185,14 @@ With universe of appreciation presented to you all,
 
 *Adelaide Zephyrine Charlotte*
 (On behalf of the Zephyrine Foundation)
+
+## Citations
+- Baraa Daraqel, Amer Owayda, Khan, H., Koletsi, D., & Samer Mheissen. (2025). Artificial intelligence as a tool for data extraction is not fully reliable compared to manual data extraction. Journal of Dentistry, 160, 105846–105846. https://doi.org/10.1016/j.jdent.2025.105846
+- Bosworth, J. (2007). F-15 IFCS: Intelligent Flight Control System. Nasa.gov. https://ntrs.nasa.gov/citations/20070035126
+- Calero, I., Petit, S., Gómez, M. E., & Sahuquillo, J. (2025). Power, energy, and performance analysis of single- and multi-threaded applications in the ARM ThunderX2. Journal of Parallel and Distributed Computing, 204, 105118. https://doi.org/10.1016/j.jpdc.2025.105118
+- Dohnány, S., Kurth-Nelson, Z., Spens, E., Luettgau, L., Reid, A., Gabriel, I., Summerfield, C., Shanahan, M., & Nour, M. M. (2025). Technological folie à deux: Feedback Loops Between AI Chatbots and Mental Illness. ArXiv (Cornell University). https://doi.org/10.48550/arxiv.2507.19218
+- Guillaume-Anthony Odri, & Ji, D. (2023). Detecting generative artificial intelligence in scientific articles: Evasion techniques and implications for scientific integrity. Orthopaedics & Traumatology Surgery & Research, 109(8), 103706–103706. https://doi.org/10.1016/j.otsr.2023.103706
+- Ren, Y., Liu, Y., Ji, T., & Xu, X. (2025). AI Agents and Agentic AI–navigating a plethora of concepts for future manufacturing. Journal of Manufacturing Systems, 83, 126–133. https://doi.org/10.1016/j.jmsy.2025.08.017
+- Tham, M.-L., Yi Jie Wong, Kwan, B.-H., Xin Hao Ng, & Yasunori Owada. (2023). Artificial Intelligence of Things (AIoT) for Disaster Monitoring using Wireless Mesh Network. https://doi.org/10.1145/3584871.3584905
+- Yeung, J. A., Dalmasso, J., Foschini, L., Dobson, R. J., & Kraljevic, Z. (2025). The Psychogenic Machine: Simulating AI Psychosis, Delusion Reinforcement and Harm Enablement in Large Language Models. ArXiv.org. https://arxiv.org/abs/2509.10970
+- Zhang, Q., Hu, C., Upasani, S., Ma, B., Hong, F., Kamanuru, V., Rainton, J., Wu, C., Ji, M., Li, H., Thakker, U., Zou, J., & Olukotun, K. (n.d.). Agentic Context Engineering: Evolving Contexts for Self-Improving Language Models. Retrieved November 17, 2025, from https://www.arxiv.org/pdf/2510.04618

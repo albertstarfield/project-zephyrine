@@ -78,6 +78,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
     -   **Description:** This entry formalizes the structure and content of the `Issue_Log.md` file itself. It ensures that all future entries adhere to the established format of ID, Title, Status, and Description, as defined in the `CONTRIBUTING.md` guidelines. This meta-entry serves as a reference point for the log's own standards.
 
+-   **ID:** `DOC-REQ-005`
+    -   **Title:** Clarify contribution process by defining the Issue Log
+    -   **Status:** `Resolved`
+    -   **Description:** This entry serves as a practical example of the contribution workflow. It was created by reading the `CONTRIBUTING.md` guidelines, defining a new issue in `Issue_Log.md` (this very entry), and will be committed following the formal traceability standard. This helps to clarify the process for future contributors.
+
 ### Test Cases (Verification)
 
 -   **ID:** `DOC-REVIEW-001`
