@@ -32,7 +32,7 @@ except ImportError:
 
 # Import necessary DB functions and session factory
 try:
-    from database import add_interaction, get_recent_interactions, get_past_applescript_attempts, SessionLocal, Interaction
+    from database import add_interaction, get_recent_interactions, get_past_scriptingseqprogramminginterface_attempts, SessionLocal, Interaction
 except ImportError:
     logger.error("Failed to import database components in agent.py")
     # Define dummy functions/classes if needed for basic loading, but app will likely fail
@@ -571,7 +571,7 @@ class AmaryllisAgent:
 
         # a. Get RAG context from past attempts
         past_attempts = await asyncio.to_thread(
-            get_past_applescript_attempts, db, action_type, params_json, limit=5
+            get_past_scriptingseqprogramminginterface_attempts, db, action_type, params_json, limit=5
         )
         past_attempts_context = self._format_script_rag_context(past_attempts)
 

@@ -155,9 +155,9 @@ try:
     
     from database import (
         init_db, queue_interaction_for_batch_logging, add_interaction, get_recent_interactions, # <<< REMOVED get_db
-        get_past_tot_interactions, Interaction, SessionLocal, AppleScriptAttempt, # Added AppleScriptAttempt if needed here
+        get_past_tot_interactions, Interaction, SessionLocal, SystemInteractionScriptAttempt, # Added SystemInteractionScriptAttempt if needed here
         get_global_recent_interactions, get_pending_tot_result, mark_tot_delivered,
-        get_past_applescript_attempts, FileIndex, search_file_index, UploadedFileRecord, add_interaction_no_commit, AppleScriptAttempt, _DB_HEALTH_OK_EVENT # Added new DB function
+        get_past_scriptingseqprogramminginterface_attempts, FileIndex, search_file_index, UploadedFileRecord, add_interaction_no_commit, SystemInteractionScriptAttempt, _DB_HEALTH_OK_EVENT # Added new DB function
     )
     # Import all config variables (prompts, settings, etc.)
     from CortexConfiguration import * # Ensure this includes the SQLite DATABASE_URL and all prompts/models
@@ -275,9 +275,8 @@ try:
     logger.debug("---------------------------------------------------------")
 except Exception as inspect_err:
     logger.error(f"Failed to inspect Interaction model: {inspect_err}")
-# --- END DEBUGGING STEP ---
-
 # --- Initialize Database ---
+init_db()
 
 
 # --- Determine Python Executable ---
@@ -2679,7 +2678,7 @@ class CortexThoughts:
                 llm_prompt_template = gen_prompt if attempt == 1 else refine_prompt
                 
                 # RAG: Get past attempts for context
-                past_attempts = await asyncio.to_thread(get_past_applescript_attempts, exec_db, action_type, params_json, limit=5)
+                past_attempts = await asyncio.to_thread(get_past_scriptingseqprogramminginterface_attempts, exec_db, action_type, params_json, limit=5)
                 past_attempts_context = self._format_script_rag_context(past_attempts)
 
                 llm_input = {
@@ -2737,7 +2736,7 @@ class CortexThoughts:
                 success = (rc == 0)
                 error_summary = f"RC={rc}. Stderr: {stderr}" if not success else None
                 
-                attempt_record = AppleScriptAttempt(
+                attempt_record = SystemInteractionScriptAttempt(
                     session_id=session_id,
                     triggering_interaction_id=triggering_interaction.id,
                     action_type=action_type, parameters_json=params_json, attempt_number=attempt,
