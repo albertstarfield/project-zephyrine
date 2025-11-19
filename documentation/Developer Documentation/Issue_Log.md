@@ -10,7 +10,7 @@ This document serves as the master list for all tracked requirements, features, 
 
 -   **ID:** `BUILD-CHORE-001`
     -   **Title:** Remove conda executable path cache file.
-    -   **Status:** `In-Progress`
+    -   **Status:** `Resolved`
     -   **Description:** Removed the `.conda_executable_path_cache_main_env.txt` file from the repository. This file is specific to a local user environment and should not be tracked in version control.
 
 ---
@@ -88,7 +88,7 @@ This document serves as the master list for all tracked requirements, features, 
 -   **ID:** `DOC-REVIEW-001`
     -   **Title:** Documentation Accuracy & Completeness Review for MESH-DOC-001.
     -   **Status:** `Closed`
-    -   **Description:** Verify that the `zephyMeshNetwork/README.md` file is present, well-formatted, and accurately reflects the current design, implementation status, and planned features of the ZephyMesh component.
+    -   **Description:** Verify that the `zephyMeshNetwork/README.md` file is present, well-formatted, and accurately reflects the current design, implementation, and planned features of the ZephyMesh component.
 
 -   **ID:** `DOC-REVIEW-002`
     -   **Title:** Governance Documentation Review for GOVERNANCE-REQ-001 and GOVERNANCE-REQ-002.
@@ -111,6 +111,11 @@ This document serves as the master list for all tracked requirements, features, 
 ## **CORE ENGINE (CORE)**
 
 ### Features
+
+-   **ID:** `CORE-FEAT-013`
+    -   **Title:** Add `parent_ingestion_job_id` to Interaction model.
+    -   **Status:** `Resolved`
+    -   **Description:** Added a `parent_ingestion_job_id` field to the `Interaction` model. This allows for better tracking of interactions that are part of a larger ingestion job.
 
 -   **ID:** `CORE-FEAT-012`
     -   **Title:** Add langchain and langchain-text-splitters to dependencies.
@@ -198,6 +203,16 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Description:** Removed the `_stream` method from `LlamaCppChatWrapper` as it was incompatible with raw prompt mode and causing errors.
 
 ### Refactors
+
+-   **ID:** `CORE-REFACTOR-007`
+    -   **Title:** Overhaul DB health check with a robust "Nuke and Pave" strategy.
+    -   **Status:** `Resolved`
+    -   **Description:** The database health check in `database.py` has been completely refactored. It now employs a "Nuke and Pave" strategy for new or corrupt databases, where it automatically handles Alembic migrations. This significantly improves the robustness and reliability of the database initialization process.
+
+-   **ID:** `CORE-REFACTOR-006`
+    -   **Title:** Generalize `AppleScriptAttempt` to `SystemInteractionScriptAttempt`.
+    -   **Status:** `Resolved`
+    -   **Description:** Renamed the `AppleScriptAttempt` model to `SystemInteractionScriptAttempt` to better reflect its purpose of tracking various types of system interactions, not just AppleScript. This change was propagated throughout the codebase.
 
 -   **ID:** `CORE-REFACTOR-001`
     -   **Title:** Refactor ToT payload and increase embedding context size.
@@ -339,7 +354,7 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Description:** The audio_worker.py process shows a gradual increase in memory usage over time, suggesting a potential memory leak. This needs to be investigated and patched to ensure long-term stability.
 ---
 
-## **ZEPHY WATCHTOWER (WATCHDOG)**
+## **ZEPHY WATCHTOWER (WATCHDOWER)**
 
 ### Features
 
