@@ -1,0 +1,26 @@
+project Zephyrine_Server is
+
+   -- <<< THE PORTABILITY FIX STARTS HERE >>>
+   -- 1. Declare a variable to hold the OS name.
+   type OS_Type is ("macos", "linux", "windows", "unknown");
+   OS : OS_Type := external ("OS", "unknown");
+
+   for Source_Dirs use ("src");
+   for Object_Dir use "obj";
+   for Exec_Dir use "bin";
+   for Main use ("zephyrine_server.adb");
+
+   package C_Types is for Spec use "src/zephyrine-c_types.ads"; end C_Types;
+
+   package Compiler is
+      -- 2. Pass this OS variable to the Ada compiler as a configuration pragma.
+      -- This makes the OS variable available inside our Ada code.
+      for Switches ("ada") use
+        ("-g", "-O2", "-gnat12", "-gnatwa", "-gnatX", "-gnatec=src/config.pra", "OS=" & OS);
+   end Compiler;
+
+   package Linker is
+      for Switches ("ada") use ("-lsqlite3", "-lcurl"); -- We can add -lcurl back for now
+   end Linker;
+
+end Zephyrine_Server;
