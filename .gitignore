@@ -167,3 +167,4 @@ AutomatedAuditNotes.txt
 systemCore/UIEngine/backend-service/zephyrine-backend
 **.pyc**
 
+.conda_executable_path_cache_main_env.txt
