@@ -153,6 +153,14 @@ albumentations
 pyreadline3 # Note: Primarily for Windows compatibility
 
 
+# Branch Prediction, what is this?
+# Just a language that is instead of binary it is on vector, directly. simple as that.
+qiskit
+qiskit-aer
+qiskit-qrack-provider
+pyzmq
+
+
 ################################################################################
 #                            Notes & Considerations                            #
 #                                                                              #
