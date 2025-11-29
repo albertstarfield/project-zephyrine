@@ -117,6 +117,11 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Status:** `Resolved`
     -   **Description:** Added a `parent_ingestion_job_id` field to the `Interaction` model. This allows for better tracking of interactions that are part of a larger ingestion job.
 
+-   **ID:** `CORE-FEAT-014`
+    -   **Title:** Checkpoint: Initial Implementation of Branch Prediction Framework.
+    -   **Status:** `In-Progress`
+    -   **Description:** This commit serves as a checkpoint for the initial, experimental implementation of the DCTD (Decentralized Celestial Time-series Dynamics) Branch Prediction framework. This includes adding new dependencies (Qiskit, ZMQ), database schema changes for LSH hashing, and core logic in the AdelaideAlbertCortex to predict future user intent based on temporal vector analysis. This is a foundational step before a larger planned refactor and enhancement of the branch prediction capabilities.
+
 -   **ID:** `CORE-FEAT-012`
     -   **Title:** Add langchain and langchain-text-splitters to dependencies.
     -   **Status:** `In-Progress`

@@ -17,6 +17,7 @@ import re
 import subprocess  # Used in AgentTools (agent.py)
 import sys
 import tempfile
+import numpy as np # NEW: For LSH calculations
 # numpy import moved inside _find_existing_tot_result to make it optional
 import threading
 import time
@@ -34,6 +35,7 @@ from PIL import Image  # Used for image handling (optional validation/info)
 from bs4 import BeautifulSoup  # Used for URL parsing
 from loguru import logger  # Logging library
 from werkzeug.utils import secure_filename  # For safely handling uploaded filenames
+import zmq # NEW: For ZMQ communication with the branch predictor daemon
 
 try:
     ocr_reader = easyocr.Reader(['en'], gpu=True) # Use GPU if available
@@ -169,6 +171,8 @@ try:
         get_global_file_index_vectorstore  # You already had this for CortexThoughts
     )
     from agent import AmaryllisAgent, AgentTools, _start_agent_task # Keep Agent imports
+    from .dctd_branchpredictor import BranchPredictorProvider # NEW: For DCTD Branch Prediction
+    from numpy.linalg import norm # NEW: For vector similarity calculation
 except ImportError as e:
     print(f"Error importing local modules (database, config, agent, cortex_backbone_provider): {e}")
     logger.exception("Import Error Traceback:") # Log traceback for import errors
@@ -1065,6 +1069,18 @@ class CortexThoughts:
         self.current_session_id: Optional[str] = None
         self.setup_prompts()
 
+        # --- NEW: Initialize Branch Predictor Provider ---
+        self.branch_predictor: Optional[BranchPredictorProvider] = None
+        if DCTD_ENABLE_QUANTUM_PREDICTION:
+            try:
+                self.branch_predictor = BranchPredictorProvider(priority_lock=self.provider._priority_quota_lock)
+                logger.success("✅ Branch Predictor Provider initialized with priority lock.")
+            except Exception as e:
+                logger.error(f"❌ Failed to initialize Branch Predictor Provider: {e}. Branch prediction will be disabled.")
+        else:
+            logger.info("DCTD Branch Prediction is disabled by configuration. Branch Predictor Provider not initialized.")
+        # --- END NEW ---
+
         # --- NEW: Initialize StellaIcarusHookManager ---
         # --- MODIFIED: Initialize StellaIcarusHookManager ---
         self.stella_icarus_manager: Optional[StellaIcarusHookManager] = None
@@ -1892,6 +1908,33 @@ class CortexThoughts:
             logger.exception(f"{log_prefix} Traceback:")
             return None
 
+    def _find_most_similar_interaction_by_vector(self, predicted_vector: np.ndarray, interactions: List[Interaction]) -> Optional[Interaction]:
+        """
+        Finds the most similar interaction to a predicted vector from a list of interactions.
+        """
+        if predicted_vector is None or not interactions:
+            return None
+
+        best_match = None
+        highest_similarity = -1.0
+
+        for interaction in interactions:
+            if interaction.embedding_json:
+                try:
+                    embedding_list = json.loads(interaction.embedding_json)
+                    interaction_vector = np.array(embedding_list, dtype=np.float32)
+                    
+                    # Cosine similarity
+                    similarity = np.dot(predicted_vector, interaction_vector) / (norm(predicted_vector) * norm(interaction_vector))
+                    
+                    if similarity > highest_similarity:
+                        highest_similarity = similarity
+                        best_match = interaction
+                except (json.JSONDecodeError, TypeError):
+                    continue
+        
+        return best_match
+
     def _get_rag_retriever_thread_wrapper(self, db_session: Session, user_input_str: str, priority_val: int) -> Dict[str, Any]:
         """
         Synchronous wrapper for _get_rag_retriever to be run in asyncio.to_thread.
@@ -1913,6 +1956,117 @@ class CortexThoughts:
             logger.error(f"❌ {log_prefix}: Exception caught: {e_wrapper}")
             logger.exception(f"{log_prefix} _get_rag_retriever_thread_wrapper Exception Details:")
             return {"status": "error", "error_message": str(e_wrapper)}
+
+    # --- NEW HELPER: Temporal Sieve Data for Branch Prediction ---
+    def _get_temporal_sieve_data(self, db: Session, limit: int = MEMORY_SIZE) -> List[Dict[str, Any]]:
+        """
+        Extracts a sequence of recent interaction vectors and timestamps,
+        calculates LSH hashes and temporal bins.
+        """
+        log_prefix = f"TemporalSieve|{self.current_session_id or 'NoSession'}"
+        logger.debug(f"{log_prefix}: Extracting last {limit} interactions for temporal sieve.")
+
+        sieve_data = []
+        try:
+            # Query recent interactions that have an embedding and a timestamp
+            interactions = db.query(Interaction).filter(
+                Interaction.embedding_json.isnot(None),
+                Interaction.timestamp.isnot(None)
+            ).order_by(desc(Interaction.timestamp)).limit(limit).all()
+
+            if not interactions:
+                logger.debug(f"{log_prefix}: No interactions with embeddings found for temporal sieve.")
+                return []
+
+            # Sort by timestamp ascending to process chronologically for time deltas
+            interactions.sort(key=lambda x: x.timestamp)
+
+            previous_timestamp = None
+            for interaction in interactions:
+                # 1. Extract Vector (Embedding)
+                embedding_list = json.loads(interaction.embedding_json)
+                interaction_vector = np.array(embedding_list, dtype=np.float32)
+
+                # 2. Calculate LSH Hash
+                lsh_hash = calculate_lsh_hash(interaction_vector)
+                if lsh_hash is None:
+                    logger.warning(
+                        f"{log_prefix}: Failed to calculate LSH for interaction ID {interaction.id}. Skipping.")
+                    continue
+
+                # 3. Calculate Time Bins (Temporal Quantization)
+                time_delta_seconds = 0
+                if previous_timestamp:
+                    time_delta = interaction.timestamp - previous_timestamp
+                
+                # Define temporal bins (adjust as needed)
+                temporal_bin_id = 0 # Default for very recent
+                if time_delta_seconds > 24 * 3600: # > 24 hours
+                    temporal_bin_id = 4
+                elif time_delta_seconds > 3600: # > 1 hour
+                    temporal_bin_id = 3
+                elif time_delta_seconds > 5 * 60: # > 5 minutes
+                    temporal_bin_id = 2
+                elif time_delta_seconds > 120: # > 2 minutes
+                    temporal_bin_id = 1
+                
+                # Combine 10-bit LSH hash and 6-bit temporal bin into a single 16-bit integer
+                # LSH_hash (10 bits) << 6 | Temporal_bin (6 bits)
+                combined_feature = (lsh_hash << 6) | temporal_bin_id
+
+                sieve_data.append({
+                    "interaction_id": interaction.id,
+                    "timestamp": interaction.timestamp.isoformat(),
+                    "lsh_hash": lsh_hash,
+                    "time_delta_seconds": time_delta_seconds,
+                    "temporal_bin_id": temporal_bin_id,
+                    "combined_feature_16bit": combined_feature
+                })
+                previous_timestamp = interaction.timestamp
+
+            logger.debug(f"{log_prefix}: Extracted {len(sieve_data)} items for temporal sieve.")
+            return sieve_data
+
+        except Exception as e:
+            logger.error(f"❌ {log_prefix}: Error extracting temporal sieve data: {e}")
+            logger.exception(f"{log_prefix} Temporal Sieve Traceback:")
+            return []
+                    time_delta_seconds = int(time_delta.total_seconds())
+
+                # Define temporal bins (adjust as needed)
+                temporal_bin_id = 0 # Default to 0-120s
+                if time_delta_seconds > 24 * 3600: # > 24 hours
+                    temporal_bin_id = 4
+                elif time_delta_seconds > 3600: # > 1 hour
+                    temporal_bin_id = 3
+                elif time_delta_seconds > 5 * 60: # > 5 minutes
+                    temporal_bin_id = 2
+                elif time_delta_seconds > 120: # > 2 minutes
+                    temporal_bin_id = 1
+                
+                # Combine 10-bit LSH hash and 6-bit temporal bin into a single 16-bit integer
+                # LSH_hash (10 bits) << 6 | Temporal_bin (6 bits)
+                combined_feature = (lsh_hash << 6) | temporal_bin_id
+
+                sieve_data.append({
+                    "interaction_id": interaction.id,
+                    "timestamp": interaction.timestamp.isoformat(),
+                    "lsh_hash": lsh_hash,
+                    "time_delta_seconds": time_delta_seconds,
+                    "temporal_bin_id": temporal_bin_id,
+                    "combined_feature_16bit": combined_feature
+                })
+                previous_timestamp = interaction.timestamp
+
+            logger.debug(f"{log_prefix}: Extracted {len(sieve_data)} items for temporal sieve.")
+            return sieve_data
+
+        except Exception as e:
+            logger.error(f"❌ {log_prefix}: Error extracting temporal sieve data: {e}")
+            logger.exception(f"{log_prefix} Temporal Sieve Traceback:")
+            return []
+
+    # --- END NEW HELPER ---
 
     class _CustomVectorSearchRetriever(VectorStoreRetriever):
         vectorstore: VectorStore
@@ -2085,6 +2239,42 @@ class CortexThoughts:
             return "[An error occurred while retrieving historical context]"
 
     #for ELP1 rag retriever since it's uses small amount of resources for calculation vector and retrieve it's better to put it on ELP1 by default
+    def _send_to_dctd_daemon(self, temporal_sieve_data: List[Dict[str, Any]]) -> Optional[Dict[str, Any]]:
+        """
+        Sends temporal sieve data to the DCTD daemon via ZMQ and returns the prediction.
+        """
+        log_prefix = f"DCTD_Client|{self.current_session_id or 'NoSession'}"
+        if not DCTD_ENABLE_QUANTUM_PREDICTION or self.zmq_socket is None:
+            logger.debug(f"{log_prefix}: DCTD daemon communication skipped (disabled or not connected).")
+            return None
+
+        if not temporal_sieve_data:
+            logger.debug(f"{log_prefix}: No temporal sieve data to send.")
+            return None
+
+        try:
+            # Serialize the data to JSON
+            message = json.dumps(temporal_sieve_data)
+            
+            logger.debug(f"{log_prefix}: Sending {len(message)} bytes to DCTD daemon...")
+            self.zmq_socket.send_string(message)
+            
+            # Wait for response
+            response_str = self.zmq_socket.recv_string()
+            logger.debug(f"{log_prefix}: Received {len(response_str)} bytes from DCTD daemon.")
+            
+            prediction = json.loads(response_str)
+            return prediction
+            
+        except zmq.Again: # Timeout exception
+            logger.warning(f"{log_prefix}: ZMQ communication timed out with DCTD daemon.")
+            return None
+        except Exception as e:
+            logger.error(f"❌ {log_prefix}: Error communicating with DCTD daemon: {e}")
+            return None
+
+    # --- END NEW HELPER ---
+
     def _get_rag_retriever(self, db: Session, user_input_for_rag_query: str, priority: int = ELP1) -> Tuple[
     Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], Optional[VectorStoreRetriever], str
     ]:
@@ -4389,6 +4579,8 @@ class CortexThoughts:
         # <<< MODIFICATION: Call the new, lightweight RAG helper >>>
         history_rag_str = await self._get_direct_rag_context_elp1(db, user_input, session_id)
 
+        # --- End Branch Prediction Augmentation ---
+        
         # Get the most recent, direct conversation turns for immediate context.
         direct_history_interactions = await asyncio.to_thread(get_global_recent_interactions, db, limit=5)
         recent_direct_history_str = self._format_direct_history(direct_history_interactions)
@@ -4405,6 +4597,7 @@ class CortexThoughts:
             "history_rag": history_rag_str,
             "recent_direct_history": recent_direct_history_str,
             "input": user_input,
+            "augmented_prediction_context": "" # NEW
         }
 
         bound_model = fast_model.bind(max_tokens=max_response_tokens, stop=[CHATML_END_TOKEN], priority=ELP1)
@@ -5938,15 +6131,57 @@ class CortexThoughts:
                     logger.info(f"🚦 {log_prefix} Server busy, pausing background task start...")
                     was_busy_waiting = True
                 await asyncio.sleep(1.0)
-            if was_busy_waiting: logger.info(f"🟢 {log_prefix} Server free, resuming background task.")
-
-            current_attempt = 0
-            while current_attempt <= max_retries_for_bg_task:
-                current_attempt += 1
-                if current_attempt > 1:
-                    logger.warning(
-                        f"{log_prefix} Retrying entire background generate process (Attempt {current_attempt})...")
-                    await asyncio.sleep(retry_delay_seconds)
+                        if was_busy_waiting: logger.info(f"🟢 {log_prefix} Server free, resuming background task.")
+            
+                        # --- Branch Prediction ---
+                        future_information_prediction = ""
+                        if DCTD_ENABLE_QUANTUM_PREDICTION and self.branch_predictor:
+                            logger.info(f"{log_prefix} DCTD: Attempting branch prediction augmentation.")
+                            
+                            # Combine initial prompt and recent interactions for embedding
+                            recent_interactions_for_embedding = await asyncio.to_thread(get_recent_interactions, db, limit=10)
+                            combined_text_for_embedding = user_input + "\n" + self._format_direct_history(recent_interactions_for_embedding)
+                            
+                            # Generate embedding for the combined text
+                            combined_embedding = await asyncio.to_thread(self.provider.embeddings.embed_query, combined_text_for_embedding)
+                            
+                            # Predict the next embedding
+                            temporal_sieve_data = await asyncio.to_thread(self._get_temporal_sieve_data, db)
+                            if temporal_sieve_data:
+                                prediction_result = self.branch_predictor.predict_future_vector(temporal_sieve_data)
+                                
+                                if prediction_result and isinstance(prediction_result, dict):
+                                    predicted_vector = prediction_result.get("predicted_vector")
+                                    
+                                    if predicted_vector is not None:
+                                        # Find most similar interaction to the predicted vector
+                                        recent_interactions = await asyncio.to_thread(get_recent_interactions, db, limit=100)
+                                        most_similar_interaction = await asyncio.to_thread(self._find_most_similar_interaction_by_vector, predicted_vector, recent_interactions)
+                                        
+                                        if most_similar_interaction:
+                                            query_text = f"{most_similar_interaction.user_input or ''} {most_similar_interaction.llm_response or ''}"
+                                            fuzzy_match_interaction = await asyncio.to_thread(fuzzy_search_interactions, db, query_text)
+                                            
+                                                                            if fuzzy_match_interaction:
+                                                                                future_rag_info = f"User: {fuzzy_match_interaction.user_input or ''}\nAI: {fuzzy_match_interaction.llm_response or ''}"
+                                                                                future_information_prediction = f"\nFutureInformationPrediction: {future_rag_info}\n"
+                                                                                logger.debug(f"{log_prefix} DCTD: Injected future information prediction.")
+                                            
+                                                                    # --- NEW: Vector to Text Conversion ---
+                                                                    if predicted_vector is not None:
+                                                                        retrieved_text = await asyncio.to_thread(get_text_from_vector, db, predicted_vector)
+                                                                        if retrieved_text:
+                                                                            logger.info(f"{log_prefix} DCTD: Vector-to-text conversion result: '{retrieved_text[:100]}...'")
+                                                                        else:
+                                                                            logger.warning(f"{log_prefix} DCTD: Vector-to-text conversion failed to retrieve text.")
+                                                                    # --- END NEW ---
+                                            
+                                                        current_attempt = 0
+                                                        while current_attempt <= max_retries_for_bg_task:
+                                                            current_attempt += 1
+                                                            if current_attempt > 1:                                logger.warning(f"{log_prefix} Retrying entire background generate process (Attempt {current_attempt})...")
+                                await asyncio.sleep(retry_delay_seconds)
+            
 
                 try:
                     if stop_event_for_bg and stop_event_for_bg.is_set():
@@ -6079,6 +6314,8 @@ class CortexThoughts:
                         current_input_for_analysis, session_id, ELP0, stop_event_for_bg)
                     url_context_str = self._format_docs(url_docs, "URL Context")
                     history_rag_str = self._format_docs(session_docs + reflection_docs, "History/Reflection RAG")
+                    if future_information_prediction:
+                        history_rag_str += f"\n{future_information_prediction}"
 
                     rag_summary = (
                         f"URL Context: {len(url_docs)} docs. "

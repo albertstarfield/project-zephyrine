@@ -81,6 +81,7 @@ LATEX_OCR_SUBMODULE_DIR_NAME = "LaTeX_OCR-SubEngine"
 LATEX_OCR_PATH = os.path.join(ENGINE_MAIN_DIR, LATEX_OCR_SUBMODULE_DIR_NAME)
 LATEX_OCR_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".latex_ocr_subengine_installed_v1")
 
+
 # --- Playwright Flag Configuration
 
 PLAYWRIGHT_BROWSERS_INSTALLED_FLAG_FILE = os.path.join(ROOT_DIR, ".playwright_browsers_installed_v1")
@@ -1011,7 +1012,6 @@ def start_zephymesh_service_fast():
         os.remove(ZEPHYMESH_PORT_INFO_FILE)
 
     start_service_process([mesh_exe_path], ROOT_DIR, name)
-
 
 def start_watchdogs_service_fast():
     """Fast-path version: Assumes watchdogs are compiled and launches them directly."""
@@ -4350,6 +4350,14 @@ if __name__ == "__main__":
                 setup_failures.append("Failed to install patchelf, which is critical for fixing library paths.")
             if not _ensure_conda_package("ncurses", is_critical=True):
                 setup_failures.append("Failed to install ncurses, which is critical for terminal operations.")
+            if not _ensure_conda_package("llvm-openmp", is_critical=True):
+                setup_failures.append("Failed to install llvm-openmp, which is critical for terminal operations.")
+            if not _ensure_conda_package("openmpi-mpifort", is_critical=True):
+                setup_failures.append("Failed to install openmpi-mpifort, which is critical for terminal operations.")
+            if not _ensure_conda_package("openmpi", is_critical=True):
+                setup_failures.append("Failed to install openmpi, which is critical for terminal operations.")
+            if not _ensure_conda_package("cmake>=3.21", is_critical=True):
+                setup_failures.append("Failed to install cmake>=3.21, which is critical for installation operations.")
             if AUTO_VULKAN_AVAILABLE:
                 print_system("--- Ensuring Vulkan build tools (shaderc for glslc) ---")
                 if not _ensure_conda_package("shaderc", executable_to_check="glslc", is_critical=True):

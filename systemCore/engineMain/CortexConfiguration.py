@@ -312,6 +312,12 @@ logger.info(f"StellaIcarusHooks Enabled: {ENABLE_STELLA_ICARUS_HOOKS}")
 logger.info(f"  Hook Directory: {STELLA_ICARUS_HOOK_DIR}")
 logger.info(f"  Cache Directory: {STELLA_ICARUS_CACHE_DIR}") # Primarily for Numba's cache if configured
 ADA_DAEMON_RETRY_DELAY_SECONDS = 30 # NEW: Fallback value
+# --- NEW: DCTD Branch Predictor Settings ---
+DCTD_SOCKET_PATH = "./celestial_timestream_vector_helper.socket" # Relative to systemCore/engineMain
+DCTD_NT_PORT = 11891 # Port for Windows TCP fallback
+DCTD_ENABLE_QUANTUM_PREDICTION = os.getenv("DCTD_ENABLE_QUANTUM_PREDICTION", "true").lower() in ('true', '1', 't', 'yes', 'y')
+logger.info(f"🔮 DCTD Quantum Prediction Enabled: {DCTD_ENABLE_QUANTUM_PREDICTION}")
+# --- END NEW: DCTD Branch Predictor Settings ---
 # --- NEW: StellaIcarus Ada Daemon & Instrument Viewport Settings ---
 ENABLE_STELLA_ICARUS_DAEMON = os.getenv("ENABLE_STELLA_ICARUS_DAEMON", "true").lower() in ('true', '1', 't', 'yes', 'y')
 # This is the parent directory where multiple Ada project folders are located.
@@ -893,8 +899,8 @@ PROMPT_DIRECT_GENERATE_SYSTEM_CONTENT = """你是一个共生体助手，一个�
 [已生成的回应 (RESPONSE SO FAR)]:
 {current_response_so_far}
 ---
-
 **背景知识 (BACKGROUND KNOWLEDGE - 较低优先级上下文)**
+[预测未来情境 (Predicted Future Context)]: {augmented_prediction_context}
 [整体主题 (Overall Topic)]: {topic_summary}
 [叙事目标 (Narrative Goal)]: {narrative_anchors}
 [下一步 (Next Step)]: {progression_summary}

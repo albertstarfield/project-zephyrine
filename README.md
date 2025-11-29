@@ -50,6 +50,21 @@ Beneath the conversational surface, I am built upon several core architectural p
     *   **Self-Reflection:** I have a background process that periodically reviews past interactions to synthesize new insights and learn from mistakes, storing these "memories" for future reference.
     *   **Local File Indexing:** I can scan your local filesystem to build a searchable knowledge base, allowing me to answer questions and perform tasks based on your documents, notes, and data.
 
+(Check out this 2023 with the paper that is published by someone @article{zhou2025mementofinetuningllmagents,
+      title={Memento: Fine-tuning LLM Agents without Fine-tuning LLMs},
+      author={Huichi Zhou and Yihang Chen and Siyuan Guo and Xue Yan and Kin Hei Lee and Zihan Wang and Ka Yiu Lee and Guchun Zhang and Kun Shao and Linyi Yang and Jun Wang},
+      journal={arXiv preprint arXiv: 2508.16153},
+      url={https://arxiv.org/abs/2508.16153},
+      year={2025}
+}
+
+@article{huang2025deep,
+  title={Deep Research Agents: A Systematic Examination And Roadmap},
+  author={Huang, Yuxuan and Chen, Yihang and Zhang, Haozheng and Li, Kang and Fang, Meng and Yang, Linyi and Li, Xiaoguang and Shang, Lifeng and Xu, Songcen and Hao, Jianye and others},
+  journal={arXiv preprint arXiv:2506.18096},
+  year={2025}
+}) for the scientific academic exploration of this very concept 
+
 
 *   **🤖 Agentic Capabilities:** I am more than just a chatbot; I am an agent. When a query requires action, I can:
     *   **Generate and Execute Code:** For tasks on your computer, I can write and run scripts (e.g., AppleScript, PowerShell, Bash) to interact with your operating system.

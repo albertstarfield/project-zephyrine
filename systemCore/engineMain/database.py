@@ -12,6 +12,7 @@ import tempfile
 import re
 import enum
 import threading  # For the snapshotter thread
+import numpy as np # NEW: For LSH calculations
 
 from sqlalchemy.cyextension import collections
 
@@ -44,6 +45,9 @@ from alembic import command
 from alembic.util import CommandError
 from collections import deque
 from loguru import logger
+from thefuzz import process as fuzz_process, fuzz
+from langchain_chroma import Chroma
+from interaction_indexer import get_global_interaction_vectorstore
 
 
 # --- Configuration & Paths ---
@@ -67,6 +71,13 @@ DB_SNAPSHOT_FILENAME_SUFFIX = ".db.zst"
 from CortexConfiguration import *
 
 ZSTD_COMPRESSION_LEVEL = int(os.getenv("ZSTD_COMPRESSION_LEVEL", 9))
+
+# --- NEW: LSH Configuration for Branch Prediction ---
+LSH_VECTOR_SIZE = 384 # Common embedding size, adjust if your vectors are different
+LSH_NUM_HYPERPLANES = 10 # For a 10-bit hash
+# Generate random hyperplanes once at startup
+LSH_HYPERPLANES = np.random.randn(LSH_NUM_HYPERPLANES, LSH_VECTOR_SIZE)
+# --- END NEW: LSH Configuration ---
 
 logger.info(f"⚙️ Runtime DB Path: {RUNTIME_DB_PATH}")
 logger.info(f"📦 Compressed DB Path (Shutdown Archive): {DB_PATH_COMPRESSED}")
@@ -175,6 +186,7 @@ class Interaction(Base):
     is_indexed_for_rag = Column(Boolean, nullable=False, server_default=text("0"), index=True)
     embedding_json = Column(Text, nullable=True)
     parent_ingestion_job_id = Column(Text, nullable=True)
+    lsh_hash_10bit = Column(Integer, nullable=True, index=True) # NEW: For Branch Prediction DCTD
 
 
     __table_args__ = (
@@ -190,6 +202,7 @@ class Interaction(Base):
         Index('ix_interactions_llm_response_search', 'llm_response'),
         Index('ix_interactions_user_input_search', 'user_input'),
         Index('ix_interactions_parent_ingestion_job_id', 'parent_ingestion_job_id'),
+        Index('ix_interactions_lsh_hash_10bit', 'lsh_hash_10bit'), # NEW: For Branch Prediction DCTD
         # Index for new field
     )
 
@@ -274,6 +287,52 @@ class FileIndex(Base):
 
     def __repr__(self):
         return f"<FileIndex(path='{self.file_path[:50]}...', status='{self.index_status}', hash='{self.md5_hash}')>"
+
+# --- NEW: LSH Helper Functions for Branch Prediction ---
+def calculate_lsh_hash(vector: np.ndarray) -> Optional[int]:
+    """
+    Calculates a 10-bit Locality Sensitive Hash for a given vector.
+    Returns None if the vector size does not match LSH_VECTOR_SIZE.
+    """
+    if vector.shape[0] != LSH_VECTOR_SIZE:
+        logger.warning(f"Vector size mismatch for LSH calculation. Expected {LSH_VECTOR_SIZE}, got {vector.shape[0]}.")
+        return None
+    
+    # Project the vector onto each hyperplane and determine the bit
+    # If dot product is positive, bit is 1; otherwise, 0.
+    bits = (np.dot(LSH_HYPERPLANES, vector) > 0).astype(int)
+    
+    # Combine bits into a single integer (10-bit hash)
+    lsh_hash = int("".join(str(b) for b in bits), 2)
+    return lsh_hash
+
+def store_lsh_hash_for_interaction(db_session: Session, interaction_id: int, vector: np.ndarray) -> bool:
+    """
+    Calculates the LSH hash for a given vector and stores it in the specified interaction.
+    """
+    lsh_hash = calculate_lsh_hash(vector)
+    if lsh_hash is None:
+        return False
+
+    try:
+        stmt = update(Interaction).where(Interaction.id == interaction_id).values(lsh_hash_10bit=lsh_hash)
+        db_session.execute(stmt)
+        # No commit here; assume calling function will commit/rollback transaction
+        return True
+    except Exception as e:
+        logger.error(f"Error storing LSH hash for interaction ID {interaction_id}: {e}")
+        return False
+
+def create_lsh_index(db_session: Session):
+    """
+    Ensures that an index exists on the lsh_hash_10bit column.
+    This function is largely a no-op as SQLAlchemy's __table_args__ handles
+    index creation via Alembic migrations. It's kept for conceptual completeness
+    as described in the TODO.
+    """
+    logger.debug("create_lsh_index called. Index is handled by SQLAlchemy/Alembic migration on Interaction table.")
+    pass
+# --- END NEW: LSH Helper Functions ---
 
 
 # --- END Database Models ---
@@ -1887,6 +1946,93 @@ def search_file_index(db: Session, query: str, limit: int = 10) -> List[FileInde
         return results
     except Exception as e:
         logger.error(f"Error searching file index: {e}"); return []
+
+def fuzzy_search_interactions(db: Session, query: str, limit: int = 100, threshold: int = 80) -> Optional[Interaction]:
+    """
+    Performs a fuzzy search on recent interactions.
+
+    :param db: The database session.
+    :param query: The query string to search for.
+    :param limit: The number of recent interactions to search through.
+    :param threshold: The minimum similarity score to consider a match.
+    :return: The best matching Interaction object, or None if no good match is found.
+    """
+    logger.debug(f"Performing fuzzy search for query: '{query}'")
+    try:
+        recent_interactions = get_recent_interactions(db, limit=limit)
+        if not recent_interactions:
+            return None
+
+        choices = {
+            interaction.id: f"{interaction.user_input or ''} {interaction.llm_response or ''}"
+            for interaction in recent_interactions
+        }
+
+        best_match = fuzz_process.extractOne(query, choices, scorer=fuzz.token_set_ratio)
+        
+        if best_match and best_match[1] >= threshold:
+            interaction_id, score = best_match[0], best_match[1]
+            logger.debug(f"Found fuzzy match with score {score}: interaction ID {interaction_id}")
+            # Find the interaction object corresponding to the best match ID
+            for interaction in recent_interactions:
+                if interaction.id == interaction_id:
+                    return interaction
+        
+        logger.debug("No suitable fuzzy match found.")
+        return None
+
+    except Exception as e:
+        logger.error(f"Error during fuzzy search: {e}")
+        return None
+
+def get_text_from_vector(db: Session, vector: np.ndarray) -> Optional[str]:
+    """
+    Retrieves the text of the most similar interaction to a given vector.
+
+    :param db: The database session.
+    :param vector: The vector to search for.
+    :return: The text of the most similar interaction, or None if not found.
+    """
+
+    log_prefix = "VectorToText"
+    logger.debug(f"{log_prefix}: Searching for text from vector.")
+    try:
+        interaction_vs = get_global_interaction_vectorstore()
+        if not interaction_vs:
+            logger.error(f"{log_prefix}: Interaction vector store not available.")
+            return None
+
+        # similarity_search_by_vector returns a list of Document objects
+        search_results = interaction_vs.similarity_search_by_vector(vector, k=1)
+        
+        if not search_results:
+            logger.warning(f"{log_prefix}: No similar documents found in vector store.")
+            return None
+
+        # The result is a list, get the first element
+        most_similar_doc = search_results[0]
+        interaction_id = most_similar_doc.metadata.get("interaction_id")
+        
+        if not interaction_id:
+            logger.error(f"{log_prefix}: Found a similar document, but it's missing 'interaction_id' in metadata.")
+            return None
+
+        # Query the main database for the interaction
+        interaction = db.query(Interaction).filter(Interaction.id == interaction_id).first()
+        if not interaction:
+            logger.error(f"{log_prefix}: Interaction with ID {interaction_id} not found in the main database.")
+            return None
+            
+        # Return the content of the interaction
+        # We can decide which part of the interaction to return, e.g., llm_response
+        text_content = interaction.llm_response or interaction.user_input
+        logger.success(f"{log_prefix}: Successfully retrieved text for interaction ID {interaction_id}.")
+        return text_content
+
+    except Exception as e:
+        logger.error(f"❌ {log_prefix}: An error occurred: {e}")
+        logger.exception(f"{log_prefix} Traceback:")
+        return None
 
 def _delete_malformed_entries():
     """
