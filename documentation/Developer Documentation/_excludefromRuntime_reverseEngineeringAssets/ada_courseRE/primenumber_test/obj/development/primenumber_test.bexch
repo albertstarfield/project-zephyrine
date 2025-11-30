@@ -1,0 +1,19 @@
+[GENERATED OBJECT FILE]
+b__primenumber_test.o
+[PROJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/primenumber_test/primenumber_test.gpr
+20250619150635 cfb0403f4446d18d505930a2663225f7
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/primenumber_test/config/primenumber_test_config.gpr
+20250619150635 88eb934e5c7880fa491316143dede341
+[BOUND OBJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/primenumber_test/obj/development/primenumber_test.o
+[GENERATED SOURCE FILES]
+b__primenumber_test.ads
+b__primenumber_test.adb
+b__primenumber_test.ali
+[RESULTING OPTIONS]
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/primenumber_test/obj/development/
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/primenumber_test/obj/development/
+-L/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/
+-static
+/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/libgnat.a

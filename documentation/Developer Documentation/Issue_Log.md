@@ -421,3 +421,10 @@ This document serves as the master list for all tracked requirements, features, 
     -   **Title:** Create a user guide for the main features.
     -   **Status:** `Open`
     -   **Description:** The project lacks a user-facing guide explaining how to use the main features like the agent, the imagination worker, and the different search functionalities. A new document should be created in the `documentation` folder to serve as a user manual.
+
+### Maintenance
+
+-   **ID:** `DOC-MAINT-001`
+    -   **Title:** Checkpoint: AdelaideAlbertCortex refactor and documentation asset relocation.
+    -   **Status:** `Resolved`
+    -   **Description:** This serves as a checkpoint before a major refactoring of the Branch Prediction system. It includes a significant logical overhaul of the `AdelaideAlbertCortex.py` main loop, restructuring the flow of context gathering, action analysis, and response synthesis. Additionally, the `_excludefromRuntime_reverseEngineeringAssets` directory has been relocated into the `documentation/Developer Documentation` folder to better organize non-runtime assets.

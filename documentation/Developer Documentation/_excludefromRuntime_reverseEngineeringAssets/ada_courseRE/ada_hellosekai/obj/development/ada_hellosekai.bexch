@@ -1,0 +1,19 @@
+[GENERATED OBJECT FILE]
+b__ada_hellosekai.o
+[PROJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_hellosekai/ada_hellosekai.gpr
+20250619145501 9ad730b84d9f81dbc79c649c4854a482
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_hellosekai/config/ada_hellosekai_config.gpr
+20250619145501 ff4e723179a7233fdd30ce17f1324940
+[BOUND OBJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_hellosekai/obj/development/ada_hellosekai.o
+[GENERATED SOURCE FILES]
+b__ada_hellosekai.ads
+b__ada_hellosekai.adb
+b__ada_hellosekai.ali
+[RESULTING OPTIONS]
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_hellosekai/obj/development/
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_hellosekai/obj/development/
+-L/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/
+-static
+/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/libgnat.a

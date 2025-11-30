@@ -1,0 +1,66 @@
+V "GNAT Lib v15"
+A -Og
+A -gnatA
+A -ffunction-sections
+A -fdata-sections
+A -g
+A -gnatwa
+A -gnatw.X
+A -gnatVa
+A -gnaty3
+A -gnatya
+A -gnatyA
+A -gnatyB
+A -gnatyb
+A -gnatyc
+A -gnaty-
+A -gnatyd
+A -gnatye
+A -gnatyf
+A -gnatyh
+A -gnatyi
+A -gnatyI
+A -gnatyk
+A -gnatyl
+A -gnatym
+A -gnatyn
+A -gnatyO
+A -gnatyp
+A -gnatyr
+A -gnatyS
+A -gnatyt
+A -gnatyu
+A -gnatyx
+A -gnatW8
+A -gnatR2js
+A -gnatws
+A -gnatis
+A -mmacosx-version-min=16.0.0
+A -mcpu=apple-m1
+A -mlittle-endian
+A -mabi=lp64
+A -fPIC
+P SS ZX
+
+RN
+RV NO_SECONDARY_STACK
+RV NO_IMPLEMENTATION_ASPECT_SPECIFICATIONS
+RV NO_IMPLEMENTATION_PRAGMAS
+
+U message_generator%b	message_generator.adb	71fdd28f NE OO PK
+Z system.secondary_stack%s  s-secsta.adb	s-secsta.ali
+
+U message_generator%s	message_generator.ads	a62f73b2 EE NE OO PK
+
+D message_generator.ads	20250628010829 a62f73b2 message_generator%s
+D message_generator.adb	20250628010845 d7d2a13d message_generator%b
+D system.ads		20250419085653 70765b54 system%s
+D s-parame.ads		20250419085653 3597fc11 system.parameters%s
+D s-secsta.ads		20250419085653 578279f5 system.secondary_stack%s
+D s-stoele.ads		20250419085653 ccded4e8 system.storage_elements%s
+G a e
+G c Z s b [get_message message_generator 9 13 none]
+X 1 message_generator.ads
+1K9*Message_Generator 12l5 12e22 2|1b14 12l5 12t22
+9V13*Get_Message{string} 10r19 2|5b13 10l8 10t19
+

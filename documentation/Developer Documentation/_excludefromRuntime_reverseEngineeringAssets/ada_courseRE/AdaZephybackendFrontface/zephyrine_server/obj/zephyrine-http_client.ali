@@ -1,0 +1,227 @@
+V "GNAT Lib v15"
+A -O2
+A -gnatA
+A -g
+A -gnatX
+A -gnatwa
+A -mmacosx-version-min=16.0.0
+A -mcpu=apple-m1
+A -mlittle-endian
+A -mabi=lp64
+A -fPIC
+P SS ZX
+
+RN
+RV NO_EXCEPTION_HANDLERS
+RV NO_EXCEPTION_PROPAGATION
+RV NO_EXCEPTIONS
+RV NO_IO
+RV NO_IMPLICIT_CONDITIONALS
+RV NO_LOCAL_ALLOCATORS
+RV NO_SECONDARY_STACK
+RV NO_STANDARD_STORAGE_POOLS
+RV NO_UNCHECKED_CONVERSION
+RV NO_DYNAMIC_SIZED_OBJECTS
+RV NO_IMPLEMENTATION_PRAGMAS
+RV NO_ELABORATION_CODE
+RV NO_OBSOLESCENT_FEATURES
+
+U zephyrine.http_client%b  zephyrine-http_client.adb  7133517a NE OO PK
+W ada%s			ada.ads			ada.ali
+W ada.exceptions%s	a-except.adb		a-except.ali
+W ada.strings%s		a-string.ads		a-string.ali
+W ada.strings.fixed%s	a-strfix.adb		a-strfix.ali
+Z ada.strings.text_buffers%s  a-sttebu.adb	a-sttebu.ali
+W ada.text_io%s		a-textio.adb		a-textio.ali
+W ada.unchecked_conversion%s
+W interfaces%s		interfac.ads		interfac.ali
+W interfaces.c%s	i-c.adb			i-c.ali
+W interfaces.c.strings%s  i-cstrin.adb		i-cstrin.ali
+W system%s		system.ads		system.ali
+Z system.img_int%s	s-imgint.ads		s-imgint.ali
+Z system.img_llli%s	s-imgllli.ads		s-imgllli.ali
+Z system.secondary_stack%s  s-secsta.adb	s-secsta.ali
+W zephyrine%s		zephyrine.ads		zephyrine.ali
+W zephyrine.c_sockets%s	zephyrine-c_sockets.ads	zephyrine-c_sockets.ali
+
+U zephyrine.http_client%s  zephyrine-http_client.ads  2d4b3d61 EE OO PK
+Z system%s		system.ads		system.ali
+Z system.exception_table%s  s-exctab.adb	s-exctab.ali
+Z system.standard_library%s  s-stalib.adb	s-stalib.ali
+W zephyrine%s		zephyrine.ads		zephyrine.ali
+
+D ada.ads		20250419085653 76789da1 ada%s
+D a-charac.ads		20250419085653 2d3ec45b ada.characters%s
+D a-chlat1.ads		20250419085653 e0d72e76 ada.characters.latin_1%s
+D a-except.ads		20250419085653 e7970cd9 ada.exceptions%s
+D a-ioexce.ads		20250419085653 40018c65 ada.io_exceptions%s
+D a-stream.ads		20250419085653 17477cbd ada.streams%s
+D a-string.ads		20250419085653 90ac6797 ada.strings%s
+D a-strfix.ads		20250419085653 8648dedb ada.strings.fixed%s
+D a-strmap.ads		20250419085653 1f91ebb6 ada.strings.maps%s
+D a-strsea.ads		20250419085653 18c3c634 ada.strings.search%s
+D a-sttebu.ads		20250419085653 f1ad67a2 ada.strings.text_buffers%s
+D a-stuten.ads		20250419085653 c6ced0ae ada.strings.utf_encoding%s
+D a-tags.ads		20250419085653 fbca0ad5 ada.tags%s
+D a-textio.ads		20250419085653 34ef47de ada.text_io%s
+D a-unccon.ads		20250419085653 0e9b276f ada.unchecked_conversion%s
+D interfac.ads		20250419085653 9111f9c1 interfaces%s
+D i-c.ads		20250419085653 e94c966a interfaces.c%s
+D i-cstrin.ads		20250419085653 5409c1a4 interfaces.c.strings%s
+D i-cstrea.ads		20250419085653 ffd01b9d interfaces.c_streams%s
+D system.ads		20250419085653 70765b54 system%s
+D s-crtl.ads		20250419085653 beb39b9e system.crtl%s
+D s-exctab.ads		20250419085653 91bef6ef system.exception_table%s
+D s-ficobl.ads		20250419085653 dc5161d4 system.file_control_block%s
+D s-imagei.ads		20250419085653 5e131ce0 system.image_i%s
+D s-imgint.ads		20250419085653 67e4edfb system.img_int%s
+D s-imgllli.ads		20250419085653 404e72c5 system.img_llli%s
+D s-parame.ads		20250419085653 3597fc11 system.parameters%s
+D s-putima.ads		20250419085653 17291fe4 system.put_images%s
+D s-secsta.ads		20250419085653 578279f5 system.secondary_stack%s
+D s-soflin.ads		20250419085653 5d88fdea system.soft_links%s
+D s-stache.ads		20250419085653 0b81c1fe system.stack_checking%s
+D s-stalib.ads		20250419085653 1c9580f6 system.standard_library%s
+D s-stoele.ads		20250419085653 ccded4e8 system.storage_elements%s
+D s-traent.ads		20250419085653 c81cbf8c system.traceback_entries%s
+D s-unstyp.ads		20250419085653 fa2a7f59 system.unsigned_types%s
+D s-valspe.ads		20250419085653 f810d31c system.val_spec%s
+D s-vaispe.ads		20250419085653 8280550e system.value_i_spec%s
+D s-vauspe.ads		20250419085653 89269ba5 system.value_u_spec%s
+D s-vs_int.ads		20250419085653 06b6b724 system.vs_int%s
+D s-vsllli.ads		20250419085653 3a5ba700 system.vs_llli%s
+D s-vslllu.ads		20250419085653 678200a0 system.vs_lllu%s
+D s-vs_uns.ads		20250419085653 e7f47a27 system.vs_uns%s
+D s-wchcon.ads		20250419085653 d9032363 system.wch_con%s
+D zephyrine.ads		20250621052221 fa60cf7b zephyrine%s
+D zephyrine-c_sockets.ads  20250621092433 6d27070e zephyrine.c_sockets%s
+D zephyrine-http_client.ads  20250621082501 d72bf21a zephyrine.http_client%s
+D zephyrine-http_client.adb  20250621092121 5da71a47 zephyrine.http_client%b
+G a e
+G c Z s b [post zephyrine__http_client 4 13 none]
+G c Z b b [create_request zephyrine__http_client 20 13 none]
+G r c none [post zephyrine__http_client 4 13 none] [getaddrinfo zephyrine__c_sockets 33 13 none]
+G r c none [post zephyrine__http_client 4 13 none] [socket zephyrine__c_sockets 42 13 none]
+G r c none [post zephyrine__http_client 4 13 none] [connect zephyrine__c_sockets 45 13 none]
+G r c none [post zephyrine__http_client 4 13 none] [get_errno zephyrine__c_sockets 78 13 none]
+G r c none [post zephyrine__http_client 4 13 none] [strerror zephyrine__c_sockets 69 13 none]
+G r c none [post zephyrine__http_client 4 13 none] [close zephyrine__c_sockets 65 13 none]
+G r c none [post zephyrine__http_client 4 13 none] [send zephyrine__c_sockets 51 13 none]
+G r c none [post zephyrine__http_client 4 13 none] [recv zephyrine__c_sockets 58 13 none]
+G r c none [post zephyrine__http_client 4 13 none] [freeaddrinfo zephyrine__c_sockets 39 14 none]
+X 1 ada.ads
+18K9*Ada 22e8 47|3r6 7r6 8r6 9r6 21r49 23r49 35r40 37r49 46r40 67r19 72r25
+. 81r28 88r22 127r76
+X 4 a-except.ads
+44K13*Exceptions 309e19 47|8w10 127r80
+84V13*Exception_Message{string} 47|127s91
+X 7 a-string.ads
+16K13*Strings 35e16 47|3r10 21r53 23r53 35r44 37r53
+X 8 a-strfix.ads
+49K21*Fixed 1390e22 47|3w18 21r61 23r61 35r52 37r61
+252V13*Index{natural} 47|21s67 23s67 35s58 37s67
+X 14 a-textio.ads
+58K13*Text_IO 785e16 47|9w10 67r23 72r29 81r32 88r26
+565U14*Put_Line 47|67s31 72s37 81s40 88s34
+X 15 a-unccon.ads
+23v14*Unchecked_Conversion 47|7w10 46r44
+X 16 interfac.ads
+47K9*Interfaces 247e15 47|4r6 5r6 16r13 17r13 50r22 50r56 51r22 51r56 52r22
+. 55r13 56r13 77r47 78r51 79r57 83r41 100r36 100r63 101r37 101r60 102r28
+. 104r29 109r43 110r44 115r48 115r71 116r58 126r50 130r44
+X 17 i-c.ads
+33K20*C 601e17 47|4w17 5r17 16r24 17r24 50r33 50r67 51r33 51r67 52r33 55r24
+. 56r24 77r58 78r62 79r68 83r52 100r47 100r74 101r48 101r71 102r39 104r40
+. 109r54 110r55 115r59 115r82 116r69 126r61 130r55
+62I9*int<integer> 47|17r26 52r35 77r60 83r54 126r63 130r57
+64I9*long<long_integer> 47|16r26 102r41 104r42 110r57
+71M9*unsigned
+92M9*size_t 47|101r50 101r73 115r61 115r84
+109E9*char<character>
+124A9*char_array(109E9)<92M9> 47|100r49 109r56
+145V13*To_C{124A9} 47|100s76
+163V13*To_Ada{string} 47|116s71
+X 18 i-cstrin.ads
+48K22*Strings 171e25 47|5w19 50r35 50r69 51r35 51r69 55r26 56r26 78r64 79r70
+65P9*chars_ptr 47|50r43 51r43 78r72
+86V13*New_String{65P9} 47|50s77 51s77
+92U14*Free 47|55s34 56s34
+114V13*Value{string} 47|79s78
+X 20 system.ads
+37K9*System 173e11 47|6w6 18r13 44r27 44r45 46r65 54r61 61r32 63r39 125r37
+. 129r31
+67M9*Address 47|18r20 44r34 46r72 61r39
+69m4*Null_Address{67M9} 47|44r52 54r68 63r46 125r44 129r38
+81V14*"="{boolean} 47|63r36 125r34 129r28
+X 44 zephyrine.ads
+5K9*Zephyrine 7e14 46|2r9 5r5 47|11r6 13r14 15r13 133r5
+X 45 zephyrine-c_sockets.ads
+7K19*C_Sockets 80e24 47|11w16 15r23 42r18 45r43 54r23 68r30 71r25 77r67 78r85
+. 83r61 102r49 110r65 125r62 126r70 129r56 130r64
+10I9*Socket_FD<17|62I9> 47|15r33 42r28
+21R9*Addr_Info 30e14 47|45r53
+23i7*Ai_Family{17|62I9} 47|67r95 68r65
+24i7*Ai_Socktype{17|62I9} 47|68r94
+25i7*Ai_Protocol{17|62I9} 47|68r125
+26m7*Ai_Addrlen{17|71M9} 47|71r97
+27m7*Ai_Addr{20|67M9} 47|71r70
+29m7*Ai_Next{20|67M9} 47|91r71
+33V13*getaddrinfo{17|62I9} 47|54s33
+39U14*freeaddrinfo 47|125s72 129s66
+42V13*socket{10I9} 47|68s40
+45V13*connect{17|62I9} 47|71s35
+51V13*send{17|64I9} 47|102s59
+58V13*recv{17|64I9} 47|110s75
+65V13*close{17|62I9} 47|83s71 126s80 130s74
+69V13*strerror{18|65P9} 47|78s95
+78V13*Get_Errno{17|62I9} 47|77s77
+X 46 zephyrine-http_client.ads
+2K19*HTTP_Client 44|5k9 46|5l15 5e26 47|13b24 133l15 133t26
+3X4*HTTP_Error 47|57r39 96r19 104r71 127r19
+4V13*Post{string} 4>19 4>33 47|34b13 132l8 132t12
+4a19 URL{string} 47|34b19 35r64 36r41 36r59 41r53
+4a33 Payload{string} 47|34b33 41r58
+X 47 zephyrine-http_client.adb
+20V13 Create_Request{string} 20b13 20>29 20>43 32l8 32t22 41s37
+20a29 URL{string} 21r73 22r48 22r66
+20a43 Payload{string} 27r193 27r304 30r193 30r304
+21i7 Host_Start{natural} 22r52
+22a7 Search_Slice{string} 23r73 26r44 29r44 29r57 29r131 29r167
+23i7 Path_Index_In_Slice{natural} 25r10 29r79 29r144
+26a18 Host{string} 27r87
+26a58 Path{string} 27r33
+29a18 Host{string} 30r87
+29a105 Path{string} 30r33
+35i7 Host_Start{natural} 36r45
+36a7 Search_Slice{string} 37r73 38r66 38r84 38r97
+37i7 Path_Index_In_Slice{natural} 38r37 38r119
+38a7 Host{string} 50r88 57r82 96r61
+39a7 Port{string} 51r88
+41a7 Request{string} 100r81 101r80
+42i7 Sock_FD{45|10I9} 68m19 70r22 71r43 83r77 85m25 95r13 102r64 110r80 126r16
+. 126r86 130r10 130r80
+43a7 Response{string} 118m19 118r31 131r14
+44m7 Addr_Info_Results{20|67M9} 54m82 54r82 61r50 125r16 125r85 129r10 129r79
+45P12 Addr_Info_Access(45|21R9) 46r81 65r48
+46V16 To_Addr_Info_Ptr[15|23]{45P12} 65s68 91s36
+50p13 C_Host{18|65P9} 54r45 55m39 55r39
+51p13 C_Port{18|65P9} 54r53 56m39 56r39
+52i13 Result{17|62I9} 54m13 57r16
+61m13 Current_Addr_Ptr{20|67M9} 63r19 65r85 91m16 91r53
+65p19 Current_Addr_Info{45P12} 67r77 68r47 68r76 68r107 71r52 71r79
+77i28 Err_Num{17|62I9} 78r104
+78p28 Err_Msg_Ptr{18|65P9} 79r84
+79a28 Err_Msg{string} 81r81
+83i33 Dummy{17|62I9} 84r51
+100a13 C_Request{17|124A9} 102r73
+101m13 Request_Len{17|92M9} 102r92 104r47
+102i13 Sent_Bytes{17|64I9} 104r16
+109a16 Buffer{17|124A9} 110m89 110r89 110r105 116r78
+110i16 Bytes_Read{17|64I9} 111r63 113r19
+111i16 Num_Bytes_Read{natural} 115r91
+115m19 Slice_Upper_Bound{17|92M9} 116r90
+116a19 Chunk{string} 118r42
+124r15 E{4|53R9} 127r109
+126i42 Dummy{17|62I9} 126r122
+130i36 Dummy{17|62I9} 130r116
+

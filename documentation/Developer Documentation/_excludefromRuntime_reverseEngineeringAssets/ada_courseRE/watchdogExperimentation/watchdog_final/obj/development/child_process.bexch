@@ -1,0 +1,19 @@
+[GENERATED OBJECT FILE]
+b__child_process.o
+[PROJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/ZephyWatchtower/watchdog_final/watchdog_final.gpr
+20250620022532 467fc03a8afa999f460acd6f20a5b3ae
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/ZephyWatchtower/watchdog_final/config/watchdog_final_config.gpr
+20250620001055 3c53503a9cc4fce032d8cb293c64c512
+[BOUND OBJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/ZephyWatchtower/watchdog_final/obj/development/child_process.o
+[GENERATED SOURCE FILES]
+b__child_process.ads
+b__child_process.adb
+b__child_process.ali
+[RESULTING OPTIONS]
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/ZephyWatchtower/watchdog_final/obj/development/
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/ZephyWatchtower/watchdog_final/obj/development/
+-L/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/
+-static
+/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/libgnat.a

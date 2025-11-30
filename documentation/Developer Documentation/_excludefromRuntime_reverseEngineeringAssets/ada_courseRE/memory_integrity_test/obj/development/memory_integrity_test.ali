@@ -1,0 +1,116 @@
+V "GNAT Lib v15"
+M P W=b
+A -gnatA
+A -g
+A -gnat2022
+A -gnatwa
+A -mmacosx-version-min=16.0.0
+A -mcpu=apple-m1
+A -mlittle-endian
+A -mabi=lp64
+A -fPIC
+P ZX
+
+RN
+RV NO_EXCEPTION_HANDLERS
+RV NO_EXCEPTIONS
+RV NO_IO
+RV NO_LONG_LONG_INTEGERS
+RV NO_DYNAMIC_SIZED_OBJECTS
+RV NO_IMPLEMENTATION_PRAGMAS
+
+U memory_integrity_test%b  memory_integrity_test.adb  58c17def NE OO SU
+W ada%s			ada.ads			ada.ali
+Z ada.strings.text_buffers%s  a-sttebu.adb	a-sttebu.ali
+W ada.text_io%s		a-textio.adb		a-textio.ali
+W interfaces%s		interfac.ads		interfac.ali
+W interfaces.c%s	i-c.adb			i-c.ali
+W system%s		system.ads		system.ali
+Z system.img_lli%s	s-imglli.ads		s-imglli.ali
+Z system.img_llu%s	s-imgllu.ads		s-imgllu.ali
+Z system.unsigned_types%s  s-unstyp.ads		s-unstyp.ali
+
+D ada.ads		20250419085653 76789da1 ada%s
+D a-except.ads		20250419085653 e7970cd9 ada.exceptions%s
+D a-ioexce.ads		20250419085653 40018c65 ada.io_exceptions%s
+D a-stream.ads		20250419085653 17477cbd ada.streams%s
+D a-string.ads		20250419085653 90ac6797 ada.strings%s
+D a-sttebu.ads		20250419085653 f1ad67a2 ada.strings.text_buffers%s
+D a-stuten.ads		20250419085653 c6ced0ae ada.strings.utf_encoding%s
+D a-tags.ads		20250419085653 fbca0ad5 ada.tags%s
+D a-textio.ads		20250419085653 34ef47de ada.text_io%s
+D a-unccon.ads		20250419085653 0e9b276f ada.unchecked_conversion%s
+D interfac.ads		20250419085653 9111f9c1 interfaces%s
+D i-c.ads		20250419085653 e94c966a interfaces.c%s
+D i-cstrea.ads		20250419085653 ffd01b9d interfaces.c_streams%s
+D memory_integrity_test.adb  20250619233215 64050ece memory_integrity_test%b
+D system.ads		20250419085653 70765b54 system%s
+D s-crtl.ads		20250419085653 beb39b9e system.crtl%s
+D s-exctab.ads		20250419085653 91bef6ef system.exception_table%s
+D s-ficobl.ads		20250419085653 dc5161d4 system.file_control_block%s
+D s-imagei.ads		20250419085653 5e131ce0 system.image_i%s
+D s-imageu.ads		20250419085653 b0b50650 system.image_u%s
+D s-imglli.ads		20250419085653 d88f4f3b system.img_lli%s
+D s-imgllu.ads		20250419085653 55ba53d8 system.img_llu%s
+D s-parame.ads		20250419085653 3597fc11 system.parameters%s
+D s-putima.ads		20250419085653 17291fe4 system.put_images%s
+D s-secsta.ads		20250419085653 578279f5 system.secondary_stack%s
+D s-soflin.ads		20250419085653 5d88fdea system.soft_links%s
+D s-stache.ads		20250419085653 0b81c1fe system.stack_checking%s
+D s-stalib.ads		20250419085653 1c9580f6 system.standard_library%s
+D s-stoele.ads		20250419085653 ccded4e8 system.storage_elements%s
+D s-traent.ads		20250419085653 c81cbf8c system.traceback_entries%s
+D s-unstyp.ads		20250419085653 fa2a7f59 system.unsigned_types%s
+D s-valspe.ads		20250419085653 f810d31c system.val_spec%s
+D s-vaispe.ads		20250419085653 8280550e system.value_i_spec%s
+D s-vauspe.ads		20250419085653 89269ba5 system.value_u_spec%s
+D s-vs_lli.ads		20250419085653 b945cf7d system.vs_lli%s
+D s-vs_llu.ads		20250419085653 8f3536c5 system.vs_llu%s
+D s-wchcon.ads		20250419085653 d9032363 system.wch_con%s
+G a e
+G c Z b b [memory_integrity_test standard 6 11 none]
+X 1 ada.ads
+18K9*Ada 22e8 14|4r6 7r8
+X 9 a-textio.ads
+58K13*Text_IO 785e16 14|4w10 7r12
+284U14*New_Line 14|108s10
+515U14*Put 14|33s7 34s7 42s10 69s13 70s13 82s7
+565U14*Put_Line 14|35s7 40s10 44s10 60s7 66s7 71s13 77s7 83s7 87s7 107s10
+. 110s10 112s10 119s7 121s7
+X 11 interfac.ads
+47K9*Interfaces 247e15 14|1w6 2r6 8r8 11r13 52r23
+81M9*Unsigned_8 14|11r24 52r34
+X 12 i-c.ads
+33K20*C 601e17 14|2w17 8r19
+92M9*size_t 14|19r30 29r47 49r54 53r33 95r31
+X 14 memory_integrity_test.adb
+6U11*Memory_Integrity_Test 6b11 122l5 122t26
+19V13*C_Malloc{15|67M9} 19>23 20b<c,malloc>22 37s23
+19m23 Size{12|92M9}
+22U14*C_Free 22>22 23b<c,free>22 84s7
+22m22 Ptr{15|67M9}
+29U14 Allocate_Memory 29b14 29>31 30<31 46l8 46t23 99s4
+29m31 Size_In_Bytes{12|92M9} 34r54 37r33
+30m31 Memory_Block{15|67M9} 37m7 39r10 44r42
+48U14 Write_And_Verify_Memory 48b14 48>39 49>39 50<39 78l8 78t31 102s7 111s10
+48m39 Memory_Block{15|67M9} 56r60
+49m39 Size{12|92M9} 56r38
+50b39 Success{boolean} 59m7 72m13
+52M15 Byte{11|81M9} 53r53 57r31
+53A12 Byte_Array(52M15)<12|92M9> 54r20 56r21
+56a7 Test_Buffer{53A12} 62r16 63m10 67r16 68r13
+57m7 Test_Pattern{52M15} 63r29 68r32
+62m11 I{12|92M9} 63r23
+67m11 I{12|92M9} 68r26 70r60
+80U14 Deallocate_Memory 80b14 80=33 88l8 88t25 105s10
+80m33 Memory_Block{15|67M9} 83r39 84r15 86m7
+94m4 My_Memory_Block{15|67M9} 99m33 101r7 102r32 105m29 105r29 111r35
+95m4 Block_Size{12|92M9} 99r21 102r49 111r52
+96b4 Is_OK{boolean} 102m61 104r10 111m64
+X 15 system.ads
+37K9*System 14|3w6 10r13 19r45 22r28 30r51 39r25 44r20 48r54 80r55 83r17
+. 86r23 94r22 94r40 101r26 15|173e11
+67M9*Address 14|10r20 19r52 22r35 30r58 44r27 48r61 80r62 83r24 94r29
+69m4*Null_Address{67M9} 14|39r32 86r30 94r47 101r33
+81V14*"="{boolean} 14|39r23 101r23
+

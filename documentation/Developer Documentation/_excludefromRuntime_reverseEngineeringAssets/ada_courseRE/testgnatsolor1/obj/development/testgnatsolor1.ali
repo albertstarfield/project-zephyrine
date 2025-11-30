@@ -1,0 +1,159 @@
+V "GNAT Lib v15"
+M P W=8
+A -Og
+A -gnatA
+A -ffunction-sections
+A -fdata-sections
+A -g
+A -gnatwa
+A -gnatw.X
+A -gnatVa
+A -gnaty3
+A -gnatya
+A -gnatyA
+A -gnatyB
+A -gnatyb
+A -gnatyc
+A -gnaty-
+A -gnatyd
+A -gnatye
+A -gnatyf
+A -gnatyh
+A -gnatyi
+A -gnatyI
+A -gnatyk
+A -gnatyl
+A -gnatym
+A -gnatyn
+A -gnatyO
+A -gnatyp
+A -gnatyr
+A -gnatyS
+A -gnatyt
+A -gnatyu
+A -gnatyx
+A -gnatW8
+A -mmacosx-version-min=16.0.0
+A -mcpu=apple-m1
+A -mlittle-endian
+A -mabi=lp64
+A -fPIC
+P ZX
+
+RN
+RV NO_DIRECT_BOOLEAN_OPERATORS
+RV NO_EXCEPTION_HANDLERS
+RV NO_EXCEPTIONS
+RV NO_IO
+RV NO_IMPLICIT_CONDITIONALS
+RV NO_STANDARD_STORAGE_POOLS
+RV NO_DYNAMIC_SIZED_OBJECTS
+RV NO_IMPLEMENTATION_ASPECT_SPECIFICATIONS
+RV NO_IMPLEMENTATION_PRAGMAS
+
+U simple_io%b		testgnatsolor1.adb	75eab684 NE OO SU
+W ada%s			ada.ads			ada.ali
+Z ada.exceptions%s	a-except.adb		a-except.ali
+Z ada.strings.text_buffers%s  a-sttebu.adb	a-sttebu.ali
+W ada.text_io%s		a-textio.adb		a-textio.ali
+Z ada.text_io.generic_aux%s  a-tigeau.adb	a-tigeau.ali
+Z ada.text_io.integer_aux%s
+Z ada.text_io.integer_io%s
+W system%s		system.ads		system.ali
+Z system.img_biu%s	s-imgbiu.ads		s-imgbiu.ali
+Z system.img_int%s	s-imgint.ads		s-imgint.ali
+Z system.img_llb%s	s-imgllb.ads		s-imgllb.ali
+Z system.img_lli%s	s-imglli.ads		s-imglli.ali
+Z system.img_lllb%s	s-imglllb.ads		s-imglllb.ali
+Z system.img_llli%s	s-imgllli.ads		s-imgllli.ali
+Z system.img_lllw%s	s-imglllw.ads		s-imglllw.ali
+Z system.img_llw%s	s-imgllw.ads		s-imgllw.ali
+Z system.img_wiu%s	s-imgwiu.ads		s-imgwiu.ali
+Z system.val_int%s	s-valint.ads		s-valint.ali
+Z system.val_lli%s	s-vallli.ads		s-vallli.ali
+Z system.val_llli%s	s-valllli.ads		s-valllli.ali
+
+D ada.ads		20250419085653 76789da1 ada%s
+D a-except.ads		20250419085653 e7970cd9 ada.exceptions%s
+D a-ioexce.ads		20250419085653 40018c65 ada.io_exceptions%s
+D a-stream.ads		20250419085653 17477cbd ada.streams%s
+D a-string.ads		20250419085653 90ac6797 ada.strings%s
+D a-sttebu.ads		20250419085653 f1ad67a2 ada.strings.text_buffers%s
+D a-stuten.ads		20250419085653 c6ced0ae ada.strings.utf_encoding%s
+D a-tags.ads		20250419085653 fbca0ad5 ada.tags%s
+D a-textio.ads		20250419085653 34ef47de ada.text_io%s
+D a-tigeau.ads		20250419085653 e643cdf3 ada.text_io.generic_aux%s
+D a-tiinau.ads		20250419085653 3ca4fcff ada.text_io.integer_aux%s
+D a-tiinau.adb		20250419085653 199a0c7a ada.text_io.integer_aux%b
+D a-tiinio.ads		20250419085653 76699c8f ada.text_io.integer_io%s
+D a-tiinio.adb		20250419085653 b79731f4 ada.text_io.integer_io%b
+D a-unccon.ads		20250419085653 0e9b276f ada.unchecked_conversion%s
+D interfac.ads		20250419085653 9111f9c1 interfaces%s
+D i-cstrea.ads		20250419085653 ffd01b9d interfaces.c_streams%s
+D testgnatsolor1.adb	20250619221632 4105f15a simple_io%b
+D system.ads		20250419085653 70765b54 system%s
+D s-crtl.ads		20250419085653 beb39b9e system.crtl%s
+D s-exctab.ads		20250419085653 91bef6ef system.exception_table%s
+D s-ficobl.ads		20250419085653 dc5161d4 system.file_control_block%s
+D s-imageb.ads		20250419085653 3953e0e6 system.image_b%s
+D s-imagei.ads		20250419085653 5e131ce0 system.image_i%s
+D s-imagew.ads		20250419085653 9d2dd267 system.image_w%s
+D s-imgbiu.ads		20250419085653 0a8e1c41 system.img_biu%s
+D s-imgint.ads		20250419085653 67e4edfb system.img_int%s
+D s-imgllb.ads		20250419085653 47d0db9f system.img_llb%s
+D s-imglli.ads		20250419085653 d88f4f3b system.img_lli%s
+D s-imglllb.ads		20250419085653 30212eed system.img_lllb%s
+D s-imgllli.ads		20250419085653 404e72c5 system.img_llli%s
+D s-imglllw.ads		20250419085653 9e2b0560 system.img_lllw%s
+D s-imgllw.ads		20250419085653 bf9c9c15 system.img_llw%s
+D s-imgwiu.ads		20250419085653 912a95f2 system.img_wiu%s
+D s-parame.ads		20250419085653 3597fc11 system.parameters%s
+D s-putima.ads		20250419085653 17291fe4 system.put_images%s
+D s-secsta.ads		20250419085653 578279f5 system.secondary_stack%s
+D s-soflin.ads		20250419085653 5d88fdea system.soft_links%s
+D s-stache.ads		20250419085653 0b81c1fe system.stack_checking%s
+D s-stalib.ads		20250419085653 1c9580f6 system.standard_library%s
+D s-stoele.ads		20250419085653 ccded4e8 system.storage_elements%s
+D s-traent.ads		20250419085653 c81cbf8c system.traceback_entries%s
+D s-unstyp.ads		20250419085653 fa2a7f59 system.unsigned_types%s
+D s-valint.ads		20250419085653 8bab724f system.val_int%s
+D s-vallli.ads		20250419085653 353103fd system.val_lli%s
+D s-valllli.ads		20250419085653 fb5526e1 system.val_llli%s
+D s-vallllu.ads		20250419085653 34470a29 system.val_lllu%s
+D s-valllu.ads		20250419085653 4134fa35 system.val_llu%s
+D s-valspe.ads		20250419085653 f810d31c system.val_spec%s
+D s-valuns.ads		20250419085653 f7ddb71d system.val_uns%s
+D s-valuei.ads		20250419085653 d9377ca5 system.value_i%s
+D s-vaispe.ads		20250419085653 8280550e system.value_i_spec%s
+D s-valueu.ads		20250419085653 a38d32a6 system.value_u%s
+D s-vauspe.ads		20250419085653 89269ba5 system.value_u_spec%s
+D s-vs_int.ads		20250419085653 06b6b724 system.vs_int%s
+D s-vs_lli.ads		20250419085653 b945cf7d system.vs_lli%s
+D s-vsllli.ads		20250419085653 3a5ba700 system.vs_llli%s
+D s-vslllu.ads		20250419085653 678200a0 system.vs_lllu%s
+D s-vs_llu.ads		20250419085653 8f3536c5 system.vs_llu%s
+D s-vs_uns.ads		20250419085653 e7f47a27 system.vs_uns%s
+D s-wchcon.ads		20250419085653 d9032363 system.wch_con%s
+G a e
+G c Z b b [simple_io standard 6 11 none]
+X 1 ada.ads
+18K9*Ada 22e8 18|3r6 10r8 16r26
+X 9 a-textio.ads
+58K13*Text_IO 785e16 18|3w10 10r12 16r30
+284U14*New_Line 18|36s4
+515U14*Put 18|26s4 31s4
+535U14*Get_Line 18|29s4
+536a7 Item{string} 18|29r14
+537i7 Last{natural} 18|29r33
+565U14*Put_Line 18|41s4 45s4 46s4 47s4
+X 13 a-tiinio.ads
+46k21*Integer_IO 116e27 18|16r38
+62U14 Get 18|33s11[16]
+63i7 Item{integer} 18|33r16[16]
+X 18 testgnatsolor1.adb
+6U11*Simple_IO 6b11 49l5 49t14
+16K12 Int_IO[13|46] 33r4
+19a4 User_Name{string} 29m22 41r26
+20i4 Last{natural} 29m41 41r42
+21i4 User_Age{integer} 33m24 45r41 46r56
+

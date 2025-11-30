@@ -1,0 +1,4 @@
+external:C_BINDING_TEST_LIBRARY_TYPE=default
+external:LIBRARY_TYPE=default
+profile:c_binding_test=RELEASE
+switches:c_binding_test=-O3,-fdata-sections,-ffunction-sections,-gnatW8,-gnatn

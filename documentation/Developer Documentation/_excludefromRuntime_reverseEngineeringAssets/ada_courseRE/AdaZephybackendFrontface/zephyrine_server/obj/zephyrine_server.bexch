@@ -1,0 +1,20 @@
+[GENERATED OBJECT FILE]
+b__zephyrine_server.o
+[PROJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/backend-service/zephyrine_server/zephyrine_server.gpr
+20250621082411 43daa02135360fa7f069898857db3fe3
+[BOUND OBJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/backend-service/zephyrine_server/obj/zephyrine.o
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/backend-service/zephyrine_server/obj/zephyrine-c_sockets.o
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/backend-service/zephyrine_server/obj/zephyrine-http_client.o
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/backend-service/zephyrine_server/obj/zephyrine_server.o
+[GENERATED SOURCE FILES]
+b__zephyrine_server.ads
+b__zephyrine_server.adb
+b__zephyrine_server.ali
+[RESULTING OPTIONS]
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/backend-service/zephyrine_server/obj/
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/backend-service/zephyrine_server/obj/
+-L/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/
+-static
+/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/libgnat.a
