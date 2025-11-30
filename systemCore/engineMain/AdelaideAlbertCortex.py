@@ -5782,26 +5782,38 @@ class CortexThoughts:
         return user_input_content, assistant_response_content, extracted_successfully
 
     async def _initiate_file_ingestion_and_reflection(self,
-                                                      db_session_from_caller: Session,
+                                                      db_session_factory: Any,
+                                                      # Changed type hint to generic Any to accept sessionmaker or Session
                                                       uploaded_file_record_id: int):
         """
-        Revised to use a single DB session and transaction for the entire ingestion process.
+        Revised Ingestion Logic: Parses JSONL, Parquet, CSV, and Text files.
+        Extracts specific interaction pairs for reflection.
         """
         current_job_id = f"ingest_proc_{uploaded_file_record_id}"
         logger.info(f"🚀 {current_job_id}: Starting REVISED background file ingestion and reflection.")
 
         bg_db_session: Optional[Session] = None
         uploaded_record_path: Optional[str] = None
-        request_start_time = time.monotonic()
+
+        # Handle the session factory vs session instance discrepancy
+        try:
+            if callable(db_session_factory):
+                bg_db_session = db_session_factory()
+            else:
+                # If a session was passed directly (less likely for BG task, but possible)
+                bg_db_session = db_session_factory
+        except Exception:
+            # Fallback if passed argument is weird, create fresh from global
+            bg_db_session = SessionLocal()
+
+        if not bg_db_session:
+            logger.error(f"{current_job_id}: Could not create DB session.")
+            return
 
         try:
-            bg_db_session = SessionLocal()
-            if not bg_db_session:
-                raise RuntimeError("Failed to create a new database session for the background ingestion task.")
-
             # Fetch and update the main upload record
             uploaded_record = bg_db_session.query(UploadedFileRecord).filter(
-                UploadedFileRecord.id == uploaded_file_record_id).with_for_update().first()
+                UploadedFileRecord.id == uploaded_file_record_id).first()
 
             if not uploaded_record:
                 raise FileNotFoundError(f"UploadedFileRecord ID {uploaded_file_record_id} not found.")
@@ -5810,98 +5822,231 @@ class CortexThoughts:
             original_filename = uploaded_record.original_filename
             file_ext = os.path.splitext(original_filename)[1].lower()
 
-            logger.info(
-                f"{current_job_id}: Processing file '{original_filename}' ({uploaded_record_path}) for ingestion.")
+            logger.info(f"{current_job_id}: Processing '{original_filename}' ({file_ext})...")
             uploaded_record.status = "processing"
             bg_db_session.commit()
 
-            # Phase 1: Read the file and add all interaction stubs to the session
-            # (This section is simplified; the full parsing logic from your original file would go here)
             newly_created_interaction_ids = []
             processed_rows_or_lines = 0
 
-            # This is a simplified representation of your file-parsing logic
-            # Replace this with the full if/elif block for .jsonl, .csv, .txt, etc.
-            with open(uploaded_record_path, 'r', encoding='utf-8') as f:
-                for i, line in enumerate(f):
-                    processed_rows_or_lines += 1
-                    if not line.strip(): continue
-                    bg_user_input = f"{line.strip()}"
-                    bg_session_id = f"ingest_{uploaded_record.ingestion_id}_entry_{i + 1}"
+            # --- PARSING LOGIC START ---
 
-                    # Use the new no-commit function
-                    new_interaction = add_interaction_no_commit(
-                        bg_db_session,
-                        session_id=bg_session_id,
-                        mode="chat",
-                        input_type="ingested_file_entry_raw",
-                        user_input=bg_user_input,
-                        llm_response="[Queued for background reflection]",
-                        classification="ingested_reflection_task_queued",
-                        reflection_completed=False,
-                    )
-                    if new_interaction:
-                        # Flush to get the ID for the background task
-                        bg_db_session.flush()
-                        if new_interaction.id:
+            # 1. Handle JSONL (OpenAI Fine-Tuning Format)
+            if file_ext == '.jsonl':
+                with open(uploaded_record_path, 'r', encoding='utf-8', errors='replace') as f:
+                    for line in f:
+                        if not line.strip(): continue
+                        try:
+                            data_entry = json.loads(line)
+                            user_content, asst_content, valid = self._parse_ingested_text_content(data_entry)
+
+                            if valid:
+                                processed_rows_or_lines += 1
+                                # Create structured interaction
+                                new_interaction = add_interaction_no_commit(
+                                    bg_db_session,
+                                    session_id=f"ingest_{uploaded_record.ingestion_id}_row_{processed_rows_or_lines}",
+                                    mode="ingested_dataset",
+                                    input_type="text",
+                                    user_input=user_content,
+                                    llm_response=asst_content,
+                                    classification="ingested_reflection_task_queued",
+                                    reflection_completed=False,
+                                    parent_ingestion_job_id=uploaded_record.ingestion_id
+                                )
+                                if new_interaction:
+                                    bg_db_session.flush()  # Get ID
+                                    newly_created_interaction_ids.append(new_interaction.id)
+                        except json.JSONDecodeError:
+                            logger.warning(f"{current_job_id}: Skipping invalid JSON line.")
+                            continue
+
+            # 2. Handle Parquet / CSV (Structured Data)
+            elif file_ext in ['.parquet', '.csv']:
+                try:
+                    if file_ext == '.parquet':
+                        df = pd.read_parquet(uploaded_record_path)
+                    else:
+                        df = pd.read_csv(uploaded_record_path)
+
+                    # Iterate rows
+                    for _, row in df.iterrows():
+                        data_entry = row.to_dict()
+                        keys_lower = {k.lower(): k for k in data_entry.keys()}
+
+                        user_content = None
+                        asst_content = None
+
+                        # --- PRIORITY 1: Chat/Messages Format (GPT, Qwen, Llama 3) ---
+                        if 'messages' in keys_lower:
+                            # Complex parsing: Extract the last user and last assistant message
+                            msgs = data_entry[keys_lower['messages']]
+                            # (Add logic here to parse list of dicts if format is JSON string)
+                            # For now, assuming it's already parsed or handled by helper
+
+                        # --- PRIORITY 2: Instruction/Alpaca Format (Llama 2, Deepseek, Mistral) ---
+                        elif 'instruction' in keys_lower and 'output' in keys_lower:
+                            # Handle "Input" column if it exists (Context)
+                            if 'input' in keys_lower and pd.notna(data_entry[keys_lower['input']]):
+                                user_content = f"{data_entry[keys_lower['instruction']]}\n\nContext:\n{data_entry[keys_lower['input']]}"
+                            else:
+                                user_content = str(data_entry[keys_lower['instruction']])
+                            asst_content = str(data_entry[keys_lower['output']])
+
+                        # --- PRIORITY 3: Legacy Prompt/Completion (Old GPT, Mistral) ---
+                        elif 'prompt' in keys_lower and 'completion' in keys_lower:
+                            user_content = str(data_entry[keys_lower['prompt']])
+                            asst_content = str(data_entry[keys_lower['completion']])
+
+                        # --- PRIORITY 4: Google/Turn-based Style (Gemma, Gemini) ---
+                        elif 'human' in keys_lower and 'assistant' in keys_lower:
+                            user_content = str(data_entry[keys_lower['human']])
+                            asst_content = str(data_entry[keys_lower['assistant']])
+
+                        # --- PRIORITY 5: Raw Text (Phi, Granite Pre-training) ---
+                        elif 'text' in keys_lower:
+                            # Treat the whole text as input, and the "response" is a self-reflection task
+                            user_content = str(data_entry[keys_lower['text']])
+                            asst_content = "[Raw Text Data: Requesting Self-Reflection/Analysis]"
+
+                        # --- PRIORITY 6: DPO/Preference Data (Alignment) ---
+                        elif 'chosen' in keys_lower and 'rejected' in keys_lower:
+                            # We ingest the 'chosen' (good) response for learning
+                            if 'prompt' in keys_lower:
+                                user_content = str(data_entry[keys_lower['prompt']])
+                            elif 'instruction' in keys_lower:
+                                user_content = str(data_entry[keys_lower['instruction']])
+
+                            # Ingest the 'chosen' response
+                            # (Optional: You could ingest 'rejected' as a negative example later)
+                            chosen_data = data_entry[keys_lower['chosen']]
+                            # Handle if 'chosen' is a list of messages or a string
+                            if isinstance(chosen_data, list):
+                                asst_content = chosen_data[-1].get('content', '')  # Last message
+                            else:
+                                asst_content = str(chosen_data)
+
+                        reasoning_content = None
+                        if 'reasoning' in keys_lower:
+                            reasoning_content = str(data_entry[keys_lower['reasoning']])
+                        elif 'thought' in keys_lower:
+                            reasoning_content = str(data_entry[keys_lower['thought']])
+                        elif 'rationale' in keys_lower:
+                            reasoning_content = str(data_entry[keys_lower['rationale']])
+                        elif 'cot_content' in keys_lower:
+                            reasoning_content = str(data_entry[keys_lower['cot_content']])
+
+                        # 4. Merge Reasoning into Assistant Output
+                        # We wrap it in <think> tags so your system recognizes it as internal monologue.
+                        if reasoning_content and pd.notna(reasoning_content):
+                            # Clean up existing tags if they exist in the raw data
+                            clean_reasoning = reasoning_content.replace("<think>", "").replace("</think>", "").strip()
+
+                            formatted_thought = f"<think>\n{clean_reasoning}\n</think>"
+
+                            if asst_content:
+                                # Prepend thought to the final answer
+                                asst_content = f"{formatted_thought}\n\n{asst_content}"
+                            else:
+                                # If there's only thought (rare), that becomes the response
+                                asst_content = formatted_thought
+
+                        # Fallback if still None
+                        if not user_content:
+                            user_content, asst_content, _ = self._parse_ingested_text_content(data_entry)
+
+                        if user_content:
+                            processed_rows_or_lines += 1
+                            new_interaction = add_interaction_no_commit(
+                                bg_db_session,
+                                session_id=f"ingest_{uploaded_record.ingestion_id}_row_{processed_rows_or_lines}",
+                                mode="ingested_dataset",
+                                input_type="text",
+                                user_input=user_content,
+                                llm_response=asst_content if asst_content else "[Ingested without response]",
+                                classification="ingested_reflection_task_queued",
+                                reflection_completed=False,
+                                parent_ingestion_job_id=uploaded_record.ingestion_id
+                            )
+                            if new_interaction:
+                                bg_db_session.flush()
+                                newly_created_interaction_ids.append(new_interaction.id)
+                except Exception as e_pandas:
+                    logger.error(f"{current_job_id}: Pandas parsing error: {e_pandas}")
+                    raise e_pandas
+
+            # 3. Fallback: Raw Text Files
+            else:
+                # Treat as raw text, line by line
+                with open(uploaded_record_path, 'r', encoding='utf-8', errors='replace') as f:
+                    for i, line in enumerate(f):
+                        if not line.strip(): continue
+                        processed_rows_or_lines += 1
+                        new_interaction = add_interaction_no_commit(
+                            bg_db_session,
+                            session_id=f"ingest_{uploaded_record.ingestion_id}_line_{processed_rows_or_lines}",
+                            mode="ingested_raw_text",
+                            input_type="text",
+                            user_input=line.strip(),
+                            llm_response="[Raw text ingested for reflection]",
+                            classification="ingested_reflection_task_queued",
+                            reflection_completed=False,
+                            parent_ingestion_job_id=uploaded_record.ingestion_id
+                        )
+                        if new_interaction:
+                            bg_db_session.flush()
                             newly_created_interaction_ids.append(new_interaction.id)
 
-            # After adding all stubs, commit the transaction
+            # --- PARSING LOGIC END ---
+
             bg_db_session.commit()
             logger.info(
-                f"{current_job_id}: Committed {len(newly_created_interaction_ids)} raw interaction records to the database.")
+                f"{current_job_id}: Committed {len(newly_created_interaction_ids)} records. Spawning background tasks...")
 
             # Phase 2: Spawn background tasks for the committed records
             spawned_tasks_count = 0
             for interaction_id in newly_created_interaction_ids:
+                # Note: We don't pass 'db' here; background_generate creates its own session
                 asyncio.create_task(
                     self.background_generate(
-                        db=None,  # The task will create its own session
-                        user_input=None,
-                        session_id=None,
+                        db=None,
+                        user_input=None,  # It will load from DB based on ID
+                        session_id=None,  # It will generate one
                         classification="ingested_reflection_task",
                         image_b64=None,
-                        update_interaction_id=interaction_id
+                        update_interaction_id=interaction_id,  # THIS IS KEY
+                        parent_ingestion_job_id=uploaded_record.id
                     )
                 )
                 spawned_tasks_count += 1
 
-            logger.info(f"{current_job_id}: Spawned {spawned_tasks_count} background reflection tasks.")
-
-            # Final status update for the upload record
             uploaded_record.status = "completed"
             uploaded_record.processed_entries_count = processed_rows_or_lines
             uploaded_record.spawned_tasks_count = spawned_tasks_count
             bg_db_session.commit()
-            logger.success(f"{current_job_id}: Ingestion orchestration finished successfully.")
+            logger.success(f"{current_job_id}: Ingestion finished. {spawned_tasks_count} tasks running.")
 
         except Exception as e:
-            logger.error(f"{current_job_id}: An error occurred during the ingestion process: {e}")
+            logger.error(f"{current_job_id}: Error during ingestion: {e}", exc_info=True)
             if bg_db_session:
                 bg_db_session.rollback()
                 try:
-                    # Attempt to update the record with the error status
-                    record_to_update = bg_db_session.query(UploadedFileRecord).filter(
+                    rec = bg_db_session.query(UploadedFileRecord).filter(
                         UploadedFileRecord.id == uploaded_file_record_id).first()
-                    if record_to_update:
-                        record_to_update.status = "failed"
-                        record_to_update.processing_error = str(e)[:1000]
+                    if rec:
+                        rec.status = "failed"
+                        rec.processing_error = str(e)[:1000]
                         bg_db_session.commit()
-                except Exception as e_log:
-                    logger.error(f"{current_job_id}: Could not even update the record to a failed state: {e_log}")
-                    bg_db_session.rollback()
-
+                except:
+                    pass
         finally:
-            if bg_db_session:
-                bg_db_session.close()
-                logger.debug(f"{current_job_id}: Background DB session closed.")
-            # Clean up the temporary file
+            if bg_db_session: bg_db_session.close()
+            # Cleanup temp file
             if uploaded_record_path and os.path.exists(uploaded_record_path):
                 try:
                     os.remove(uploaded_record_path)
-                    logger.info(f"{current_job_id}: Cleaned up temporary uploaded file.")
-                except Exception as e_del:
-                    logger.warning(f"Failed to delete temp file '{uploaded_record_path}': {e_del}")
+                except:
+                    pass
 
         # In AdelaideAlbertCortex.py, inside the CortexThoughts class
 
