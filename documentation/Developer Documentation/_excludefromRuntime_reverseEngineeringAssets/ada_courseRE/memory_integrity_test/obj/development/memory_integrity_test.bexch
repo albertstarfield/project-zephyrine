@@ -1,0 +1,19 @@
+[GENERATED OBJECT FILE]
+b__memory_integrity_test.o
+[PROJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/memory_integrity_test/memory_integrity_test.gpr
+20250619232833 fac9b5be3eb15e75b5baa3ed7ba3424d
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/memory_integrity_test/config/memory_integrity_test_config.gpr
+20250619232149 b9d22674ebe87873ed51da433075a290
+[BOUND OBJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/memory_integrity_test/obj/development/memory_integrity_test.o
+[GENERATED SOURCE FILES]
+b__memory_integrity_test.ads
+b__memory_integrity_test.adb
+b__memory_integrity_test.ali
+[RESULTING OPTIONS]
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/memory_integrity_test/obj/development/
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/memory_integrity_test/obj/development/
+-L/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/
+-static
+/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/libgnat.a

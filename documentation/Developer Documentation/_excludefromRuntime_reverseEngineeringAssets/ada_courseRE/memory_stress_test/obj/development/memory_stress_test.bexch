@@ -1,0 +1,19 @@
+[GENERATED OBJECT FILE]
+b__memory_stress_test.o
+[PROJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/memory_stress_test/memory_stress_test.gpr
+20250619233658 c90844ce58c4178074e5810047e8f357
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/memory_stress_test/config/memory_stress_test_config.gpr
+20250619233540 3a04cbfdfcece978fc874fe6e9a86bc3
+[BOUND OBJECT FILES]
+/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/memory_stress_test/obj/development/memory_stress_test.o
+[GENERATED SOURCE FILES]
+b__memory_stress_test.ads
+b__memory_stress_test.adb
+b__memory_stress_test.ali
+[RESULTING OPTIONS]
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/memory_stress_test/obj/development/
+-L/Users/albertstarfield/Documents/misc/AI/project-zephyrine/systemCore/engineMain/_excludefromRuntime_reverseEngineeringAssets/ada_courseRE/memory_stress_test/obj/development/
+-L/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/
+-static
+/users/albertstarfield/.local/share/alire/toolchains/gnat_native_15.1.2_60748c54/lib/gcc/aarch64-apple-darwin23.6.0/15.0.1/adalib/libgnat.a

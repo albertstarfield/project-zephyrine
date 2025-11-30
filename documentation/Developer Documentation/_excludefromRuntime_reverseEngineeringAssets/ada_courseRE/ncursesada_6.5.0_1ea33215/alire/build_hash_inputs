@@ -1,0 +1,4 @@
+external:LIBRARY_TYPE=default
+external:NCURSESADA_LIBRARY_TYPE=default
+profile:ncursesada=RELEASE
+switches:ncursesada=-O3,-fdata-sections,-ffunction-sections,-gnatW8,-gnatn

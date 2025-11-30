@@ -1,0 +1,13 @@
+zephyrine_server.adb:3:06: error: file "aws.ads" not found
+zephyrine_server.adb:4:06: error: file "aws.ads" not found
+zephyrine_server.adb:5:06: error: file "aws.ads" not found
+zephyrine_server.adb:6:06: error: file "vss.ads" not found
+zephyrine_server.adb:7:06: error: file "uuids.ads" not found
+zephyrine_server.adb:10:06: error: file "zephyrine-config.ads" not found
+zephyrine_server.adb:11:06: error: "Zephyrine_Server (body)" depends on "Zephyrine.Database (body)"
+zephyrine_server.adb:11:06: error: "Zephyrine.Database (body)" depends on "Zephyrine.Database (spec)"
+zephyrine_server.adb:11:06: error: file "zephyrine-database.ads" not found
+zephyrine_server.adb:12:06: error: file "openai.ads" not found
+zephyrine_server.adb:12:06: error: "Zephyrine.Llm (spec)" depends on "Openai (spec)"
+zephyrine_server.adb:12:06: error: "Zephyrine_Server (body)" depends on "Zephyrine.Llm (spec)"
+zephyrine_server.adb:12:06: error: "Zephyrine.Llm (spec)" depends on "Aws (spec)"

@@ -1,0 +1,14 @@
+gnattestingdarwin.adb:1:04: (style) space required [-gnatyt]
+gnattestingdarwin.adb:5:04: (style) space required [-gnatyt]
+gnattestingdarwin.adb:7:07: (style) space required [-gnatyt]
+gnattestingdarwin.adb:15:01: (style) trailing spaces not permitted [-gnatyb]
+gnattestingdarwin.adb:21:07: (style) space required [-gnatyt]
+gnattestingdarwin.adb:22:07: error: no candidate interpretations match the actuals:
+gnattestingdarwin.adb:22:07: error: missing argument for parameter "Output_File" in call to "Spawn" declared at s-os_lib.ads:936
+gnattestingdarwin.adb:22:07: error: missing argument for parameter "Output_File_Descriptor" in call to "Spawn" declared at s-os_lib.ads:922
+gnattestingdarwin.adb:22:07: error: missing argument for parameter "Success" in call to "Spawn" declared at s-os_lib.ads:876
+gnattestingdarwin.adb:24:14: error: unmatched actual "Process_Id" in call
+gnattestingdarwin.adb:26:10: (style) space required [-gnatyt]
+gnattestingdarwin.adb:27:61: error: "To_String" is undefined
+gnattestingdarwin.adb:27:80: (style) this line is too long: 83 [-gnatyM]
+gnattestingdarwin.adb:37:80: (style) this line is too long: 82 [-gnatyM]

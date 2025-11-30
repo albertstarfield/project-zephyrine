@@ -1,0 +1,105 @@
+V "GNAT Lib v15"
+A -O2
+A -gnatA
+A -g
+A -gnat12
+A -gnatwa
+A -mmacosx-version-min=16.0.0
+A -mcpu=apple-m1
+A -mlittle-endian
+A -mabi=lp64
+A -fPIC
+P SS ZX
+
+RN
+RV NO_IO
+RV NO_IMPLICIT_CONDITIONALS
+RV NO_LOCAL_ALLOCATORS
+RV NO_SECONDARY_STACK
+RV NO_STANDARD_STORAGE_POOLS
+RV NO_DYNAMIC_SIZED_OBJECTS
+RV NO_IMPLEMENTATION_PRAGMAS
+
+U zephyrine.utils%b	zephyrine-utils.adb	c140db80 NE OO PK
+W ada%s			ada.ads			ada.ali
+W ada.strings%s		a-string.ads		a-string.ali
+Z ada.strings.text_buffers%s  a-sttebu.adb	a-sttebu.ali
+W ada.strings.unbounded%s  a-strunb.adb		a-strunb.ali
+W ada.text_io%s		a-textio.adb		a-textio.ali
+Z system.secondary_stack%s  s-secsta.adb	s-secsta.ali
+W zephyrine%s		zephyrine.ads		zephyrine.ali
+
+U zephyrine.utils%s	zephyrine-utils.ads	c4d711c8 EE NE OO PK
+W zephyrine%s		zephyrine.ads		zephyrine.ali
+W zephyrine.database%s	zephyrine-database.adb	zephyrine-database.ali
+
+D ada.ads		20250419085653 76789da1 ada%s
+D a-charac.ads		20250419085653 2d3ec45b ada.characters%s
+D a-chlat1.ads		20250419085653 e0d72e76 ada.characters.latin_1%s
+D a-except.ads		20250419085653 e7970cd9 ada.exceptions%s
+D a-finali.ads		20250419085653 bf4f806b ada.finalization%s
+D a-ioexce.ads		20250419085653 40018c65 ada.io_exceptions%s
+D a-stream.ads		20250419085653 17477cbd ada.streams%s
+D a-string.ads		20250419085653 90ac6797 ada.strings%s
+D a-strmap.ads		20250419085653 1f91ebb6 ada.strings.maps%s
+D a-strsea.ads		20250419085653 18c3c634 ada.strings.search%s
+D a-sttebu.ads		20250419085653 f1ad67a2 ada.strings.text_buffers%s
+D a-strunb.ads		20250419085653 b10770ab ada.strings.unbounded%s
+D a-stuten.ads		20250419085653 c6ced0ae ada.strings.utf_encoding%s
+D a-tags.ads		20250419085653 fbca0ad5 ada.tags%s
+D a-textio.ads		20250419085653 34ef47de ada.text_io%s
+D a-unccon.ads		20250419085653 0e9b276f ada.unchecked_conversion%s
+D interfac.ads		20250419085653 9111f9c1 interfaces%s
+D i-c.ads		20250419085653 e94c966a interfaces.c%s
+D i-cstrea.ads		20250419085653 ffd01b9d interfaces.c_streams%s
+D system.ads		20250419085653 70765b54 system%s
+D s-atocou.ads		20250419085653 dc18efc3 system.atomic_counters%s
+D s-crtl.ads		20250419085653 beb39b9e system.crtl%s
+D s-exctab.ads		20250419085653 91bef6ef system.exception_table%s
+D s-ficobl.ads		20250419085653 dc5161d4 system.file_control_block%s
+D s-finpri.ads		20250419085653 5970d55a system.finalization_primitives%s
+D s-finroo.ads		20250419085653 0a7c3ed4 system.finalization_root%s
+D s-oscons.ads		20250522142959 16132a6a system.os_constants%s
+D s-oslock.ads		20250419085653 13fa6b78 system.os_locks%s
+D s-parame.ads		20250419085653 3597fc11 system.parameters%s
+D s-putima.ads		20250419085653 17291fe4 system.put_images%s
+D s-retsta.ads		20250419085653 0f6b06cb system.return_stack%s
+D s-secsta.ads		20250419085653 578279f5 system.secondary_stack%s
+D s-soflin.ads		20250419085653 5d88fdea system.soft_links%s
+D s-stache.ads		20250419085653 0b81c1fe system.stack_checking%s
+D s-stalib.ads		20250419085653 1c9580f6 system.standard_library%s
+D s-stoele.ads		20250419085653 ccded4e8 system.storage_elements%s
+D s-stratt.ads		20250419085653 516607ae system.stream_attributes%s
+D s-traent.ads		20250419085653 c81cbf8c system.traceback_entries%s
+D s-unstyp.ads		20250419085653 fa2a7f59 system.unsigned_types%s
+D s-wchcon.ads		20250419085653 d9032363 system.wch_con%s
+D zephyrine.ads		20250621052221 fa60cf7b zephyrine%s
+D zephyrine-c_types.ads	20250621051933 3a14cf56 zephyrine.c_types%s
+D zephyrine-database.ads  20250621053412 8e15475a zephyrine.database%s
+D zephyrine-utils.ads	20250621054735 b0a299e9 zephyrine.utils%s
+D zephyrine-utils.adb	20250621054746 f40a751c zephyrine.utils%b
+G a e
+G c Z s b [print_row zephyrine__utils 8 14 none]
+X 1 ada.ads
+18K9*Ada 22e8 45|3r6 4r6 11r11 15r15
+X 8 a-string.ads
+16K13*Strings 35e16 45|4r10 15r19
+X 12 a-strunb.ads
+91K21*Unbounded 1641e26 45|4w18 15r27
+135V13*To_String{string} 45|15s37
+X 15 a-textio.ads
+58K13*Text_IO 785e16 45|3w10 11r15
+284U14*New_Line 45|17s7
+515U14*Put 45|13s7 15s10
+X 41 zephyrine.ads
+5K9*Zephyrine 7e14 44|3r6 5r9 8r34 10r5 45|6r14 10r34 20r5
+X 43 zephyrine-database.ads
+5K19*Database 26e23 44|3w16 8r44 45|10r44
+16A9*Row_Data(12|105R9)<integer> 44|8r53 45|10r53
+X 44 zephyrine-utils.ads
+5K19*Utils 41|5k9 44|10l15 10e20 45|6b24 20l15 20t20
+8U14*Print_Row 8>25 45|10b14 18l8 18t17
+8a25 Row{43|16A9} 45|10b25 14r16 15r47
+X 45 zephyrine-utils.adb
+14i11 I{integer} 15r51
+

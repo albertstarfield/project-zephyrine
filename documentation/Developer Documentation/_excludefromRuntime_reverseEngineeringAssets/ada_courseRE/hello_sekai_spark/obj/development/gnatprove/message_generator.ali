@@ -1,0 +1,68 @@
+V "GNAT Lib v15"
+A -x
+A ada
+A -gnatA
+A -Og
+A -ffunction-sections
+A -fdata-sections
+A -g
+A -g
+A -gnatwa
+A -gnatw.X
+A -gnatVa
+A -gnaty3
+A -gnatya
+A -gnatyA
+A -gnatyB
+A -gnatyb
+A -gnatyc
+A -gnaty-
+A -gnatyd
+A -gnatye
+A -gnatyf
+A -gnatyh
+A -gnatyi
+A -gnatyI
+A -gnatyk
+A -gnatyl
+A -gnatym
+A -gnatyn
+A -gnatyO
+A -gnatyp
+A -gnatyr
+A -gnatyS
+A -gnatyt
+A -gnatyu
+A -gnatyx
+A -gnatW8
+A -gnatc
+A -gnatis
+P GP
+
+RN
+RV NO_IMPLEMENTATION_ASPECT_SPECIFICATIONS
+RV NO_IMPLEMENTATION_PRAGMAS
+RV NO_ELABORATION_CODE
+
+U message_generator%b	message_generator.adb	71fdd28f OO PK
+
+U message_generator%s	message_generator.ads	a62f73b2 OO PK
+
+D message_generator.ads	20250628010829 a62f73b2 message_generator%s
+D message_generator.adb	20250628010845 d7d2a13d message_generator%b
+D system.ads		20250419085653 70765b54 system%s
+G a Z
+X 1 message_generator.ads
+1K9*Message_Generator 12l5 12e22 2|1b14 12l5 12t22
+9V13*Get_Message{string} 10r19 2|5b13 10l8 10t19
+
+QQ SPARKVERSION FSF 15.0
+GG EK_DIRECT_CALLS message_generator__get_message 0
+GG EK_PROOF_DEPENDENCIES message_generator__get_message 0
+GG EK_GLOBALS message_generator__get_message local FALSE E_FUNCTION FALSE ORIGIN_FLOW 1 message_generator proper_proof_in 0 proper_input 0 proper_output 0 refined_proof_in 0 refined_input 0 refined_output 0 calls_proof 0 calls 0 calls_conditional 0 TRUE FALSE FALSE FALSE TRUE ENTRY_CALLS 0 SUSPENDS_ON 0 UNSYNCH_ACCESSES 0 LOCKS 0
+GG EK_DIRECT_CALLS message_generator 0
+GG EK_PROOF_DEPENDENCIES message_generator 0
+GG EK_GLOBALS message_generator local FALSE E_PACKAGE TRUE ORIGIN_FLOW 0 proper_proof_in 0 proper_input 0 proper_output 0 refined_proof_in 0 refined_input 0 refined_output 0 initializes 0 refined_initializes 0 calls_proof 0 calls 0 calls_conditional 0 local_packages 0 local_var 0 TRUE FALSE FALSE FALSE FALSE ENTRY_CALLS 0 SUSPENDS_ON 0 UNSYNCH_ACCESSES 0 LOCKS 0
+GG EK_FLOW_SCOPE message_generator TRUE FALSE FALSE FALSE FALSE __standard
+GG EK_FLOW_SCOPE message_generator__get_message FALSE FALSE FALSE FALSE TRUE message_generator VISIBLE_PART
+GG EK_END_MARKER

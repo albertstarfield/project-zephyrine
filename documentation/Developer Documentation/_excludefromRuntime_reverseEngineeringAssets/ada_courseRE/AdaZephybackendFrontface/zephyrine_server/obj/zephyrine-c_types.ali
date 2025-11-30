@@ -1,0 +1,51 @@
+V "GNAT Lib v15"
+A -O2
+A -gnatA
+A -g
+A -gnat12
+A -gnatwa
+A -mmacosx-version-min=16.0.0
+A -mcpu=apple-m1
+A -mlittle-endian
+A -mabi=lp64
+A -fPIC
+P ZX
+
+RN
+RV NO_STANDARD_STORAGE_POOLS
+RV NO_IMPLEMENTATION_PRAGMAS
+
+U zephyrine.c_types%s	zephyrine-c_types.ads	594ecd13 NE OO PK
+W interfaces%s		interfac.ads		interfac.ali
+W interfaces.c%s	i-c.adb			i-c.ali
+W system%s		system.ads		system.ali
+W zephyrine%s		zephyrine.ads		zephyrine.ali
+
+D ada.ads		20250419085653 76789da1 ada%s
+D a-unccon.ads		20250419085653 0e9b276f ada.unchecked_conversion%s
+D interfac.ads		20250419085653 9111f9c1 interfaces%s
+D i-c.ads		20250419085653 e94c966a interfaces.c%s
+D system.ads		20250419085653 70765b54 system%s
+D s-exctab.ads		20250419085653 91bef6ef system.exception_table%s
+D s-parame.ads		20250419085653 3597fc11 system.parameters%s
+D s-stalib.ads		20250419085653 1c9580f6 system.standard_library%s
+D zephyrine.ads		20250621052221 fa60cf7b zephyrine%s
+D zephyrine-c_types.ads	20250621051933 3a14cf56 zephyrine.c_types%s
+G a e
+X 3 interfac.ads
+47K9*Interfaces 247e15 10|2r6 9r24
+X 4 i-c.ads
+33K20*C 601e17 10|2w17 9r35
+109E9*char<character>
+124A9*char_array(109E9)<92M9> 10|9r37
+X 5 system.ads
+37K9*System 173e11 10|1w6 6r30
+67M9*Address 10|6r37
+X 9 zephyrine.ads
+5K9*Zephyrine 7e14 10|4r9 14r5
+X 10 zephyrine-c_types.ads
+4K19*C_Types 9|5k9 10|14l15 14e22
+6M9*Opaque_Handle<5|67M9>
+9A12*C_String{4|124A9}<4|92M9> 12r39
+12P9*C_String_Access(9A12)
+
