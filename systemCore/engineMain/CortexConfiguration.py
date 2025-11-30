@@ -179,10 +179,10 @@ USER_AGENTS = [
 # --- Agent Settings ---
 AGENT_MAX_SCRIPT_RETRIES = 3 # Max attempts to generate/fix AppleScript per action
 
-ENABLE_FILE_INDEXER_STR = os.getenv("ENABLE_FILE_INDEXER", "false")
+ENABLE_FILE_INDEXER_STR = os.getenv("ENABLE_FILE_INDEXER", "true")
 ENABLE_FILE_INDEXER = ENABLE_FILE_INDEXER_STR.lower() in ('true', '1', 't', 'yes', 'y')
 logger.info(f"File Indexer Enabled: {ENABLE_FILE_INDEXER}")
-DB_TEXT_TRUNCATE_LEN = int(os.getenv("DB_TEXT_TRUNCATE_LEN", 10000000)) # Max length for indexed_content before truncation
+DB_TEXT_TRUNCATE_LEN = int(os.getenv("DB_TEXT_TRUNCATE_LEN", 16384)) # Max length for indexed_content before truncation
 
 
 # --- Database Settings (SQLite) ---
@@ -326,17 +326,17 @@ _rng = np.random.default_rng(_lsh_seed)
 if 'LSH_BIT_COUNT' not in globals():
     LSH_BIT_COUNT = 10
 
-print(f"🌀 Generating {LSH_BIT_COUNT} random hyperplanes for LSH with vector size {LSH_VECTOR_SIZE}...")
+logger.info(f"🌀 Generating {LSH_BIT_COUNT} random hyperplanes for LSH with vector size {LSH_VECTOR_SIZE}...")
 
 # Generate random vectors (hyperplanes) with a normal distribution.
 LSH_HYPERPLANES = _rng.normal(size=(LSH_BIT_COUNT, LSH_VECTOR_SIZE))
 
-print("🌀 LSH Hyperplanes generated successfully.")
+logger.info("🌀 LSH Hyperplanes ref generated successfully.")
 # --- END NEW: LSH Configuration ---
 DCTD_SOCKET_PATH = "./celestial_timestream_vector_helper.socket" # Relative to systemCore/engineMain
 DCTD_NT_PORT = 11891 # Port for Windows TCP fallback
 DCTD_ENABLE_QUANTUM_PREDICTION = os.getenv("DCTD_ENABLE_QUANTUM_PREDICTION", "true").lower() in ('true', '1', 't', 'yes', 'y')
-logger.info(f"🔮 DCTD Quantum Prediction Enabled: {DCTD_ENABLE_QUANTUM_PREDICTION}")
+logger.info(f"🦋Dancing in the Celestial Timeline (DCTD) Branch Predictor : {DCTD_ENABLE_QUANTUM_PREDICTION}")
 # --- END NEW: DCTD Branch Predictor Settings ---
 # --- NEW: StellaIcarus Ada Daemon & Instrument Viewport Settings ---
 ENABLE_STELLA_ICARUS_DAEMON = os.getenv("ENABLE_STELLA_ICARUS_DAEMON", "true").lower() in ('true', '1', 't', 'yes', 'y')

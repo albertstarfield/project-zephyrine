@@ -152,6 +152,26 @@ class StellaIcarusHookManager:
                     logger.error(f"StellaIcarusHook '{module_name}' execution error: {e}")
         return None
 
+    def try_hooks(self, user_input: str, session_id: str) -> Optional[str]:
+        if not self.is_enabled or not self.hooks:
+            return None
+
+        for pattern, handler, module_name in self.hooks:
+            match = pattern.match(user_input)
+            if match:
+                hook_start_time = time.perf_counter_ns()
+                try:
+                    response = handler(match, user_input, session_id)
+                    hook_end_time = time.perf_counter_ns()
+                    duration_us = (hook_end_time - hook_start_time) / 1000.0
+                    logger.debug(f"StellaIcarusHook '{module_name}' matched. Handler duration: {duration_us:.3f} µs.")
+
+                    if response is not None and isinstance(response, str):
+                        return response
+                except Exception as e:
+                    logger.error(f"StellaIcarusHook '{module_name}' execution error: {e}")
+        return None
+
 
 # --- NEW: Stella Icarus Ada Daemon Manager (Refactored) ---
 class StellaIcarusAdaDaemonManager:

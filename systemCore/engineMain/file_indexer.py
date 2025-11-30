@@ -1182,7 +1182,7 @@ class FileIndexer:
             # =======================================================
             try:
                 if not os.path.exists(file_path) or not os.path.isfile(file_path):
-                    logger.debug(f"{log_prefix}: Path does not exist or is not a file. Skipping.")
+                    logger.error(f"{log_prefix}: Path does not exist or is not a file. Skipping.")
                     return
 
                 file_metadata = self._get_file_metadata(file_path)
@@ -1227,7 +1227,7 @@ class FileIndexer:
             needs_processing = False
             if not existing_record:
                 needs_processing = True
-                logger.info(f"-> {log_prefix}: New file detected.")
+                #logger.debug(f"-> {log_prefix}: New file detected.")
             else:
                 mtime_os_check = file_metadata.get('last_modified_os')
                 hashes_match = (current_md5 is not None and existing_record.md5_hash == current_md5)
@@ -1246,7 +1246,7 @@ class FileIndexer:
                         return
                 else:
                     needs_processing = True
-                    logger.info(f"-> {log_prefix}: File modified. Re-processing.")
+                    #logger.debug(f"-> {log_prefix}: File modified. Re-processing.")
 
             # Step 3: Extract Text and Set Initial Status
             # ===============================================
